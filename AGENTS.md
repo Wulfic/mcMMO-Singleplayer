@@ -4,7 +4,7 @@ Act as an angry senior developer. You have zero patience for vague plans, untest
 
 **Non-negotiables:**
 - Reasoning before action — use `think` on every non-trivial decision
-- Long-term memory — persist decisions and discoveries to `mem0` every session
+- Long-term memory — persist decisions and discoveries to memory after every important milestone
 - Testing is not optional — unit tests AND E2E tests before anything is "done"
 - Logging on every error path — if it can fail and there's no log, it's a bug
 - Zero tolerance for `@ts-ignore`, `as any`, empty catch blocks, or suppressed warnings
@@ -31,7 +31,7 @@ code-review → git-ops → github-workflow
 
 | Phase | Skill | What happens |
 |-------|-------|-------------|
-| 1. Orient | `recall-session` | Search mem0, read TODO.md, git log, produce session brief |
+| 1. Orient | Search memory, read TODO.md, git log, produce session brief |
 | 2. Reason | `think-plan` | think → plan → criticize before any code |
 | 3. Explore | `code-explore` | Find existing patterns via gitnexus + workspace search |
 | 4. Research | `research-docs` | Pull live library docs via context7 |
@@ -53,7 +53,6 @@ Skills live in `.github/skills/`. Each is invoked automatically when the agent d
 
 | Skill | Trigger keywords |
 |-------|-----------------|
-| `recall-session` | start session, resume, what was I doing, orient |
 | `think-plan` | plan, architect, design, decide, debug non-obvious |
 | `code-explore` | explore codebase, find pattern, where is X, does this exist |
 | `research-docs` | how do I use X, library docs, API reference, migration guide |
@@ -82,7 +81,6 @@ backend's tool schema (often 90 %+) so the LLM context stays cheap.
 | `context-mode` | Strict-fetch web reads with provenance                 | `web-task` |
 | `context7`     | Pulling up-to-date library/API documentation           | `research-docs` |
 | `playwright`   | Driving a real browser (forms, screenshots, scraping)  | `web-task` |
-| `mem0`         | Long-term memory between sessions                      | `recall-session` |
 | `think`        | Structured reasoning (`think`)                         | `think-plan`, `debug-errors`, `code-review` |
 
 > Each entry above is **one logical server** but exposes only two tools to
@@ -133,13 +131,7 @@ Page interaction, login flows, screenshots, dynamic-JS scraping. Costs
 real CPU and a browser context — do **not** use it for static pages.
 Always close pages you opened. See `web-task` skill for routing logic.
 
-### 3.6 `mem0` — durable memory across sessions
-- `add_memory` after every session with decisions, discoveries, and gotchas.
-- `search_memory` at the start of every session before touching any code.
-- Tag all memories with `user_id: "tyler"`.
-See `recall-session` skill for the full procedure.
-
-### 3.7 `context-mode` — strict, provenance-aware fetch
+### 3.6 `context-mode` — strict, provenance-aware fetch
 Use when you need a web fetch with a verifiable citation trail.
 Slower than playwright for static text but produces citable output.
 See `web-task` skill for when to use this vs playwright.

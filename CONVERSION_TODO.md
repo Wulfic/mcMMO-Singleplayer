@@ -79,11 +79,18 @@ that's about to be deleted.
 
 ## Phases
 
-### Phase 0 — Fabric scaffolding
-- [ ] New Gradle build with Fabric Loom; delete/park `pom.xml`.
-- [ ] Target Java 21; MC 1.21.11, matching Fabric Loader + Fabric API + mappings.
-- [ ] `fabric.mod.json`, mixin config, `ModInitializer` stub, mod icon.
-- [ ] Use **Yarn** mappings (decided).
+### Phase 0 — Fabric scaffolding ✅
+- [x] New Gradle build with Fabric Loom; parked `pom.xml` → `legacy/pom.xml.parked`.
+- [x] Target Java 21; MC 1.21.11 with matching Fabric Loader `0.19.3` + Fabric API
+      `0.141.4+1.21.11` + Yarn `1.21.11+build.6` (versions verified live 2026-07-05,
+      pinned in `gradle.properties`). Loom `1.17.13`, Gradle wrapper `9.6.0`.
+- [x] `fabric.mod.json` (main + client entrypoints), `mcmmo.mixins.json` +
+      `mcmmo.client.mixins.json`, `McMMOMod`/`McMMOClient` stubs, placeholder mod icon.
+- [x] Use **Yarn** mappings (decided).
+- [x] **Legacy layout:** the original Bukkit plugin moved to `legacy/` (mirrors the old
+      Maven tree; NOT a Gradle source dir). `src/` now holds only ported Fabric code.
+      Port by `git mv`-ing each file from `legacy/` into `src/` — standard Loom
+      sourceSets, no include filters.
 
 ### Phase 1 — Entry point
 - [ ] Replace `JavaPlugin` lifecycle (`onEnable`/`onDisable`) and `plugin.yml` with

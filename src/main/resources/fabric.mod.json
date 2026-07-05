@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "mcmmo",
+  "version": "${version}",
+  "name": "mcMMO",
+  "description": "mcMMO reborn as a singleplayer Fabric mod: RPG skills, leveling, and active abilities for vanilla Minecraft.",
+  "authors": [
+    "nossr50",
+    "mcMMO contributors"
+  ],
+  "contact": {
+    "homepage": "https://github.com/mcMMO-Dev/mcMMO",
+    "sources": "https://github.com/mcMMO-Dev/mcMMO"
+  },
+  "license": "GPL-3.0-only",
+  "icon": "assets/mcmmo/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.gmail.nossr50.fabric.McMMOMod"
+    ],
+    "client": [
+      "com.gmail.nossr50.fabric.client.McMMOClient"
+    ]
+  },
+  "mixins": [
+    "mcmmo.mixins.json",
+    {
+      "config": "mcmmo.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

@@ -1,0 +1,60 @@
+plugins {
+    id 'fabric-loom' version '1.17.13'
+    id 'java'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    // Add repositories here as ported code needs them. Fabric/MC come from Loom.
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+}
+
+// -----------------------------------------------------------------------------
+// Incremental migration note.
+//
+// The legacy Bukkit/Spigot plugin lives under legacy/ (NOT a Gradle source dir)
+// and is ported into src/main/java package-by-package per CONVERSION_TODO.md.
+// `git mv` each file from legacy/ into src/ as it's converted. Standard Loom
+// sourceSets apply here — no include filters.
+// -----------------------------------------------------------------------------
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') {
+        expand version: project.version
+    }
+    // Legacy Bukkit resource files (plugin.yml, locale/**, *.yml configs) are
+    // migrated in later phases; only fabric.mod.json + mixin configs matter now.
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = 'UTF-8'
+    it.options.release = 21
+}
+
+jar {
+    from('LICENSE') {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+}
