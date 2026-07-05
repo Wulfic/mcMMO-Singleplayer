@@ -1,58 +1,78 @@
-# bash stuff
-*.sh
+# =============================================================================
+# mcMMO — Singleplayer Fabric mod (.gitignore)
+# =============================================================================
 
-# Eclipse stuff
-/.classpath
-/.project
-/.settings
-/dependency-reduced-pom.xml
+# ── Secrets & local config ───────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+*.keystore
+.mcp.json
 
-#vs code
-/.vscode
-
-# Maven Depends
-/lib
-
-# gradle
-/.gradle
-/mcMMO-core/.gradle
-/mcMMO-core/gradle
-
-# netbeans
-/nbproject
-
-# we use maven!
-/build.xml
-
-# maven
-/target
-
-# vim
-.*.sw[a-p]
-
-# various other potential build files
-/build
-/bin
-/dist
-/manifest.mf
-
-/world
-
-# Mac filesystem dust
-*.DS_Store
-
-# intellij
+# ── Agent / editor local config ──────────────────────────────────────────────
+.claude/
+CLAUDE.md
+.vscode/
+!.vscode/extensions.json
+.idea/
 *.iml
 *.ipr
 *.iws
-.idea/
+out/
+.settings/
+.project
+.classpath
+.nb-gradle/
+nbproject/
 
-# Project Stuff
-/src/main/resources/mcMMO
+# ── Gradle (primary build after Fabric migration) ────────────────────────────
+.gradle/
+build/
+**/build/
+gradle-app.setting
+.gradletasknamecache
 
-# Other Libraries
+# ── Fabric Loom ──────────────────────────────────────────────────────────────
+# Loom's decompiled/remapped caches, generated run dir and sources
+.fabric/
+run/
+!run/README.md
+remappedSrc/
+
+# ── Maven (legacy build; remove once pom.xml is dropped) ──────────────────────
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+.flattened-pom.xml
+
+# ── Java / JVM ───────────────────────────────────────────────────────────────
+*.class
+*.log
 *.jar
+# Gradle wrapper jar must be committed so CI can run ./gradlew
+!gradle/wrapper/gradle-wrapper.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
 
-# Atlassian Stuff
-/atlassian-ide-plugin.xml
-/nulllocale_override.properties
+# ── OS generated ─────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/

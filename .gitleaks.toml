@@ -1,0 +1,35 @@
+# Gitleaks configuration
+# https://github.com/gitleaks/gitleaks
+
+title = "simple-photos gitleaks config"
+
+[allowlist]
+  description = "Global allowlist"
+  paths = [
+    '''\.lock$''',
+    '''\.sum$''',
+    '''go\.sum''',
+    '''package-lock\.json''',
+    '''\.git/''',
+    '''blns\.txt''',
+    '''benchmark_results/''',
+  ]
+
+# Allow the example config's placeholder values
+[[rules]]
+  id = "example-config-placeholder"
+  description = "Allow example config placeholder secrets"
+  regex = '''change_me_to_a_random_64_char_hex_string|your_backup_api_key_here'''
+  [rules.allowlist]
+    paths = ['''config\.example\.toml''']
+
+# Allow test fixture encryption keys
+[[rules]]
+  id = "test-fixture-keys"
+  description = "Allow test fixture encryption keys"
+  regex = '''[0-9a-f]{64}'''
+  [rules.allowlist]
+    paths = [
+      '''tests/''',
+      '''conftest\.py''',
+    ]
