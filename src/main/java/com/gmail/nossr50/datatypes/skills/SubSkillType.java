@@ -1,7 +1,7 @@
 package com.gmail.nossr50.datatypes.skills;
 
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
-import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.util.text.StringUtils;
 import java.util.Locale;
 
@@ -154,7 +154,7 @@ public enum SubSkillType {
      * @return the parent skill of this subskill
      */
     public PrimarySkillType getParentSkill() {
-        return mcMMO.p.getSkillTools().getPrimarySkillBySubSkill(this);
+        return McMMOMod.getSkillTools().getPrimarySkillBySubSkill(this);
     }
 
     /**

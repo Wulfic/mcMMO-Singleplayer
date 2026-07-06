@@ -1,0 +1,15 @@
+# Test fixture for ConfigLoaderTest — exercises the bundled-default copy/merge path.
+General:
+  Enabled: true
+  MaxLevel: 100
+  Locale: en_US
+Skills:
+  Mining:
+    DoubleDrops:
+      ChanceMax: 50.0
+    Enabled: true
+  Woodcutting:
+    Enabled: false
+Blacklist:
+  - STONE
+  - DIRT

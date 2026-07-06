@@ -112,13 +112,25 @@ that's about to be deleted.
 - [ ] Map `org.bukkit.Material` enum → `net.minecraft` `Item`/`Block` registries
       (registry lookups, not enum switches).
 
-### Phase 3 — Event system
-- [ ] Map each Bukkit listener (`BlockListener`, `EntityListener`, `PlayerListener`,
-      `InventoryListener`, `WorldListener`, `ChunkListener`, `SelfListener`) to Fabric
-      events where they exist, and **Mixins** where they don't (block-break XP, damage
-      hooks, etc.).
-- [ ] Replace mcMMO's custom Bukkit events (`events/` package) with internal
-      callbacks or a small event bus.
+### Phase 3 — Event system  🟡 infra complete
+- [x] **Internal event bus** built (`event/`: `Event`, `Cancellable`, `EventPriority`,
+      `EventBus` + `SimpleEventBus`) replacing Bukkit `Event`/`HandlerList`/`Cancellable`
+      for mcMMO's own `events/*`. Faithful dispatch: hierarchy (supertype handler sees
+      subtypes), priority `LOWEST→MONITOR`, `ignoreCancelled`, in-place mutation, per-handler
+      exception isolation. Wired into `McMMOMod.getEventBus()`. Unit-tested (10 tests, green
+      — first MC-free test suite in the port; JUnit 5 infra added to the Gradle build).
+- [x] **Fake-event elimination decided:** `events/fake/*` (`FakeBlockBreakEvent` etc.) existed
+      to stop Bukkit re-catching mcMMO's simulated actions. No external Bukkit event loop in
+      Fabric → they become unnecessary; drop (don't port) when the firing skills land.
+- [ ] **Listener → Fabric-hook mapping (deferred to Phase 10, interleaved with skills):** the
+      listener *bodies* (`BlockListener`, `EntityListener`, `PlayerListener`,
+      `InventoryListener`, `WorldListener`, `ChunkListener`, `SelfListener`; ~4.1k lines) call
+      skill managers that don't exist until Phase 10, so they port alongside their skills.
+      Hook plan (Fabric API event where one exists, Mixin otherwise) is recorded in
+      `McMMOMod.onInitialize`. `SelfListener` becomes `EventBus` subscriptions, not a MC hook.
+- [ ] **Concrete `events/*` classes** ported onto the new bus with their skills (Phase 10):
+      drop `extends org.bukkit.event.Event` + `HandlerList`/`getHandlers()`; extend `event.Event`
+      (and `implements event.Cancellable` where they were `Cancellable`).
 
 ### Phase 4 — Commands
 - [ ] Convert `CommandExecutor`/`TabExecutor` + `plugin.yml` commands to **Brigadier**
@@ -136,19 +148,43 @@ that's about to be deleted.
       toggles / always-allow.
 - [ ] Decide fate of the **party** system (multiplayer concept) — likely stub/remove.
 
-### Phase 7 — Text / chat
-- [ ] Migrate Kyori Adventure usage (41 files) to vanilla `net.minecraft.text.Text`
-      (decided — no Adventure bridge).
-- [ ] Replace `ChatColor` (24 files) with `Formatting`/`Style`.
+### Phase 7 — Text / chat  🟡 core parser done
+- [x] **Legacy-`§`-string → vanilla `Text` parser** (`util/text/TextUtils#toText`): rebuilds
+      mcMMO's legacy-formatted strings (simple `§`/`&` codes, `[[COLOR]]` tokens, and the
+      `§x§R§R§G§G§B§B` hex form) as a styled `net.minecraft.text.Text` tree — the Fabric
+      replacement for Adventure's `LegacyComponentSerializer`. Faithful legacy semantics
+      (colour/reset clears decorations; decorations accumulate). 6 unit tests vs. real MC
+      `Text`/`Style`/`Formatting` (green). **Decided: Legacy→Text via `Formatting`** (keep
+      strings, translate to `§`, parse) over rewriting every string in code.
+- [ ] Migrate remaining Kyori Adventure usage (the other ~40 files) to vanilla `Text` as they
+      port (the wholesale `util/text/TextUtils` Adventure class was replaced, not ported).
+- [ ] Replace `ChatColor` (24 files) with `Formatting`/`Style` as those files port.
 
-### Phase 8 — Config, strings & config menu
-- [ ] Keep simple, human-editable config files, relocated to the mod config dir.
-- [ ] **English only:** collapse `locale_en_US.properties` into the single string source,
-      delete the other 19 locale files, and reduce the locale loader to plain lookups.
+### Phase 8 — Config, strings & config menu  🟡 localization done
+- [x] **English only:** `LocaleLoader` rewritten to a single `locale_en_US` `ResourceBundle`
+      (moved to `src/main/resources/com/gmail/nossr50/locale/`); the other 19 locale files
+      deleted; override-file / per-server-locale / Folia / Adventure machinery dropped.
+      `getString` returns a `§`-coded string; new `getText` returns vanilla `Text` via the
+      Phase 7 parser. `&`/`[[COLOR]]`/`&#RRGGBB` all normalise to `§`. 8 unit tests (green).
+- [x] **Config engine ported off Bukkit YAML.** Added `org.yaml:snakeyaml:2.3`
+      (`implementation` + Loom `include` → nested at `META-INF/jars/` in the built jar, verified).
+      `config/YamlConfiguration` reproduces the slice of Bukkit's `YamlConfiguration`/
+      `ConfigurationSection` API the configs use (dotted paths, typed getters w/ defaults,
+      `getKeys(deep)`, `contains`, `isConfigurationSection`, section views sharing one backing
+      map, `set`/`save`); `config/ConfigLoader` is the `BukkitConfig` replacement (bundled-default
+      copy-to-disk + missing-key back-fill, data folder injected for testability). Both MC-free;
+      12 unit tests (suite 42 green).
+- [ ] Port the concrete config classes onto `ConfigLoader`: `GeneralConfig`, `AdvancedConfig`,
+      `ExperienceConfig`, `RankConfig`, `CoreSkillsConfig`, `SoundConfig`, `HiddenConfig`,
+      `WorldBlacklist`, per-skill treasure/repair/salvage/alchemy configs. Each needs its default
+      `.yml` copied into `src/main/resources/`. Retarget `Material`/`Sound` lookups to `platform/`.
+      **(These + `SkillTools` unblock `SubSkillType`/`SuperAbilityType` and Phase 10.)**
+- [ ] Keep simple, human-editable config files, relocated to the mod config dir (real config dir
+      resolved via `FabricLoader.getConfigDir()` when the concrete configs are wired in).
 - [ ] Build the **in-game config menu** (`Screen`) that reads/writes those config files.
 
 ### Phase 9 — Third-party integrations
-- [ ] Remove/replace `WorldGuard`, `PlaceholderAPI`, `ProtocolLib`, `CombatTag`,
+- [ ] Remove `WorldGuard`, `PlaceholderAPI`, `ProtocolLib`, `CombatTag`,
       `HealthBar` hooks and **Folia** scheduler support (all server-only).
 
 ### Phase 10 — Skill modules

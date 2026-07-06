@@ -1,0 +1,13 @@
+Project: mcMMO‑SP (Single‑Player Port)
+Based on: mcMMO by the mcMMO team (https://github.com/mcMMO-Dev/mcMMO)
+Original license: GNU General Public License v3.0 (GPL‑3.0). See LICENSE file. 
+
+What this fork is
+This repository contains a single‑player port and related changes to adapt mcMMO for local/single‑player use.
+All original code from mcMMO remains under GPL‑3.0. This fork’s modifications are also released under GPL‑3.0.
+
+How to obtain source
+The full source for every distributed binary is available in this repository and in the Releases section. Binary downloads include a link to this source and the LICENSE file. 
+
+Attribution and credits
+This project is a fork of mcMMO (https://github.com/mcMMO-Dev/mcMMO). Original authors and contributors retain copyright; see CONTRIBUTORS.md for details. 

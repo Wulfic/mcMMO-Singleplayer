@@ -12,6 +12,7 @@ base {
 
 repositories {
     // Add repositories here as ported code needs them. Fabric/MC come from Loom.
+    mavenCentral() // JUnit (and future plain-Java test/util deps)
 }
 
 dependencies {
@@ -19,6 +20,18 @@ dependencies {
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // YAML config backend. mcMMO's configs are .yml (ported from Bukkit's YamlConfiguration);
+    // snakeyaml replaces that engine. `include` nests it in the built jar (Fabric Jar-in-Jar)
+    // so the mod ships it at runtime; `implementation` puts it on the compile/test classpath.
+    implementation "org.yaml:snakeyaml:${project.snakeyaml_version}"
+    include "org.yaml:snakeyaml:${project.snakeyaml_version}"
+
+    // Unit tests for MC-free code (currently the platform/ + event/ layers). Anything that
+    // touches net.minecraft.* registries needs an in-game harness instead — see Phase 12.
+    testImplementation platform("org.junit:junit-bom:${project.junit_version}")
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 // -----------------------------------------------------------------------------
@@ -51,6 +64,10 @@ java {
 tasks.withType(JavaCompile).configureEach {
     it.options.encoding = 'UTF-8'
     it.options.release = 21
+}
+
+test {
+    useJUnitPlatform()
 }
 
 jar {
