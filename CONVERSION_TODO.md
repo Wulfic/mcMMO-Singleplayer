@@ -182,6 +182,15 @@ that's about to be deleted.
       with the Phase 10 `platform/` adapters): the per-skill treasure/repair/salvage/alchemy configs.
       Retarget `Material`/`Sound` lookups to `platform/`.
       **(These + `SkillTools` unblock `SubSkillType`/`SuperAbilityType` and Phase 10.)**
+      **Treasure tier STARTED (Phase 10.4):** `TreasureConfig` ported onto `ConfigLoader` (Excavation
+      section only). Introduced the MC-free `datatypes/treasure/ItemSpec` blueprint (material
+      registry-path + amount + optional §-name/lore) so `Treasure` no longer holds a live Bukkit
+      `ItemStack` — actual `ItemStack` construction is deferred to a post-bootstrap builder (registries
+      aren't populated at config-load; enchant/potion items need a world's `RegistryManager`). Dropped:
+      Hylian_Luck loading (needs a block-`Tag` adapter), the legacy `Drop_Level` key auto-migration, and
+      the potion/`ItemMeta` branches (no Excavation treasure uses them). `McMMOMod.getTreasureConfig()`
+      locator added; `treasures.yml` bundled. **Still deferred:** FishingTreasure (potion/enchant/book
+      metadata → `ItemSpec` extension + fishing skill), repair/salvage item configs, alchemy.
 - [ ] Keep simple, human-editable config files, relocated to the mod config dir (real config dir
       resolved via `FabricLoader.getConfigDir()` when the concrete configs are wired in).
 - [ ] Build the **in-game config menu** (`Screen`) that reads/writes those config files.
@@ -229,6 +238,11 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       (`getTridentsManager()` accessor added). `impaleDamageBonus` proven end-to-end vs real configs
       (RankUtilsTest ×8, TridentsManagerTest ×3; suite 137 green). **Next:** `ArcheryManager`,
       `AcrobaticsManager` (need `Permissions`, `NotificationManager`, `Misc`, `ProbabilityUtil`).
+- [~] **10.4 Excavation core** — `ExcavationManager` Archaeology rank rewards + treasure-table lookup
+      (`getTreasures(blockRegistryPath)`) ported and wired into the `McMMOPlayer` factory (11th live
+      manager). The block-break drop/spawn bodies (`excavationBlockCheck`, `gigaDrillBreaker`) stay
+      deferred pending the item-spawn adapter + `ItemSpec`→`ItemStack` builder. See treasure-tier note
+      under Phase 8. Suite 214 green (+7 tests: `TreasureConfigTest`, `ExcavationManagerTest`).
 - [ ] **10.3 Remaining skills** by rising complexity, interleaving the deferred Bukkit
       method bodies as each skill needs them: `mining`, `woodcutting`, `excavation`,
       `unarmed`, `swords`/`axes`/`maces`/`spears`, `smelting`, then the heavy config-backed
