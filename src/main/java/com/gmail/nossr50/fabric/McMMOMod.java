@@ -7,15 +7,19 @@ import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.config.SoundConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.database.FlatFileProfileStore;
 import com.gmail.nossr50.database.ProfileStore;
 import com.gmail.nossr50.event.EventBus;
 import com.gmail.nossr50.event.SimpleEventBus;
 import com.gmail.nossr50.util.experience.FormulaManager;
+import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillTools;
+import java.nio.file.Path;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.WorldSavePath;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -103,6 +107,10 @@ public class McMMOMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTING.register(this::onServerStarting);
         ServerLifecycleEvents.SERVER_STOPPING.register(this::onServerStopping);
 
+        // Phase 5 / Phase 3: per-player session lifecycle (load-on-join, save-on-quit). Registered
+        // once here; the handlers fire per player and read the store bound at server start.
+        PlayerSessionListener.register();
+
         // PORT Phase 4: register Brigadier commands via CommandRegistrationCallback.
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
@@ -126,8 +134,12 @@ public class McMMOMod implements ModInitializer {
             // Phase 8: load config files from <configDir>/mcmmo. Resolved via FabricLoader so the
             // configs live alongside every other mod's config, not inside the world save.
             ConfigBootstrap.loadAll(FabricLoader.getInstance().getConfigDir().resolve(MOD_ID));
+            // Phase 5: bind the per-world profile store under <worldRoot>/mcmmo/players/. Player
+            // profiles load lazily on join (PlayerSessionListener), not eagerly here.
+            final Path playersDir = startingServer.getSavePath(WorldSavePath.ROOT)
+                    .resolve(MOD_ID).resolve("players");
+            McMMOMod.setProfileStore(new FlatFileProfileStore(playersDir));
             // PORT Phase 10: register core skills / interaction maps.
-            // PORT Phase 5: initialize per-world persistence + load online player profiles.
             // PORT Phase 11: schedule save/tick tasks via ServerTickEvents.
         } catch (Throwable t) {
             LOGGER.error("Error while enabling mcMMO for the server session", t);
@@ -138,7 +150,11 @@ public class McMMOMod implements ModInitializer {
     private void onServerStopping(MinecraftServer stoppingServer) {
         try {
             LOGGER.info("mcMMO server session stopping, saving and cleaning up data.");
-            // PORT Phase 5: save all player profiles, then clear.
+            // Phase 5: flush every online player's profile to disk, then drop the registry so the
+            // next world session starts clean.
+            UserManager.saveAll();
+            UserManager.clearAll();
+            McMMOMod.setProfileStore(null);
             // PORT Phase 10: finish in-progress alchemy brews.
             // PORT Phase 11: cancel scheduled tasks.
             ConfigBootstrap.unload();
