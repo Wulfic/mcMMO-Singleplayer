@@ -3,10 +3,13 @@ package com.gmail.nossr50.skills.mining;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.Locale;
 import java.util.Set;
 import org.jetbrains.annotations.NotNull;
@@ -75,6 +78,67 @@ public class MiningManager extends SkillManager {
 
     public boolean canMotherLode() {
         return Permissions.canUseSubSkill(getPlayer(), SubSkillType.MINING_MOTHER_LODE);
+    }
+
+    /**
+     * Whether breaking a block is eligible for Mining bonus drops. Deterministic gate mirroring the
+     * guards in legacy {@code miningBlockCheck} up to the double/triple-drop rolls (block XP and the
+     * Super-Breaker tool-damage side effect are handled by the XP pipeline / caller, not here). The
+     * actual RNG roll is {@link #rollBonusDropCount()}.
+     *
+     * @param blockRegistryId the broken block's vanilla registry id (namespaced or bare)
+     * @param silkTouch whether the breaking tool carried Silk Touch
+     * @return whether a bonus-drop roll should be attempted for this block
+     */
+    public boolean isBonusDropsEligible(@NotNull String blockRegistryId, boolean silkTouch) {
+        // Never bonus-drop a block that can't legitimately be obtained (spawner, budding amethyst,
+        // infested blocks). This guard is load-bearing, not merely defensive: the bundled config.yml
+        // actually lists Budding_Amethyst under Bonus_Drops.Mining. Legacy got away without it
+        // because its drop-multiply metadata was never read for those blocks; the singleplayer
+        // re-roll model spawns fresh loot, so the illegal-block check has to happen here.
+        if (isDropIllegal(stripToPath(blockRegistryId))) {
+            return false;
+        }
+        if (!Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.MINING_DOUBLE_DROPS)) {
+            return false;
+        }
+        final String materialConfigString = ConfigStringUtils.getMaterialConfigString(blockRegistryId);
+        if (!McMMOMod.getGeneralConfig()
+                .getDoubleDropsEnabled(PrimarySkillType.MINING, materialConfigString)
+                || !canDoubleDrop()) {
+            return false;
+        }
+        // Silk Touch only suppresses bonus drops when the operator disabled it in advanced.yml.
+        return !silkTouch || McMMOMod.getAdvancedConfig().getDoubleDropSilkTouchEnabled();
+    }
+
+    /**
+     * Rolls the number of <i>extra</i> copies of the broken block's drops to spawn (0, 1, or 2),
+     * assuming {@link #isBonusDropsEligible} already passed. Mirrors legacy {@code processTripleDrops}
+     * / {@code processDoubleDrops}: Mother Lode grants a triple-drop roll first (2 extra copies on
+     * success), otherwise a double-drop roll yields 1 extra copy — or 2 while Super Breaker is active
+     * and triple drops are allowed in config.
+     *
+     * @return the number of extra drop rounds to spawn (0 = the roll failed)
+     */
+    public int rollBonusDropCount() {
+        if (canMotherLode()
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.MINING_MOTHER_LODE, mmoPlayer)) {
+            return 2;
+        }
+        if (ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.MINING_DOUBLE_DROPS, mmoPlayer)) {
+            final boolean superBreakerTriple =
+                    mmoPlayer.getAbilityMode(SuperAbilityType.SUPER_BREAKER)
+                            && McMMOMod.getAdvancedConfig().getAllowMiningTripleDrops();
+            return superBreakerTriple ? 2 : 1;
+        }
+        return 0;
+    }
+
+    private static @NotNull String stripToPath(@NotNull String registryId) {
+        final int colon = registryId.indexOf(':');
+        return (colon >= 0 ? registryId.substring(colon + 1) : registryId)
+                .toLowerCase(Locale.ENGLISH);
     }
 
     private boolean isInfestedBlock(@NotNull String blockRegistryPath) {

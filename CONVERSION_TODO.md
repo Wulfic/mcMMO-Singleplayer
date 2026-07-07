@@ -112,7 +112,15 @@ that's about to be deleted.
 - [ ] Map `org.bukkit.Material` enum → `net.minecraft` `Item`/`Block` registries
       (registry lookups, not enum switches).
 
-### Phase 3 — Event system  🟡 infra complete
+### Phase 3 — Event system  🟡 bus + XP hooks live
+- [x] **First real Fabric gameplay hooks wired** (`fabric/listeners/`): `BlockBreakListener`
+      (`PlayerBlockBreakEvents.AFTER` → gathering XP for mining/woodcutting/excavation/herbalism
+      via the MC-free `skills/BlockBreakXp` config lookup) and `CombatListener`
+      (`ServerLivingEntityEvents.AFTER_DEATH` → combat XP via `skills/CombatXp`). Both route
+      through the real `McMMOPlayer#beginXpGain` pipeline; `PlayerSessionListener`
+      (`ServerPlayConnectionEvents`) loads/saves the profile. Unit-tested (`BlockBreakXpTest`,
+      `CombatXpTest`). Deferred: the bonus-drop / super-ability *side effects* still need the
+      item-spawn adapter + Phase 11 scheduler.
 - [x] **Internal event bus** built (`event/`: `Event`, `Cancellable`, `EventPriority`,
       `EventBus` + `SimpleEventBus`) replacing Bukkit `Event`/`HandlerList`/`Cancellable`
       for mcMMO's own `events/*`. Faithful dispatch: hierarchy (supertype handler sees
@@ -132,21 +140,35 @@ that's about to be deleted.
       drop `extends org.bukkit.event.Event` + `HandlerList`/`getHandlers()`; extend `event.Event`
       (and `implements event.Cancellable` where they were `Cancellable`).
 
-### Phase 4 — Commands
-- [ ] Convert `CommandExecutor`/`TabExecutor` + `plugin.yml` commands to **Brigadier**
-      via `CommandRegistrationCallback`.
-- [ ] Tab-completion → Brigadier suggestion providers.
+### Phase 4 — Commands  🟡 core tree done
+- [x] Brigadier tree registered via `CommandRegistrationCallback` (`commands/McMMOCommands`):
+      `/mcmmo` (banner), `/mcstats` (per-skill level/xp + power level), `/addlevels` and
+      `/addxp` (op-gated `GAMEMASTERS_CHECK`, run through the real gain pipeline). Skill-name
+      tab-completion via a Brigadier `SuggestionProvider`.
+- [ ] Remaining self commands: `/mcability` (toggle super-ability readiness), `/mcrefresh`
+      (clear cooldowns), per-skill info commands. Land as their subsystems port (super-ability
+      activation → Phase 11).
 
-### Phase 5 — Persistence
-- [ ] Drop SQL backend (`SQLDatabaseManager`) — overkill for singleplayer.
-- [ ] Store player skill data in per-world save data (attachment API / `PersistentState`
-      or player NBT) instead of the flatfile/SQL DB.
-- [ ] Migration path for existing flatfile data (optional).
+### Phase 5 — Persistence  ✅ core done
+- [x] SQL backend dropped (never ported); sole store is per-world flatfile.
+- [x] Per-world flatfile store (`database/ProfileStore` + `FlatFileProfileStore`): one
+      `<uuid>.yml` per player under `<worldRoot>/mcmmo/players/`, bound at server start in
+      `McMMOMod#onServerStarting` and cleared at stop. `PlayerProfile#save(boolean)` writes
+      through the bound store (no-op when unbound, e.g. in unit tests). Session lifecycle
+      (`PlayerSessionListener`) loads on join and saves+untracks on quit; `UserManager.saveAll()`
+      flushes on server stop. Round-trip unit-tested (`FlatFileProfileStoreTest`).
+- [ ] Periodic autosave while online (crash safety) — Phase 11 scheduler (`SaveTimerTask`).
+- [ ] `getOfflinePlayer` (offline profile reads for admin commands) still dropped — re-add if
+      an offline-target command needs it.
+- [ ] Migration path for legacy `mcmmo.users` flatfile / SQL data (optional, low priority).
 
-### Phase 6 — Permissions & multiplayer assumptions
-- [ ] Singleplayer has no permission plugin: map permission checks to op-level / config
-      toggles / always-allow.
-- [ ] Decide fate of the **party** system (multiplayer concept) — likely stub/remove.
+### Phase 6 — Permissions & multiplayer assumptions  ✅ decided + implemented
+- [x] No permission plugin in singleplayer: `util/Permissions` collapses every check to a fixed
+      answer — gameplay/activation nodes → "allowed", opt-in perk nodes (`lucky`, XP perks) →
+      "not granted". Nodes are added to this class as the skills referencing them port (the
+      surface grows with Phase 3/10, not a separate pass). Admin commands (`/addlevels`,`/addxp`)
+      are gated on vanilla op level (`GAMEMASTERS_CHECK`) instead of a permission node.
+- [x] Party system removed entirely (Phase 1.5) — not stubbed, cut.
 
 ### Phase 7 — Text / chat  🟡 core parser done
 - [x] **Legacy-`§`-string → vanilla `Text` parser** (`util/text/TextUtils#toText`): rebuilds

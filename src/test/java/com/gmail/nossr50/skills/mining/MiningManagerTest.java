@@ -163,4 +163,46 @@ class MiningManagerTest {
         assertFalse(miningManager.isDropIllegal("stone"));
         assertFalse(miningManager.isDropIllegal("coal_ore"));
     }
+
+    // --- Bonus-drop eligibility gate (deterministic; the RNG roll is verified in-game) ----------
+
+    @Test
+    void bonusDropsEligibleForConfiguredOreOnceDoubleDropsUnlock() {
+        atMiningLevel(1); // Double Drops unlocks at mining level 1.
+        // Coal_Ore is listed true under Bonus_Drops.Mining in config.yml.
+        assertTrue(miningManager.isBonusDropsEligible("minecraft:coal_ore", false),
+                "configured ore at unlock level with no silk touch → eligible");
+    }
+
+    @Test
+    void bonusDropsIneligibleForUnconfiguredBlock() {
+        atMiningLevel(1);
+        // Dirt is not under Bonus_Drops.Mining → getDoubleDropsEnabled false.
+        assertFalse(miningManager.isBonusDropsEligible("minecraft:dirt", false),
+                "block absent from Bonus_Drops.Mining → not eligible");
+    }
+
+    @Test
+    void bonusDropsIneligibleBeforeDoubleDropsUnlock() {
+        atMiningLevel(0); // below the level-1 Double Drops unlock
+        assertFalse(miningManager.isBonusDropsEligible("minecraft:coal_ore", false),
+                "double drops locked at level 0 → not eligible even for a configured ore");
+    }
+
+    @Test
+    void bonusDropsIneligibleForIllegalBlockEvenWhenConfigured() {
+        atMiningLevel(1);
+        // config.yml actually lists Budding_Amethyst: true, but it can't be legitimately obtained,
+        // so the isDropIllegal guard must veto it before the config check.
+        assertFalse(miningManager.isBonusDropsEligible("minecraft:budding_amethyst", false),
+                "unobtainable block is vetoed despite being listed under Bonus_Drops.Mining");
+    }
+
+    @Test
+    void silkTouchStillEligibleWhenConfigEnablesIt() {
+        atMiningLevel(1);
+        // advanced.yml Skills.Mining.DoubleDrops.SilkTouch defaults to true.
+        assertTrue(miningManager.isBonusDropsEligible("minecraft:coal_ore", true),
+                "silk touch does not suppress bonus drops while the config allows it");
+    }
 }
