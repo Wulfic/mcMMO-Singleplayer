@@ -12,6 +12,8 @@ import com.gmail.nossr50.database.FlatFileProfileStore;
 import com.gmail.nossr50.database.ProfileStore;
 import com.gmail.nossr50.event.EventBus;
 import com.gmail.nossr50.event.SimpleEventBus;
+import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
+import com.gmail.nossr50.fabric.listeners.CombatListener;
 import com.gmail.nossr50.util.experience.FormulaManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillTools;
@@ -114,6 +116,10 @@ public class McMMOMod implements ModInitializer {
 
         // Phase 4: register the Brigadier command tree (/mcmmo, /mcstats, /addlevels, /addxp).
         McMMOCommands.register();
+
+        // Phase 3: gameplay XP hooks — block-break gathering XP and mob-kill combat XP.
+        BlockBreakListener.register();
+        CombatListener.register();
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
         // drive the legacy listeners, routing each to the ported skill managers. Preferred
