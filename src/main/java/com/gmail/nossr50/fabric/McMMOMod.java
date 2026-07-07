@@ -13,6 +13,7 @@ import com.gmail.nossr50.util.experience.FormulaManager;
 import com.gmail.nossr50.util.skills.SkillTools;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -113,7 +114,9 @@ public class McMMOMod implements ModInitializer {
         server = startingServer;
         try {
             LOGGER.info("mcMMO enabling for server session.");
-            // PORT Phase 8: load config files.
+            // Phase 8: load config files from <configDir>/mcmmo. Resolved via FabricLoader so the
+            // configs live alongside every other mod's config, not inside the world save.
+            ConfigBootstrap.loadAll(FabricLoader.getInstance().getConfigDir().resolve(MOD_ID));
             // PORT Phase 10: register core skills / interaction maps.
             // PORT Phase 5: initialize per-world persistence + load online player profiles.
             // PORT Phase 11: schedule save/tick tasks via ServerTickEvents.
@@ -129,6 +132,7 @@ public class McMMOMod implements ModInitializer {
             // PORT Phase 5: save all player profiles, then clear.
             // PORT Phase 10: finish in-progress alchemy brews.
             // PORT Phase 11: cancel scheduled tasks.
+            ConfigBootstrap.unload();
         } catch (Exception e) {
             LOGGER.error("Error while disabling mcMMO for the server session", e);
         } finally {
