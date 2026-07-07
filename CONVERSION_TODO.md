@@ -222,9 +222,13 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       chain vs bundled `config.yml`+`experience.yml`, child split, creative guard, caps),
       `UserManagerTest` (7), `SkillManagerTest` (4, Mockito). **Mockito 5 added** to mock the final
       `platform/` adapters MC-free. Suite **126 green** (was 103).
-- [ ] **10.2 First leaf skills** (MC-light, prove the chain): `TridentsManager` (25 lines,
-      0 Bukkit imports), then `ArcheryManager`, `AcrobaticsManager`. Uncomment each manager
-      in `McMMOPlayer` as it lands; add a per-skill unit test.
+- [~] **10.2 First leaf skills** (MC-light, prove the chain). **Done:** prereq `RankUtils`
+      ported (SubSkillType rank ladder onto `McMMOMod.getRankConfig()`; `Player` param retargeted to
+      `McMMOPlayer` core + `PlatformPlayer`/UserManager overload; notification + AbstractSubSkill
+      surfaces dropped → PORT 11/10.3) and **`TridentsManager`** ported + uncommented in `McMMOPlayer`
+      (`getTridentsManager()` accessor added). `impaleDamageBonus` proven end-to-end vs real configs
+      (RankUtilsTest ×8, TridentsManagerTest ×3; suite 137 green). **Next:** `ArcheryManager`,
+      `AcrobaticsManager` (need `Permissions`, `NotificationManager`, `Misc`, `ProbabilityUtil`).
 - [ ] **10.3 Remaining skills** by rising complexity, interleaving the deferred Bukkit
       method bodies as each skill needs them: `mining`, `woodcutting`, `excavation`,
       `unarmed`, `swords`/`axes`/`maces`/`spears`, `smelting`, then the heavy config-backed

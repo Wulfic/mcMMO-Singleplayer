@@ -10,6 +10,7 @@ import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.SkillManager;
+import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
 import java.util.EnumMap;
@@ -123,7 +124,7 @@ public class McMMOPlayer {
             //   case SPEARS     -> new SpearsManager(this);   // 1.21.11 always has Spears (pinned)
             //   case SWORDS     -> new SwordsManager(this);
             //   case TAMING     -> new TamingManager(this);
-            //   case TRIDENTS   -> new TridentsManager(this);
+            case TRIDENTS -> new TridentsManager(this);
             //   case UNARMED    -> new UnarmedManager(this);
             //   case WOODCUTTING-> new WoodcuttingManager(this);
             default -> null;
@@ -140,6 +141,10 @@ public class McMMOPlayer {
      * Uncomment/add one per manager as it ports, alongside its initManager() case above. The
      * manager ↔ skill mapping is the commented switch above (AcrobaticsManager↔ACROBATICS, …).
      */
+
+    public TridentsManager getTridentsManager() {
+        return (TridentsManager) skillManagers.get(PrimarySkillType.TRIDENTS);
+    }
 
     public String getPlayerName() {
         return playerName;
