@@ -4,6 +4,7 @@ import com.gmail.nossr50.datatypes.experience.FormulaType;
 import com.gmail.nossr50.datatypes.experience.SkillXpGain;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
+import com.gmail.nossr50.database.ProfileStore;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
@@ -109,22 +110,23 @@ public class PlayerProfile {
         }
     }
 
-    // PORT Phase 5: profile persistence. The legacy save path scheduled a PlayerProfileSaveTask
-    // on the (Folia) scheduler and wrote to the SQL/flatfile DatabaseManager — both cut for the
-    // singleplayer port. Persistence is being re-homed onto per-world save data (attachment API /
-    // PersistentState). Until that lands these are no-ops; the in-memory profile is authoritative.
+    // Phase 5: profile persistence. The legacy save path scheduled a PlayerProfileSaveTask on the
+    // (Folia) scheduler and wrote to the SQL/flatfile DatabaseManager. For the singleplayer port
+    // the SQL backend and the async scheduler are cut: save() writes synchronously to the bound
+    // per-world FlatFileProfileStore (integrated-server saves are already off the render thread via
+    // the lifecycle/quit hooks that drive them). The async* helpers collapse onto the sync path.
 
     public void scheduleAsyncSave() {
-        // PORT Phase 5: async persistence.
+        save(true);
     }
 
     public void scheduleAsyncSaveDelay() {
-        // PORT Phase 5: delayed async persistence.
+        save(true);
     }
 
     @Deprecated
     public void scheduleSyncSaveDelay() {
-        // PORT Phase 5: delayed sync persistence.
+        save(true);
     }
 
     public void save(boolean useSync) {
@@ -133,20 +135,33 @@ public class PlayerProfile {
             return;
         }
 
-        // PORT Phase 5: write this profile to per-world save data. Leaving `changed` set so the
-        // profile is re-attempted once persistence exists.
-        LogUtils.debug("PlayerProfile.save deferred (persistence lands in Phase 5): " + playerName);
+        final ProfileStore store = McMMOMod.getProfileStore();
+        if (store == null) {
+            // No store bound (outside a world session / unit tests without persistence): the
+            // in-memory profile stays authoritative. Keep `changed` set so the write is retried
+            // once a store is bound.
+            LogUtils.debug("PlayerProfile.save skipped — no profile store bound: " + playerName);
+            return;
+        }
+
+        try {
+            store.saveProfile(this);
+            changed = false;
+            saveAttempts = 0;
+        } catch (Exception e) {
+            saveAttempts++;
+            McMMOMod.LOGGER.warn("Failed to save mcMMO profile for {} (attempt {}); will retry.",
+                    playerName, saveAttempts, e);
+            // Leave `changed` set so the next save operation retries.
+        }
     }
 
     /**
-     * Get this users last login, will return current java.lang.System#currentTimeMillis() if it
-     * doesn't exist
+     * This user's last-login timestamp (epoch millis), or {@code -1} if unknown. Serialized by
+     * {@link com.gmail.nossr50.database.FlatFileProfileStore}.
      *
      * @return the last login
-     * @deprecated This is only function for FlatFileDB atm, and it's only here for unit testing
-     * right now
      */
-    @Deprecated
     public @NotNull Long getLastLogin() {
         return Objects.requireNonNullElse(lastLogin, -1L);
     }

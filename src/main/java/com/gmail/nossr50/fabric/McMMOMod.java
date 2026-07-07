@@ -7,6 +7,7 @@ import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.config.SoundConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.database.ProfileStore;
 import com.gmail.nossr50.event.EventBus;
 import com.gmail.nossr50.event.SimpleEventBus;
 import com.gmail.nossr50.util.experience.FormulaManager;
@@ -77,6 +78,14 @@ public class McMMOMod implements ModInitializer {
      * (PORT Phase 8 — {@code onServerStarting}); {@code null} before then. The ported enums/
      * {@link SkillTools} only touch these on in-game code paths, so lazy wiring is safe.
      */
+    /**
+     * The per-world player-data store (Phase 5). Bound at server start once the world save path is
+     * known and cleared at server stop; {@code null} outside a world session (and in unit tests
+     * that don't exercise persistence, where {@link com.gmail.nossr50.datatypes.player.PlayerProfile#save}
+     * degrades to a no-op). Replaces the legacy {@code DatabaseManager} singleton.
+     */
+    private static volatile ProfileStore profileStore;
+
     private static volatile GeneralConfig generalConfig;
     private static volatile ExperienceConfig experienceConfig;
     private static volatile CoreSkillsConfig coreSkillsConfig;
@@ -190,6 +199,19 @@ public class McMMOMod implements ModInitializer {
             }
         }
         return local;
+    }
+
+    /**
+     * The active per-world {@link ProfileStore}, or {@code null} outside a world session. Replaces
+     * the legacy {@code mcMMO.getDatabaseManager()}.
+     */
+    public static @Nullable ProfileStore getProfileStore() {
+        return profileStore;
+    }
+
+    /** Binds the per-world {@link ProfileStore} at server start (Phase 5). */
+    public static void setProfileStore(@Nullable ProfileStore store) {
+        profileStore = store;
     }
 
     /**
