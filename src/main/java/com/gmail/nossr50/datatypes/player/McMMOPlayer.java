@@ -22,6 +22,7 @@ import com.gmail.nossr50.skills.spears.SpearsManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
+import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
 import java.util.EnumMap;
@@ -143,7 +144,7 @@ public class McMMOPlayer {
             //   case TAMING     -> new TamingManager(this);
             case TRIDENTS -> new TridentsManager(this);
             case UNARMED -> new UnarmedManager(this);
-            //   case WOODCUTTING-> new WoodcuttingManager(this);
+            case WOODCUTTING -> new WoodcuttingManager(this);
             default -> null;
         };
 
@@ -205,6 +206,10 @@ public class McMMOPlayer {
 
     public UnarmedManager getUnarmedManager() {
         return (UnarmedManager) skillManagers.get(PrimarySkillType.UNARMED);
+    }
+
+    public WoodcuttingManager getWoodcuttingManager() {
+        return (WoodcuttingManager) skillManagers.get(PrimarySkillType.WOODCUTTING);
     }
 
     public String getPlayerName() {
