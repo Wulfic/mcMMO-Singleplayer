@@ -8,13 +8,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.gmail.nossr50.database.FlatFileProfileStore;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import java.nio.file.Path;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Exercises the Phase 10.1 stripped {@link UserManager} — the UUID-keyed online-player registry that
@@ -112,15 +117,26 @@ class UserManagerTest {
     }
 
     @Test
-    void saveAllIsANoOpThatDoesNotThrow() {
-        final McMMOPlayer user = mockUser(UID_A, "Alice");
-        // saveAll reads each user's profile (persistence is a Phase 5 no-op on an unchanged profile).
-        when(user.getProfile()).thenReturn(new PlayerProfile("Alice", UID_A, 0));
-        UserManager.track(user);
+    void saveAllPersistsChangedProfilesToBoundStore(@TempDir Path dir) {
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        McMMOMod.setProfileStore(store);
+        try {
+            final PlayerProfile profile = store.loadProfile(UID_A, "Alice", 0);
+            profile.modifySkill(PrimarySkillType.MINING, 4); // marks the profile dirty
+            final McMMOPlayer user = mockUser(UID_A, "Alice");
+            when(user.getProfile()).thenReturn(profile);
+            UserManager.track(user);
 
-        UserManager.saveAll();
+            UserManager.saveAll();
 
-        // Registry is untouched by a save.
-        assertSame(user, UserManager.getPlayer(UID_A));
+            // Phase 5: saveAll flushes changed profiles through the bound store.
+            assertTrue(store.hasProfile(UID_A));
+            assertEquals(4, store.loadProfile(UID_A, "Alice", 0)
+                    .getSkillLevel(PrimarySkillType.MINING));
+            // Registry is untouched by a save.
+            assertSame(user, UserManager.getPlayer(UID_A));
+        } finally {
+            McMMOMod.setProfileStore(null);
+        }
     }
 }
