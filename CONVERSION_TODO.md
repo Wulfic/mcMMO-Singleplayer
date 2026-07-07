@@ -243,6 +243,16 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       manager). The block-break drop/spawn bodies (`excavationBlockCheck`, `gigaDrillBreaker`) stay
       deferred pending the item-spawn adapter + `ItemSpec`→`ItemStack` builder. See treasure-tier note
       under Phase 8. Suite 214 green (+7 tests: `TreasureConfigTest`, `ExcavationManagerTest`).
+- [~] **10.5 Mining core** — `MiningManager` + `BlastMining` ported (12th live manager):
+      Blast-Mining rank/config math (`getOreBonus`, `getDropMultiplier`, `getDebrisReduction`,
+      `biggerBombs`, `processDemolitionsExpertise`, tier ladder) + the double/triple-drop and
+      blast-mining/bigger-bombs/demolitions *eligibility* gates, plus the `isDropIllegal` predicate
+      (retargeted `Material`→registry-path `String`). Added `Permissions.demolitionsExpertise`/
+      `biggerBombs`. **Deferred** (block-break + item-spawn + entity-spawn + Phase 11 scheduler):
+      `miningBlockCheck`/`processDoubleDrops`/`processTripleDrops` (`BlockUtils.markDropsAsBonus`),
+      `canDetonate`/`remoteDetonation` (TNT spawn + target ray), `blastMiningDropProcessing`
+      (`EntityExplodeEvent`), and the PvP `BlastMining.processBlastMiningExplosion`. Suite 223 green
+      (+9 `MiningManagerTest` vs real advanced.yml/skillranks.yml RetroMode ladder).
 - [ ] **10.3 Remaining skills** by rising complexity, interleaving the deferred Bukkit
       method bodies as each skill needs them: `mining`, `woodcutting`, `excavation`,
       `unarmed`, `swords`/`axes`/`maces`/`spears`, `smelting`, then the heavy config-backed
