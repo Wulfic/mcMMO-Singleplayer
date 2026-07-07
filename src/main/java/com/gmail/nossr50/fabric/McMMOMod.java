@@ -1,6 +1,7 @@
 package com.gmail.nossr50.fabric;
 
 import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.config.treasure.TreasureConfig;
 import com.gmail.nossr50.config.CoreSkillsConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
@@ -81,6 +82,7 @@ public class McMMOMod implements ModInitializer {
     private static volatile RankConfig rankConfig;
     private static volatile SoundConfig soundConfig;
     private static volatile AdvancedConfig advancedConfig;
+    private static volatile TreasureConfig treasureConfig;
 
     @Override
     public void onInitialize() {
@@ -273,5 +275,18 @@ public class McMMOMod implements ModInitializer {
     /** Wires the loaded {@link AdvancedConfig} at server start (PORT Phase 8). */
     public static void setAdvancedConfig(@Nullable AdvancedConfig config) {
         advancedConfig = config;
+    }
+
+    /**
+     * The loaded {@link TreasureConfig}, or {@code null} outside a world session (before the configs
+     * are wired in at server start — PORT Phase 8). Replaces {@code TreasureConfig.getInstance()}.
+     */
+    public static @Nullable TreasureConfig getTreasureConfig() {
+        return treasureConfig;
+    }
+
+    /** Wires the loaded {@link TreasureConfig} at server start (PORT Phase 8). */
+    public static void setTreasureConfig(@Nullable TreasureConfig config) {
+        treasureConfig = config;
     }
 }

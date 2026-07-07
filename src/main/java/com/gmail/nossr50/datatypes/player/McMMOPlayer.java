@@ -10,7 +10,17 @@ import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.SkillManager;
+import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
+import com.gmail.nossr50.skills.archery.ArcheryManager;
+import com.gmail.nossr50.skills.axes.AxesManager;
+import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
+import com.gmail.nossr50.skills.excavation.ExcavationManager;
+import com.gmail.nossr50.skills.maces.MacesManager;
+import com.gmail.nossr50.skills.smelting.SmeltingManager;
+import com.gmail.nossr50.skills.spears.SpearsManager;
+import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.tridents.TridentsManager;
+import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
 import java.util.EnumMap;
@@ -67,6 +77,12 @@ public class McMMOPlayer {
 
     private boolean isUsingUnarmed;
 
+    // Combat-captured attack-cooldown charge (0.0–1.0) at the moment of the hit that a combat
+    // handler is processing. The vanilla attack-cooldown read that fills it lands with the combat
+    // pipeline (PORT Phase 10.3+); until then it stays at the "fully charged" default so the
+    // damage-math skills (Berserk, Critical Strikes, Rupture odds, …) read a neutral 1.0.
+    private float attackStrength = 1.0f;
+
     public McMMOPlayer(@NotNull PlatformPlayer player, @NotNull PlayerProfile profile) {
         requireNonNull(player, "player cannot be null");
         requireNonNull(profile, "profile cannot be null");
@@ -108,24 +124,24 @@ public class McMMOPlayer {
     private void initManager(PrimarySkillType primarySkillType) {
         final SkillManager manager = switch (primarySkillType) {
             // PORT Phase 10.2/10.3: uncomment each case as the manager class ports.
-            //   case ACROBATICS -> new AcrobaticsManager(this);
+            case ACROBATICS -> new AcrobaticsManager(this);
             //   case ALCHEMY    -> new AlchemyManager(this);
-            //   case ARCHERY    -> new ArcheryManager(this);
-            //   case AXES       -> new AxesManager(this);
-            //   case CROSSBOWS  -> new CrossbowsManager(this);
-            //   case EXCAVATION -> new ExcavationManager(this);
+            case ARCHERY -> new ArcheryManager(this);
+            case AXES -> new AxesManager(this);
+            case CROSSBOWS -> new CrossbowsManager(this);
+            case EXCAVATION -> new ExcavationManager(this);
             //   case FISHING    -> new FishingManager(this);
             //   case HERBALISM  -> new HerbalismManager(this);
-            //   case MACES      -> new MacesManager(this);
+            case MACES -> new MacesManager(this);
             //   case MINING     -> new MiningManager(this);
             //   case REPAIR     -> new RepairManager(this);
             //   case SALVAGE    -> new SalvageManager(this);
-            //   case SMELTING   -> new SmeltingManager(this);
-            //   case SPEARS     -> new SpearsManager(this);   // 1.21.11 always has Spears (pinned)
-            //   case SWORDS     -> new SwordsManager(this);
+            case SMELTING -> new SmeltingManager(this);
+            case SPEARS -> new SpearsManager(this);   // 1.21.11 always has Spears (pinned)
+            case SWORDS -> new SwordsManager(this);
             //   case TAMING     -> new TamingManager(this);
             case TRIDENTS -> new TridentsManager(this);
-            //   case UNARMED    -> new UnarmedManager(this);
+            case UNARMED -> new UnarmedManager(this);
             //   case WOODCUTTING-> new WoodcuttingManager(this);
             default -> null;
         };
@@ -142,8 +158,48 @@ public class McMMOPlayer {
      * manager ↔ skill mapping is the commented switch above (AcrobaticsManager↔ACROBATICS, …).
      */
 
+    public AcrobaticsManager getAcrobaticsManager() {
+        return (AcrobaticsManager) skillManagers.get(PrimarySkillType.ACROBATICS);
+    }
+
+    public ArcheryManager getArcheryManager() {
+        return (ArcheryManager) skillManagers.get(PrimarySkillType.ARCHERY);
+    }
+
+    public AxesManager getAxesManager() {
+        return (AxesManager) skillManagers.get(PrimarySkillType.AXES);
+    }
+
+    public CrossbowsManager getCrossbowsManager() {
+        return (CrossbowsManager) skillManagers.get(PrimarySkillType.CROSSBOWS);
+    }
+
+    public ExcavationManager getExcavationManager() {
+        return (ExcavationManager) skillManagers.get(PrimarySkillType.EXCAVATION);
+    }
+
+    public MacesManager getMacesManager() {
+        return (MacesManager) skillManagers.get(PrimarySkillType.MACES);
+    }
+
+    public SmeltingManager getSmeltingManager() {
+        return (SmeltingManager) skillManagers.get(PrimarySkillType.SMELTING);
+    }
+
+    public SpearsManager getSpearsManager() {
+        return (SpearsManager) skillManagers.get(PrimarySkillType.SPEARS);
+    }
+
+    public SwordsManager getSwordsManager() {
+        return (SwordsManager) skillManagers.get(PrimarySkillType.SWORDS);
+    }
+
     public TridentsManager getTridentsManager() {
         return (TridentsManager) skillManagers.get(PrimarySkillType.TRIDENTS);
+    }
+
+    public UnarmedManager getUnarmedManager() {
+        return (UnarmedManager) skillManagers.get(PrimarySkillType.UNARMED);
     }
 
     public String getPlayerName() {
@@ -494,8 +550,18 @@ public class McMMOPlayer {
         profile.resetCooldowns();
     }
 
-    // PORT Phase 10.3: getAttackStrength() dropped — read the Bukkit attack-cooldown; needs a
-    // PlatformPlayer attack-cooldown accessor, re-added with the combat skills.
+    /**
+     * The attack-cooldown charge (0.0–1.0) captured for the hit currently being processed. Combat
+     * damage-math sub-skills scale their bonus by this. Defaults to {@code 1.0} until the combat
+     * pipeline that reads the vanilla attack-cooldown lands (PORT Phase 10.3+).
+     */
+    public float getAttackStrength() {
+        return attackStrength;
+    }
+
+    public void setAttackStrength(float attackStrength) {
+        this.attackStrength = attackStrength;
+    }
 
     // PORT Phase 10/11: the super-ability activation cluster (checkAbilityActivation,
     // processAbilityActivation, processAxeToolMessages, calculateTimeRemaining, isAbilityOnCooldown)

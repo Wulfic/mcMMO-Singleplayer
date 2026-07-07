@@ -1,6 +1,7 @@
 package com.gmail.nossr50.util;
 
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -32,5 +33,68 @@ public final class Permissions {
      */
     public static boolean lucky(@Nullable PlatformPlayer player, @NotNull PrimarySkillType skill) {
         return false;
+    }
+
+    /**
+     * Whether a given sub-skill is enabled for a player. In the Bukkit plugin this gated each
+     * sub-skill behind an {@code mcmmo.ability.<skill>.<subskill>} permission node. Per the Phase 6
+     * decision, gameplay checks default to "allowed" in singleplayer — the lone player always has
+     * every sub-skill enabled.
+     *
+     * @param player the player (unused — retained to mirror the legacy call sites)
+     * @param subSkillType the sub-skill being checked
+     * @return always {@code true} — no permission backend in singleplayer
+     */
+    public static boolean isSubSkillEnabled(@Nullable PlatformPlayer player,
+            @NotNull SubSkillType subSkillType) {
+        return true;
+    }
+
+    /**
+     * Whether a player may use a given sub-skill. The Bukkit plugin gated this on the
+     * {@code mcmmo.ability.<skill>.<subskill>} node; per the Phase 6 decision gameplay checks
+     * default to "allowed" in singleplayer. Distinct from {@link #isSubSkillEnabled} only in the
+     * legacy node it mirrored (Maces/Spears call sites used this variant).
+     *
+     * @param player the player (unused — retained to mirror the legacy call sites)
+     * @param subSkillType the sub-skill being checked
+     * @return always {@code true} — no permission backend in singleplayer
+     */
+    public static boolean canUseSubSkill(@Nullable PlatformPlayer player,
+            @NotNull SubSkillType subSkillType) {
+        return true;
+    }
+
+    /**
+     * Berserk super-ability activation ({@code mcmmo.ability.unarmed.berserk}). A gameplay
+     * activation check, so it defaults to "allowed" in singleplayer.
+     *
+     * @param player the player (unused — retained to mirror the legacy call sites)
+     * @return always {@code true} — no permission backend in singleplayer
+     */
+    public static boolean berserk(@Nullable PlatformPlayer player) {
+        return true;
+    }
+
+    /**
+     * Serrated Strikes super-ability activation ({@code mcmmo.ability.swords.serratedstrikes}).
+     * A gameplay activation check, so it defaults to "allowed" in singleplayer.
+     *
+     * @param player the player (unused — retained to mirror the legacy call sites)
+     * @return always {@code true} — no permission backend in singleplayer
+     */
+    public static boolean serratedStrikes(@Nullable PlatformPlayer player) {
+        return true;
+    }
+
+    /**
+     * Skull Splitter super-ability activation ({@code mcmmo.ability.axes.skullsplitter}). A
+     * gameplay activation check, so it defaults to "allowed" in singleplayer.
+     *
+     * @param player the player (unused — retained to mirror the legacy call sites)
+     * @return always {@code true} — no permission backend in singleplayer
+     */
+    public static boolean skullSplitter(@Nullable PlatformPlayer player) {
+        return true;
     }
 }

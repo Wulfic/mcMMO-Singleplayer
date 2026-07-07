@@ -105,6 +105,15 @@ public final class PlatformPlayer {
         return handle.isSneaking();
     }
 
+    /**
+     * Bukkit {@code Player#isBlocking()}: whether the player is actively raising a shield. Maps to
+     * vanilla {@link net.minecraft.entity.LivingEntity#isBlocking()}. Consumed by the Acrobatics
+     * Dodge gate, which suppresses a dodge while the player is blocking.
+     */
+    public boolean isBlocking() {
+        return handle.isBlocking();
+    }
+
     // --- Messaging (Text = locked target type) ------------------------------
 
     /** Bukkit {@code sendMessage} (127 refs). Chat message. */
