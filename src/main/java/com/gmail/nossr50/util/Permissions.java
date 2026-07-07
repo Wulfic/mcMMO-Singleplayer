@@ -97,4 +97,26 @@ public final class Permissions {
     public static boolean skullSplitter(@Nullable PlatformPlayer player) {
         return true;
     }
+
+    /**
+     * Demolitions Expertise sub-skill ({@code mcmmo.ability.mining.demolitionsexpertise}), which
+     * reduces Blast Mining self-damage. A gameplay check, so it defaults to "allowed".
+     *
+     * @param player the player (unused — retained to mirror the legacy call sites)
+     * @return always {@code true} — no permission backend in singleplayer
+     */
+    public static boolean demolitionsExpertise(@Nullable PlatformPlayer player) {
+        return true;
+    }
+
+    /**
+     * Bigger Bombs sub-skill ({@code mcmmo.ability.mining.biggerbombs}), which widens the Blast
+     * Mining radius. A gameplay check, so it defaults to "allowed".
+     *
+     * @param player the player (unused — retained to mirror the legacy call sites)
+     * @return always {@code true} — no permission backend in singleplayer
+     */
+    public static boolean biggerBombs(@Nullable PlatformPlayer player) {
+        return true;
+    }
 }
