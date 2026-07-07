@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -62,5 +63,15 @@ class GeneralConfigTest {
     void greenThumbReplantDefaultsTrueForUnknownCrop(@TempDir Path dataFolder) {
         final GeneralConfig config = new GeneralConfig(dataFolder);
         assertTrue(config.isGreenThumbReplantableCrop("Not_A_Real_Crop"));
+    }
+
+    @Test
+    void superAbilityCooldownTypedOverloadDelegatesToStringKey(@TempDir Path dataFolder) {
+        final GeneralConfig config = new GeneralConfig(dataFolder);
+        // SuperAbilityType.toString() yields the PascalCase config key (e.g. "Super_Breaker").
+        assertEquals(config.getCooldown("Super_Breaker"),
+                config.getCooldown(SuperAbilityType.SUPER_BREAKER));
+        assertEquals(config.getMaxLength("Super_Breaker"),
+                config.getMaxLength(SuperAbilityType.SUPER_BREAKER));
     }
 }

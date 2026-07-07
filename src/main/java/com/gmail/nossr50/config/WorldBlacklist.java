@@ -1,33 +1,47 @@
 package com.gmail.nossr50.config;
 
-import com.gmail.nossr50.mcMMO;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
-import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
-import org.bukkit.World;
+import java.util.List;
+import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * Blacklist certain features in certain worlds
+ * Blacklist certain features in certain worlds, backed by a plain {@code world_blacklist.txt} (one
+ * world name per line) in the mod data folder.
+ *
+ * <p>Port notes: the dataFolder is injected as a {@link Path} (replacing {@code mcMMO#getDataFolder}),
+ * and the lookup is keyed by <b>world name string</b> ({@link #isWorldBlacklisted(String)}) rather
+ * than a Bukkit {@code World} — the Fabric world type wraps into {@code platform/} in Phase 10, and
+ * the legacy body already compared against {@code world.getName()} anyway.
  */
 public class WorldBlacklist {
-    private static ArrayList<String> blacklist;
-    private final mcMMO plugin;
 
-    private final String blackListFileName = "world_blacklist.txt";
+    private static final Logger LOGGER = LoggerFactory.getLogger("mcMMO/Config");
 
-    public WorldBlacklist(mcMMO plugin) {
-        this.plugin = plugin;
-        blacklist = new ArrayList<>();
+    private static final String BLACKLIST_FILE_NAME = "world_blacklist.txt";
+
+    private static final List<String> blacklist = new ArrayList<>();
+
+    private final Path dataFolder;
+
+    public WorldBlacklist(@NotNull Path dataFolder) {
+        this.dataFolder = dataFolder;
+        blacklist.clear();
         init();
     }
 
-    public static boolean isWorldBlacklisted(World world) {
-
+    /**
+     * @param worldName the name of the world to check (case-insensitive)
+     * @return true if the named world is on the blacklist
+     */
+    public static boolean isWorldBlacklisted(String worldName) {
         for (String s : blacklist) {
-            if (world.getName().equalsIgnoreCase(s)) {
+            if (s.equalsIgnoreCase(worldName)) {
                 return true;
             }
         }
@@ -36,33 +50,26 @@ public class WorldBlacklist {
     }
 
     public void init() {
-        //Make the blacklist file if it doesn't exist
-        File blackListFile = new File(plugin.getDataFolder() + File.separator + blackListFileName);
+        final Path blackListFile = dataFolder.resolve(BLACKLIST_FILE_NAME);
 
         try {
-            if (!blackListFile.exists()) {
-                blackListFile.createNewFile();
+            //Make the blacklist file if it doesn't exist
+            if (!Files.exists(blackListFile)) {
+                Files.createDirectories(dataFolder);
+                Files.createFile(blackListFile);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.error("Failed to create world blacklist file: {}", blackListFile, e);
         }
 
         //Load up the blacklist
         loadBlacklist(blackListFile);
-        //registerFlags();
     }
 
-    private void loadBlacklist(File blackListFile) {
-        FileReader fileReader = null;
-        BufferedReader bufferedReader = null;
+    private void loadBlacklist(@NotNull Path blackListFile) {
         try {
-            fileReader = new FileReader(blackListFile);
-            bufferedReader = new BufferedReader(fileReader);
-
-            String currentLine;
-
-            while ((currentLine = bufferedReader.readLine()) != null) {
-                if (currentLine.length() == 0) {
+            for (String currentLine : Files.readAllLines(blackListFile, StandardCharsets.UTF_8)) {
+                if (currentLine.isEmpty()) {
                     continue;
                 }
 
@@ -70,28 +77,12 @@ public class WorldBlacklist {
                     blacklist.add(currentLine);
                 }
             }
-
-
         } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            //Close readers
-            closeRead(bufferedReader);
-            closeRead(fileReader);
+            LOGGER.error("Failed to read world blacklist file: {}", blackListFile, e);
         }
 
-        if (blacklist.size() > 0) {
-            plugin.getLogger().info(blacklist.size() + " entries in mcMMO World Blacklist");
-        }
-    }
-
-    private void closeRead(Reader reader) {
-        if (reader != null) {
-            try {
-                reader.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        if (!blacklist.isEmpty()) {
+            LOGGER.info("{} entries in mcMMO World Blacklist", blacklist.size());
         }
     }
 }

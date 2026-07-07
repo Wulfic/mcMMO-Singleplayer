@@ -1,6 +1,7 @@
 package com.gmail.nossr50.config;
 
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.util.text.StringUtils;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -118,6 +119,15 @@ public class GeneralConfig extends ConfigLoader {
 
     public boolean isMasterySystemEnabled() {
         return config.getBoolean("General.PowerLevel.Skill_Mastery.Enabled");
+    }
+
+    /**
+     * Whether RetroMode (1–1000 skill scaling) is enabled. A leveling-scale option, not a
+     * multiplayer concept, so it is kept for the singleplayer port; {@code RankConfig} reads it to
+     * pick the {@code Standard} vs {@code RetroMode} rank sections in {@code skillranks.yml}.
+     */
+    public boolean getIsRetroMode() {
+        return config.getBoolean("General.RetroMode.Enabled", true);
     }
 
     /* Level Caps */
@@ -303,14 +313,27 @@ public class GeneralConfig extends ConfigLoader {
         return config.getBoolean("Abilities.Activation.Level_Gate_Abilities");
     }
 
-    /** Cooldown for a super ability, keyed by its config String (pending {@code SuperAbilityType}). */
+    /** Cooldown for a super ability, keyed by its config String. */
     public int getCooldown(String superAbility) {
         return config.getInt("Abilities.Cooldowns." + superAbility);
     }
 
-    /** Max duration for a super ability, keyed by its config String (pending {@code SuperAbilityType}). */
+    /** Max duration for a super ability, keyed by its config String. */
     public int getMaxLength(String superAbility) {
         return config.getInt("Abilities.Max_Seconds." + superAbility);
+    }
+
+    /**
+     * Cooldown for a super ability. {@link SuperAbilityType#toString()} yields the PascalCase
+     * config key (e.g. {@code Super_Breaker}), matching {@link #getCooldown(String)}.
+     */
+    public int getCooldown(SuperAbilityType ability) {
+        return getCooldown(ability.toString());
+    }
+
+    /** Max duration for a super ability, keyed by {@link SuperAbilityType#toString()}. */
+    public int getMaxLength(SuperAbilityType ability) {
+        return getMaxLength(ability.toString());
     }
 
     public int getAbilityToolDamage() {

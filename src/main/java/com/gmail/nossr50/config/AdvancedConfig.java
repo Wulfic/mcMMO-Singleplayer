@@ -2,23 +2,37 @@ package com.gmail.nossr50.config;
 
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
-import com.gmail.nossr50.datatypes.skills.subskills.AbstractSubSkill;
-import com.gmail.nossr50.mcMMO;
-import java.io.File;
+import com.gmail.nossr50.fabric.McMMOMod;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import net.md_5.bungee.api.ChatColor;
 
-public class AdvancedConfig extends BukkitConfig {
+/**
+ * {@code advanced.yml} — per-subskill tuning (max-bonus levels, chance caps, damage modifiers,
+ * rank tables), ported onto {@link ConfigLoader}.
+ *
+ * <p>Port notes:
+ * <ul>
+ *   <li>The legacy {@code mcMMO} retro-mode static → {@link McMMOMod#isRetroModeEnabled()}
+ *       (null-safe: Standard scaling when the config isn't loaded, so this stays unit-testable).</li>
+ *   <li>The {@code AbstractSubSkill} overloads of {@link #getMaxBonusLevel}/
+ *       {@link #getMaximumProbability} are dropped ({@code // PORT Phase 10}) — they only
+ *       delegated to the {@link SubSkillType} versions via {@code getSubSkillType()}.</li>
+ *   <li>The private {@code getChatColor}/{@code getChatColorFromKey} helpers (the sole
+ *       {@code net.md_5.bungee.api.ChatColor} users) were dead code — no caller — and are dropped
+ *       with the Adventure/bungee dependency.</li>
+ * </ul>
+ */
+public class AdvancedConfig extends ConfigLoader {
     int[] defaultCrippleValues = new int[]{10, 15, 20, 25};
     int[] defaultMomentumValues = new int[]{5, 10, 15, 20, 25, 30, 35, 40, 45, 50};
 
-    public AdvancedConfig(File dataFolder) {
+    public AdvancedConfig(Path dataFolder) {
         super("advanced.yml", dataFolder);
-        validate();
+        loadKeys();
+        validateKeys();
     }
 
-    @Override
     protected boolean validateKeys() {
         // Validate all the settings!
         List<String> reason = new ArrayList<>();
@@ -409,6 +423,15 @@ public class AdvancedConfig extends BukkitConfig {
     protected void loadKeys() {
     }
 
+    /** Logs any collected validation issues and reports whether the config is clean. */
+    private boolean noErrorsInConfig(List<String> issues) {
+        for (String issue : issues) {
+            LOGGER.warn(issue);
+        }
+
+        return issues.isEmpty();
+    }
+
     /* GENERAL */
 
     public boolean useAttackCooldown() {
@@ -436,7 +459,7 @@ public class AdvancedConfig extends BukkitConfig {
      * @return the level at which abilities stop increasing in length
      */
     public int getAbilityLengthCap() {
-        if (!mcMMO.isRetroModeEnabled()) {
+        if (!McMMOMod.isRetroModeEnabled()) {
             return config.getInt("Skills.General.Ability.Length.Standard.CapLevel", 50);
         } else {
             return config.getInt("Skills.General.Ability.Length.RetroMode.CapLevel", 500);
@@ -450,7 +473,7 @@ public class AdvancedConfig extends BukkitConfig {
      * @return the number of levels required per ability length increase
      */
     public int getAbilityLength() {
-        if (!mcMMO.isRetroModeEnabled()) {
+        if (!McMMOMod.isRetroModeEnabled()) {
             return config.getInt("Skills.General.Ability.Length.Standard.IncreaseLevel", 5);
         } else {
             return config.getInt("Skills.General.Ability.Length.RetroMode.IncreaseLevel", 50);
@@ -472,23 +495,21 @@ public class AdvancedConfig extends BukkitConfig {
      */
     public int getMaxBonusLevel(SubSkillType subSkillType) {
         String keyPath = subSkillType.getAdvConfigAddress() + ".MaxBonusLevel.";
-        return mcMMO.isRetroModeEnabled() ? config.getInt(keyPath + "RetroMode", 1000)
+        return McMMOMod.isRetroModeEnabled() ? config.getInt(keyPath + "RetroMode", 1000)
                 : config.getInt(
                         keyPath + "Standard", 100);
     }
 
-    public int getMaxBonusLevel(AbstractSubSkill abstractSubSkill) {
-        return getMaxBonusLevel(abstractSubSkill.getSubSkillType());
-    }
+    // PORT Phase 10: getMaxBonusLevel(AbstractSubSkill) — dropped. Delegated to the SubSkillType
+    // overload via abstractSubSkill.getSubSkillType(); re-add when AbstractSubSkill ports.
 
     public double getMaximumProbability(SubSkillType subSkillType) {
 
         return config.getDouble(subSkillType.getAdvConfigAddress() + ".ChanceMax", 100.0D);
     }
 
-    public double getMaximumProbability(AbstractSubSkill abstractSubSkill) {
-        return getMaximumProbability(abstractSubSkill.getSubSkillType());
-    }
+    // PORT Phase 10: getMaximumProbability(AbstractSubSkill) — dropped (same delegating shim as
+    // getMaxBonusLevel above).
 
     /* Notification Settings */
 
@@ -517,23 +538,9 @@ public class AdvancedConfig extends BukkitConfig {
                 true);
     }
 
-    private ChatColor getChatColorFromKey(String keyLocation) {
-        String colorName = config.getString(keyLocation);
-
-        return getChatColor(colorName);
-    }
-
-    private ChatColor getChatColor(String configColor) {
-        for (ChatColor chatColor : ChatColor.values()) {
-            if (configColor.equalsIgnoreCase(chatColor.getName())) {
-                return chatColor;
-            }
-        }
-
-        //Invalid Color
-        mcMMO.p.getLogger().warning(configColor + " is an invalid color value");
-        return ChatColor.WHITE;
-    }
+    // PORT: getChatColorFromKey/getChatColor(String) — dropped. Dead code (no callers) and the
+    // sole net.md_5.bungee.api.ChatColor users. Colour parsing, if ever needed, belongs on the
+    // Phase 7 Formatting/Style pipeline, not bungee ChatColor.
 
     /* ACROBATICS */
     public double getDodgeDamageModifier() {
@@ -550,7 +557,7 @@ public class AdvancedConfig extends BukkitConfig {
 
     /* ALCHEMY */
     public int getCatalysisMaxBonusLevel() {
-        if (mcMMO.isRetroModeEnabled()) {
+        if (McMMOMod.isRetroModeEnabled()) {
             return config.getInt("Skills.Alchemy.Catalysis.MaxBonusLevel.RetroMode", 1000);
         } else {
             return config.getInt("Skills.Alchemy.Catalysis.MaxBonusLevel.Standard", 100);
@@ -771,7 +778,7 @@ public class AdvancedConfig extends BukkitConfig {
 
     /* SMELTING */
     public int getBurnModifierMaxLevel() {
-        if (mcMMO.isRetroModeEnabled()) {
+        if (McMMOMod.isRetroModeEnabled()) {
             return config.getInt("Skills.Smelting.FuelEfficiency.RetroMode.MaxBonusLevel", 1000);
         } else {
             return config.getInt("Skills.Smelting.FuelEfficiency.Standard.MaxBonusLevel", 100);

@@ -1,14 +1,8 @@
 package com.gmail.nossr50.datatypes.skills;
 
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
-import com.gmail.nossr50.mcMMO;
-import com.gmail.nossr50.util.BlockUtils;
-import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.text.StringUtils;
-import org.bukkit.Material;
-import org.bukkit.block.Block;
-import org.bukkit.entity.Player;
-import org.jetbrains.annotations.NotNull;
 
 public enum SuperAbilityType {
     EXPLOSIVE_SHOT("Archery.Skills.ExplosiveShot.On",
@@ -148,11 +142,11 @@ public enum SuperAbilityType {
     }
 
     public int getCooldown() {
-        return mcMMO.p.getSkillTools().getSuperAbilityCooldown(this);
+        return McMMOMod.getSkillTools().getSuperAbilityCooldown(this);
     }
 
     public int getMaxLength() {
-        return mcMMO.p.getGeneralConfig().getMaxLength(this);
+        return McMMOMod.getGeneralConfig().getMaxLength(this);
     }
 
     public String getAbilityOn() {
@@ -176,7 +170,10 @@ public enum SuperAbilityType {
     }
 
     public String getName() {
-        return StringUtils.getPrettySuperAbilityString(this);
+        // Legacy used StringUtils.getPrettySuperAbilityString(this); the ported StringUtils
+        // keeps only the String-based getPrettyString. name() ("SUPER_BREAKER") prettifies
+        // identically ("Super Breaker").
+        return StringUtils.getPrettyString(name());
     }
 
     public String getLocalizedName() {
@@ -204,42 +201,13 @@ public enum SuperAbilityType {
         return formattedString;
     }
 
-    /**
-     * Get the permissions for this ability.
-     *
-     * @param player Player to check permissions for
-     * @return true if the player has permissions, false otherwise
-     */
-    // TODO: Add unit tests
-    // TODO: This is stupid
-    public boolean getPermissions(Player player) {
-        return switch (this) {
-            case BERSERK -> Permissions.berserk(player);
-            case BLAST_MINING -> Permissions.remoteDetonation(player);
-            case GIGA_DRILL_BREAKER -> Permissions.gigaDrillBreaker(player);
-            case GREEN_TERRA -> Permissions.greenTerra(player);
-            case SERRATED_STRIKES -> Permissions.serratedStrikes(player);
-            case SKULL_SPLITTER -> Permissions.skullSplitter(player);
-            case SUPER_BREAKER -> Permissions.superBreaker(player);
-            case TREE_FELLER -> Permissions.treeFeller(player);
-            // TODO: once implemented, return permissions for the following abilities
-            case EXPLOSIVE_SHOT, TRIDENTS_SUPER_ABILITY, SUPER_SHOTGUN, MACES_SUPER_ABILITY,
-                 SPEARS_SUPER_ABILITY -> false;
-        };
-    }
+    // PORT Phase 6/10: getPermissions(Player) — dropped here. In singleplayer permission
+    // checks collapse to op-level/config/always-allow (Phase 6); the Bukkit Player + Permissions
+    // dependency is re-added against the platform/ player adapter when abilities port.
 
-    public boolean blockCheck(@NotNull Block block) {
-        return switch (this) {
-            case BERSERK -> (BlockUtils.affectedByGigaDrillBreaker(block)
-                    || block.getType() == Material.SNOW
-                    || mcMMO.getMaterialMapStore().isGlass(block.getType()));
-            case GIGA_DRILL_BREAKER -> BlockUtils.affectedByGigaDrillBreaker(block);
-            case GREEN_TERRA -> BlockUtils.canMakeMossy(block);
-            case SUPER_BREAKER -> BlockUtils.affectedBySuperBreaker(block);
-            case TREE_FELLER -> BlockUtils.hasWoodcuttingXP(block);
-            default -> false;
-        };
-    }
+    // PORT Phase 10: blockCheck(Block) — dropped here. Needs BlockUtils + the material map
+    // store, which land with the Mining/Excavation/Herbalism/Woodcutting skills against the
+    // platform/ block adapter.
 
     /**
      * Grabs the associated SubSkillType definition for this SuperAbilityType

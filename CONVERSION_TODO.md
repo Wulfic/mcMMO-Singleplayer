@@ -174,10 +174,13 @@ that's about to be deleted.
       map, `set`/`save`); `config/ConfigLoader` is the `BukkitConfig` replacement (bundled-default
       copy-to-disk + missing-key back-fill, data folder injected for testability). Both MC-free;
       12 unit tests (suite 42 green).
-- [ ] Port the concrete config classes onto `ConfigLoader`: `GeneralConfig`, `AdvancedConfig`,
-      `ExperienceConfig`, `RankConfig`, `CoreSkillsConfig`, `SoundConfig`, `HiddenConfig`,
-      `WorldBlacklist`, per-skill treasure/repair/salvage/alchemy configs. Each needs its default
-      `.yml` copied into `src/main/resources/`. Retarget `Material`/`Sound` lookups to `platform/`.
+- [~] Port the concrete config classes onto `ConfigLoader`. **Done:** `GeneralConfig`,
+      `ExperienceConfig`, `CoreSkillsConfig`, `SoundConfig`, `RankConfig`, `HiddenConfig`,
+      `WorldBlacklist`, `AdvancedConfig` (+ prereqs `LogUtils`→SLF4J, `SoundType`; default `.yml`s
+      copied into `src/main/resources/`; service-locator accessors + null-safe
+      `McMMOMod.isRetroModeEnabled()` on `McMMOMod`). **Deferred** (Material/ItemStack-heavy → port
+      with the Phase 10 `platform/` adapters): the per-skill treasure/repair/salvage/alchemy configs.
+      Retarget `Material`/`Sound` lookups to `platform/`.
       **(These + `SkillTools` unblock `SubSkillType`/`SuperAbilityType` and Phase 10.)**
 - [ ] Keep simple, human-editable config files, relocated to the mod config dir (real config dir
       resolved via `FabricLoader.getConfigDir()` when the concrete configs are wired in).

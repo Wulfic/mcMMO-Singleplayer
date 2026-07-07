@@ -1,13 +1,11 @@
 package com.gmail.nossr50.util.skills;
 
-import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
-import com.gmail.nossr50.mcMMO;
-import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.text.StringUtils;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -19,15 +17,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
-import org.bukkit.entity.Tameable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 
 public class SkillTools {
-    private final mcMMO pluginRef;
-
     // TODO: Java has immutable types now, switch to those
     // TODO: Figure out which ones we don't need, this was copy pasted from a diff branch
     public final @NotNull ImmutableList<String> LOCALIZED_SKILL_NAMES;
@@ -68,9 +61,7 @@ public class SkillTools {
         );
     }
 
-    public SkillTools(@NotNull mcMMO pluginRef) {
-        this.pluginRef = pluginRef;
-
+    public SkillTools() {
         /*
          * Setup subskill -> parent relationship map
          */
@@ -241,43 +232,19 @@ public class SkillTools {
     @VisibleForTesting
     @NotNull
     ImmutableList<PrimarySkillType> buildCombatSkills() {
-        if (mcMMO.getMinecraftGameVersion().isAtLeast(1, 21, 11)) {
-            // We are in a game version with Spears and Maces
-            return ImmutableList.of(
-                    PrimarySkillType.ARCHERY,
-                    PrimarySkillType.AXES,
-                    PrimarySkillType.CROSSBOWS,
-                    PrimarySkillType.MACES,
-                    PrimarySkillType.SWORDS,
-                    PrimarySkillType.SPEARS,
-                    PrimarySkillType.TAMING,
-                    PrimarySkillType.TRIDENTS,
-                    PrimarySkillType.UNARMED
-            );
-        } else if (mcMMO.getMinecraftGameVersion().isAtLeast(1, 21, 0)) {
-            // We are in a game version with Maces
-            return ImmutableList.of(
-                    PrimarySkillType.ARCHERY,
-                    PrimarySkillType.AXES,
-                    PrimarySkillType.CROSSBOWS,
-                    PrimarySkillType.MACES,
-                    PrimarySkillType.SWORDS,
-                    PrimarySkillType.TAMING,
-                    PrimarySkillType.TRIDENTS,
-                    PrimarySkillType.UNARMED
-            );
-        } else {
-            // No Maces in this version
-            return ImmutableList.of(
-                    PrimarySkillType.ARCHERY,
-                    PrimarySkillType.AXES,
-                    PrimarySkillType.CROSSBOWS,
-                    PrimarySkillType.SWORDS,
-                    PrimarySkillType.TAMING,
-                    PrimarySkillType.TRIDENTS,
-                    PrimarySkillType.UNARMED
-            );
-        }
+        // The port pins MC 1.21.11 (see gradle.properties), which has both Spears and Maces,
+        // so the legacy game-version branching collapses to this single list.
+        return ImmutableList.of(
+                PrimarySkillType.ARCHERY,
+                PrimarySkillType.AXES,
+                PrimarySkillType.CROSSBOWS,
+                PrimarySkillType.MACES,
+                PrimarySkillType.SWORDS,
+                PrimarySkillType.SPEARS,
+                PrimarySkillType.TAMING,
+                PrimarySkillType.TRIDENTS,
+                PrimarySkillType.UNARMED
+        );
     }
 
     private @NotNull PrimarySkillType getSuperAbilityParent(SuperAbilityType superAbilityType) {
@@ -344,24 +311,14 @@ public class SkillTools {
      * Matches a string of a skill to a skill.
      * This is NOT case-sensitive.
      * <p>
-     * First it checks the locale file and tries to match by the localized name of the skill.
-     * Then if nothing is found it checks against the hard coded "name" of the skill,
-     * which is just its name in English.
+     * Matches against the hard coded English "name" of the skill. The legacy localized-name
+     * branch is dropped: the port is English-only (see the English-only LocaleLoader), so it
+     * was dead for the {@code en_US} case anyway.
      *
      * @param skillName target skill name
      * @return the matching PrimarySkillType if one is found, otherwise null
      */
     public PrimarySkillType matchSkill(String skillName) {
-        if (!pluginRef.getGeneralConfig().getLocale().equalsIgnoreCase("en_US")) {
-            for (PrimarySkillType type : PrimarySkillType.values()) {
-                String localized = LocaleLoader.getString(
-                        StringUtils.getCapitalized(type.name()) + ".SkillName");
-                if (skillName.equalsIgnoreCase(localized)) {
-                    return type;
-                }
-            }
-        }
-
         for (PrimarySkillType type : PrimarySkillType.values()) {
             if (type.name().equalsIgnoreCase(skillName)) {
                 return type;
@@ -369,8 +326,7 @@ public class SkillTools {
         }
 
         if (!skillName.equalsIgnoreCase("all")) {
-            pluginRef.getLogger()
-                    .warning("Invalid mcMMO skill (" + skillName + ")"); // TODO: Localize
+            McMMOMod.LOGGER.warn("Invalid mcMMO skill ({})", skillName);
         }
 
         return null;
@@ -402,30 +358,24 @@ public class SkillTools {
         return mainActivatedAbilityChildMap.get(primarySkillType);
     }
 
-    public boolean isSuperAbilityUnlocked(PrimarySkillType primarySkillType, Player player) {
-        SuperAbilityType superAbilityType = getSuperAbility(primarySkillType);
-        if (superAbilityType == null) {
-            return false;
-        }
-
-        SubSkillType subSkillType = superAbilityType.getSubSkillTypeDefinition();
-        return RankUtils.hasUnlockedSubskill(player, subSkillType);
-    }
+    // PORT Phase 10: isSuperAbilityUnlocked(PrimarySkillType, Player) — dropped here. Needs the
+    // Bukkit Player + RankUtils.hasUnlockedSubskill; re-add against the platform/ player adapter
+    // when RankUtils/RankConfig port with the skills.
 
     public boolean getPVPEnabled(PrimarySkillType primarySkillType) {
-        return pluginRef.getGeneralConfig().getPVPEnabled(primarySkillType);
+        return McMMOMod.getGeneralConfig().getPVPEnabled(primarySkillType);
     }
 
     public boolean getPVEEnabled(PrimarySkillType primarySkillType) {
-        return pluginRef.getGeneralConfig().getPVEEnabled(primarySkillType);
+        return McMMOMod.getGeneralConfig().getPVEEnabled(primarySkillType);
     }
 
     public boolean getHardcoreStatLossEnabled(PrimarySkillType primarySkillType) {
-        return pluginRef.getGeneralConfig().getHardcoreStatLossEnabled(primarySkillType);
+        return McMMOMod.getGeneralConfig().getHardcoreStatLossEnabled(primarySkillType);
     }
 
     public boolean getHardcoreVampirismEnabled(PrimarySkillType primarySkillType) {
-        return pluginRef.getGeneralConfig().getHardcoreVampirismEnabled(primarySkillType);
+        return McMMOMod.getGeneralConfig().getHardcoreVampirismEnabled(primarySkillType);
     }
 
     public ToolType getPrimarySkillToolType(PrimarySkillType primarySkillType) {
@@ -437,7 +387,7 @@ public class SkillTools {
     }
 
     public double getXpMultiplier(PrimarySkillType primarySkillType) {
-        return ExperienceConfig.getInstance().getFormulaSkillModifier(primarySkillType);
+        return McMMOMod.getExperienceConfig().getFormulaSkillModifier(primarySkillType);
     }
 
     public static boolean isChildSkill(PrimarySkillType primarySkillType) {
@@ -458,44 +408,33 @@ public class SkillTools {
                 StringUtils.getCapitalized(primarySkillType.toString()) + ".SkillName");
     }
 
-    public boolean doesPlayerHaveSkillPermission(Player player, PrimarySkillType primarySkillType) {
-        return Permissions.skillEnabled(player, primarySkillType);
-    }
+    // PORT Phase 6/10: doesPlayerHaveSkillPermission(Player, PrimarySkillType) — dropped. Needs
+    // Bukkit Player + Permissions; permission model is reworked for singleplayer in Phase 6.
 
-    public boolean canCombatSkillsTrigger(PrimarySkillType primarySkillType, Entity target) {
-        boolean isPlayerOrTamed = (target instanceof Player)
-                || (target instanceof Tameable && ((Tameable) target).isTamed());
-        return isPlayerOrTamed
-                ? getPVPEnabled(primarySkillType)
-                : getPVEEnabled(primarySkillType);
-    }
+    // PORT Phase 10: canCombatSkillsTrigger(PrimarySkillType, Entity) — dropped. Needs Bukkit
+    // Entity/Tameable/Player; re-add against the platform/ entity adapter with the combat skills.
+    // (Faithful body just routed player/tamed targets to getPVPEnabled, everything else to
+    // getPVEEnabled.)
 
     public String getCapitalizedPrimarySkillName(PrimarySkillType primarySkillType) {
         return StringUtils.getCapitalized(primarySkillType.toString());
     }
 
     public int getSuperAbilityCooldown(SuperAbilityType superAbilityType) {
-        return pluginRef.getGeneralConfig().getCooldown(superAbilityType);
+        return McMMOMod.getGeneralConfig().getCooldown(superAbilityType);
     }
 
     public int getSuperAbilityMaxLength(SuperAbilityType superAbilityType) {
-        return pluginRef.getGeneralConfig().getMaxLength(superAbilityType);
+        return McMMOMod.getGeneralConfig().getMaxLength(superAbilityType);
     }
 
     public int getLevelCap(@NotNull PrimarySkillType primarySkillType) {
-        return pluginRef.getGeneralConfig().getLevelCap(primarySkillType);
+        return McMMOMod.getGeneralConfig().getLevelCap(primarySkillType);
     }
 
-    /**
-     * Get the permissions for this ability.
-     *
-     * @param player Player to check permissions for
-     * @param superAbilityType target super ability
-     * @return true if the player has permissions, false otherwise
-     */
-    public boolean superAbilityPermissionCheck(SuperAbilityType superAbilityType, Player player) {
-        return superAbilityType.getPermissions(player);
-    }
+    // PORT Phase 6/10: superAbilityPermissionCheck(SuperAbilityType, Player) — dropped. Delegated
+    // to the deferred SuperAbilityType.getPermissions(Player); re-add with the Phase 6 permission
+    // rework.
 
     public @NotNull List<PrimarySkillType> getChildSkills() {
         return CHILD_SKILLS;

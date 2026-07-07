@@ -1,45 +1,38 @@
 package com.gmail.nossr50.config;
 
-import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.sounds.SoundType;
+import java.nio.file.Path;
 
-public class SoundConfig extends BukkitConfig {
-    private static SoundConfig instance;
+/**
+ * {@code sounds.yml} — per-{@link SoundType} volume/pitch/enable + custom sound ids, ported onto
+ * {@link ConfigLoader}. MC-free: sound playback (which needs the Fabric sound registry) lives in
+ * {@code util/sounds/SoundManager}, deferred to Phase 11; this class only reads the tuning values.
+ */
+public class SoundConfig extends ConfigLoader {
 
-    public SoundConfig() {
-        super("sounds.yml");
-        validate();
-        instance = this;
-    }
-
-    public static SoundConfig getInstance() {
-        if (instance == null) {
-            return new SoundConfig();
-        }
-
-        return instance;
+    public SoundConfig(Path dataFolder) {
+        super("sounds.yml", dataFolder);
+        loadKeys();
+        validateKeys();
     }
 
     @Override
     protected void loadKeys() {
-
+        // Values are read lazily through the getters; nothing to pre-compute.
     }
 
-    @Override
     protected boolean validateKeys() {
         for (SoundType soundType : SoundType.values()) {
             if (config.getDouble("Sounds." + soundType + ".Volume") < 0) {
-                LogUtils.debug(mcMMO.p.getLogger(),
-                        "[mcMMO] Sound volume cannot be below 0 for " + soundType);
+                LogUtils.debug("[mcMMO] Sound volume cannot be below 0 for " + soundType);
                 return false;
             }
 
             //Sounds with custom pitching don't use pitch values
             if (!soundType.usesCustomPitch()) {
                 if (config.getDouble("Sounds." + soundType + ".Pitch") < 0) {
-                    LogUtils.debug(mcMMO.p.getLogger(),
-                            "[mcMMO] Sound pitch cannot be below 0 for " + soundType);
+                    LogUtils.debug("[mcMMO] Sound pitch cannot be below 0 for " + soundType);
                     return false;
                 }
             }

@@ -1,9 +1,5 @@
 package com.gmail.nossr50.datatypes.skills;
 
-import com.gmail.nossr50.util.ItemUtils;
-import org.bukkit.Material;
-import org.bukkit.inventory.ItemStack;
-
 public enum ToolType {
     AXE("Axes.Ability.Lower", "Axes.Ability.Ready"),
     FISTS("Unarmed.Ability.Lower", "Unarmed.Ability.Ready"),
@@ -32,40 +28,7 @@ public enum ToolType {
         return raiseTool;
     }
 
-    /**
-     * Check to see if the item is of the appropriate type.
-     *
-     * @param itemStack The item to check
-     * @return true if the item is the right type, false otherwise
-     */
-    public boolean inHand(ItemStack itemStack) {
-        switch (this) {
-            case AXE:
-                return ItemUtils.isAxe(itemStack);
-            case CROSSBOW:
-                return ItemUtils.isCrossbow(itemStack);
-            case TRIDENTS:
-                return ItemUtils.isTrident(itemStack);
-            case MACES:
-                return ItemUtils.isMace(itemStack);
-
-            case FISTS:
-                return itemStack.getType() == Material.AIR;
-
-            case HOE:
-                return ItemUtils.isHoe(itemStack);
-
-            case PICKAXE:
-                return ItemUtils.isPickaxe(itemStack);
-
-            case SHOVEL:
-                return ItemUtils.isShovel(itemStack);
-
-            case SWORD:
-                return ItemUtils.isSword(itemStack);
-
-            default:
-                return false;
-        }
-    }
+    // PORT Phase 10: inHand(ItemStack) — dropped here because it needs the Bukkit
+    // ItemStack + ItemUtils.isAxe/isPickaxe/... type checks. Re-add against the
+    // platform/ item adapter (or Minecraft ItemStack) when the skills that call it port.
 }

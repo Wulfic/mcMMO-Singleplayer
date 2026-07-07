@@ -1,7 +1,14 @@
 package com.gmail.nossr50.fabric;
 
+import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.config.CoreSkillsConfig;
+import com.gmail.nossr50.config.GeneralConfig;
+import com.gmail.nossr50.config.RankConfig;
+import com.gmail.nossr50.config.SoundConfig;
+import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.event.EventBus;
 import com.gmail.nossr50.event.SimpleEventBus;
+import com.gmail.nossr50.util.skills.SkillTools;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.server.MinecraftServer;
@@ -45,6 +52,26 @@ public class McMMOMod implements ModInitializer {
      * singleplayer world open/close cycles. Emitted events are fired on the server thread.
      */
     private static final EventBus eventBus = new SimpleEventBus();
+
+    /**
+     * Skill metadata/relationship registry (subskill↔parent, super-ability↔skill, tool maps,
+     * localized name lists). Legacy code reached it via {@code mcMMO.p.getSkillTools()}. It holds
+     * no per-world state and only reads the (English) locale bundle, so it is built lazily on
+     * first access and lives for the whole JVM.
+     */
+    private static volatile SkillTools skillTools;
+
+    /**
+     * The loaded config instances. Wired in when the concrete configs are loaded at server start
+     * (PORT Phase 8 — {@code onServerStarting}); {@code null} before then. The ported enums/
+     * {@link SkillTools} only touch these on in-game code paths, so lazy wiring is safe.
+     */
+    private static volatile GeneralConfig generalConfig;
+    private static volatile ExperienceConfig experienceConfig;
+    private static volatile CoreSkillsConfig coreSkillsConfig;
+    private static volatile RankConfig rankConfig;
+    private static volatile SoundConfig soundConfig;
+    private static volatile AdvancedConfig advancedConfig;
 
     @Override
     public void onInitialize() {
@@ -112,5 +139,112 @@ public class McMMOMod implements ModInitializer {
      */
     public static @NotNull EventBus getEventBus() {
         return eventBus;
+    }
+
+    /**
+     * The skill metadata registry. Never {@code null} — built lazily on first access (it needs
+     * no world session, only the locale bundle). Replaces legacy {@code mcMMO.p.getSkillTools()}.
+     */
+    public static @NotNull SkillTools getSkillTools() {
+        SkillTools local = skillTools;
+        if (local == null) {
+            synchronized (McMMOMod.class) {
+                local = skillTools;
+                if (local == null) {
+                    local = new SkillTools();
+                    skillTools = local;
+                }
+            }
+        }
+        return local;
+    }
+
+    /**
+     * The loaded {@link GeneralConfig}, or {@code null} outside a world session (before the
+     * configs are wired in at server start — PORT Phase 8). Replaces {@code mcMMO.p.getGeneralConfig()}.
+     */
+    public static @Nullable GeneralConfig getGeneralConfig() {
+        return generalConfig;
+    }
+
+    /** Wires the loaded {@link GeneralConfig} at server start (PORT Phase 8). */
+    public static void setGeneralConfig(@Nullable GeneralConfig config) {
+        generalConfig = config;
+    }
+
+    /**
+     * Whether RetroMode (1–1000) scaling is enabled, or {@code false} when the config is not yet
+     * loaded (outside a world session / in unit tests → Standard scaling). Replaces the legacy
+     * {@code mcMMO.isRetroModeEnabled()} static, which cached {@code generalConfig.getIsRetroMode()}
+     * at enable time; a live null-safe read avoids a stale snapshot.
+     */
+    public static boolean isRetroModeEnabled() {
+        final GeneralConfig config = generalConfig;
+        return config != null && config.getIsRetroMode();
+    }
+
+    /**
+     * The loaded {@link ExperienceConfig}, or {@code null} outside a world session (before the
+     * configs are wired in at server start — PORT Phase 8). Replaces {@code ExperienceConfig.getInstance()}.
+     */
+    public static @Nullable ExperienceConfig getExperienceConfig() {
+        return experienceConfig;
+    }
+
+    /** Wires the loaded {@link ExperienceConfig} at server start (PORT Phase 8). */
+    public static void setExperienceConfig(@Nullable ExperienceConfig config) {
+        experienceConfig = config;
+    }
+
+    /**
+     * The loaded {@link CoreSkillsConfig}, or {@code null} outside a world session (before the
+     * configs are wired in at server start — PORT Phase 8). Replaces {@code CoreSkillsConfig.getInstance()}.
+     */
+    public static @Nullable CoreSkillsConfig getCoreSkillsConfig() {
+        return coreSkillsConfig;
+    }
+
+    /** Wires the loaded {@link CoreSkillsConfig} at server start (PORT Phase 8). */
+    public static void setCoreSkillsConfig(@Nullable CoreSkillsConfig config) {
+        coreSkillsConfig = config;
+    }
+
+    /**
+     * The loaded {@link RankConfig}, or {@code null} outside a world session (before the configs
+     * are wired in at server start — PORT Phase 8). Replaces {@code RankConfig.getInstance()}.
+     */
+    public static @Nullable RankConfig getRankConfig() {
+        return rankConfig;
+    }
+
+    /** Wires the loaded {@link RankConfig} at server start (PORT Phase 8). */
+    public static void setRankConfig(@Nullable RankConfig config) {
+        rankConfig = config;
+    }
+
+    /**
+     * The loaded {@link SoundConfig}, or {@code null} outside a world session (before the configs
+     * are wired in at server start — PORT Phase 8). Replaces {@code SoundConfig.getInstance()}.
+     */
+    public static @Nullable SoundConfig getSoundConfig() {
+        return soundConfig;
+    }
+
+    /** Wires the loaded {@link SoundConfig} at server start (PORT Phase 8). */
+    public static void setSoundConfig(@Nullable SoundConfig config) {
+        soundConfig = config;
+    }
+
+    /**
+     * The loaded {@link AdvancedConfig}, or {@code null} outside a world session (before the configs
+     * are wired in at server start — PORT Phase 8). Replaces {@code AdvancedConfig.getInstance()}.
+     */
+    public static @Nullable AdvancedConfig getAdvancedConfig() {
+        return advancedConfig;
+    }
+
+    /** Wires the loaded {@link AdvancedConfig} at server start (PORT Phase 8). */
+    public static void setAdvancedConfig(@Nullable AdvancedConfig config) {
+        advancedConfig = config;
     }
 }
