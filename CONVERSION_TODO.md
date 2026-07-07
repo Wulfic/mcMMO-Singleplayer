@@ -253,6 +253,18 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       `canDetonate`/`remoteDetonation` (TNT spawn + target ray), `blastMiningDropProcessing`
       (`EntityExplodeEvent`), and the PvP `BlastMining.processBlastMiningExplosion`. Suite 223 green
       (+9 `MiningManagerTest` vs real advanced.yml/skillranks.yml RetroMode ladder).
+- [~] **10.6 Woodcutting core** — `WoodcuttingManager` ported (13th live manager): the XP-per-log
+      lookup (`getExperienceFromLog`), the Tree Feller XP-reduction curve (`processTreeFellerXPGains`,
+      `-5*woodCount`, floored at 1, gated on `ExploitFix.TreeFellerReducedXP`), the Tree Feller
+      threshold read, and the Harvest Lumber / Clean Cuts bonus-drop *activation* gates
+      (`checkHarvestLumberActivation`/`checkCleanCutsActivation`) — all retargeting `Material`→
+      config-material `String`, configs via `McMMOMod` locators. Wired into the `McMMOPlayer` factory +
+      `getWoodcuttingManager()`. **Deferred** (block-break + held-item + item-spawn + durability +
+      scheduler adapters): `canUseLeafBlower`/`canUseTreeFeller` (`ItemUtils.isAxe` on held item),
+      `processWoodcuttingBlockXP`, `processBonusDropCheck`/`spawnHarvestLumberBonusDrops`, and the whole
+      Tree Feller machinery (`processTree`/`processTreeFellerTargetBlock`/`dropTreeFellerLootFromBlocks`/
+      `handleDurabilityLoss` — recursive block search, `PlayerItemDamageEvent`, per-log drops + XP orbs +
+      Knock on Wood sapling filter). Suite 228 green (+5 `WoodcuttingManagerTest` vs real experience.yml).
 - [ ] **10.3 Remaining skills** by rising complexity, interleaving the deferred Bukkit
       method bodies as each skill needs them: `mining`, `woodcutting`, `excavation`,
       `unarmed`, `swords`/`axes`/`maces`/`spears`, `smelting`, then the heavy config-backed
