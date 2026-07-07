@@ -190,11 +190,50 @@ that's about to be deleted.
 - [ ] Remove `WorldGuard`, `PlaceholderAPI`, `ProtocolLib`, `CombatTag`,
       `HealthBar` hooks and **Folia** scheduler support (all server-only).
 
-### Phase 10 — Skill modules
-- [ ] Migrate all 20 skill packages (acrobatics, alchemy, archery, axes, crossbows,
-      excavation, fishing, herbalism, maces, mining, repair, salvage, smelting, spears,
-      swords, taming, tridents, unarmed, woodcutting + `SkillManager`) onto the adapter
-      layer.
+### Phase 10 — Skill modules  🟡 god-object stripped
+
+Migrate all 20 skill packages (acrobatics, alchemy, archery, axes, crossbows, excavation,
+fishing, herbalism, maces, mining, repair, salvage, smelting, spears, swords, taming,
+tridents, unarmed, woodcutting) + `SkillManager` onto the platform adapter layer.
+
+**The knot:** `McMMOPlayer` (1282 lines) is a god-object that imports *all 20* skill
+managers (it's their factory) and carries 82 refs to cut systems (party/chat/scoreboard);
+every `*Manager extends SkillManager`, which needs `McMMOPlayer`. So nothing compiles
+one-skill-at-a-time unless the not-yet-ported managers are commented out of `McMMOPlayer`
+(`// PORT Phase 10`) and uncommented as each lands. Port **bottom-up**.
+
+- [~] **10.0 Keystone data model** (MC-free, unit-testable island): `UniqueDataType`,
+      `SkillXpGain`, `FormulaManager` (defer the `formula.yml` migration cache → Phase 5),
+      `PlayerProfile` (defer `save()`/`scheduleAsyncSave*` → Phase 5; cumulative XP curve
+      needs `UserManager` → guarded `// PORT`). `McMMOMod.getFormulaManager()` locator added.
+- [x] **10.1 God-object + base:** `SkillManager` base ported (`getPlayer()` → `PlatformPlayer`;
+      combat `getXPGainReason(LivingEntity, Entity)` dropped → PORT 10.3, needs an entity adapter).
+      `McMMOPlayer` **stripped 1282 → ~430 lines**: holds `PlatformPlayer` + `PlayerProfile`; the
+      **XP-gain pipeline stays functional** (`beginXpGain`→`beginUnsharedXpGain`→`applyXpGain`→
+      `checkXp`/`modifyXpGain`) — party-share, perks, the pre/xp/level-change API events, and all
+      notification/sound/bar feedback dropped with PORT breadcrumbs, but the actual XP-add (which
+      legacy hid inside `EventUtils.handleXpGainEvent`) is **retained inline** or the gain never
+      reaches the profile. Ability/tool/flag/power-level state kept. All 20 skill managers commented
+      out of the `initManager` factory (uncomment per skill in 10.2/10.3); super-ability activation,
+      exploit/teleport timestamps, `logout`/`cleanup`, and the cut party/chat/scoreboard/Adventure/
+      Bukkit-metadata surfaces dropped. `UserManager` **stripped** to a `ConcurrentHashMap<UUID,
+      McMMOPlayer>` registry (replaces the Bukkit-metadata attachment + sync-save `HashSet`);
+      `getOfflinePlayer` dropped → PORT 5. Tests: `McMMOPlayerTest` (12 — incl. real XP→level-up
+      chain vs bundled `config.yml`+`experience.yml`, child split, creative guard, caps),
+      `UserManagerTest` (7), `SkillManagerTest` (4, Mockito). **Mockito 5 added** to mock the final
+      `platform/` adapters MC-free. Suite **126 green** (was 103).
+- [ ] **10.2 First leaf skills** (MC-light, prove the chain): `TridentsManager` (25 lines,
+      0 Bukkit imports), then `ArcheryManager`, `AcrobaticsManager`. Uncomment each manager
+      in `McMMOPlayer` as it lands; add a per-skill unit test.
+- [ ] **10.3 Remaining skills** by rising complexity, interleaving the deferred Bukkit
+      method bodies as each skill needs them: `mining`, `woodcutting`, `excavation`,
+      `unarmed`, `swords`/`axes`/`maces`/`spears`, `smelting`, then the heavy config-backed
+      ones — `herbalism` (992), `fishing` (749), `taming` (572), `repair`/`salvage` (need
+      the deferred treasure/repair/salvage/alchemy item configs from Phase 8).
+- [ ] **Utility prereqs to port as skills demand them** (drop-Bukkit-body pattern held):
+      `UserManager`, `RankUtils`, `SkillUtils`, `BlockUtils`, `ItemUtils`, `PerksUtils`,
+      `EventUtils`, `Misc`, `NotificationManager`, `SoundManager` (Phase 11), `Permissions`
+      (Phase 6). Retarget their Bukkit surfaces to `platform/` adapters.
 
 ### Phase 11 — Scheduler / runnables
 - [ ] Convert `runnables/` (BukkitScheduler tasks) to server-tick callbacks

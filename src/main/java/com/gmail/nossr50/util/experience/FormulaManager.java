@@ -1,18 +1,13 @@
 package com.gmail.nossr50.util.experience;
 
-import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.experience.FormulaType;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
-import com.gmail.nossr50.mcMMO;
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.LogUtils;
-import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
-import org.bukkit.configuration.file.YamlConfiguration;
 
 public class FormulaManager {
-    private static final File formulaFile = new File(mcMMO.getFlatFileDirectory() + "formula.yml");
-
     // Experience needed to reach a level, cached values to improve conversion speed
     private Map<Integer, Integer> experienceNeededRetroLinear;
     private Map<Integer, Integer> experienceNeededStandardLinear;
@@ -87,7 +82,7 @@ public class FormulaManager {
             FormulaType formulaType) {
         int newLevel = 0;
         int remainder = 0;
-        int maxLevel = mcMMO.p.getSkillTools().getLevelCap(primarySkillType);
+        int maxLevel = McMMOMod.getSkillTools().getLevelCap(primarySkillType);
 
         while (experience > 0 && newLevel < maxLevel) {
             int experienceToNextLevel = getXPtoNextLevel(newLevel, formulaType);
@@ -134,7 +129,7 @@ public class FormulaManager {
      * @param formulaType target formulaType
      */
     private int processXPToNextLevel(int level, FormulaType formulaType) {
-        if (mcMMO.isRetroModeEnabled()) {
+        if (McMMOMod.isRetroModeEnabled()) {
             return processXPRetroToNextLevel(level, formulaType);
         } else {
             return processStandardXPToNextLevel(level, formulaType);
@@ -199,49 +194,41 @@ public class FormulaManager {
      * @return the raw XP needed for the next level based on formula type
      */
     private int calculateXPNeeded(int level, FormulaType formulaType) {
-        int base = ExperienceConfig.getInstance().getBase(formulaType);
-        double multiplier = ExperienceConfig.getInstance().getMultiplier(formulaType);
+        int base = McMMOMod.getExperienceConfig().getBase(formulaType);
+        double multiplier = McMMOMod.getExperienceConfig().getMultiplier(formulaType);
 
         switch (formulaType) {
             case LINEAR:
                 return (int) Math.floor(base + level * multiplier);
             case EXPONENTIAL:
-                double exponent = ExperienceConfig.getInstance().getExponent(formulaType);
+                double exponent = McMMOMod.getExperienceConfig().getExponent(formulaType);
                 return (int) Math.floor(multiplier * Math.pow(level, exponent) + base);
             default:
                 //TODO: Should never be called
-                mcMMO.p.getLogger()
-                        .severe("Invalid formula specified for calculation, defaulting to Linear");
+                McMMOMod.LOGGER.error(
+                        "Invalid formula specified for calculation, defaulting to Linear");
                 return calculateXPNeeded(level, FormulaType.LINEAR);
         }
     }
 
     /**
      * Load formula file.
+     *
+     * <p>PORT Phase 5: the legacy {@code formula.yml} cache stored the previously-used XP curve so
+     * levels could be recomputed when an admin changed the curve. There is no persisted cache yet
+     * (per-world save data lands in Phase 5), so treat the previous formula as UNKNOWN.
      */
     public void loadFormula() {
-        if (!formulaFile.exists()) {
-            previousFormula = FormulaType.UNKNOWN;
-            return;
-        }
-
-        previousFormula = FormulaType.getFormulaType(
-                YamlConfiguration.loadConfiguration(formulaFile)
-                        .getString("Previous_Formula", "UNKNOWN"));
+        previousFormula = FormulaType.UNKNOWN;
     }
 
     /**
      * Save formula file.
+     *
+     * <p>PORT Phase 5: persist {@link #previousFormula} to the mod config/save dir. No-op until the
+     * persistence layer exists.
      */
     public void saveFormula() {
-        LogUtils.debug(mcMMO.p.getLogger(), "Saving previous XP formula type...");
-        YamlConfiguration formulasFile = new YamlConfiguration();
-        formulasFile.set("Previous_Formula", previousFormula.toString());
-
-        try {
-            formulasFile.save(formulaFile);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        LogUtils.debug("Skipping previous-XP-formula save (persistence deferred to Phase 5).");
     }
 }

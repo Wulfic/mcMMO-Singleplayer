@@ -1,16 +1,13 @@
 package com.gmail.nossr50.datatypes.player;
 
-import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.experience.FormulaType;
 import com.gmail.nossr50.datatypes.experience.SkillXpGain;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
-import com.gmail.nossr50.mcMMO;
-import com.gmail.nossr50.runnables.player.PlayerProfileSaveTask;
-import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
@@ -112,18 +109,22 @@ public class PlayerProfile {
         }
     }
 
+    // PORT Phase 5: profile persistence. The legacy save path scheduled a PlayerProfileSaveTask
+    // on the (Folia) scheduler and wrote to the SQL/flatfile DatabaseManager — both cut for the
+    // singleplayer port. Persistence is being re-homed onto per-world save data (attachment API /
+    // PersistentState). Until that lands these are no-ops; the in-memory profile is authoritative.
+
     public void scheduleAsyncSave() {
-        mcMMO.p.getFoliaLib().getScheduler().runAsync(new PlayerProfileSaveTask(this, false));
+        // PORT Phase 5: async persistence.
     }
 
     public void scheduleAsyncSaveDelay() {
-        mcMMO.p.getFoliaLib().getScheduler()
-                .runLaterAsync(new PlayerProfileSaveTask(this, false), 20);
+        // PORT Phase 5: delayed async persistence.
     }
 
     @Deprecated
     public void scheduleSyncSaveDelay() {
-        mcMMO.p.getFoliaLib().getScheduler().runLater(new PlayerProfileSaveTask(this, true), 20);
+        // PORT Phase 5: delayed sync persistence.
     }
 
     public void save(boolean useSync) {
@@ -132,42 +133,9 @@ public class PlayerProfile {
             return;
         }
 
-        // TODO should this part be synchronized?
-        PlayerProfile profileCopy = new PlayerProfile(playerName, uuid, ImmutableMap.copyOf(skills),
-                ImmutableMap.copyOf(skillsXp), ImmutableMap.copyOf(abilityDATS),
-                scoreboardTipsShown, ImmutableMap.copyOf(uniquePlayerData), lastLogin);
-        changed = !mcMMO.getDatabaseManager().saveUser(profileCopy);
-
-        if (changed) {
-            mcMMO.p.getLogger()
-                    .severe("PlayerProfile saving failed for player: " + playerName + " " + uuid);
-
-            if (saveAttempts > 0) {
-                mcMMO.p.getLogger().severe("Attempted to save profile for player " + getPlayerName()
-                        + " resulted in failure. " + saveAttempts + " have been made so far.");
-            }
-
-            if (saveAttempts < 10) {
-                saveAttempts++;
-
-                //Back out of async saving if we detect a server shutdown, this is not always going to be caught
-                if (mcMMO.isServerShutdownExecuted() || useSync) {
-                    mcMMO.p.getFoliaLib().getScheduler()
-                            .runNextTick(new PlayerProfileSaveTask(this, true));
-                } else {
-                    scheduleAsyncSave();
-                }
-
-            } else {
-                mcMMO.p.getLogger().severe("mcMMO has failed to save the profile for "
-                        + getPlayerName() + " numerous times." +
-                        " mcMMO will now stop attempting to save this profile." +
-                        " Check your console for errors and inspect your DB for issues.");
-            }
-
-        } else {
-            saveAttempts = 0;
-        }
+        // PORT Phase 5: write this profile to per-world save data. Leaving `changed` set so the
+        // profile is re-attempted once persistence exists.
+        LogUtils.debug("PlayerProfile.save deferred (persistence lands in Phase 5): " + playerName);
     }
 
     /**
@@ -178,6 +146,7 @@ public class PlayerProfile {
      * @deprecated This is only function for FlatFileDB atm, and it's only here for unit testing
      * right now
      */
+    @Deprecated
     public @NotNull Long getLastLogin() {
         return Objects.requireNonNullElse(lastLogin, -1L);
     }
@@ -387,7 +356,7 @@ public class PlayerProfile {
         markProfileDirty();
 
         if (SkillTools.isChildSkill(skill)) {
-            var parentSkills = mcMMO.p.getSkillTools().getChildSkillParents(skill);
+            var parentSkills = McMMOMod.getSkillTools().getChildSkillParents(skill);
             float dividedXP = (xp / parentSkills.size());
 
             for (PrimarySkillType parentSkill : parentSkills) {
@@ -446,11 +415,19 @@ public class PlayerProfile {
             return 0;
         }
 
-        int level = (ExperienceConfig.getInstance().getCumulativeCurveEnabled())
-                ? UserManager.getPlayer(playerName).getPowerLevel() : skills.get(primarySkillType);
-        FormulaType formulaType = ExperienceConfig.getInstance().getFormulaType();
+        final int level;
+        if (McMMOMod.getExperienceConfig().getCumulativeCurveEnabled()) {
+            // PORT Phase 10: the cumulative XP curve keys off the player's total power level, which
+            // is resolved through UserManager (the online-player registry, not yet ported). The
+            // default (non-cumulative) curve below is fully functional.
+            throw new UnsupportedOperationException(
+                    "Cumulative XP curve not yet ported (needs UserManager) — Phase 10");
+        } else {
+            level = skills.get(primarySkillType);
+        }
+        FormulaType formulaType = McMMOMod.getExperienceConfig().getFormulaType();
 
-        return mcMMO.getFormulaManager().getXPtoNextLevel(level, formulaType);
+        return McMMOMod.getFormulaManager().getXPtoNextLevel(level, formulaType);
     }
 
     private int getChildSkillLevel(@NotNull PrimarySkillType primarySkillType)
@@ -459,12 +436,12 @@ public class PlayerProfile {
             throw new IllegalArgumentException(primarySkillType + " is not a child skill!");
         }
 
-        ImmutableList<PrimarySkillType> parents = mcMMO.p.getSkillTools()
+        ImmutableList<PrimarySkillType> parents = McMMOMod.getSkillTools()
                 .getChildSkillParents(primarySkillType);
         int sum = 0;
 
         for (PrimarySkillType parent : parents) {
-            sum += Math.min(getSkillLevel(parent), mcMMO.p.getSkillTools().getLevelCap(parent));
+            sum += Math.min(getSkillLevel(parent), McMMOMod.getSkillTools().getLevelCap(parent));
         }
 
         return sum / parents.size();

@@ -32,6 +32,11 @@ dependencies {
     testImplementation platform("org.junit:junit-bom:${project.junit_version}")
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // Mockito for MC-free unit tests that need to stand in for the platform/ adapters (final
+    // wrappers over net.minecraft types like ServerPlayerEntity, which can't be built without a
+    // running server). Mockito 5's default inline mock maker mocks final classes directly.
+    testImplementation "org.mockito:mockito-core:${project.mockito_version}"
 }
 
 // -----------------------------------------------------------------------------

@@ -8,6 +8,7 @@ import com.gmail.nossr50.config.SoundConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.event.EventBus;
 import com.gmail.nossr50.event.SimpleEventBus;
+import com.gmail.nossr50.util.experience.FormulaManager;
 import com.gmail.nossr50.util.skills.SkillTools;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -60,6 +61,14 @@ public class McMMOMod implements ModInitializer {
      * first access and lives for the whole JVM.
      */
     private static volatile SkillTools skillTools;
+
+    /**
+     * XP-curve engine (level ↔ experience conversions). Legacy code reached it via
+     * {@code mcMMO.getFormulaManager()}. Like {@link #skillTools} it holds no per-world state and
+     * only reads {@link ExperienceConfig}/{@link GeneralConfig} on demand, so it is built lazily on
+     * first access and lives for the whole JVM.
+     */
+    private static volatile FormulaManager formulaManager;
 
     /**
      * The loaded config instances. Wired in when the concrete configs are loaded at server start
@@ -153,6 +162,24 @@ public class McMMOMod implements ModInitializer {
                 if (local == null) {
                     local = new SkillTools();
                     skillTools = local;
+                }
+            }
+        }
+        return local;
+    }
+
+    /**
+     * The XP-curve engine. Never {@code null} — built lazily on first access (it needs no world
+     * session; it reads the configs on demand). Replaces legacy {@code mcMMO.getFormulaManager()}.
+     */
+    public static @NotNull FormulaManager getFormulaManager() {
+        FormulaManager local = formulaManager;
+        if (local == null) {
+            synchronized (McMMOMod.class) {
+                local = formulaManager;
+                if (local == null) {
+                    local = new FormulaManager();
+                    formulaManager = local;
                 }
             }
         }

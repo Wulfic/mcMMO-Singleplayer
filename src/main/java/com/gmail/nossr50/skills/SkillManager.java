@@ -4,10 +4,18 @@ import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Player;
+import com.gmail.nossr50.platform.PlatformPlayer;
 
+/**
+ * Base class every {@code *Manager} extends. Holds the owning {@link McMMOPlayer} and the
+ * {@link PrimarySkillType} the manager is for, and exposes the handful of helpers the concrete
+ * skill managers reach through the base.
+ *
+ * <p>Port note (Phase 10.1): the Bukkit {@code org.bukkit.entity.Player} return of
+ * {@link #getPlayer()} is retargeted to the {@link PlatformPlayer} adapter. The combat helper
+ * {@code getXPGainReason(LivingEntity, Entity)} is dropped for now — see the breadcrumb at the
+ * bottom of the class.
+ */
 public abstract class SkillManager {
     protected McMMOPlayer mmoPlayer;
     protected PrimarySkillType skill;
@@ -17,7 +25,7 @@ public abstract class SkillManager {
         this.skill = skill;
     }
 
-    public Player getPlayer() {
+    public PlatformPlayer getPlayer() {
         return mmoPlayer.getPlayer();
     }
 
@@ -48,8 +56,9 @@ public abstract class SkillManager {
         mmoPlayer.beginXpGain(skill, xp, xpGainReason, xpGainSource);
     }
 
-    public XPGainReason getXPGainReason(LivingEntity target, Entity damager) {
-        return (damager instanceof Player && target instanceof Player) ? XPGainReason.PVP
-                : XPGainReason.PVE;
-    }
+    // PORT Phase 10.3: getXPGainReason(LivingEntity target, Entity damager) — dropped. The legacy
+    // signature took raw Bukkit entities and returned PVP when both target and damager are players,
+    // PVE otherwise. It needs a platform/ entity adapter for the (non-living) damager, which lands
+    // with the combat skills. Singleplayer has no other players, so once re-added it collapses to
+    // XPGainReason.PVE in practice.
 }
