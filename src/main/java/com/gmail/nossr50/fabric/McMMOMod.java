@@ -6,6 +6,7 @@ import com.gmail.nossr50.config.CoreSkillsConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.config.SoundConfig;
+import com.gmail.nossr50.commands.McMMOCommands;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.database.FlatFileProfileStore;
 import com.gmail.nossr50.database.ProfileStore;
@@ -111,7 +112,8 @@ public class McMMOMod implements ModInitializer {
         // once here; the handlers fire per player and read the store bound at server start.
         PlayerSessionListener.register();
 
-        // PORT Phase 4: register Brigadier commands via CommandRegistrationCallback.
+        // Phase 4: register the Brigadier command tree (/mcmmo, /mcstats, /addlevels, /addxp).
+        McMMOCommands.register();
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
         // drive the legacy listeners, routing each to the ported skill managers. Preferred
