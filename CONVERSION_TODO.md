@@ -302,11 +302,29 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       `dropTreeFellerLootFromBlocks`/`handleDurabilityLoss` — recursive block search,
       `PlayerItemDamageEvent`, per-log drops + XP orbs + Knock on Wood sapling filter). Suite green
       (+2 `WoodcuttingManagerTest` deterministic roll gates).
-- [ ] **10.3 Remaining skills** by rising complexity, interleaving the deferred Bukkit
-      method bodies as each skill needs them: `mining`, `woodcutting`, `excavation`,
-      `unarmed`, `swords`/`axes`/`maces`/`spears`, `smelting`, then the heavy config-backed
-      ones — `herbalism` (992), `fishing` (749), `taming` (572), `repair`/`salvage` (need
-      the deferred treasure/repair/salvage/alchemy item configs from Phase 8).
+- [~] **10.7 Herbalism core** — `HerbalismManager` ported (15th live manager), the largest
+      remaining skill (legacy 992 lines): the tall-plant XP cap (`applyTallPlantXpCap`, verbatim
+      `plantBreakLimits` table), the Sweet Berry Bush age→multiplier→XP math
+      (`getBerryBushXpReward`), the Green Thumb replant **age-decision state machine**
+      (`resolveGreenThumbReplant` — the pure switch legacy buried inside `processGrowingPlants`,
+      100% portable once retargeted from a live `Ageable` to `(materialPath, isMature,
+      greenTerraActive)` primitives) + its crop→seed lookup (`getGreenThumbReplantMaterial`), the
+      Green Terra/Shroom Thumb block-conversion lookup tables (new sibling `Herbalism` util class,
+      `greenTerraConversionTarget`/`shroomThumbConversionTarget` — pure `String→Optional<String>`,
+      replacing legacy's `BlockState.setType` mutation), and the double-drop/Green
+      Thumb/Shroom Thumb/Hylian-Luck rank+permission+RNG gates. New `Permissions.greenTerra`.
+      Wired into the `McMMOPlayer` factory + `getHerbalismManager()`. **Gotcha hit during testing:**
+      `General.RetroMode.Enabled` defaults **true**, so rank-threshold tests must use the
+      `RetroMode` skillranks.yml column (e.g. Green Thumb Rank_1 = level 250), not `Standard`
+      (level 25) — don't assume Standard when picking test levels. **Doubly-deferred:**
+      `processHylianLuck` needs both a live-block adapter *and* `TreasureConfig.hylianMap`, which
+      is still always empty (Phase 10.4 gap, unrelated to this slice) — only its rank/permission
+      gate (`canUseHylianLuck`) is ported. Everything touching a live `Block`/`BlockState`/
+      `Ageable`/`PlayerInventory`/scheduler (the event-entry method, multi-block chorus/cactus
+      traversal, `BlockUtils`/`ItemUtils`/`SkillUtils` calls) stays `// PORT`-deferred — none of
+      those three utility classes are ported yet. Suite green (272, +18 `HerbalismManagerTest`).
+- [ ] **10.3 Remaining skills**: `fishing` (749), `taming` (572), `repair`/`salvage`/`alchemy`
+      (need the deferred repair/salvage/alchemy item configs from Phase 8).
 - [ ] **Utility prereqs to port as skills demand them** (drop-Bukkit-body pattern held):
       `UserManager`, `RankUtils`, `SkillUtils`, `BlockUtils`, `ItemUtils`, `PerksUtils`,
       `EventUtils`, `Misc`, `NotificationManager`, `SoundManager` (Phase 11), `Permissions`
