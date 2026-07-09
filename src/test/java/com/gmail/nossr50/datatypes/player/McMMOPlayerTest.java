@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
@@ -48,6 +49,7 @@ class McMMOPlayerTest {
         experienceConfig = new ExperienceConfig(dataFolder);
         McMMOMod.setExperienceConfig(experienceConfig);
         McMMOMod.setGeneralConfig(new GeneralConfig(dataFolder));
+        McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
 
         player = mock(PlatformPlayer.class);
         when(player.getName()).thenReturn("TestPlayer");
@@ -62,6 +64,7 @@ class McMMOPlayerTest {
     void tearDown() {
         McMMOMod.setExperienceConfig(null);
         McMMOMod.setGeneralConfig(null);
+        McMMOMod.setAdvancedConfig(null);
     }
 
     @Test
