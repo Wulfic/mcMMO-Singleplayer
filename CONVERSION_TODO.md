@@ -119,8 +119,15 @@ that's about to be deleted.
       (`ServerLivingEntityEvents.AFTER_DEATH` → combat XP via `skills/CombatXp`). Both route
       through the real `McMMOPlayer#beginXpGain` pipeline; `PlayerSessionListener`
       (`ServerPlayConnectionEvents`) loads/saves the profile. Unit-tested (`BlockBreakXpTest`,
-      `CombatXpTest`). Deferred: the bonus-drop / super-ability *side effects* still need the
-      item-spawn adapter + Phase 11 scheduler.
+      `CombatXpTest`).
+- [x] **Block-break bonus side effects wired (3 skills)** via `platform/BlockDrops` (loot re-roll)
+      + `platform/ItemSpecBuilder` (ItemSpec→ItemStack): **Mining** double/triple drops,
+      **Woodcutting** Harvest Lumber / Clean Cuts (`WoodcuttingManager#rollHarvestLumberBonusDropCount`,
+      2/1/0 extra loot rounds), and **Excavation** treasure-table drops + Archaeology XP orbs +
+      bonus treasure XP (`ExcavationManager#rollTreasureRewards` → MC-free `ExcavationRewards`;
+      listener builds each `ItemSpec` and spawns via `Block.dropStack` / `ExperienceOrbEntity.spawn`).
+      All bonus paths are creative-guarded and self-gate on their own config section. Deferred: the
+      super-ability tool-damage/AoE side effects (need Phase 11 scheduler + held-item durability).
 - [x] **Internal event bus** built (`event/`: `Event`, `Cancellable`, `EventPriority`,
       `EventBus` + `SimpleEventBus`) replacing Bukkit `Event`/`HandlerList`/`Cancellable`
       for mcMMO's own `events/*`. Faithful dispatch: hierarchy (supertype handler sees
@@ -260,11 +267,16 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       (`getTridentsManager()` accessor added). `impaleDamageBonus` proven end-to-end vs real configs
       (RankUtilsTest ×8, TridentsManagerTest ×3; suite 137 green). **Next:** `ArcheryManager`,
       `AcrobaticsManager` (need `Permissions`, `NotificationManager`, `Misc`, `ProbabilityUtil`).
-- [~] **10.4 Excavation core** — `ExcavationManager` Archaeology rank rewards + treasure-table lookup
-      (`getTreasures(blockRegistryPath)`) ported and wired into the `McMMOPlayer` factory (11th live
-      manager). The block-break drop/spawn bodies (`excavationBlockCheck`, `gigaDrillBreaker`) stay
-      deferred pending the item-spawn adapter + `ItemSpec`→`ItemStack` builder. See treasure-tier note
-      under Phase 8. Suite 214 green (+7 tests: `TreasureConfigTest`, `ExcavationManagerTest`).
+- [x] **10.4 Excavation core + treasure spawn** — `ExcavationManager` Archaeology rank rewards +
+      treasure-table lookup (`getTreasures(blockRegistryPath)`) ported and wired into the `McMMOPlayer`
+      factory (11th live manager). **`excavationBlockCheck` now wired end-to-end**: `rollTreasureRewards`
+      (MC-free level-filter + per-treasure RNG + per-drop Archaeology orb roll → `ExcavationRewards`
+      record) drives the `BlockBreakListener`, which builds each treasure via the new
+      `platform/ItemSpecBuilder` (`ItemSpec`→`ItemStack`: `Materials.item` + §-name/lore →
+      `CUSTOM_NAME`/`LORE` data components) and spawns items (`Block.dropStack`) + XP orbs
+      (`ExperienceOrbEntity.spawn`) + bonus treasure XP. Still deferred: `gigaDrillBreaker` (super-ability
+      double-check + tool durability → Phase 11), `printExcavationDebug`. Suite green (+deterministic
+      empty-table roll test).
 - [~] **10.5 Mining core** — `MiningManager` + `BlastMining` ported (12th live manager):
       Blast-Mining rank/config math (`getOreBonus`, `getDropMultiplier`, `getDebrisReduction`,
       `biggerBombs`, `processDemolitionsExpertise`, tier ladder) + the double/triple-drop and
@@ -281,12 +293,15 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       threshold read, and the Harvest Lumber / Clean Cuts bonus-drop *activation* gates
       (`checkHarvestLumberActivation`/`checkCleanCutsActivation`) — all retargeting `Material`→
       config-material `String`, configs via `McMMOMod` locators. Wired into the `McMMOPlayer` factory +
-      `getWoodcuttingManager()`. **Deferred** (block-break + held-item + item-spawn + durability +
-      scheduler adapters): `canUseLeafBlower`/`canUseTreeFeller` (`ItemUtils.isAxe` on held item),
-      `processWoodcuttingBlockXP`, `processBonusDropCheck`/`spawnHarvestLumberBonusDrops`, and the whole
-      Tree Feller machinery (`processTree`/`processTreeFellerTargetBlock`/`dropTreeFellerLootFromBlocks`/
-      `handleDurabilityLoss` — recursive block search, `PlayerItemDamageEvent`, per-log drops + XP orbs +
-      Knock on Wood sapling filter). Suite 228 green (+5 `WoodcuttingManagerTest` vs real experience.yml).
+      `getWoodcuttingManager()`. **Harvest Lumber / Clean Cuts bonus drops now wired end-to-end**:
+      `rollHarvestLumberBonusDropCount` (cheap `Bonus_Drops.Woodcutting` gate first → Clean Cuts=2 /
+      Harvest Lumber=1 / 0 extra loot rounds) drives `BlockBreakListener` → `platform/BlockDrops`
+      re-roll (same seam as Mining). **Still deferred** (held-item + durability + scheduler adapters):
+      `canUseLeafBlower`/`canUseTreeFeller` (`ItemUtils.isAxe` on held item), `processWoodcuttingBlockXP`,
+      and the whole Tree Feller machinery (`processTree`/`processTreeFellerTargetBlock`/
+      `dropTreeFellerLootFromBlocks`/`handleDurabilityLoss` — recursive block search,
+      `PlayerItemDamageEvent`, per-log drops + XP orbs + Knock on Wood sapling filter). Suite green
+      (+2 `WoodcuttingManagerTest` deterministic roll gates).
 - [ ] **10.3 Remaining skills** by rising complexity, interleaving the deferred Bukkit
       method bodies as each skill needs them: `mining`, `woodcutting`, `excavation`,
       `unarmed`, `swords`/`axes`/`maces`/`spears`, `smelting`, then the heavy config-backed
@@ -301,9 +316,19 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
 - [ ] Convert `runnables/` (BukkitScheduler tasks) to server-tick callbacks
       (`ServerTickEvents`) / client tick as appropriate.
 
-### Phase 12 — Testing & verification
-- [ ] Rework the test suite (currently assumes Bukkit/MockBukkit) for a Fabric test
-      harness or plain unit tests on the adapter layer.
-- [ ] In-game verification in a real 1.21.11 singleplayer world.
+### Phase 12 — Testing & verification  🟡 boot verified in-game
+- [x] Test suite reworked off Bukkit/MockBukkit → plain JUnit 5 + Mockito on the MC-free
+      manager/config/event/platform layers (228 green as of 79a559a96).
+- [x] **Headless boot verified in a real 1.21.11 dedicated server** (`./gradlew runServer`,
+      commit 79a559a96 code): full lifecycle clean — `onInitialize` → `onServerStarting`
+      (all 7 configs write defaults to disk + load via the JiJ'd snakeyaml, profile store
+      bound, Brigadier commands + block-break/combat listeners registered) → `Done (5.0s)!`
+      → `stop` → `onServerStopping` (UserManager.saveAll/clearAll, config unload) → exit 0.
+      Zero exceptions/mixin failures in the log. Repro: `run/eula.txt=true` +
+      lightweight `run/server.properties` (flat world), feed `stop` on stdin after "Done (".
+      (The lone `No key layers in MapLike[{}]` line is a benign vanilla biome-codec log.)
+- [ ] **Interactive gameplay verification** (no player has joined a world yet): block-break
+      XP, combat XP, and the Mining bonus-drop spawn path still need a client-joined session
+      to observe. This is the remaining Phase 12 in-game work.
 
 ---

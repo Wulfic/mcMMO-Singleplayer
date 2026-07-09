@@ -106,4 +106,23 @@ class WoodcuttingManagerTest {
         assertFalse(woodcuttingManager.checkCleanCutsActivation("Oak_Log"),
                 "no Harvest Lumber rank yet");
     }
+
+    @Test
+    void harvestLumberRollIsZeroForNonBonusMaterialEvenAtMaxLevel() {
+        // Stone isn't listed under Bonus_Drops.Woodcutting, so the roll's cheap config gate rejects it
+        // up front — deterministically 0 even for a maxed player (and without consuming the RNG stream).
+        atWoodcuttingLevel(1000);
+        assertEquals(0, woodcuttingManager.rollHarvestLumberBonusDropCount("stone"),
+                "a non-bonus-drop block never rolls");
+    }
+
+    @Test
+    void harvestLumberRollIsZeroBeforeUnlockingHarvestLumber() {
+        // Oak_Log IS a configured bonus-drop material (config gate passes), so this exercises the rank
+        // gate: at level 0 the player hasn't reached Harvest Lumber rank 1, so both activation gates
+        // short-circuit before any RNG and the roll is deterministically 0.
+        atWoodcuttingLevel(0);
+        assertEquals(0, woodcuttingManager.rollHarvestLumberBonusDropCount("oak_log"),
+                "no Harvest Lumber rank yet → no bonus drops");
+    }
 }

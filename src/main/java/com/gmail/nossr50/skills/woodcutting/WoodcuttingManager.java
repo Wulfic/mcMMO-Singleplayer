@@ -8,6 +8,7 @@ import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.text.ConfigStringUtils;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -89,6 +90,35 @@ public class WoodcuttingManager extends SkillManager {
                 mmoPlayer)
                 && McMMOMod.getGeneralConfig()
                 .getDoubleDropsEnabled(PrimarySkillType.WOODCUTTING, materialConfigString);
+    }
+
+    /**
+     * Rolls the number of <i>extra</i> copies of a broken log's drops to spawn (0, 1, or 2),
+     * mirroring legacy {@code processBonusDropCheck}: Clean Cuts (the Harvest Lumber mastery) grants a
+     * triple drop — 2 extra copies — on success, otherwise Harvest Lumber grants a double drop — 1
+     * extra copy. A block that isn't a configured {@code Bonus_Drops.Woodcutting} material is rejected
+     * up front (cheap, deterministic) before either RNG gate runs, so breaking non-logs never consumes
+     * the skill RNG stream — matching the outer {@code getDoubleDropsEnabled} guard legacy checked
+     * first. This is the RNG counterpart to {@code MiningManager#rollBonusDropCount}; the
+     * item-spawn itself is performed by the caller via {@code platform/BlockDrops}.
+     *
+     * @param blockRegistryId the broken block's vanilla registry id (namespaced or bare)
+     * @return the number of extra drop rounds to spawn (0 = not a bonus-drop log, subskill locked,
+     *     or the roll failed)
+     */
+    public int rollHarvestLumberBonusDropCount(@NotNull String blockRegistryId) {
+        final String materialConfigString = ConfigStringUtils.getMaterialConfigString(blockRegistryId);
+        if (!McMMOMod.getGeneralConfig()
+                .getDoubleDropsEnabled(PrimarySkillType.WOODCUTTING, materialConfigString)) {
+            return 0;
+        }
+        if (checkCleanCutsActivation(materialConfigString)) {
+            return 2;
+        }
+        if (checkHarvestLumberActivation(materialConfigString)) {
+            return 1;
+        }
+        return 0;
     }
 
     /**

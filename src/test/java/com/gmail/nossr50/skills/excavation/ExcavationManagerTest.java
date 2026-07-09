@@ -2,6 +2,7 @@ package com.gmail.nossr50.skills.excavation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -96,5 +97,20 @@ class ExcavationManagerTest {
         assertFalse(excavationManager.getTreasures("minecraft:dirt").isEmpty());
         // A block with no treasure table yields an empty list.
         assertTrue(excavationManager.getTreasures("bedrock").isEmpty());
+    }
+
+    @Test
+    void treasureRollIsEmptyForBlockWithoutTable() {
+        // Bedrock has no Excavation treasure table, so the roll short-circuits to the shared EMPTY
+        // sentinel before any RNG — deterministic even for a maxed player.
+        atExcavationLevel(1000);
+        final ExcavationManager.ExcavationRewards rewards =
+                excavationManager.rollTreasureRewards("bedrock");
+        assertSame(ExcavationManager.ExcavationRewards.EMPTY, rewards,
+                "no treasure table → shared EMPTY result");
+        assertTrue(rewards.isEmpty());
+        assertTrue(rewards.treasures().isEmpty());
+        assertTrue(rewards.experienceOrbs().isEmpty());
+        assertEquals(0, rewards.treasureXp());
     }
 }
