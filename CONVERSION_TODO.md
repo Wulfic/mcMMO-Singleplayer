@@ -323,7 +323,30 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       `Ageable`/`PlayerInventory`/scheduler (the event-entry method, multi-block chorus/cactus
       traversal, `BlockUtils`/`ItemUtils`/`SkillUtils` calls) stays `// PORT`-deferred — none of
       those three utility classes are ported yet. Suite green (272, +18 `HerbalismManagerTest`).
-- [ ] **10.3 Remaining skills**: `fishing` (749), `taming` (572), `repair`/`salvage`/`alchemy`
+- [~] **10.8 Fishing core** — `FishingManager` ported (16th live manager), legacy 749 lines: the
+      Shake/Master-Angler/Magic-Hunter/Treasure-Hunter rank+permission gates, the loot-tier ->
+      ShakeChance/VanillaXPMultiplier config lookups, the Master Angler wait-time reduction math
+      (`getMasterAnglerTick{Min,Max}WaitReduction`, `getReducedTicks`, boat bonus), and the
+      fishing-spot exploit-detection state machine (`processExploiting`/`isExploitingFishing`,
+      retargeted from a Bukkit `Vector`/`BoundingBox` to raw `(x,y,z)` doubles + a new MC-free
+      `CastBox` record) are all ported and unit-tested against the real bundled configs
+      (`advanced.yml`/`skillranks.yml`/`experience.yml` — all three already had their Fishing
+      sections ported ahead of time back in Phase 8). New extraction:
+      `resolveMasterAnglerWaitTimes` pulls the pure wait-time decision out of legacy
+      `processMasterAngler` (same "buried pure decision" pattern as Herbalism's
+      `resolveGreenThumbReplant`) so the eventual `FishHook`-mutating body is a thin wrapper around
+      it. Wired into the `McMMOPlayer` factory + `getFishingManager()`. **Deferred** (need
+      `FishHook`/`ItemStack`/`Enchantment`/`Block`/`Biome`/vehicle adapters, the still-unported
+      `FishingTreasureConfig` rarity tables, and `SkillUtils`): `processFishing`,
+      `getFishingTreasure`/`processMagicHunter`/`getPossibleEnchantments` (Treasure/Magic Hunter
+      item rolls), `shakeCheck` (shake-drop tables + item spawn), `canIceFish`/`iceFishing`,
+      `masterAngler`/`processMasterAngler` (FishHook mutation + Folia scheduler), `isInBoat`,
+      `handleFishermanDiet`. **Fixture gotcha:** `FishingManager`'s constructor reads
+      `AdvancedConfig` eagerly (Master Angler wait-time lower bounds), so `McMMOPlayerTest` — which
+      constructs every skill manager via `initSkillManagers()` — needed `AdvancedConfig` added to
+      its fixture alongside the already-wired `GeneralConfig`/`ExperienceConfig`. Suite 284 green
+      (+12 `FishingManagerTest`).
+- [ ] **10.3 Remaining skills**: `taming` (572), `repair`/`salvage`/`alchemy`
       (need the deferred repair/salvage/alchemy item configs from Phase 8).
 - [ ] **Utility prereqs to port as skills demand them** (drop-Bukkit-body pattern held):
       `UserManager`, `RankUtils`, `SkillUtils`, `BlockUtils`, `ItemUtils`, `PerksUtils`,
