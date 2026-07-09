@@ -4,19 +4,26 @@ import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.platform.BlockDrops;
+import com.gmail.nossr50.platform.ItemSpecBuilder;
 import com.gmail.nossr50.skills.BlockBreakXp;
+import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
+import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.player.UserManager;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
@@ -57,10 +64,15 @@ public final class BlockBreakListener {
         final String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
 
         awardBlockXp(mmoPlayer, blockId);
-        // Bonus drops never fire in creative (no vanilla loot spawns there to complement).
+        // Bonus drops never fire in creative (no vanilla loot spawns there to complement). Each
+        // skill's bonus-drop path self-gates on its own config section (a log is never a Mining
+        // bonus block and an ore is never a Woodcutting one), so running both per break is safe.
         if (!serverPlayer.isCreative()) {
             awardMiningBonusDrops(mmoPlayer, serverWorld, pos, state, blockEntity, serverPlayer,
                     blockId);
+            awardWoodcuttingBonusDrops(mmoPlayer, serverWorld, pos, state, blockEntity, serverPlayer,
+                    blockId);
+            awardExcavationTreasures(mmoPlayer, serverWorld, pos, blockId);
         }
     }
 
@@ -85,6 +97,52 @@ public final class BlockBreakListener {
         final int rounds = mining.rollBonusDropCount();
         if (rounds > 0) {
             BlockDrops.dropBonusLoot(world, pos, state, blockEntity, breaker, tool, rounds);
+        }
+    }
+
+    private static void awardWoodcuttingBonusDrops(McMMOPlayer mmoPlayer, ServerWorld world,
+            BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity,
+            ServerPlayerEntity breaker, String blockId) {
+        final WoodcuttingManager woodcutting = mmoPlayer.getWoodcuttingManager();
+        if (woodcutting == null) {
+            return;
+        }
+        // Harvest Lumber / Clean Cuts duplicate the felled log regardless of Silk Touch, so (unlike
+        // Mining) there is no enchantment gate here — the config toggle + rank + RNG live in the roll.
+        final int rounds = woodcutting.rollHarvestLumberBonusDropCount(blockId);
+        if (rounds > 0) {
+            BlockDrops.dropBonusLoot(world, pos, state, blockEntity, breaker,
+                    breaker.getMainHandStack(), rounds);
+        }
+    }
+
+    private static void awardExcavationTreasures(McMMOPlayer mmoPlayer, ServerWorld world,
+            BlockPos pos, String blockId) {
+        final ExcavationManager excavation = mmoPlayer.getExcavationManager();
+        if (excavation == null) {
+            return;
+        }
+        final ExcavationManager.ExcavationRewards rewards = excavation.rollTreasureRewards(blockId);
+        if (rewards.isEmpty()) {
+            return;
+        }
+        // Build each MC-free ItemSpec into a live stack and scatter it at the block (an unknown
+        // material is skipped, having already been logged by Materials).
+        for (ItemSpec spec : rewards.treasures()) {
+            ItemSpecBuilder.build(spec).ifPresent(stack -> Block.dropStack(world, pos, stack));
+        }
+        if (!rewards.experienceOrbs().isEmpty()) {
+            final Vec3d center = Vec3d.ofCenter(pos);
+            for (int amount : rewards.experienceOrbs()) {
+                if (amount > 0) {
+                    ExperienceOrbEntity.spawn(world, center, amount);
+                }
+            }
+        }
+        // Treasure XP is a bonus on top of the base block XP already awarded in awardBlockXp.
+        if (rewards.treasureXp() > 0) {
+            mmoPlayer.beginXpGain(PrimarySkillType.EXCAVATION, rewards.treasureXp(),
+                    XPGainReason.PVE, XPGainSource.SELF);
         }
     }
 }
