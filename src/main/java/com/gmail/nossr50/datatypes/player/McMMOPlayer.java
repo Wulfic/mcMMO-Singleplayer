@@ -11,6 +11,7 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
+import com.gmail.nossr50.skills.alchemy.AlchemyManager;
 import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
@@ -132,7 +133,7 @@ public class McMMOPlayer {
         final SkillManager manager = switch (primarySkillType) {
             // PORT Phase 10.2/10.3: uncomment each case as the manager class ports.
             case ACROBATICS -> new AcrobaticsManager(this);
-            //   case ALCHEMY    -> new AlchemyManager(this);
+            case ALCHEMY -> new AlchemyManager(this);
             case ARCHERY -> new ArcheryManager(this);
             case AXES -> new AxesManager(this);
             case CROSSBOWS -> new CrossbowsManager(this);
@@ -167,6 +168,10 @@ public class McMMOPlayer {
 
     public AcrobaticsManager getAcrobaticsManager() {
         return (AcrobaticsManager) skillManagers.get(PrimarySkillType.ACROBATICS);
+    }
+
+    public AlchemyManager getAlchemyManager() {
+        return (AlchemyManager) skillManagers.get(PrimarySkillType.ALCHEMY);
     }
 
     public ArcheryManager getArcheryManager() {
