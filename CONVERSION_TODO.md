@@ -346,8 +346,20 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       constructs every skill manager via `initSkillManagers()` — needed `AdvancedConfig` added to
       its fixture alongside the already-wired `GeneralConfig`/`ExperienceConfig`. Suite 284 green
       (+12 `FishingManagerTest`).
-- [ ] **10.3 Remaining skills**: `taming` (572), `repair`/`salvage`/`alchemy`
+- [~] **10.3 Remaining skills**: `repair`/`salvage`/`alchemy`
       (need the deferred repair/salvage/alchemy item configs from Phase 8).
+      **`taming` DONE (17th live manager):** `TamingManager` numeric core ported — the 8 sub-skill
+      rank+permission `canUseX` gates (incl. the legacy Holy Hound quirk: unlocked by the
+      Environmentally Aware ladder, enabled by the Holy Hound node), the pure damage-modifier math
+      (`gore` extra-damage, `sharpenedClaws`, `processThickFur`/`processShockProof` division,
+      `GORE_BLEED_TICKS`), and the Beast Lore horse-jump-strength polynomial extracted as a pure
+      static (`beastLoreHorseJumpStrength`, buried-decision pattern). Constructor does NO eager
+      config read → no `McMMOPlayerTest` fixture change. Wired into the `McMMOPlayer` factory +
+      `getTamingManager()`. **Deferred** (entity-spawn + `Wolf`/`Horse` mutation + transient-entity
+      tracker + Phase 11 scheduler): `awardTamingXP` (needs the tame event + `getTamingXP`),
+      `fastFoodService`/`processEnvironmentallyAware`/`pummel`/`attackTarget`/`beastLore`, the whole
+      Call-of-the-Wild summon path (`CallOfTheWildType`/`TamingSummon` datatypes, `Permissions.callOfTheWild`),
+      and the `Taming` static Wolf helpers. Suite green (+6 `TamingManagerTest`).
 - [ ] **Utility prereqs to port as skills demand them** (drop-Bukkit-body pattern held):
       `UserManager`, `RankUtils`, `SkillUtils`, `BlockUtils`, `ItemUtils`, `PerksUtils`,
       `EventUtils`, `Misc`, `NotificationManager`, `SoundManager` (Phase 11), `Permissions`
