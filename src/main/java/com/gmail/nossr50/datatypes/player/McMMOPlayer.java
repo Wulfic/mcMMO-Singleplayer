@@ -22,6 +22,7 @@ import com.gmail.nossr50.skills.maces.MacesManager;
 import com.gmail.nossr50.skills.smelting.SmeltingManager;
 import com.gmail.nossr50.skills.spears.SpearsManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
+import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
@@ -143,7 +144,7 @@ public class McMMOPlayer {
             case SMELTING -> new SmeltingManager(this);
             case SPEARS -> new SpearsManager(this);   // 1.21.11 always has Spears (pinned)
             case SWORDS -> new SwordsManager(this);
-            //   case TAMING     -> new TamingManager(this);
+            case TAMING -> new TamingManager(this);
             case TRIDENTS -> new TridentsManager(this);
             case UNARMED -> new UnarmedManager(this);
             case WOODCUTTING -> new WoodcuttingManager(this);
@@ -208,6 +209,10 @@ public class McMMOPlayer {
 
     public SwordsManager getSwordsManager() {
         return (SwordsManager) skillManagers.get(PrimarySkillType.SWORDS);
+    }
+
+    public TamingManager getTamingManager() {
+        return (TamingManager) skillManagers.get(PrimarySkillType.TAMING);
     }
 
     public TridentsManager getTridentsManager() {
