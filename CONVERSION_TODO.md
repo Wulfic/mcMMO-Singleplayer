@@ -442,9 +442,22 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       messaging prereqs for the super-ability activation trigger (NotificationManager + SoundManager)
       are now both done; next = the `AbilityDisableTask`/`ToolLowerTask` runnables → interaction
       listener.
+- [x] **Super-ability ability runnables ported (11.5).** The three activation-trigger prereq tasks
+      moved to `runnables/skills/` on the `TickScheduler`: `ToolLowerTask` (ends a tool-prep window +
+      lower-tool notification), `AbilityCooldownTask` (cooldown-finished "refreshed" reminder,
+      `Player.isOnline()`→`PlatformPlayer.isAlive()`), and `AbilityDisableTask` (deactivates a running
+      super ability: mode/informed flips + off-notification + schedules the follow-up cooldown reminder
+      via `McMMOMod.getScheduler().runLater`, FoliaLib `runAtEntityLater` retired). **Deferred in
+      `AbilityDisableTask`** (PORT breadcrumbs in-file): `SkillUtils.removeAbilityBoostsFromInventory`
+      (Super/Giga Breaker inventory-boost removal — inventory adapter), the Berserk/breaker chunk-resend
+      (`World.refreshChunk` has no singleplayer analogue), `EventUtils.callAbilityDeactivateEvent`
+      (Bukkit event, no SP listeners), and the multiplayer "alert nearby players" broadcast (cut). The
+      `!isServerShutdownExecuted()` scheduling guard is dropped (scheduler `cancelAll()`-ed at stop
+      instead). Unit-tested (ToolLower ×2 / AbilityCooldown ×3 / AbilityDisable ×2; suite 345 green).
+      Next: held-item/tool detection + the interaction listener that fires these + the activation math
+      already on `McMMOPlayer`.
 - [ ] Port the remaining live-value runnables onto the scheduler as their subsystems unblock:
-      super-ability `AbilityCooldownTask`/`AbilityDisableTask`/`ToolLowerTask` (need super-ability
-      activation + held-item durability), `RuptureTask`/`BleedContainer` (Rupture DoT — needs an
+      `RuptureTask`/`BleedContainer` (Rupture DoT — needs an
       entity-damage adapter), Alchemy `AlchemyBrewTask`/`AlchemyBrewCheckTask` (needs PotionConfig +
       brewing-stand adapter), `MasterAnglerTask` (FishHook mutation), herbalism
       `DelayedCropReplant`/`HerbalismBlockUpdaterTask`/`DelayedHerbalismXPCheckTask`,
