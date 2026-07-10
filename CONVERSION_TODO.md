@@ -164,7 +164,8 @@ that's about to be deleted.
       through the bound store (no-op when unbound, e.g. in unit tests). Session lifecycle
       (`PlayerSessionListener`) loads on join and saves+untracks on quit; `UserManager.saveAll()`
       flushes on server stop. Round-trip unit-tested (`FlatFileProfileStoreTest`).
-- [ ] Periodic autosave while online (crash safety) — Phase 11 scheduler (`SaveTimerTask`).
+- [x] Periodic autosave while online (crash safety) — `SaveTimerTask` on the Phase 11
+      `TickScheduler`, interval = `General.Save_Interval` min (floored at 1); boot-verified firing.
 - [ ] `getOfflinePlayer` (offline profile reads for admin commands) still dropped — re-add if
       an offline-target command needs it.
 - [ ] Migration path for legacy `mcmmo.users` flatfile / SQL data (optional, low priority).
@@ -393,9 +394,37 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       `EventUtils`, `Misc`, `NotificationManager`, `SoundManager` (Phase 11), `Permissions`
       (Phase 6). Retarget their Bukkit surfaces to `platform/` adapters.
 
-### Phase 11 — Scheduler / runnables
-- [ ] Convert `runnables/` (BukkitScheduler tasks) to server-tick callbacks
-      (`ServerTickEvents`) / client tick as appropriate.
+### Phase 11 — Scheduler / runnables  🟡 keystone infra live
+- [x] **Scheduler seam built + boot-verified (11.1).** New MC-free `platform/scheduler/`
+      (`TaskScheduler` interface + `ScheduledTask` handle + `TickScheduler` impl) replaces the
+      FoliaLib scheduler. Region/async Folia variants collapse to plain main-thread delays on the
+      single integrated-server thread. `TickScheduler.tick()` is pumped by
+      `ServerTickEvents.END_SERVER_TICK` (registered once in `McMMOMod.onInitialize`); the queue is
+      scheduled at server start and `cancelAll()`-ed at server stop. Timing model: pre-decrement a
+      per-entry `remaining` counter, fire at 0, re-arm timers to `period`; tasks scheduled from
+      inside a running task defer to the next tick; a throwing task is logged + auto-cancelled.
+      `CancellableRunnable` ported off FoliaLib to a plain `Runnable` base (self-cancel idiom kept —
+      the scheduler drops it when `isCancelled()`). **First real ported task: `SaveTimerTask`**
+      (periodic autosave, interval = `General.Save_Interval` min floored at 1) → `UserManager.saveAll()`
+      (party save + async per-player fan-out dropped). Unit-tested (`TickSchedulerTest` ×10:
+      delay/timer schedules, both cancel paths, cancelAll, re-entrant scheduling, exception
+      isolation). **Boot-verified**: headless `runServer`, autosave fired at exactly 60s after
+      `Done` then clean shutdown save, exit 0. ⚠️ Smoke-test gotcha: vanilla
+      `pause-when-empty-seconds` (default 60) halts ticking with no players joined, freezing the
+      pump — set it to `-1` for headless observation; irrelevant in real singleplayer (player present).
+- [ ] Port the remaining live-value runnables onto the scheduler as their subsystems unblock:
+      super-ability `AbilityCooldownTask`/`AbilityDisableTask`/`ToolLowerTask` (need super-ability
+      activation + held-item durability), `RuptureTask`/`BleedContainer` (Rupture DoT — needs an
+      entity-damage adapter), Alchemy `AlchemyBrewTask`/`AlchemyBrewCheckTask` (needs PotionConfig +
+      brewing-stand adapter), `MasterAnglerTask` (FishHook mutation), herbalism
+      `DelayedCropReplant`/`HerbalismBlockUpdaterTask`/`DelayedHerbalismXPCheckTask`,
+      `ClearRegisteredXPGainTask` (diminished-returns XP reset), `ExperienceBarHideTask`,
+      `SkillUnlockNotificationTask`, `AwardCombatXpTask`.
+- [ ] **Cut, do not port** (belong to dropped systems): `CleanBackupsTask`, `UserPurgeTask`,
+      `PartyAutoKickTask`, `PowerLevelUpdatingTask` (scoreboard), `NotifySquelchReminderTask`,
+      `MobHealthDisplayUpdaterTask`, all `commands/Mc{Rank,Top}*` + `database/*` conversion tasks,
+      `AprilTask`, and the Bukkit-metadata cleanup tasks (`MobDodgeMetaCleanup`,
+      `TravelingBlockMetaCleanup`, `StickyPistonTrackerTask`, `CheckDateTask`).
 
 ### Phase 12 — Testing & verification  🟡 boot verified in-game
 - [x] Test suite reworked off Bukkit/MockBukkit → plain JUnit 5 + Mockito on the MC-free

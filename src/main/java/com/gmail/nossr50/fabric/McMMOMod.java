@@ -14,12 +14,15 @@ import com.gmail.nossr50.event.EventBus;
 import com.gmail.nossr50.event.SimpleEventBus;
 import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
 import com.gmail.nossr50.fabric.listeners.CombatListener;
+import com.gmail.nossr50.platform.scheduler.TickScheduler;
+import com.gmail.nossr50.runnables.SaveTimerTask;
 import com.gmail.nossr50.util.experience.FormulaManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillTools;
 import java.nio.file.Path;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.WorldSavePath;
@@ -63,6 +66,17 @@ public class McMMOMod implements ModInitializer {
      * singleplayer world open/close cycles. Emitted events are fired on the server thread.
      */
     private static final EventBus eventBus = new SimpleEventBus();
+
+    /**
+     * mcMMO's server-tick scheduler (Phase 11). Replaces the legacy FoliaLib scheduler; every
+     * ported {@code runnables/} task is submitted here. Created once at mod load and pumped by
+     * {@code ServerTickEvents.END_SERVER_TICK}; its task queue is cleared at each server stop, so
+     * one instance safely spans singleplayer world open/close cycles. Holds no per-world state.
+     */
+    private static final TickScheduler scheduler = new TickScheduler();
+
+    /** Ticks in one real-time minute (20 tps × 60 s). Autosave interval is configured in minutes. */
+    private static final long TICKS_PER_MINUTE = 20L * 60L;
 
     /**
      * Skill metadata/relationship registry (subskill↔parent, super-ability↔skill, tool maps,
@@ -110,6 +124,11 @@ public class McMMOMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTING.register(this::onServerStarting);
         ServerLifecycleEvents.SERVER_STOPPING.register(this::onServerStopping);
 
+        // Phase 11: pump the task scheduler once per server tick. Registered once at mod load; the
+        // event only fires while a server is running, and the task queue is scheduled at server
+        // start / cleared at server stop, so no tasks run outside a world session.
+        ServerTickEvents.END_SERVER_TICK.register(s -> scheduler.tick());
+
         // Phase 5 / Phase 3: per-player session lifecycle (load-on-join, save-on-quit). Registered
         // once here; the handlers fire per player and read the store bound at server start.
         PlayerSessionListener.register();
@@ -148,7 +167,13 @@ public class McMMOMod implements ModInitializer {
                     .resolve(MOD_ID).resolve("players");
             McMMOMod.setProfileStore(new FlatFileProfileStore(playersDir));
             // PORT Phase 10: register core skills / interaction maps.
-            // PORT Phase 11: schedule save/tick tasks via ServerTickEvents.
+            // Phase 11: schedule the periodic autosave (interval = General.Save_Interval minutes,
+            // floored at 1 minute). Cancelled in onServerStopping.
+            final int saveIntervalMinutes = generalConfig != null ? generalConfig.getSaveInterval()
+                    : 10;
+            final long saveIntervalTicks = Math.max(TICKS_PER_MINUTE,
+                    saveIntervalMinutes * TICKS_PER_MINUTE);
+            scheduler.runTimer(new SaveTimerTask(), saveIntervalTicks, saveIntervalTicks);
         } catch (Throwable t) {
             LOGGER.error("Error while enabling mcMMO for the server session", t);
         }
@@ -158,13 +183,15 @@ public class McMMOMod implements ModInitializer {
     private void onServerStopping(MinecraftServer stoppingServer) {
         try {
             LOGGER.info("mcMMO server session stopping, saving and cleaning up data.");
+            // Phase 11: stop the tick pump's queue before the final save so no autosave races the
+            // shutdown flush below.
+            scheduler.cancelAll();
             // Phase 5: flush every online player's profile to disk, then drop the registry so the
             // next world session starts clean.
             UserManager.saveAll();
             UserManager.clearAll();
             McMMOMod.setProfileStore(null);
             // PORT Phase 10: finish in-progress alchemy brews.
-            // PORT Phase 11: cancel scheduled tasks.
             ConfigBootstrap.unload();
         } catch (Exception e) {
             LOGGER.error("Error while disabling mcMMO for the server session", e);
@@ -187,6 +214,15 @@ public class McMMOMod implements ModInitializer {
      */
     public static @NotNull EventBus getEventBus() {
         return eventBus;
+    }
+
+    /**
+     * mcMMO's server-tick scheduler (Phase 11). Never {@code null} — it exists from mod load
+     * onward. Ported {@code runnables/} tasks and skill managers submit delayed/repeating work here
+     * instead of the legacy FoliaLib scheduler. Its queue is cleared at each server stop.
+     */
+    public static @NotNull TickScheduler getScheduler() {
+        return scheduler;
     }
 
     /**
