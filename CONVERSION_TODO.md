@@ -346,7 +346,18 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       constructs every skill manager via `initSkillManagers()` — needed `AdvancedConfig` added to
       its fixture alongside the already-wired `GeneralConfig`/`ExperienceConfig`. Suite 284 green
       (+12 `FishingManagerTest`).
-- [~] **10.3 Remaining skills**: `alchemy` (needs the deferred alchemy/potion item config from Phase 8).
+- [x] **10.3 Remaining skills — ALL SKILL MANAGERS NOW LIVE.**
+      **`alchemy` DONE (final manager):** `AlchemyManager` numeric core ported — the Concoctions
+      `getTier` lookup and the Catalysis `calculateBrewSpeed` curve (min→max linear scale by skill
+      level, Lucky ×4/3 multiplier faithful to legacy's evaluation order). Wired into the
+      `McMMOPlayer` factory + `getAlchemyManager()`. **Deferred** (still-unported `PotionConfig`/
+      `PotionStage` + item/scheduler adapters): `getIngredients`/`getIngredientList` (potion
+      ingredient tables), `handlePotionBrewSuccesses` (`getPotionXP`), and the whole brewing-stand
+      machinery (`Alchemy.brewingStandMap`/`AlchemyBrewTask`/`AlchemyPotionBrewer`). Suite green
+      (+4 `AlchemyManagerTest`).
+      **Every `initManager` case is now uncommented — 19 primary-skill managers live.** Remaining
+      per-skill work is all deferred Bukkit-body wiring gated on the item/entity/block adapters and
+      the Phase 11 scheduler, not new manager ports.
       **`salvage` DONE (19th live manager):** `SalvageManager` numeric core ported —
       `calculateSalvageableAmount` (yield-from-damage), `getSalvageLimit` (Scrap Collector cap: rank
       1→1 else rank×2), the Arcane Salvage rank + full/partial enchant-extraction chances,
