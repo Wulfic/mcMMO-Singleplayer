@@ -18,6 +18,7 @@ import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.fishing.FishingManager;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
+import com.gmail.nossr50.skills.repair.RepairManager;
 import com.gmail.nossr50.skills.maces.MacesManager;
 import com.gmail.nossr50.skills.smelting.SmeltingManager;
 import com.gmail.nossr50.skills.spears.SpearsManager;
@@ -139,7 +140,7 @@ public class McMMOPlayer {
             case HERBALISM -> new HerbalismManager(this);
             case MACES -> new MacesManager(this);
             case MINING -> new MiningManager(this);
-            //   case REPAIR     -> new RepairManager(this);
+            case REPAIR -> new RepairManager(this);
             //   case SALVAGE    -> new SalvageManager(this);
             case SMELTING -> new SmeltingManager(this);
             case SPEARS -> new SpearsManager(this);   // 1.21.11 always has Spears (pinned)
@@ -197,6 +198,10 @@ public class McMMOPlayer {
 
     public MiningManager getMiningManager() {
         return (MiningManager) skillManagers.get(PrimarySkillType.MINING);
+    }
+
+    public RepairManager getRepairManager() {
+        return (RepairManager) skillManagers.get(PrimarySkillType.REPAIR);
     }
 
     public SmeltingManager getSmeltingManager() {

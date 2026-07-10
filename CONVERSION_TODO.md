@@ -346,8 +346,18 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       constructs every skill manager via `initSkillManagers()` — needed `AdvancedConfig` added to
       its fixture alongside the already-wired `GeneralConfig`/`ExperienceConfig`. Suite 284 green
       (+12 `FishingManagerTest`).
-- [~] **10.3 Remaining skills**: `repair`/`salvage`/`alchemy`
-      (need the deferred repair/salvage/alchemy item configs from Phase 8).
+- [~] **10.3 Remaining skills**: `salvage`/`alchemy`
+      (need the deferred salvage/alchemy item configs from Phase 8).
+      **`repair` DONE (18th live manager):** `RepairManager` numeric core ported —
+      `getPercentageRepaired` ratio, the `repairCalculate` durability math (Repair Mastery
+      skill-scaled bonus + cap, Super Repair doubling with the RNG proc **injected** as a boolean so
+      the math stays deterministic/testable), the Arcane Forging rank + keep/downgrade enchant
+      chances, and the anvil placement/last-use state. Constructor does NO eager config read. Wired
+      into the `McMMOPlayer` factory + `getRepairManager()`. **Deferred** (item/inventory/enchant
+      adapters + the still-unported repairable-item config + `getRepairXP(MaterialType)` +
+      `SkillUtils`): `handleRepair` (the whole repair action + XP award), `addEnchants` (Arcane
+      Forging enchant mutation), `placedAnvilCheck`/`checkConfirmation` (notification/sound/cooldown),
+      `checkPlayerProcRepair` (the injected Super Repair roll). Suite green (+7 `RepairManagerTest`).
       **`taming` DONE (17th live manager):** `TamingManager` numeric core ported — the 8 sub-skill
       rank+permission `canUseX` gates (incl. the legacy Holy Hound quirk: unlocked by the
       Environmentally Aware ladder, enabled by the Holy Hound node), the pure damage-modifier math
