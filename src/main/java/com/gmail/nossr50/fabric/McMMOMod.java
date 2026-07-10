@@ -18,6 +18,7 @@ import com.gmail.nossr50.platform.scheduler.TickScheduler;
 import com.gmail.nossr50.runnables.SaveTimerTask;
 import com.gmail.nossr50.runnables.player.ClearRegisteredXPGainTask;
 import com.gmail.nossr50.util.experience.FormulaManager;
+import com.gmail.nossr50.util.MaterialMapStore;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillTools;
 import java.nio.file.Path;
@@ -86,6 +87,13 @@ public class McMMOMod implements ModInitializer {
      * first access and lives for the whole JVM.
      */
     private static volatile SkillTools skillTools;
+
+    /**
+     * MC-free item/block classification tables (registry-path String membership). Legacy code
+     * reached it via {@code mcMMO.getMaterialMapStore()}; it needs no world session (pure hardcoded
+     * sets), so it is built lazily on first access and lives for the whole JVM.
+     */
+    private static volatile MaterialMapStore materialMapStore;
 
     /**
      * XP-curve engine (level ↔ experience conversions). Legacy code reached it via
@@ -241,6 +249,26 @@ public class McMMOMod implements ModInitializer {
                 if (local == null) {
                     local = new SkillTools();
                     skillTools = local;
+                }
+            }
+        }
+        return local;
+    }
+
+    /**
+     * The item/block classification tables. Never {@code null} — built lazily on first access (pure
+     * hardcoded registry-path sets, no world session). Replaces legacy
+     * {@code mcMMO.getMaterialMapStore()}; {@code ItemUtils}/{@code BlockUtils} delegate their
+     * type checks here once they extract the id path from a live item/block.
+     */
+    public static @NotNull MaterialMapStore getMaterialMapStore() {
+        MaterialMapStore local = materialMapStore;
+        if (local == null) {
+            synchronized (McMMOMod.class) {
+                local = materialMapStore;
+                if (local == null) {
+                    local = new MaterialMapStore();
+                    materialMapStore = local;
                 }
             }
         }
