@@ -1,10 +1,15 @@
 package com.gmail.nossr50.platform;
 
+import com.gmail.nossr50.fabric.McMMOMod;
 import java.util.UUID;
 import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvent;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
@@ -124,6 +129,35 @@ public final class PlatformPlayer {
     /** Action-bar / overlay message (Bukkit {@code sendActionBar}). */
     public void sendActionBar(@NotNull Text message) {
         handle.sendMessage(message, true);
+    }
+
+    // --- Sound (Bukkit Player#playSound / World#playSound) -------------------
+
+    /**
+     * Plays a sound at this player's position. Replaces Bukkit's
+     * {@code Player#playSound(Location, Sound, SoundCategory, volume, pitch)} and
+     * {@code World#playSound(...)}; in singleplayer the "only this player hears it" vs. "everyone
+     * nearby hears it" distinction collapses (one listener), so both route here — spatialized at the
+     * player via {@link ServerWorld#playSound}. The {@code soundRegistryId} is a namespaced sound id
+     * (e.g. {@code minecraft:block.anvil.place}, from {@link com.gmail.nossr50.util.sounds.SoundType});
+     * an unknown id is logged and skipped rather than thrown, so a bad custom id never breaks gameplay.
+     *
+     * @param soundRegistryId namespaced vanilla sound id
+     * @param category volume-slider category the sound obeys
+     * @param volume final volume (already master-scaled by the caller)
+     * @param pitch final pitch
+     */
+    public void playSound(@NotNull String soundRegistryId, @NotNull SoundCategory category,
+            float volume, float pitch) {
+        Identifier id = Identifier.tryParse(soundRegistryId);
+        if (id == null || !Registries.SOUND_EVENT.containsId(id)) {
+            McMMOMod.LOGGER.warn("No vanilla sound for id '{}'", soundRegistryId);
+            return;
+        }
+        SoundEvent soundEvent = Registries.SOUND_EVENT.get(id);
+        Vec3d pos = getPos();
+        // except = null → all players in range hear it (the one player, in singleplayer).
+        getWorld().playSound(null, pos.x, pos.y, pos.z, soundEvent, category, volume, pitch);
     }
 
     // --- Stopgap raw accessors (pending dedicated adapters) ------------------

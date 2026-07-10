@@ -424,8 +424,24 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       `handleActivationPerks` maxTicks cap — every perk node collapsed per Phase 6). Unit-tested vs
       real config.yml/advanced.yml (McMMOPlayerTest +5, PerksUtilsTest ×3; suite 324 green). Wired
       into `/mcrefresh`. **Still deferred** (need the interaction listener + tool detection +
-      NotificationManager/SoundManager/SkillUtils/EventUtils + the runnables): the activation
+      SkillUtils/EventUtils + the runnables): the activation
       *trigger* (`checkAbilityActivation`/`processAbilityActivation`/`processAxeToolMessages`).
+- [x] **NotificationManager ported (11.3)** — action-bar/chat feedback routing (see Phase 10 util
+      prereqs). Suite 330 green.
+- [x] **SoundManager ported (11.4).** Singleplayer `util/sounds/SoundManager` (MC-free-ish): reads
+      per-`SoundType` enable/volume/pitch tuning from the real `sounds.yml` via
+      `McMMOMod.getSoundConfig()` (master-scaled volume, FIZZ/POP custom-pitch RNG, custom-sound-id
+      override, `min(2.0)` pitch-modifier clamp — verbatim legacy), and delegates the MC-typed
+      registry lookup + spatial playback to the new `PlatformPlayer#playSound(soundId, SoundCategory,
+      volume, pitch)` (resolves the id via `Registries.SOUND_EVENT`, plays via
+      `ServerWorld#playSound` at the player; unknown id logged + skipped, never thrown). Legacy's
+      player-only vs. world-broadcast split collapses in singleplayer (one listener) so both route the
+      same; dropped the Spigot enum→interface reflection sound lookup / `SoundRegistryUtils` /
+      `soundCache`. `SoundManagerTest` ×8 (real `sounds.yml` for volume/pitch/id/category + mocked
+      `SoundConfig` for the enable-gate/null/custom-id/master-scaling). Suite **338 green**. The two
+      messaging prereqs for the super-ability activation trigger (NotificationManager + SoundManager)
+      are now both done; next = the `AbilityDisableTask`/`ToolLowerTask` runnables → interaction
+      listener.
 - [ ] Port the remaining live-value runnables onto the scheduler as their subsystems unblock:
       super-ability `AbilityCooldownTask`/`AbilityDisableTask`/`ToolLowerTask` (need super-ability
       activation + held-item durability), `RuptureTask`/`BleedContainer` (Rupture DoT — needs an
