@@ -16,6 +16,7 @@ import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
 import com.gmail.nossr50.fabric.listeners.CombatListener;
 import com.gmail.nossr50.platform.scheduler.TickScheduler;
 import com.gmail.nossr50.runnables.SaveTimerTask;
+import com.gmail.nossr50.runnables.player.ClearRegisteredXPGainTask;
 import com.gmail.nossr50.util.experience.FormulaManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillTools;
@@ -174,6 +175,9 @@ public class McMMOMod implements ModInitializer {
             final long saveIntervalTicks = Math.max(TICKS_PER_MINUTE,
                     saveIntervalMinutes * TICKS_PER_MINUTE);
             scheduler.runTimer(new SaveTimerTask(), saveIntervalTicks, saveIntervalTicks);
+            // Phase 11: expire stale diminished-returns XP records every 60 ticks (matches legacy),
+            // so the rolling per-skill XP totals don't grow unbounded. Cancelled in onServerStopping.
+            scheduler.runTimer(new ClearRegisteredXPGainTask(), 60, 60);
         } catch (Throwable t) {
             LOGGER.error("Error while enabling mcMMO for the server session", t);
         }
