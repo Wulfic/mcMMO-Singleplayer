@@ -346,8 +346,15 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       constructs every skill manager via `initSkillManagers()` — needed `AdvancedConfig` added to
       its fixture alongside the already-wired `GeneralConfig`/`ExperienceConfig`. Suite 284 green
       (+12 `FishingManagerTest`).
-- [~] **10.3 Remaining skills**: `salvage`/`alchemy`
-      (need the deferred salvage/alchemy item configs from Phase 8).
+- [~] **10.3 Remaining skills**: `alchemy` (needs the deferred alchemy/potion item config from Phase 8).
+      **`salvage` DONE (19th live manager):** `SalvageManager` numeric core ported —
+      `calculateSalvageableAmount` (yield-from-damage), `getSalvageLimit` (Scrap Collector cap: rank
+      1→1 else rank×2), the Arcane Salvage rank + full/partial enchant-extraction chances,
+      `failedAllEnchants`, and the anvil placement/last-use state. New `Permissions.hasSalvageEnchantBypassPerk`
+      (perk → false). Wired into the `McMMOPlayer` factory + `getSalvageManager()`. **Deferred**
+      (item/inventory/enchant adapters + the still-unported salvageable-item config + `SkillUtils`):
+      `handleSalvage` (the whole salvage action + item spawn), `arcaneSalvageCheck` (enchanted-book
+      build), `placedAnvilCheck`/`checkConfirmation`. Suite green (+5 `SalvageManagerTest`).
       **`repair` DONE (18th live manager):** `RepairManager` numeric core ported —
       `getPercentageRepaired` ratio, the `repairCalculate` durability math (Repair Mastery
       skill-scaled bonus + cap, Super Repair doubling with the RNG proc **injected** as a boolean so

@@ -130,4 +130,16 @@ public final class Permissions {
     public static boolean greenTerra(@Nullable PlatformPlayer player) {
         return true;
     }
+
+    /**
+     * The Salvage enchant-bypass perk ({@code mcmmo.perks.bypass.salvageenchant}), which guaranteed
+     * full enchant extraction. Like {@link #lucky}, it's an opt-in perk node no player holds in
+     * singleplayer, so it never applies.
+     *
+     * @param player the player (unused — retained to mirror the legacy call sites)
+     * @return always {@code false} — no perk-permission backend in singleplayer
+     */
+    public static boolean hasSalvageEnchantBypassPerk(@Nullable PlatformPlayer player) {
+        return false;
+    }
 }
