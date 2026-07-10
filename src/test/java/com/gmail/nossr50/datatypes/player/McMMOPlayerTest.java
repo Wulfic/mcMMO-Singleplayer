@@ -200,4 +200,63 @@ class McMMOPlayerTest {
         mmoPlayer.toggleAbilityUse();
         assertFalse(mmoPlayer.getAbilityUse());
     }
+
+    // --- Super-ability cooldown / duration core (Phase 11.2) ----------------
+
+    @Test
+    void freshAbilityIsNotOnCooldown() {
+        // A fresh profile has DATS 0, so (0 + cooldown) is far in the past → not on cooldown.
+        assertFalse(mmoPlayer.isAbilityOnCooldown(SuperAbilityType.SUPER_BREAKER));
+        assertTrue(mmoPlayer.calculateTimeRemaining(SuperAbilityType.SUPER_BREAKER) <= 0,
+                "an ability never used is off cooldown");
+    }
+
+    @Test
+    void recentlyDeactivatedAbilityIsOnCooldownForItsFullCooldown() {
+        // Super Breaker's configured cooldown is 240s (config.yml). Deactivating "now" leaves ~240s.
+        mmoPlayer.setAbilityDATS(SuperAbilityType.SUPER_BREAKER, System.currentTimeMillis());
+
+        assertTrue(mmoPlayer.isAbilityOnCooldown(SuperAbilityType.SUPER_BREAKER));
+        final int remaining = mmoPlayer.calculateTimeRemaining(SuperAbilityType.SUPER_BREAKER);
+        assertTrue(remaining >= 238 && remaining <= 240,
+                "remaining should be ~240s (the Super Breaker cooldown), was " + remaining);
+    }
+
+    @Test
+    void activeAbilityIsNeverReportedOnCooldown() {
+        // Even with a fresh-deactivation timestamp, an *active* ability is not "on cooldown".
+        mmoPlayer.setAbilityDATS(SuperAbilityType.SUPER_BREAKER, System.currentTimeMillis());
+        mmoPlayer.setAbilityMode(SuperAbilityType.SUPER_BREAKER, true);
+
+        assertFalse(mmoPlayer.isAbilityOnCooldown(SuperAbilityType.SUPER_BREAKER),
+                "an active ability is running, not cooling down");
+    }
+
+    @Test
+    void resetAbilityModeClearsEveryActiveMode() {
+        mmoPlayer.setAbilityMode(SuperAbilityType.SUPER_BREAKER, true);
+        mmoPlayer.setAbilityMode(SuperAbilityType.BERSERK, true);
+
+        mmoPlayer.resetAbilityMode();
+
+        assertFalse(mmoPlayer.getAbilityMode(SuperAbilityType.SUPER_BREAKER));
+        assertFalse(mmoPlayer.getAbilityMode(SuperAbilityType.BERSERK));
+    }
+
+    @Test
+    void activationTicksScaleWithLevelThenCap() {
+        // RetroMode defaults true; bundled advanced.yml RetroMode: IncreaseLevel = 50, CapLevel = 1000.
+        // Super Breaker's Max_Seconds is 0 (no per-ability cap), so ticks = 2 + min(1000, level) / 50.
+        final PrimarySkillType skill = PrimarySkillType.MINING;
+        final SuperAbilityType ability = SuperAbilityType.SUPER_BREAKER;
+
+        // Level 0 → base 2 ticks.
+        assertEquals(2, mmoPlayer.calculateAbilityActivationTicks(skill, ability));
+
+        mmoPlayer.addLevels(skill, 250); // 2 + 250/50 = 7
+        assertEquals(7, mmoPlayer.calculateAbilityActivationTicks(skill, ability));
+
+        mmoPlayer.addLevels(skill, 950); // level 1200, capped at 1000 → 2 + 1000/50 = 22
+        assertEquals(22, mmoPlayer.calculateAbilityActivationTicks(skill, ability));
+    }
 }

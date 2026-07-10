@@ -152,9 +152,11 @@ that's about to be deleted.
       `/mcmmo` (banner), `/mcstats` (per-skill level/xp + power level), `/addlevels` and
       `/addxp` (op-gated `GAMEMASTERS_CHECK`, run through the real gain pipeline). Skill-name
       tab-completion via a Brigadier `SuggestionProvider`.
-- [ ] Remaining self commands: `/mcability` (toggle super-ability readiness), `/mcrefresh`
-      (clear cooldowns), per-skill info commands. Land as their subsystems port (super-ability
-      activation → Phase 11).
+- [x] `/mcability` (toggle super-ability readiness via `abilityUse`) and `/mcrefresh` (clear the
+      caller's cooldowns + active ability modes) ported onto the Brigadier tree (Phase 11.2). Both
+      self-only; the notification/sound feedback legacy attached is deferred with NotificationManager.
+- [ ] Per-skill info commands still to port. The `/mcability` toggle is inert until the super-ability
+      activation *trigger* lands (interaction listener + tool detection → Phase 11).
 
 ### Phase 5 — Persistence  ✅ core done
 - [x] SQL backend dropped (never ported); sole store is per-world flatfile.
@@ -412,6 +414,18 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       `Done` then clean shutdown save, exit 0. ⚠️ Smoke-test gotcha: vanilla
       `pause-when-empty-seconds` (default 60) halts ticking with no players joined, freezing the
       pump — set it to `-1` for headless observation; irrelevant in real singleplayer (player present).
+- [x] **Super-ability cooldown/duration core ported (11.2).** The MC-free numeric heart of the
+      super-ability subsystem now lives on `McMMOPlayer`: `calculateTimeRemaining` /
+      `isAbilityOnCooldown` (read the profile's second-granularity DATS + config cooldown, verbatim
+      from legacy) and `calculateAbilityActivationTicks` (the buried-decision ability-length curve
+      `2 + min(cap, level)/increaseLevel`, capped by `SuperAbilityType.getMaxLength()`), plus a
+      side-effect-free `resetAbilityMode()`. Support utils: MC-free `util/Misc` (TIME/TICK conversion
+      constants only) and singleplayer `util/skills/PerksUtils` (cooldown passthrough +
+      `handleActivationPerks` maxTicks cap — every perk node collapsed per Phase 6). Unit-tested vs
+      real config.yml/advanced.yml (McMMOPlayerTest +5, PerksUtilsTest ×3; suite 324 green). Wired
+      into `/mcrefresh`. **Still deferred** (need the interaction listener + tool detection +
+      NotificationManager/SoundManager/SkillUtils/EventUtils + the runnables): the activation
+      *trigger* (`checkAbilityActivation`/`processAbilityActivation`/`processAxeToolMessages`).
 - [ ] Port the remaining live-value runnables onto the scheduler as their subsystems unblock:
       super-ability `AbilityCooldownTask`/`AbilityDisableTask`/`ToolLowerTask` (need super-ability
       activation + held-item durability), `RuptureTask`/`BleedContainer` (Rupture DoT — needs an

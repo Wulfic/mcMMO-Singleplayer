@@ -30,6 +30,8 @@ import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.LogUtils;
+import com.gmail.nossr50.util.Misc;
+import com.gmail.nossr50.util.skills.PerksUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
 import java.util.EnumMap;
 import java.util.Map;
@@ -476,9 +478,20 @@ public class McMMOPlayer {
         abilityUse = !abilityUse;
     }
 
-    // PORT Phase 10/11: resetAbilityMode() dropped — it ran an AbilityDisableTask (a runnable, not
-    // yet ported) per ability to fire deactivation side effects. Re-add with the super-ability
-    // activation subsystem.
+    /**
+     * Clears the active state of every super ability. Legacy ran a full {@code AbilityDisableTask}
+     * per ability to fire the deactivation side effects (deactivate event, off-notification,
+     * inventory ability-buff removal, chunk refresh, and the follow-up cooldown-refresh task). Those
+     * side effects are gated on the still-unported {@code AbilityDisableTask}/{@code EventUtils}/
+     * {@code NotificationManager}/{@code SkillUtils} (PORT Phase 11) and the interaction listener
+     * that would ever set a mode true, so this port flips the transient mode/informed flags directly
+     * — the correct, side-effect-free reset used by {@code /mcrefresh} and player logout.
+     */
+    public void resetAbilityMode() {
+        for (SuperAbilityType ability : SuperAbilityType.values()) {
+            setAbilityMode(ability, false);
+        }
+    }
 
     /*
      * Tool preparation mode
@@ -603,11 +616,76 @@ public class McMMOPlayer {
         this.attackStrength = attackStrength;
     }
 
-    // PORT Phase 10/11: the super-ability activation cluster (checkAbilityActivation,
-    // processAbilityActivation, processAxeToolMessages, calculateTimeRemaining, isAbilityOnCooldown)
-    // dropped — it depends on EventUtils, NotificationManager, SoundManager, SkillUtils, PerksUtils,
-    // RankUtils, BlockUtils, the Folia scheduler, and the ability runnables, none of which are
-    // ported yet. Re-add with the super-ability subsystem.
+    /*
+     * Super-ability cooldown / duration core (Phase 11.2)
+     *
+     * The MC-free numeric heart of the super-ability subsystem. The activation *trigger* itself
+     * (checkAbilityActivation / processAbilityActivation / processAxeToolMessages) is still deferred
+     * — it needs the interaction listener, held-item/tool detection, EventUtils' ability events,
+     * NotificationManager, SoundManager, SkillUtils and the ability runnables (AbilityDisableTask /
+     * ToolLowerTask), none of which are ported. These three methods are the pieces that don't touch
+     * any of that: pure reads of the profile's deactivation timestamp (DATS) and the config-driven
+     * ability length. They drive the cooldown display and are the exact math the eventual trigger
+     * will call, so they land + get unit-tested now.
+     */
+
+    /**
+     * Whether the given super ability is currently on cooldown (not active, and its deactivation
+     * timestamp plus its cooldown is still in the future).
+     */
+    public boolean isAbilityOnCooldown(@NotNull SuperAbilityType ability) {
+        return !getAbilityMode(ability) && calculateTimeRemaining(ability) > 0;
+    }
+
+    /**
+     * Seconds remaining until the ability's cooldown expires (≤ 0 means ready). The profile stores
+     * the deactivation timestamp (DATS) in whole seconds, so it is scaled back to millis here,
+     * added to the (perk-adjusted) cooldown, and compared against wall-clock time.
+     *
+     * @param ability the ability whose cooldown to check
+     * @return the number of seconds remaining before the cooldown expires
+     */
+    public int calculateTimeRemaining(@NotNull SuperAbilityType ability) {
+        long deactivatedTimestamp = profile.getAbilityDATS(ability) * Misc.TIME_CONVERSION_FACTOR;
+        return (int) (((deactivatedTimestamp
+                + ((long) PerksUtils.handleCooldownPerks(ability.getCooldown())
+                * Misc.TIME_CONVERSION_FACTOR)) - System.currentTimeMillis())
+                / Misc.TIME_CONVERSION_FACTOR);
+    }
+
+    /**
+     * The length, in ticks, that activating {@code superAbilityType} at this player's current level
+     * of {@code primarySkillType} would run for. Extracted verbatim from legacy
+     * {@code checkAbilityActivation} (the "buried pure decision" pattern): base {@code 2 + level /
+     * Ability_Length}, capped to {@code Ability_Length_Cap} skill levels when that cap is positive,
+     * then run through {@link PerksUtils#handleActivationPerks} for the per-ability {@code maxLength}
+     * cap. Pure over {@code (skillLevel, AdvancedConfig, SuperAbilityType.getMaxLength)} so the
+     * eventual activation trigger is a thin wrapper around it.
+     */
+    public int calculateAbilityActivationTicks(@NotNull PrimarySkillType primarySkillType,
+            @NotNull SuperAbilityType superAbilityType) {
+        // These values change depending on whether the server is in retro mode.
+        int abilityLengthVar = McMMOMod.getAdvancedConfig().getAbilityLength();
+        int abilityLengthCap = McMMOMod.getAdvancedConfig().getAbilityLengthCap();
+
+        int baseTicks;
+        // Ability cap of 0 or below means no cap.
+        if (abilityLengthCap > 0) {
+            baseTicks = 2 + (Math.min(abilityLengthCap, getSkillLevel(primarySkillType))
+                    / abilityLengthVar);
+        } else {
+            baseTicks = 2 + (getSkillLevel(primarySkillType) / abilityLengthVar);
+        }
+
+        return PerksUtils.handleActivationPerks(baseTicks, superAbilityType.getMaxLength());
+    }
+
+    // PORT Phase 11: the super-ability activation *trigger* (checkAbilityActivation /
+    // processAbilityActivation / processAxeToolMessages) and the tool-prep raise/lower flow are
+    // still deferred — they depend on EventUtils, NotificationManager, SoundManager, SkillUtils,
+    // BlockUtils, held-item/tool detection, the interaction listener, and the ability runnables
+    // (AbilityDisableTask / AbilityCooldownTask / ToolLowerTask). The cooldown/duration math above
+    // is the MC-free core those will call once their adapters land.
 
     // PORT Phase 10.3+: exploit-prevention / teleport / Chimaera-wing timestamps (recentlyHurt,
     // respawnATS, teleportATS, databaseATS, teleportCommence, Chimaera-wing DATS) dropped — the

@@ -37,6 +37,8 @@ import net.minecraft.util.Formatting;
  * <ul>
  *   <li>{@code /mcmmo} — mod + version banner.</li>
  *   <li>{@code /mcstats} — the caller's level and XP for every skill, plus power level.</li>
+ *   <li>{@code /mcability} — toggle whether super abilities may be readied/activated.</li>
+ *   <li>{@code /mcrefresh} — clear the caller's super-ability cooldowns and active modes.</li>
  *   <li>{@code /addlevels <skill|all> <amount>} — admin: grant skill levels (op level 2).</li>
  *   <li>{@code /addxp <skill|all> <amount>} — admin: grant raw XP through the real gain pipeline.</li>
  * </ul>
@@ -58,6 +60,8 @@ public final class McMMOCommands {
     private static void registerAll(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(literal("mcmmo").executes(ctx -> info(ctx.getSource())));
         dispatcher.register(literal("mcstats").executes(ctx -> stats(ctx.getSource())));
+        dispatcher.register(literal("mcability").executes(ctx -> ability(ctx.getSource())));
+        dispatcher.register(literal("mcrefresh").executes(ctx -> refresh(ctx.getSource())));
 
         dispatcher.register(literal("addlevels")
                 .requires(CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK))
@@ -115,6 +119,43 @@ public final class McMMOCommands {
         final int power = mmoPlayer.getPowerLevel();
         source.sendFeedback(() -> Text.literal("Power Level: ").formatted(Formatting.GOLD)
                 .append(Text.literal(String.valueOf(power)).formatted(Formatting.GREEN)), false);
+        return 1;
+    }
+
+    // --- /mcability ---------------------------------------------------------
+
+    /** Toggles whether the caller may ready/activate super abilities ({@code abilityUse}). */
+    private static int ability(ServerCommandSource source) throws CommandSyntaxException {
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrThrow().getUuid());
+        if (mmoPlayer == null) {
+            source.sendError(Text.literal("Your mcMMO data has not loaded yet."));
+            return 0;
+        }
+
+        mmoPlayer.toggleAbilityUse();
+        final boolean on = mmoPlayer.getAbilityUse();
+        source.sendFeedback(() -> Text.literal("Super abilities ")
+                .formatted(Formatting.GRAY)
+                .append(Text.literal(on ? "enabled" : "disabled")
+                        .formatted(on ? Formatting.GREEN : Formatting.RED))
+                .append(Text.literal(".").formatted(Formatting.GRAY)), false);
+        return 1;
+    }
+
+    // --- /mcrefresh ---------------------------------------------------------
+
+    /** Clears the caller's super-ability cooldowns and any active ability modes. */
+    private static int refresh(ServerCommandSource source) throws CommandSyntaxException {
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrThrow().getUuid());
+        if (mmoPlayer == null) {
+            source.sendError(Text.literal("Your mcMMO data has not loaded yet."));
+            return 0;
+        }
+
+        mmoPlayer.resetCooldowns();
+        mmoPlayer.resetAbilityMode();
+        source.sendFeedback(() -> Text.literal("Your super-ability cooldowns have been refreshed.")
+                .formatted(Formatting.GREEN), false);
         return 1;
     }
 
