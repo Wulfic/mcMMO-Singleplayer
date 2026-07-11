@@ -26,8 +26,10 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       `EntityDamageListener` — chosen over `ServerLivingEntityEvents.ALLOW_DAMAGE` because mcMMO must
       *reduce* damage, not just veto it. **Still TODO for combat:** branch the listener on attacker
       identity (needs `AttackEntityCallback` + a projectile-launch Mixin for ranged) to drive the on-hit
-      sub-skills (§B/§C), Acrobatics Dodge, Taming damage modifiers, Rupture/Bleed. Only the fall branch
-      (K2) is wired today.
+      sub-skills (§B/§C), Taming damage modifiers, Rupture/Bleed. **Defender branch now wired:**
+      `EntityDamageListener` routes incoming entity damage → **Acrobatics Dodge** (damage reduction + XP,
+      per-mob anti-farm cap via `MetadataStore`, lightning-dodge config exclusion). Still TODO:
+      attacker-side melee weapon bonuses (Swords/Axes/Unarmed) + projectile skills.
 - [x] **K2 — Fall-damage hook.** DONE. `EntityDamageListener` detects `DamageTypeTags.IS_FALL` and drives
       Acrobatics Roll (XP + damage reduction) via the K1 mixin seam above.
 - [ ] **K3 — Item / inventory / enchant mutation adapter.** `PlatformItem` + `ItemSpecBuilder` can *read*
@@ -63,10 +65,12 @@ Currently wired: Mining / Woodcutting / Excavation / Herbalism (block-break) + w
 The rest have ported numeric cores but **no event awards their XP**. Each needs its §A hook, then the
 XP-award body:
 
-- [~] **Acrobatics** — via K2: fall damage → Roll XP (gated by `canGainRollXP()`) + Roll/Graceful Roll
-      damage negation **DONE** (full Roll port folded MC-free into `AcrobaticsManager`, exploit throttle +
-      fall-location history + Feather Falling XP boost; unit-tested; **in-game verification pending**). Still
-      TODO via K1: Dodge XP + damage reduction (with the mob dodge-XP anti-farm cap).
+- [x] **Acrobatics** — via K2: fall damage → Roll XP (gated by `canGainRollXP()`) + Roll/Graceful Roll
+      damage negation **DONE**. Via K1 defender branch: **Dodge** damage reduction + XP **DONE** (per-mob
+      dodge-XP anti-farm cap via `MetadataStore`, lightning-dodge exclusion; deterministic `dodgeCheck`
+      unit-tested, RNG orchestration `processDodge` + cap verified in-game). **In-game verification
+      pending** for both. Deferred refinements: dodge particle effect (needs a PlatformPlayer particle
+      adapter) + `MobDodgeMetaCleanup` tracker-expiry task (transient store caps per session without it).
 - [ ] **Fishing** — via K7 (fishing-catch) + K8 (`FishingTreasureConfig`): `processFishing` → fishing XP,
       treasure/Magic Hunter/Shake loot, Treasure Hunter.
 - [ ] **Repair** — via K7 (anvil) + K3 + K8 (`RepairConfig`): `handleRepair` → repair action + XP; Repair
