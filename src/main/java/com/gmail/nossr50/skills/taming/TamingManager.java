@@ -1,5 +1,7 @@
 package com.gmail.nossr50.skills.taming;
 
+import com.gmail.nossr50.datatypes.experience.XPGainReason;
+import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
@@ -53,6 +55,25 @@ public class TamingManager extends SkillManager {
 
     public TamingManager(@NotNull McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.TAMING);
+    }
+
+    /**
+     * Award Taming XP for taming an animal (legacy {@code awardTamingXP(LivingEntity)}). The MC-typed
+     * caller ({@code fabric.listeners.TamingListener}) resolves the tamed entity's config-entity
+     * string (e.g. {@code "Wolf"}); this looks up the per-entity XP and awards it, keeping the manager
+     * MC-free.
+     *
+     * <p>The legacy cancellable {@code McMMOPlayerTameEntityEvent} (which could veto/adjust the award)
+     * is dropped — there are no singleplayer listeners for it (K5 EventUtils; no-op with a breadcrumb).
+     *
+     * @param entityConfigString the config-entity string of the tamed animal
+     */
+    public void awardTamingXP(@NotNull String entityConfigString) {
+        final int xp = McMMOMod.getExperienceConfig().getTamingXP(entityConfigString);
+        if (xp <= 0) {
+            return; // entity has no configured Taming XP (e.g. tamed a type mcMMO doesn't reward).
+        }
+        applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF);
     }
 
     public boolean canUseThickFur() {

@@ -4,7 +4,9 @@
   "package": "com.gmail.nossr50.fabric.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "LivingEntityDamageMixin"
+    "AbstractHorseBondMixin",
+    "LivingEntityDamageMixin",
+    "TameableEntityTameMixin"
   ],
   "injectors": {
     "defaultRequire": 1
