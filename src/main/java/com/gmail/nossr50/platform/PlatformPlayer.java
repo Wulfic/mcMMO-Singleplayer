@@ -1,6 +1,8 @@
 package com.gmail.nossr50.platform;
 
+import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.util.BlockUtils;
 import java.util.UUID;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
@@ -17,6 +19,8 @@ import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
@@ -224,6 +228,35 @@ public final class PlatformPlayer {
      */
     public long getFeetBlockKey() {
         return handle.getBlockPos().asLong();
+    }
+
+    // --- Super-ability activation support (K6) ------------------------------
+
+    /**
+     * Whether the stack currently in the main hand matches {@code toolType} (Bukkit
+     * {@code ToolType#inHand(getInventory().getItemInMainHand())}). Keeps the MC-typed
+     * {@link ItemStack} inspection in the platform layer so the MC-free super-ability activation
+     * trigger on {@link com.gmail.nossr50.datatypes.player.McMMOPlayer} can gate on a pure
+     * {@link ToolType}.
+     */
+    public boolean isHoldingTool(@NotNull ToolType toolType) {
+        return toolType.inHand(handle.getMainHandStack());
+    }
+
+    /**
+     * Whether the player is currently looking at a tree block within reach (Bukkit
+     * {@code BlockUtils.isPartOfTree(player.getTargetBlock(null, 100))}). Used by the shared-axe
+     * "tool ready" messaging ({@code McMMOPlayer#processAxeToolMessages}) to decide whether a raised
+     * axe is readying Tree Feller vs Skull Splitter. Ray-casts 100 blocks along the player's look
+     * vector; a miss (air / fluid / entity) or a non-tree block yields {@code false}.
+     */
+    public boolean isLookingAtTree() {
+        HitResult hit = handle.raycast(100.0D, 1.0F, false);
+        if (hit.getType() != HitResult.Type.BLOCK) {
+            return false;
+        }
+        BlockPos pos = ((BlockHitResult) hit).getBlockPos();
+        return BlockUtils.isPartOfTree(getWorld().getBlockState(pos));
     }
 
     // --- Stopgap raw accessors (pending dedicated adapters) ------------------
