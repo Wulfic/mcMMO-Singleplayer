@@ -4,12 +4,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.datatypes.experience.XPGainReason;
+import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
@@ -21,6 +25,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 
 /**
  * Proves the Fishing numeric cores (Phase 10.8) against the real bundled configs.
@@ -182,5 +187,25 @@ class FishingManagerTest {
     void isFishingTooOftenDetectsRapidRecast() {
         assertFalse(fishingManager.isFishingTooOften(), "first catch, nothing to compare against");
         assertTrue(fishingManager.isFishingTooOften(), "immediate recast within the same millisecond window");
+    }
+
+    @Test
+    void awardFishingXpUsesTheCaughtMaterialsXpTable() {
+        // experience.yml: Experience_Values.Fishing.Cod = 100, Salmon = 600.
+        fishingManager.awardFishingXP("Cod");
+        verify(mmoPlayer).beginXpGain(PrimarySkillType.FISHING, 100f, XPGainReason.PVE,
+                XPGainSource.SELF);
+
+        fishingManager.awardFishingXP("Salmon");
+        verify(mmoPlayer).beginXpGain(PrimarySkillType.FISHING, 600f, XPGainReason.PVE,
+                XPGainSource.SELF);
+    }
+
+    @Test
+    void awardFishingXpIsANoOpForMaterialsWithNoConfiguredXp() {
+        // Stone is not in the Fishing XP table -> getXp returns 0 -> no award.
+        fishingManager.awardFishingXP("Stone");
+        verify(mmoPlayer, never()).beginXpGain(ArgumentMatchers.any(), ArgumentMatchers.anyFloat(),
+                ArgumentMatchers.any(), ArgumentMatchers.any());
     }
 }

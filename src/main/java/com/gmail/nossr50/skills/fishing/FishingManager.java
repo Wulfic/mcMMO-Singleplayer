@@ -1,5 +1,7 @@
 package com.gmail.nossr50.skills.fishing;
 
+import com.gmail.nossr50.datatypes.experience.XPGainReason;
+import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
@@ -143,6 +145,27 @@ public class FishingManager extends SkillManager {
     public double getShakeChance() {
         return McMMOMod.getAdvancedConfig().getShakeChance(
                 RankUtils.getRank(getPlayer(), SubSkillType.FISHING_SHAKE));
+    }
+
+    /**
+     * Award the base Fishing XP for a caught item (the XP slice of legacy {@code processFishing}, which
+     * awarded {@code getXp(FISHING, fishingCatch.getType())}). The Treasure Hunter / Magic Hunter loot
+     * and its bonus {@code treasureXp} are deferred until {@code FishingTreasureConfig} is ported —
+     * that config is entirely additive on top of this base value, so wiring the base XP first stands
+     * alone. The MC-typed caller ({@code fabric.listeners.FishingListener}) resolves the caught item's
+     * material config string; this stays MC-free and unit-testable — same split as
+     * {@link com.gmail.nossr50.skills.smelting.SmeltingManager#awardSmeltingXP(String)}.
+     *
+     * @param materialConfigString the caught item's material config string (see
+     *     {@code ConfigStringUtils.getMaterialConfigString}), e.g. {@code "Cod"}
+     */
+    public void awardFishingXP(@NotNull String materialConfigString) {
+        final int xp = McMMOMod.getExperienceConfig().getXp(PrimarySkillType.FISHING,
+                materialConfigString);
+        if (xp <= 0) {
+            return; // caught item carries no configured Fishing XP (junk / treasure not in the table).
+        }
+        applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF);
     }
 
     protected int getVanillaXPBoostModifier() {
