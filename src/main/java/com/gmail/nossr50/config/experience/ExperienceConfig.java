@@ -332,6 +332,13 @@ public class ExperienceConfig extends ConfigLoader {
         return config.getDouble("Experience_Values.Repair.Base", 1000.0);
     }
 
+    /* Smelting — keyed by the smelted input material's config string (see ConfigStringUtils), e.g.
+     * {@code "Iron_Ore"}. Legacy {@code Smelting.getResourceXp} looked up the input item; ores /
+     * raw metals carry a value, everything else resolves to 0 (no reward). */
+    public int getSmeltingXP(String materialConfigString) {
+        return config.getInt("Experience_Values.Smelting." + materialConfigString);
+    }
+
     /* Taming — keyed by config-entity string (see ConfigStringUtils). */
     public int getTamingXP(String entityConfigString) {
         return config.getInt("Experience_Values.Taming.Animal_Taming." + entityConfigString);

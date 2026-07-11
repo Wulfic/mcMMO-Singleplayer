@@ -14,6 +14,7 @@ import com.gmail.nossr50.event.EventBus;
 import com.gmail.nossr50.event.SimpleEventBus;
 import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
 import com.gmail.nossr50.fabric.listeners.CombatListener;
+import com.gmail.nossr50.fabric.listeners.SmeltingListener;
 import com.gmail.nossr50.fabric.listeners.SuperAbilityListener;
 import com.gmail.nossr50.platform.scheduler.TickScheduler;
 import com.gmail.nossr50.runnables.SaveTimerTask;
@@ -152,6 +153,8 @@ public class McMMOMod implements ModInitializer {
         // K6 (Phase 11): super-ability activation trigger — right-click readies a tool, left-click
         // (block damage) with the prepared tool fires the ability.
         SuperAbilityListener.register();
+        // K7: Smelting XP — track furnace owners on right-click; the furnace-smelt mixin awards XP.
+        SmeltingListener.register();
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
         // drive the legacy listeners, routing each to the ported skill managers. Preferred
@@ -207,6 +210,8 @@ public class McMMOMod implements ModInitializer {
             UserManager.saveAll();
             UserManager.clearAll();
             McMMOMod.setProfileStore(null);
+            // K7: drop the furnace-owner tracker so the next world session starts clean.
+            SmeltingListener.clearOwners();
             // PORT Phase 10: finish in-progress alchemy brews.
             ConfigBootstrap.unload();
         } catch (Exception e) {
