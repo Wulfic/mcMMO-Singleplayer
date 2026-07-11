@@ -34,8 +34,8 @@ import org.jetbrains.annotations.NotNull;
  *       mutation (the chances themselves are ported below);</li>
  *   <li>{@code placedAnvilCheck} — needs notification/sound adapters (the anvil-placed state itself
  *       is ported below);</li>
- *   <li>{@code checkConfirmation} — needs {@code SkillUtils.cooldownExpired} (still unported) plus
- *       notification;</li>
+ *   <li>{@code checkConfirmation} — the anvil-use hook (K7) + notification; {@link
+ *       com.gmail.nossr50.util.skills.SkillUtils#cooldownExpired} it depends on is now ported;</li>
  *   <li>{@code checkPlayerProcRepair} — the Super Repair RNG roll + notification; its decision is
  *       injected into {@link #repairCalculate} instead.</li>
  * </ul>

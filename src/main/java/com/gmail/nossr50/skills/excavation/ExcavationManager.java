@@ -24,8 +24,9 @@ import org.jetbrains.annotations.NotNull;
  *       Misc.spawnItem}/{@code spawnExperienceOrb}, then award block XP from {@code ExperienceConfig}.
  *       They need a live block + the {@link com.gmail.nossr50.datatypes.treasure.ItemSpec}→ItemStack
  *       builder;</li>
- *   <li>{@code gigaDrillBreaker} — double block-check + {@code SkillUtils.handleDurabilityChange} on
- *       the held tool (needs the ItemStack durability path);</li>
+ *   <li>{@code gigaDrillBreaker} — double block-check + {@link
+ *       com.gmail.nossr50.util.skills.SkillUtils#handleDurabilityChange} on the held tool (the
+ *       durability path now exists; this body still needs the block-break integration);</li>
  *   <li>{@code printExcavationDebug} — chat-dumps a block's treasures (needs a live block).</li>
  * </ul>
  * All of these are pure downstream of the two things this port <i>does</i> deliver: the treasure

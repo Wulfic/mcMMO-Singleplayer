@@ -25,7 +25,8 @@ import org.jetbrains.annotations.NotNull;
  *   <li>{@code miningBlockCheck} / {@code processDoubleDrops} / {@code processTripleDrops} — award
  *       block XP then mark the broken block's drops as bonus via {@code BlockUtils.markDropsAsBonus}
  *       (needs a live block + the drop-marking adapter) and damage the held tool during Super
- *       Breaker ({@code SkillUtils.handleDurabilityChange});</li>
+ *       Breaker ({@link com.gmail.nossr50.util.skills.SkillUtils#handleDurabilityChange}, now
+ *       available);</li>
  *   <li>{@code canDetonate} / {@code isDetonatorInHand} / {@code remoteDetonation} — ray-cast the
  *       target block, spawn a primed {@code TNTPrimed}, and schedule the cooldown task (needs the
  *       held-item + entity-spawn adapters and the Phase 11 scheduler);</li>
