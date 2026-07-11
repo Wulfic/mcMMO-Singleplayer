@@ -2,11 +2,16 @@ package com.gmail.nossr50.skills.smelting;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
+import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.datatypes.experience.XPGainReason;
+import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
@@ -18,6 +23,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 
 /**
  * Proves the Smelting rank-multiplier cores (Phase 10.3) against the real bundled configs. Fuel
@@ -36,6 +42,7 @@ class SmeltingManagerTest {
         McMMOMod.setGeneralConfig(new GeneralConfig(dataFolder));
         McMMOMod.setRankConfig(new RankConfig(dataFolder));
         McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
+        McMMOMod.setExperienceConfig(new ExperienceConfig(dataFolder));
 
         platformPlayer = mock(PlatformPlayer.class);
         when(platformPlayer.getUniqueId())
@@ -53,6 +60,7 @@ class SmeltingManagerTest {
         McMMOMod.setGeneralConfig(null);
         McMMOMod.setRankConfig(null);
         McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setExperienceConfig(null);
         UserManager.clearAll();
     }
 
@@ -89,5 +97,21 @@ class SmeltingManagerTest {
 
         atSmeltingLevel(250); // rank 2 → x2
         assertEquals(200, smeltingManager.vanillaXPBoost(100), "rank 2 → x2");
+    }
+
+    @Test
+    void awardSmeltingXpLooksUpPerMaterialXpAndGainsIt() {
+        // experience.yml default: Experience_Values.Smelting.Iron_Ore = 25.
+        smeltingManager.awardSmeltingXP("Iron_Ore");
+        verify(mmoPlayer).beginXpGain(PrimarySkillType.SMELTING, 25f, XPGainReason.PVE,
+                XPGainSource.SELF);
+    }
+
+    @Test
+    void awardSmeltingXpIsNoOpForMaterialWithNoConfiguredXp() {
+        // A non-ore (e.g. cooking food) has no Smelting entry → resolves to 0 XP → no gain.
+        smeltingManager.awardSmeltingXP("Raw_Beef");
+        verify(mmoPlayer, never()).beginXpGain(ArgumentMatchers.any(), ArgumentMatchers.anyFloat(),
+                ArgumentMatchers.any(), ArgumentMatchers.any());
     }
 }
