@@ -3,15 +3,22 @@ package com.gmail.nossr50.util.skills;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
+import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformItem;
+import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.McTestRegistries;
+import java.nio.file.Path;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.util.Unit;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Covers the ported {@link SkillUtils} core: the pure cooldown-expiry math (no harness needed) and the
@@ -99,5 +106,35 @@ class SkillUtilsTest {
         SkillUtils.handleArmorDurabilityChange(item, 50, 1.0);
 
         assertEquals(50, item.getDurability());
+    }
+
+    // --- Super/Giga Breaker dig-speed boost orchestration -------------------
+    // Only the MC-free decision layer is asserted here; the enchant/marker mutation on PlatformPlayer
+    // needs the dynamic enchantment registry (absent in this harness) and is verified in-game.
+
+    @Test
+    void handleAbilitySpeedIncreaseAppliesTheConfiguredEnchantBuff(@TempDir Path dataFolder) {
+        McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
+        try {
+            PlatformPlayer player = mock(PlatformPlayer.class);
+
+            SkillUtils.handleAbilitySpeedIncrease(player);
+
+            // Bundled hidden.yml Options.EnchantmentBuffs=true; advanced.yml EnchantBuff=5.
+            verify(player).applySuperAbilityDigBoost(5);
+        } finally {
+            McMMOMod.setAdvancedConfig(null);
+        }
+    }
+
+    @Test
+    void removeAbilityBoostMethodsDelegateToThePlayerAdapter() {
+        PlatformPlayer player = mock(PlatformPlayer.class);
+
+        SkillUtils.removeAbilityBuffFromMainHand(player);
+        verify(player).removeSuperAbilityBoostFromMainHand();
+
+        SkillUtils.removeAbilityBoostsFromInventory(player);
+        verify(player).removeSuperAbilityBoostsFromInventory();
     }
 }

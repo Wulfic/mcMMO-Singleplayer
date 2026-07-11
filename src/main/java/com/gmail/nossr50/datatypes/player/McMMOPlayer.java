@@ -40,6 +40,7 @@ import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.skills.PerksUtils;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
+import com.gmail.nossr50.util.skills.SkillUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import java.util.EnumMap;
@@ -766,18 +767,22 @@ public class McMMOPlayer {
 
         SoundManager.worldSendSound(player, SoundType.ABILITY_ACTIVATED_GENERIC);
 
-        // PORT K3/K4: SkillUtils.removeAbilityBuff(mainHand) for SUPER_BREAKER/GIGA_DRILL_BREAKER —
-        // clears a stale haste enchant before re-applying, so boosts don't stack. Needs the
-        // item/enchant mutation adapter.
+        // If the held tool is still buffed from a prior activation, clear it so Efficiency doesn't stack.
+        if (superAbilityType == SuperAbilityType.SUPER_BREAKER
+                || superAbilityType == SuperAbilityType.GIGA_DRILL_BREAKER) {
+            SkillUtils.removeAbilityBuffFromMainHand(player);
+        }
 
         // Enable the ability.
         profile.setAbilityDATS(superAbilityType,
                 System.currentTimeMillis() + ((long) ticks * Misc.TIME_CONVERSION_FACTOR));
         setAbilityMode(superAbilityType, true);
 
-        // PORT K3/K4: SkillUtils.handleAbilitySpeedIncrease(player) for SUPER_BREAKER/GIGA_DRILL_BREAKER
-        // — the vanilla dig-speed (haste) boost. The mode is active + gates the effect bodies; the
-        // actual mining-speed increase lands with the enchant adapter.
+        // The vanilla dig-speed (haste) boost for the breaker abilities.
+        if (superAbilityType == SuperAbilityType.SUPER_BREAKER
+                || superAbilityType == SuperAbilityType.GIGA_DRILL_BREAKER) {
+            SkillUtils.handleAbilitySpeedIncrease(player);
+        }
 
         setToolPreparationMode(tool, false);
         McMMOMod.getScheduler().runLater(new AbilityDisableTask(this, superAbilityType),

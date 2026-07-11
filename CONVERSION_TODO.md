@@ -36,19 +36,21 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       ⚠️ TUNING §F: bonuses land POST-armor (bypass armor) — flag for the tuning pass.
 - [x] **K2 — Fall-damage hook.** DONE. `EntityDamageListener` detects `DamageTypeTags.IS_FALL` and drives
       Acrobatics Roll (XP + damage reduction) via the K1 mixin seam above.
-- [~] **K3 — Item / inventory / enchant mutation adapter.** **Read-side DONE** (commit b26096c56):
-      `PlatformItem` gained `isUnbreakable()` + `getEnchantmentLevel(RegistryKey)`/`getUnbreakingLevel()`
-      (registry-free component scan), and durability set already existed. **Still TODO:** enchant
-      **write** (add/remove Efficiency for the haste boost + super-ability-boosted marker component) and
-      an inventory read/modify sweep. **Unblocks (write side):** Alchemy item handling, Arcane
-      Forging/Arcane Salvage enchant transfer, the Super/Giga Breaker dig-speed boost. Tool-durability
-      on super abilities is unblocked NOW.
-- [~] **K4 — Port `SkillUtils`.** **Core DONE** (commit b26096c56): new MC-free `util/skills/SkillUtils`
-      with `cooldownExpired` (Repair/Salvage `checkConfirmation` dep) + `handleDurabilityChange`/
-      `handleArmorDurabilityChange` (tool wear on super abilities), tested ×7. **Still TODO:** the
-      enchant-write `handleAbilitySpeedIncrease`/`removeAbilityBuff`/`removeAbilityBoostsFromInventory`
-      (haste boost — needs K3 write side), `getRepairAndSalvage*` (needs K8 configs + recipe iterator),
-      `handleFoodSkills` (K7 food event), and the `RepairableManager` max-durability override.
+- [~] **K3 — Item / inventory / enchant mutation adapter.** **Read-side DONE** (commit b26096c56);
+      **enchant-WRITE + inventory sweep DONE** (commit for the haste boost): `PlatformPlayer` gained
+      `applySuperAbilityDigBoost(int)` / `removeSuperAbilityBoostFromMainHand()` /
+      `removeSuperAbilityBoostsFromInventory()` — set/remove Efficiency via `EnchantmentHelper.apply`
+      (dynamic-registry `Efficiency` entry) + a `custom_data` marker (`NbtComponent`) stashing the
+      pre-boost level; plus `getEnchantmentLevel`/`getUnbreakingLevel` (registry-free scan) and durability
+      set from before. **Still TODO:** Alchemy potion-content read/write, Arcane Forging/Arcane Salvage
+      enchant transfer (need the general enchant read/modify surface on repaired/salvaged items).
+- [~] **K4 — Port `SkillUtils`.** **Core DONE** (commit b26096c56): `cooldownExpired` +
+      `handleDurabilityChange`/`handleArmorDurabilityChange`. **Haste-boost orchestration DONE**:
+      `handleAbilitySpeedIncrease`/`removeAbilityBuffFromMainHand`/`removeAbilityBoostsFromInventory`
+      (MC-free mode decision from `HiddenConfig.useEnchantmentBuffs` + `AdvancedConfig.getEnchantBuff`,
+      delegating the mutation to `PlatformPlayer` K3-write). **Still TODO:** the legacy Haste-*potion*
+      fallback branch (unreachable with bundled `hidden.yml`), `getRepairAndSalvage*` (K8 + recipe
+      iterator), `handleFoodSkills` (K7 food event), and the `RepairableManager` max-durability override.
 - [ ] **K5 — Port `EventUtils`.** The internal-bus event fires (ability activate/deactivate, XP events)
       several bodies expect. Port onto the existing `event/` bus (or no-op the ones with no SP listener,
       with a breadcrumb).
@@ -60,11 +62,12 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       all return `ActionResult.PASS`. The pure decision bodies
       `checkAbilityActivation`/`processAbilityActivation`/`processAxeToolMessages` were ported MC-free
       onto `McMMOPlayer` (held-item/target-block reads routed through new
-      `PlatformPlayer.isHoldingTool`/`isLookingAtTree`). **Still deferred (breadcrumbs):** K5
-      ability-activate event (no SP listeners); K3/K4 `SkillUtils.removeAbilityBuff`/
-      `handleAbilitySpeedIncrease` — the Super/Giga Breaker **haste dig-speed boost** (mode flips +
-      gates bodies, but the actual speed increase needs the enchant adapter). **Unblocks:** every
-      super ability's mode flag (§D bodies still need their effect code). ⚠️ In-game verification pending.
+      `PlatformPlayer.isHoldingTool`/`isLookingAtTree`). **Haste dig-speed boost NOW WIRED** (K3-write/K4):
+      `checkAbilityActivation` calls `SkillUtils.removeAbilityBuffFromMainHand` (clear stale) +
+      `handleAbilitySpeedIncrease` for SUPER_BREAKER/GIGA_DRILL_BREAKER, and `AbilityDisableTask` sweeps
+      the boost off on disable — Efficiency is actually bumped in-game now. **Still deferred:** K5
+      ability-activate event (no SP listeners). **Unblocks:** every super ability's mode flag (§D bodies
+      still need their effect code). ⚠️ In-game verification pending (enchant mutation is MC-typed glue).
 - [~] **K7 — Subsystem vanilla hooks** (each is one Fabric event/Mixin; each unblocks one skill's XP):
       **entity-tame (Taming) DONE** — two mixins (`TameableEntity#setTamedBy` for wolf/cat/parrot,
       `AbstractHorseEntity#bondWithPlayer` for horses/donkeys/mules/llamas/camels) funnel into
