@@ -6,6 +6,7 @@ import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.DodgeResult;
 import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.RollResult;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
@@ -17,10 +18,12 @@ import com.gmail.nossr50.util.skills.RankUtils;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Acrobatics skill manager. The Dodge combat path is still deferred until the K1 combat-damage hook
- * lands (it needs attacker identity + mob metadata tracking); what is live here is the <b>Roll /
- * Graceful Roll</b> fall-damage path (K2), driven by the {@code modifyAppliedDamage} damage mixin via
- * {@link com.gmail.nossr50.fabric.listeners.EntityDamageListener}.
+ * Acrobatics skill manager. Both the <b>Roll / Graceful Roll</b> fall-damage path (K2) and the
+ * <b>Dodge</b> combat path (K1) are live, driven by the {@code modifyAppliedDamage} damage mixin via
+ * {@link com.gmail.nossr50.fabric.listeners.EntityDamageListener}. The Dodge XP anti-farm cap
+ * (per-mob dodge tracker) and the lightning-dodge exclusion live in the listener (the MC-typed layer,
+ * which has the attacker entity); this manager takes the attacker's XP-eligibility as a boolean so its
+ * damage-reduction + XP math stays deterministic and unit-testable.
  *
  * <p>Port note: the legacy Roll logic lived in the {@code AbstractSubSkill}-based
  * {@code datatypes.skills.subskills.acrobatics.Roll}, tightly coupled to Bukkit's
@@ -144,6 +147,71 @@ public class AcrobaticsManager extends SkillManager {
     public boolean canRoll() {
         return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.ACROBATICS_ROLL)
                 && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.ACROBATICS_ROLL);
+    }
+
+    /**
+     * Whether the Dodge subskill can fire right now: the player is not raising a shield, and the
+     * subskill is unlocked and enabled. The legacy {@code canCombatSkillsTrigger} guard is always true
+     * in singleplayer, and the lightning-dodge exclusion is applied by the listener (it holds the
+     * attacker entity), so neither is checked here.
+     */
+    public boolean canDodge() {
+        if (getPlayer().isBlocking()) {
+            return false;
+        }
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.ACROBATICS_DODGE)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.ACROBATICS_DODGE);
+    }
+
+    /**
+     * Processes an incoming combat hit against this player: rolls Dodge, and on success awards
+     * Acrobatics XP (when the attacker is eligible) and hands back the reduced damage. Called from the
+     * damage listener with the (post-armor/protection) combat damage.
+     *
+     * @param baseDamage        the incoming combat damage
+     * @param attackerXpEligible whether the attacker may grant dodge XP (the listener resolves this:
+     *                          the attacker is a mob, under the per-mob dodge-XP cap); a successful
+     *                          dodge still reduces damage when this is {@code false}, it just pays no XP
+     * @return the {@link DodgeResult} on a successful dodge (the caller applies
+     *         {@link DodgeResult#getModifiedDamage()} + feedback), or {@code null} when Dodge is locked,
+     *         the roll fails, or the reduced hit would still be fatal
+     */
+    public @Nullable DodgeResult processDodge(double baseDamage, boolean attackerXpEligible) {
+        if (!canDodge()) {
+            return null;
+        }
+        final boolean rngSuccess = ProbabilityUtil.isSkillRNGSuccessful(
+                SubSkillType.ACROBATICS_DODGE, mmoPlayer);
+        final DodgeResult result = dodgeCheck(baseDamage, rngSuccess, attackerXpEligible);
+        if (result != null && result.getXpGain() > 0) {
+            applyXpGain(result.getXpGain(), XPGainReason.PVE, XPGainSource.SELF);
+        }
+        return result;
+    }
+
+    /**
+     * Evaluates a combat hit against the Dodge mechanic. Deterministic given the pre-computed RNG
+     * outcome, so it is unit-testable (the RNG roll itself is made by {@link #processDodge}).
+     *
+     * @param baseDamage        the incoming combat damage
+     * @param rngSuccess        whether the skill RNG roll succeeded this hit
+     * @param attackerXpEligible whether the attacker may grant dodge XP (see {@link #processDodge})
+     * @return the outcome on a successful dodge, or {@code null} when the roll failed or the reduced
+     *         hit would still be fatal (mcMMO must not soften a killing blow into a survivable one)
+     */
+    public @Nullable DodgeResult dodgeCheck(double baseDamage, boolean rngSuccess,
+            boolean attackerXpEligible) {
+        final double modifiedDamage = Acrobatics.calculateModifiedDodgeDamage(baseDamage,
+                McMMOMod.getAdvancedConfig().getDodgeDamageModifier());
+
+        if (isFatal(modifiedDamage) || !rngSuccess) {
+            return null;
+        }
+
+        final float xpGain = attackerXpEligible
+                ? (float) (baseDamage * McMMOMod.getExperienceConfig().getDodgeXPModifier())
+                : 0F;
+        return new DodgeResult(modifiedDamage, xpGain);
     }
 
     /**
