@@ -2,9 +2,15 @@ package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.fabric.McMMOMod;
 import java.util.UUID;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
@@ -176,6 +182,48 @@ public final class PlatformPlayer {
     /** The stack in the off hand (Bukkit {@code getInventory().getItemInOffHand()}); empty when none. */
     public @NotNull ItemStack getOffHandStack() {
         return handle.getOffHandStack();
+    }
+
+    // --- Acrobatics fall/roll support (K2) ----------------------------------
+
+    /**
+     * Whether either hand holds an Ender Pearl. Consumed by the Acrobatics exploit check (throwing
+     * pearls to trigger fall damage is a known XP-farm). Bukkit
+     * {@code ItemUtils.hasItemInEitherHand(player, Material.ENDER_PEARL)}.
+     */
+    public boolean hasEnderPearlInEitherHand() {
+        return handle.getMainHandStack().isOf(Items.ENDER_PEARL)
+                || handle.getOffHandStack().isOf(Items.ENDER_PEARL);
+    }
+
+    /**
+     * Whether the player is riding an entity (Bukkit {@code Player#isInsideVehicle()} →
+     * {@link net.minecraft.entity.Entity#hasVehicle()}). Consumed by the Acrobatics exploit check
+     * (fall damage while mounted is disallowed for XP).
+     */
+    public boolean isInsideVehicle() {
+        return handle.hasVehicle();
+    }
+
+    /**
+     * Whether the player's boots (any equipped armor, since Feather Falling only rolls on boots) carry
+     * the Feather Falling enchantment. Consumed by the Roll XP calculation, which boosts fall XP for
+     * players who invested in fall-damage gear. Resolves the enchantment from the world's dynamic
+     * registry; if the enchantment registry is somehow absent the check degrades to {@code false}.
+     */
+    public boolean hasFeatherFallingBoots() {
+        RegistryEntry<Enchantment> featherFalling = getWorld().getRegistryManager()
+                .getOrThrow(RegistryKeys.ENCHANTMENT)
+                .getOrThrow(Enchantments.FEATHER_FALLING);
+        return EnchantmentHelper.getEquipmentLevel(featherFalling, handle) > 0;
+    }
+
+    /**
+     * The packed key ({@link BlockPos#asLong()}) of the block the player is standing in, used by the
+     * Acrobatics fall-location history to throttle repeat XP farming on the same block.
+     */
+    public long getFeetBlockKey() {
+        return handle.getBlockPos().asLong();
     }
 
     // --- Stopgap raw accessors (pending dedicated adapters) ------------------

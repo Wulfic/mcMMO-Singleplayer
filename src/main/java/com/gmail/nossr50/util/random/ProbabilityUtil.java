@@ -266,6 +266,20 @@ public class ProbabilityUtil {
         return ProbabilityUtil.ofSubSkill(mmoPlayer, subSkillType);
     }
 
+    /**
+     * The Acrobatics Graceful Roll probability: double the odds of a normal Roll (verbatim legacy
+     * {@code Roll#getGracefulProbability}). Lives here rather than in the skill manager because
+     * {@link Probability#ofValue(double)} is package-private to {@code util.random}.
+     *
+     * @param mmoPlayer the target player (null → zero-skill odds)
+     * @return the graceful-roll probability
+     */
+    public static @NotNull Probability getGracefulRollProbability(@Nullable McMMOPlayer mmoPlayer) {
+        double gracefulOdds =
+                getSubSkillProbability(SubSkillType.ACROBATICS_ROLL, mmoPlayer).getValue() * 2;
+        return Probability.ofValue(gracefulOdds);
+    }
+
     public static @NotNull String[] getRNGDisplayValues(@Nullable McMMOPlayer mmoPlayer,
             @NotNull SubSkillType subSkill) {
         double firstValue = chanceOfSuccessPercentage(mmoPlayer, subSkill, false);

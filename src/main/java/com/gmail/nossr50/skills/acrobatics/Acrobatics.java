@@ -23,4 +23,17 @@ public final class Acrobatics {
     static double calculateModifiedDodgeDamage(double damage, double damageModifier) {
         return Math.max(damage / damageModifier, 1.0);
     }
+
+    /**
+     * Reduces incoming fall damage by a flat threshold, flooring the result at 0 (a successful roll
+     * may fully negate a small fall). Verbatim legacy math; the caller passes
+     * {@code AdvancedConfig.getRollDamageThreshold() * 2} for the roll threshold.
+     *
+     * @param damage          the raw incoming fall damage
+     * @param damageThreshold the flat amount subtracted
+     * @return the reduced damage, never below {@code 0.0}
+     */
+    static double calculateModifiedRollDamage(double damage, double damageThreshold) {
+        return Math.max(damage - damageThreshold, 0.0);
+    }
 }
