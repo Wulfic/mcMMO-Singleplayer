@@ -27,11 +27,19 @@ dependencies {
     implementation "org.yaml:snakeyaml:${project.snakeyaml_version}"
     include "org.yaml:snakeyaml:${project.snakeyaml_version}"
 
-    // Unit tests for MC-free code (currently the platform/ + event/ layers). Anything that
-    // touches net.minecraft.* registries needs an in-game harness instead — see Phase 12.
+    // Unit tests for MC-free code (the platform/ + event/ + skill-manager + config layers).
     testImplementation platform("org.junit:junit-bom:${project.junit_version}")
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // Fabric Loader JUnit: runs the test task under Knot's classloader so Minecraft's access
+    // wideners apply and SharedConstants.createGameVersion()/Bootstrap.initialize() can populate
+    // the vanilla registries in a @BeforeAll. This is what makes the MC-typed glue that extracts a
+    // registry-id path from an ItemStack/Block (ItemUtils/BlockUtils over MaterialMapStore) unit-
+    // testable without an in-game client — plain JUnit fails with an IllegalAccessError because it
+    // loads MC classes off the app classloader with the access wideners un-applied. Versioned to
+    // the loader. See CONVERSION_TODO.md Phase 12.
+    testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
 
     // Mockito for MC-free unit tests that need to stand in for the platform/ adapters (final
     // wrappers over net.minecraft types like ServerPlayerEntity, which can't be built without a

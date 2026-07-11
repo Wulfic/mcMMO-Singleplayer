@@ -3,6 +3,7 @@ package com.gmail.nossr50.platform;
 import com.gmail.nossr50.fabric.McMMOMod;
 import java.util.UUID;
 import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -158,6 +159,23 @@ public final class PlatformPlayer {
         Vec3d pos = getPos();
         // except = null → all players in range hear it (the one player, in singleplayer).
         getWorld().playSound(null, pos.x, pos.y, pos.z, soundEvent, category, volume, pitch);
+    }
+
+    // --- Held items ---------------------------------------------------------
+
+    /**
+     * The stack in the main hand (Bukkit {@code getInventory().getItemInMainHand()}). Consumed by
+     * the super-ability activation trigger and tool-type detection ({@link
+     * com.gmail.nossr50.datatypes.skills.ToolType#inHand}). Returns an empty {@link ItemStack} (never
+     * null) when the hand is empty, matching vanilla {@link net.minecraft.entity.LivingEntity#getMainHandStack()}.
+     */
+    public @NotNull ItemStack getMainHandStack() {
+        return handle.getMainHandStack();
+    }
+
+    /** The stack in the off hand (Bukkit {@code getInventory().getItemInOffHand()}); empty when none. */
+    public @NotNull ItemStack getOffHandStack() {
+        return handle.getOffHandStack();
     }
 
     // --- Stopgap raw accessors (pending dedicated adapters) ------------------
