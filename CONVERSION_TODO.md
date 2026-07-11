@@ -46,13 +46,19 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
 - [ ] **K5 — Port `EventUtils`.** The internal-bus event fires (ability activate/deactivate, XP events)
       several bodies expect. Port onto the existing `event/` bus (or no-op the ones with no SP listener,
       with a breadcrumb).
-- [ ] **K6 — Super-ability activation trigger.** The interaction listener
-      (`UseBlockCallback`/`AttackBlockCallback`) + target-block raycast + held-item/tool detection that
-      fires `checkAbilityActivation`/`processAbilityActivation`/`processAxeToolMessages` (legacy git
-      `811b50325` McMMOPlayer.java lines 907–1126) to flip a super-ability mode on and schedule the
-      already-ported `ToolLowerTask`/`AbilityDisableTask`/`AbilityCooldownTask`. Cooldown/duration math,
-      NotificationManager, SoundManager, `ItemUtils`/`ToolType.inHand`, `BlockUtils.isPartOfTree` are all
-      **done** — this is the missing wire. **Unblocks:** every super ability (§D).
+- [x] **K6 — Super-ability activation trigger.** DONE (commit 23ea97e38). New
+      `fabric/listeners/SuperAbilityListener`: `UseBlockCallback`/`UseItemCallback` (right-click →
+      ready tool, gated by `canActivateTools`/`canActivateHerbalism` + off-hand rule, MAIN_HAND only) +
+      `AttackBlockCallback` (left-click block-damage → fire, replicating legacy `onBlockDamage`
+      tool-prep/`ItemUtils`/`BlockUtils` dispatch for Herbalism/Woodcutting/Mining/Excavation/Unarmed);
+      all return `ActionResult.PASS`. The pure decision bodies
+      `checkAbilityActivation`/`processAbilityActivation`/`processAxeToolMessages` were ported MC-free
+      onto `McMMOPlayer` (held-item/target-block reads routed through new
+      `PlatformPlayer.isHoldingTool`/`isLookingAtTree`). **Still deferred (breadcrumbs):** K5
+      ability-activate event (no SP listeners); K3/K4 `SkillUtils.removeAbilityBuff`/
+      `handleAbilitySpeedIncrease` — the Super/Giga Breaker **haste dig-speed boost** (mode flips +
+      gates bodies, but the actual speed increase needs the enchant adapter). **Unblocks:** every
+      super ability's mode flag (§D bodies still need their effect code). ⚠️ In-game verification pending.
 - [ ] **K7 — Subsystem vanilla hooks** (each is one Fabric event/Mixin; each unblocks one skill's XP):
       furnace-smelt (Smelting), brewing-stand (Alchemy), fishing-catch `FishHook` (Fishing), anvil-use
       (Repair + Salvage), entity-tame (Taming).
