@@ -13,13 +13,13 @@ import net.minecraft.SharedConstants;
  * throws an {@code IllegalAccessError} from {@code SimpleRegistry} during registration. Idempotent:
  * {@link Bootstrap#initialize()} is itself guarded, and the flag here avoids re-entry.
  */
-final class McTestRegistries {
+public final class McTestRegistries {
 
     private static boolean bootstrapped;
 
     private McTestRegistries() {}
 
-    static synchronized void bootstrap() {
+    public static synchronized void bootstrap() {
         if (bootstrapped) {
             return;
         }

@@ -1,8 +1,14 @@
 package com.gmail.nossr50.platform;
 
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.ItemEnchantmentsComponent;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.enchantment.Enchantments;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.NotNull;
 
@@ -79,6 +85,41 @@ public final class PlatformItem {
 
     public int getMaxDurability() {
         return handle.getMaxDamage();
+    }
+
+    // --- Unbreakable / enchantments (Bukkit ItemMeta.isUnbreakable / getEnchantmentLevel) --------
+
+    /**
+     * Whether this stack carries the vanilla {@code UNBREAKABLE} data component (Bukkit
+     * {@code ItemMeta.isUnbreakable()}). Unbreakable tools take no durability damage, so skill
+     * durability changes are a no-op on them.
+     */
+    public boolean isUnbreakable() {
+        return handle.contains(DataComponentTypes.UNBREAKABLE);
+    }
+
+    /**
+     * Level of {@code enchantmentKey} on this stack, or {@code 0} if absent (Bukkit
+     * {@code ItemStack.getEnchantmentLevel}). Resolves by iterating the stack's enchantment component
+     * and matching the {@link RegistryKey} — no registry-manager access is needed, so this is callable
+     * without a world context.
+     */
+    public int getEnchantmentLevel(@NotNull RegistryKey<Enchantment> enchantmentKey) {
+        if (!handle.hasEnchantments()) {
+            return 0;
+        }
+        ItemEnchantmentsComponent enchantments = handle.getEnchantments();
+        for (RegistryEntry<Enchantment> entry : enchantments.getEnchantments()) {
+            if (entry.matchesKey(enchantmentKey)) {
+                return enchantments.getLevel(entry);
+            }
+        }
+        return 0;
+    }
+
+    /** Convenience: the {@code Unbreaking} enchantment level (durability-damage reduction divisor). */
+    public int getUnbreakingLevel() {
+        return getEnchantmentLevel(Enchantments.UNBREAKING);
     }
 
     // --- Similarity / copy --------------------------------------------------

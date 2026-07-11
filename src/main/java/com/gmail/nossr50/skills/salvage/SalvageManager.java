@@ -29,7 +29,8 @@ import org.jetbrains.annotations.NotNull;
  *   <li>{@code arcaneSalvageCheck} — builds the extracted enchanted book, needs live
  *       {@code Enchantment}/{@code EnchantmentStorageMeta} (its chances are ported below);</li>
  *   <li>{@code placedAnvilCheck} — needs notification/sound adapters (anvil-placed state is ported);</li>
- *   <li>{@code checkConfirmation} — needs {@code SkillUtils.cooldownExpired} (still unported).</li>
+ *   <li>{@code checkConfirmation} — the anvil-use hook (K7) + notification; {@link
+ *       com.gmail.nossr50.util.skills.SkillUtils#cooldownExpired} it depends on is now ported.</li>
  * </ul>
  */
 public class SalvageManager extends SkillManager {
