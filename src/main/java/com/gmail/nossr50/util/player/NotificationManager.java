@@ -2,10 +2,15 @@ package com.gmail.nossr50.util.player;
 
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.sounds.SoundManager;
+import com.gmail.nossr50.util.sounds.SoundType;
 import com.gmail.nossr50.util.text.McMMOMessageType;
+import net.minecraft.sound.SoundCategory;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -33,8 +38,7 @@ import org.jetbrains.annotations.Nullable;
  * has chat notifications toggled off, matching legacy's {@code useChatNotifications()} gate.
  *
  * <p>Still deferred (need unported adapters): {@code sendPlayerLevelUpNotification} (special
- * level-up component formatting) and {@code sendPlayerUnlockNotification} (plays a
- * {@code SoundType} — {@code SoundManager} is unported).
+ * level-up component formatting via the dropped Adventure {@code TextComponentFactory}).
  */
 public final class NotificationManager {
 
@@ -110,5 +114,34 @@ public final class NotificationManager {
 
         String preColored = LocaleLoader.getString(key, (Object[]) values);
         mmoPlayer.getPlayer().sendMessage(LocaleLoader.getText("mcMMO.Template.Prefix", preColored));
+    }
+
+    /**
+     * Tells {@code mmoPlayer} they just unlocked a new rank of {@code subSkillType}: a chat message
+     * built from the {@code JSON.SkillUnlockMessage} locale key (skill name + current rank) plus the
+     * {@link SoundType#SKILL_UNLOCKED} sound. No-op if the player is {@code null} or has chat
+     * notifications disabled (matching legacy's gate on both the message and the sound).
+     *
+     * <p>Singleplayer port of legacy {@code sendPlayerUnlockNotification}. Legacy attached an
+     * Adventure hover (subskill description) and a click-to-run-command to the message via the
+     * dropped {@code TextComponentFactory}; those interactive extras are cosmetic and are dropped
+     * here, same as this port does for the level-up notification — the unlock text and sound are
+     * preserved.
+     *
+     * @param mmoPlayer target player (may be {@code null}; treated as a no-op)
+     * @param subSkillType the subskill whose new rank was just unlocked
+     */
+    public static void sendPlayerUnlockNotification(@Nullable McMMOPlayer mmoPlayer,
+            @NotNull SubSkillType subSkillType) {
+        if (mmoPlayer == null || !mmoPlayer.useChatNotifications()) {
+            return;
+        }
+
+        Text message = LocaleLoader.getText("JSON.SkillUnlockMessage",
+                subSkillType.getLocaleName(), RankUtils.getRank(mmoPlayer, subSkillType));
+        mmoPlayer.getPlayer().sendMessage(message);
+
+        SoundManager.sendCategorizedSound(mmoPlayer.getPlayer(), SoundType.SKILL_UNLOCKED,
+                SoundCategory.MASTER);
     }
 }

@@ -7,11 +7,15 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.config.GeneralConfig;
+import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.util.skills.RankUtils;
 import java.nio.file.Path;
 import net.minecraft.text.Text;
 import org.junit.jupiter.api.AfterEach;
@@ -37,6 +41,10 @@ class NotificationManagerTest {
     @BeforeEach
     void setUp(@TempDir Path dataFolder) {
         McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
+        // sendPlayerUnlockNotification resolves the current rank via RankUtils, which reads RankConfig;
+        // RankConfig in turn reads GeneralConfig to pick the RetroMode vs Standard rank column.
+        McMMOMod.setGeneralConfig(new GeneralConfig(dataFolder));
+        McMMOMod.setRankConfig(new RankConfig(dataFolder));
 
         platformPlayer = mock(PlatformPlayer.class);
         mmoPlayer = mock(McMMOPlayer.class);
@@ -47,6 +55,8 @@ class NotificationManagerTest {
     @AfterEach
     void tearDown() {
         McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setGeneralConfig(null);
+        McMMOMod.setRankConfig(null);
     }
 
     @Test
@@ -107,5 +117,36 @@ class NotificationManagerTest {
 
         verify(platformPlayer).sendMessage(expected);
         verify(platformPlayer, never()).sendActionBar(expected);
+    }
+
+    @Test
+    void unlockNotificationSendsSkillUnlockMessageToChat() {
+        SubSkillType subSkillType = SubSkillType.ACROBATICS_DODGE;
+        // Build the expectation from the same inputs the manager uses, so the assertion is robust to
+        // the concrete rank the (unstubbed) player resolves to.
+        Text expected = LocaleLoader.getText("JSON.SkillUnlockMessage",
+                subSkillType.getLocaleName(), RankUtils.getRank(mmoPlayer, subSkillType));
+
+        NotificationManager.sendPlayerUnlockNotification(mmoPlayer, subSkillType);
+
+        verify(platformPlayer).sendMessage(expected);
+        // The action bar is never used for unlock notifications (chat only, plus a sound).
+        verify(platformPlayer, never()).sendActionBar(expected);
+    }
+
+    @Test
+    void unlockNotificationIsNoOpWhenChatNotificationsDisabled() {
+        when(mmoPlayer.useChatNotifications()).thenReturn(false);
+
+        NotificationManager.sendPlayerUnlockNotification(mmoPlayer, SubSkillType.ACROBATICS_DODGE);
+
+        // Gated before both the message and the unlock sound.
+        verifyNoInteractions(platformPlayer);
+    }
+
+    @Test
+    void unlockNotificationIsNoOpForNullPlayer() {
+        // Must not throw and must not touch config/player.
+        NotificationManager.sendPlayerUnlockNotification(null, SubSkillType.ACROBATICS_DODGE);
     }
 }
