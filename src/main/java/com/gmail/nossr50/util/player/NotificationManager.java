@@ -2,6 +2,7 @@ package com.gmail.nossr50.util.player;
 
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
@@ -10,6 +11,7 @@ import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import com.gmail.nossr50.util.text.McMMOMessageType;
+import com.gmail.nossr50.util.text.StringUtils;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
@@ -36,9 +38,6 @@ import org.jetbrains.annotations.Nullable;
  * {@link McMMOMod#getAdvancedConfig()} — verbatim with legacy. All entry points take an
  * {@link McMMOPlayer} (the trigger/skill call sites already hold it) and are no-ops when the player
  * has chat notifications toggled off, matching legacy's {@code useChatNotifications()} gate.
- *
- * <p>Still deferred (need unported adapters): {@code sendPlayerLevelUpNotification} (special
- * level-up component formatting via the dropped Adventure {@code TextComponentFactory}).
  */
 public final class NotificationManager {
 
@@ -114,6 +113,51 @@ public final class NotificationManager {
 
         String preColored = LocaleLoader.getString(key, (Object[]) values);
         mmoPlayer.getPlayer().sendMessage(LocaleLoader.getText("mcMMO.Template.Prefix", preColored));
+    }
+
+    /**
+     * Tells {@code mmoPlayer} they just leveled up {@code skill}: the {@code Overhaul.Levelup}
+     * message ("{skill} increased to {newLevel}."), routed to the action bar or system chat per the
+     * {@code advanced.yml} {@link NotificationType#LEVEL_UP_MESSAGE} setting. No-op if the player is
+     * {@code null} or has chat notifications disabled.
+     *
+     * <p>Singleplayer port of legacy {@code sendPlayerLevelUpNotification}. The message text and
+     * routing are preserved verbatim; the level-up <em>sound</em> is fired by the caller
+     * ({@code McMMOPlayer.checkXp}) exactly as in legacy. Dropped: the cancellable
+     * {@code McMMOPlayerNotificationEvent} (no external plugins) and the Adventure
+     * {@code TextComponentFactory} hover/click extras (cosmetic), same as the unlock path.
+     *
+     * @param mmoPlayer target player (may be {@code null}; treated as a no-op)
+     * @param skill the skill that leveled up
+     * @param levelsGained how many levels were gained in this event
+     * @param newLevel the skill's resulting level
+     */
+    public static void sendPlayerLevelUpNotification(@Nullable McMMOPlayer mmoPlayer,
+            @NotNull PrimarySkillType skill, int levelsGained, int newLevel) {
+        if (mmoPlayer == null || !mmoPlayer.useChatNotifications()) {
+            return;
+        }
+
+        McMMOMessageType destination =
+                McMMOMod.getAdvancedConfig().doesNotificationUseActionBar(
+                        NotificationType.LEVEL_UP_MESSAGE)
+                        ? McMMOMessageType.ACTION_BAR : McMMOMessageType.SYSTEM;
+
+        String skillName =
+                LocaleLoader.getString("Overhaul.Name." + StringUtils.getCapitalized(skill.toString()));
+        Text message = LocaleLoader.getText("Overhaul.Levelup", skillName, levelsGained, newLevel);
+
+        PlatformPlayer player = mmoPlayer.getPlayer();
+        if (destination == McMMOMessageType.ACTION_BAR) {
+            player.sendActionBar(message);
+
+            if (McMMOMod.getAdvancedConfig()
+                    .doesNotificationSendCopyToChat(NotificationType.LEVEL_UP_MESSAGE)) {
+                player.sendMessage(message);
+            }
+        } else {
+            player.sendMessage(message);
+        }
     }
 
     /**

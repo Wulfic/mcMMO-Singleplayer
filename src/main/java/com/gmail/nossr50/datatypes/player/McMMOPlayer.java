@@ -31,8 +31,11 @@ import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.Misc;
+import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.skills.PerksUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
+import com.gmail.nossr50.util.sounds.SoundManager;
+import com.gmail.nossr50.util.sounds.SoundType;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.UUID;
@@ -374,16 +377,25 @@ public class McMMOPlayer {
             levelsGained++;
         }
 
+        // PORT Phase 3/10: EventUtils.tryLevelChangeEvent(...) dropped — it fired the cancellable
+        // McMMOPlayerLevelChangeEvent that could veto the level-up. No listeners in singleplayer, so
+        // it never cancels; the level change is already committed to the profile above.
+
         if (levelsGained > 0) {
             LogUtils.debug(playerName + " leveled up " + primarySkillType + " x" + levelsGained
                     + " (now level " + profile.getSkillLevel(primarySkillType) + ")");
+
+            // Player-facing feedback (legacy fired both here, in this order, on a real level-up).
+            if (McMMOMod.getGeneralConfig().getLevelUpSoundsEnabled()) {
+                SoundManager.sendSound(player, SoundType.LEVEL_UP);
+            }
+
+            NotificationManager.sendPlayerLevelUpNotification(this, primarySkillType, levelsGained,
+                    profile.getSkillLevel(primarySkillType));
         }
 
-        // PORT Phase 3/10: EventUtils.tryLevelChangeEvent(...) dropped — it fired the cancellable
-        // McMMOPlayerLevelChangeEvent that could veto the level-up. No listeners in singleplayer.
-        // PORT Phase 11: level-up sound (SoundManager), level-up notification + skill-unlock
-        // notifications (NotificationManager), and the XP-bar update dropped with the feedback
-        // subsystems. The level change itself is already committed to the profile above.
+        // PORT Phase 11: the skill-unlock notification sweep and the XP-bar update still ride with
+        // the deferred experience-bar subsystem (processPostXpEvent).
     }
 
     /**
