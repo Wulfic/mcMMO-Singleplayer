@@ -68,8 +68,11 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
 - [~] **K7 — Subsystem vanilla hooks** (each is one Fabric event/Mixin; each unblocks one skill's XP):
       **entity-tame (Taming) DONE** — two mixins (`TameableEntity#setTamedBy` for wolf/cat/parrot,
       `AbstractHorseEntity#bondWithPlayer` for horses/donkeys/mules/llamas/camels) funnel into
-      `fabric/listeners/TamingListener` → `TamingManager.awardTamingXP(configString)`. **Still TODO:**
-      furnace-smelt (Smelting), brewing-stand (Alchemy), fishing-catch `FishHook` (Fishing), anvil-use
+      `fabric/listeners/TamingListener` → `TamingManager.awardTamingXP(configString)`.
+      **furnace-smelt (Smelting) DONE** (commit 071674e8f) — `AbstractFurnaceSmeltMixin` @Injects at
+      the `craftRecipe` call in `AbstractFurnaceBlockEntity#tick` → `fabric/listeners/SmeltingListener`
+      (furnace-owner map via `UseBlockCallback`) → `SmeltingManager.awardSmeltingXP(materialConfigString)`.
+      **Still TODO:** brewing-stand (Alchemy), fishing-catch `FishHook` (Fishing), anvil-use
       (Repair + Salvage).
 - [ ] **K8 — Port the deferred configs:** `RepairConfig`, `SalvageConfig` (repairable/salvageable item
       tables — need K3 + `MaterialMapStore` classification, both now available), `PotionConfig`/`PotionStage`
@@ -101,7 +104,9 @@ XP-award body:
 - [~] **Taming** — base tame XP **DONE** (via K7 entity-tame mixins → `awardTamingXP`/`getTamingXP`;
       per-entity XP from `experience.yml`, K5 cancellable event dropped). ⚠️ In-game verification
       pending. Still TODO: wolf-assisted combat XP (via K1) + the summon/damage-modifier bodies (§C/§D).
-- [ ] **Smelting** — via K7 (furnace-smelt) + K3: furnace-event body → smelting XP + vanilla-XP boost.
+- [~] **Smelting** — base smelt XP **DONE** (via K7 furnace-smelt mixin → `awardSmeltingXP`, keyed by
+      input material from `experience.yml`; commit 071674e8f). ⚠️ In-game verification pending. Still
+      TODO (K3 ItemStack adapter): Second Smelt result-doubling + vanilla-XP boost application.
 
 > When this section is all checked, every skill can gain XP and the *first meaningful play test* becomes
 > possible. This is the minimum bar for "Pass 1 testable."
