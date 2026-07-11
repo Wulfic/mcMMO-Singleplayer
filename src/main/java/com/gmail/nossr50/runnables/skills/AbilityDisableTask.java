@@ -8,6 +8,7 @@ import com.gmail.nossr50.util.CancellableRunnable;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.skills.PerksUtils;
+import com.gmail.nossr50.util.skills.SkillUtils;
 
 /**
  * Deactivates a running super ability when its duration expires (Phase 11). Flips the ability out of
@@ -18,13 +19,12 @@ import com.gmail.nossr50.util.skills.PerksUtils;
  * follow-up cooldown scheduling are ported verbatim (the FoliaLib {@code runAtEntityLater} becomes
  * {@link McMMOMod#getScheduler()}{@code .runLater}). What's dropped/deferred:
  * <ul>
- *   <li><b>PORT Phase 11</b> — the ability-specific teardown behind unported adapters:
- *       {@code SUPER_BREAKER}/{@code GIGA_DRILL_BREAKER} ran
- *       {@code SkillUtils.removeAbilityBoostsFromInventory} (inventory/enchant adapter, unported),
- *       and the breaker/{@code BERSERK} abilities resent a chunk radius
- *       ({@code General.RefreshChunks} → Bukkit {@code World.refreshChunk}, which has no
- *       singleplayer analogue — the integrated client renders locally). Re-add with the inventory
- *       adapter / a client chunk-refresh mixin only if a boost item actually needs clearing.</li>
+ *   <li><b>Wired (K3/K4)</b> — {@code SUPER_BREAKER}/{@code GIGA_DRILL_BREAKER} now run
+ *       {@link SkillUtils#removeAbilityBoostsFromInventory} to strip the dig-speed enchant boost from
+ *       any tool it was applied to. <b>PORT Phase 11 (still deferred)</b> — the breaker/{@code BERSERK}
+ *       chunk resend ({@code General.RefreshChunks} → Bukkit {@code World.refreshChunk}) has no
+ *       singleplayer analogue (the integrated client renders locally); re-add via a client
+ *       chunk-refresh mixin only if actually needed.</li>
  *   <li><b>PORT Phase 3</b> — {@code EventUtils.callAbilityDeactivateEvent}: a Bukkit API event with
  *       no listeners in singleplayer. Re-home onto the internal {@code EventBus} if ever needed.</li>
  *   <li><b>Cut (Phase 1.5)</b> — {@code sendAbilityNotificationToOtherPlayers} /
@@ -54,6 +54,12 @@ public class AbilityDisableTask extends CancellableRunnable {
 
         mmoPlayer.setAbilityMode(ability, false);
         mmoPlayer.setAbilityInformed(ability, false);
+
+        // Clear the Super/Giga Breaker dig-speed boost from any tool it was applied to.
+        if (ability == SuperAbilityType.SUPER_BREAKER
+                || ability == SuperAbilityType.GIGA_DRILL_BREAKER) {
+            SkillUtils.removeAbilityBoostsFromInventory(mmoPlayer.getPlayer());
+        }
 
         if (mmoPlayer.useChatNotifications()) {
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.ABILITY_OFF,

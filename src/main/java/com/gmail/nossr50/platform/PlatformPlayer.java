@@ -3,13 +3,17 @@ package com.gmail.nossr50.platform;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.BlockUtils;
+import com.gmail.nossr50.util.ItemUtils;
 import java.util.UUID;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.NbtComponent;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
@@ -257,6 +261,100 @@ public final class PlatformPlayer {
         }
         BlockPos pos = ((BlockHitResult) hit).getBlockPos();
         return BlockUtils.isPartOfTree(getWorld().getBlockState(pos));
+    }
+
+    // --- Super/Giga Breaker dig-speed boost (K3 enchant-write / K4) ----------
+
+    /**
+     * Config-string key under {@code minecraft:custom_data} that stashes the tool's pre-boost
+     * Efficiency level, mirroring the legacy {@code NSK_SUPER_ABILITY_BOOSTED_ITEM} persistent-data key.
+     * Its presence marks a stack as super-ability boosted; its value restores the original level when
+     * the boost is removed.
+     */
+    private static final String SUPER_ABILITY_BOOST_KEY = "mcmmo:super_ability_boosted";
+
+    /**
+     * Apply the Super/Giga Breaker dig-speed boost to the main-hand tool (legacy
+     * {@code SkillUtils.handleAbilitySpeedIncrease} enchant-buff path, the default with the bundled
+     * {@code hidden.yml}). No-op unless the main hand is a pickaxe or shovel. Bumps the tool's
+     * Efficiency by {@code enchantBuff} levels and stashes the pre-boost level in a
+     * {@code custom_data} marker so {@link #removeSuperAbilityBoostFromMainHand()} /
+     * {@link #removeSuperAbilityBoostsFromInventory()} can restore it exactly when the ability ends.
+     *
+     * @param enchantBuff the number of Efficiency levels to add (advanced.yml {@code EnchantBuff})
+     */
+    public void applySuperAbilityDigBoost(int enchantBuff) {
+        final ItemStack stack = handle.getMainHandStack();
+        if (!canBeDigBoosted(stack)) {
+            return;
+        }
+        final RegistryEntry<Enchantment> efficiency = efficiencyEntry();
+        final int originalDigSpeed = EnchantmentHelper.getLevel(efficiency, stack);
+        EnchantmentHelper.apply(stack, builder -> builder.set(efficiency,
+                originalDigSpeed + enchantBuff));
+        NbtComponent.set(DataComponentTypes.CUSTOM_DATA, stack,
+                nbt -> nbt.putInt(SUPER_ABILITY_BOOST_KEY, originalDigSpeed));
+    }
+
+    /**
+     * Remove the dig-speed boost from the main-hand tool (legacy {@code SkillUtils.removeAbilityBuff}
+     * on the held item). Called before (re)activating so a stale boost can't stack its Efficiency.
+     */
+    public void removeSuperAbilityBoostFromMainHand() {
+        removeSuperAbilityBoostFromStack(handle.getMainHandStack());
+    }
+
+    /**
+     * Remove the dig-speed boost from every stack in the player's inventory (legacy
+     * {@code SkillUtils.removeAbilityBoostsFromInventory}). Run when Super/Giga Breaker ends so a
+     * boosted tool that was moved out of the main hand is still cleaned up.
+     */
+    public void removeSuperAbilityBoostsFromInventory() {
+        final PlayerInventory inventory = handle.getInventory();
+        for (int slot = 0; slot < inventory.size(); slot++) {
+            removeSuperAbilityBoostFromStack(inventory.getStack(slot));
+        }
+    }
+
+    /**
+     * Undo the boost on one stack: only touches boosted pickaxes/shovels. Restores the stashed
+     * original Efficiency level (or strips Efficiency entirely if the tool had none pre-boost) and
+     * clears the marker. Mirrors legacy {@code ItemMetadataUtils.removeBonusDigSpeedOnSuperAbilityTool}.
+     */
+    private void removeSuperAbilityBoostFromStack(@NotNull ItemStack stack) {
+        if (stack.isEmpty() || !canBeDigBoosted(stack)) {
+            return;
+        }
+        final NbtComponent customData = stack.get(DataComponentTypes.CUSTOM_DATA);
+        if (customData == null) {
+            return;
+        }
+        final NbtCompound nbt = customData.copyNbt();
+        if (!nbt.contains(SUPER_ABILITY_BOOST_KEY)) {
+            return; // not a boosted stack.
+        }
+        final int originalDigSpeed = nbt.getInt(SUPER_ABILITY_BOOST_KEY, 0);
+        final RegistryEntry<Enchantment> efficiency = efficiencyEntry();
+        if (originalDigSpeed > 0) {
+            EnchantmentHelper.apply(stack, builder -> builder.set(efficiency, originalDigSpeed));
+        } else {
+            EnchantmentHelper.apply(stack,
+                    builder -> builder.remove(entry -> entry.matchesKey(Enchantments.EFFICIENCY)));
+        }
+        NbtComponent.set(DataComponentTypes.CUSTOM_DATA, stack,
+                marker -> marker.remove(SUPER_ABILITY_BOOST_KEY));
+    }
+
+    /** Legacy {@code ItemUtils.canBeSuperAbilityDigBoosted}: only pickaxes and shovels dig-boost. */
+    private static boolean canBeDigBoosted(@NotNull ItemStack stack) {
+        return ItemUtils.isPickaxe(stack) || ItemUtils.isShovel(stack);
+    }
+
+    /** Resolve the {@code Efficiency} enchantment entry from the world's dynamic registry. */
+    private @NotNull RegistryEntry<Enchantment> efficiencyEntry() {
+        return getWorld().getRegistryManager()
+                .getOrThrow(RegistryKeys.ENCHANTMENT)
+                .getOrThrow(Enchantments.EFFICIENCY);
     }
 
     // --- Stopgap raw accessors (pending dedicated adapters) ------------------
