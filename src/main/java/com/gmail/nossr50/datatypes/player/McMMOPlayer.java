@@ -4,11 +4,16 @@ import static java.util.Objects.requireNonNull;
 
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
+import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.runnables.skills.AbilityDisableTask;
+import com.gmail.nossr50.runnables.skills.ToolLowerTask;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
 import com.gmail.nossr50.skills.alchemy.AlchemyManager;
@@ -33,6 +38,7 @@ import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.skills.PerksUtils;
+import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
@@ -692,12 +698,197 @@ public class McMMOPlayer {
         return PerksUtils.handleActivationPerks(baseTicks, superAbilityType.getMaxLength());
     }
 
-    // PORT Phase 11: the super-ability activation *trigger* (checkAbilityActivation /
-    // processAbilityActivation / processAxeToolMessages) and the tool-prep raise/lower flow are
-    // still deferred — they depend on EventUtils, NotificationManager, SoundManager, SkillUtils,
-    // BlockUtils, held-item/tool detection, the interaction listener, and the ability runnables
-    // (AbilityDisableTask / AbilityCooldownTask / ToolLowerTask). The cooldown/duration math above
-    // is the MC-free core those will call once their adapters land.
+    /*
+     * Super-ability activation trigger (K6 / Phase 11)
+     *
+     * The interaction-driven half of the super-ability subsystem, ported from legacy
+     * checkAbilityActivation / processAbilityActivation / processAxeToolMessages (git 811b50325
+     * McMMOPlayer.java L907-1126). The Fabric interaction listener
+     * ({@code fabric.listeners.SuperAbilityListener}) does the MC-typed block/tool gating and calls
+     * these; the flow here stays MC-free by routing held-item and target-block reads through the
+     * {@link PlatformPlayer} ({@link PlatformPlayer#isHoldingTool}/{@link PlatformPlayer#isLookingAtTree}).
+     *
+     * Deferred (breadcrumbs inline):
+     *  - K5 EventUtils.callPlayerAbilityActivateEvent — no singleplayer cancel-listeners; dropped.
+     *  - K3/K4 SkillUtils.removeAbilityBuff / handleAbilitySpeedIncrease — the Super/Giga Breaker
+     *    held-tool haste-enchant boost. The ability mode still flips + schedules disable/cooldown and
+     *    gates the effect bodies; the vanilla dig-speed increase lands with the item/enchant adapter.
+     *  - sendAbilityNotificationToOtherPlayers — a multiplayer broadcast (cut, no other players).
+     */
+
+    /**
+     * Activate the readied super ability for {@code primarySkillType} when the player acts on a valid
+     * target (legacy {@code checkAbilityActivation}). No-op if the ability is already running, still
+     * locked by rank, or on cooldown; otherwise flips the ability mode on, stamps the deactivation
+     * timestamp, clears the tool-prep flag, and schedules the {@link AbilityDisableTask} that ends it.
+     */
+    public void checkAbilityActivation(@NotNull PrimarySkillType primarySkillType) {
+        ToolType tool = McMMOMod.getSkillTools().getPrimarySkillToolType(primarySkillType);
+        SuperAbilityType superAbilityType = McMMOMod.getSkillTools().getSuperAbility(primarySkillType);
+        SubSkillType subSkillType = superAbilityType.getSubSkillTypeDefinition();
+
+        // Singleplayer: super-ability permissions are always granted (legacy getPermissions(player)
+        // gate dropped, Phase 6 by-design).
+        if (getAbilityMode(superAbilityType)) {
+            return;
+        }
+
+        if (!RankUtils.hasUnlockedSubskill(this, subSkillType)) {
+            int diff = RankUtils.getSuperAbilityUnlockRequirement(superAbilityType)
+                    - getSkillLevel(primarySkillType);
+
+            // Inform the player they are not yet skilled enough.
+            NotificationManager.sendPlayerInformation(this, NotificationType.ABILITY_COOLDOWN,
+                    "Skills.AbilityGateRequirementFail", String.valueOf(diff),
+                    McMMOMod.getSkillTools().getLocalizedSkillName(primarySkillType));
+            return;
+        }
+
+        int timeRemaining = calculateTimeRemaining(superAbilityType);
+        if (timeRemaining > 0) {
+            // Axes and Woodcutting share a tool, so their "too tired" message is shown when they act.
+            if (primarySkillType == PrimarySkillType.WOODCUTTING
+                    || primarySkillType == PrimarySkillType.AXES) {
+                NotificationManager.sendPlayerInformation(this, NotificationType.ABILITY_COOLDOWN,
+                        "Skills.TooTired", String.valueOf(timeRemaining));
+            }
+            return;
+        }
+
+        // PORT K5: EventUtils.callPlayerAbilityActivateEvent — no singleplayer cancel-listeners; dropped.
+
+        int ticks = calculateAbilityActivationTicks(primarySkillType, superAbilityType);
+
+        if (useChatNotifications()) {
+            NotificationManager.sendPlayerInformation(this, NotificationType.SUPER_ABILITY,
+                    superAbilityType.getAbilityOn());
+        }
+
+        SoundManager.worldSendSound(player, SoundType.ABILITY_ACTIVATED_GENERIC);
+
+        // PORT K3/K4: SkillUtils.removeAbilityBuff(mainHand) for SUPER_BREAKER/GIGA_DRILL_BREAKER —
+        // clears a stale haste enchant before re-applying, so boosts don't stack. Needs the
+        // item/enchant mutation adapter.
+
+        // Enable the ability.
+        profile.setAbilityDATS(superAbilityType,
+                System.currentTimeMillis() + ((long) ticks * Misc.TIME_CONVERSION_FACTOR));
+        setAbilityMode(superAbilityType, true);
+
+        // PORT K3/K4: SkillUtils.handleAbilitySpeedIncrease(player) for SUPER_BREAKER/GIGA_DRILL_BREAKER
+        // — the vanilla dig-speed (haste) boost. The mode is active + gates the effect bodies; the
+        // actual mining-speed increase lands with the enchant adapter.
+
+        setToolPreparationMode(tool, false);
+        McMMOMod.getScheduler().runLater(new AbilityDisableTask(this, superAbilityType),
+                (long) ticks * Misc.TICK_CONVERSION_FACTOR);
+    }
+
+    /**
+     * Ready the super-ability tool for {@code primarySkillType} on interaction (legacy
+     * {@code processAbilityActivation}). No-op while sneaking is required and the player isn't, while
+     * ability use is toggled off, or while any super ability is already active. When the matching tool
+     * is in hand and not yet prepared, flips tool-preparation mode on, sends the "tool ready" feedback,
+     * and schedules the {@link ToolLowerTask} that lowers it after the readiness window.
+     */
+    public void processAbilityActivation(@NotNull PrimarySkillType primarySkillType) {
+        if (McMMOMod.getGeneralConfig().getAbilitiesOnlyActivateWhenSneaking() && !player.isSneaking()) {
+            return;
+        }
+
+        if (!getAbilityUse()) {
+            return;
+        }
+
+        for (SuperAbilityType superAbilityType : SuperAbilityType.values()) {
+            if (getAbilityMode(superAbilityType)) {
+                return;
+            }
+        }
+
+        SuperAbilityType ability = McMMOMod.getSkillTools().getSuperAbility(primarySkillType);
+        ToolType tool = McMMOMod.getSkillTools().getPrimarySkillToolType(primarySkillType);
+
+        /*
+         * Woodcutting & Axes share the same tool. That tool always needs to be ready; the cooldown is
+         * checked when the player takes action (checkAbilityActivation), not here.
+         */
+        if (player.isHoldingTool(tool) && !getToolPreparationMode(tool)) {
+            if (primarySkillType != PrimarySkillType.WOODCUTTING
+                    && primarySkillType != PrimarySkillType.AXES) {
+                if (isAbilityOnCooldown(ability)) {
+                    NotificationManager.sendPlayerInformation(this, NotificationType.ABILITY_COOLDOWN,
+                            "Skills.TooTired", String.valueOf(calculateTimeRemaining(ability)));
+                    return;
+                }
+            }
+
+            if (McMMOMod.getGeneralConfig().getAbilityMessagesEnabled()) {
+                if (tool == ToolType.AXE) {
+                    processAxeToolMessages();
+                } else {
+                    NotificationManager.sendPlayerInformation(this, NotificationType.TOOL,
+                            tool.getRaiseTool());
+                }
+                SoundManager.sendSound(player, SoundType.TOOL_READY);
+            }
+
+            setToolPreparationMode(tool, true);
+            McMMOMod.getScheduler().runLater(new ToolLowerTask(this, tool),
+                    4L * Misc.TICK_CONVERSION_FACTOR);
+        }
+    }
+
+    /**
+     * Choose the right "tool ready" message for the shared axe, which readies both Tree Feller
+     * (Woodcutting) and Skull Splitter (Axes). Legacy {@code processAxeToolMessages}: when both are on
+     * cooldown, or one is while the player looks at a tree, tell them the cooldown; otherwise the
+     * generic axe-raise message.
+     */
+    public void processAxeToolMessages() {
+        boolean lookingAtTree = player.isLookingAtTree();
+
+        if (isAbilityOnCooldown(SuperAbilityType.TREE_FELLER)
+                && isAbilityOnCooldown(SuperAbilityType.SKULL_SPLITTER)) {
+            // Both Tree Feller and Skull Splitter are on cooldown.
+            tooTiredMultiple(PrimarySkillType.WOODCUTTING, SubSkillType.WOODCUTTING_TREE_FELLER,
+                    SuperAbilityType.TREE_FELLER, SubSkillType.AXES_SKULL_SPLITTER,
+                    SuperAbilityType.SKULL_SPLITTER);
+        } else if (isAbilityOnCooldown(SuperAbilityType.TREE_FELLER) && lookingAtTree) {
+            // Tree Feller on cooldown and the player is looking at a tree.
+            raiseToolWithCooldowns(SubSkillType.WOODCUTTING_TREE_FELLER, SuperAbilityType.TREE_FELLER);
+        } else if (isAbilityOnCooldown(SuperAbilityType.SKULL_SPLITTER)) {
+            raiseToolWithCooldowns(SubSkillType.AXES_SKULL_SPLITTER, SuperAbilityType.SKULL_SPLITTER);
+        } else {
+            NotificationManager.sendPlayerInformation(this, NotificationType.TOOL,
+                    ToolType.AXE.getRaiseTool());
+        }
+    }
+
+    private void tooTiredMultiple(PrimarySkillType primarySkillType, SubSkillType aSubSkill,
+            SuperAbilityType aSuperAbility, SubSkillType bSubSkill,
+            SuperAbilityType bSuperAbility) {
+        String aSuperAbilityCD = LocaleLoader.getString("Skills.TooTired.Named",
+                aSubSkill.getLocaleName(),
+                String.valueOf(calculateTimeRemaining(aSuperAbility)));
+        String bSuperAbilityCD = LocaleLoader.getString("Skills.TooTired.Named",
+                bSubSkill.getLocaleName(),
+                String.valueOf(calculateTimeRemaining(bSuperAbility)));
+        String allCDStr = aSuperAbilityCD + ", " + bSuperAbilityCD;
+
+        NotificationManager.sendPlayerInformation(this, NotificationType.TOOL,
+                "Skills.TooTired.Extra",
+                McMMOMod.getSkillTools().getLocalizedSkillName(primarySkillType),
+                allCDStr);
+    }
+
+    private void raiseToolWithCooldowns(SubSkillType subSkillType,
+            SuperAbilityType superAbilityType) {
+        NotificationManager.sendPlayerInformation(this, NotificationType.TOOL,
+                "Axes.Ability.Ready.Extra",
+                subSkillType.getLocaleName(),
+                String.valueOf(calculateTimeRemaining(superAbilityType)));
+    }
 
     // PORT Phase 10.3+: exploit-prevention / teleport / Chimaera-wing timestamps (recentlyHurt,
     // respawnATS, teleportATS, databaseATS, teleportCommence, Chimaera-wing DATS) dropped — the

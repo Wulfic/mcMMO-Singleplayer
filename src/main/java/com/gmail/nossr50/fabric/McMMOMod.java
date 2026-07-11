@@ -14,6 +14,7 @@ import com.gmail.nossr50.event.EventBus;
 import com.gmail.nossr50.event.SimpleEventBus;
 import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
 import com.gmail.nossr50.fabric.listeners.CombatListener;
+import com.gmail.nossr50.fabric.listeners.SuperAbilityListener;
 import com.gmail.nossr50.platform.scheduler.TickScheduler;
 import com.gmail.nossr50.runnables.SaveTimerTask;
 import com.gmail.nossr50.runnables.player.ClearRegisteredXPGainTask;
@@ -148,6 +149,9 @@ public class McMMOMod implements ModInitializer {
         // Phase 3: gameplay XP hooks — block-break gathering XP and mob-kill combat XP.
         BlockBreakListener.register();
         CombatListener.register();
+        // K6 (Phase 11): super-ability activation trigger — right-click readies a tool, left-click
+        // (block damage) with the prepared tool fires the ability.
+        SuperAbilityListener.register();
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
         // drive the legacy listeners, routing each to the ported skill managers. Preferred
