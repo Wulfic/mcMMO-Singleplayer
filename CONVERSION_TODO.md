@@ -20,14 +20,16 @@ get stubs that lie.
 
 Each of these is currently missing and blocks multiple skills. Nothing downstream works until they land.
 
-- [ ] **K1 — Combat on-hit damage hook.** *Biggest single unblock.* Only `ServerLivingEntityEvents.AFTER_DEATH`
-      is wired (kill-XP). There is **no before/on-hit damage hook**, so every on-hit combat effect is dead.
-      Wire `ServerLivingEntityEvents.ALLOW_DAMAGE` (+ `AttackEntityCallback`, + a Mixin for
-      projectile-launch bookkeeping) into a new `EntityDamageListener` that can read/modify incoming damage
-      and identify attacker/victim. **Unblocks:** all combat sub-skills (§B), Acrobatics Dodge, Taming
-      damage modifiers, and Rupture/Bleed application.
-- [ ] **K2 — Fall-damage hook.** Detect player fall damage (part of K1's damage listener, `DamageSource`
-      = fall). **Unblocks:** Acrobatics Roll / Graceful Roll (XP + damage reduction).
+- [~] **K1 — Combat on-hit damage hook.** *Biggest single unblock.* **Damage-hook SEAM now built:** a
+      MixinExtras `@ModifyReturnValue` on `LivingEntity#modifyAppliedDamage` (see
+      `fabric/mixin/LivingEntityDamageMixin`) routes the post-armor damage through the new
+      `EntityDamageListener` — chosen over `ServerLivingEntityEvents.ALLOW_DAMAGE` because mcMMO must
+      *reduce* damage, not just veto it. **Still TODO for combat:** branch the listener on attacker
+      identity (needs `AttackEntityCallback` + a projectile-launch Mixin for ranged) to drive the on-hit
+      sub-skills (§B/§C), Acrobatics Dodge, Taming damage modifiers, Rupture/Bleed. Only the fall branch
+      (K2) is wired today.
+- [x] **K2 — Fall-damage hook.** DONE. `EntityDamageListener` detects `DamageTypeTags.IS_FALL` and drives
+      Acrobatics Roll (XP + damage reduction) via the K1 mixin seam above.
 - [ ] **K3 — Item / inventory / enchant mutation adapter.** `PlatformItem` + `ItemSpecBuilder` can *read*
       and *spawn* items, but there's no adapter to mutate a held stack (durability), read/modify inventory
       slots, or add/remove enchantments. **Unblocks:** Repair, Salvage, Alchemy item handling, Arcane
@@ -61,8 +63,10 @@ Currently wired: Mining / Woodcutting / Excavation / Herbalism (block-break) + w
 The rest have ported numeric cores but **no event awards their XP**. Each needs its §A hook, then the
 XP-award body:
 
-- [ ] **Acrobatics** — via K2: fall damage → Roll XP (gated by `canGainRollXP()`) + Roll/Graceful Roll
-      damage negation; via K1: Dodge XP + damage reduction (with the mob dodge-XP anti-farm cap).
+- [~] **Acrobatics** — via K2: fall damage → Roll XP (gated by `canGainRollXP()`) + Roll/Graceful Roll
+      damage negation **DONE** (full Roll port folded MC-free into `AcrobaticsManager`, exploit throttle +
+      fall-location history + Feather Falling XP boost; unit-tested; **in-game verification pending**). Still
+      TODO via K1: Dodge XP + damage reduction (with the mob dodge-XP anti-farm cap).
 - [ ] **Fishing** — via K7 (fishing-catch) + K8 (`FishingTreasureConfig`): `processFishing` → fishing XP,
       treasure/Magic Hunter/Shake loot, Treasure Hunter.
 - [ ] **Repair** — via K7 (anvil) + K3 + K8 (`RepairConfig`): `handleRepair` → repair action + XP; Repair
