@@ -11,11 +11,13 @@ import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.text.StringUtils;
 import java.nio.file.Path;
 import net.minecraft.text.Text;
 import org.junit.jupiter.api.AfterEach;
@@ -148,5 +150,34 @@ class NotificationManagerTest {
     void unlockNotificationIsNoOpForNullPlayer() {
         // Must not throw and must not touch config/player.
         NotificationManager.sendPlayerUnlockNotification(null, SubSkillType.ACROBATICS_DODGE);
+    }
+
+    @Test
+    void levelUpNotificationRoutesToActionBarAndChatCopy() {
+        // advanced.yml LevelUps: Enabled=true (action bar), SendCopyOfMessageToChat=true.
+        PrimarySkillType skill = PrimarySkillType.MINING;
+        String skillName =
+                LocaleLoader.getString("Overhaul.Name." + StringUtils.getCapitalized(skill.toString()));
+        Text expected = LocaleLoader.getText("Overhaul.Levelup", skillName, 1, 2);
+
+        NotificationManager.sendPlayerLevelUpNotification(mmoPlayer, skill, 1, 2);
+
+        verify(platformPlayer).sendActionBar(expected);
+        verify(platformPlayer).sendMessage(expected);
+    }
+
+    @Test
+    void levelUpNotificationIsNoOpWhenChatNotificationsDisabled() {
+        when(mmoPlayer.useChatNotifications()).thenReturn(false);
+
+        NotificationManager.sendPlayerLevelUpNotification(mmoPlayer, PrimarySkillType.MINING, 1, 2);
+
+        verifyNoInteractions(platformPlayer);
+    }
+
+    @Test
+    void levelUpNotificationIsNoOpForNullPlayer() {
+        // Must not throw and must not touch config/player.
+        NotificationManager.sendPlayerLevelUpNotification(null, PrimarySkillType.MINING, 1, 2);
     }
 }
