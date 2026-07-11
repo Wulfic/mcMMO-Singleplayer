@@ -25,11 +25,15 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       `fabric/mixin/LivingEntityDamageMixin`) routes the post-armor damage through the new
       `EntityDamageListener` — chosen over `ServerLivingEntityEvents.ALLOW_DAMAGE` because mcMMO must
       *reduce* damage, not just veto it. **Still TODO for combat:** branch the listener on attacker
-      identity (needs `AttackEntityCallback` + a projectile-launch Mixin for ranged) to drive the on-hit
-      sub-skills (§B/§C), Taming damage modifiers, Rupture/Bleed. **Defender branch now wired:**
-      `EntityDamageListener` routes incoming entity damage → **Acrobatics Dodge** (damage reduction + XP,
-      per-mob anti-farm cap via `MetadataStore`, lightning-dodge config exclusion). Still TODO:
-      attacker-side melee weapon bonuses (Swords/Axes/Unarmed) + projectile skills.
+      identity to drive the on-hit sub-skills (§B/§C), Taming damage modifiers, Rupture/Bleed.
+      **Defender branch wired:** `EntityDamageListener` routes incoming entity damage → **Acrobatics
+      Dodge** (damage reduction + XP, per-mob anti-farm cap via `MetadataStore`, lightning-dodge config
+      exclusion). **Attacker melee branch wired:** `applyAttackerWeaponBonus` classifies the held item
+      (`ItemUtils.isSword/isAxe/isUnarmed`) on a *direct* melee swing (`getSource()==attacker`, not
+      Thorns/projectile) → adds the MC-free `MeleeDamageBonus` (Swords Stab / Axe Mastery / Unarmed
+      Steel Arm + Berserk, scaled by attack strength). Still TODO: projectile skills (Archery/Crossbows/
+      Tridents ranged) via a projectile-launch Mixin, and the effect-only on-hit sub-skills (§C).
+      ⚠️ TUNING §F: bonuses land POST-armor (bypass armor) — flag for the tuning pass.
 - [x] **K2 — Fall-damage hook.** DONE. `EntityDamageListener` detects `DamageTypeTags.IS_FALL` and drives
       Acrobatics Roll (XP + damage reduction) via the K1 mixin seam above.
 - [ ] **K3 — Item / inventory / enchant mutation adapter.** `PlatformItem` + `ItemSpecBuilder` can *read*
@@ -92,9 +96,12 @@ XP-award body:
 The weapon skills earn kill-XP but none of their on-hit effects fire. Port each body onto the K1 damage
 hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tracking):
 
-- [ ] **Swords** — Rupture (bleed DoT, see §E), Counter Attack, Serrated Strikes on-hit.
-- [ ] **Axes** — Armor Impact, Greater Impact, Critical Strikes, Skull Splitter AoE.
-- [ ] **Unarmed** — Disarm, Iron Grip, Arrow Deflect, Berserk on-hit.
+- [~] **Swords** — Stab on-hit damage **DONE** (via K1 attacker branch, `MeleeDamageBonus`). Deferred:
+      Rupture (bleed DoT, see §E), Counter Attack, Serrated Strikes AoE.
+- [~] **Axes** — Axe Mastery on-hit damage **DONE**. Deferred: Armor Impact, Greater Impact, Critical
+      Strikes, Skull Splitter AoE (all need target-armor/entity inspection).
+- [~] **Unarmed** — Steel Arm Style + Berserk on-hit damage **DONE**. Deferred: Disarm, Iron Grip,
+      Arrow Deflect.
 - [ ] **Archery** — Daze, distance-based XP, arrow retrieval, Skill Shot damage (needs projectile hooks).
 - [ ] **Maces** — Cripple effect (needs potion/entity adapter), on-hit bonuses.
 - [ ] **Tridents** — throw handling + on-hit (needs projectile adapter).
