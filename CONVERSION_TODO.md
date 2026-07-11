@@ -398,9 +398,19 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       keyed on `Registries.ITEM.getId(item).getPath()`; unit-tested via the new
       `fabric-loader-junit` registry harness — dropped the inventory/enchant/spawn/lore methods
       with PORT breadcrumbs).** Also added `PlatformPlayer.getMainHandStack`/`getOffHandStack`
-      and wired `ToolType.inHand`. **Still to port:** `BlockUtils` (same thin-wrapper pattern,
-      block registry-path → `MaterialMapStore`/`ExperienceConfig` — next), `SkillUtils`,
-      `EventUtils`. Retarget their Bukkit surfaces to `platform/` adapters.
+      and wired `ToolType.inHand`. **`BlockUtils` DONE (10.9/11 — same thin-wrapper pattern):**
+      the super-ability activation/affected-block gates + tree/ore/herbalism-conversion checks —
+      MaterialMapStore whitelists keyed on the block registry-path
+      (`Registries.BLOCK.getId(block).getPath()`) and the `ExperienceConfig` XP tables keyed on the
+      config string (`ConfigStringUtils.getMaterialConfigString`, null-safe when configs unloaded);
+      `Block` + `BlockState` overloads; unit-tested via the `fabric-loader-junit` registry harness
+      (`BlockUtilsTest` ×6, suite 365 green). Deferred with PORT breadcrumbs: the metadata mutators
+      (`markDropsAsBonus`/`setUnnaturalBlock`/`cleanupBlockMetadata`), `checkDoubleDrops`,
+      `shouldBeWatched`, the live-state predicates (`isFullyGrown`/`isWithinWorldBounds`/
+      `isPistonPiece`), whole-registry sweeps (`getTransparentBlocks`/`getShortGrass`), and the
+      mcMMO-anvil identity + `canActivateTools` anvil exclusion (need the unported Repair/Salvage
+      item configs' `anvilMaterial`). **Still to port:** `SkillUtils`, `EventUtils`. Retarget their
+      Bukkit surfaces to `platform/` adapters.
 
 ### Phase 11 — Scheduler / runnables  🟡 keystone infra live
 - [x] **Scheduler seam built + boot-verified (11.1).** New MC-free `platform/scheduler/`
