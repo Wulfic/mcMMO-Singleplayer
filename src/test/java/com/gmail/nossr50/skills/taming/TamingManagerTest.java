@@ -4,16 +4,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
+import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.datatypes.experience.XPGainReason;
+import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.player.UserManager;
+import org.mockito.ArgumentMatchers;
 import java.nio.file.Path;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -39,6 +45,7 @@ class TamingManagerTest {
         McMMOMod.setGeneralConfig(new GeneralConfig(dataFolder));
         McMMOMod.setRankConfig(new RankConfig(dataFolder));
         McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
+        McMMOMod.setExperienceConfig(new ExperienceConfig(dataFolder));
 
         PlatformPlayer platformPlayer = mock(PlatformPlayer.class);
         when(platformPlayer.getUniqueId())
@@ -56,6 +63,7 @@ class TamingManagerTest {
         McMMOMod.setGeneralConfig(null);
         McMMOMod.setRankConfig(null);
         McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setExperienceConfig(null);
         UserManager.clearAll();
     }
 
@@ -107,6 +115,22 @@ class TamingManagerTest {
     void thickFurAndShockProofDivideByTheirModifiers() {
         assertEquals(5.0, tamingManager.processThickFur(10.0), 1.0e-9, "Thick Fur modifier 2.0");
         assertEquals(2.0, tamingManager.processShockProof(12.0), 1.0e-9, "Shock Proof modifier 6.0");
+    }
+
+    @Test
+    void awardTamingXpLooksUpPerEntityXpAndGainsIt() {
+        // experience.yml default: Taming.Animal_Taming.Wolf = 250.
+        tamingManager.awardTamingXP("Wolf");
+        verify(mmoPlayer).beginXpGain(PrimarySkillType.TAMING, 250f, XPGainReason.PVE,
+                XPGainSource.SELF);
+    }
+
+    @Test
+    void awardTamingXpIsNoOpForEntityWithNoConfiguredXp() {
+        // An entity type with no Taming.Animal_Taming entry resolves to 0 XP -> no gain.
+        tamingManager.awardTamingXP("Not_A_Real_Animal");
+        verify(mmoPlayer, never()).beginXpGain(ArgumentMatchers.any(), ArgumentMatchers.anyFloat(),
+                ArgumentMatchers.any(), ArgumentMatchers.any());
     }
 
     @Test

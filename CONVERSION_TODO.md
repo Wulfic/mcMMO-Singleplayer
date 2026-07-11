@@ -65,9 +65,12 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       `handleAbilitySpeedIncrease` — the Super/Giga Breaker **haste dig-speed boost** (mode flips +
       gates bodies, but the actual speed increase needs the enchant adapter). **Unblocks:** every
       super ability's mode flag (§D bodies still need their effect code). ⚠️ In-game verification pending.
-- [ ] **K7 — Subsystem vanilla hooks** (each is one Fabric event/Mixin; each unblocks one skill's XP):
+- [~] **K7 — Subsystem vanilla hooks** (each is one Fabric event/Mixin; each unblocks one skill's XP):
+      **entity-tame (Taming) DONE** — two mixins (`TameableEntity#setTamedBy` for wolf/cat/parrot,
+      `AbstractHorseEntity#bondWithPlayer` for horses/donkeys/mules/llamas/camels) funnel into
+      `fabric/listeners/TamingListener` → `TamingManager.awardTamingXP(configString)`. **Still TODO:**
       furnace-smelt (Smelting), brewing-stand (Alchemy), fishing-catch `FishHook` (Fishing), anvil-use
-      (Repair + Salvage), entity-tame (Taming).
+      (Repair + Salvage).
 - [ ] **K8 — Port the deferred configs:** `RepairConfig`, `SalvageConfig` (repairable/salvageable item
       tables — need K3 + `MaterialMapStore` classification, both now available), `PotionConfig`/`PotionStage`
       (Alchemy ingredients/stages → vanilla `PotionContentsComponent`), `FishingTreasureConfig` (loot/enchant
@@ -95,7 +98,9 @@ XP-award body:
       Arcane Salvage enchant extraction (`arcaneSalvageCheck` enchanted-book build).
 - [ ] **Alchemy** — via K7 (brewing-stand) + K8 (`PotionConfig`): brew-tracking (`AlchemyBrewTask`) →
       `handlePotionBrewSuccesses`/`getPotionXP`, Catalysis brew-speed, Concoctions ingredients.
-- [ ] **Taming** — via K7 (tame event) + K1 (wolf-assisted combat): `awardTamingXP`/`getTamingXP`.
+- [~] **Taming** — base tame XP **DONE** (via K7 entity-tame mixins → `awardTamingXP`/`getTamingXP`;
+      per-entity XP from `experience.yml`, K5 cancellable event dropped). ⚠️ In-game verification
+      pending. Still TODO: wolf-assisted combat XP (via K1) + the summon/damage-modifier bodies (§C/§D).
 - [ ] **Smelting** — via K7 (furnace-smelt) + K3: furnace-event body → smelting XP + vanilla-XP boost.
 
 > When this section is all checked, every skill can gain XP and the *first meaningful play test* becomes
