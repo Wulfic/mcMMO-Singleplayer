@@ -391,10 +391,16 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
       `fastFoodService`/`processEnvironmentallyAware`/`pummel`/`attackTarget`/`beastLore`, the whole
       Call-of-the-Wild summon path (`CallOfTheWildType`/`TamingSummon` datatypes, `Permissions.callOfTheWild`),
       and the `Taming` static Wolf helpers. Suite green (+6 `TamingManagerTest`).
-- [ ] **Utility prereqs to port as skills demand them** (drop-Bukkit-body pattern held):
-      `UserManager`, `RankUtils`, `SkillUtils`, `BlockUtils`, `ItemUtils`, `PerksUtils`,
-      `EventUtils`, `Misc`, `NotificationManager`, `SoundManager` (Phase 11), `Permissions`
-      (Phase 6). Retarget their Bukkit surfaces to `platform/` adapters.
+- [~] **Utility prereqs to port as skills demand them** (drop-Bukkit-body pattern held).
+      **Done:** `UserManager`, `RankUtils`, `PerksUtils` (Phase 11), `Misc` (Phase 11),
+      `NotificationManager` (11.3), `SoundManager` (11.4), `Permissions` (Phase 6), and
+      **`ItemUtils` (10.9/11 — thin MC-typed wrappers over the tested `MaterialMapStore`,
+      keyed on `Registries.ITEM.getId(item).getPath()`; unit-tested via the new
+      `fabric-loader-junit` registry harness — dropped the inventory/enchant/spawn/lore methods
+      with PORT breadcrumbs).** Also added `PlatformPlayer.getMainHandStack`/`getOffHandStack`
+      and wired `ToolType.inHand`. **Still to port:** `BlockUtils` (same thin-wrapper pattern,
+      block registry-path → `MaterialMapStore`/`ExperienceConfig` — next), `SkillUtils`,
+      `EventUtils`. Retarget their Bukkit surfaces to `platform/` adapters.
 
 ### Phase 11 — Scheduler / runnables  🟡 keystone infra live
 - [x] **Scheduler seam built + boot-verified (11.1).** New MC-free `platform/scheduler/`
@@ -471,7 +477,14 @@ one-skill-at-a-time unless the not-yet-ported managers are commented out of `McM
 
 ### Phase 12 — Testing & verification  🟡 boot verified in-game
 - [x] Test suite reworked off Bukkit/MockBukkit → plain JUnit 5 + Mockito on the MC-free
-      manager/config/event/platform layers (228 green as of 79a559a96).
+      manager/config/event/platform layers (228 green as of 79a559a96; 359 green as of 250f5fc87).
+- [x] **Registry-backed unit tests enabled (`net.fabricmc:fabric-loader-junit`).** The `test` task
+      now runs under Knot's classloader so Minecraft's access wideners apply and a `@BeforeAll` can
+      call `SharedConstants.createGameVersion()` + `Bootstrap.initialize()` (`McTestRegistries`
+      helper) to populate the vanilla registries in-JVM. This makes the MC-typed registry-extraction
+      glue (`ItemUtils`/`BlockUtils` over `MaterialMapStore`) unit-testable without an in-game
+      client — plain JUnit failed with an `IllegalAccessError` from `SimpleRegistry`. Existing suite
+      unaffected by the launcher swap.
 - [x] **Headless boot verified in a real 1.21.11 dedicated server** (`./gradlew runServer`,
       commit 79a559a96 code): full lifecycle clean — `onInitialize` → `onServerStarting`
       (all 7 configs write defaults to disk + load via the JiJ'd snakeyaml, profile store
