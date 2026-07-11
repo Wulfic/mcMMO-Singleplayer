@@ -72,8 +72,12 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       **furnace-smelt (Smelting) DONE** (commit 071674e8f) — `AbstractFurnaceSmeltMixin` @Injects at
       the `craftRecipe` call in `AbstractFurnaceBlockEntity#tick` → `fabric/listeners/SmeltingListener`
       (furnace-owner map via `UseBlockCallback`) → `SmeltingManager.awardSmeltingXP(materialConfigString)`.
-      **Still TODO:** brewing-stand (Alchemy), fishing-catch `FishHook` (Fishing), anvil-use
-      (Repair + Salvage).
+      **fishing-catch (Fishing) DONE** — `FishingBobberUseMixin` `@ModifyArg`s the caught-loot
+      `Collection<ItemStack>` argument of the `FishingRodHookedCriterion.trigger` call inside
+      `FishingBobberEntity#use` → `fabric/listeners/FishingListener` (replicates the legacy CAUGHT_FISH
+      anti-exploit gate from the bobber position) → `FishingManager.awardFishingXP(materialConfigString)`
+      (base XP from `Experience_Values.Fishing.<Material>`; treasure loot deferred to K8).
+      **Still TODO:** brewing-stand (Alchemy), anvil-use (Repair + Salvage).
 - [ ] **K8 — Port the deferred configs:** `RepairConfig`, `SalvageConfig` (repairable/salvageable item
       tables — need K3 + `MaterialMapStore` classification, both now available), `PotionConfig`/`PotionStage`
       (Alchemy ingredients/stages → vanilla `PotionContentsComponent`), `FishingTreasureConfig` (loot/enchant
@@ -93,8 +97,10 @@ XP-award body:
       unit-tested, RNG orchestration `processDodge` + cap verified in-game). **In-game verification
       pending** for both. Deferred refinements: dodge particle effect (needs a PlatformPlayer particle
       adapter) + `MobDodgeMetaCleanup` tracker-expiry task (transient store caps per session without it).
-- [ ] **Fishing** — via K7 (fishing-catch) + K8 (`FishingTreasureConfig`): `processFishing` → fishing XP,
-      treasure/Magic Hunter/Shake loot, Treasure Hunter.
+- [~] **Fishing** — base fishing XP **DONE** (via K7 fishing-catch mixin → `awardFishingXP`, keyed by
+      the caught item's material from `experience.yml`; anti-exploit spam/scarcity gate replicated). ⚠️
+      In-game verification pending. Still TODO (K8 `FishingTreasureConfig`): treasure/Magic Hunter/Shake
+      loot + Treasure Hunter, and the exploit item-removal punishment.
 - [ ] **Repair** — via K7 (anvil) + K3 + K8 (`RepairConfig`): `handleRepair` → repair action + XP; Repair
       Mastery / Super Repair; Arcane Forging enchant keep/downgrade.
 - [ ] **Salvage** — via K7 (anvil) + K3 + K8 (`SalvageConfig`): `handleSalvage` → salvage action + XP;

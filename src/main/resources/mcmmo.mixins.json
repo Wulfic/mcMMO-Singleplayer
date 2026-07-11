@@ -6,6 +6,7 @@
   "mixins": [
     "AbstractFurnaceSmeltMixin",
     "AbstractHorseBondMixin",
+    "FishingBobberUseMixin",
     "LivingEntityDamageMixin",
     "TameableEntityTameMixin"
   ],
