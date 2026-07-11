@@ -36,13 +36,19 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       ⚠️ TUNING §F: bonuses land POST-armor (bypass armor) — flag for the tuning pass.
 - [x] **K2 — Fall-damage hook.** DONE. `EntityDamageListener` detects `DamageTypeTags.IS_FALL` and drives
       Acrobatics Roll (XP + damage reduction) via the K1 mixin seam above.
-- [ ] **K3 — Item / inventory / enchant mutation adapter.** `PlatformItem` + `ItemSpecBuilder` can *read*
-      and *spawn* items, but there's no adapter to mutate a held stack (durability), read/modify inventory
-      slots, or add/remove enchantments. **Unblocks:** Repair, Salvage, Alchemy item handling, Arcane
-      Forging/Arcane Salvage enchant transfer, and held-tool durability on every super ability.
-- [ ] **K4 — Port `SkillUtils`.** Still unported; referenced by Repair/Salvage/Fishing/ability-disable
-      bodies (`handleDurabilityChange`, `removeAbilityBoostsFromInventory`, `cooldownExpired`,
-      `handleAbilitySpeedIncrease`). Retarget its Bukkit surface to the platform adapters.
+- [~] **K3 — Item / inventory / enchant mutation adapter.** **Read-side DONE** (commit b26096c56):
+      `PlatformItem` gained `isUnbreakable()` + `getEnchantmentLevel(RegistryKey)`/`getUnbreakingLevel()`
+      (registry-free component scan), and durability set already existed. **Still TODO:** enchant
+      **write** (add/remove Efficiency for the haste boost + super-ability-boosted marker component) and
+      an inventory read/modify sweep. **Unblocks (write side):** Alchemy item handling, Arcane
+      Forging/Arcane Salvage enchant transfer, the Super/Giga Breaker dig-speed boost. Tool-durability
+      on super abilities is unblocked NOW.
+- [~] **K4 — Port `SkillUtils`.** **Core DONE** (commit b26096c56): new MC-free `util/skills/SkillUtils`
+      with `cooldownExpired` (Repair/Salvage `checkConfirmation` dep) + `handleDurabilityChange`/
+      `handleArmorDurabilityChange` (tool wear on super abilities), tested ×7. **Still TODO:** the
+      enchant-write `handleAbilitySpeedIncrease`/`removeAbilityBuff`/`removeAbilityBoostsFromInventory`
+      (haste boost — needs K3 write side), `getRepairAndSalvage*` (needs K8 configs + recipe iterator),
+      `handleFoodSkills` (K7 food event), and the `RepairableManager` max-durability override.
 - [ ] **K5 — Port `EventUtils`.** The internal-bus event fires (ability activate/deactivate, XP events)
       several bodies expect. Port onto the existing `event/` bus (or no-op the ones with no SP listener,
       with a breadcrumb).
