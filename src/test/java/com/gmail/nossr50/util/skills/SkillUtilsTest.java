@@ -137,4 +137,38 @@ class SkillUtilsTest {
         SkillUtils.removeAbilityBoostsFromInventory(player);
         verify(player).removeSuperAbilityBoostsFromInventory();
     }
+
+    // --- getRepairAndSalvageQuantities (pure vanilla-count table) ------------
+
+    @Test
+    void quantitiesFollowStandardGearRecipeCounts() {
+        assertEquals(2, SkillUtils.getRepairAndSalvageQuantities("diamond_sword"));
+        assertEquals(3, SkillUtils.getRepairAndSalvageQuantities("iron_pickaxe"));
+        assertEquals(3, SkillUtils.getRepairAndSalvageQuantities("golden_axe"));
+        assertEquals(1, SkillUtils.getRepairAndSalvageQuantities("stone_shovel"));
+        assertEquals(2, SkillUtils.getRepairAndSalvageQuantities("wooden_hoe"));
+        assertEquals(5, SkillUtils.getRepairAndSalvageQuantities("iron_helmet"));
+        assertEquals(8, SkillUtils.getRepairAndSalvageQuantities("diamond_chestplate"));
+        assertEquals(7, SkillUtils.getRepairAndSalvageQuantities("leather_leggings"));
+        assertEquals(4, SkillUtils.getRepairAndSalvageQuantities("golden_boots"));
+    }
+
+    @Test
+    void quantitiesSpecialCaseNetheriteAndTrident() {
+        // Netherite gear is crafted in units of four scraps regardless of shape.
+        assertEquals(4, SkillUtils.getRepairAndSalvageQuantities("netherite_sword"));
+        assertEquals(4, SkillUtils.getRepairAndSalvageQuantities("netherite_helmet"));
+        // Trident repairs with 16 prismarine crystals.
+        assertEquals(16, SkillUtils.getRepairAndSalvageQuantities("trident"));
+    }
+
+    @Test
+    void quantitiesCoverNonGearRepairablesAndUnknownShapes() {
+        assertEquals(2, SkillUtils.getRepairAndSalvageQuantities("shears"));
+        assertEquals(1, SkillUtils.getRepairAndSalvageQuantities("flint_and_steel"));
+        assertEquals(3, SkillUtils.getRepairAndSalvageQuantities("bow"));
+        assertEquals(2, SkillUtils.getRepairAndSalvageQuantities("fishing_rod"));
+        // Unknown shape returns 0 so the caller falls back to the config value / floor of 1.
+        assertEquals(0, SkillUtils.getRepairAndSalvageQuantities("carrot_on_a_stick"));
+    }
 }

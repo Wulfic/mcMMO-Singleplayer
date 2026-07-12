@@ -22,7 +22,7 @@ import com.gmail.nossr50.util.Misc;
  *   <li>The Haste-<em>potion</em> fallback branch of {@code handleAbilitySpeedIncrease} — unreachable
  *       with the bundled {@code hidden.yml} ({@code Options.EnchantmentBuffs=true}); port a
  *       {@code PlatformPlayer} Haste-effect method only if that knob is ever exposed to users.</li>
- *   <li>{@code getRepairAndSalvageItem} / {@code getRepairAndSalvageQuantities} — gated on the
+ *   <li>{@code getRepairAndSalvageItem} (runtime crafted-material lookup) — gated on the
  *       {@code RepairConfig}/{@code SalvageConfig} tables and the vanilla recipe iterator (K8).</li>
  *   <li>{@code handleFoodSkills} — needs a food-level change event (K7) + {@code Player} food access.</li>
  *   <li>{@code calculateLengthDisplayValues} / {@code sendSkillMessage} / {@code isSkill} — display and
@@ -146,5 +146,70 @@ public final class SkillUtils {
                 maxDurability * maxDamageModifier);
 
         item.setDurability((int) Math.min(item.getDurability() + durabilityModifier, maxDurability));
+    }
+
+    /**
+     * The number of the crafting material a vanilla item consumes in its recipe — used as the default
+     * repair minimum-quantity and salvage maximum-quantity when the config does not name one.
+     *
+     * <p>Legacy {@code getRepairAndSalvageQuantities(Material, Material)} discovered this by iterating
+     * the server's live recipe list and counting matching ingredients. Those counts are fixed vanilla
+     * constants, so this port reproduces them from the item's registry path instead: it never touches
+     * the recipe manager, stays {@code net.minecraft}-free, and is fully unit-testable. Two families
+     * short-circuit the shape lookup exactly as upstream did: netherite gear (one bar = four scraps)
+     * and prismarine tools (a trident, 16 crystals).
+     *
+     * @param itemRegistryPath the item's vanilla registry path (e.g. {@code "diamond_pickaxe"})
+     * @return the standard recipe material count, or 0 when the item's shape is unknown (callers then
+     *     fall back to the config value / a floor of 1)
+     */
+    public static int getRepairAndSalvageQuantities(String itemRegistryPath) {
+        final String path = itemRegistryPath.toLowerCase(java.util.Locale.ROOT);
+
+        // One netherite bar is crafted from four netherite scraps, so all netherite gear salvages/
+        // repairs in units of four regardless of the tool/armor shape (upstream special-case).
+        if (path.startsWith("netherite_")) {
+            return 4;
+        }
+        // Tridents are repaired with prismarine crystals; upstream returns a flat 16 for prismarine
+        // tools (the trident is the only one).
+        if (path.equals("trident")) {
+            return 16;
+        }
+
+        // Standard tool/armor recipe ingredient counts (identical for repair and salvage).
+        if (path.endsWith("_sword")) {
+            return 2;
+        }
+        if (path.endsWith("_pickaxe") || path.endsWith("_axe")) {
+            return 3;
+        }
+        if (path.endsWith("_shovel")) {
+            return 1;
+        }
+        if (path.endsWith("_hoe")) {
+            return 2;
+        }
+        if (path.endsWith("_helmet")) {
+            return 5;
+        }
+        if (path.endsWith("_chestplate")) {
+            return 8;
+        }
+        if (path.endsWith("_leggings")) {
+            return 7;
+        }
+        if (path.endsWith("_boots")) {
+            return 4;
+        }
+
+        // Non-gear vanilla repairables whose material count isn't derivable from a shape suffix.
+        return switch (path) {
+            case "shears" -> 2;         // 2 iron ingots
+            case "flint_and_steel" -> 1; // 1 iron ingot
+            case "bow" -> 3;            // 3 string
+            case "fishing_rod" -> 2;    // 2 string
+            default -> 0;               // unknown shape: caller supplies the config value / floor of 1
+        };
     }
 }
