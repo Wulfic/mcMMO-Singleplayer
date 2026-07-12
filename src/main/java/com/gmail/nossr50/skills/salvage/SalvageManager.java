@@ -1,13 +1,17 @@
 package com.gmail.nossr50.skills.salvage;
 
+import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.skills.SkillUtils;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -138,5 +142,33 @@ public class SalvageManager extends SkillManager {
     public void actualizeLastAnvilUse() {
         // legacy Misc.TIME_CONVERSION_FACTOR (ms -> s); inlined (Misc not yet ported)
         lastClick = (int) (System.currentTimeMillis() / 1000L);
+    }
+
+    /**
+     * The double-click confirmation gate for using a salvage anvil (legacy {@code checkConfirmation}).
+     * See {@link com.gmail.nossr50.skills.repair.RepairManager#checkConfirmation(boolean)} — identical
+     * semantics against {@code Salvage.Confirm_Required}. Returns {@code true} when the caller may
+     * proceed with the salvage. MC-free: routing via the ported {@link NotificationManager}.
+     *
+     * @param actualize whether to record this click (and prompt) when it is the arming first click
+     * @return {@code true} if the salvage may proceed now, {@code false} if it was merely armed
+     */
+    public boolean checkConfirmation(boolean actualize) {
+        long lastUse = getLastAnvilUse();
+
+        if (!SkillUtils.cooldownExpired(lastUse, 3)
+                || !McMMOMod.getGeneralConfig().getSalvageConfirmRequired()) {
+            return true;
+        }
+
+        if (!actualize) {
+            return false;
+        }
+
+        actualizeLastAnvilUse();
+        NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                "Skills.ConfirmOrCancel", LocaleLoader.getString("Salvage.Pretty.Name"));
+
+        return false;
     }
 }

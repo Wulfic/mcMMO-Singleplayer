@@ -8,6 +8,9 @@ import com.gmail.nossr50.platform.Materials;
 import com.gmail.nossr50.skills.repair.RepairManager;
 import com.gmail.nossr50.skills.repair.repairables.Repairable;
 import com.gmail.nossr50.skills.repair.repairables.RepairableManager;
+import com.gmail.nossr50.skills.salvage.SalvageManager;
+import com.gmail.nossr50.skills.salvage.salvageables.Salvageable;
+import com.gmail.nossr50.skills.salvage.salvageables.SalvageableManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
@@ -29,30 +32,33 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 /**
- * The K7 anvil hook: performs mcMMO Repair (and, in a later slice, Salvage) when a player
- * right-clicks the configured anvil block while holding a repairable/salvageable item
- * (CONVERSION_TODO §B). Ports the XP + repair-action slice of legacy
- * {@code RepairManager#handleRepair} plus the {@code PlayerInteractListener} anvil dispatch.
+ * The K7 anvil hook: performs mcMMO Repair and Salvage when a player right-clicks the configured
+ * anvil block while holding a repairable/salvageable item (CONVERSION_TODO §B). Ports the XP +
+ * repair-action slice of legacy {@code RepairManager#handleRepair} / {@code SalvageManager#handleSalvage}
+ * plus the {@code PlayerInteractListener} anvil dispatch.
  *
  * <p>mcMMO's anvils are ordinary vanilla blocks (an <em>iron block</em> for Repair, a
  * <em>gold block</em> for Salvage, both configurable via {@code config.yml}), not the vanilla anvil
- * screen. A right-click with a damaged, repairable item in the main hand triggers a repair; the
- * click is consumed ({@link ActionResult#SUCCESS}) so the block is not (re)placed and no other
- * interaction runs.
+ * screen. A right-click with a damaged, repairable/salvageable item in the main hand triggers the
+ * action; the click is consumed ({@link ActionResult#SUCCESS}) so the block is not (re)placed and no
+ * other interaction runs. Repair earns Repair XP and restores durability; Salvage grants no XP (it
+ * recovers crafting materials).
  *
- * <p>The pure math stays MC-free on {@link RepairManager} (durability calculation, XP award,
- * confirmation gate); this listener owns the MC-typed half: block/anvil identity, the held
- * {@link ItemStack} reads (durability, unbreakable, stack size), the repair-material inventory scan
- * and consumption, the Super Repair RNG roll, and the final durability write + sounds.
+ * <p>The pure math stays MC-free on {@link RepairManager}/{@link SalvageManager} (durability/yield
+ * calculation, XP award, confirmation gate); this listener owns the MC-typed half: block/anvil
+ * identity, the held {@link ItemStack} reads (durability, unbreakable, stack size), the
+ * repair-material inventory scan/consumption, the Super Repair RNG roll, the durability write, the
+ * salvaged-item consumption + result spawn, and sounds.
  *
- * <p><b>Deferred</b> (breadcrumbs inline): the Salvage anvil path (next slice), Arcane Forging
- * enchant loss/downgrade (K3 enchant-transfer surface), the custom-model-data reject
+ * <p><b>Deferred</b> (breadcrumbs inline): Arcane Forging enchant loss/downgrade + Arcane Salvage
+ * enchant extraction (K3 enchant-transfer surface), the custom-model-data reject
  * ({@code CustomItemSupportConfig} unported), the enchanted-repair-material avoidance branch, the
- * repair-check event (K5, no singleplayer listeners), and the block-place "you placed an anvil"
- * notification (cosmetic, Pass 2).
+ * repair/salvage-check events (K5, no singleplayer listeners), and the block-place "you placed an
+ * anvil" notification (cosmetic, Pass 2).
  */
 public final class RepairSalvageListener {
 
@@ -74,7 +80,8 @@ public final class RepairSalvageListener {
             return ActionResult.PASS; // client-side callback fire.
         }
 
-        final Block clicked = world.getBlockState(hitResult.getBlockPos()).getBlock();
+        final BlockPos pos = hitResult.getBlockPos();
+        final Block clicked = world.getBlockState(pos).getBlock();
 
         final Block repairAnvil = anvilBlock(
                 McMMOMod.getGeneralConfig().getRepairAnvilMaterialName());
@@ -82,8 +89,12 @@ public final class RepairSalvageListener {
             return handleRepairInteraction(serverPlayer);
         }
 
-        // PORT (next slice): the Salvage anvil (getSalvageAnvilMaterialName(), default GOLD_BLOCK) →
-        // SalvageManager salvage action + material spawn.
+        final Block salvageAnvil = anvilBlock(
+                McMMOMod.getGeneralConfig().getSalvageAnvilMaterialName());
+        if (salvageAnvil != null && clicked == salvageAnvil) {
+            return handleSalvageInteraction(serverPlayer, world, pos);
+        }
+
         return ActionResult.PASS;
     }
 
@@ -198,6 +209,103 @@ public final class RepairSalvageListener {
 
         // Repair the item.
         item.setDamage(newDurability);
+    }
+
+    /**
+     * The salvage-anvil right-click flow: resolve the player + held item, gate on the item being
+     * salvageable and the double-click confirmation, then perform the salvage.
+     */
+    private static ActionResult handleSalvageInteraction(ServerPlayerEntity serverPlayer,
+            World world, BlockPos pos) {
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        if (mmoPlayer == null) {
+            return ActionResult.PASS;
+        }
+
+        final ItemStack item = serverPlayer.getMainHandStack();
+        if (item.isEmpty()) {
+            return ActionResult.PASS;
+        }
+
+        final SalvageableManager salvageableManager = McMMOMod.getSalvageableManager();
+        if (salvageableManager == null) {
+            return ActionResult.PASS; // configs not loaded (no world session).
+        }
+
+        final String itemPath = Registries.ITEM.getId(item.getItem()).getPath();
+        final Salvageable salvageable = salvageableManager.getSalvageable(itemPath);
+        if (salvageable == null) {
+            return ActionResult.PASS; // the held item is not salvageable.
+        }
+
+        final SalvageManager salvageManager = mmoPlayer.getSalvageManager();
+
+        if (salvageManager.checkConfirmation(true)) {
+            performSalvage(serverPlayer, mmoPlayer, salvageManager, item, itemPath, salvageable,
+                    world, pos);
+        }
+        return ActionResult.SUCCESS;
+    }
+
+    /**
+     * Port of legacy {@code handleSalvage}: the guards, salvage-yield math, item consumption, and
+     * result spawn. Salvage grants no XP (mcMMO's Salvage is a material-recovery skill); the reward is
+     * the returned crafting materials. The yield math ({@link SalvageManager#calculateSalvageableAmount}
+     * + {@link SalvageManager#getSalvageLimit}) is MC-free; this owns the item reads/spawn.
+     */
+    private static void performSalvage(ServerPlayerEntity serverPlayer, McMMOPlayer mmoPlayer,
+            SalvageManager salvageManager, ItemStack item, String itemPath, Salvageable salvageable,
+            World world, BlockPos pos) {
+        // Unbreakable items cannot be salvaged.
+        if (item.contains(DataComponentTypes.UNBREAKABLE)) {
+            NotificationManager.sendPlayerInformation(mmoPlayer,
+                    NotificationType.SUBSKILL_MESSAGE_FAILED, "Anvil.Unbreakable");
+            return;
+        }
+
+        // Level requirement.
+        final int minimumSalvageableLevel = salvageable.getMinimumLevel();
+        if (salvageManager.getSkillLevel() < minimumSalvageableLevel) {
+            NotificationManager.sendPlayerInformation(mmoPlayer,
+                    NotificationType.REQUIREMENTS_NOT_MET, "Salvage.Skills.Adept.Level",
+                    String.valueOf(minimumSalvageableLevel), StringUtils.getPrettyString(itemPath));
+            return;
+        }
+
+        // Yield scales with how damaged the item is, capped by Scrap Collector.
+        int potentialSalvageYield = SalvageManager.calculateSalvageableAmount(item.getDamage(),
+                salvageable.getMaximumDurability(), salvageable.getMaximumQuantity());
+        if (potentialSalvageYield <= 0) {
+            NotificationManager.sendPlayerInformation(mmoPlayer,
+                    NotificationType.SUBSKILL_MESSAGE_FAILED, "Salvage.Skills.TooDamaged");
+            return;
+        }
+        potentialSalvageYield = Math.min(potentialSalvageYield,
+                SalvageManager.getSalvageLimit(mmoPlayer.getPlayer()));
+
+        // The salvage material must resolve to a real vanilla item.
+        final Optional<Item> salvageItemOpt = Materials.item(salvageable.getSalvageMaterial());
+        if (salvageItemOpt.isEmpty()) {
+            return; // misconfigured salvageable — nothing to yield.
+        }
+
+        // PORT: Arcane Salvage enchant extraction (build an enchanted book from the item's enchants) —
+        // deferred with the enchant-transfer surface (K3); base material recovery lands here.
+
+        NotificationManager.sendPlayerInformationChatOnly(mmoPlayer, "Salvage.Skills.Lottery.Normal",
+                String.valueOf(potentialSalvageYield), StringUtils.getPrettyString(itemPath));
+
+        // Consume the salvaged item (salvage only ever operates on a single, non-stacking item).
+        serverPlayer.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+
+        // Pop the recovered materials out of the top of the anvil.
+        Block.dropStack(world, pos.up(), new ItemStack(salvageItemOpt.get(), potentialSalvageYield));
+
+        if (McMMOMod.getGeneralConfig().getSalvageAnvilUseSoundsEnabled()) {
+            SoundManager.sendSound(mmoPlayer.getPlayer(), SoundType.ITEM_BREAK);
+        }
+        NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                "Salvage.Skills.Success");
     }
 
     /**

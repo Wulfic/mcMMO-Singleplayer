@@ -1,6 +1,8 @@
 package com.gmail.nossr50.skills.salvage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -96,6 +98,18 @@ class SalvageManagerTest {
     void failedAllEnchantsWhenEveryExtractFailed() {
         assertEquals(true, salvageManager.failedAllEnchants(3, 3));
         assertEquals(false, salvageManager.failedAllEnchants(2, 3));
+    }
+
+    @Test
+    void checkConfirmationArmsOnFirstClickThenProceedsOnSecond() {
+        // Confirm_Required defaults true. A stale last-use is expired -> first click only arms
+        // (returns false); recording "now" makes the next click within the 3s window proceed.
+        salvageManager.setLastAnvilUse(0);
+        assertFalse(salvageManager.checkConfirmation(true), "first click merely arms the salvage");
+
+        salvageManager.setLastAnvilUse((int) (System.currentTimeMillis() / 1000L));
+        assertTrue(salvageManager.checkConfirmation(true),
+                "a second click within the window proceeds");
     }
 
     @Test
