@@ -17,6 +17,8 @@ import com.gmail.nossr50.fabric.listeners.CombatListener;
 import com.gmail.nossr50.fabric.listeners.SmeltingListener;
 import com.gmail.nossr50.fabric.listeners.SuperAbilityListener;
 import com.gmail.nossr50.platform.scheduler.TickScheduler;
+import com.gmail.nossr50.skills.repair.repairables.RepairableManager;
+import com.gmail.nossr50.skills.salvage.salvageables.SalvageableManager;
 import com.gmail.nossr50.runnables.SaveTimerTask;
 import com.gmail.nossr50.runnables.player.ClearRegisteredXPGainTask;
 import com.gmail.nossr50.util.experience.FormulaManager;
@@ -125,6 +127,8 @@ public class McMMOMod implements ModInitializer {
     private static volatile SoundConfig soundConfig;
     private static volatile AdvancedConfig advancedConfig;
     private static volatile TreasureConfig treasureConfig;
+    private static volatile RepairableManager repairableManager;
+    private static volatile SalvageableManager salvageableManager;
 
     @Override
     public void onInitialize() {
@@ -415,5 +419,31 @@ public class McMMOMod implements ModInitializer {
     /** Wires the loaded {@link TreasureConfig} at server start (PORT Phase 8). */
     public static void setTreasureConfig(@Nullable TreasureConfig config) {
         treasureConfig = config;
+    }
+
+    /**
+     * The registry of Repair-able items built from {@code repair.vanilla.yml}, or {@code null}
+     * outside a world session. Replaces legacy {@code mcMMO.getRepairableManager()}.
+     */
+    public static @Nullable RepairableManager getRepairableManager() {
+        return repairableManager;
+    }
+
+    /** Wires the {@link RepairableManager} at server start (K8). */
+    public static void setRepairableManager(@Nullable RepairableManager manager) {
+        repairableManager = manager;
+    }
+
+    /**
+     * The registry of Salvage-able items built from {@code salvage.vanilla.yml}, or {@code null}
+     * outside a world session. Replaces legacy {@code mcMMO.getSalvageableManager()}.
+     */
+    public static @Nullable SalvageableManager getSalvageableManager() {
+        return salvageableManager;
+    }
+
+    /** Wires the {@link SalvageableManager} at server start (K8). */
+    public static void setSalvageableManager(@Nullable SalvageableManager manager) {
+        salvageableManager = manager;
     }
 }
