@@ -1,13 +1,21 @@
 package com.gmail.nossr50.skills.repair;
 
 import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.datatypes.experience.XPGainReason;
+import com.gmail.nossr50.datatypes.experience.XPGainSource;
+import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.skills.SkillManager;
+import com.gmail.nossr50.skills.repair.repairables.Repairable;
 import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.skills.SkillUtils;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -102,6 +110,29 @@ public class RepairManager extends SkillManager {
     }
 
     /**
+     * Awards the Repair XP for a completed repair. Faithful to legacy {@code handleRepair}'s XP
+     * formula: the fraction of the item's max durability restored, scaled by the repairable's XP
+     * multiplier, the {@code Experience_Values.Repair.Base} factor, and the per-{@link
+     * com.gmail.nossr50.datatypes.skills.MaterialType} Repair XP factor. MC-free (operates on the
+     * MC-free {@link Repairable} + config getters), so the anvil listener rolls the RNG and mutates
+     * the live {@link net.minecraft.item.ItemStack}, then calls this for the deterministic award.
+     *
+     * @param startDurability the item's durability (damage) before the repair
+     * @param newDurability the item's durability (damage) after the repair
+     * @param repairable the definition of the item being repaired
+     */
+    public void awardRepairXp(short startDurability, short newDurability,
+            @NotNull Repairable repairable) {
+        final ExperienceConfig experienceConfig = McMMOMod.getExperienceConfig();
+        applyXpGain((float) (getPercentageRepaired(startDurability, newDurability,
+                        repairable.getMaximumDurability())
+                        * repairable.getXpMultiplier()
+                        * experienceConfig.getRepairXPBase()
+                        * experienceConfig.getRepairXP(repairable.getRepairMaterialType())),
+                XPGainReason.PVE, XPGainSource.SELF);
+    }
+
+    /**
      * @return the current Arcane Forging rank
      */
     public int getArcaneForgingRank() {
@@ -150,5 +181,37 @@ public class RepairManager extends SkillManager {
     public void actualizeLastAnvilUse() {
         // legacy Misc.TIME_CONVERSION_FACTOR (ms -> s); inlined (Misc not yet ported)
         lastClick = (int) (System.currentTimeMillis() / 1000L);
+    }
+
+    /**
+     * The double-click confirmation gate for using a repair anvil (legacy {@code checkConfirmation}).
+     * When {@code Repair.Confirm_Required} is on, the first anvil click within the 3-second window
+     * only <em>arms</em> the repair (records the click and prompts "confirm or cancel"); a second
+     * click within the window actually performs it. Returns {@code true} when the caller may proceed
+     * with the repair — i.e. the cooldown has not expired (this is the confirming second click) or
+     * confirmation is disabled entirely. MC-free: notification routing is handled by the ported
+     * {@link NotificationManager}.
+     *
+     * @param actualize whether to record this click (and prompt) when it is the arming first click;
+     *     pass {@code false} to peek at the confirmation state without mutating it
+     * @return {@code true} if the repair may proceed now, {@code false} if it was merely armed
+     */
+    public boolean checkConfirmation(boolean actualize) {
+        long lastUse = getLastAnvilUse();
+
+        if (!SkillUtils.cooldownExpired(lastUse, 3)
+                || !McMMOMod.getGeneralConfig().getRepairConfirmRequired()) {
+            return true;
+        }
+
+        if (!actualize) {
+            return false;
+        }
+
+        actualizeLastAnvilUse();
+        NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                "Skills.ConfirmOrCancel", LocaleLoader.getString("Repair.Pretty.Name"));
+
+        return false;
     }
 }

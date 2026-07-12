@@ -3,6 +3,7 @@ package com.gmail.nossr50.config.experience;
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.config.YamlConfiguration;
 import com.gmail.nossr50.datatypes.experience.FormulaType;
+import com.gmail.nossr50.datatypes.skills.MaterialType;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.util.text.StringUtils;
 import java.nio.file.Path;
@@ -330,6 +331,16 @@ public class ExperienceConfig extends ConfigLoader {
     /* Repair */
     public double getRepairXPBase() {
         return config.getDouble("Experience_Values.Repair.Base", 1000.0);
+    }
+
+    /**
+     * The per-{@link MaterialType} Repair XP factor (legacy {@code getRepairXP}). Keyed by the
+     * capitalized material-family name, e.g. {@code Experience_Values.Repair.Iron}. Multiplied by
+     * {@link #getRepairXPBase()} and the repairable's own multiplier when a repair is performed.
+     */
+    public double getRepairXP(MaterialType repairMaterialType) {
+        return config.getDouble("Experience_Values.Repair." + StringUtils.getCapitalized(
+                repairMaterialType.toString()));
     }
 
     /* Smelting — keyed by the smelted input material's config string (see ConfigStringUtils), e.g.

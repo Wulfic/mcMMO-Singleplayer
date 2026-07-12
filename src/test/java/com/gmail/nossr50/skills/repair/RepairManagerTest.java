@@ -1,16 +1,26 @@
 package com.gmail.nossr50.skills.repair;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
+import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.datatypes.experience.XPGainReason;
+import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.ItemType;
+import com.gmail.nossr50.datatypes.skills.MaterialType;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.skills.repair.repairables.Repairable;
+import com.gmail.nossr50.skills.repair.repairables.RepairableFactory;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -37,6 +47,7 @@ class RepairManagerTest {
         McMMOMod.setGeneralConfig(new GeneralConfig(dataFolder));
         McMMOMod.setRankConfig(new RankConfig(dataFolder));
         McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
+        McMMOMod.setExperienceConfig(new ExperienceConfig(dataFolder));
 
         PlatformPlayer platformPlayer = mock(PlatformPlayer.class);
         when(platformPlayer.getUniqueId())
@@ -54,6 +65,7 @@ class RepairManagerTest {
         McMMOMod.setGeneralConfig(null);
         McMMOMod.setRankConfig(null);
         McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setExperienceConfig(null);
         UserManager.clearAll();
     }
 
@@ -110,6 +122,32 @@ class RepairManagerTest {
         assertEquals(1, repairManager.getArcaneForgingRank());
         assertEquals(10.0, repairManager.getKeepEnchantChance(), 1.0e-9);
         assertEquals(75.0, repairManager.getDowngradeEnchantChance(), 1.0e-9);
+    }
+
+    @Test
+    void awardRepairXpUsesTheDurabilityFractionMaterialFactorAndBase() {
+        // Iron repairable: max durability 250, XP multiplier 1.0. experience.yml Repair.Base = 1000.0,
+        // Repair.Iron = 2.5. Fully repaired (250 -> 0 damage): 1.0 * 1.0 * 1000 * 2.5 = 2500 XP.
+        final Repairable ironPick = RepairableFactory.getRepairable("iron_pickaxe", "iron_ingot",
+                null, 0, (short) 250, ItemType.TOOL, MaterialType.IRON, 1.0, 2);
+
+        repairManager.awardRepairXp((short) 250, (short) 0, ironPick);
+
+        verify(mmoPlayer).beginXpGain(PrimarySkillType.REPAIR, 2500.0f, XPGainReason.PVE,
+                XPGainSource.SELF);
+    }
+
+    @Test
+    void checkConfirmationArmsOnFirstClickThenProceedsOnSecond() {
+        // Confirm_Required defaults true. A stale last-use (0) is expired, so the first click only
+        // arms + returns false; recording "now" as the last use makes the next click within the 3s
+        // window return true (proceed with the repair).
+        repairManager.setLastAnvilUse(0);
+        assertFalse(repairManager.checkConfirmation(true), "first click merely arms the repair");
+
+        repairManager.setLastAnvilUse((int) (System.currentTimeMillis() / 1000L));
+        assertTrue(repairManager.checkConfirmation(true),
+                "a second click within the window proceeds");
     }
 
     @Test

@@ -14,6 +14,7 @@ import com.gmail.nossr50.event.EventBus;
 import com.gmail.nossr50.event.SimpleEventBus;
 import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
 import com.gmail.nossr50.fabric.listeners.CombatListener;
+import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
 import com.gmail.nossr50.fabric.listeners.SmeltingListener;
 import com.gmail.nossr50.fabric.listeners.SuperAbilityListener;
 import com.gmail.nossr50.platform.scheduler.TickScheduler;
@@ -159,6 +160,8 @@ public class McMMOMod implements ModInitializer {
         SuperAbilityListener.register();
         // K7: Smelting XP — track furnace owners on right-click; the furnace-smelt mixin awards XP.
         SmeltingListener.register();
+        // K7: Repair (and later Salvage) — right-click the anvil block with a repairable item held.
+        RepairSalvageListener.register();
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
         // drive the legacy listeners, routing each to the ported skill managers. Preferred
