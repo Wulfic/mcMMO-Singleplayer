@@ -80,7 +80,12 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       `FishingBobberEntity#use` → `fabric/listeners/FishingListener` (replicates the legacy CAUGHT_FISH
       anti-exploit gate from the bobber position) → `FishingManager.awardFishingXP(materialConfigString)`
       (base XP from `Experience_Values.Fishing.<Material>`; treasure loot deferred to K8).
-      **Still TODO:** brewing-stand (Alchemy), anvil-use (Repair + Salvage).
+      **anvil-use (Repair + Salvage) DONE** — `fabric/listeners/RepairSalvageListener`
+      (`UseBlockCallback` on the configured iron-block/gold-block anvils) ports
+      `RepairManager#handleRepair` (durability restore + Repair XP + Super Repair) and
+      `SalvageManager#handleSalvage` (yield math + Scrap Collector + material spawn); the
+      double-click confirmation + XP formula are MC-free on the managers.
+      **Still TODO:** brewing-stand (Alchemy).
 - [~] **K8 — Port the deferred configs.** **`RepairConfig` + `SalvageConfig` DONE** (datatypes commit
       2ca12ae27; load/wire + Knot-harness tests commit 48c2480af): both parse the bundled
       `repair.vanilla.yml`/`salvage.vanilla.yml` against the live item registry + `ItemUtils`
@@ -108,10 +113,13 @@ XP-award body:
       the caught item's material from `experience.yml`; anti-exploit spam/scarcity gate replicated). ⚠️
       In-game verification pending. Still TODO (K8 `FishingTreasureConfig`): treasure/Magic Hunter/Shake
       loot + Treasure Hunter, and the exploit item-removal punishment.
-- [ ] **Repair** — via K7 (anvil) + K3 + K8 (`RepairConfig`): `handleRepair` → repair action + XP; Repair
-      Mastery / Super Repair; Arcane Forging enchant keep/downgrade.
-- [ ] **Salvage** — via K7 (anvil) + K3 + K8 (`SalvageConfig`): `handleSalvage` → salvage action + XP;
-      Arcane Salvage enchant extraction (`arcaneSalvageCheck` enchanted-book build).
+- [~] **Repair** — repair action + Repair XP + Repair Mastery + Super Repair **DONE** (via K7 anvil →
+      `RepairSalvageListener`; XP formula `RepairManager#awardRepairXp` MC-free vs real experience.yml).
+      ⚠️ In-game verification pending. Still TODO (K3 enchant transfer): Arcane Forging enchant
+      keep/downgrade (`addEnchants`), enchanted-repair-material avoidance branch.
+- [~] **Salvage** — salvage action + yield (Scrap Collector) + material recovery **DONE** (via K7 anvil;
+      no XP by design). ⚠️ In-game verification pending. Still TODO (K3 enchant transfer): Arcane
+      Salvage enchant extraction (`arcaneSalvageCheck` enchanted-book build).
 - [ ] **Alchemy** — via K7 (brewing-stand) + K8 (`PotionConfig`): brew-tracking (`AlchemyBrewTask`) →
       `handlePotionBrewSuccesses`/`getPotionXP`, Catalysis brew-speed, Concoctions ingredients.
 - [~] **Taming** — base tame XP **DONE** (via K7 entity-tame mixins → `awardTamingXP`/`getTamingXP`;
