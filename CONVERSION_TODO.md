@@ -85,15 +85,22 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       `RepairManager#handleRepair` (durability restore + Repair XP + Super Repair) and
       `SalvageManager#handleSalvage` (yield math + Scrap Collector + material spawn); the
       double-click confirmation + XP formula are MC-free on the managers.
-      **Still TODO:** brewing-stand (Alchemy).
+      **Still TODO:** brewing-stand (Alchemy) — the K8 `PotionConfig` datatypes are now done
+      (commit 68288f727), so this is the remaining MC-typed glue: a `BrewingStandBlockEntity` mixin +
+      `AlchemyBrewTask` (Catalysis-modified custom brew timer) + `AlchemyPotionBrewer` (ingredient→
+      child resolution, inventory mutation) + container-owner tracking. In-game-verification-blocked.
 - [~] **K8 — Port the deferred configs.** **`RepairConfig` + `SalvageConfig` DONE** (datatypes commit
       2ca12ae27; load/wire + Knot-harness tests commit 48c2480af): both parse the bundled
       `repair.vanilla.yml`/`salvage.vanilla.yml` against the live item registry + `ItemUtils`
       classification, load in `ConfigBootstrap` into `Simple{Repairable,Salvageable}Manager` (via
       `McMMOMod.get{Repairable,Salvageable}Manager`), 11 registry-backed tests. (Note: spears/maces are
-      real items here, so all 77/73 entries load — nothing skipped.) **Still TODO:** `PotionConfig`/
-      `PotionStage` (Alchemy ingredients/stages → vanilla `PotionContentsComponent`),
-      `FishingTreasureConfig` (loot/enchant rarity tables). These gate the XP + rewards for their skills.
+      real items here, so all 77/73 entries load — nothing skipped.) **`PotionConfig`/`PotionStage`/
+      `AlchemyPotion` DONE** (commit 68288f727): retargeted onto 1.21.11 `PotionContentsComponent` +
+      static `Registries.POTION`/`STATUS_EFFECT`; parses the bundled `potions.yml` (232/232 potions
+      load, boot-verified) into the Concoctions ingredient tiers + brewing tree; `ExperienceConfig.
+      getPotionXP(PotionStage)` added. Registry-backed `PotionConfigTest` ×9. Deferred (cosmetic):
+      custom potion name/lore/colour. **Still TODO:** `FishingTreasureConfig` (loot/enchant rarity
+      tables). These gate the XP + rewards for their skills.
 
 ---
 
@@ -120,8 +127,11 @@ XP-award body:
 - [~] **Salvage** — salvage action + yield (Scrap Collector) + material recovery **DONE** (via K7 anvil;
       no XP by design). ⚠️ In-game verification pending. Still TODO (K3 enchant transfer): Arcane
       Salvage enchant extraction (`arcaneSalvageCheck` enchanted-book build).
-- [ ] **Alchemy** — via K7 (brewing-stand) + K8 (`PotionConfig`): brew-tracking (`AlchemyBrewTask`) →
-      `handlePotionBrewSuccesses`/`getPotionXP`, Catalysis brew-speed, Concoctions ingredients.
+- [~] **Alchemy** — K8 config half **DONE** (commit 68288f727): `PotionConfig`/`PotionStage`/
+      `AlchemyPotion` on 1.21.11 data components, `getPotionXP`, `handlePotionBrewSuccesses` +
+      `getIngredients`/`getIngredientList` restored on the manager. Still TODO (K7 brewing-stand,
+      in-game-blocked): brew-tracking (`AlchemyBrewTask` Catalysis speed) + `AlchemyPotionBrewer`
+      (ingredient→child resolution + inventory mutation) → the actual XP-on-brew wiring.
 - [~] **Taming** — base tame XP **DONE** (via K7 entity-tame mixins → `awardTamingXP`/`getTamingXP`;
       per-entity XP from `experience.yml`, K5 cancellable event dropped). ⚠️ In-game verification
       pending. Still TODO: wolf-assisted combat XP (via K1) + the summon/damage-modifier bodies (§C/§D).
