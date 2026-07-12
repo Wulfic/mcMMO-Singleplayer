@@ -1,6 +1,7 @@
 package com.gmail.nossr50.fabric;
 
 import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.config.skills.alchemy.PotionConfig;
 import com.gmail.nossr50.config.treasure.TreasureConfig;
 import com.gmail.nossr50.config.CoreSkillsConfig;
 import com.gmail.nossr50.config.GeneralConfig;
@@ -128,6 +129,7 @@ public class McMMOMod implements ModInitializer {
     private static volatile SoundConfig soundConfig;
     private static volatile AdvancedConfig advancedConfig;
     private static volatile TreasureConfig treasureConfig;
+    private static volatile PotionConfig potionConfig;
     private static volatile RepairableManager repairableManager;
     private static volatile SalvageableManager salvageableManager;
 
@@ -422,6 +424,19 @@ public class McMMOMod implements ModInitializer {
     /** Wires the loaded {@link TreasureConfig} at server start (PORT Phase 8). */
     public static void setTreasureConfig(@Nullable TreasureConfig config) {
         treasureConfig = config;
+    }
+
+    /**
+     * The loaded {@link PotionConfig} (Alchemy brewing tree + Concoctions ingredient tiers), or
+     * {@code null} outside a world session. Replaces legacy {@code mcMMO.p.getPotionConfig()} (K8).
+     */
+    public static @Nullable PotionConfig getPotionConfig() {
+        return potionConfig;
+    }
+
+    /** Wires the loaded {@link PotionConfig} at server start (K8). */
+    public static void setPotionConfig(@Nullable PotionConfig config) {
+        potionConfig = config;
     }
 
     /**

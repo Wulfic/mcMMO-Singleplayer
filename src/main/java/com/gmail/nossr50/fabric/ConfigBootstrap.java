@@ -6,6 +6,7 @@ import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.config.SoundConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.config.skills.alchemy.PotionConfig;
 import com.gmail.nossr50.config.skills.repair.RepairConfig;
 import com.gmail.nossr50.config.skills.salvage.SalvageConfig;
 import com.gmail.nossr50.config.treasure.TreasureConfig;
@@ -73,6 +74,10 @@ public final class ConfigBootstrap {
         salvageableManager.registerSalvageables(salvageConfig.getLoadedSalvageables());
         McMMOMod.setSalvageableManager(salvageableManager);
 
+        // K8: Alchemy brewing tree. Also registry-dependent (potion types, effects, ingredient
+        // items resolve against the live registries), so it loads after MC bootstrap like the above.
+        McMMOMod.setPotionConfig(new PotionConfig(dataFolder));
+
         McMMOMod.LOGGER.info("mcMMO configs loaded from {}", dataFolder);
     }
 
@@ -88,6 +93,7 @@ public final class ConfigBootstrap {
         McMMOMod.setSoundConfig(null);
         McMMOMod.setAdvancedConfig(null);
         McMMOMod.setTreasureConfig(null);
+        McMMOMod.setPotionConfig(null);
         McMMOMod.setRepairableManager(null);
         McMMOMod.setSalvageableManager(null);
     }

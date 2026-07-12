@@ -5,6 +5,7 @@ import com.gmail.nossr50.config.YamlConfiguration;
 import com.gmail.nossr50.datatypes.experience.FormulaType;
 import com.gmail.nossr50.datatypes.skills.MaterialType;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
 import com.gmail.nossr50.util.text.StringUtils;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -353,6 +354,12 @@ public class ExperienceConfig extends ConfigLoader {
     /* Taming — keyed by config-entity string (see ConfigStringUtils). */
     public int getTamingXP(String entityConfigString) {
         return config.getInt("Experience_Values.Taming.Animal_Taming." + entityConfigString);
+    }
+
+    /* Alchemy — XP for brewing a potion of the given stage (1..5). Legacy default 10. */
+    public double getPotionXP(PotionStage stage) {
+        return config.getDouble(
+                "Experience_Values.Alchemy.Potion_Brewing.Stage_" + stage.toNumerical(), 10D);
     }
 
     /**
