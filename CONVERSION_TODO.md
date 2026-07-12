@@ -81,10 +81,14 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       anti-exploit gate from the bobber position) → `FishingManager.awardFishingXP(materialConfigString)`
       (base XP from `Experience_Values.Fishing.<Material>`; treasure loot deferred to K8).
       **Still TODO:** brewing-stand (Alchemy), anvil-use (Repair + Salvage).
-- [ ] **K8 — Port the deferred configs:** `RepairConfig`, `SalvageConfig` (repairable/salvageable item
-      tables — need K3 + `MaterialMapStore` classification, both now available), `PotionConfig`/`PotionStage`
-      (Alchemy ingredients/stages → vanilla `PotionContentsComponent`), `FishingTreasureConfig` (loot/enchant
-      rarity tables). These gate the XP + rewards for their skills.
+- [~] **K8 — Port the deferred configs.** **`RepairConfig` + `SalvageConfig` DONE** (datatypes commit
+      2ca12ae27; load/wire + Knot-harness tests commit 48c2480af): both parse the bundled
+      `repair.vanilla.yml`/`salvage.vanilla.yml` against the live item registry + `ItemUtils`
+      classification, load in `ConfigBootstrap` into `Simple{Repairable,Salvageable}Manager` (via
+      `McMMOMod.get{Repairable,Salvageable}Manager`), 11 registry-backed tests. (Note: spears/maces are
+      real items here, so all 77/73 entries load — nothing skipped.) **Still TODO:** `PotionConfig`/
+      `PotionStage` (Alchemy ingredients/stages → vanilla `PotionContentsComponent`),
+      `FishingTreasureConfig` (loot/enchant rarity tables). These gate the XP + rewards for their skills.
 
 ---
 
