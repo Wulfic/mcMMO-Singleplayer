@@ -6,8 +6,10 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.BlockDrops;
 import com.gmail.nossr50.platform.ItemSpecBuilder;
+import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.skills.BlockBreakXp;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
@@ -17,6 +19,7 @@ import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.skills.SkillUtils;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -35,7 +38,7 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Drives the gathering-skill block-break hooks (CONVERSION_TODO Phase 3): gathering XP for every
  * skill, plus the block-break side effects — Mining/Woodcutting/Herbalism bonus (double/triple)
- * drops, Excavation treasure, and the Tree Feller super ability. Replaces the XP + drop slice of the
+ * drops, Excavation treasure, and the Tree Feller / Giga Drill Breaker super abilities. Replaces the XP + drop slice of the
  * legacy {@code BlockListener#onBlockBreak} / {@code MiningManager#miningBlockCheck} /
  * {@code HerbalismManager#checkDoubleDropsOnBrokenPlants}. Remaining side effects (Herbalism Green
  * Thumb replant, super-ability tool damage) land as their inventory/scheduler seams follow this
@@ -82,6 +85,10 @@ public final class BlockBreakListener {
             awardHerbalismBonusDrops(mmoPlayer, serverWorld, pos, state, blockEntity, serverPlayer,
                     blockId);
             awardExcavationTreasures(mmoPlayer, serverWorld, pos, blockId);
+            // Giga Drill Breaker re-processes the block twice more (3× drops/XP) and wears the
+            // shovel. It stays inside the creative gate with the base treasure roll: creative breaks
+            // spawn no vanilla loot, so bonus treasure copies there would be a duplication bug.
+            maybeProcessGigaDrillBreaker(mmoPlayer, serverWorld, pos, state, serverPlayer, blockId);
         }
         // Tree Feller self-gates on the super-ability mode + an axe, so it can run in creative too
         // (matching legacy, which never creative-gated it); the starting block above is untouched —
@@ -104,6 +111,38 @@ public final class BlockBreakListener {
             return;
         }
         TreeFellerProcessor.process(world, pos, breaker, mmoPlayer);
+    }
+
+    /**
+     * Re-process an excavated block twice more and wear down the shovel when Giga Drill Breaker is
+     * active (legacy {@code ExcavationManager#gigaDrillBreaker}: two extra {@code excavationBlockCheck}
+     * calls + {@code SkillUtils.handleDurabilityChange}). The base excavation XP and one treasure roll
+     * already ran ({@link #awardBlockXp} / {@link #awardExcavationTreasures}); these two bonus rounds
+     * bring it to the classic 3× excavation drops and XP, then the ability's extra tool damage is
+     * applied to the shovel.
+     *
+     * <p>Gated exactly like legacy {@code BlockListener}'s excavation branch: the super-ability mode is
+     * on, the block gives Excavation XP ({@link BlockUtils#affectedByGigaDrillBreaker}), and a shovel is
+     * in hand. Called from inside the creative gate, so the bonus treasure spawns match the base path.
+     */
+    private static void maybeProcessGigaDrillBreaker(McMMOPlayer mmoPlayer, ServerWorld world,
+            BlockPos pos, BlockState state, ServerPlayerEntity breaker, String blockId) {
+        if (!mmoPlayer.getAbilityMode(SuperAbilityType.GIGA_DRILL_BREAKER)) {
+            return;
+        }
+        final ItemStack tool = breaker.getMainHandStack();
+        if (!BlockUtils.affectedByGigaDrillBreaker(state) || !ItemUtils.isShovel(tool)) {
+            return;
+        }
+        // Two bonus excavation checks (the base one already ran) → 3× total drops/XP. Each treasure
+        // roll is independent RNG, matching legacy's separate excavationBlockCheck calls.
+        for (int i = 0; i < 2; i++) {
+            awardBlockXp(mmoPlayer, blockId);
+            awardExcavationTreasures(mmoPlayer, world, pos, blockId);
+        }
+        // Giga Drill Breaker wears the shovel harder than a normal break (extra ability tool damage).
+        SkillUtils.handleDurabilityChange(new PlatformItem(tool),
+                McMMOMod.getGeneralConfig().getAbilityToolDamage());
     }
 
     private static void awardBlockXp(McMMOPlayer mmoPlayer, String blockId) {

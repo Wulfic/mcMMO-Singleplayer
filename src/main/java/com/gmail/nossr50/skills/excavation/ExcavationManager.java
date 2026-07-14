@@ -14,23 +14,17 @@ import java.util.List;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Excavation skill manager (Phase 10.4 port). The rank-driven Archaeology math and treasure-table
- * lookup survive; the block-break drop/spawn bodies are deferred until the item-spawn adapter lands.
+ * Excavation skill manager (Phase 10.4 port). Holds the MC-free excavation decisions: the
+ * treasure-table lookup ({@link #getTreasures(String)}), the rank-driven Archaeology rewards, and the
+ * treasure roll ({@link #rollTreasureRewards(String)} — legacy {@code excavationBlockCheck} +
+ * {@code processExcavationBonusesOnBlock}, minus the base block XP the block-break listener already
+ * awards). The MC-typed spawning of those treasures/orbs and the Giga Drill Breaker super ability
+ * (legacy {@code gigaDrillBreaker}: two extra treasure rolls + shovel durability) live in
+ * {@code BlockBreakListener}, which builds each {@link com.gmail.nossr50.datatypes.treasure.ItemSpec}
+ * into a live stack via {@code platform/ItemSpecBuilder}.
  *
- * <p><b>Dropped until the item-spawn / block adapters (PORT Phase 10):</b>
- * <ul>
- *   <li>{@code excavationBlockCheck} / {@code processExcavationBonusesOnBlock} — roll the treasures
- *       returned by {@link #getTreasures(String)} and spawn them + vanilla XP orbs via {@code
- *       Misc.spawnItem}/{@code spawnExperienceOrb}, then award block XP from {@code ExperienceConfig}.
- *       They need a live block + the {@link com.gmail.nossr50.datatypes.treasure.ItemSpec}→ItemStack
- *       builder;</li>
- *   <li>{@code gigaDrillBreaker} — double block-check + {@link
- *       com.gmail.nossr50.util.skills.SkillUtils#handleDurabilityChange} on the held tool (the
- *       durability path now exists; this body still needs the block-break integration);</li>
- *   <li>{@code printExcavationDebug} — chat-dumps a block's treasures (needs a live block).</li>
- * </ul>
- * All of these are pure downstream of the two things this port <i>does</i> deliver: the treasure
- * table ({@link #getTreasures(String)}) and the Archaeology rank rewards below.
+ * <p><b>Deferred:</b> {@code printExcavationDebug} (chat-dumps a block's treasures; needs a live
+ * block and has no singleplayer command surface yet).
  */
 public class ExcavationManager extends SkillManager {
     public ExcavationManager(McMMOPlayer mmoPlayer) {
