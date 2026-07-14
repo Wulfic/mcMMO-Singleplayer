@@ -68,7 +68,7 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       the boost off on disable — Efficiency is actually bumped in-game now. **Still deferred:** K5
       ability-activate event (no SP listeners). **Unblocks:** every super ability's mode flag (§D bodies
       still need their effect code). ⚠️ In-game verification pending (enchant mutation is MC-typed glue).
-- [~] **K7 — Subsystem vanilla hooks** (each is one Fabric event/Mixin; each unblocks one skill's XP):
+- [x] **K7 — Subsystem vanilla hooks** (each is one Fabric event/Mixin; each unblocks one skill's XP):
       **entity-tame (Taming) DONE** — two mixins (`TameableEntity#setTamedBy` for wolf/cat/parrot,
       `AbstractHorseEntity#bondWithPlayer` for horses/donkeys/mules/llamas/camels) funnel into
       `fabric/listeners/TamingListener` → `TamingManager.awardTamingXP(configString)`.
@@ -85,10 +85,16 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       `RepairManager#handleRepair` (durability restore + Repair XP + Super Repair) and
       `SalvageManager#handleSalvage` (yield math + Scrap Collector + material spawn); the
       double-click confirmation + XP formula are MC-free on the managers.
-      **Still TODO:** brewing-stand (Alchemy) — the K8 `PotionConfig` datatypes are now done
-      (commit 68288f727), so this is the remaining MC-typed glue: a `BrewingStandBlockEntity` mixin +
-      `AlchemyBrewTask` (Catalysis-modified custom brew timer) + `AlchemyPotionBrewer` (ingredient→
-      child resolution, inventory mutation) + container-owner tracking. In-game-verification-blocked.
+      **brewing-stand (Alchemy) DONE** — `fabric/mixin/BrewingStandBlockEntityMixin` HEAD-cancellable
+      injects into the block entity's private `canCraft` (force-recognise an mcMMO brew so vanilla
+      still runs the fuel/timer/GUI) and `craft` (replace with the mcMMO brew) statics; the ported
+      `skills/alchemy/AlchemyPotionBrewer` does ingredient→child resolution + inventory mutation +
+      per-stage XP over the vanilla `DefaultedList`, and `fabric/listeners/AlchemyListener` tracks the
+      brewing-stand owner (right-click `UseBlockCallback`, like the furnace map) for the XP award.
+      All K7 hooks are now wired. In-game verification pending (a real brew). **Deferred (breadcrumbs):**
+      Catalysis brew-speed (needs a brew-timer-rate mixin; `calculateBrewSpeed` is ported+tested) and
+      Concoctions ingredient-tier gating (recipe recognition is tier-permissive — `canCraft` has no
+      `BlockPos` to resolve the owner's tier without risking a never-completing brew loop).
 - [~] **K8 — Port the deferred configs.** **`RepairConfig` + `SalvageConfig` DONE** (datatypes commit
       2ca12ae27; load/wire + Knot-harness tests commit 48c2480af): both parse the bundled
       `repair.vanilla.yml`/`salvage.vanilla.yml` against the live item registry + `ItemUtils`
@@ -106,9 +112,12 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
 
 ## §B. XP-source completion — THE Pass-1 gate (every skill must earn XP)
 
-Currently wired: Mining / Woodcutting / Excavation / Herbalism (block-break) + weapon skills (on kill).
-The rest have ported numeric cores but **no event awards their XP**. Each needs its §A hook, then the
-XP-award body:
+**All 19 skills now have an XP source wired** (the Pass-1 §B gate is feature-complete; every entry
+below is `[x]`/`[~]` with only deferred refinements remaining). Block-break (Mining/Woodcutting/
+Excavation/Herbalism) + combat-on-kill (weapon skills) were always wired; the rest landed via their §A
+K7 hooks (Acrobatics fall/Dodge, Fishing catch, Repair/Salvage anvil, Taming, Smelting furnace, Alchemy
+brew). ⚠️ The K7 mixin/interaction hooks are MC-typed glue — **in-game (client) verification is still
+pending** for each; the boot-verify only proves the mixins apply. Per-skill status:
 
 - [x] **Acrobatics** — via K2: fall damage → Roll XP (gated by `canGainRollXP()`) + Roll/Graceful Roll
       damage negation **DONE**. Via K1 defender branch: **Dodge** damage reduction + XP **DONE** (per-mob
@@ -127,11 +136,11 @@ XP-award body:
 - [~] **Salvage** — salvage action + yield (Scrap Collector) + material recovery **DONE** (via K7 anvil;
       no XP by design). ⚠️ In-game verification pending. Still TODO (K3 enchant transfer): Arcane
       Salvage enchant extraction (`arcaneSalvageCheck` enchanted-book build).
-- [~] **Alchemy** — K8 config half **DONE** (commit 68288f727): `PotionConfig`/`PotionStage`/
-      `AlchemyPotion` on 1.21.11 data components, `getPotionXP`, `handlePotionBrewSuccesses` +
-      `getIngredients`/`getIngredientList` restored on the manager. Still TODO (K7 brewing-stand,
-      in-game-blocked): brew-tracking (`AlchemyBrewTask` Catalysis speed) + `AlchemyPotionBrewer`
-      (ingredient→child resolution + inventory mutation) → the actual XP-on-brew wiring.
+- [~] **Alchemy** — brew action + per-stage brew XP **DONE** (via K7 brewing-stand mixin →
+      `AlchemyPotionBrewer.finishBrewing`: transform bottles→child potions, consume ingredient, award
+      `handlePotionBrewSuccesses`; owner tracked by `AlchemyListener`). Custom (non-vanilla) mcMMO
+      potions now brew. ⚠️ In-game verification pending. Still TODO (deferred, breadcrumbed): Catalysis
+      brew-speed (brew-timer-rate mixin) + Concoctions ingredient-tier gating.
 - [~] **Taming** — base tame XP **DONE** (via K7 entity-tame mixins → `awardTamingXP`/`getTamingXP`;
       per-entity XP from `experience.yml`, K5 cancellable event dropped). ⚠️ In-game verification
       pending. Still TODO: wolf-assisted combat XP (via K1) + the summon/damage-modifier bodies (§C/§D).
