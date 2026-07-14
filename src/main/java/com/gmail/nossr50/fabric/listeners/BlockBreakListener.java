@@ -10,6 +10,7 @@ import com.gmail.nossr50.platform.BlockDrops;
 import com.gmail.nossr50.platform.ItemSpecBuilder;
 import com.gmail.nossr50.skills.BlockBreakXp;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
+import com.gmail.nossr50.skills.herbalism.HerbalismManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
 import com.gmail.nossr50.skills.woodcutting.TreeFellerProcessor;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
@@ -33,10 +34,12 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Drives the gathering-skill block-break hooks (CONVERSION_TODO Phase 3): gathering XP for every
- * skill, plus Mining's double/triple bonus drops. Replaces the XP + double-drop slice of the legacy
- * {@code BlockListener#onBlockBreak} / {@code MiningManager#miningBlockCheck}. Remaining side effects
- * (Woodcutting Harvest Lumber, Excavation treasure, super-ability tool damage) land as their
- * item-spawn/scheduler seams follow this same pattern.
+ * skill, plus the block-break side effects — Mining/Woodcutting/Herbalism bonus (double/triple)
+ * drops, Excavation treasure, and the Tree Feller super ability. Replaces the XP + drop slice of the
+ * legacy {@code BlockListener#onBlockBreak} / {@code MiningManager#miningBlockCheck} /
+ * {@code HerbalismManager#checkDoubleDropsOnBrokenPlants}. Remaining side effects (Herbalism Green
+ * Thumb replant, super-ability tool damage) land as their inventory/scheduler seams follow this
+ * same pattern.
  *
  * <p>Uses Fabric's {@link PlayerBlockBreakEvents#AFTER}, which fires only once the break actually
  * succeeded (server side), so we never award XP or drops for a cancelled or client-predicted break.
@@ -75,6 +78,8 @@ public final class BlockBreakListener {
             awardMiningBonusDrops(mmoPlayer, serverWorld, pos, state, blockEntity, serverPlayer,
                     blockId);
             awardWoodcuttingBonusDrops(mmoPlayer, serverWorld, pos, state, blockEntity, serverPlayer,
+                    blockId);
+            awardHerbalismBonusDrops(mmoPlayer, serverWorld, pos, state, blockEntity, serverPlayer,
                     blockId);
             awardExcavationTreasures(mmoPlayer, serverWorld, pos, blockId);
         }
@@ -135,6 +140,25 @@ public final class BlockBreakListener {
         // Harvest Lumber / Clean Cuts duplicate the felled log regardless of Silk Touch, so (unlike
         // Mining) there is no enchantment gate here — the config toggle + rank + RNG live in the roll.
         final int rounds = woodcutting.rollHarvestLumberBonusDropCount(blockId);
+        if (rounds > 0) {
+            BlockDrops.dropBonusLoot(world, pos, state, blockEntity, breaker,
+                    breaker.getMainHandStack(), rounds);
+        }
+    }
+
+    private static void awardHerbalismBonusDrops(McMMOPlayer mmoPlayer, ServerWorld world,
+            BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity,
+            ServerPlayerEntity breaker, String blockId) {
+        final HerbalismManager herbalism = mmoPlayer.getHerbalismManager();
+        if (herbalism == null) {
+            return;
+        }
+        // Herbalism double drops have no Silk Touch gate (plants don't drop via Silk Touch); the
+        // config toggle + rank live in the eligibility check, the Green-Terra triple in the roll.
+        if (!herbalism.isBonusDropsEligible(blockId)) {
+            return;
+        }
+        final int rounds = herbalism.rollBonusDropCount();
         if (rounds > 0) {
             BlockDrops.dropBonusLoot(world, pos, state, blockEntity, breaker,
                     breaker.getMainHandStack(), rounds);
