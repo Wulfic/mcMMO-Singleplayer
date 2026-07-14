@@ -83,11 +83,52 @@ class HerbalismManagerTest {
         assertFalse(herbalismManager.canDoubleDrop(), "no Double Drops rank yet");
     }
 
+    // --- Bonus-drop eligibility gate (deterministic; the RNG roll is verified in-game) ----------
+
     @Test
-    void rollDoubleDropIsFalseBeforeUnlockingDoubleDrops() {
-        atHerbalismLevel(0);
-        assertFalse(herbalismManager.rollDoubleDrop(),
-                "no Double Drops rank yet -> deterministically false, no RNG consumed");
+    void bonusDropsIneligibleBeforeDoubleDropsUnlock() {
+        atHerbalismLevel(0); // below the level-1 Double Drops unlock
+        assertFalse(herbalismManager.isBonusDropsEligible("minecraft:wheat"),
+                "double drops locked at level 0 -> not eligible even for a configured plant");
+    }
+
+    @Test
+    void bonusDropsEligibleForConfiguredPlantOnceDoubleDropsUnlock() {
+        atHerbalismLevel(1); // Double Drops unlocks at herbalism level 1.
+        // Wheat is listed true under Bonus_Drops.Herbalism in config.yml.
+        assertTrue(herbalismManager.isBonusDropsEligible("minecraft:wheat"),
+                "configured plant at unlock level -> eligible");
+    }
+
+    @Test
+    void bonusDropsIneligibleForUnconfiguredBlock() {
+        atHerbalismLevel(1);
+        // Stone is not under Bonus_Drops.Herbalism -> getDoubleDropsEnabled false.
+        assertFalse(herbalismManager.isBonusDropsEligible("minecraft:stone"),
+                "block absent from Bonus_Drops.Herbalism -> not eligible");
+    }
+
+    @Test
+    void bonusDropsIneligibleForLilyPadDespiteBeingConfigured() {
+        atHerbalismLevel(1);
+        // config.yml lists Lily_Pad: true, but GeneralConfig hard-disables it (Spigot exploit),
+        // so the eligibility gate must still veto it.
+        assertFalse(herbalismManager.isBonusDropsEligible("minecraft:lily_pad"),
+                "lily pad is vetoed despite being listed under Bonus_Drops.Herbalism");
+    }
+
+    @Test
+    void rollBonusDropCountTriplesWhileGreenTerraActive() {
+        // Force the RNG gate to succeed by driving the underlying probability to a certainty:
+        // HERBALISM_DOUBLE_DROPS at a maxed skill level yields the ceiling probability (always
+        // succeeds), so the roll is deterministic here.
+        atHerbalismLevel(10000);
+        when(mmoPlayer.getAbilityMode(SuperAbilityType.GREEN_TERRA)).thenReturn(true);
+        assertEquals(2, herbalismManager.rollBonusDropCount(),
+                "Green Terra active -> triple drops (2 extra copies)");
+        when(mmoPlayer.getAbilityMode(SuperAbilityType.GREEN_TERRA)).thenReturn(false);
+        assertEquals(1, herbalismManager.rollBonusDropCount(),
+                "no Green Terra -> double drops (1 extra copy)");
     }
 
     @Test

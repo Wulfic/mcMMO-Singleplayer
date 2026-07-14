@@ -46,9 +46,13 @@ import org.jetbrains.annotations.NotNull;
  *       {@code getBrokenHerbalismBlocks} / the chorus-tree and cactus multi-block traversal — needs
  *       live {@code Block.getRelative}, the (unported) block-tracker/{@code MaterialMapStore}, and
  *       the Phase 11 scheduler for delayed chorus XP;</li>
- *   <li>{@code checkDoubleDropsOnBrokenPlants} / {@code markForBonusDrops} — the eligibility+RNG gate
- *       ({@link #rollDoubleDrop()}) and the triple-drop ability check ({@link #isGreenTerraActive()})
- *       are ported; the live block iteration and {@code BlockUtils.markDropsAsBonus} call are not;</li>
+ *   <li>{@code checkDoubleDropsOnBrokenPlants} / {@code markForBonusDrops} — the single-block
+ *       double/triple-drop path is now <b>wired</b> via {@link #isBonusDropsEligible(String)} +
+ *       {@link #rollBonusDropCount()} (spawned by
+ *       {@link com.gmail.nossr50.fabric.listeners.BlockBreakListener}, same re-roll model as Mining);
+ *       still deferred are the multi-block traversal ({@code getBrokenHerbalismBlocks}, one break
+ *       event = one block here) and the ageable-maturity gate (see
+ *       {@link #isBonusDropsEligible(String)});</li>
  *   <li>{@code awardXPForPlantBlocks} — the tall-plant XP cap math is ported as
  *       {@link #applyTallPlantXpCap(int, int, String)}; the live block-tracker iteration is not;</li>
  *   <li>{@code awardXPForBlockSnapshots} (chorus-tree delayed XP) — needs the unported
@@ -124,13 +128,51 @@ public class HerbalismManager extends SkillManager {
     }
 
     /**
-     * Rolls Herbalism double drops, assuming {@link #canDoubleDrop()} eligibility. The caller (once
-     * live block iteration is wired) marks the block for bonus drops — triple if
-     * {@link #isGreenTerraActive()}, else double.
+     * Whether breaking a block is eligible for Herbalism bonus drops. Deterministic gate mirroring
+     * legacy {@code checkDoubleDropsOnBrokenPlants} + {@code BlockUtils.checkDoubleDrops}: the
+     * subskill must be permission-enabled, the material must be listed under
+     * {@code Bonus_Drops.Herbalism} in {@code config.yml}, and the double-drops rank must be
+     * unlocked. The actual RNG roll is {@link #rollBonusDropCount()}. Same convention as
+     * {@link com.gmail.nossr50.skills.mining.MiningManager#isBonusDropsEligible(String, boolean)};
+     * there is no Silk Touch gate here because Herbalism plants don't drop via Silk Touch.
+     *
+     * <p>PORT (deferred, needs the live-{@code Ageable} adapter): legacy additionally requires an
+     * ageable crop to be <i>mature</i> (or a bizarre ageable) before it double-drops — the maturity
+     * math is ported MC-free as {@link #isAgeableMature(String, int, int)} /
+     * {@link #isBizarreAgeable(String)}, but reading a block's live age generically is the same
+     * gap that defers the age-based XP path, so immature crops currently pass this gate (their
+     * age-appropriate loot is still what {@code BlockDrops} re-rolls). Reinstate the maturity check
+     * in the caller once age reads exist.
+     *
+     * @param blockRegistryId the broken block's vanilla registry id (namespaced or bare)
+     * @return whether a bonus-drop roll should be attempted for this block
      */
-    public boolean rollDoubleDrop() {
-        return canDoubleDrop() && ProbabilityUtil.isSkillRNGSuccessful(
-                SubSkillType.HERBALISM_DOUBLE_DROPS, mmoPlayer);
+    public boolean isBonusDropsEligible(@NotNull String blockRegistryId) {
+        if (!Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.HERBALISM_DOUBLE_DROPS)) {
+            return false;
+        }
+        final String materialConfigString =
+                ConfigStringUtils.getMaterialConfigString(blockRegistryId);
+        if (!McMMOMod.getGeneralConfig()
+                .getDoubleDropsEnabled(PrimarySkillType.HERBALISM, materialConfigString)) {
+            return false;
+        }
+        return canDoubleDrop();
+    }
+
+    /**
+     * Rolls the number of <i>extra</i> copies of the broken plant's drops to spawn (0 or 1, or 2
+     * while Green Terra is active), assuming {@link #isBonusDropsEligible(String)} already passed.
+     * Mirrors legacy {@code markForBonusDrops}: a successful double-drop roll yields one extra copy,
+     * or two ("triple drops") when the Green Terra super ability is active.
+     *
+     * @return the number of extra drop rounds to spawn (0 = the roll failed)
+     */
+    public int rollBonusDropCount() {
+        if (!ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HERBALISM_DOUBLE_DROPS, mmoPlayer)) {
+            return 0;
+        }
+        return isGreenTerraActive() ? 2 : 1;
     }
 
     /**
