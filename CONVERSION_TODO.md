@@ -176,8 +176,11 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
 
 - [ ] **Mining** — Blast Mining detonation (`canDetonate`/`remoteDetonation` TNT spawn + ray;
       `blastMiningDropProcessing` explosion drops). Super Breaker (via K6).
-- [ ] **Woodcutting** — Tree Feller (`processTree`/recursive block search + per-log drops + XP orbs +
-      Knock on Wood sapling filter + durability), Leaf Blower. (Harvest Lumber drops already wired.)
+- [~] **Woodcutting** — Tree Feller **DONE** (commit b275b10eb): MC-free `TreeFellerTraversal` (trunk/
+      branch recursion + threshold cutoff, unit-tested) + MC-typed `TreeFellerProcessor` (per-log drops +
+      Harvest Lumber bonus + XP orbs + Knock on Wood sapling filter + axe durability/Splinter gate +
+      reduced XP), triggered from `BlockBreakListener` on a log broken with an axe + TREE_FELLER active.
+      In-game verification of a live fell pending. Deferred: Leaf Blower, splinter self-damage, fizz sound.
 - [ ] **Herbalism** — double drops, Green Thumb replant (`processGrowingPlants` + `DelayedCropReplant`),
       Shroom Thumb, Green Terra (via K6), Hylian Luck (needs `TreasureConfig.hylianMap` + block Tag adapter).
 - [ ] **Excavation** — Giga Drill Breaker (via K6: double block-check + tool durability). Treasure drops
