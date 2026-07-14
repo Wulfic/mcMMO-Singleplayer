@@ -13,6 +13,7 @@ import com.gmail.nossr50.database.FlatFileProfileStore;
 import com.gmail.nossr50.database.ProfileStore;
 import com.gmail.nossr50.event.EventBus;
 import com.gmail.nossr50.event.SimpleEventBus;
+import com.gmail.nossr50.fabric.listeners.AlchemyListener;
 import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
 import com.gmail.nossr50.fabric.listeners.CombatListener;
 import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
@@ -164,6 +165,9 @@ public class McMMOMod implements ModInitializer {
         SmeltingListener.register();
         // K7: Repair (and later Salvage) — right-click the anvil block with a repairable item held.
         RepairSalvageListener.register();
+        // K7: Alchemy XP — track brewing-stand owners on right-click; the brewing-stand mixin drives
+        // the mcMMO brew (custom potions + stage XP) via the block entity's canCraft/craft statics.
+        AlchemyListener.register();
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
         // drive the legacy listeners, routing each to the ported skill managers. Preferred
@@ -219,9 +223,11 @@ public class McMMOMod implements ModInitializer {
             UserManager.saveAll();
             UserManager.clearAll();
             McMMOMod.setProfileStore(null);
-            // K7: drop the furnace-owner tracker so the next world session starts clean.
+            // K7: drop the furnace- and brewing-stand-owner trackers so the next session starts clean.
             SmeltingListener.clearOwners();
-            // PORT Phase 10: finish in-progress alchemy brews.
+            AlchemyListener.clearOwners();
+            // In-progress brews need no explicit flush: mcMMO reuses vanilla's brew timer (persisted
+            // in the block entity's NBT), so a half-done brew simply resumes on the next world load.
             ConfigBootstrap.unload();
         } catch (Exception e) {
             LOGGER.error("Error while disabling mcMMO for the server session", e);
