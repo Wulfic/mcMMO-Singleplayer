@@ -181,8 +181,13 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       Harvest Lumber bonus + XP orbs + Knock on Wood sapling filter + axe durability/Splinter gate +
       reduced XP), triggered from `BlockBreakListener` on a log broken with an axe + TREE_FELLER active.
       In-game verification of a live fell pending. Deferred: Leaf Blower, splinter self-damage, fizz sound.
-- [ ] **Herbalism** — double drops, Green Thumb replant (`processGrowingPlants` + `DelayedCropReplant`),
-      Shroom Thumb, Green Terra (via K6), Hylian Luck (needs `TreasureConfig.hylianMap` + block Tag adapter).
+- [~] **Herbalism** — **double/triple drops DONE**: single-block bonus drops wired in
+      `BlockBreakListener` (`HerbalismManager.isBonusDropsEligible`/`rollBonusDropCount` → `BlockDrops`
+      re-roll, same model as Mining/Woodcutting; Green Terra active ⇒ triple). Deferred: ageable-maturity
+      gate on the roll (same live-age-read gap as the XP path), multi-block traversal
+      (`getBrokenHerbalismBlocks`), Green Thumb replant (`processGrowingPlants` + `DelayedCropReplant`),
+      Shroom Thumb, Green Terra super-ability effect (via K6), Hylian Luck (needs
+      `TreasureConfig.hylianMap` + block Tag adapter).
 - [ ] **Excavation** — Giga Drill Breaker (via K6: double block-check + tool durability). Treasure drops
       already wired.
 - [ ] **All super abilities via K6:** Giga Drill Breaker, Super Breaker, Berserk, Serrated Strikes,
