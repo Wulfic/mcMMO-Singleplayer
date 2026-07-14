@@ -188,8 +188,12 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       (`getBrokenHerbalismBlocks`), Green Thumb replant (`processGrowingPlants` + `DelayedCropReplant`),
       Shroom Thumb, Green Terra super-ability effect (via K6), Hylian Luck (needs
       `TreasureConfig.hylianMap` + block Tag adapter).
-- [ ] **Excavation** — Giga Drill Breaker (via K6: double block-check + tool durability). Treasure drops
-      already wired.
+- [~] **Excavation** — Giga Drill Breaker **DONE** (commit c6215d163): `BlockBreakListener.
+      maybeProcessGigaDrillBreaker` ports legacy `ExcavationManager#gigaDrillBreaker` — GIGA_DRILL_BREAKER
+      active + `affectedByGigaDrillBreaker` block + shovel ⇒ two extra excavation checks (base XP +
+      independent treasure roll each = 3× drops/XP) + `SkillUtils.handleDurabilityChange` shovel wear;
+      runs inside the creative gate so bonus treasure never duplicates. Treasure drops already wired.
+      In-game verification of a live Giga Drill pending.
 - [ ] **All super abilities via K6:** Giga Drill Breaker, Super Breaker, Berserk, Serrated Strikes,
       Skull Splitter, Tree Feller, Green Terra, Blast Mining — verify activate → effect → disable → cooldown.
 
