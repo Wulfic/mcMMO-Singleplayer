@@ -4,13 +4,17 @@ import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.platform.BlockDrops;
 import com.gmail.nossr50.platform.ItemSpecBuilder;
 import com.gmail.nossr50.skills.BlockBreakXp;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
+import com.gmail.nossr50.skills.woodcutting.TreeFellerProcessor;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
+import com.gmail.nossr50.util.BlockUtils;
+import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.player.UserManager;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.minecraft.block.Block;
@@ -74,6 +78,27 @@ public final class BlockBreakListener {
                     blockId);
             awardExcavationTreasures(mmoPlayer, serverWorld, pos, blockId);
         }
+        // Tree Feller self-gates on the super-ability mode + an axe, so it can run in creative too
+        // (matching legacy, which never creative-gated it); the starting block above is untouched —
+        // this fells the rest of the tree around it.
+        maybeProcessTreeFeller(mmoPlayer, serverWorld, pos, state, serverPlayer);
+    }
+
+    /**
+     * Fell the surrounding tree when the player broke a log with Tree Feller active while holding an
+     * axe (legacy {@code BlockListener} Woodcutting branch → {@code canUseTreeFeller} →
+     * {@code processTreeFeller}). The heavy lifting — the recursive search, drops and durability —
+     * lives in {@link TreeFellerProcessor}; this only reproduces the trigger gate.
+     */
+    private static void maybeProcessTreeFeller(McMMOPlayer mmoPlayer, ServerWorld world, BlockPos pos,
+            BlockState state, ServerPlayerEntity breaker) {
+        if (!mmoPlayer.getAbilityMode(SuperAbilityType.TREE_FELLER)) {
+            return;
+        }
+        if (!BlockUtils.hasWoodcuttingXP(state) || !ItemUtils.isAxe(breaker.getMainHandStack())) {
+            return;
+        }
+        TreeFellerProcessor.process(world, pos, breaker, mmoPlayer);
     }
 
     private static void awardBlockXp(McMMOPlayer mmoPlayer, String blockId) {
