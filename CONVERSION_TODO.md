@@ -31,7 +31,13 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       exclusion). **Attacker melee branch wired:** `applyAttackerWeaponBonus` classifies the held item
       (`ItemUtils.isSword/isAxe/isUnarmed`) on a *direct* melee swing (`getSource()==attacker`, not
       Thorns/projectile) → adds the MC-free `MeleeDamageBonus` (Swords Stab / Axe Mastery / Unarmed
-      Steel Arm + Berserk, scaled by attack strength). Still TODO: projectile skills (Archery/Crossbows/
+      Steel Arm + Berserk, scaled by attack strength). **Re-entrancy guard added**:
+      `CombatUtils.isProcessingMcMMODamage()` (a ThreadLocal set across `safeDealDamage`) makes this
+      listener pass mcMMO's *own* damage straight through — without it a Serrated Strikes AoE, which
+      attributes its damage to the player, reads as a fresh swing and re-fires itself. Legacy needed
+      a ThreadLocal *and* a target metadata marker for this; one ThreadLocal covers both roles here
+      (our hook is a direct call made from inside `damage()`, not a Bukkit event handler).
+      Still TODO: projectile skills (Archery/Crossbows/
       Tridents ranged) via a projectile-launch Mixin, and the effect-only on-hit sub-skills (§C).
       ⚠️ TUNING §F: bonuses land POST-armor (bypass armor) — flag for the tuning pass.
 - [x] **K2 — Fall-damage hook.** DONE. `EntityDamageListener` detects `DamageTypeTags.IS_FALL` and drives
@@ -174,9 +180,20 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       verification pending. Dropped: `McMMOEntityDamageByRuptureEvent` (K5 plugin veto), the PvP arms
       (blocking defender / `Against_Players` config branch / defender notification — the target is
       never a player in SP), `MobHealthbarUtils` (cut in §1.5), bleed particles (no particle adapter —
-      same deferral as Dodge). See §F upstream bug #4. Deferred: Counter Attack, Serrated Strikes AoE.
-- [~] **Axes** — Axe Mastery on-hit damage **DONE**. Deferred: Armor Impact, Greater Impact, Critical
-      Strikes, Skull Splitter AoE (all need target-armor/entity inspection).
+      same deferral as Dodge). See §F upstream bug #4.
+      **Serrated Strikes (AoE) DONE** — see the shared `CombatUtils#applyAbilityAoE` note under Axes
+      below; `SwordsManager.serratedStrikesDamage(damage)` = `damage / DamageModifier(4.0)`, notably
+      *not* scaled by attack strength (legacy scales only the Axes one — asymmetry preserved and
+      pinned by test). Each AoE-struck entity also rolls Rupture, as legacy does. Deferred: Counter
+      Attack.
+- [~] **Axes** — Axe Mastery on-hit damage **DONE**. **Skull Splitter (AoE) DONE**:
+      `AxesManager.canUseSkullSplitter(PlatformLivingEntity)` (rank + ability-mode + live-target gate)
+      + `skullSplitterDamage(damage)` = `(damage / DamageModifier(2.0)) * attackStrength`, driven from
+      `EntityDamageListener` on an axe hit. Both super-ability AoEs share the new MC-typed
+      `util/skills/CombatUtils#applyAbilityAoE` (a faithful port: weapon tier = how many neighbours
+      you cleave, damage floored at 1, primary target never struck twice) + `safeDealDamage`.
+      ⚠️ In-game verification pending. Deferred: Armor Impact, Greater Impact, Critical Strikes (all
+      need target-armor inspection via `Axes.hasArmor`).
 - [~] **Unarmed** — Steel Arm Style + Berserk on-hit damage **DONE**. Berserk's *block* effects
       (insta-break + Block Cracker) **DONE** — see §D. Deferred: Disarm, Iron Grip, Arrow Deflect.
 - [ ] **Archery** — Daze, distance-based XP, arrow retrieval, Skill Shot damage (needs projectile hooks).
@@ -249,8 +266,10 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       independent treasure roll each = 3× drops/XP) + `SkillUtils.handleDurabilityChange` shovel wear;
       runs inside the creative gate so bonus treasure never duplicates. Treasure drops already wired.
       In-game verification of a live Giga Drill pending.
-- [ ] **All super abilities via K6:** Giga Drill Breaker, Super Breaker, Berserk, Serrated Strikes,
-      Skull Splitter, Tree Feller, Green Terra, Blast Mining — verify activate → effect → disable → cooldown.
+- [~] **All super abilities via K6:** every one of the eight now has its effect body ported — Giga
+      Drill Breaker, Super Breaker, Berserk, Serrated Strikes, Skull Splitter, Tree Feller, Green
+      Terra, Blast Mining. What remains is **in-game verification only**: activate → effect →
+      disable → cooldown, per ability. This is the §G criterion that no boot-verify can close.
 
 ---
 
@@ -332,6 +351,22 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       comment promising "If Rupture runs for 5 seconds without being reapplied, it explodes". Same
       class as `DebrisReduction`: a config knob that lies to the operator. Ported nothing; decide
       later whether to implement the explosion or strip the config + comment.
+- [ ] **Suspected dead config — Serrated Strikes `BleedTicks` (found while porting the AoE):** the
+      bundled `advanced.yml` ships `Skills.Swords.SerratedStrikes.BleedTicks: 5` with a comment
+      promising "how long the bleeding effect of SerratedStrikes lasts", but
+      `AdvancedConfig.getSerratedStrikesTicks()` reads a *different* key —
+      `Skills.Swords.SerratedStrikes.RuptureTicks` — so it always falls back to its hardcoded default
+      and the shipped knob is read by nothing. The getter's only caller is the config *validator*
+      (which duly validates the key that doesn't exist). Serrated Strikes' AoE rupture just uses the
+      normal Rupture duration. Ported faithfully (nothing reads it, so nothing to wire); decide later
+      whether to fix the key or strip it. Third of this family — see `DebrisReduction` and Rupture
+      `Explosion_Damage` below: a config knob that lies to the operator.
+- [ ] **Known deviation — AoE kills pay combat XP where legacy paid none:** legacy awards combat XP
+      *per hit* and its custom-damage marker excluded mcMMO-dealt damage, so Serrated Strikes /
+      Skull Splitter AoE damage earned nothing. This port awards combat XP *per kill*
+      (`CombatListener` on `AFTER_DEATH`, a deliberate Phase 3 simplification) and the AoE attributes
+      its damage to the player, so an entity finished off by the AoE pays full kill XP. Consistent
+      with the per-kill model and arguably what a player expects; flagged rather than patched.
 - [ ] **Known deviation (whole-listener, not Blast Mining specific):** legacy gates its entire
       interact handler on `player.getGameMode() != CREATIVE`; `SuperAbilityListener` has no such
       gate, so super-ability readying/activation (and now remote detonation) also work in creative.

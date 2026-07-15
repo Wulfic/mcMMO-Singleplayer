@@ -15,6 +15,7 @@ import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
@@ -149,5 +150,35 @@ class SwordsManagerTest {
 
         atSwordsLevel(1000); // rank 2 → 1.0 + 2 * 1.5 = 4.0
         assertEquals(4.0D, swordsManager.getStabDamage(), 1e-9, "rank 2 → 4.0");
+    }
+
+    /**
+     * Serrated Strikes' AoE damage is {@code damage / DamageModifier(4.0)}, and — unlike Skull
+     * Splitter's — is deliberately <em>not</em> scaled by attack strength, so a half-charged swing
+     * spreads the same fraction. Pinned here because that asymmetry looks like an omission.
+     */
+    @Test
+    void serratedStrikesDamageIsAQuarterAndIgnoresAttackStrength() {
+        when(mmoPlayer.getAttackStrength()).thenReturn(0.5F);
+        assertEquals(3.0D, swordsManager.serratedStrikesDamage(12.0D), 1e-9,
+                "damage / 4.0, regardless of attack strength");
+
+        when(mmoPlayer.getAttackStrength()).thenReturn(1.0F);
+        assertEquals(3.0D, swordsManager.serratedStrikesDamage(12.0D), 1e-9,
+                "a fully-charged swing spreads the same fraction");
+    }
+
+    @Test
+    void serratedStrikeGateNeedsUnlockAndActiveAbility() {
+        when(mmoPlayer.getAbilityMode(SuperAbilityType.SERRATED_STRIKES)).thenReturn(true);
+
+        atSwordsLevel(49); // one short of the RetroMode Rank_1 unlock
+        assertFalse(swordsManager.canUseSerratedStrike(), "locked below rank 1");
+
+        atSwordsLevel(50); // Serrated Strikes Rank_1
+        assertTrue(swordsManager.canUseSerratedStrike(), "unlocked + ability active → fires");
+
+        when(mmoPlayer.getAbilityMode(SuperAbilityType.SERRATED_STRIKES)).thenReturn(false);
+        assertFalse(swordsManager.canUseSerratedStrike(), "unlocked but ability not active");
     }
 }
