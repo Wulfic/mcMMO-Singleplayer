@@ -6,6 +6,7 @@ import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.DodgeResult;
 import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.RollResult;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.MetadataStore;
+import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.MeleeDamageBonus;
 import com.gmail.nossr50.skills.MeleeDamageBonus.MeleeWeapon;
 import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
@@ -37,9 +38,11 @@ import net.minecraft.sound.SoundCategory;
  * <p>Currently wired: <b>K2 — fall damage → Acrobatics Roll</b>, the defender half of <b>K1 — combat
  * damage → Acrobatics Dodge</b> (attacker resolved via {@link DamageSource#getAttacker()}), and the
  * attacker half of <b>K1 — melee weapon on-hit damage bonuses</b> (Swords Stab / Axe Mastery /
- * Unarmed Steel Arm + Berserk, composed MC-free in {@link MeleeDamageBonus}). The effect-only on-hit
- * sub-skills (Counter Attack, Armor Impact, Rupture DoT, Taming damage modifiers, projectile skills,
- * …) attach to this same entry point as their entity/metadata/DoT adapters land.
+ * Unarmed Steel Arm + Berserk, composed MC-free in {@link MeleeDamageBonus}), and the first on-hit
+ * <em>effect</em> sub-skill, <b>Swords Rupture</b> (bleed DoT — see
+ * {@link #maybeProcessRupture}). The remaining effect-only sub-skills (Counter Attack, Armor Impact,
+ * Taming damage modifiers, projectile skills, …) attach to this same entry point as their
+ * entity/metadata adapters land.
  */
 public final class EntityDamageListener {
 
@@ -154,7 +157,32 @@ public final class EntityDamageListener {
         // TUNING (CONVERSION_TODO §F): modifyAppliedDamage is POST-armor, so these bonuses bypass the
         // target's armor mitigation — a discrepancy vs legacy, which boosted the pre-armor damage.
         // Flagged for the tuning pass; the correct seam is a pre-armor hook once one exists.
-        return MeleeDamageBonus.applyBonus(mmoPlayer, weapon, amount);
+        final float boostedDamage = MeleeDamageBonus.applyBonus(mmoPlayer, weapon, amount);
+
+        if (weapon == MeleeWeapon.SWORD) {
+            maybeProcessRupture(mmoPlayer, target, boostedDamage);
+        }
+        return boostedDamage;
+    }
+
+    /**
+     * Swords Rupture: a sword hit that leaves the target alive may start a bleed. Mirrors legacy
+     * {@code CombatUtils#processSwordCombat}, which calls {@code processRupture} only once the
+     * boosted damage is settled and only when the target survives the hit — there is no point
+     * bleeding something this swing already kills, and legacy's Rupture can never land a killing
+     * blow anyway.
+     *
+     * <p>{@code modifyAppliedDamage} runs before vanilla writes the new health, so reading
+     * {@link LivingEntity#getHealth()} here gives the pre-hit health — the same value legacy's
+     * {@code target.getHealth() - event.getFinalDamage()} check saw.
+     */
+    private static void maybeProcessRupture(McMMOPlayer mmoPlayer, LivingEntity target,
+            float boostedDamage) {
+        if (target.getHealth() - boostedDamage <= 0) {
+            return; // the swing itself is lethal.
+        }
+        mmoPlayer.getSwordsManager().processRupture(new PlatformLivingEntity(target),
+                mmoPlayer.getAttackStrength());
     }
 
     /** Classify a held main-hand stack into the melee weapon whose bonus applies (legacy order). */

@@ -19,6 +19,7 @@ import com.gmail.nossr50.fabric.listeners.CombatListener;
 import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
 import com.gmail.nossr50.fabric.listeners.SmeltingListener;
 import com.gmail.nossr50.fabric.listeners.SuperAbilityListener;
+import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.scheduler.TickScheduler;
 import com.gmail.nossr50.skills.repair.repairables.RepairableManager;
 import com.gmail.nossr50.skills.salvage.salvageables.SalvageableManager;
@@ -226,6 +227,12 @@ public class McMMOMod implements ModInitializer {
             // K7: drop the furnace- and brewing-stand-owner trackers so the next session starts clean.
             SmeltingListener.clearOwners();
             AlchemyListener.clearOwners();
+            // Drop transient per-entity markers (Rupture bleeds, dodge-XP counters, tracked TNT).
+            // Bukkit dropped plugin metadata on disable; our side-table has no such lifecycle, and
+            // entity UUIDs persist to disk — so without this a marker outlives the session that
+            // owned it. The tasks those markers point at were just killed by cancelAll() above, and
+            // a leaked rupture marker would make its target permanently immune to Rupture.
+            MetadataStore.clearAll();
             // In-progress brews need no explicit flush: mcMMO reuses vanilla's brew timer (persisted
             // in the block entity's NBT), so a half-done brew simply resumes on the next world load.
             ConfigBootstrap.unload();

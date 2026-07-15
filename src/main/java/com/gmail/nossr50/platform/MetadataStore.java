@@ -65,11 +65,41 @@ public final class MetadataStore {
 
     /** Remove a single key from an entity. */
     public static void remove(@NotNull Entity entity, @NotNull String key) {
-        final Map<String, Object> data = ENTITY_DATA.get(entity.getUuid());
+        remove(entity.getUuid(), key);
+    }
+
+    /*
+     * UUID-keyed overloads. The store is a UUID side-table already, so these are the same operations
+     * without the Minecraft type. They exist for ported code that holds a
+     * {@link PlatformLivingEntity} rather than a raw entity and must stay free of net.minecraft
+     * imports to remain unit-testable outside the Knot harness (e.g. {@code RuptureTask}).
+     */
+
+    /** Set a transient flag/value on an entity, addressed by {@link UUID}. */
+    public static void set(@NotNull UUID entityId, @NotNull String key, @NotNull Object value) {
+        ENTITY_DATA.computeIfAbsent(entityId, k -> new ConcurrentHashMap<>()).put(key, value);
+    }
+
+    public static boolean has(@NotNull UUID entityId, @NotNull String key) {
+        final Map<String, Object> data = ENTITY_DATA.get(entityId);
+        return data != null && data.containsKey(key);
+    }
+
+    /** Typed value for an entity id, or {@code null} if unset or of the wrong type. */
+    public static <T> @Nullable T get(@NotNull UUID entityId, @NotNull String key,
+            @NotNull Class<T> type) {
+        final Map<String, Object> data = ENTITY_DATA.get(entityId);
+        final Object value = data == null ? null : data.get(key);
+        return type.isInstance(value) ? type.cast(value) : null;
+    }
+
+    /** Remove a single key from an entity, addressed by {@link UUID}. */
+    public static void remove(@NotNull UUID entityId, @NotNull String key) {
+        final Map<String, Object> data = ENTITY_DATA.get(entityId);
         if (data != null) {
             data.remove(key);
             if (data.isEmpty()) {
-                ENTITY_DATA.remove(entity.getUuid());
+                ENTITY_DATA.remove(entityId);
             }
         }
     }

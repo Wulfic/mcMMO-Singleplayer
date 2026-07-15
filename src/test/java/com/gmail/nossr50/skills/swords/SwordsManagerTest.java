@@ -2,8 +2,12 @@ package com.gmail.nossr50.skills.swords;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
@@ -12,7 +16,10 @@ import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.MetadataStore;
+import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.runnables.skills.RuptureTask;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -55,10 +62,76 @@ class SwordsManagerTest {
         McMMOMod.setRankConfig(null);
         McMMOMod.setAdvancedConfig(null);
         UserManager.clearAll();
+        // Rupture parks tasks on the store and schedules them; drop both so cases stay independent.
+        MetadataStore.clearAll();
+        McMMOMod.getScheduler().cancelAll();
     }
 
     private void atSwordsLevel(int level) {
         when(mmoPlayer.getSkillLevel(PrimarySkillType.SWORDS)).thenReturn(level);
+    }
+
+    /**
+     * Rupture's odds are {@code Chance_To_Apply_On_Hit.Rank_N * attackStrengthScale}, so an
+     * exaggerated scale drives the probability past 100% and makes the roll deterministic
+     * ({@code Probability.isSuccessfulRoll} is {@code value >= nextDouble(1.0)}). Rank 1 is 15%.
+     */
+    private static final double ALWAYS_RUPTURES = 10.0D;
+
+    private PlatformLivingEntity mockTarget(UUID id) {
+        final PlatformLivingEntity target = mock(PlatformLivingEntity.class);
+        when(target.getUniqueId()).thenReturn(id);
+        return target;
+    }
+
+    private static RuptureTask activeRuptureOn(UUID id) {
+        return MetadataStore.get(id, RuptureTask.RUPTURE_KEY, RuptureTask.class);
+    }
+
+    @Test
+    void ruptureLockedBeforeRankOne() {
+        atSwordsLevel(0); // RetroMode skillranks.yml puts Rupture Rank_1 at level 1
+        final UUID targetId = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+
+        assertFalse(swordsManager.canUseRupture(), "level 0 → Rupture locked");
+        swordsManager.processRupture(mockTarget(targetId), ALWAYS_RUPTURES);
+
+        assertNull(activeRuptureOn(targetId), "a locked Rupture must not start a bleed");
+    }
+
+    @Test
+    void ruptureMarksTheTargetOnASuccessfulRoll() {
+        atSwordsLevel(1); // rank 1
+        final UUID targetId = UUID.fromString("00000000-0000-0000-0000-0000000000c2");
+
+        swordsManager.processRupture(mockTarget(targetId), ALWAYS_RUPTURES);
+
+        assertNotNull(activeRuptureOn(targetId), "a successful roll parks a bleed on the target");
+    }
+
+    @Test
+    void ruptureNeverAppliesOnAZeroStrengthHit() {
+        atSwordsLevel(1);
+        final UUID targetId = UUID.fromString("00000000-0000-0000-0000-0000000000c3");
+
+        // A swing with no attack-cooldown charge scales the odds to 0%.
+        swordsManager.processRupture(mockTarget(targetId), 0.0D);
+
+        assertNull(activeRuptureOn(targetId), "a 0% roll must not start a bleed");
+    }
+
+    @Test
+    void ruptureRefreshesAnExistingBleedInsteadOfStacking() {
+        atSwordsLevel(1);
+        final UUID targetId = UUID.fromString("00000000-0000-0000-0000-0000000000c4");
+        final RuptureTask existing = mock(RuptureTask.class);
+        MetadataStore.set(targetId, RuptureTask.RUPTURE_KEY, existing);
+
+        swordsManager.processRupture(mockTarget(targetId), ALWAYS_RUPTURES);
+
+        verify(existing).refreshRupture();
+        assertSame(existing, activeRuptureOn(targetId),
+                "an already-bleeding target keeps its original task rather than stacking a second");
     }
 
     @Test
