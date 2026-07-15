@@ -16,6 +16,7 @@ import com.gmail.nossr50.event.SimpleEventBus;
 import com.gmail.nossr50.fabric.listeners.AlchemyListener;
 import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
 import com.gmail.nossr50.fabric.listeners.CombatListener;
+import com.gmail.nossr50.fabric.listeners.EntityDamageListener;
 import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
 import com.gmail.nossr50.fabric.listeners.SmeltingListener;
 import com.gmail.nossr50.fabric.listeners.SuperAbilityListener;
@@ -169,6 +170,10 @@ public class McMMOMod implements ModInitializer {
         // K7: Alchemy XP — track brewing-stand owners on right-click; the brewing-stand mixin drives
         // the mcMMO brew (custom potions + stage XP) via the block entity's canCraft/craft statics.
         AlchemyListener.register();
+        // K1: the cancel-only half of the damage hook — Unarmed's Arrow Deflect vetoes an incoming
+        // arrow outright. The rest of that listener rides the modifyAppliedDamage mixin, which can
+        // reduce damage but not cancel it.
+        EntityDamageListener.register();
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
         // drive the legacy listeners, routing each to the ported skill managers. Preferred

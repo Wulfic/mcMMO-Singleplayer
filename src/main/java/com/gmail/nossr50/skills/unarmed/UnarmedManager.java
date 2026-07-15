@@ -6,15 +6,15 @@ import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
 
 /**
- * Unarmed skill manager (Phase 10.3 port). Only the pure damage-math sub-skills and their unlock
- * gates survive; every combat-effect body that mutates a Bukkit entity, block, or inventory is
- * dropped until the combat/entity + metadata adapters land.
+ * Unarmed skill manager. <b>Complete</b>: every Unarmed sub-skill that can fire in singleplayer now
+ * has a live decision core.
  *
  * <p>Kept (config + rank arithmetic, server-free and provable):
  * <ul>
@@ -25,16 +25,28 @@ import com.gmail.nossr50.util.skills.RankUtils;
  *   <li>{@link #canUseBlockCracker()} / {@link #rollBlockCracker()} — the Block Cracker gates. Legacy's
  *       {@code blockCrackerCheck} also mutated the block; that half is split out into the MC-free
  *       {@link Unarmed#blockCrackerConversionTarget} table plus the listener's live block swap;</li>
+ *   <li>{@link #canDeflect()} / {@link #rollArrowDeflect()} — the Arrow Deflect gates. The cancel of
+ *       the incoming hit and the notification live in {@code fabric.listeners.EntityDamageListener};</li>
  *   <li>the activation/unlock gates.</li>
  * </ul>
  *
- * <p>Dropped until the combat phase (each needs a Bukkit surface with no adapter yet):
+ * <p><b>Deliberately not ported — Disarm and Iron Grip are unreachable in singleplayer</b> (the same
+ * honest collapse as {@code CombatUtils#shouldBeAffected}'s player arm, and the reason
+ * {@code safeDealDamage}'s no-attacker overload was left out: porting an unreachable branch is how
+ * the §F dead-code bugs are made):
  * <ul>
- *   <li>{@code disarmCheck} / {@code canDisarm} / {@code hasIronGrip} — read the defender's held
- *       {@code ItemStack}, spawn a dropped {@code Item}, tag it with entity metadata, fire the
- *       disarm event, and push notifications;</li>
- *   <li>{@code deflectCheck} / {@code canDeflect} — inspect the held item (ItemUtils) and notify.</li>
+ *   <li>{@code canDisarm(LivingEntity target)} requires {@code target instanceof Player}, and its
+ *       only caller ({@code CombatUtils#processUnarmedCombat}) passes the entity the player just
+ *       <em>swung at</em>. The attacker is the only player here, and nothing melees itself, so the
+ *       gate is never true ⇒ {@code disarmCheck} is dead. With it go
+ *       {@code ItemSpawnReason.UNARMED_DISARMED_ITEM}, {@code METADATA_KEY_DISARMED_ITEM} and the
+ *       {@code Disarm.AntiTheft} config, which exist only to serve it.</li>
+ *   <li>{@code hasIronGrip(Player defender)} is called from exactly one place — inside
+ *       {@code disarmCheck} — and defends a player against <em>being</em> disarmed. Only an mcMMO
+ *       player disarms anyone; mobs never do. Dead for the same reason.</li>
  * </ul>
+ * Both remain listed in {@code SubSkillType} and in the skill's command output, exactly as the
+ * dropped PvP arms elsewhere do — they simply never fire.
  */
 public class UnarmedManager extends SkillManager {
     public static final double BERSERK_DMG_MODIFIER = 1.5;
@@ -57,6 +69,39 @@ public class UnarmedManager extends SkillManager {
 
     public boolean canUseBerserk() {
         return mmoPlayer.getAbilityMode(SuperAbilityType.BERSERK);
+    }
+
+    /**
+     * Arrow Deflect: whether the player is in a position to swat an incoming arrow away — unlocked,
+     * enabled, and bare-handed. Ports legacy {@code UnarmedManager#canDeflect}, whose held-item read
+     * becomes {@link PlatformPlayer#isUnarmed()} so the whole gate stays MC-free.
+     *
+     * <p>Legacy's {@code projectile instanceof Arrow} half stays on the caller
+     * ({@code fabric.listeners.EntityDamageListener}), which is where the MC types are — the same
+     * split Counter Attack's {@code instanceof LivingEntity} half uses.
+     */
+    public boolean canDeflect() {
+        if (!RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.UNARMED_ARROW_DEFLECT)) {
+            return false;
+        }
+
+        return getPlayer().isUnarmed()
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.UNARMED_ARROW_DEFLECT);
+    }
+
+    /**
+     * Arrow Deflect: roll for the deflection landing. Ports the RNG half of legacy
+     * {@code UnarmedManager#deflectCheck}; the caller owns the two MC-typed halves legacy did inline
+     * — cancelling the hit and notifying the player.
+     *
+     * <p>Not scaled by attack strength: legacy passes no multiplier here, and rightly so — deflecting
+     * an arrow is a reaction, not a swing of the player's own, so there is no cooldown charge to
+     * scale by. (Same reasoning as Counter Attack, which is likewise unscaled.)
+     *
+     * @return {@code true} if the incoming arrow should be deflected
+     */
+    public boolean rollArrowDeflect() {
+        return ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.UNARMED_ARROW_DEFLECT, mmoPlayer);
     }
 
     public boolean canUseBlockCracker() {

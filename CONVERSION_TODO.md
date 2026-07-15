@@ -162,10 +162,10 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
 ## §C. Combat on-hit sub-skills (need K1)
 
 Port each on-hit body onto the K1 damage hook (+ K5 for ability events, `MetadataStore` already
-exists for per-entity tracking). **Swords and Axes are complete**; the melee skills' remaining gaps
-are Unarmed's Disarm / Iron Grip / Arrow Deflect and Taming's damage modifiers. The projectile skills
-(Archery / Crossbows / Tridents) still need a projectile-launch hook before any of their bodies can
-land.
+exists for per-entity tracking). **Swords, Axes and Unarmed are complete — every melee weapon skill
+is now fully ported**; the only remaining melee gap is Taming's damage modifiers. The projectile
+skills (Archery / Crossbows / Tridents) still need a projectile-launch hook before any of their
+bodies can land.
 
 - [~] **Swords** — Stab on-hit damage **DONE** (via K1 attacker branch, `MeleeDamageBonus`).
       **Rupture (bleed DoT) DONE** — the first §C on-hit *effect* body: `SwordsManager.processRupture(
@@ -237,8 +237,34 @@ land.
       after the whole chain, which is equivalent (the AoE neither reads nor writes the damage total
       and never touches the primary target — only the player's chat-notification order differs).
       See §F upstream bugs #6 and #7.
-- [~] **Unarmed** — Steel Arm Style + Berserk on-hit damage **DONE**. Berserk's *block* effects
-      (insta-break + Block Cracker) **DONE** — see §D. Deferred: Disarm, Iron Grip, Arrow Deflect.
+- [x] **Unarmed** — **COMPLETE**: every Unarmed sub-skill that can fire in singleplayer is live.
+      Steel Arm Style + Berserk on-hit damage **DONE**. Berserk's *block* effects (insta-break +
+      Block Cracker) **DONE** — see §D. **Arrow Deflect DONE**: `UnarmedManager.canDeflect()` (rank
+      + `Permissions` + bare-handed via the new `PlatformPlayer.isUnarmed()` adapter, which wraps
+      `ItemUtils.isUnarmed(mainHandStack)` — the adapter-over-split call `MiningManager.canDetonate`
+      established) + `rollArrowDeflect()`, driven from the new
+      `EntityDamageListener.onAllowDamage`. ⚠️ **This is the first mcMMO damage branch that rides
+      Fabric's `ServerLivingEntityEvents.ALLOW_DAMAGE` instead of the `modifyAppliedDamage` mixin**
+      — deflect must *cancel* the hit, and that veto is the faithful analogue of legacy's
+      `event.setCancelled(true)`: it fires before knockback, i-frames and the hurt sound, and
+      vanilla bounces the arrow off when `damage()` returns false. Returning `0` from the mixin seam
+      would have zeroed the damage but still knocked the player back, burnt their i-frames and
+      consumed the arrow. It also lands ahead of Dodge, as legacy's does. Legacy's
+      `projectile instanceof Arrow` half stays on the listener as `instanceof ArrowEntity` —
+      verified equivalent: `SpectralArrowEntity`/`TridentEntity` are *siblings* under
+      `PersistentProjectileEntity`, exactly as Bukkit's `SpectralArrow`/`Trident` implement
+      `AbstractArrow` rather than `Arrow`, so neither was ever deflectable.
+      **Disarm + Iron Grip deliberately NOT ported — both are unreachable in singleplayer** (an
+      honest collapse, not a deferral; the same call made for `CombatUtils#shouldBeAffected`'s
+      player arm and `safeDealDamage`'s no-attacker overload). `canDisarm(target)` requires
+      `target instanceof Player` and its only caller passes the entity the player just *swung at*;
+      the attacker is the only player here and nothing melees itself, so `disarmCheck` is dead —
+      and `hasIronGrip` is called from exactly one place, inside `disarmCheck`. Only an mcMMO player
+      disarms anyone, so nothing can ever disarm the singleplayer player either. Dropped with them:
+      `ItemSpawnReason.UNARMED_DISARMED_ITEM`, `METADATA_KEY_DISARMED_ITEM` and the
+      `Disarm.AntiTheft` config, which exist only to serve `disarmCheck`. Both sub-skills remain in
+      `SubSkillType` and the skill's command output, exactly as the dropped PvP arms elsewhere do.
+      ⚠️ In-game verification pending.
 - [ ] **Archery** — Daze, distance-based XP, arrow retrieval, Skill Shot damage (needs projectile hooks).
 - [ ] **Maces** — Cripple effect (needs potion/entity adapter), on-hit bonuses.
 - [ ] **Tridents** — throw handling + on-hit (needs projectile adapter).

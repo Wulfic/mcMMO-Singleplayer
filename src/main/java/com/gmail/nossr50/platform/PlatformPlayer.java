@@ -259,6 +259,21 @@ public final class PlatformPlayer {
     }
 
     /**
+     * Whether the main-hand stack counts as "unarmed" for the Unarmed skill (Bukkit
+     * {@code ItemUtils.isUnarmed(player.getInventory().getItemInMainHand())}) — an empty hand, or
+     * any non-tool item when the {@code Unarmed_Items_As_Unarmed} config is on.
+     *
+     * <p>Lives here rather than being split onto the caller because the caller
+     * ({@code UnarmedManager#canDeflect}) holds no {@link ItemStack} of its own — the same reason
+     * {@code MiningManager#canDetonate} kept its held-item half via {@link #isHoldingItem}. That
+     * keeps the whole gate MC-free and mockable. (A platform adapter calling an mcMMO util is the
+     * established shape — see {@link #isHoldingTool} and {@link #isLookingAtTree}.)
+     */
+    public boolean isUnarmed() {
+        return ItemUtils.isUnarmed(handle.getMainHandStack());
+    }
+
+    /**
      * Whether the player is currently looking at a tree block within reach (Bukkit
      * {@code BlockUtils.isPartOfTree(player.getTargetBlock(null, 100))}). Used by the shared-axe
      * "tool ready" messaging ({@code McMMOPlayer#processAxeToolMessages}) to decide whether a raised
