@@ -22,9 +22,6 @@ import org.jetbrains.annotations.NotNull;
  * <p><b>Deferred until the block-break / held-item / item-spawn / scheduler adapters
  * (PORT Phase 10/11):</b>
  * <ul>
- *   <li>{@code canUseLeafBlower} / {@code canUseTreeFeller} — the rank/ability half is trivial but
- *       both hinge on {@code ItemUtils.isAxe(heldItem)}, which needs the held-{@code ItemStack}
- *       adapter;</li>
  *   <li>{@code processWoodcuttingBlockXP} — awards {@link #getExperienceFromLog(String)} for a single
  *       broken log (needs a live block + the block-tracker eligibility adapter);</li>
  *   <li>{@code processBonusDropCheck} / {@code spawnHarvestLumberBonusDrops} — roll
@@ -61,6 +58,19 @@ public class WoodcuttingManager extends SkillManager {
      */
     public int getTreeFellerThreshold() {
         return treeFellerThreshold;
+    }
+
+    /**
+     * Whether the player may use Leaf Blower — the sub-skill that lets an axe insta-break the non-wood
+     * parts of a tree (leaves, mushroom caps, warts) instead of chewing through them.
+     *
+     * <p>Ports legacy {@code canUseLeafBlower(ItemStack)} minus its {@code ItemUtils.isAxe(heldItem)}
+     * half: the held-item classification is MC-typed, so it stays on the caller
+     * ({@code SuperAbilityListener}), matching how {@code UnarmedManager#canUseBlockCracker} splits.
+     */
+    public boolean canUseLeafBlower() {
+        return Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.WOODCUTTING_LEAF_BLOWER)
+                && RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.WOODCUTTING_LEAF_BLOWER);
     }
 
     /**
