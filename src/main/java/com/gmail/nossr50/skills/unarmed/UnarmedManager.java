@@ -22,6 +22,9 @@ import com.gmail.nossr50.util.skills.RankUtils;
  *       attack-cooldown charge (see {@link McMMOPlayer#getAttackStrength()});</li>
  *   <li>{@link #getSteelArmStyleDamage()} / {@link #calculateSteelArmStyleDamage()} — the Steel Arm
  *       Style rank bonus, with the config override path;</li>
+ *   <li>{@link #canUseBlockCracker()} / {@link #rollBlockCracker()} — the Block Cracker gates. Legacy's
+ *       {@code blockCrackerCheck} also mutated the block; that half is split out into the MC-free
+ *       {@link Unarmed#blockCrackerConversionTarget} table plus the listener's live block swap;</li>
  *   <li>the activation/unlock gates.</li>
  * </ul>
  *
@@ -30,8 +33,7 @@ import com.gmail.nossr50.util.skills.RankUtils;
  *   <li>{@code disarmCheck} / {@code canDisarm} / {@code hasIronGrip} — read the defender's held
  *       {@code ItemStack}, spawn a dropped {@code Item}, tag it with entity metadata, fire the
  *       disarm event, and push notifications;</li>
- *   <li>{@code deflectCheck} / {@code canDeflect} — inspect the held item (ItemUtils) and notify;</li>
- *   <li>{@code blockCrackerCheck} / {@code canUseBlockCracker} — mutate {@code Block} material.</li>
+ *   <li>{@code deflectCheck} / {@code canDeflect} — inspect the held item (ItemUtils) and notify.</li>
  * </ul>
  */
 public class UnarmedManager extends SkillManager {
@@ -55,6 +57,30 @@ public class UnarmedManager extends SkillManager {
 
     public boolean canUseBerserk() {
         return mmoPlayer.getAbilityMode(SuperAbilityType.BERSERK);
+    }
+
+    public boolean canUseBlockCracker() {
+        if (!RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.UNARMED_BLOCK_CRACKER)) {
+            return false;
+        }
+
+        return Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.UNARMED_BLOCK_CRACKER);
+    }
+
+    /**
+     * Whether this Berserk strike cracks the block it hit — the config + RNG half of legacy
+     * {@code blockCrackerCheck}. The "what does it crack into" half is the MC-free table in
+     * {@link Unarmed#blockCrackerConversionTarget}, and the live block swap belongs to the caller.
+     *
+     * @return {@code true} if the struck block should be converted to its cracked variant
+     */
+    public boolean rollBlockCracker() {
+        if (!McMMOMod.getGeneralConfig().isBlockCrackerAllowed()) {
+            return false;
+        }
+
+        return ProbabilityUtil.isNonRNGSkillActivationSuccessful(SubSkillType.UNARMED_BLOCK_CRACKER,
+                mmoPlayer);
     }
 
     /**

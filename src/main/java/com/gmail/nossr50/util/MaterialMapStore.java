@@ -987,7 +987,14 @@ public class MaterialMapStore {
     private void fillBlockCrackerWhiteList() {
         blockCrackerWhiteList.add("stone_bricks");
         blockCrackerWhiteList.add("infested_stone_bricks");
-
+        // Upstream bug: the four below are handled by the Block Cracker conversion switch (see
+        // Unarmed#blockCrackerConversionTarget) but were never whitelisted here, and the whitelist
+        // gates the call — so upstream could only ever crack the two stone-brick variants and those
+        // switch arms were dead. Same class of bug as the stale grass_path in fillMossyWhiteList.
+        blockCrackerWhiteList.add("deepslate_bricks");
+        blockCrackerWhiteList.add("deepslate_tiles");
+        blockCrackerWhiteList.add("polished_blackstone_bricks");
+        blockCrackerWhiteList.add("nether_bricks");
     }
 
     private void fillHerbalismAbilityBlackList() {

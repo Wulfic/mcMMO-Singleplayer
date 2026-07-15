@@ -205,9 +205,10 @@ public enum SuperAbilityType {
     // checks collapse to op-level/config/always-allow (Phase 6); the Bukkit Player + Permissions
     // dependency is re-added against the platform/ player adapter when abilities port.
 
-    // PORT Phase 10: blockCheck(Block) — dropped here. Needs BlockUtils + the material map
-    // store, which land with the Mining/Excavation/Herbalism/Woodcutting skills against the
-    // platform/ block adapter.
+    // PORT: blockCheck(Block) stays off this enum for good — it would drag Minecraft types into an
+    // otherwise MC-free datatype. Its BERSERK branch now lives as BlockUtils#affectedByBerserk; its
+    // other branches were each only a sibling BlockUtils check (affectedByGigaDrillBreaker /
+    // canMakeMossy / affectedBySuperBreaker / hasWoodcuttingXP) called directly at their call site.
 
     /**
      * Grabs the associated SubSkillType definition for this SuperAbilityType
