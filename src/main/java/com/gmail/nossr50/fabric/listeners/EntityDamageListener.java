@@ -13,6 +13,7 @@ import com.gmail.nossr50.skills.MeleeDamageBonus.MeleeWeapon;
 import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
+import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
@@ -20,6 +21,7 @@ import com.gmail.nossr50.util.skills.CombatUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import java.util.UUID;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LightningEntity;
 import net.minecraft.entity.LivingEntity;
@@ -27,6 +29,7 @@ import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.projectile.ArrowEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.tag.DamageTypeTags;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -49,12 +52,71 @@ import net.minecraft.sound.SoundCategory;
  * side again — <b>Swords Counter Attack</b> (see {@link #maybeProcessCounterAttack}). The Axes
  * target-inspecting sub-skills (<b>Armor Impact</b> / <b>Greater Impact</b> / <b>Critical
  * Strikes</b>) ride the attacker branch inside {@link MeleeDamageBonus}, since they feed the same
- * damage total. The remaining effect-only sub-skills (Disarm, Taming damage modifiers, projectile
- * skills, …) attach to this same entry point as their entity/metadata adapters land.
+ * damage total. The remaining effect-only sub-skills (Taming damage modifiers, projectile skills, …)
+ * attach to this same entry point as their entity/metadata adapters land.
+ *
+ * <p>One branch does <em>not</em> ride the mixin: Unarmed's <b>Arrow Deflect</b> ({@link
+ * #onAllowDamage}) has to cancel the hit outright, so it rides Fabric's cancel-only
+ * {@code ServerLivingEntityEvents.ALLOW_DAMAGE} veto — hence this class has a {@link #register()}
+ * as well as a mixin entry point.
  */
 public final class EntityDamageListener {
 
     private EntityDamageListener() {
+    }
+
+    /**
+     * Subscribe the one branch of this listener that needs to <em>veto</em> a hit outright rather
+     * than reduce it: Unarmed's Arrow Deflect (see {@link #onAllowDamage}). Everything else here is
+     * driven by the {@code modifyAppliedDamage} mixin, which cannot cancel.
+     */
+    public static void register() {
+        ServerLivingEntityEvents.ALLOW_DAMAGE.register(EntityDamageListener::onAllowDamage);
+    }
+
+    /**
+     * Unarmed Arrow Deflect: a bare-handed player may swat an incoming arrow out of the air. Ports
+     * legacy {@code EntityListener#onEntityDamageByEntity}'s deflect arm plus
+     * {@code UnarmedManager#deflectCheck}.
+     *
+     * <p>This is the one mcMMO damage branch that <b>cancels</b> instead of reducing, so it rides
+     * Fabric's cancel-only {@code ALLOW_DAMAGE} veto rather than the {@code modifyAppliedDamage}
+     * seam the rest of this class uses. That is not a workaround but the faithful seam: legacy
+     * called {@code event.setCancelled(true)}, and like Bukkit's cancel this fires before knockback,
+     * i-frames and the hurt sound. Returning {@code 0} from {@code modifyAppliedDamage} would zero
+     * the damage but still knock the player back, burn their invulnerability window and consume the
+     * arrow — a deflected arrow instead bounces off, which is vanilla's own behaviour when
+     * {@code damage()} returns false.
+     *
+     * <p>It also lands earlier than Dodge, matching legacy: the deflect arm sits in the damage
+     * handler ahead of {@code processCombatAttack}, so a deflected arrow is never also dodged.
+     *
+     * @return {@code false} to cancel the hit (the arrow was deflected), {@code true} to allow it
+     */
+    private static boolean onAllowDamage(LivingEntity entity, DamageSource source, float amount) {
+        if (!(entity instanceof ServerPlayerEntity serverPlayer)) {
+            return true; // legacy's `defender instanceof Player` — deflect is a player-only defence.
+        }
+        // Legacy checks the *direct* damager (`event.getDamager()`) for `instanceof Arrow`, which in
+        // Bukkit is specifically a regular/tipped arrow — its sibling types (SpectralArrow, Trident)
+        // implement AbstractArrow, not Arrow, so they were never deflectable. ArrowEntity draws that
+        // same line here: its siblings extend PersistentProjectileEntity alongside it, not from it.
+        if (!(source.getSource() instanceof ArrowEntity)) {
+            return true;
+        }
+
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        if (mmoPlayer == null) {
+            return true; // data not loaded (e.g. mid-join).
+        }
+        final UnarmedManager unarmed = mmoPlayer.getUnarmedManager();
+        if (unarmed == null || !unarmed.canDeflect() || !unarmed.rollArrowDeflect()) {
+            return true;
+        }
+
+        NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                "Combat.ArrowDeflect");
+        return false;
     }
 
     /**

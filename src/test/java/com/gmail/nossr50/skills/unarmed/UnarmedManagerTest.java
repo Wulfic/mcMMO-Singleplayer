@@ -1,6 +1,8 @@
 package com.gmail.nossr50.skills.unarmed;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -85,5 +87,35 @@ class UnarmedManagerTest {
 
         atUnarmedLevel(150); // rank 3 → 0.5 + 3/2 = 2.0
         assertEquals(2.0D, unarmedManager.getSteelArmStyleDamage(), 1e-9, "rank 3 → 2.0");
+    }
+
+    /**
+     * Arrow Deflect unlocks at Unarmed 200 in RetroMode ({@code skillranks.yml} ArrowDeflect
+     * Rank_1), and legacy checks the rank before ever looking at the held item.
+     */
+    @Test
+    void arrowDeflectGateNeedsUnlock() {
+        when(platformPlayer.isUnarmed()).thenReturn(true);
+
+        atUnarmedLevel(199); // one short of the RetroMode Rank_1 unlock
+        assertFalse(unarmedManager.canDeflect(), "locked below rank 1");
+
+        atUnarmedLevel(200); // ArrowDeflect Rank_1
+        assertTrue(unarmedManager.canDeflect(), "level 200 + bare-handed → Arrow Deflect available");
+    }
+
+    /**
+     * You cannot swat an arrow away with a weapon in your hand: legacy gates {@code canDeflect} on
+     * {@code ItemUtils.isUnarmed(mainHand)}, which this port reads through the platform adapter.
+     */
+    @Test
+    void arrowDeflectGateNeedsAnEmptyHand() {
+        atUnarmedLevel(1000); // well past the unlock, so only the held item can decide this
+
+        when(platformPlayer.isUnarmed()).thenReturn(false);
+        assertFalse(unarmedManager.canDeflect(), "holding a tool → nothing to deflect with");
+
+        when(platformPlayer.isUnarmed()).thenReturn(true);
+        assertTrue(unarmedManager.canDeflect(), "bare-handed → deflect available");
     }
 }
