@@ -2,6 +2,7 @@ package com.gmail.nossr50.skills.woodcutting;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -94,6 +95,16 @@ class WoodcuttingManagerTest {
     void treeFellerXpGainsZeroForNonLogs() {
         assertEquals(0, WoodcuttingManager.processTreeFellerXPGains("Stone", 0),
                 "0-XP blocks stay 0 regardless of reduction");
+    }
+
+    @Test
+    void leafBlowerLocksUntilItsRankOneLevel() {
+        // skillranks.yml: LeafBlower Rank_1 = 150 in RetroMode (the default mode).
+        atWoodcuttingLevel(149);
+        assertFalse(woodcuttingManager.canUseLeafBlower(), "one level short of Leaf Blower rank 1");
+
+        atWoodcuttingLevel(150);
+        assertTrue(woodcuttingManager.canUseLeafBlower(), "Leaf Blower unlocks at rank 1");
     }
 
     @Test

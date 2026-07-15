@@ -71,8 +71,7 @@ import net.minecraft.world.World;
  * already excluded — it could never detonate anything.
  *
  * <p><b>Deferred (as their bodies land):</b> the Herbalism Green Thumb / Shroom Thumb / berry-bush
- * right-click paths and Woodcutting's Leaf Blower insta-break — both need skill bodies that are
- * still stubbed.
+ * right-click paths, which need skill bodies that are still stubbed.
  */
 public final class SuperAbilityListener {
 
@@ -190,7 +189,7 @@ public final class SuperAbilityListener {
                 // The strike that activates Berserk also insta-breaks, exactly as legacy.
                 if (mmoPlayer.getAbilityMode(SuperAbilityType.BERSERK)
                         && BlockUtils.affectedByBerserk(state)) {
-                    instaBroke = instaBreak(mmoPlayer, serverPlayer, pos, state);
+                    instaBroke = berserkInstaBreak(mmoPlayer, serverPlayer, pos, state);
                 }
             }
         }
@@ -227,31 +226,48 @@ public final class SuperAbilityListener {
                     && BlockUtils.affectedByBlockCracker(state)) {
                 processBlockCracker(mmoPlayer, world, pos, state);
             } else if (!instaBroke && BlockUtils.affectedByBerserk(state)) {
-                instaBroke = instaBreak(mmoPlayer, serverPlayer, pos, state);
+                instaBroke = berserkInstaBreak(mmoPlayer, serverPlayer, pos, state);
+            }
+        } else if (mmoPlayer.getWoodcuttingManager().canUseLeafBlower() && ItemUtils.isAxe(held)
+                && BlockUtils.isNonWoodPartOfTree(state)) {
+            // Leaf Blower: an axe pops the non-wood parts of a tree (leaves, mushroom caps, warts)
+            // outright rather than chewing through them. Unlike the two branches above this is a
+            // plain sub-skill, not a super ability — no ability mode is consulted, only the rank.
+            instaBroke = instaBreak(serverPlayer, pos);
+            if (instaBroke) {
+                SoundManager.sendSound(mmoPlayer.getPlayer(), SoundType.POP);
             }
         }
-        // PORT: legacy's third branch is Woodcutting's Leaf Blower (insta-break the non-wood parts of
-        // a tree). It lands with the Leaf Blower body, which is still deferred (§D Woodcutting).
         return instaBroke;
     }
 
     /**
-     * Berserk's insta-break: while Berserk is active, a bare-fisted strike on a block it affects
-     * (dirt/gravel/sand, snow, glass) destroys it outright instead of mining it down. Ports legacy's
-     * {@code event.setInstaBreak(true)}, which handed the break back to vanilla as a normal player
-     * break — so this uses {@code tryBreakBlock} rather than {@code World#breakBlock}, keeping the
-     * drops, the block-break event, and therefore mcMMO's own XP/treasure processing
-     * ({@code BlockBreakListener}) intact, exactly as the real {@code BlockBreakEvent} did upstream.
+     * Destroy a block on the player's behalf — the port of legacy's {@code event.setInstaBreak(true)},
+     * which handed the break back to vanilla as a normal player break. Hence {@code tryBreakBlock}
+     * rather than {@code World#breakBlock}: it keeps the drops, the block-break event, and therefore
+     * mcMMO's own XP/treasure processing ({@code BlockBreakListener}) intact, exactly as the real
+     * {@code BlockBreakEvent} did upstream.
      *
      * @return whether the block was actually broken
      */
-    private static boolean instaBreak(McMMOPlayer mmoPlayer, ServerPlayerEntity serverPlayer,
-            BlockPos pos, BlockState state) {
+    private static boolean instaBreak(ServerPlayerEntity serverPlayer, BlockPos pos) {
         // PORT (K5): legacy gated this on EventUtils.simulateBlockBreak(block, player) — a fake
         // BlockBreakEvent asking other plugins whether the break was allowed. No plugins exist in
         // singleplayer, so the check collapses to "always allowed"; tryBreakBlock still enforces
         // vanilla's own rules (adventure mode, protected spawn) and reports the outcome.
-        if (!serverPlayer.interactionManager.tryBreakBlock(pos)) {
+        return serverPlayer.interactionManager.tryBreakBlock(pos);
+    }
+
+    /**
+     * Berserk's insta-break: while Berserk is active, a bare-fisted strike on a block it affects
+     * (dirt/gravel/sand, snow, glass) destroys it outright instead of mining it down. Berserk is the
+     * one insta-break that picks its sound from the block — glass shatters, everything else pops.
+     *
+     * @return whether the block was actually broken
+     */
+    private static boolean berserkInstaBreak(McMMOPlayer mmoPlayer, ServerPlayerEntity serverPlayer,
+            BlockPos pos, BlockState state) {
+        if (!instaBreak(serverPlayer, pos)) {
             return false;
         }
 

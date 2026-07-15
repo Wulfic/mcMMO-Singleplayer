@@ -207,7 +207,13 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       branch recursion + threshold cutoff, unit-tested) + MC-typed `TreeFellerProcessor` (per-log drops +
       Harvest Lumber bonus + XP orbs + Knock on Wood sapling filter + axe durability/Splinter gate +
       reduced XP), triggered from `BlockBreakListener` on a log broken with an axe + TREE_FELLER active.
-      In-game verification of a live fell pending. Deferred: Leaf Blower, splinter self-damage, fizz sound.
+      In-game verification of a live fell pending. **Leaf Blower DONE**: the third branch of
+      `SuperAbilityListener.processAbilityEffects` (legacy `onBlockDamageHigher`'s last arm) — axe +
+      `WoodcuttingManager.canUseLeafBlower()` (MC-free rank gate; the `ItemUtils.isAxe` half stays on
+      the listener, as with Block Cracker) + `BlockUtils.isNonWoodPartOfTree` ⇒ insta-break + POP,
+      reusing Berserk's `instaBreak`/`tryBreakBlock` shape (now split out so only Berserk owns the
+      glass-vs-pop sound choice, which no tree part can trigger). ⚠️ In-game verification pending.
+      Deferred: splinter self-damage, fizz sound.
 - [~] **Herbalism** — **double/triple drops DONE**: single-block bonus drops wired in
       `BlockBreakListener` (`HerbalismManager.isBonusDropsEligible`/`rollBonusDropCount` → `BlockDrops`
       re-roll, same model as Mining/Woodcutting; Green Terra active ⇒ triple). **Green Terra
