@@ -13,6 +13,12 @@ import org.jetbrains.annotations.NotNull;
  */
 public final class Herbalism {
 
+    /**
+     * The item a Green Terra block conversion consumes, one per converted block. Mirrors legacy
+     * {@code processGreenTerraBlockConversion}'s hardcoded {@code Material.WHEAT_SEEDS}.
+     */
+    public static final String GREEN_TERRA_SEED = "wheat_seeds";
+
     private Herbalism() {}
 
     /**

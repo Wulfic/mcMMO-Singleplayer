@@ -1020,6 +1020,12 @@ public class MaterialMapStore {
     private void fillMossyWhiteList() {
         mossyWhiteList.add("cobblestone");
         mossyWhiteList.add("dirt");
+        // PORT (§F upstream-bug fix): upstream still lists only "grass_path", the pre-1.17 name of
+        // this block. Against a modern registry that entry matches nothing, so a dirt path could
+        // never be mossified even though the conversion table maps it (see
+        // Herbalism#greenTerraConversionTarget). Both names are listed: "dirt_path" is what actually
+        // matches, "grass_path" is kept so an operator's pre-1.17 expectations still read true.
+        mossyWhiteList.add("dirt_path");
         mossyWhiteList.add("grass_path");
         mossyWhiteList.add("stone_bricks");
         mossyWhiteList.add("cobblestone_wall");
