@@ -1,17 +1,26 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.Materials;
+import com.gmail.nossr50.skills.herbalism.Herbalism;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.ItemUtils;
+import com.gmail.nossr50.util.LogUtils;
+import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
+import java.util.Optional;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -110,37 +119,108 @@ public final class SuperAbilityListener {
         }
 
         final BlockState state = world.getBlockState(pos);
-        if (!BlockUtils.canActivateAbilities(state)) {
-            return ActionResult.PASS;
+        final ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
+
+        // Legacy splits this strike across two BlockDamageEvent handlers: activation at NORMAL
+        // priority (onBlockDamage), then the ability *effects* at HIGHEST (onBlockDamageHigher).
+        // That order is load-bearing — the strike that activates Green Terra also converts the block
+        // it was activated on — so activation must stay ahead of the effect below.
+        if (BlockUtils.canActivateAbilities(state)) {
+            final ItemStack held = serverPlayer.getMainHandStack();
+
+            // Order matters: the prepared tool + matching item + block-affects-ability triple selects
+            // one super ability. Singleplayer drops the legacy Permissions.* gates (Phase 6).
+            if (mmoPlayer.getToolPreparationMode(ToolType.HOE) && ItemUtils.isHoe(held)
+                    && (BlockUtils.affectedByGreenTerra(state) || BlockUtils.canMakeMossy(state))) {
+                mmoPlayer.checkAbilityActivation(PrimarySkillType.HERBALISM);
+            } else if (mmoPlayer.getToolPreparationMode(ToolType.AXE) && ItemUtils.isAxe(held)
+                    && BlockUtils.hasWoodcuttingXP(state)) {
+                mmoPlayer.checkAbilityActivation(PrimarySkillType.WOODCUTTING);
+            } else if (mmoPlayer.getToolPreparationMode(ToolType.PICKAXE) && ItemUtils.isPickaxe(held)
+                    && BlockUtils.affectedBySuperBreaker(state)) {
+                mmoPlayer.checkAbilityActivation(PrimarySkillType.MINING);
+            } else if (mmoPlayer.getToolPreparationMode(ToolType.SHOVEL) && ItemUtils.isShovel(held)
+                    && BlockUtils.affectedByGigaDrillBreaker(state)) {
+                mmoPlayer.checkAbilityActivation(PrimarySkillType.EXCAVATION);
+            } else if (mmoPlayer.getToolPreparationMode(ToolType.FISTS) && held.isEmpty()
+                    && (BlockUtils.affectedByGigaDrillBreaker(state)
+                            || McMMOMod.getMaterialMapStore().isGlass(blockPath(state))
+                            || state.isOf(Blocks.SNOW)
+                            || BlockUtils.affectedByBlockCracker(state))) {
+                mmoPlayer.checkAbilityActivation(PrimarySkillType.UNARMED);
+                // PORT: legacy also insta-broke the block once Berserk was active (BERSERK.blockCheck
+                // + simulateBlockBreak → event.setInstaBreak). That's the Unarmed super-ability
+                // *body*, which lands with the Berserk block-break body + the block-mutation adapter.
+            }
         }
 
-        final ItemStack held = ((ServerPlayerEntity) player).getMainHandStack();
-
-        // Order matters: the prepared tool + matching item + block-affects-ability triple selects one
-        // super ability. Singleplayer drops the legacy Permissions.* gates (always granted, Phase 6).
-        if (mmoPlayer.getToolPreparationMode(ToolType.HOE) && ItemUtils.isHoe(held)
-                && (BlockUtils.affectedByGreenTerra(state) || BlockUtils.canMakeMossy(state))) {
-            mmoPlayer.checkAbilityActivation(PrimarySkillType.HERBALISM);
-        } else if (mmoPlayer.getToolPreparationMode(ToolType.AXE) && ItemUtils.isAxe(held)
-                && BlockUtils.hasWoodcuttingXP(state)) {
-            mmoPlayer.checkAbilityActivation(PrimarySkillType.WOODCUTTING);
-        } else if (mmoPlayer.getToolPreparationMode(ToolType.PICKAXE) && ItemUtils.isPickaxe(held)
-                && BlockUtils.affectedBySuperBreaker(state)) {
-            mmoPlayer.checkAbilityActivation(PrimarySkillType.MINING);
-        } else if (mmoPlayer.getToolPreparationMode(ToolType.SHOVEL) && ItemUtils.isShovel(held)
-                && BlockUtils.affectedByGigaDrillBreaker(state)) {
-            mmoPlayer.checkAbilityActivation(PrimarySkillType.EXCAVATION);
-        } else if (mmoPlayer.getToolPreparationMode(ToolType.FISTS) && held.isEmpty()
-                && (BlockUtils.affectedByGigaDrillBreaker(state)
-                        || McMMOMod.getMaterialMapStore().isGlass(blockPath(state))
-                        || state.isOf(Blocks.SNOW)
-                        || BlockUtils.affectedByBlockCracker(state))) {
-            mmoPlayer.checkAbilityActivation(PrimarySkillType.UNARMED);
-            // PORT: legacy also insta-broke the block once Berserk was active (BERSERK.blockCheck +
-            // simulateBlockBreak → event.setInstaBreak). That's the Unarmed super-ability *body*, which
-            // lands with the Berserk block-break body + the block-mutation adapter.
-        }
+        // Green Terra's effect (mossify the struck block). Legacy's effect handler has no
+        // canActivateAbilities gate and doesn't else-if against the activation branches above, so
+        // this runs on every strike an already-active Green Terra makes on a mossify-able block.
+        maybeProcessGreenTerraConversion(mmoPlayer, serverPlayer, world, pos, state);
         return ActionResult.PASS;
+    }
+
+    /**
+     * The Green Terra super-ability effect: while Green Terra is active, striking a mossify-able
+     * block converts it (cobblestone → mossy cobblestone, dirt → grass, …) at the cost of one wheat
+     * seed. Ports legacy {@code HerbalismManager#processGreenTerraBlockConversion}: the MC-free
+     * "what does this block become" decision lives on {@link Herbalism#greenTerraConversionTarget},
+     * so this glue only owns the inventory read/consume and the live block swap.
+     *
+     * <p>Singleplayer drops the legacy {@code Permissions.greenThumbBlock} gate (always granted,
+     * Phase 6). Legacy's {@code blockState.update(true)} force-flag is implicit here:
+     * {@link World#setBlockState(BlockPos, BlockState)} already notifies neighbours, which is what
+     * re-connects a converted {@code cobblestone_wall}.
+     */
+    private static void maybeProcessGreenTerraConversion(McMMOPlayer mmoPlayer,
+            ServerPlayerEntity serverPlayer, World world, BlockPos pos, BlockState state) {
+        if (!mmoPlayer.getHerbalismManager().isGreenTerraActive()
+                || !BlockUtils.canMakeMossy(state)) {
+            return;
+        }
+
+        final Optional<String> targetPath = Herbalism.greenTerraConversionTarget(blockPath(state));
+        if (targetPath.isEmpty()) {
+            return; // mossify-whitelisted but with no conversion target: nothing to become.
+        }
+        final Optional<Block> targetBlock = Materials.block(targetPath.get());
+        if (targetBlock.isEmpty()) {
+            LogUtils.debug(McMMOMod.LOGGER, "Green Terra conversion target '" + targetPath.get()
+                    + "' is not a block in this registry; skipping conversion of " + blockPath(state));
+            return;
+        }
+
+        final Optional<Item> seed = Materials.item(Herbalism.GREEN_TERRA_SEED);
+        if (seed.isEmpty()) {
+            LogUtils.debug(McMMOMod.LOGGER, "Green Terra seed item '" + Herbalism.GREEN_TERRA_SEED
+                    + "' is not an item in this registry; skipping conversion.");
+            return;
+        }
+        final int seedSlot = findItemSlot(serverPlayer.getInventory(), seed.get());
+        if (seedSlot < 0) {
+            NotificationManager.sendPlayerInformation(mmoPlayer,
+                    NotificationType.REQUIREMENTS_NOT_MET, "Herbalism.Ability.GTe.NeedMore");
+            return;
+        }
+
+        serverPlayer.getInventory().removeStack(seedSlot, 1);
+        world.setBlockState(pos, targetBlock.get().getDefaultState());
+    }
+
+    /**
+     * First inventory slot holding {@code item}, or {@code -1} if none — matching legacy
+     * {@code PlayerInventory#containsAtLeast(stack, 1)}, whose paired {@code removeItem} then
+     * consumes one. Mirrors {@code RepairSalvageListener#findMaterialSlot}.
+     */
+    private static int findItemSlot(PlayerInventory inventory, Item item) {
+        for (int slot = 0; slot < inventory.size(); slot++) {
+            final ItemStack stack = inventory.getStack(slot);
+            if (!stack.isEmpty() && stack.isOf(item)) {
+                return slot;
+            }
+        }
+        return -1;
     }
 
     /** Ready the six shared tool skills (Herbalism is gated separately by its caller). */
