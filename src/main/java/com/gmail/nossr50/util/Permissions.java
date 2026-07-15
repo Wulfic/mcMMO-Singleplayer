@@ -121,6 +121,17 @@ public final class Permissions {
     }
 
     /**
+     * Blast Mining remote detonation ({@code mcmmo.ability.mining.blastmining.detonate}). A gameplay
+     * activation check, so it defaults to "allowed" in singleplayer.
+     *
+     * @param player the player (unused — retained to mirror the legacy call sites)
+     * @return always {@code true} — no permission backend in singleplayer
+     */
+    public static boolean remoteDetonation(@Nullable PlatformPlayer player) {
+        return true;
+    }
+
+    /**
      * Green Terra super-ability activation ({@code mcmmo.ability.herbalism.greenterra}). A
      * gameplay activation check, so it defaults to "allowed" in singleplayer.
      *

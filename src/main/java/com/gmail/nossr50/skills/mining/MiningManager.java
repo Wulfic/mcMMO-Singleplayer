@@ -1,12 +1,18 @@
 package com.gmail.nossr50.skills.mining;
 
+import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
+import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.runnables.skills.AbilityCooldownTask;
 import com.gmail.nossr50.skills.SkillManager;
+import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
@@ -27,9 +33,6 @@ import org.jetbrains.annotations.NotNull;
  *       (needs a live block + the drop-marking adapter) and damage the held tool during Super
  *       Breaker ({@link com.gmail.nossr50.util.skills.SkillUtils#handleDurabilityChange}, now
  *       available);</li>
- *   <li>{@code canDetonate} / {@code isDetonatorInHand} / {@code remoteDetonation} — ray-cast the
- *       target block, spawn a primed {@code TNTPrimed}, and schedule the cooldown task (needs the
- *       held-item + entity-spawn adapters and the Phase 11 scheduler);</li>
  *   <li>{@code blastMiningDropProcessing} — consumes a Bukkit {@code EntityExplodeEvent} and spawns
  *       ore/debris {@code ItemStack}s (needs the explosion hook + item-spawn adapter).</li>
  * </ul>
@@ -61,6 +64,59 @@ public class MiningManager extends SkillManager {
     public boolean canUseBlastMining() {
         //Not checking permissions?
         return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.MINING_BLAST_MINING);
+    }
+
+    /**
+     * Whether this player's current stance can remote-detonate TNT: sneaking, with a pickaxe or the
+     * configured detonator item in the main hand. Ports legacy {@code canDetonate()} — the MC-typed
+     * reads it made directly (sneak state, held-item type) route through the
+     * {@link com.gmail.nossr50.platform.PlatformPlayer} adapter, so the decision stays whole and
+     * MC-free here rather than being split across the listener.
+     */
+    public boolean canDetonate() {
+        final PlatformPlayer player = getPlayer();
+
+        return canUseBlastMining()
+                && player.isSneaking()
+                && (player.isHoldingTool(ToolType.PICKAXE) || isDetonatorInHand(player))
+                && Permissions.remoteDetonation(player);
+    }
+
+    private static boolean isDetonatorInHand(@NotNull PlatformPlayer player) {
+        return player.isHoldingItem(McMMOMod.getGeneralConfig().getDetonatorItemName());
+    }
+
+    /**
+     * Whether Blast Mining is off cooldown, notifying the player if it is not. Ports legacy
+     * {@code blastMiningCooldownOver()}; the detonation glue
+     * ({@code fabric.listeners.BlastMiningListener}) calls this first so the "too tired" message is
+     * sent even when the player is not aiming at TNT, exactly as upstream ordered it.
+     *
+     * @return whether the ability may be used now
+     */
+    public boolean blastMiningCooldownOver() {
+        final int timeRemaining = mmoPlayer.calculateTimeRemaining(SuperAbilityType.BLAST_MINING);
+
+        if (timeRemaining > 0) {
+            NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.ABILITY_COOLDOWN,
+                    "Skills.TooTired", String.valueOf(timeRemaining));
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Start the Blast Mining cooldown after a successful detonation: stamp the deactivation time,
+     * clear the "ability refreshed" flag and schedule the reminder. The MC-free tail of legacy
+     * {@code remoteDetonation()} (its TNT spawn + block removal live in the listener).
+     */
+    public void startBlastMiningCooldown() {
+        mmoPlayer.setAbilityDATS(SuperAbilityType.BLAST_MINING, System.currentTimeMillis());
+        mmoPlayer.setAbilityInformed(SuperAbilityType.BLAST_MINING, false);
+        McMMOMod.getScheduler().runLater(
+                new AbilityCooldownTask(mmoPlayer, SuperAbilityType.BLAST_MINING),
+                (long) SuperAbilityType.BLAST_MINING.getCooldown() * Misc.TICK_CONVERSION_FACTOR);
     }
 
     public boolean canUseBiggerBombs() {

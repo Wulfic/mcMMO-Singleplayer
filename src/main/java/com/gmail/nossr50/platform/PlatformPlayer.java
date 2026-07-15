@@ -248,6 +248,17 @@ public final class PlatformPlayer {
     }
 
     /**
+     * Whether the main-hand stack is the given vanilla item, named Bukkit-style or as a namespaced
+     * id (Bukkit {@code getInventory().getItemInMainHand().getType() == <material>}). Resolves the
+     * name through {@link Materials}, so an unknown name is simply "not held" rather than a crash —
+     * used for config-named items such as the Blast Mining detonator.
+     */
+    public boolean isHoldingItem(@NotNull String itemName) {
+        final ItemStack held = handle.getMainHandStack();
+        return Materials.item(itemName).map(held::isOf).orElse(false);
+    }
+
+    /**
      * Whether the player is currently looking at a tree block within reach (Bukkit
      * {@code BlockUtils.isPartOfTree(player.getTargetBlock(null, 100))}). Used by the shared-axe
      * "tool ready" messaging ({@code McMMOPlayer#processAxeToolMessages}) to decide whether a raised

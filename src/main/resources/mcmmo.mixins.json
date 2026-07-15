@@ -9,7 +9,8 @@
     "BrewingStandBlockEntityMixin",
     "FishingBobberUseMixin",
     "LivingEntityDamageMixin",
-    "TameableEntityTameMixin"
+    "TameableEntityTameMixin",
+    "TntExplodeMixin"
   ],
   "injectors": {
     "defaultRequire": 1

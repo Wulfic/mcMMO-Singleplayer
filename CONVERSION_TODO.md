@@ -174,8 +174,18 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
 
 ## §D. Gathering active bodies & super abilities (need K6, some need K3)
 
-- [ ] **Mining** — Blast Mining detonation (`canDetonate`/`remoteDetonation` TNT spawn + ray;
-      `blastMiningDropProcessing` explosion drops). Super Breaker (via K6).
+- [~] **Mining** — Super Breaker done (via K6). **Blast Mining detonation DONE** (commit TBD):
+      `MiningManager.canDetonate()` (sneak + pickaxe/detonator, MC-free via new
+      `PlatformPlayer.isHoldingItem`) + `fabric/listeners/BlastMiningListener.remoteDetonation`
+      (ray-cast ≤100 blocks → TNT block → spawn a fuse-0 `TntEntity`, stamp the `mcmmo:tracked_tnt`
+      marker on `MetadataStore` with the detonator's UUID, clear the block, notify, start the
+      cooldown via `MiningManager.startBlastMiningCooldown`), wired into `SuperAbilityListener`'s
+      right-click-air path. **Bigger Bombs DONE**: `fabric/mixin/TntExplodeMixin` `@ModifyArg`s the
+      power argument of the `World#createExplosion` call inside `TntEntity#explode()` (replaces the
+      `ExplosionPrimeEvent` handler); bytecode-verified applied. **Demolitions Expertise DONE**:
+      `EntityDamageListener` reduces the blast's self-damage before (and instead of) Dodge, matching
+      legacy's early return. ⚠️ In-game verification pending. **Still TODO:**
+      `blastMiningDropProcessing` (ore/debris yield + XP) via an `ExplosionImpl#destroyBlocks` mixin.
 - [~] **Unarmed** — Berserk's block effects **DONE** (commit 4f72a7344): `SuperAbilityListener.
       instaBreak` ports legacy's `event.setInstaBreak(true)` — an active Berserk bare-fisted strike on
       an affected block (`BlockUtils.affectedByBerserk`: Excavation-XP block / snow / glass) destroys
@@ -246,6 +256,26 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       four arms could never run. Added the four. Same shape as the mossify bug above (table entry with
       no whitelist entry); `UnarmedTest` now asserts the table↔whitelist invariant in both directions,
       which is how it was caught. ⚠️ The other paired table/whitelist sets deserve the same invariant.
+- [x] **Fixed upstream bug — unreachable Blast Mining right-click-block guard** (commit TBD): in
+      `PlayerListener#onPlayerInteractLowest`, the `/* BLAST MINING CHECK */ else if
+      (miningManager.canDetonate())` arm hangs off `if (!getAbilitiesOnlyActivateWhenSneaking() ||
+      player.isSneaking())`, so it needs the player NOT sneaking — while `canDetonate()` requires
+      that they ARE. Dead in both config states (and with the default `Only_Activate_When_Sneaking:
+      false` the `if` is unconditionally true, so the `else` never runs at all). Player-visible: the
+      arm's job is to *cancel* the interaction when you right-click a TNT block you're next to, so
+      upstream players holding the default detonator (flint & steel) light it by hand and blow
+      themselves up — the exact thing the comment "Don't detonate the TNT if they're too close"
+      says it prevents. Ported to the reachable form (`SuperAbilityListener#onUseBlock` → `TNT` +
+      `canDetonate()` → `ActionResult.FAIL`). The arm's other half (`else → remoteDetonation()`) is
+      deliberately dropped: a ray-cast from a right-click-*block* can only re-find the block just
+      clicked, which the TNT branch already excluded, so it could never detonate anything.
+      ⚠️ Third bug of this shape (see the two above) — dead branches hide behind gates that
+      contradict the body's own preconditions. Cross-check *every* ported `else if` gate against
+      the callee's internal gates.
+- [ ] **Known deviation (whole-listener, not Blast Mining specific):** legacy gates its entire
+      interact handler on `player.getGameMode() != CREATIVE`; `SuperAbilityListener` has no such
+      gate, so super-ability readying/activation (and now remote detonation) also work in creative.
+      Sweep the listener once and decide deliberately rather than patching per-branch.
 - [ ] **Suspected real bug:** `ProbabilityUtil.isSkillRNGSuccessful(subSkill, player, multiplier)` — the
       non-lucky branch calls `evaluate()` and **drops the `probabilityMultiplier`**; the lucky branch uses
       `evaluate(LUCKY, multiplier)`. Confirm against upstream; if upstream applies it in both, non-lucky

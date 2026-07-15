@@ -14,6 +14,7 @@ import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
+import java.util.UUID;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LightningEntity;
 import net.minecraft.entity.LivingEntity;
@@ -71,6 +72,11 @@ public final class EntityDamageListener {
         if (entity instanceof ServerPlayerEntity serverPlayer) {
             if (source.isIn(DamageTypeTags.IS_FALL)) {
                 result = handleFallDamage(serverPlayer, result);
+            } else if (canReduceOwnBlast(serverPlayer, source)) {
+                // Blast Mining self-damage. Legacy returns out of its combat handler once
+                // Demolitions Expertise has taken the hit, so this must pre-empt Dodge below —
+                // a player is not "dodging" their own charge.
+                result = handleOwnBlastDamage(serverPlayer, result);
             } else {
                 final Entity attacker = source.getAttacker();
                 if (attacker != null) {
@@ -79,6 +85,41 @@ public final class EntityDamageListener {
             }
         }
         return result;
+    }
+
+    /**
+     * Whether this hit is the player's own Blast Mining charge going off <i>and</i> they have
+     * Demolitions Expertise unlocked. Mirrors the gates in legacy
+     * {@code BlastMining#processBlastMiningExplosion} that decide whether it handles the hit
+     * (returns true) or lets normal combat processing continue (returns false).
+     *
+     * <p>Legacy's other branch — capping the damage another player's charge deals at 24 — is dropped
+     * with the rest of PvP (see {@code BlastMining}'s javadoc): the only player a blast can hit here
+     * is the one who set it off.
+     */
+    private static boolean canReduceOwnBlast(ServerPlayerEntity serverPlayer, DamageSource source) {
+        final UUID detonator = BlastMiningListener.detonatorUuid(source.getSource());
+        if (detonator == null || !detonator.equals(serverPlayer.getUuid())) {
+            return false; // not an mcMMO charge, or not this player's.
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        return mmoPlayer != null && mmoPlayer.getMiningManager().canUseDemolitionsExpertise();
+    }
+
+    /**
+     * Demolitions Expertise: reduce the damage the player's own Blast Mining charge deals to them,
+     * by their rank's percentage (legacy {@code MiningManager#processDemolitionsExpertise}).
+     */
+    private static float handleOwnBlastDamage(ServerPlayerEntity serverPlayer, float amount) {
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        if (mmoPlayer == null) {
+            return amount;
+        }
+        // TUNING (CONVERSION_TODO §F): as with the melee bonuses above, modifyAppliedDamage is
+        // POST-armor, so the reduction compounds with armor rather than preceding it as in legacy.
+        // Legacy additionally cancelled the hit outright when the reduction took it to <= 0; a
+        // returned 0 here is equivalent in effect (no health lost).
+        return (float) Math.max(mmoPlayer.getMiningManager().processDemolitionsExpertise(amount), 0.0D);
     }
 
     /**
