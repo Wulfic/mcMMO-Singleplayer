@@ -17,9 +17,12 @@ import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.player.UserManager;
 import org.mockito.ArgumentMatchers;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -39,9 +42,11 @@ class TamingManagerTest {
 
     private McMMOPlayer mmoPlayer;
     private TamingManager tamingManager;
+    private Path dataFolder;
 
     @BeforeEach
     void setUp(@TempDir Path dataFolder) {
+        this.dataFolder = dataFolder;
         McMMOMod.setGeneralConfig(new GeneralConfig(dataFolder));
         McMMOMod.setRankConfig(new RankConfig(dataFolder));
         McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
@@ -131,6 +136,88 @@ class TamingManagerTest {
         tamingManager.awardTamingXP("Not_A_Real_Animal");
         verify(mmoPlayer, never()).beginXpGain(ArgumentMatchers.any(), ArgumentMatchers.anyFloat(),
                 ArgumentMatchers.any(), ArgumentMatchers.any());
+    }
+
+    /**
+     * Re-points {@link AdvancedConfig} at a data folder whose {@code advanced.yml} overrides only the
+     * Fast Food Service chance; {@code ConfigLoader} back-fills every other key from the bundled
+     * default. Fast Food Service is the one STATIC_CONFIGURABLE Taming roll, and
+     * {@code Probability.isSuccessfulRoll} is {@code value >= nextDouble(1.0)} over {@code [0, 1)} —
+     * so a chance of 100 always succeeds and a chance of 0 never does, making the roll deterministic
+     * without injecting an RNG.
+     */
+    private void withFastFoodChance(double chance) throws IOException {
+        final Path overrideFolder = dataFolder.resolve("ffs-" + chance);
+        Files.createDirectories(overrideFolder);
+        Files.writeString(overrideFolder.resolve("advanced.yml"), """
+                Skills:
+                    Taming:
+                        FastFoodService:
+                            Chance: %s
+                """.formatted(chance));
+        McMMOMod.setAdvancedConfig(new AdvancedConfig(overrideFolder));
+    }
+
+    private PlatformLivingEntity wolfAt(float health, float maxHealth) {
+        PlatformLivingEntity wolf = mock(PlatformLivingEntity.class);
+        when(wolf.getHealth()).thenReturn(health);
+        when(wolf.getMaxHealth()).thenReturn(maxHealth);
+        return wolf;
+    }
+
+    @Test
+    void fastFoodServiceHealsTheWolfForTheDamageItDealt() throws IOException {
+        withFastFoodChance(100.0);
+        PlatformLivingEntity wolf = wolfAt(10f, 20f);
+
+        tamingManager.fastFoodService(wolf, 5.0);
+
+        verify(wolf).setHealth(15f);
+    }
+
+    @Test
+    void fastFoodServiceClampsTheHealToMaxHealth() throws IOException {
+        withFastFoodChance(100.0);
+        PlatformLivingEntity wolf = wolfAt(18f, 20f);
+
+        tamingManager.fastFoodService(wolf, 5.0);
+
+        verify(wolf).setHealth(20f);
+    }
+
+    @Test
+    void fastFoodServiceLeavesAFullHealthWolfAlone() throws IOException {
+        // Pins legacy's `health < maxHealth` guard: a full-health wolf is never written to at all,
+        // rather than being redundantly re-set to its own max.
+        withFastFoodChance(100.0);
+        PlatformLivingEntity wolf = wolfAt(20f, 20f);
+
+        tamingManager.fastFoodService(wolf, 5.0);
+
+        verify(wolf, never()).setHealth(ArgumentMatchers.anyFloat());
+    }
+
+    @Test
+    void fastFoodServiceDoesNothingWhenTheRollFails() throws IOException {
+        withFastFoodChance(0.0);
+        PlatformLivingEntity wolf = wolfAt(10f, 20f);
+
+        tamingManager.fastFoodService(wolf, 5.0);
+
+        verify(wolf, never()).setHealth(ArgumentMatchers.anyFloat());
+    }
+
+    @Test
+    void holyHoundHealsTheWolfForTheIncomingDamageAndClamps() {
+        // Holy Hound has no RNG gate and no `health < maxHealth` guard — the min clamp is the whole
+        // body, exactly as legacy wrote it.
+        PlatformLivingEntity hurt = wolfAt(10f, 20f);
+        tamingManager.processHolyHound(hurt, 5.0);
+        verify(hurt).setHealth(15f);
+
+        PlatformLivingEntity nearlyFull = wolfAt(18f, 20f);
+        tamingManager.processHolyHound(nearlyFull, 5.0);
+        verify(nearlyFull).setHealth(20f);
     }
 
     @Test

@@ -13,6 +13,7 @@ import com.gmail.nossr50.skills.MeleeDamageBonus.MeleeWeapon;
 import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
+import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.player.NotificationManager;
@@ -29,6 +30,7 @@ import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.passive.WolfEntity;
 import net.minecraft.entity.projectile.ArrowEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.tag.DamageTypeTags;
@@ -52,8 +54,11 @@ import net.minecraft.sound.SoundCategory;
  * side again — <b>Swords Counter Attack</b> (see {@link #maybeProcessCounterAttack}). The Axes
  * target-inspecting sub-skills (<b>Armor Impact</b> / <b>Greater Impact</b> / <b>Critical
  * Strikes</b>) ride the attacker branch inside {@link MeleeDamageBonus}, since they feed the same
- * damage total. The remaining effect-only sub-skills (Taming damage modifiers, projectile skills, …)
- * attach to this same entry point as their entity/metadata adapters land.
+ * damage total. <b>Taming</b>'s damage modifiers ride both branches: a tamed wolf's bite carries its
+ * owner's Gore / Sharpened Claws / Fast Food Service (see {@link #applyWolfAttackBonus}), and a hit
+ * on that wolf is softened by Thick Fur / Shock Proof / Holy Hound (see {@link #handleWolfDamage}).
+ * The remaining effect-only sub-skills (projectile skills, …) attach to this same entry point as
+ * their entity/metadata adapters land.
  *
  * <p>One branch does <em>not</em> ride the mixin: Unarmed's <b>Arrow Deflect</b> ({@link
  * #onAllowDamage}) has to cancel the hit outright, so it rides Fabric's cancel-only
@@ -147,6 +152,10 @@ public final class EntityDamageListener {
         // K1 attacker branch: a player landing a *melee* hit adds their weapon skill's on-hit damage
         // bonus. Runs first so a PvP defender's Dodge (below) reduces the already-boosted damage.
         result = applyAttackerWeaponBonus(entity, source, result);
+        // ...and the other half of legacy's attacker dispatch: the damager is the player's *wolf*,
+        // which adds the owner's Taming bonuses. Legacy branches on the damager's type in one
+        // if/else-if chain, so at most one of these two can ever fire.
+        result = applyWolfAttackBonus(entity, source, result);
 
         // K1 defender / K2 branch: the entity *taking* damage is a player — fall damage feeds
         // Acrobatics Roll, an incoming entity hit feeds Acrobatics Dodge.
@@ -168,8 +177,176 @@ public final class EntityDamageListener {
                 // back *after* Dodge has written to it, so a dodged hit counters for less.
                 maybeProcessCounterAttack(serverPlayer, source, result);
             }
+        } else if (entity instanceof WolfEntity wolf) {
+            // Legacy's sibling `else if (livingEntity instanceof Tameable pet)` arm: the player's own
+            // wolf is taking damage, and Taming may soften or undo it.
+            result = handleWolfDamage(wolf, source, result);
         }
         return result;
+    }
+
+    /**
+     * K1 attacker branch, Taming half: a tamed wolf's bite carries its owner's Taming bonuses. Ports
+     * legacy {@code CombatUtils#processTamingCombat} (reached from the {@code entityType ==
+     * EntityType.WOLF} arm of {@code processCombatAttack}).
+     *
+     * <p>Order is legacy's: Fast Food Service heals the wolf for the <em>unboosted</em> damage it just
+     * dealt, then Sharpened Claws adds its flat bonus, then Gore multiplies the <em>initial</em>
+     * damage and contributes only the difference. Gore reading {@code amount} rather than the running
+     * total is why the two are additive rather than compounding.
+     *
+     * <p>{@code getOwner()} is used deliberately here, unlike in {@link
+     * CombatUtils#canCombatSkillsTrigger} where it is avoided: that method only needs to know
+     * <em>whether</em> an animal is tamed (so an unloaded owner must not read as "wild"), whereas this
+     * one needs the owner themselves and has nothing to do if they are not present — exactly what
+     * legacy's {@code wolf.getOwner() instanceof Player} did.
+     *
+     * <p>Dropped from the legacy body:
+     * <ul>
+     *   <li>{@code master.isOnline() && master.isValid()} — the {@link UserManager} lookup below is
+     *       the singleplayer equivalent (no profile loaded, nothing to do);</li>
+     *   <li>{@code Misc.isNPCEntityExcludingVillagers(master)} and
+     *       {@code doesPlayerHaveSkillPermission} — the NPC helpers were not ported (Phase 9) and the
+     *       skill-permission check was dropped at Phase 6/10 (see the breadcrumb in {@link
+     *       com.gmail.nossr50.util.skills.SkillTools}), as on every other attacker arm here.</li>
+     * </ul>
+     *
+     * <p>Deferred (breadcrumbs, CONVERSION_TODO §C): {@code pummel} (needs a
+     * velocity-along-a-non-player's-look-direction adapter plus particles) and legacy's
+     * {@code processCombatXP(mmoPlayer, target, TAMING, 3)} — this port awards combat XP per *kill*
+     * ({@code CombatListener}), not per hit, and that listener only pays out when the killer is a
+     * player, so wolf-assisted Taming XP is a pre-existing §B gap rather than something this arm can
+     * drop in without picking an XP model for it.
+     */
+    private static float applyWolfAttackBonus(LivingEntity target, DamageSource source,
+            float amount) {
+        // Legacy keys off painSource (the *direct* damager), so a wolf's own bite — not, say, an
+        // arrow that happens to have a wolf as its owner — is what counts.
+        if (!(source.getSource() instanceof WolfEntity wolf)) {
+            return amount;
+        }
+        if (!(wolf.getOwner() instanceof ServerPlayerEntity master)) {
+            return amount; // wild wolf, or one whose owner is not this player.
+        }
+        if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.TAMING, target)) {
+            return amount;
+        }
+
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(master.getUuid());
+        if (mmoPlayer == null) {
+            return amount; // data not loaded (e.g. mid-join).
+        }
+        final TamingManager taming = mmoPlayer.getTamingManager();
+        if (taming == null) {
+            return amount;
+        }
+
+        if (taming.canUseFastFoodService()) {
+            taming.fastFoodService(new PlatformLivingEntity(wolf), amount);
+        }
+
+        double boostedDamage = amount;
+        if (taming.canUseSharpenedClaws()) {
+            boostedDamage += taming.sharpenedClaws();
+        }
+        if (taming.canUseGore()) {
+            boostedDamage += taming.gore(amount);
+        }
+        return (float) boostedDamage;
+    }
+
+    /**
+     * K1 defender branch, Taming half: the player's wolf is taking damage, and Taming may soften,
+     * heal back or shrug it off depending on what hurt it. Ports the {@code Tameable} arm of legacy
+     * {@code EntityListener#onEntityDamage}, including {@code Taming.canPreventDamage}'s
+     * {@code isTamed() && owner instanceof Player && pet instanceof Wolf} gate — {@code getOwner()}
+     * is null unless tamed, so matching {@link WolfEntity} and a {@link ServerPlayerEntity} owner is
+     * that whole check.
+     *
+     * <p>Legacy switches on Bukkit's {@code DamageCause}, which has no modern counterpart; each arm is
+     * mapped to the vanilla damage types Bukkit derived that cause from (see the helpers below). The
+     * arms are mutually exclusive and every one of them {@code return}s, exactly as legacy's
+     * {@code switch} did.
+     *
+     * <p>Deferred (breadcrumb, CONVERSION_TODO §C): Environmentally Aware, whose two arms
+     * ({@code CONTACT}/{@code FIRE}/{@code HOT_FLOOR}/{@code LAVA} → teleport the wolf to its owner,
+     * and {@code FALL} → cancel outright) need an entity-teleport adapter and a cancel-shaped seam
+     * ({@code ALLOW_DAMAGE}, as Arrow Deflect uses) respectively. Those causes currently fall through
+     * untouched.
+     */
+    private static float handleWolfDamage(WolfEntity wolf, DamageSource source, float amount) {
+        if (!(wolf.getOwner() instanceof ServerPlayerEntity owner)) {
+            return amount; // wild wolf (getOwner() is null unless tamed).
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(owner.getUuid());
+        if (mmoPlayer == null) {
+            return amount;
+        }
+        final TamingManager taming = mmoPlayer.getTamingManager();
+        if (taming == null) {
+            return amount;
+        }
+
+        // ENTITY_ATTACK / PROJECTILE -> Thick Fur halves the hit.
+        if (isEntityAttack(source) || source.isIn(DamageTypeTags.IS_PROJECTILE)) {
+            if (taming.canUseThickFur()) {
+                // Legacy additionally cancelled the event when the reduction bottomed out at 0; a
+                // returned 0 is equivalent in effect (no health lost), as with Demolitions Expertise.
+                return (float) Math.max(taming.processThickFur(amount), 0.0D);
+            }
+            return amount;
+        }
+
+        // FIRE_TICK -> Thick Fur snuffs the flames. Note this is vanilla ON_FIRE (*burning*), not the
+        // IS_FIRE tag: that tag also covers IN_FIRE/CAMPFIRE, which are Bukkit's FIRE cause and
+        // belong to the deferred Environmentally Aware arm, not to this one.
+        if (source.isOf(DamageTypes.ON_FIRE)) {
+            if (taming.canUseThickFur()) {
+                new PlatformLivingEntity(wolf).extinguish();
+            }
+            return amount;
+        }
+
+        // MAGIC / POISON / WITHER -> Holy Hound heals the wolf for what it took.
+        if (isHolyHoundCause(source)) {
+            if (taming.canUseHolyHound()) {
+                taming.processHolyHound(new PlatformLivingEntity(wolf), amount);
+            }
+            return amount;
+        }
+
+        // BLOCK_EXPLOSION / ENTITY_EXPLOSION / LIGHTNING -> Shock Proof divides the hit down.
+        if (source.isIn(DamageTypeTags.IS_EXPLOSION) || source.isIn(DamageTypeTags.IS_LIGHTNING)) {
+            if (taming.canUseShockProof()) {
+                return (float) Math.max(taming.processShockProof(amount), 0.0D);
+            }
+            return amount;
+        }
+
+        return amount;
+    }
+
+    /**
+     * Bukkit's {@code ENTITY_ATTACK}: a melee blow from a mob or a player. Bukkit derived that cause
+     * from these damage types; the projectile ones it mapped to {@code PROJECTILE} instead, which the
+     * caller tests separately via {@code IS_PROJECTILE}.
+     */
+    private static boolean isEntityAttack(DamageSource source) {
+        return source.isIn(DamageTypeTags.IS_PLAYER_ATTACK)
+                || source.isOf(DamageTypes.MOB_ATTACK)
+                || source.isOf(DamageTypes.MOB_ATTACK_NO_AGGRO);
+    }
+
+    /**
+     * Bukkit's {@code MAGIC}, {@code POISON} and {@code WITHER} causes, which Holy Hound treats
+     * alike. Note the three collapse to two tests here: vanilla deals Poison's damage as
+     * {@link DamageTypes#MAGIC}, so Bukkit's separate {@code POISON} cause has no distinct damage
+     * type to match on and is already covered.
+     */
+    private static boolean isHolyHoundCause(DamageSource source) {
+        return source.isOf(DamageTypes.MAGIC)
+                || source.isOf(DamageTypes.INDIRECT_MAGIC)
+                || source.isOf(DamageTypes.WITHER);
     }
 
     /**

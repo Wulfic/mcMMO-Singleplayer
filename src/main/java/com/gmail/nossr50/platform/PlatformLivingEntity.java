@@ -83,6 +83,14 @@ public final class PlatformLivingEntity {
         return handle.getUuid();
     }
 
+    /**
+     * Put out a burning entity. Ports Bukkit {@code setFireTicks(0)} — Taming's Thick Fur snuffs the
+     * flames on a burning wolf. Vanilla's own {@code extinguish()} is exactly that assignment.
+     */
+    public void extinguish() {
+        handle.extinguish();
+    }
+
     // --- Equipment (Bukkit EntityEquipment#getArmorContents) ----------------
 
     /**

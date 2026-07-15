@@ -6,8 +6,10 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
 import org.jetbrains.annotations.NotNull;
 
@@ -32,26 +34,24 @@ import org.jetbrains.annotations.NotNull;
  *   <li>{@code awardTamingXP} — needs the {@code LivingEntity} target, the internal
  *       {@code McMMOPlayerTameEntityEvent} on the new event bus, and
  *       {@code ExperienceConfig.getTamingXP(entityConfigString)};</li>
- *   <li>{@code fastFoodService}/{@code processEnvironmentallyAware}/{@code pummel}/
- *       {@code attackTarget}/{@code beastLore} — need live {@code Wolf}/{@code LivingEntity}
- *       mutation, {@code ProbabilityUtil} RNG, particle/sound/notification adapters, and (for
- *       Environmentally Aware) the Folia teleport scheduler;</li>
+ *   <li>{@code processEnvironmentallyAware}/{@code pummel}/{@code attackTarget}/{@code beastLore} —
+ *       need an entity-teleport adapter (Environmentally Aware), a velocity-from-a-non-player-source
+ *       adapter plus particles (Pummel), a nearby-entity target sweep ({@code attackTarget}), and a
+ *       right-click-entity hook ({@code beastLore});</li>
  *   <li>the whole Call of the Wild summon path ({@code summonOcelot}/{@code summonWolf}/
  *       {@code summonHorse}/{@code processCallOfTheWild}/{@code spawnCOTWEntity}/{@code isCOTWItem}/
  *       {@code cleanupAllSummons}) — needs the entity-spawn adapter, the transient-entity tracker,
  *       the {@code CallOfTheWildType}/{@code TamingSummon} datatypes, and {@code Permissions.callOfTheWild};</li>
- *   <li>the {@code Taming} static helpers touching a live {@code Wolf} ({@code processThickFurFire},
- *       {@code processHolyHound}, {@code canPreventDamage}) — the pure modifier-division parts are
- *       extracted here as {@link #processThickFur(double)}/{@link #processShockProof(double)}.</li>
+ *   <li>{@code processThickFurFire} — the fire-extinguish half is MC-typed glue and lives on the
+ *       listener, since it mutates the wolf rather than computing anything.</li>
  * </ul>
+ *
+ * <p>The damage-modifier bodies are now driven by {@code fabric.listeners.EntityDamageListener} on
+ * the K1 seam: Gore/Sharpened Claws/Fast Food Service on the wolf-<em>attacker</em> arm (legacy
+ * {@code CombatUtils#processTamingCombat}), and Thick Fur/Shock Proof/Holy Hound on the
+ * wolf-<em>defender</em> arm (legacy {@code EntityListener#onEntityDamage}'s {@code Tameable} switch).
  */
 public class TamingManager extends SkillManager {
-
-    /**
-     * Bleed ticks applied by Gore. Legacy {@code Taming.goreBleedTicks} — equivalent to rank 1 in
-     * Rupture; consumed by the deferred Gore body that applies the DoT (PORT Phase 11).
-     */
-    public static final int GORE_BLEED_TICKS = 2;
 
     public TamingManager(@NotNull McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.TAMING);
@@ -124,14 +124,64 @@ public class TamingManager extends SkillManager {
 
     /**
      * The bonus (extra) damage Gore adds. Legacy {@code gore(target, damage)} — the {@code target}
-     * argument was unused for the math, so this is the pure part: applying the configured Gore
-     * modifier and returning only the <em>additional</em> damage over the base hit.
+     * argument is unused (see below), so this is the whole of it: apply the configured Gore modifier
+     * and return only the <em>additional</em> damage over the base hit.
+     *
+     * <p><b>Gore does not roll.</b> Every other proc-shaped sub-skill gates on
+     * {@code ProbabilityUtil.isSkillRNGSuccessful}; Gore simply applies whenever it is unlocked, so an
+     * owner past the unlock level gets the modifier on <em>every</em> wolf hit. That is faithful:
+     * upstream's {@code gore()} is byte-identical to the vendored one (checked against
+     * {@code mcMMO-Dev/mcMMO@master} — no roll, no bleed). See CONVERSION_TODO §F for the dead
+     * {@code Skills.Taming.Gore.ChanceMax}/{@code MaxBonusLevel} config this leaves stranded, and why
+     * inventing the roll here would be a deviation rather than a fix.
      *
      * @param damage the initial (base) damage
      * @return the extra damage Gore contributes on top of {@code damage}
      */
     public double gore(double damage) {
         return (damage * McMMOMod.getAdvancedConfig().getGoreModifier()) - damage;
+    }
+
+    /**
+     * Fast Food Service: a summoned wolf heals itself for the damage it just dealt. Ports legacy
+     * {@code fastFoodService(Wolf, double)} — the RNG gate and the heal, kept MC-free by taking the
+     * wolf through {@link PlatformLivingEntity} (the same shape Rupture's DoT uses).
+     *
+     * <p>Legacy's {@code health < maxHealth} guard is preserved rather than folded into the
+     * {@code min}: it keeps a full-health wolf from being written to at all.
+     *
+     * @param wolf the wolf that landed the hit
+     * @param damage the damage the wolf dealt, which it heals for
+     */
+    public void fastFoodService(@NotNull PlatformLivingEntity wolf, double damage) {
+        if (!ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.TAMING_FAST_FOOD_SERVICE,
+                mmoPlayer)) {
+            return;
+        }
+
+        final float health = wolf.getHealth();
+        final float maxHealth = wolf.getMaxHealth();
+        if (health < maxHealth) {
+            wolf.setHealth((float) Math.min(health + damage, maxHealth));
+        }
+    }
+
+    /**
+     * Holy Hound: a wolf is healed by the magic/poison/wither damage that would have hurt it. Ports
+     * legacy {@code Taming.processHolyHound(Wolf, double)}.
+     *
+     * <p>Note there is no RNG gate and no {@code health < maxHealth} guard — the {@code min} clamp is
+     * the whole of it, exactly as legacy wrote it. The caller still applies the damage: legacy heals
+     * and lets the hit land, so the wolf nets zero rather than being made immune.
+     *
+     * <p>Dropped: the {@code EntityEffect.WOLF_HEARTS} particle — no particle adapter yet, the same
+     * deferral as Dodge, Greater Impact and Rupture's bleed particles.
+     *
+     * @param wolf the wolf taking the damage
+     * @param damage the incoming damage, which is healed back
+     */
+    public void processHolyHound(@NotNull PlatformLivingEntity wolf, double damage) {
+        wolf.setHealth((float) Math.min(wolf.getHealth() + damage, wolf.getMaxHealth()));
     }
 
     /**
