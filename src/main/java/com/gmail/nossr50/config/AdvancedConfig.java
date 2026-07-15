@@ -131,7 +131,10 @@ public class AdvancedConfig extends ConfigLoader {
             reason.add("Skills.Axes.CriticalStrikes.PVP_Modifier should be at least 1!");
         }
 
-        if (getCriticalStrikesPVPModifier() < 1) {
+        // FIXED UPSTREAM BUG (CONVERSION_TODO §F #6): legacy tested getCriticalStrikesPVPModifier()
+        // here too, so PVE_Modifier — the only one singleplayer ever reads — was never validated and
+        // a value below 1 (a "critical" hit that reduces damage) sailed through.
+        if (getCriticalStrikesPVEModifier() < 1) {
             reason.add("Skills.Axes.CriticalStrikes.PVE_Modifier should be at least 1!");
         }
 

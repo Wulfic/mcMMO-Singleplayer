@@ -162,9 +162,21 @@ public class ProbabilityUtil {
      * Skill RNG evaluation that additionally applies a probability multiplier after any lucky
      * modifier, affecting the final result.
      *
+     * <p>⚠️ FIXED UPSTREAM BUG (CONVERSION_TODO §F #7 — a new shape: <b>a parameter honoured on only
+     * one branch of a two-branch dispatch</b>). Legacy's non-lucky branch called {@code evaluate()},
+     * silently discarding {@code probabilityMultiplier}; only the lucky branch applied it. The
+     * multiplier is the attack-cooldown charge, which mcMMO scales its Axes proc chances by so that a
+     * spam-clicked, half-charged swing procs about half as often. Because {@code Permissions.lucky} is
+     * an opt-in perk node this port never grants, the non-lucky branch is the <em>only</em> branch
+     * here — so left as-is the multiplier would never apply at all and attack strength would not
+     * affect a single proc chance. Ported to the intent this method's own contract states ("applies a
+     * probability multiplier ... affecting the final result") via the {@code evaluate(double)}
+     * overload, which exists for precisely this and had no other caller.
+     *
      * @param subSkillType target subskill
      * @param mmoPlayer target player can be null (null players are given odds equivalent to a
      * player with no levels or luck)
+     * @param probabilityMultiplier scales the odds after any lucky modifier
      * @return true if the Skill RNG succeeds, false if it fails
      */
     public static boolean isSkillRNGSuccessful(@NotNull SubSkillType subSkillType,
@@ -179,7 +191,7 @@ public class ProbabilityUtil {
         if (isLucky) {
             return probability.evaluate(LUCKY_MODIFIER, probabilityMultiplier);
         } else {
-            return probability.evaluate();
+            return probability.evaluate(probabilityMultiplier);
         }
     }
 

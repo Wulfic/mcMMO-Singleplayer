@@ -1,6 +1,7 @@
 package com.gmail.nossr50.skills;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
@@ -13,11 +14,15 @@ import org.jetbrains.annotations.NotNull;
  * MC-typed half — resolving the attacker, confirming a direct melee swing, and classifying the held
  * item into a {@link MeleeWeapon} — then defers the actual damage arithmetic here.
  *
- * <p>Only the pure damage-math sub-skills are wired (all deterministic — the Axe Mastery / Steel Arm
- * "checks" are {@code isNonRNGSkillActivationSuccessful}, i.e. always-on once unlocked, not a dice
- * roll). The effect-only on-hit sub-skills that mutate the target — Rupture DoT, Serrated Strikes /
- * Skull Splitter AoE, Armor Impact durability, Disarm, Counter Attack, Limit Break (PvP-only) — stay
- * deferred behind their entity/metadata/DoT adapters, matching the manager ports.
+ * <p>The Axes arm additionally drives the sub-skills that need to inspect the target — Armor Impact,
+ * Greater Impact and Critical Strikes — because their outcome feeds this same damage total and
+ * legacy's ordering between them is load-bearing (see {@link #applyBonus}). They reach the entity
+ * through the {@link PlatformLivingEntity} adapter, so this class stays server-free.
+ *
+ * <p>Still deferred behind their own adapters, matching the manager ports: Disarm, Arrow Deflect,
+ * Taming's damage modifiers, and Limit Break (PvP-only). Rupture, the Serrated Strikes / Skull
+ * Splitter AoEs and Counter Attack are live but sit in {@code EntityDamageListener} instead — none of
+ * them contributes to the attacker's damage total, so they do not belong in this composition.
  */
 public final class MeleeDamageBonus {
 
@@ -34,18 +39,24 @@ public final class MeleeDamageBonus {
 
     /**
      * The post-armor damage after adding the attacker's melee weapon on-hit bonus. Faithful to the
-     * legacy per-weapon dispatch: Swords adds Stab, Axes adds Axe Mastery, Unarmed adds Steel Arm
-     * Style then Berserk (Berserk scales off the already-boosted damage). Every bonus is scaled by
-     * the captured attack-cooldown charge ({@link McMMOPlayer#getAttackStrength()}), exactly as
-     * legacy did. A null manager or unmet unlock/permission gate contributes nothing.
+     * legacy per-weapon dispatch: Swords adds Stab, Axes runs its whole chain (below), Unarmed adds
+     * Steel Arm Style then Berserk (Berserk scales off the already-boosted damage). Every bonus is
+     * scaled by the captured attack-cooldown charge ({@link McMMOPlayer#getAttackStrength()}),
+     * exactly as legacy did. A null manager or unmet unlock/permission gate contributes nothing.
+     *
+     * <p>The Axes chain's order is legacy's and matters: Axe Mastery lands first, then <em>either</em>
+     * Armor Impact (armored target — durability only, no damage) <em>or</em> Greater Impact (unarmored
+     * — knockback plus flat bonus damage), and Critical Strikes last, multiplying the damage those
+     * have already accumulated rather than the base hit.
      *
      * @param mmoPlayer     the attacking player's mcMMO profile
      * @param weapon        the classification of the held main-hand item
      * @param appliedDamage the vanilla post-armor damage that would be applied
+     * @param target        the entity being hit, for the sub-skills that inspect or move it
      * @return the damage mcMMO wants applied instead (>= {@code appliedDamage})
      */
     public static float applyBonus(@NotNull McMMOPlayer mmoPlayer, @NotNull MeleeWeapon weapon,
-            float appliedDamage) {
+            float appliedDamage, @NotNull PlatformLivingEntity target) {
         final float attackStrength = mmoPlayer.getAttackStrength();
         double boostedDamage = appliedDamage;
 
@@ -58,8 +69,18 @@ public final class MeleeDamageBonus {
             }
             case AXE -> {
                 final AxesManager axes = mmoPlayer.getAxesManager();
-                if (axes != null && axes.canUseAxeMastery()) {
-                    boostedDamage += axes.axeMastery() * attackStrength;
+                if (axes != null) {
+                    if (axes.canUseAxeMastery()) {
+                        boostedDamage += axes.axeMastery() * attackStrength;
+                    }
+                    if (axes.canImpact(target)) {
+                        axes.impactCheck(target);
+                    } else if (axes.canGreaterImpact(target)) {
+                        boostedDamage += axes.greaterImpact(target) * attackStrength;
+                    }
+                    if (axes.canCriticalHit(target)) {
+                        boostedDamage += axes.criticalHit(boostedDamage) * attackStrength;
+                    }
                 }
             }
             case UNARMED -> {

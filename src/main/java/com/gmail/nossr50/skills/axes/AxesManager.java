@@ -1,34 +1,38 @@
 package com.gmail.nossr50.skills.axes;
 
+import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.skills.SkillUtils;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Axes skill manager (Phase 10.3 port). Only the Axe Mastery / Impact-durability damage math and the
- * activation/unlock gates survive; the combat-effect bodies are dropped until the combat/entity +
- * equipment adapters land.
+ * Axes skill manager. Every Axes sub-skill decision core is live: Axe Mastery ({@link #axeMastery}),
+ * Critical Strikes ({@link #criticalHit}), the Armor Impact / Greater Impact pair
+ * ({@link #impactCheck} / {@link #greaterImpact}) and the Skull Splitter super ability
+ * ({@link #canUseSkullSplitter} / {@link #skullSplitterDamage}).
  *
- * <p>Dropped until the combat phase (all take a raw {@code LivingEntity} target):
- * <ul>
- *   <li>{@code criticalHit} — PVP/PVE modifier split + defender notifications;</li>
- *   <li>{@code impactCheck} / {@code greaterImpact} — mutate armor durability, set entity velocity,
- *       play particles;</li>
- *   <li>the {@code canCriticalHit} / {@code canImpact} / {@code canGreaterImpact} gates — they
- *       inspect the target's armor ({@code Axes.hasArmor}).</li>
- * </ul>
+ * <p>The target-inspecting gates reach the entity through {@link PlatformLivingEntity} — armor via
+ * {@link Axes#hasArmor}, knockback via
+ * {@link PlatformLivingEntity#setVelocityAlongLookDirection} — so this class stays free of
+ * {@code net.minecraft} types and unit-testable against mocked adapters.
  *
- * <p>Skull Splitter (the super ability's AoE) is live — see {@link #canUseSkullSplitter} /
- * {@link #skullSplitterDamage}.
+ * <p>Dropped: the PvP arms of {@code criticalHit} / {@code greaterImpact} (the
+ * {@code target instanceof Player} defender notifications and the {@code criticalHitPVPModifier}
+ * branch) — the attacking player is the only player in singleplayer, so the target is never one, and
+ * the PVE modifier always applies. Also dropped: {@code ParticleEffectUtils.playGreaterImpactEffect}
+ * (no particle adapter yet — the same deferral as Dodge and Rupture's bleed particles).
  */
 public class AxesManager extends SkillManager {
     public AxesManager(McMMOPlayer mmoPlayer) {
@@ -100,11 +104,121 @@ public class AxesManager extends SkillManager {
 
     /**
      * The armor-durability damage Impact applies per successful proc: the configured multiplier
-     * scaled by the player's Armor Impact rank. Pure math; the {@code impactCheck} body that walks
-     * the target's armor slots and applies this is deferred to the combat phase.
+     * scaled by the player's Armor Impact rank.
      */
     public double getImpactDurabilityDamage() {
         return McMMOMod.getAdvancedConfig().getImpactDurabilityDamageMultiplier()
                 * RankUtils.getRank(getPlayer(), SubSkillType.AXES_ARMOR_IMPACT);
+    }
+
+    /**
+     * Critical Strikes: whether a crit may be rolled against {@code target}. Ports legacy
+     * {@code AxesManager#canCriticalHit}.
+     */
+    public boolean canCriticalHit(@NotNull PlatformLivingEntity target) {
+        if (!RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AXES_CRITICAL_STRIKES)) {
+            return false;
+        }
+
+        return target.isValid() && Permissions.isSubSkillEnabled(getPlayer(),
+                SubSkillType.AXES_CRITICAL_STRIKES);
+    }
+
+    /**
+     * Armor Impact: whether the target's armor may be chewed up. Ports legacy
+     * {@code AxesManager#canImpact} — requires the target to <em>be</em> armored, which is what makes
+     * this and {@link #canGreaterImpact} mutually exclusive.
+     */
+    public boolean canImpact(@NotNull PlatformLivingEntity target) {
+        if (!RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AXES_ARMOR_IMPACT)) {
+            return false;
+        }
+
+        return target.isValid() && Permissions.isSubSkillEnabled(getPlayer(),
+                SubSkillType.AXES_ARMOR_IMPACT) && Axes.hasArmor(target);
+    }
+
+    /**
+     * Greater Impact: whether an unarmored target may be sent flying. Ports legacy
+     * {@code AxesManager#canGreaterImpact} — the inverse armor test to {@link #canImpact}.
+     */
+    public boolean canGreaterImpact(@NotNull PlatformLivingEntity target) {
+        if (!RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AXES_GREATER_IMPACT)) {
+            return false;
+        }
+
+        return target.isValid() && Permissions.isSubSkillEnabled(getPlayer(),
+                SubSkillType.AXES_GREATER_IMPACT) && !Axes.hasArmor(target);
+    }
+
+    /**
+     * Critical Strikes: roll a crit and return the <em>bonus</em> damage it adds. Ports legacy
+     * {@code AxesManager#criticalHit}, which returned {@code (damage * modifier) - damage}, i.e. the
+     * delta the caller adds on top of the damage so far — not the new total.
+     *
+     * <p>Legacy took the target only to pick the PVP vs PVE modifier and to notify a player defender;
+     * both are dead in singleplayer (see the class javadoc), so the PVE modifier always applies and
+     * the parameter is gone. The roll is scaled by the attack-cooldown charge, so a spam-clicked
+     * swing crits proportionally less often.
+     *
+     * @param damage the damage accumulated so far (base + Axe Mastery + Greater Impact)
+     * @return the additional damage the crit contributes, or {@code 0} if it did not proc
+     */
+    public double criticalHit(double damage) {
+        if (!ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.AXES_CRITICAL_STRIKES, mmoPlayer,
+                mmoPlayer.getAttackStrength())) {
+            return 0;
+        }
+
+        if (mmoPlayer.useChatNotifications()) {
+            NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                    "Axes.Combat.CriticalHit");
+        }
+
+        return (damage * McMMOMod.getAdvancedConfig().getCriticalStrikesPVEModifier()) - damage;
+    }
+
+    /**
+     * Armor Impact: roll independently against each armor piece the target wears and damage the ones
+     * that proc. Ports legacy {@code AxesManager#impactCheck}.
+     *
+     * <p>Deals no damage of its own — the whole effect is durability wear, so unlike its Greater
+     * Impact counterpart it returns nothing.
+     *
+     * @param target the entity being hit
+     */
+    public void impactCheck(@NotNull PlatformLivingEntity target) {
+        final double durabilityDamage = getImpactDurabilityDamage();
+
+        for (PlatformItem armor : target.getArmorPieces()) {
+            if (ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.AXES_ARMOR_IMPACT, mmoPlayer,
+                    mmoPlayer.getAttackStrength())) {
+                SkillUtils.handleArmorDurabilityChange(armor, durabilityDamage, 1);
+            }
+        }
+    }
+
+    /**
+     * Greater Impact: roll to send an unarmored target flying along the player's look direction and
+     * return the flat bonus damage it adds. Ports legacy {@code AxesManager#greaterImpact}.
+     *
+     * @param target the entity being hit
+     * @return the configured bonus damage if it procced, otherwise {@code 0}
+     */
+    public double greaterImpact(@NotNull PlatformLivingEntity target) {
+        if (!ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.AXES_GREATER_IMPACT, mmoPlayer,
+                mmoPlayer.getAttackStrength())) {
+            return 0;
+        }
+
+        target.setVelocityAlongLookDirection(getPlayer(),
+                McMMOMod.getAdvancedConfig().getGreaterImpactModifier());
+
+        if (mmoPlayer.useChatNotifications()) {
+            NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                    "Axes.Combat.GI.Proc");
+        }
+
+        return McMMOMod.getAdvancedConfig().getGreaterImpactBonusDamage();
     }
 }

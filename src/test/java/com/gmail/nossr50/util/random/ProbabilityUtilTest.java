@@ -11,6 +11,8 @@ import static com.gmail.nossr50.datatypes.skills.SubSkillType.UNARMED_ARROW_DEFL
 import static com.gmail.nossr50.util.random.ProbabilityTestUtils.assertProbabilityExpectations;
 import static com.gmail.nossr50.util.random.ProbabilityUtil.calculateCurrentSkillProbability;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -92,6 +94,33 @@ class ProbabilityUtilTest {
                 UNARMED_ARROW_DEFLECT, mmoPlayer);
         assertEquals(0.2D, probability.getValue());
         assertProbabilityExpectations(20, probability);
+    }
+
+    /**
+     * Pins CONVERSION_TODO §F #7: the {@code probabilityMultiplier} overload must honour the
+     * multiplier on the <em>non-lucky</em> branch, which legacy skipped by calling the no-arg
+     * {@code evaluate()}. That branch is the only one this port ever takes ({@code Permissions.lucky}
+     * is a perk node singleplayer never grants), so dropping the multiplier there would make attack
+     * strength irrelevant to every Axes proc chance.
+     *
+     * <p>Asserted as absolutes rather than a distribution, so it cannot flake: Armor Impact's static
+     * 11% chance times a 0 multiplier can never succeed, and times a 100 multiplier can never fail.
+     * Against the unfixed code both loops roll a flat 11% every iteration, so each fails within a few
+     * iterations — verified by reverting the fix.
+     */
+    @Test
+    void skillRngMultiplierAppliesWithoutLuck() {
+        final int rolls = 200;
+
+        for (int i = 0; i < rolls; i++) {
+            assertFalse(ProbabilityUtil.isSkillRNGSuccessful(AXES_ARMOR_IMPACT, mmoPlayer, 0.0D),
+                    "a 0 multiplier must zero out the odds (roll " + i + ")");
+        }
+
+        for (int i = 0; i < rolls; i++) {
+            assertTrue(ProbabilityUtil.isSkillRNGSuccessful(AXES_ARMOR_IMPACT, mmoPlayer, 100.0D),
+                    "a 100 multiplier must saturate the 11% odds (roll " + i + ")");
+        }
     }
 
     private static Stream<Arguments> provideSkillProbabilityTestData() {
