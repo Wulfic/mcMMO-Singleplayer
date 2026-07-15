@@ -161,8 +161,11 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
 
 ## §C. Combat on-hit sub-skills (need K1)
 
-The weapon skills earn kill-XP but none of their on-hit effects fire. Port each body onto the K1 damage
-hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tracking):
+Port each on-hit body onto the K1 damage hook (+ K5 for ability events, `MetadataStore` already
+exists for per-entity tracking). **Swords and Axes are complete**; the melee skills' remaining gaps
+are Unarmed's Disarm / Iron Grip / Arrow Deflect and Taming's damage modifiers. The projectile skills
+(Archery / Crossbows / Tridents) still need a projectile-launch hook before any of their bodies can
+land.
 
 - [~] **Swords** — Stab on-hit damage **DONE** (via K1 attacker branch, `MeleeDamageBonus`).
       **Rupture (bleed DoT) DONE** — the first §C on-hit *effect* body: `SwordsManager.processRupture(
@@ -207,14 +210,33 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       *not* used — it resolves the reference and yields null for an unloaded owner, misreporting a
       tamed animal as wild. Now gates both the attacker branch (per weapon, as legacy does) and
       Counter Attack. Both switches default `true`, so the shipped config is unaffected.
-- [~] **Axes** — Axe Mastery on-hit damage **DONE**. **Skull Splitter (AoE) DONE**:
-      `AxesManager.canUseSkullSplitter(PlatformLivingEntity)` (rank + ability-mode + live-target gate)
-      + `skullSplitterDamage(damage)` = `(damage / DamageModifier(2.0)) * attackStrength`, driven from
-      `EntityDamageListener` on an axe hit. Both super-ability AoEs share the new MC-typed
-      `util/skills/CombatUtils#applyAbilityAoE` (a faithful port: weapon tier = how many neighbours
-      you cleave, damage floored at 1, primary target never struck twice) + `safeDealDamage`.
-      ⚠️ In-game verification pending. Deferred: Armor Impact, Greater Impact, Critical Strikes (all
-      need target-armor inspection via `Axes.hasArmor`).
+- [x] **Axes** — **COMPLETE**: every Axes sub-skill decision core is live. Axe Mastery on-hit damage
+      **DONE**. **Skull Splitter (AoE) DONE**: `AxesManager.canUseSkullSplitter(PlatformLivingEntity)`
+      (rank + ability-mode + live-target gate) + `skullSplitterDamage(damage)` =
+      `(damage / DamageModifier(2.0)) * attackStrength`, driven from `EntityDamageListener` on an axe
+      hit. Both super-ability AoEs share the new MC-typed `util/skills/CombatUtils#applyAbilityAoE`
+      (a faithful port: weapon tier = how many neighbours you cleave, damage floored at 1, primary
+      target never struck twice) + `safeDealDamage`.
+      **Armor Impact / Greater Impact / Critical Strikes DONE** — the sub-skills that inspect the
+      target, unblocked by the new entity-equipment adapter
+      (`PlatformLivingEntity.getArmorPieces()`, which returns the entity's *live* stacks in the four
+      humanoid armor slots filtered by `ItemUtils.isArmor` — exactly Bukkit's `getArmorContents()`
+      plus the filter every legacy caller wrapped it in; `Axes.hasArmor` is now just its emptiness
+      test). They run inside `MeleeDamageBonus`'s Axes arm rather than the listener, because each
+      feeds the same damage total and legacy's order between them is load-bearing: Axe Mastery →
+      *either* Armor Impact (armored target; rolls per piece and wears durability via
+      `SkillUtils.handleArmorDurabilityChange`, deals no damage) *or* Greater Impact (unarmored;
+      knockback via the new `PlatformLivingEntity.setVelocityAlongLookDirection` + flat `BonusDamage`)
+      → Critical Strikes last, multiplying the damage the others already accumulated (it returns the
+      *delta*, `(damage * PVE_Modifier) - damage`, as legacy did). ⚠️ In-game verification pending.
+      Dropped: the PvP arms of `criticalHit`/`greaterImpact` (the `target instanceof Player` defender
+      notifications and the `PVP_Modifier` branch — the target is never a player in singleplayer, so
+      the PVE modifier always applies) and `ParticleEffectUtils.playGreaterImpactEffect` (no particle
+      adapter — same deferral as Dodge and Rupture's bleed particles). PORT deviation: legacy
+      sequences the Skull Splitter AoE *between* Greater Impact and Critical Strikes; ours fires it
+      after the whole chain, which is equivalent (the AoE neither reads nor writes the damage total
+      and never touches the primary target — only the player's chat-notification order differs).
+      See §F upstream bugs #6 and #7.
 - [~] **Unarmed** — Steel Arm Style + Berserk on-hit damage **DONE**. Berserk's *block* effects
       (insta-break + Block Cracker) **DONE** — see §D. Deferred: Disarm, Iron Grip, Arrow Deflect.
 - [ ] **Archery** — Daze, distance-based XP, arrow retrieval, Skill Shot damage (needs projectile hooks).
@@ -374,6 +396,37 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       attacker-side branch's variable name (`target`) and quietly means the opposite entity by it.
       Lesson: when a handler serves both sides of an interaction, re-check *which* entity every
       shared-named variable refers to in each arm.
+- [x] **Fixed upstream bug #6 — `AdvancedConfig`'s validator never checks `PVE_Modifier`** (Axes
+      commit): the Critical Strikes block validates `getCriticalStrikesPVPModifier() < 1` **twice**,
+      the second time while reporting `"Skills.Axes.CriticalStrikes.PVE_Modifier should be at least
+      1!"`. A plain copy-paste slip, so `PVE_Modifier` is unvalidated and a value below 1 — a
+      "critical" hit that *reduces* damage — passes silently. Sharper here than upstream: singleplayer
+      drops the PVP arm entirely, so `PVE_Modifier` is the only crit modifier this port ever reads,
+      i.e. the one knob that matters is the one never checked. Pointed at
+      `getCriticalStrikesPVEModifier()`. ⚠️ **New shape: validator copy-paste** — a getter validated
+      twice while its sibling is never validated at all. Lesson: cross-check every validator arm's
+      getter against the config key its message names; the message is the intent, the getter is the
+      behaviour, and nothing forces them to agree.
+- [x] **Fixed upstream bug #7 — `ProbabilityUtil.isSkillRNGSuccessful`'s multiplier overload drops
+      the multiplier unless you are lucky** (Axes commit): the 3-arg overload branches on
+      `Permissions.lucky` and calls `probability.evaluate(LUCKY_MODIFIER, probabilityMultiplier)` when
+      lucky but a bare `probability.evaluate()` when not — silently discarding `probabilityMultiplier`
+      on the non-lucky path, despite the method's own contract ("applies a probability multiplier ...
+      affecting the final result") and the existence of the `evaluate(double)` overload that does
+      exactly this and had no other caller. The multiplier is the **attack-cooldown charge**, which
+      mcMMO scales Axes' proc chances by so a spam-clicked half-charged swing procs about half as
+      often. Player-visible and severe in this port: `mcmmo.perks.lucky.*` is an opt-in perk node
+      singleplayer never grants (Phase 6), so the non-lucky branch is the **only** branch — left
+      as-is, attack strength would affect *no* Armor Impact / Greater Impact / Critical Strikes roll
+      at all, defeating the 1.9-combat scaling those procs are balanced around. Fixed to
+      `evaluate(probabilityMultiplier)`; `ProbabilityUtilTest.skillRngMultiplierAppliesWithoutLuck`
+      pins both directions with absolutes (a 0 multiplier can never win, a 100 multiplier can never
+      lose) and was **mutation-checked** — reinstating the legacy call fails exactly that case.
+      Blast radius was nil until now: this overload had **zero callers** before Axes, which is why it
+      was recorded as dormant rather than fixed at the time. ⚠️ **New shape: a parameter honoured on
+      only one branch of a two-branch dispatch.** Lesson: when a method branches on a privilege/perk
+      flag, check that *every* branch still honours the ordinary parameters — and note that a bug on
+      the un-privileged branch hits the common case, not the rare one.
 - [x] **Fixed port bug (ours, not upstream) — `MetadataStore` leaked across world sessions:**
       `MetadataStore.clearAll()` existed with an "e.g. on server stop" javadoc and **zero callers**.
       Bukkit dropped plugin metadata on disable, but our side-table is a static map and entity UUIDs

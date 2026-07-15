@@ -46,9 +46,11 @@ import net.minecraft.sound.SoundCategory;
  * <em>effect</em> sub-skills: <b>Swords Rupture</b> (bleed DoT — see {@link #maybeProcessRupture})
  * and the two combat super abilities, <b>Serrated Strikes</b> and <b>Skull Splitter</b> (AoE — see
  * {@link #maybeProcessSerratedStrikes} / {@link #maybeProcessSkullSplitter}), and — on the defender
- * side again — <b>Swords Counter Attack</b> (see {@link #maybeProcessCounterAttack}). The remaining
- * effect-only sub-skills (Armor Impact, Disarm, Taming damage modifiers, projectile skills, …)
- * attach to this same entry point as their entity/metadata adapters land.
+ * side again — <b>Swords Counter Attack</b> (see {@link #maybeProcessCounterAttack}). The Axes
+ * target-inspecting sub-skills (<b>Armor Impact</b> / <b>Greater Impact</b> / <b>Critical
+ * Strikes</b>) ride the attacker branch inside {@link MeleeDamageBonus}, since they feed the same
+ * damage total. The remaining effect-only sub-skills (Disarm, Taming damage modifiers, projectile
+ * skills, …) attach to this same entry point as their entity/metadata adapters land.
  */
 public final class EntityDamageListener {
 
@@ -181,16 +183,23 @@ public final class EntityDamageListener {
         // TUNING (CONVERSION_TODO §F): modifyAppliedDamage is POST-armor, so these bonuses bypass the
         // target's armor mitigation — a discrepancy vs legacy, which boosted the pre-armor damage.
         // Flagged for the tuning pass; the correct seam is a pre-armor hook once one exists.
-        final float boostedDamage = MeleeDamageBonus.applyBonus(mmoPlayer, weapon, amount);
+        final PlatformLivingEntity platformTarget = new PlatformLivingEntity(target);
+        final float boostedDamage = MeleeDamageBonus.applyBonus(mmoPlayer, weapon, amount,
+                platformTarget);
 
         // Legacy's per-weapon ordering, preserved: the super-ability AoE fires after the damage
         // bonus is computed but before it is committed, and is passed the *unboosted* damage
         // (legacy hands it `event.getDamage()`, which it only overwrites via setDamage afterwards).
+        //
+        // PORT: legacy sequences the Axes AoE *between* Greater Impact and Critical Strikes rather
+        // than after the whole chain as here. Equivalent: the AoE neither reads nor writes the
+        // damage total (it is handed the unboosted amount either way) and it never touches the
+        // primary target, so only the order of the player's own chat notifications differs.
         if (weapon == MeleeWeapon.SWORD) {
             maybeProcessSerratedStrikes(mmoPlayer, attacker, target, amount);
             maybeProcessRupture(mmoPlayer, target, boostedDamage);
         } else if (weapon == MeleeWeapon.AXE) {
-            maybeProcessSkullSplitter(mmoPlayer, attacker, target, amount);
+            maybeProcessSkullSplitter(mmoPlayer, attacker, platformTarget, target, amount);
         }
         return boostedDamage;
     }
@@ -216,9 +225,9 @@ public final class EntityDamageListener {
      * {@code canUseSkullSplitter} arm.
      */
     private static void maybeProcessSkullSplitter(McMMOPlayer mmoPlayer, ServerPlayerEntity attacker,
-            LivingEntity target, float damage) {
+            PlatformLivingEntity platformTarget, LivingEntity target, float damage) {
         final AxesManager axes = mmoPlayer.getAxesManager();
-        if (axes == null || !axes.canUseSkullSplitter(new PlatformLivingEntity(target))) {
+        if (axes == null || !axes.canUseSkullSplitter(platformTarget)) {
             return;
         }
         CombatUtils.applyAbilityAoE(attacker, mmoPlayer, target, axes.skullSplitterDamage(damage),
