@@ -184,8 +184,29 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       **Serrated Strikes (AoE) DONE** — see the shared `CombatUtils#applyAbilityAoE` note under Axes
       below; `SwordsManager.serratedStrikesDamage(damage)` = `damage / DamageModifier(4.0)`, notably
       *not* scaled by attack strength (legacy scales only the Axes one — asymmetry preserved and
-      pinned by test). Each AoE-struck entity also rolls Rupture, as legacy does. Deferred: Counter
-      Attack.
+      pinned by test). Each AoE-struck entity also rolls Rupture, as legacy does.
+      **Counter Attack DONE** — the last Swords sub-skill, so every Swords decision core is now live.
+      Defender-side: `EntityDamageListener.maybeProcessCounterAttack` runs after Dodge (legacy reads
+      the damage back *after* Dodge writes to it, so a dodged hit counters for less) and reflects
+      `SwordsManager.counterAttackDamage(damage)` = `damage / DamageModifier(2.0)` at the *direct*
+      living damager (legacy's `painSource`, so an arrow or a Blast Mining charge counters nothing)
+      via the existing `CombatUtils.safeDealDamage`. Gate/roll/math split MC-free onto the manager
+      (`canUseCounterAttack()`/`rollCounterAttack()`/`counterAttackDamage(d)`); the
+      `instanceof LivingEntity` half stays on the listener, as Block Cracker's `isAxe` half does.
+      Not scaled by attack strength (it is a reaction, not a swing of the player's own — pinned by
+      test). No re-entrancy problem: the counter's damage runs under `safeDealDamage`'s ThreadLocal,
+      so the K1 seam passes it straight through. Dropped: the `Swords.Combat.Counter.Hit`
+      notification to the countered attacker (fires only `if (attacker instanceof Player)` — dead in
+      SP). See §F upstream bug #5. ⚠️ In-game verification pending.
+- [x] **`SkillTools.canCombatSkillsTrigger` restored** (it had been dropped at Phase 10 for want of an
+      entity adapter, leaving the `Enabled_For_PVE`/`Enabled_For_PVP` switches doing **nothing** on
+      the whole combat path). Re-homed onto the MC-typed `util/skills/CombatUtils` — deciding
+      "player or tamed" needs the entity types, which the MC-free `SkillTools` cannot hold; it still
+      reads the switches through `SkillTools.getPVPEnabled/getPVEEnabled`. Tamed-ness is
+      `Tameable#getOwnerReference() != null` (legacy's `isTamed()`); `getOwner()` is deliberately
+      *not* used — it resolves the reference and yields null for an unloaded owner, misreporting a
+      tamed animal as wild. Now gates both the attacker branch (per weapon, as legacy does) and
+      Counter Attack. Both switches default `true`, so the shipped config is unaffected.
 - [~] **Axes** — Axe Mastery on-hit damage **DONE**. **Skull Splitter (AoE) DONE**:
       `AxesManager.canUseSkullSplitter(PlatformLivingEntity)` (rank + ability-mode + live-target gate)
       + `skullSplitterDamage(damage)` = `(damage / DamageModifier(2.0)) * attackStrength`, driven from
@@ -337,6 +358,22 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       #1/#2 were table↔whitelist, #3 was gate↔precondition, this one is **failsafe↔normal-path** — a
       later-added guard silently swallowing the original exit. When porting anything with two
       counters/timeouts over one loop, check which one can actually win.
+- [x] **Fixed upstream bug — Counter Attack's PVE gate reads the PVP switch** (Counter Attack commit):
+      in `CombatUtils#processCombatAttack`'s *defender* arm, the guard is
+      `canCombatSkillsTrigger(SWORDS, target)` — but in that arm `target` is the **player being hit**,
+      not the entity the skill acts upon (that is `painSource`, the assailant, which is what the very
+      next line passes to `counterAttackChecks`). `canCombatSkillsTrigger` answers
+      `isPlayerOrTamed ? getPVPEnabled : getPVEEnabled`, and a player is trivially "player or tamed",
+      so the arm **always** resolves to `getPVPEnabled(SWORDS)`. Player-visible: an operator who
+      disables Swords for PVP silently loses counter-attacks **against mobs**, and one who disables
+      Swords for PVE keeps them. Every other one of the ~11 call sites passes the acted-upon entity;
+      this one alone inverts the roles. Ported to the intent (gate on the assailant). Both switches
+      default `true`, so shipped behaviour is unchanged — this bites only a tuned config.
+      ⚠️ **Fifth bug of the family, and a new shape: role inversion** — #1/#2 were table↔whitelist,
+      #3 gate↔precondition, #4 failsafe↔normal-path. Here a defender-side branch reuses the
+      attacker-side branch's variable name (`target`) and quietly means the opposite entity by it.
+      Lesson: when a handler serves both sides of an interaction, re-check *which* entity every
+      shared-named variable refers to in each arm.
 - [x] **Fixed port bug (ours, not upstream) — `MetadataStore` leaked across world sessions:**
       `MetadataStore.clearAll()` existed with an "e.g. on server stop" javadoc and **zero callers**.
       Bukkit dropped plugin metadata on disable, but our side-table is a static map and entity UUIDs

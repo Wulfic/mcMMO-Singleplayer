@@ -2,6 +2,7 @@ package com.gmail.nossr50.util.skills;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.util.ItemUtils;
 import net.minecraft.entity.Entity;
@@ -85,6 +86,33 @@ public final class CombatUtils {
         } finally {
             IN_MCMMO_DAMAGE.set(false);
         }
+    }
+
+    /**
+     * Whether a combat skill is allowed to act on {@code target} at all, per the operator's
+     * {@code Enabled_For_PVP} / {@code Enabled_For_PVE} switches. Restores legacy
+     * {@code SkillTools#canCombatSkillsTrigger}, which was dropped at Phase 10 for want of an entity
+     * adapter (see the breadcrumb in {@link SkillTools}); it lives here rather than back on the
+     * MC-free {@code SkillTools} because deciding "player or tamed" needs the MC types.
+     *
+     * <p>{@code target} is the entity the skill <em>acts upon</em> — the victim of the player's swing
+     * on the attacker side, and the counter-attacked assailant on the defender side. Passing the
+     * wrong one silently swaps which config switch applies; see the §F note on
+     * {@code EntityDamageListener#maybeProcessCounterAttack}.
+     *
+     * <p>Legacy tests tamed-ness with {@code Tameable#isTamed()}; the modern interface exposes it as a
+     * non-null {@code getOwnerReference()}. {@code getOwner()} is deliberately not used here — it
+     * resolves the reference and yields null for an owner who is not currently loaded, which would
+     * misreport a tamed animal as wild.
+     */
+    public static boolean canCombatSkillsTrigger(@NotNull PrimarySkillType primarySkillType,
+            @NotNull Entity target) {
+        final boolean isPlayerOrTamed = target instanceof PlayerEntity
+                || (target instanceof Tameable tameable && tameable.getOwnerReference() != null);
+
+        return isPlayerOrTamed
+                ? McMMOMod.getSkillTools().getPVPEnabled(primarySkillType)
+                : McMMOMod.getSkillTools().getPVEEnabled(primarySkillType);
     }
 
     /**

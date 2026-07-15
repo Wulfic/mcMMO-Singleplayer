@@ -17,16 +17,11 @@ import com.gmail.nossr50.util.skills.RankUtils;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Swords skill manager (Phase 10.3 port; Rupture added in §C). The Stab damage math, the
- * activation/unlock gates, and the Rupture bleed are live.
+ * Swords skill manager (Phase 10.3 port; Rupture and Counter Attack added in §C). Every Swords
+ * sub-skill's decision core is now live here.
  *
- * <p>Still dropped, pending their adapters:
- * <ul>
- *   <li>{@code counterAttackChecks} / {@code canUseCounterAttack} — deals reflected damage through
- *       {@code CombatUtils} against a raw {@code LivingEntity}.</li>
- * </ul>
- * The static {@code Swords.counterAttackModifier} went with that body and was not ported;
- * {@code Swords.serratedStrikesModifier} became the live config read in
+ * <p>The legacy statics {@code Swords.counterAttackModifier} / {@code Swords.serratedStrikesModifier}
+ * became the live config reads in {@link #counterAttackDamage(double)} /
  * {@link #serratedStrikesDamage(double)} (the service-locator config is installed after class load,
  * so a cached static would be fragile — same call the ported {@code Axes} makes).
  */
@@ -48,6 +43,47 @@ public class SwordsManager extends SkillManager {
     public boolean canUseRupture() {
         return Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.SWORDS_RUPTURE)
                 && RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.SWORDS_RUPTURE);
+    }
+
+    /**
+     * Counter Attack: whether the player is able to counter at all. Ports the MC-free half of legacy
+     * {@code SwordsManager#canUseCounterAttack(Entity)}.
+     *
+     * <p>Legacy's {@code target instanceof LivingEntity} half stays on the caller
+     * ({@code fabric.listeners.EntityDamageListener}), which is where the MC types are — the same
+     * split Block Cracker and Leaf Blower use for their {@code ItemUtils} half.
+     */
+    public boolean canUseCounterAttack() {
+        if (!RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.SWORDS_COUNTER_ATTACK)) {
+            return false;
+        }
+
+        return Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.SWORDS_COUNTER_ATTACK);
+    }
+
+    /**
+     * Counter Attack: roll for the counter landing. Ports the RNG gate inside legacy
+     * {@code SwordsManager#counterAttackChecks}.
+     *
+     * <p>Unlike Rupture, this is <em>not</em> scaled by attack strength — the counter is a reaction to
+     * being hit, not a swing of the player's own, so there is no attack-cooldown charge to scale by.
+     * Legacy agrees (it passes no multiplier here); the asymmetry is preserved.
+     */
+    public boolean rollCounterAttack() {
+        return ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.SWORDS_COUNTER_ATTACK, mmoPlayer);
+    }
+
+    /**
+     * Counter Attack: the damage reflected back at the attacker. Ports the arithmetic half of legacy
+     * {@code SwordsManager#counterAttackChecks}, which passed {@code damage /
+     * Swords.counterAttackModifier} to {@code CombatUtils#safeDealDamage}.
+     *
+     * @param damage the damage the incoming hit dealt to the player (after any Dodge reduction, as in
+     * legacy — it reads {@code event.getDamage()} back after Dodge has written to it)
+     * @return the damage to reflect at the attacker
+     */
+    public double counterAttackDamage(double damage) {
+        return damage / McMMOMod.getAdvancedConfig().getCounterModifier();
     }
 
     public boolean canUseSerratedStrike() {

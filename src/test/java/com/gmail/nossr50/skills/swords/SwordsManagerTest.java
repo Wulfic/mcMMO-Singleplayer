@@ -168,6 +168,31 @@ class SwordsManagerTest {
                 "a fully-charged swing spreads the same fraction");
     }
 
+    /**
+     * Counter Attack's reflected damage is {@code damage / DamageModifier(2.0)}. Like Serrated
+     * Strikes — and unlike Rupture — it ignores attack strength: the counter is a reaction to being
+     * hit, not a swing of the player's own, so there is no cooldown charge to scale by.
+     */
+    @Test
+    void counterAttackDamageIsHalfAndIgnoresAttackStrength() {
+        when(mmoPlayer.getAttackStrength()).thenReturn(0.25F);
+        assertEquals(6.0D, swordsManager.counterAttackDamage(12.0D), 1e-9,
+                "damage / 2.0, regardless of attack strength");
+
+        when(mmoPlayer.getAttackStrength()).thenReturn(1.0F);
+        assertEquals(6.0D, swordsManager.counterAttackDamage(12.0D), 1e-9,
+                "a fully-charged player reflects the same fraction");
+    }
+
+    @Test
+    void counterAttackGateNeedsUnlock() {
+        atSwordsLevel(199); // one short of the RetroMode Rank_1 unlock
+        assertFalse(swordsManager.canUseCounterAttack(), "locked below rank 1");
+
+        atSwordsLevel(200); // CounterAttack Rank_1
+        assertTrue(swordsManager.canUseCounterAttack(), "level 200 → Counter Attack unlocked");
+    }
+
     @Test
     void serratedStrikeGateNeedsUnlockAndActiveAbility() {
         when(mmoPlayer.getAbilityMode(SuperAbilityType.SERRATED_STRIKES)).thenReturn(true);

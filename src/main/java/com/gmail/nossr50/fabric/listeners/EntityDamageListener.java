@@ -45,9 +45,10 @@ import net.minecraft.sound.SoundCategory;
  * Unarmed Steel Arm + Berserk, composed MC-free in {@link MeleeDamageBonus}), and the on-hit
  * <em>effect</em> sub-skills: <b>Swords Rupture</b> (bleed DoT — see {@link #maybeProcessRupture})
  * and the two combat super abilities, <b>Serrated Strikes</b> and <b>Skull Splitter</b> (AoE — see
- * {@link #maybeProcessSerratedStrikes} / {@link #maybeProcessSkullSplitter}). The remaining
- * effect-only sub-skills (Counter Attack, Armor Impact, Taming damage modifiers, projectile skills,
- * …) attach to this same entry point as their entity/metadata adapters land.
+ * {@link #maybeProcessSerratedStrikes} / {@link #maybeProcessSkullSplitter}), and — on the defender
+ * side again — <b>Swords Counter Attack</b> (see {@link #maybeProcessCounterAttack}). The remaining
+ * effect-only sub-skills (Armor Impact, Disarm, Taming damage modifiers, projectile skills, …)
+ * attach to this same entry point as their entity/metadata adapters land.
  */
 public final class EntityDamageListener {
 
@@ -98,6 +99,10 @@ public final class EntityDamageListener {
                 if (attacker != null) {
                     result = handleDodge(serverPlayer, attacker, result);
                 }
+                // Counter Attack reflects damage but does not change what the player takes, so it
+                // runs last and returns nothing. Legacy's ordering, preserved: it reads the damage
+                // back *after* Dodge has written to it, so a dodged hit counters for less.
+                maybeProcessCounterAttack(serverPlayer, source, result);
             }
         }
         return result;
@@ -167,6 +172,12 @@ public final class EntityDamageListener {
         if (weapon == MeleeWeapon.OTHER) {
             return amount;
         }
+        // Legacy gates each weapon's branch on the skill's Enabled_For_PVE/PVP switch before doing
+        // anything. That gate was dropped when SkillTools was ported without an entity adapter, so
+        // until now these switches did nothing on the attacker side; restored with the adapter.
+        if (!CombatUtils.canCombatSkillsTrigger(skillOf(weapon), target)) {
+            return amount;
+        }
         // TUNING (CONVERSION_TODO §F): modifyAppliedDamage is POST-armor, so these bonuses bypass the
         // target's armor mitigation — a discrepancy vs legacy, which boosted the pre-armor damage.
         // Flagged for the tuning pass; the correct seam is a pre-armor hook once one exists.
@@ -232,6 +243,66 @@ public final class EntityDamageListener {
         }
         mmoPlayer.getSwordsManager().processRupture(new PlatformLivingEntity(target),
                 mmoPlayer.getAttackStrength());
+    }
+
+    /**
+     * Swords Counter Attack: a player hit while holding a sword may reflect a fraction of the damage
+     * back at their assailant. Ports legacy {@code CombatUtils#processCombatAttack}'s defender arm
+     * plus {@code SwordsManager#counterAttackChecks}.
+     *
+     * <p>Only a <em>living, direct</em> damager can be countered — legacy passes {@code painSource}
+     * (the damager itself, not the projectile's shooter) and its {@code canUseCounterAttack} requires
+     * {@code instanceof LivingEntity}, so an arrow or a Blast Mining charge counters nothing.
+     *
+     * <p>⚠️ FIXED UPSTREAM BUG (CONVERSION_TODO §F #5, a new shape — <b>role inversion</b>): legacy
+     * gates this on {@code canCombatSkillsTrigger(SWORDS, target)}, but in the defender arm
+     * {@code target} is the <em>player</em>, not the entity being acted upon. That makes
+     * {@code isPlayerOrTamed} unconditionally true, so a PvE counter against a mob is decided by
+     * {@code Enabled_For_PVP} — an operator disabling Swords for PvP silently kills counter-attacks
+     * against mobs, and one disabling it for PvE does not. Every other call site passes the entity the
+     * skill acts upon; this one is ported to that intent ({@code assailant}). Both switches default to
+     * {@code true}, so the shipped config behaves identically either way.
+     *
+     * @param damage the damage the player is taking, after any Dodge reduction
+     */
+    private static void maybeProcessCounterAttack(ServerPlayerEntity serverPlayer,
+            DamageSource source, float damage) {
+        // The *direct* damager, matching legacy's painSource (not painSourceRoot).
+        if (!(source.getSource() instanceof LivingEntity assailant)) {
+            return;
+        }
+        if (!ItemUtils.isSword(serverPlayer.getMainHandStack())) {
+            return;
+        }
+        if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.SWORDS, assailant)) {
+            return;
+        }
+
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        if (mmoPlayer == null) {
+            return;
+        }
+        final SwordsManager swords = mmoPlayer.getSwordsManager();
+        if (swords == null || !swords.canUseCounterAttack() || !swords.rollCounterAttack()) {
+            return;
+        }
+
+        CombatUtils.safeDealDamage(assailant, swords.counterAttackDamage(damage), serverPlayer);
+        NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                "Swords.Combat.Countered");
+        // PORT: legacy also notified the countered attacker ("Swords.Combat.Counter.Hit"), which only
+        // fires `if (attacker instanceof Player)` — dead in singleplayer, where the only player is the
+        // one countering. Dropped with the rest of PvP.
+    }
+
+    /** The primary skill a melee weapon's on-hit bonuses belong to (legacy's per-weapon dispatch). */
+    private static PrimarySkillType skillOf(MeleeWeapon weapon) {
+        return switch (weapon) {
+            case SWORD -> PrimarySkillType.SWORDS;
+            case AXE -> PrimarySkillType.AXES;
+            case UNARMED -> PrimarySkillType.UNARMED;
+            case OTHER -> throw new IllegalArgumentException("OTHER has no skill; gate it first");
+        };
     }
 
     /** Classify a held main-hand stack into the melee weapon whose bonus applies (legacy order). */
