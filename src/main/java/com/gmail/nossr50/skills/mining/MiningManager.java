@@ -13,6 +13,7 @@ import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.NotificationManager;
+import com.gmail.nossr50.util.random.Probability;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
@@ -190,6 +191,62 @@ public class MiningManager extends SkillManager {
             return superBreakerTriple ? 2 : 1;
         }
         return 0;
+    }
+
+    // --- Blast Mining explosion yield (legacy blastMiningDropProcessing's arithmetic) -----------
+
+    /**
+     * The chance that one ore caught in this player's blast drops, per round: vanilla's own yield
+     * raised by the Ore Bonus %. Values above 1 mean guaranteed drops <i>plus</i> another round —
+     * see {@link #rollOreDropRounds(float)} — which is why legacy caps it at 3 rounds' worth.
+     *
+     * @param yield the fraction of blocks the explosion would drop without mcMMO
+     * @return the boosted per-round drop chance, capped at 3
+     */
+    public float blastMiningOreYield(float yield) {
+        return Math.min(yield + (yield * getOreBonus()), 3.0F);
+    }
+
+    /**
+     * Roll how many rounds of an ore's drops the blast produces. Ports legacy's
+     * {@code while (currentOreYield > 0)} loop: each round rolls against the remaining yield and
+     * then consumes 1 from it, so a yield of 2.4 gives two guaranteed rounds and a 40% third.
+     *
+     * @param oreYield the boosted yield from {@link #blastMiningOreYield(float)}
+     * @return how many times to spawn the ore's drops (0 = the blast destroyed it for nothing)
+     */
+    public int rollOreDropRounds(float oreYield) {
+        int rounds = 0;
+        for (float remaining = oreYield; remaining > 0; remaining = Math.max(remaining - 1, 0)) {
+            if (Probability.ofValue(remaining).evaluate()) {
+                rounds++;
+            }
+        }
+        return rounds;
+    }
+
+    /**
+     * Roll the number of <i>extra</i> copies of an ore's drops to spawn on top of a successful
+     * round (legacy's {@code isBlastMiningBonusDropsEnabled} + coin-flip + {@code for (i = 1;
+     * i < dropMultiplier; i++)} block).
+     *
+     * @return the extra rounds to spawn, or 0 if the coin flip failed / bonus drops are disabled
+     */
+    public int rollBonusOreRounds() {
+        if (!McMMOMod.getAdvancedConfig().isBlastMiningBonusDropsEnabled()
+                || !Probability.ofValue(0.5F).evaluate()) {
+            return 0;
+        }
+        return Math.max(getDropMultiplier() - 1, 0);
+    }
+
+    /**
+     * Roll whether one piece of non-ore debris survives the blast. Legacy hard-codes 10% here and
+     * never consults the per-rank {@code DebrisReduction} config that {@link #getDebrisReduction()}
+     * reads — see CONVERSION_TODO §F; the constant is kept faithfully rather than "fixed".
+     */
+    public boolean rollDebrisDrop() {
+        return Probability.ofPercent(10).evaluate();
     }
 
     private static @NotNull String stripToPath(@NotNull String registryId) {

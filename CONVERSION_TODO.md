@@ -184,8 +184,16 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       power argument of the `World#createExplosion` call inside `TntEntity#explode()` (replaces the
       `ExplosionPrimeEvent` handler); bytecode-verified applied. **Demolitions Expertise DONE**:
       `EntityDamageListener` reduces the blast's self-damage before (and instead of) Dodge, matching
-      legacy's early return. ⚠️ In-game verification pending. **Still TODO:**
-      `blastMiningDropProcessing` (ore/debris yield + XP) via an `ExplosionImpl#destroyBlocks` mixin.
+      legacy's early return. **Ore yield + XP DONE** (commit TBD): `fabric/mixin/ExplosionDropsMixin`
+      replaces the `EntityExplodeEvent` handler with two injections into
+      `ExplosionImpl#destroyBlocks` — a HEAD hook (blocks still standing = when the Bukkit event
+      fired) driving `BlastMiningListener.processBlastDrops`, and a `@ModifyArg` swapping vanilla's
+      drop-collecting `BiConsumer` for a no-op, which is the exact analogue of `event.setYield(0F)`
+      and leaves block removal / block entities / TNT chain-detonation untouched. Ore/debris split,
+      per-round yield rolls and bonus copies are MC-free on `MiningManager`
+      (`blastMiningOreYield`/`rollOreDropRounds`/`rollBonusOreRounds`/`rollDebrisDrop`).
+      ⚠️ In-game verification pending. Deferred: `UserBlockTracker` placed-block skip (still unported
+      §A), so a blast on player-placed ore currently pays out.
 - [~] **Unarmed** — Berserk's block effects **DONE** (commit 4f72a7344): `SuperAbilityListener.
       instaBreak` ports legacy's `event.setInstaBreak(true)` — an active Berserk bare-fisted strike on
       an affected block (`BlockUtils.affectedByBerserk`: Excavation-XP block / snow / glass) destroys
@@ -276,6 +284,17 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       interact handler on `player.getGameMode() != CREATIVE`; `SuperAbilityListener` has no such
       gate, so super-ability readying/activation (and now remote detonation) also work in creative.
       Sweep the listener once and decide deliberately rather than patching per-branch.
+- [ ] **Suspected dead config — `DebrisReduction`:** `MiningManager.getDebrisReduction()` reads a
+      per-rank `advanced.yml` value ({10,20,30,30,…}%) that `blastMiningDropProcessing` never
+      consults; the non-ore debris chance is a hard-coded 10%. Ported faithfully (hard-coded), but
+      the config knob is a lie to the operator. Confirm against upstream, then either wire it in or
+      drop the key.
+- [ ] **Blast Mining yield semantics — verify by observation:** Bukkit handed mcMMO a `yield` (the
+      fraction of destroyed blocks that drop) which has no direct modern equivalent; the port derives
+      it as `1 / explosion power`, which is what vanilla's own `ExplosionDecayLootFunction` uses
+      (bytecode-verified: `1.0F / EXPLOSION_RADIUS` per item). Sound, but it means Bigger Bombs
+      *lowers* the per-block yield as it widens the blast — check that the net payout still feels
+      like an upgrade at high rank.
 - [ ] **Suspected real bug:** `ProbabilityUtil.isSkillRNGSuccessful(subSkill, player, multiplier)` — the
       non-lucky branch calls `evaluate()` and **drops the `probabilityMultiplier`**; the lucky branch uses
       `evaluate(LUCKY, multiplier)`. Confirm against upstream; if upstream applies it in both, non-lucky

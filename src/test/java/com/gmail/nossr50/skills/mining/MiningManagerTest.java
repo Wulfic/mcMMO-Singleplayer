@@ -200,6 +200,47 @@ class MiningManagerTest {
         assertTrue(miningManager.canDetonate(), "the detonator item works in place of a pickaxe");
     }
 
+    // --- Blast Mining explosion yield ----------------------------------------------------------
+
+    @Test
+    void oreYieldRaisesTheVanillaYieldByTheOreBonus() {
+        atMiningLevel(100); // tier 1 → 35% ore bonus
+        // Vanilla TNT (power 4) drops 1/4 of blocks; blast mining lifts that to 0.25 * 1.35.
+        assertEquals(0.3375f, miningManager.blastMiningOreYield(0.25f), 1.0e-6f);
+        atMiningLevel(1000); // tier 8 → 70%
+        assertEquals(0.425f, miningManager.blastMiningOreYield(0.25f), 1.0e-6f);
+    }
+
+    @Test
+    void oreYieldIsCappedAtThreeRounds() {
+        atMiningLevel(1000); // tier 8 → 70% would take 2.0 to 3.4
+        assertEquals(3.0f, miningManager.blastMiningOreYield(2.0f), 1.0e-6f,
+                "yield is capped at 3 so a huge blast can't roll unbounded drop rounds");
+    }
+
+    @Test
+    void oreDropRoundsAreGuaranteedByWholeNumbersOfYield() {
+        atMiningLevel(100);
+        assertEquals(0, miningManager.rollOreDropRounds(0.0f), "no yield → no drops");
+        assertEquals(2, miningManager.rollOreDropRounds(2.0f),
+                "a yield of 2 guarantees exactly two rounds");
+        assertEquals(3, miningManager.rollOreDropRounds(3.0f), "the capped yield → three rounds");
+        // A fractional yield rolls: 1.0 guarantees the first round, the 0.5 remainder is chance.
+        final int rounds = miningManager.rollOreDropRounds(1.5f);
+        assertTrue(rounds == 1 || rounds == 2, "1.5 yield → one guaranteed round plus a coin flip");
+    }
+
+    @Test
+    void bonusOreRoundsFollowTheDropMultiplierWhenTheyProc() {
+        atMiningLevel(850); // tier 7 → drop multiplier 3 → up to 2 extra rounds
+        // The proc is a coin flip, so assert over the reachable outcomes rather than one roll.
+        for (int attempt = 0; attempt < 100; attempt++) {
+            final int bonus = miningManager.rollBonusOreRounds();
+            assertTrue(bonus == 0 || bonus == 2,
+                    "tier 7 bonus rounds are either the failed flip (0) or dropMultiplier-1 (2)");
+        }
+    }
+
     @Test
     void isDropIllegalGuardsUnobtainableBlocks() {
         assertTrue(miningManager.isDropIllegal("spawner"));
