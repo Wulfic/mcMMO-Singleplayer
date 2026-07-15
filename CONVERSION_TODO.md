@@ -163,9 +163,10 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
 
 Port each on-hit body onto the K1 damage hook (+ K5 for ability events, `MetadataStore` already
 exists for per-entity tracking). **Swords, Axes and Unarmed are complete — every melee weapon skill
-is now fully ported**; the only remaining melee gap is Taming's damage modifiers. The projectile
-skills (Archery / Crossbows / Tridents) still need a projectile-launch hook before any of their
-bodies can land.
+is now fully ported — and Taming's damage modifiers are done on both sides of the seam, closing the
+last melee gap.** What remains in §C is Taming's non-damage bodies (Beast Lore, Environmentally
+Aware, Pummel) and the projectile skills (Archery / Crossbows / Tridents), which still need a
+projectile-launch hook before any of their bodies can land.
 
 - [~] **Swords** — Stab on-hit damage **DONE** (via K1 attacker branch, `MeleeDamageBonus`).
       **Rupture (bleed DoT) DONE** — the first §C on-hit *effect* body: `SwordsManager.processRupture(
@@ -269,7 +270,38 @@ bodies can land.
 - [ ] **Maces** — Cripple effect (needs potion/entity adapter), on-hit bonuses.
 - [ ] **Tridents** — throw handling + on-hit (needs projectile adapter).
 - [ ] **Crossbows** — on-hit body (needs projectile/metadata adapter).
-- [ ] **Taming** — Gore/Sharpened Claws/Thick Fur/Shock Proof damage modifiers, Beast Lore.
+- [~] **Taming** — the **damage modifiers are DONE**, on both sides of the K1 seam. *Attacker* arm
+      (`EntityDamageListener#applyWolfAttackBonus`, porting legacy `CombatUtils#processTamingCombat`):
+      a tamed wolf's bite carries its owner's **Fast Food Service** (heals the wolf for the unboosted
+      damage it dealt — the one STATIC_CONFIGURABLE Taming roll, 50% from
+      `FastFoodService.Chance`), **Sharpened Claws** (flat `+Bonus`) and **Gore** (multiplies the
+      *initial* damage, contributing only the delta — so the two are additive, not compounding).
+      Reached from `source.getSource() instanceof WolfEntity` (legacy's `painSource` type check) with
+      `wolf.getOwner() instanceof ServerPlayerEntity`; `getOwner()` is correct *here* (we need the
+      owner and have nothing to do without them), unlike in `canCombatSkillsTrigger` where it must be
+      avoided. *Defender* arm (`#handleWolfDamage`, porting the `Tameable` arm of legacy
+      `EntityListener#onEntityDamage` + `Taming.canPreventDamage`): **Thick Fur** (`ENTITY_ATTACK`/
+      `PROJECTILE` → `/Modifier`), **Thick Fur**'s fire snuff (`FIRE_TICK` → new
+      `PlatformLivingEntity.extinguish()`), **Holy Hound** (`MAGIC`/`POISON`/`WITHER` → heal back),
+      **Shock Proof** (explosion/lightning → `/Modifier`). Legacy switches on Bukkit's `DamageCause`,
+      which has no modern counterpart, so each arm is mapped to the vanilla damage types Bukkit
+      derived that cause from — note `FIRE_TICK` must be `isOf(ON_FIRE)`, **not** the `IS_FIRE` tag,
+      which also covers `IN_FIRE`/`CAMPFIRE` (Bukkit's `FIRE`, an Environmentally Aware arm); and
+      Bukkit's separate `POISON` cause has no distinct damage type to match (vanilla deals Poison as
+      `MAGIC`), so Holy Hound's three causes collapse to two tests. Dropped: the `WOLF_SHAKE`/
+      `WOLF_HEARTS`/`WOLF_SMOKE` effects (no particle adapter — same deferral as Dodge/Greater
+      Impact/Rupture), `master.isOnline() && isValid()` (the `UserManager` lookup is the SP
+      equivalent), the NPC skip and `doesPlayerHaveSkillPermission` (both already unported).
+      ⚠️ In-game verification pending. See §F upstream bug #8.
+      **Still TODO:** **Beast Lore** (needs a right-click-entity hook), **Environmentally Aware**
+      (its `CONTACT`/`FIRE`/`HOT_FLOOR`/`LAVA` arm needs an entity-teleport adapter and its `FALL`
+      arm a cancel-shaped seam — `ALLOW_DAMAGE`, as Arrow Deflect uses; those causes currently fall
+      through untouched), **Pummel** (needs velocity-along-a-*non-player's* look direction plus
+      particles), `attackTarget` (nearby-entity sweep), and **wolf-assisted Taming XP** — legacy's
+      `processTamingCombat` ends in `processCombatXP(mmoPlayer, target, TAMING, 3)`, but this port
+      awards combat XP *per kill* (`CombatListener`) and that listener only pays out when the
+      *killer* is a player, so a wolf's kill currently pays nothing. That is a pre-existing §B gap
+      needing an XP-model decision, not something the damage-modifier arm can drop in.
 
 ---
 
@@ -461,6 +493,30 @@ bodies can land.
       player-visible (it would have re-created the immunity bug above across a world reload). Now
       called from `McMMOMod#onServerStopping` next to the other trackers. The dodge-XP tracker and
       tracked-TNT markers were leaking the same way.
+- [ ] **Upstream bug #8 — Gore never rolls, stranding its `ChanceMax`/`MaxBonusLevel` config**
+      (Taming damage-modifier commit): `advanced.yml` ships `Skills.Taming.Gore.ChanceMax: 100.0`
+      plus a `MaxBonusLevel` ladder (Standard 100 / RetroMode 1000), documented as "Maximum chance of
+      triggering gore" and "On this level, the chance to cause Gore will be `<ChanceMax>`", and
+      `AdvancedConfig`'s validator dutifully validates **both**. But `TamingManager#gore(target,
+      damage)` contains no `ProbabilityUtil` call at all — it just applies the modifier — so the
+      **validator is the only reader of either key** and Gore in fact fires on *every* wolf hit once
+      unlocked (RetroMode level 150), rather than scaling from near-0% to 100% across the ladder.
+      The vestiges are still lying around: `gore`'s `target` parameter is unused, `Taming.goreBleedTicks`
+      has zero callers, and `runnables/skills/BleedContainer` is an **orphan class nothing ever
+      constructs** — the wreckage of a Gore bleed that no longer exists.
+      **Verified against upstream rather than assumed:** the vendored snapshot looked mangled, but
+      `mcMMO-Dev/mcMMO@master`'s `gore()` is byte-identical (no roll, no bleed) and its `Taming.java`
+      still carries the same orphaned `goreBleedTicks` — so this is genuine upstream, and the
+      vendored tree is faithful. **Ported faithfully (no roll); NOT patched** — inventing the roll
+      would be a deviation, and this port has no way to know what odds upstream intended.
+      Fourth of the "config knob that lies to the operator" family (`DebrisReduction`, Rupture
+      `Explosion_Damage`, SerratedStrikes `BleedTicks`), but the **most player-visible** of them: the
+      others merely fail to tune a value, whereas this one hands a low-level tamer a permanent
+      unconditional 2× wolf-damage multiplier that the config says they should rarely get. Decide
+      later whether to wire the roll (a balance change) or strip the keys + comments.
+      ⚠️ **Lesson: an unused parameter, a zero-caller constant and an orphan class are the fossil
+      record of a deleted branch — when a sub-skill's config promises a chance, grep for who actually
+      rolls it.**
 - [ ] **Suspected dead config — Rupture `Explosion_Damage`:** `AdvancedConfig.getRuptureExplosionDamage`
       and `MetadataConstants.METADATA_KEY_EXPLOSION_FROM_RUPTURE` have **zero callers upstream** —
       `RuptureTask` has no explosion code at all — yet `advanced.yml` still ships the values *and* a
@@ -498,10 +554,6 @@ bodies can land.
       (bytecode-verified: `1.0F / EXPLOSION_RADIUS` per item). Sound, but it means Bigger Bombs
       *lowers* the per-block yield as it widens the blast — check that the net payout still feels
       like an upgrade at high rank.
-- [ ] **Suspected real bug:** `ProbabilityUtil.isSkillRNGSuccessful(subSkill, player, multiplier)` — the
-      non-lucky branch calls `evaluate()` and **drops the `probabilityMultiplier`**; the lucky branch uses
-      `evaluate(LUCKY, multiplier)`. Confirm against upstream; if upstream applies it in both, non-lucky
-      players under-roll. Fix while touching combat/gathering RNG.
 - [ ] Keep the config-interaction gotcha in mind: RetroMode (default `true`) + the live 10× XP rate make
       drop-level gates clear fast — that's tuning *feel*, verify math at 1.0× single-mode.
 
