@@ -162,8 +162,8 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       Rupture (bleed DoT, see §E), Counter Attack, Serrated Strikes AoE.
 - [~] **Axes** — Axe Mastery on-hit damage **DONE**. Deferred: Armor Impact, Greater Impact, Critical
       Strikes, Skull Splitter AoE (all need target-armor/entity inspection).
-- [~] **Unarmed** — Steel Arm Style + Berserk on-hit damage **DONE**. Deferred: Disarm, Iron Grip,
-      Arrow Deflect.
+- [~] **Unarmed** — Steel Arm Style + Berserk on-hit damage **DONE**. Berserk's *block* effects
+      (insta-break + Block Cracker) **DONE** — see §D. Deferred: Disarm, Iron Grip, Arrow Deflect.
 - [ ] **Archery** — Daze, distance-based XP, arrow retrieval, Skill Shot damage (needs projectile hooks).
 - [ ] **Maces** — Cripple effect (needs potion/entity adapter), on-hit bonuses.
 - [ ] **Tridents** — throw handling + on-hit (needs projectile adapter).
@@ -176,6 +176,15 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
 
 - [ ] **Mining** — Blast Mining detonation (`canDetonate`/`remoteDetonation` TNT spawn + ray;
       `blastMiningDropProcessing` explosion drops). Super Breaker (via K6).
+- [~] **Unarmed** — Berserk's block effects **DONE** (commit 4f72a7344): `SuperAbilityListener.
+      instaBreak` ports legacy's `event.setInstaBreak(true)` — an active Berserk bare-fisted strike on
+      an affected block (`BlockUtils.affectedByBerserk`: Excavation-XP block / snow / glass) destroys
+      it via `ServerPlayerInteractionManager#tryBreakBlock`, which fires `PlayerBlockBreakEvents` so
+      drops + mcMMO XP/treasure still process (that strike returns `ActionResult.SUCCESS` so vanilla
+      doesn't also start a mining cycle); `processBlockCracker` ports `blockCrackerCheck` (gates on
+      `UnarmedManager.canUseBlockCracker`/`rollBlockCracker`, table in the new MC-free `Unarmed`).
+      Both run from `processAbilityEffects`, which now mirrors legacy `onBlockDamageHigher`'s
+      if/else-if shape. ⚠️ In-game verification pending. Deferred: Disarm/Iron Grip/Arrow Deflect (§C).
 - [~] **Woodcutting** — Tree Feller **DONE** (commit b275b10eb): MC-free `TreeFellerTraversal` (trunk/
       branch recursion + threshold cutoff, unit-tested) + MC-typed `TreeFellerProcessor` (per-log drops +
       Harvest Lumber bonus + XP orbs + Knock on Wood sapling filter + axe durability/Splinter gate +
@@ -230,6 +239,13 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       conversion table maps it (`dirt_path` → `grass_block`) — the branch was dead. Added `dirt_path`
       (kept the old alias). ⚠️ Worth grepping the other `MaterialMapStore` lists for the same class of
       staleness (pre-flattening / pre-1.17 names that silently match nothing).
+- [x] **Fixed upstream bug — incomplete `MaterialMapStore.fillBlockCrackerWhiteList`** (commit
+      4f72a7344): upstream whitelists only `stone_bricks` + `infested_stone_bricks`, but
+      `UnarmedManager#blockCrackerCheck`'s switch also converts `deepslate_bricks`, `deepslate_tiles`,
+      `polished_blackstone_bricks` and `nether_bricks` — and the whitelist gates the call, so those
+      four arms could never run. Added the four. Same shape as the mossify bug above (table entry with
+      no whitelist entry); `UnarmedTest` now asserts the table↔whitelist invariant in both directions,
+      which is how it was caught. ⚠️ The other paired table/whitelist sets deserve the same invariant.
 - [ ] **Suspected real bug:** `ProbabilityUtil.isSkillRNGSuccessful(subSkill, player, multiplier)` — the
       non-lucky branch calls `evaluate()` and **drops the `probabilityMultiplier`**; the lucky branch uses
       `evaluate(LUCKY, multiplier)`. Confirm against upstream; if upstream applies it in both, non-lucky
