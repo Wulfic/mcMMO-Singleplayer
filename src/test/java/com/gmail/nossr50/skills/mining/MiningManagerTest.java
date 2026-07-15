@@ -11,6 +11,7 @@ import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.player.UserManager;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.io.TempDir;
 class MiningManagerTest {
 
     private McMMOPlayer mmoPlayer;
+    private PlatformPlayer platformPlayer;
     private MiningManager miningManager;
 
     @BeforeEach
@@ -41,7 +43,7 @@ class MiningManagerTest {
         McMMOMod.setRankConfig(new RankConfig(dataFolder));
         McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
 
-        PlatformPlayer platformPlayer = mock(PlatformPlayer.class);
+        platformPlayer = mock(PlatformPlayer.class);
         when(platformPlayer.getUniqueId())
                 .thenReturn(UUID.fromString("00000000-0000-0000-0000-0000000000d1"));
 
@@ -151,6 +153,51 @@ class MiningManagerTest {
         atMiningLevel(1);
         assertTrue(miningManager.canDoubleDrop(), "double drops unlocked at 1");
         assertTrue(miningManager.canMotherLode(), "mother lode is always permitted");
+    }
+
+    // --- Remote detonation stance gate ---------------------------------------------------------
+
+    /** Put the player in the stance that should allow detonation: sneaking, pickaxe in hand. */
+    private void readyToDetonate() {
+        atMiningLevel(100); // Blast Mining rank 1.
+        when(platformPlayer.isSneaking()).thenReturn(true);
+        when(platformPlayer.isHoldingTool(ToolType.PICKAXE)).thenReturn(true);
+    }
+
+    @Test
+    void canDetonateWithASneakingPickaxeOnceBlastMiningUnlocks() {
+        readyToDetonate();
+        assertTrue(miningManager.canDetonate());
+    }
+
+    @Test
+    void cannotDetonateBeforeBlastMiningUnlocks() {
+        readyToDetonate();
+        atMiningLevel(99); // one short of the rank-1 unlock
+        assertFalse(miningManager.canDetonate(), "blast mining locked → no detonation");
+    }
+
+    @Test
+    void cannotDetonateWithoutSneaking() {
+        readyToDetonate();
+        when(platformPlayer.isSneaking()).thenReturn(false);
+        assertFalse(miningManager.canDetonate(), "detonation is a sneaking-only action");
+    }
+
+    @Test
+    void cannotDetonateEmptyHanded() {
+        readyToDetonate();
+        when(platformPlayer.isHoldingTool(ToolType.PICKAXE)).thenReturn(false);
+        assertFalse(miningManager.canDetonate(), "needs a pickaxe or the detonator item");
+    }
+
+    @Test
+    void theConfiguredDetonatorItemSubstitutesForAPickaxe() {
+        readyToDetonate();
+        when(platformPlayer.isHoldingTool(ToolType.PICKAXE)).thenReturn(false);
+        // config.yml Skills.Mining.Detonator_Name defaults to FLINT_AND_STEEL.
+        when(platformPlayer.isHoldingItem("FLINT_AND_STEEL")).thenReturn(true);
+        assertTrue(miningManager.canDetonate(), "the detonator item works in place of a pickaxe");
     }
 
     @Test

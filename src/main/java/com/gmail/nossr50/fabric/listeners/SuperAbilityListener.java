@@ -59,9 +59,20 @@ import net.minecraft.world.World;
  * {@code null} → pass), and only for {@link Hand#MAIN_HAND} so the dual main/off-hand dispatch can't
  * ready or fire an ability twice.
  *
+ * <p>Blast Mining hangs off the same two right-click paths (its detonation glue lives in
+ * {@link BlastMiningListener}): right-clicking thin air detonates the TNT you're aiming at, and
+ * right-clicking a TNT block with the detonator in hand is refused so you can't light one at your
+ * feet. ⚠️ Legacy's right-click-block arm was <b>unreachable</b> — its {@code else if} hangs off
+ * {@code if (!onlyActivateWhenSneaking || isSneaking())}, so it needs the player to <i>not</i> be
+ * sneaking while {@code canDetonate()} requires that they are (and with the default config the
+ * {@code if} is simply always true). Ported to the reachable form upstream clearly intended; the
+ * "else → remoteDetonation" half of that arm is intentionally dropped, as a ray-cast from a
+ * right-click-<i>block</i> can only ever re-find the block just clicked, which the TNT arm has
+ * already excluded — it could never detonate anything.
+ *
  * <p><b>Deferred (as their bodies land):</b> the Herbalism Green Thumb / Shroom Thumb / berry-bush
- * right-click paths, Blast Mining remote detonation on right-click-air, and Woodcutting's Leaf Blower
- * insta-break — all need their skill bodies + item/block adapters that are still stubbed.
+ * right-click paths and Woodcutting's Leaf Blower insta-break — both need skill bodies that are
+ * still stubbed.
  */
 public final class SuperAbilityListener {
 
@@ -82,12 +93,26 @@ public final class SuperAbilityListener {
             return ActionResult.PASS;
         }
         final McMMOPlayer mmoPlayer = resolve(player);
-        if (mmoPlayer == null || offhandBlocksActivation((ServerPlayerEntity) player)
-                || !McMMOMod.getGeneralConfig().getAbilitiesEnabled()) {
+        if (mmoPlayer == null) {
             return ActionResult.PASS;
         }
 
         final BlockState state = world.getBlockState(hitResult.getBlockPos());
+
+        // Blast Mining's "don't blow yourself up" guard: with the detonator (flint & steel, by
+        // default) in hand, right-clicking a TNT block you're standing next to would light it the
+        // vanilla way. Refusing the interaction is legacy's event.setCancelled(true). This runs
+        // before the activation chain because legacy checks it in an earlier (LOWEST-priority)
+        // handler whose cancel suppresses the activation handler entirely.
+        if (state.isOf(Blocks.TNT) && mmoPlayer.getMiningManager().canDetonate()) {
+            return ActionResult.FAIL;
+        }
+
+        if (offhandBlocksActivation((ServerPlayerEntity) player)
+                || !McMMOMod.getGeneralConfig().getAbilitiesEnabled()) {
+            return ActionResult.PASS;
+        }
+
         if (BlockUtils.canActivateTools(state)) {
             if (BlockUtils.canActivateHerbalism(state)) {
                 mmoPlayer.processAbilityActivation(PrimarySkillType.HERBALISM);
@@ -97,19 +122,26 @@ public final class SuperAbilityListener {
         return ActionResult.PASS;
     }
 
-    /** Right-click the air → ready every tool skill (no target block to gate on). */
+    /** Right-click the air → ready every tool skill, and fire Blast Mining's remote detonation. */
     private static ActionResult onUseItem(PlayerEntity player, World world, Hand hand) {
         if (hand != Hand.MAIN_HAND) {
             return ActionResult.PASS;
         }
         final McMMOPlayer mmoPlayer = resolve(player);
-        if (mmoPlayer == null || offhandBlocksActivation((ServerPlayerEntity) player)
-                || !McMMOMod.getGeneralConfig().getAbilitiesEnabled()) {
+        if (mmoPlayer == null || offhandBlocksActivation((ServerPlayerEntity) player)) {
             return ActionResult.PASS;
         }
 
-        mmoPlayer.processAbilityActivation(PrimarySkillType.HERBALISM);
-        readyToolSkills(mmoPlayer);
+        if (McMMOMod.getGeneralConfig().getAbilitiesEnabled()) {
+            mmoPlayer.processAbilityActivation(PrimarySkillType.HERBALISM);
+            readyToolSkills(mmoPlayer);
+        }
+
+        // Blast Mining: aiming at distant TNT and right-clicking thin air detonates it. Legacy runs
+        // this after the activation chain and outside the abilities-enabled gate, as here.
+        if (mmoPlayer.getMiningManager().canDetonate()) {
+            BlastMiningListener.remoteDetonation(mmoPlayer, (ServerPlayerEntity) player);
+        }
         return ActionResult.PASS;
     }
 
