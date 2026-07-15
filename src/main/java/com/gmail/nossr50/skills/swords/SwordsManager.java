@@ -1,25 +1,27 @@
 package com.gmail.nossr50.skills.swords;
 
+import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.MetadataStore;
+import com.gmail.nossr50.platform.PlatformLivingEntity;
+import com.gmail.nossr50.runnables.skills.RuptureTask;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
+import org.jetbrains.annotations.NotNull;
 
 /**
- * Swords skill manager (Phase 10.3 port). Only the Stab damage math and the activation/unlock gates
- * survive; the effect bodies that touch Bukkit entities, metadata, or the Folia scheduler are
- * dropped until the combat/entity + metadata adapters land.
+ * Swords skill manager (Phase 10.3 port; Rupture added in §C). The Stab damage math, the
+ * activation/unlock gates, and the Rupture bleed are live.
  *
- * <p>Dropped until the combat phase:
+ * <p>Still dropped, pending their adapters:
  * <ul>
- *   <li>{@code processRupture} / {@code canUseRupture}'s effect — starts a repeating bleed task
- *       ({@code RuptureTask}) tracked via entity metadata + the Folia scheduler, and notifies a
- *       {@code Player} defender;</li>
  *   <li>{@code counterAttackChecks} / {@code canUseCounterAttack} — deals reflected damage through
  *       {@code CombatUtils} against a raw {@code LivingEntity};</li>
  *   <li>{@code serratedStrikes} — the {@code CombatUtils} ability AoE.</li>
@@ -52,6 +54,56 @@ public class SwordsManager extends SkillManager {
         }
 
         return mmoPlayer.getAbilityMode(SuperAbilityType.SERRATED_STRIKES);
+    }
+
+    /**
+     * Rupture: a sword hit may start (or refresh) a bleed damage-over-time on the target. Ports
+     * legacy {@code SwordsManager#processRupture}.
+     *
+     * <p>An already-bleeding target refreshes rather than stacking: only one {@link RuptureTask}
+     * runs per target, parked on {@link MetadataStore} under {@link RuptureTask#RUPTURE_KEY}.
+     *
+     * <p>Legacy's PvP arms are dropped with the rest of PvP: a defending {@code Player} could block
+     * to refuse the bleed and got a "you are bleeding" notification, and the tick damage/duration
+     * were read from the {@code Against_Players} config branch. The only player in this port is the
+     * attacker, and a sword swing cannot target its own wielder, so the target is never a player and
+     * those branches would be dead code — hence the hardcoded {@code false} below.
+     *
+     * @param target the entity that was hit
+     * @param attackStrengthScale committed attack-cooldown charge of the hit (0.0–1.0); scales the
+     * odds so a spam-clicked swing is less likely to apply a bleed
+     */
+    public void processRupture(@NotNull PlatformLivingEntity target, double attackStrengthScale) {
+        if (!canUseRupture()) {
+            return;
+        }
+
+        final RuptureTask existingRupture = MetadataStore.get(target.getUniqueId(),
+                RuptureTask.RUPTURE_KEY, RuptureTask.class);
+        if (existingRupture != null) {
+            existingRupture.refreshRupture();
+            return; // Don't apply a second bleed.
+        }
+
+        final AdvancedConfig advancedConfig = McMMOMod.getAdvancedConfig();
+        final double ruptureOdds =
+                advancedConfig.getRuptureChanceToApplyOnHit(getRuptureRank()) * attackStrengthScale;
+        if (!ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.SWORDS, mmoPlayer,
+                ruptureOdds)) {
+            return;
+        }
+
+        final RuptureTask ruptureTask = new RuptureTask(target,
+                advancedConfig.getRuptureTickDamage(false, getRuptureRank()),
+                advancedConfig.getRuptureDurationSeconds(false) * 20);
+
+        // Mark before scheduling: the marker is what stops the next hit stacking a second bleed.
+        MetadataStore.set(target.getUniqueId(), RuptureTask.RUPTURE_KEY, ruptureTask);
+        McMMOMod.getScheduler().runTimer(ruptureTask, 1, 1);
+    }
+
+    private int getRuptureRank() {
+        return RankUtils.getRank(getPlayer(), SubSkillType.SWORDS_RUPTURE);
     }
 
     public double getStabDamage() {

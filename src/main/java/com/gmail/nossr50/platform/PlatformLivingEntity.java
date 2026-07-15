@@ -60,6 +60,16 @@ public final class PlatformLivingEntity {
         return handle.getHealth();
     }
 
+    /**
+     * Write health directly, bypassing the damage pipeline. This is Bukkit {@code setHealth}'s role
+     * in mcMMO: Rupture's damage-over-time is "pure" (see {@code advanced.yml}) and must not trigger
+     * knockback, invulnerability frames, hurt animation or death attribution the way
+     * {@link LivingEntity#damage} would.
+     */
+    public void setHealth(float health) {
+        handle.setHealth(health);
+    }
+
     public float getMaxHealth() {
         return handle.getMaxHealth();
     }

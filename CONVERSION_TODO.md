@@ -158,8 +158,23 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
 The weapon skills earn kill-XP but none of their on-hit effects fire. Port each body onto the K1 damage
 hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tracking):
 
-- [~] **Swords** — Stab on-hit damage **DONE** (via K1 attacker branch, `MeleeDamageBonus`). Deferred:
-      Rupture (bleed DoT, see §E), Counter Attack, Serrated Strikes AoE.
+- [~] **Swords** — Stab on-hit damage **DONE** (via K1 attacker branch, `MeleeDamageBonus`).
+      **Rupture (bleed DoT) DONE** — the first §C on-hit *effect* body: `SwordsManager.processRupture(
+      PlatformLivingEntity, attackStrengthScale)` ports legacy's method (rank gate → refresh-if-already
+      -bleeding → `Chance_To_Apply_On_Hit * attackStrengthScale` roll → park a task), driven from
+      `EntityDamageListener.maybeProcessRupture` on a sword hit that leaves the target alive (legacy's
+      `target.getHealth() - event.getFinalDamage() > 0` check; `modifyAppliedDamage` runs pre-health-
+      write so the read matches). New `runnables/skills/RuptureTask` runs on the `TickScheduler`,
+      writing "pure" damage straight to health via the new `PlatformLivingEntity.setHealth` (no
+      knockback/i-frames/armor reduction) every 10 ticks, clamped so a bleed can never land the killing
+      blow. One bleed per target, parked on `MetadataStore` under `mcmmo:rupture` (replaces legacy's
+      `RuptureTaskMeta` wrapper, which existed only because Bukkit metadata needed a `MetadataValue`).
+      Kept MC-free via `PlatformLivingEntity` + new UUID-keyed `MetadataStore` overloads, so the whole
+      timer/expiry/clamp loop is unit-tested (`RuptureTaskTest` ×7, mutation-verified). ⚠️ In-game
+      verification pending. Dropped: `McMMOEntityDamageByRuptureEvent` (K5 plugin veto), the PvP arms
+      (blocking defender / `Against_Players` config branch / defender notification — the target is
+      never a player in SP), `MobHealthbarUtils` (cut in §1.5), bleed particles (no particle adapter —
+      same deferral as Dodge). See §F upstream bug #4. Deferred: Counter Attack, Serrated Strikes AoE.
 - [~] **Axes** — Axe Mastery on-hit damage **DONE**. Deferred: Armor Impact, Greater Impact, Critical
       Strikes, Skull Splitter AoE (all need target-armor/entity inspection).
 - [~] **Unarmed** — Steel Arm Style + Berserk on-hit damage **DONE**. Berserk's *block* effects
@@ -286,6 +301,37 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       ⚠️ Third bug of this shape (see the two above) — dead branches hide behind gates that
       contradict the body's own preconditions. Cross-check *every* ported `else if` gate against
       the callee's internal gates.
+- [x] **Fixed upstream bug — `RuptureTask`'s failsafe shadows its own expiry** (Rupture commit): the
+      task ran two counters — `ruptureTick` (reset by `refreshRupture`) and a `totalTicks` failsafe
+      bounded by `totalTickCeiling = min(expireTick, 200)`. That ceiling is by construction `<=
+      expireTick` and both counters advance together, so `totalTicks >= ceiling` always trips first
+      and **`endRupture()` is unreachable in every configuration** (with the shipped
+      `Duration_In_Seconds.Against_Mobs: 5`, expireTick=100 and ceiling=100 — an exact collision).
+      Two player-visible effects: (1) only `endRupture()` removes the rupture marker on expiry, so any
+      mob that *survives* a full bleed keeps the marker forever and becomes **permanently
+      rupture-immune** — every later hit takes the refresh path on a dead, unscheduled task; (2)
+      `refreshRupture()` cannot extend a bleed, because it resets `ruptureTick` but not `totalTicks`,
+      so the failsafe still fires on the original schedule. Ported to the intent: one tick counter,
+      still truncated at `MAX_RUPTURE_TICKS` (200), and *every* exit path runs `endRupture()`.
+      `RuptureTaskTest` pins both halves and was mutation-checked (reinstating the legacy
+      cancel-without-release fails 3 cases). ⚠️ **Fourth bug of the same family** and a new shape:
+      #1/#2 were table↔whitelist, #3 was gate↔precondition, this one is **failsafe↔normal-path** — a
+      later-added guard silently swallowing the original exit. When porting anything with two
+      counters/timeouts over one loop, check which one can actually win.
+- [x] **Fixed port bug (ours, not upstream) — `MetadataStore` leaked across world sessions:**
+      `MetadataStore.clearAll()` existed with an "e.g. on server stop" javadoc and **zero callers**.
+      Bukkit dropped plugin metadata on disable, but our side-table is a static map and entity UUIDs
+      persist to disk, so markers outlived the session that owned them while `scheduler.cancelAll()`
+      killed the tasks they pointed at. Rupture is the first feature to make that leak
+      player-visible (it would have re-created the immunity bug above across a world reload). Now
+      called from `McMMOMod#onServerStopping` next to the other trackers. The dodge-XP tracker and
+      tracked-TNT markers were leaking the same way.
+- [ ] **Suspected dead config — Rupture `Explosion_Damage`:** `AdvancedConfig.getRuptureExplosionDamage`
+      and `MetadataConstants.METADATA_KEY_EXPLOSION_FROM_RUPTURE` have **zero callers upstream** —
+      `RuptureTask` has no explosion code at all — yet `advanced.yml` still ships the values *and* a
+      comment promising "If Rupture runs for 5 seconds without being reapplied, it explodes". Same
+      class as `DebrisReduction`: a config knob that lies to the operator. Ported nothing; decide
+      later whether to implement the explosion or strip the config + comment.
 - [ ] **Known deviation (whole-listener, not Blast Mining specific):** legacy gates its entire
       interact handler on `player.getGameMode() != CREATIVE`; `SuperAbilityListener` has no such
       gate, so super-ability readying/activation (and now remote detonation) also work in creative.
