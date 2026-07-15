@@ -6,6 +6,7 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.registry.Registries;
 import org.jetbrains.annotations.NotNull;
 
@@ -141,6 +142,21 @@ public final class BlockUtils {
 
     public static boolean affectedByBlockCracker(@NotNull BlockState blockState) {
         return affectedByBlockCracker(blockState.getBlock());
+    }
+
+    /**
+     * Whether Berserk insta-breaks this block. Ports the {@code BERSERK} branch of legacy
+     * {@code SuperAbilityType#blockCheck(Block)}, which lands here rather than back on the enum so
+     * {@link com.gmail.nossr50.datatypes.skills.SuperAbilityType} stays MC-free. That switch's other
+     * branches are each just a sibling check already exposed by this class
+     * ({@link #affectedByGigaDrillBreaker}/{@link #canMakeMossy}/{@link #affectedBySuperBreaker}/
+     * {@link #hasWoodcuttingXP}) called directly at their single call site, so re-adding the
+     * dispatch would only duplicate them.
+     */
+    public static boolean affectedByBerserk(@NotNull BlockState blockState) {
+        return affectedByGigaDrillBreaker(blockState)
+                || blockState.isOf(Blocks.SNOW)
+                || McMMOMod.getMaterialMapStore().isGlass(idPath(blockState.getBlock()));
     }
 
     // --- Woodcutting / tree ------------------------------------------------

@@ -3,15 +3,19 @@ package com.gmail.nossr50.fabric.listeners;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.Materials;
 import com.gmail.nossr50.skills.herbalism.Herbalism;
+import com.gmail.nossr50.skills.unarmed.Unarmed;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.sounds.SoundManager;
+import com.gmail.nossr50.util.sounds.SoundType;
 import java.util.Optional;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
@@ -48,14 +52,16 @@ import net.minecraft.world.World;
  *       affects flips the super-ability mode on and schedules the {@code AbilityDisableTask}.</li>
  * </ol>
  *
- * <p>All callbacks return {@link ActionResult#PASS}: mcMMO observes the interaction, it never
- * cancels vanilla behaviour here. Handlers run only for a {@link ServerPlayerEntity} (client-side
- * callback fires resolve to {@code null} → pass), and only for {@link Hand#MAIN_HAND} so the dual
- * main/off-hand dispatch can't ready or fire an ability twice.
+ * <p>Callbacks return {@link ActionResult#PASS} — mcMMO observes the interaction rather than
+ * replacing it — with one exception: Berserk's insta-break has already destroyed the block, so that
+ * strike returns {@link ActionResult#SUCCESS} to stop vanilla starting a mining cycle on it.
+ * Handlers run only for a {@link ServerPlayerEntity} (client-side callback fires resolve to
+ * {@code null} → pass), and only for {@link Hand#MAIN_HAND} so the dual main/off-hand dispatch can't
+ * ready or fire an ability twice.
  *
  * <p><b>Deferred (as their bodies land):</b> the Herbalism Green Thumb / Shroom Thumb / berry-bush
- * right-click paths, Blast Mining remote detonation on right-click-air, and the Berserk insta-break on
- * left-click — all need their skill bodies + item/block adapters that are still stubbed.
+ * right-click paths, Blast Mining remote detonation on right-click-air, and Woodcutting's Leaf Blower
+ * insta-break — all need their skill bodies + item/block adapters that are still stubbed.
  */
 public final class SuperAbilityListener {
 
@@ -120,14 +126,14 @@ public final class SuperAbilityListener {
 
         final BlockState state = world.getBlockState(pos);
         final ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
+        final ItemStack held = serverPlayer.getMainHandStack();
+        boolean instaBroke = false;
 
         // Legacy splits this strike across two BlockDamageEvent handlers: activation at NORMAL
         // priority (onBlockDamage), then the ability *effects* at HIGHEST (onBlockDamageHigher).
         // That order is load-bearing — the strike that activates Green Terra also converts the block
-        // it was activated on — so activation must stay ahead of the effect below.
+        // it was activated on — so activation must stay ahead of the effects below.
         if (BlockUtils.canActivateAbilities(state)) {
-            final ItemStack held = serverPlayer.getMainHandStack();
-
             // Order matters: the prepared tool + matching item + block-affects-ability triple selects
             // one super ability. Singleplayer drops the legacy Permissions.* gates (Phase 6).
             if (mmoPlayer.getToolPreparationMode(ToolType.HOE) && ItemUtils.isHoe(held)
@@ -148,17 +154,107 @@ public final class SuperAbilityListener {
                             || state.isOf(Blocks.SNOW)
                             || BlockUtils.affectedByBlockCracker(state))) {
                 mmoPlayer.checkAbilityActivation(PrimarySkillType.UNARMED);
-                // PORT: legacy also insta-broke the block once Berserk was active (BERSERK.blockCheck
-                // + simulateBlockBreak → event.setInstaBreak). That's the Unarmed super-ability
-                // *body*, which lands with the Berserk block-break body + the block-mutation adapter.
+
+                // The strike that activates Berserk also insta-breaks, exactly as legacy.
+                if (mmoPlayer.getAbilityMode(SuperAbilityType.BERSERK)
+                        && BlockUtils.affectedByBerserk(state)) {
+                    instaBroke = instaBreak(mmoPlayer, serverPlayer, pos, state);
+                }
             }
         }
 
-        // Green Terra's effect (mossify the struck block). Legacy's effect handler has no
+        // Super-ability effects (legacy onBlockDamageHigher). That handler has no
         // canActivateAbilities gate and doesn't else-if against the activation branches above, so
-        // this runs on every strike an already-active Green Terra makes on a mossify-able block.
-        maybeProcessGreenTerraConversion(mmoPlayer, serverPlayer, world, pos, state);
-        return ActionResult.PASS;
+        // these run on every strike an already-active ability makes on an eligible block.
+        instaBroke = processAbilityEffects(mmoPlayer, serverPlayer, world, pos, state, held,
+                instaBroke);
+
+        // Cancelling the attack is how the port spells legacy's event.setInstaBreak(true): the block
+        // is already gone, so vanilla must not also start a mining-progress cycle on it.
+        return instaBroke ? ActionResult.SUCCESS : ActionResult.PASS;
+    }
+
+    /**
+     * The already-active super-ability effects, porting legacy {@code BlockListener#onBlockDamageHigher}
+     * — including its if/else-if shape, so at most one ability effect fires per strike.
+     *
+     * @param instaBroke whether the activation phase above already broke this block (legacy's
+     *                   {@code event.getInstaBreak()} read)
+     * @return {@code instaBroke}, updated if this phase broke the block
+     */
+    private static boolean processAbilityEffects(McMMOPlayer mmoPlayer,
+            ServerPlayerEntity serverPlayer, World world, BlockPos pos, BlockState state,
+            ItemStack held, boolean instaBroke) {
+        if (mmoPlayer.getHerbalismManager().isGreenTerraActive() && BlockUtils.canMakeMossy(state)) {
+            processGreenTerraConversion(mmoPlayer, serverPlayer, world, pos, state);
+        } else if (mmoPlayer.getAbilityMode(SuperAbilityType.BERSERK)
+                && (held.isEmpty() || McMMOMod.getGeneralConfig().getUnarmedItemsAsUnarmed())) {
+            // These two branches can't contend for the same block: Block Cracker's whitelist holds
+            // brick/tile blocks, while affectedByBerserk covers Excavation-XP blocks, snow and glass.
+            if (mmoPlayer.getUnarmedManager().canUseBlockCracker()
+                    && BlockUtils.affectedByBlockCracker(state)) {
+                processBlockCracker(mmoPlayer, world, pos, state);
+            } else if (!instaBroke && BlockUtils.affectedByBerserk(state)) {
+                instaBroke = instaBreak(mmoPlayer, serverPlayer, pos, state);
+            }
+        }
+        // PORT: legacy's third branch is Woodcutting's Leaf Blower (insta-break the non-wood parts of
+        // a tree). It lands with the Leaf Blower body, which is still deferred (§D Woodcutting).
+        return instaBroke;
+    }
+
+    /**
+     * Berserk's insta-break: while Berserk is active, a bare-fisted strike on a block it affects
+     * (dirt/gravel/sand, snow, glass) destroys it outright instead of mining it down. Ports legacy's
+     * {@code event.setInstaBreak(true)}, which handed the break back to vanilla as a normal player
+     * break — so this uses {@code tryBreakBlock} rather than {@code World#breakBlock}, keeping the
+     * drops, the block-break event, and therefore mcMMO's own XP/treasure processing
+     * ({@code BlockBreakListener}) intact, exactly as the real {@code BlockBreakEvent} did upstream.
+     *
+     * @return whether the block was actually broken
+     */
+    private static boolean instaBreak(McMMOPlayer mmoPlayer, ServerPlayerEntity serverPlayer,
+            BlockPos pos, BlockState state) {
+        // PORT (K5): legacy gated this on EventUtils.simulateBlockBreak(block, player) — a fake
+        // BlockBreakEvent asking other plugins whether the break was allowed. No plugins exist in
+        // singleplayer, so the check collapses to "always allowed"; tryBreakBlock still enforces
+        // vanilla's own rules (adventure mode, protected spawn) and reports the outcome.
+        if (!serverPlayer.interactionManager.tryBreakBlock(pos)) {
+            return false;
+        }
+
+        if (blockPath(state).contains("glass")) {
+            SoundManager.worldSendSound(mmoPlayer.getPlayer(), SoundType.GLASS);
+        } else {
+            SoundManager.sendSound(mmoPlayer.getPlayer(), SoundType.POP);
+        }
+        return true;
+    }
+
+    /**
+     * The Block Cracker sub-skill: while Berserk is active, striking an intact brick/tile block has a
+     * chance to crack it in place. Ports legacy {@code UnarmedManager#blockCrackerCheck}, split as
+     * usual — config + RNG gate on {@link com.gmail.nossr50.skills.unarmed.UnarmedManager#rollBlockCracker},
+     * conversion table in {@link Unarmed#blockCrackerConversionTarget}, live swap here.
+     */
+    private static void processBlockCracker(McMMOPlayer mmoPlayer, World world, BlockPos pos,
+            BlockState state) {
+        if (!mmoPlayer.getUnarmedManager().rollBlockCracker()) {
+            return;
+        }
+
+        final Optional<String> targetPath = Unarmed.blockCrackerConversionTarget(blockPath(state));
+        if (targetPath.isEmpty()) {
+            return; // block-cracker-whitelisted but with no cracked variant: nothing to become.
+        }
+        final Optional<Block> targetBlock = Materials.block(targetPath.get());
+        if (targetBlock.isEmpty()) {
+            LogUtils.debug(McMMOMod.LOGGER, "Block Cracker target '" + targetPath.get()
+                    + "' is not a block in this registry; skipping crack of " + blockPath(state));
+            return;
+        }
+
+        world.setBlockState(pos, targetBlock.get().getDefaultState());
     }
 
     /**
@@ -172,14 +268,12 @@ public final class SuperAbilityListener {
      * Phase 6). Legacy's {@code blockState.update(true)} force-flag is implicit here:
      * {@link World#setBlockState(BlockPos, BlockState)} already notifies neighbours, which is what
      * re-connects a converted {@code cobblestone_wall}.
+     *
+     * <p>The Green Terra active + {@code canMakeMossy} gate lives on the caller, matching legacy's
+     * own branch condition in {@code onBlockDamageHigher}.
      */
-    private static void maybeProcessGreenTerraConversion(McMMOPlayer mmoPlayer,
+    private static void processGreenTerraConversion(McMMOPlayer mmoPlayer,
             ServerPlayerEntity serverPlayer, World world, BlockPos pos, BlockState state) {
-        if (!mmoPlayer.getHerbalismManager().isGreenTerraActive()
-                || !BlockUtils.canMakeMossy(state)) {
-            return;
-        }
-
         final Optional<String> targetPath = Herbalism.greenTerraConversionTarget(blockPath(state));
         if (targetPath.isEmpty()) {
             return; // mossify-whitelisted but with no conversion target: nothing to become.
