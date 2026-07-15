@@ -1,6 +1,8 @@
 package com.gmail.nossr50.skills.axes;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -9,7 +11,9 @@ import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
@@ -70,6 +74,41 @@ class AxesManagerTest {
 
         atAxesLevel(100); // rank 2 → 2 * 1.0 = 2.0
         assertEquals(2.0D, Axes.getAxeMasteryBonusDamage(platformPlayer), 1e-9, "rank 2 → 2.0");
+    }
+
+    /**
+     * Skull Splitter's AoE damage is {@code (damage / DamageModifier(2.0)) * attackStrength}. The
+     * attack-strength scaling is the documented asymmetry with Serrated Strikes, which is not scaled.
+     */
+    @Test
+    void skullSplitterDamageIsHalvedAndScaledByAttackStrength() {
+        when(mmoPlayer.getAttackStrength()).thenReturn(1.0F); // fully charged swing
+        assertEquals(5.0D, axesManager.skullSplitterDamage(10.0D), 1e-9,
+                "full-strength swing → damage / 2.0");
+
+        when(mmoPlayer.getAttackStrength()).thenReturn(0.5F); // half-charged (spam-clicked) swing
+        assertEquals(2.5D, axesManager.skullSplitterDamage(10.0D), 1e-9,
+                "half-strength swing → half the AoE damage");
+    }
+
+    @Test
+    void skullSplitterGateNeedsUnlockActiveAbilityAndLiveTarget() {
+        final PlatformLivingEntity target = mock(PlatformLivingEntity.class);
+        when(target.isValid()).thenReturn(true);
+        when(mmoPlayer.getAbilityMode(SuperAbilityType.SKULL_SPLITTER)).thenReturn(true);
+
+        atAxesLevel(49); // one short of the RetroMode Rank_1 unlock
+        assertFalse(axesManager.canUseSkullSplitter(target), "locked below rank 1");
+
+        atAxesLevel(50); // Skull Splitter Rank_1
+        assertTrue(axesManager.canUseSkullSplitter(target), "unlocked + ability active → fires");
+
+        when(mmoPlayer.getAbilityMode(SuperAbilityType.SKULL_SPLITTER)).thenReturn(false);
+        assertFalse(axesManager.canUseSkullSplitter(target), "unlocked but ability not active");
+
+        when(mmoPlayer.getAbilityMode(SuperAbilityType.SKULL_SPLITTER)).thenReturn(true);
+        when(target.isValid()).thenReturn(false);
+        assertFalse(axesManager.canUseSkullSplitter(target), "dead/removed target is never struck");
     }
 
     @Test

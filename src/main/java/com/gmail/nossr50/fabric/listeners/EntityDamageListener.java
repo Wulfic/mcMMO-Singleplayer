@@ -2,6 +2,7 @@ package com.gmail.nossr50.fabric.listeners;
 
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.DodgeResult;
 import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.RollResult;
 import com.gmail.nossr50.fabric.McMMOMod;
@@ -10,9 +11,12 @@ import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.MeleeDamageBonus;
 import com.gmail.nossr50.skills.MeleeDamageBonus.MeleeWeapon;
 import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
+import com.gmail.nossr50.skills.axes.AxesManager;
+import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.skills.CombatUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import java.util.UUID;
@@ -38,11 +42,12 @@ import net.minecraft.sound.SoundCategory;
  * <p>Currently wired: <b>K2 — fall damage → Acrobatics Roll</b>, the defender half of <b>K1 — combat
  * damage → Acrobatics Dodge</b> (attacker resolved via {@link DamageSource#getAttacker()}), and the
  * attacker half of <b>K1 — melee weapon on-hit damage bonuses</b> (Swords Stab / Axe Mastery /
- * Unarmed Steel Arm + Berserk, composed MC-free in {@link MeleeDamageBonus}), and the first on-hit
- * <em>effect</em> sub-skill, <b>Swords Rupture</b> (bleed DoT — see
- * {@link #maybeProcessRupture}). The remaining effect-only sub-skills (Counter Attack, Armor Impact,
- * Taming damage modifiers, projectile skills, …) attach to this same entry point as their
- * entity/metadata adapters land.
+ * Unarmed Steel Arm + Berserk, composed MC-free in {@link MeleeDamageBonus}), and the on-hit
+ * <em>effect</em> sub-skills: <b>Swords Rupture</b> (bleed DoT — see {@link #maybeProcessRupture})
+ * and the two combat super abilities, <b>Serrated Strikes</b> and <b>Skull Splitter</b> (AoE — see
+ * {@link #maybeProcessSerratedStrikes} / {@link #maybeProcessSkullSplitter}). The remaining
+ * effect-only sub-skills (Counter Attack, Armor Impact, Taming damage modifiers, projectile skills,
+ * …) attach to this same entry point as their entity/metadata adapters land.
  */
 public final class EntityDamageListener {
 
@@ -61,6 +66,14 @@ public final class EntityDamageListener {
      */
     public static float onModifyAppliedDamage(LivingEntity entity, DamageSource source, float amount) {
         if (amount <= 0) {
+            return amount;
+        }
+        // Damage mcMMO is dealing itself (a Serrated Strikes / Skull Splitter AoE) must not be fed
+        // back through mcMMO's own on-hit processing: the AoE attributes its damage to the player,
+        // so without this it would read as a fresh swing and re-fire the very ability that is
+        // dealing it. Legacy guards its damage handlers the same way, via a custom-damage marker on
+        // the target (see CombatUtils#isProcessingMcMMODamage for why a ThreadLocal replaces it).
+        if (CombatUtils.isProcessingMcMMODamage()) {
             return amount;
         }
 
@@ -159,10 +172,46 @@ public final class EntityDamageListener {
         // Flagged for the tuning pass; the correct seam is a pre-armor hook once one exists.
         final float boostedDamage = MeleeDamageBonus.applyBonus(mmoPlayer, weapon, amount);
 
+        // Legacy's per-weapon ordering, preserved: the super-ability AoE fires after the damage
+        // bonus is computed but before it is committed, and is passed the *unboosted* damage
+        // (legacy hands it `event.getDamage()`, which it only overwrites via setDamage afterwards).
         if (weapon == MeleeWeapon.SWORD) {
+            maybeProcessSerratedStrikes(mmoPlayer, attacker, target, amount);
             maybeProcessRupture(mmoPlayer, target, boostedDamage);
+        } else if (weapon == MeleeWeapon.AXE) {
+            maybeProcessSkullSplitter(mmoPlayer, attacker, target, amount);
         }
         return boostedDamage;
+    }
+
+    /**
+     * Swords Serrated Strikes: while the super ability is active, a sword hit also strikes nearby
+     * entities for a fraction of the damage. Mirrors legacy {@code CombatUtils#processSwordCombat}'s
+     * {@code canUseSerratedStrike} arm.
+     */
+    private static void maybeProcessSerratedStrikes(McMMOPlayer mmoPlayer,
+            ServerPlayerEntity attacker, LivingEntity target, float damage) {
+        final SwordsManager swords = mmoPlayer.getSwordsManager();
+        if (swords == null || !swords.canUseSerratedStrike()) {
+            return;
+        }
+        CombatUtils.applyAbilityAoE(attacker, mmoPlayer, target,
+                swords.serratedStrikesDamage(damage), PrimarySkillType.SWORDS);
+    }
+
+    /**
+     * Axes Skull Splitter: while the super ability is active, an axe hit also strikes nearby entities
+     * for a fraction of the damage. Mirrors legacy {@code CombatUtils#processAxeCombat}'s
+     * {@code canUseSkullSplitter} arm.
+     */
+    private static void maybeProcessSkullSplitter(McMMOPlayer mmoPlayer, ServerPlayerEntity attacker,
+            LivingEntity target, float damage) {
+        final AxesManager axes = mmoPlayer.getAxesManager();
+        if (axes == null || !axes.canUseSkullSplitter(new PlatformLivingEntity(target))) {
+            return;
+        }
+        CombatUtils.applyAbilityAoE(attacker, mmoPlayer, target, axes.skullSplitterDamage(damage),
+                PrimarySkillType.AXES);
     }
 
     /**

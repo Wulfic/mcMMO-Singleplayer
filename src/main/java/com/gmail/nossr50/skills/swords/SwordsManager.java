@@ -23,10 +23,12 @@ import org.jetbrains.annotations.NotNull;
  * <p>Still dropped, pending their adapters:
  * <ul>
  *   <li>{@code counterAttackChecks} / {@code canUseCounterAttack} — deals reflected damage through
- *       {@code CombatUtils} against a raw {@code LivingEntity};</li>
- *   <li>{@code serratedStrikes} — the {@code CombatUtils} ability AoE.</li>
+ *       {@code CombatUtils} against a raw {@code LivingEntity}.</li>
  * </ul>
- * The static {@code Swords} modifiers (counter/serrated) went with those bodies and were not ported.
+ * The static {@code Swords.counterAttackModifier} went with that body and was not ported;
+ * {@code Swords.serratedStrikesModifier} became the live config read in
+ * {@link #serratedStrikesDamage(double)} (the service-locator config is installed after class load,
+ * so a cached static would be fragile — same call the ported {@code Axes} makes).
  */
 public class SwordsManager extends SkillManager {
     public SwordsManager(McMMOPlayer mmoPlayer) {
@@ -104,6 +106,23 @@ public class SwordsManager extends SkillManager {
 
     private int getRuptureRank() {
         return RankUtils.getRank(getPlayer(), SubSkillType.SWORDS_RUPTURE);
+    }
+
+    /**
+     * Serrated Strikes: the damage each nearby entity takes when the super ability's AoE fires.
+     * Ports the arithmetic half of legacy {@code SwordsManager#serratedStrikes}, which passed
+     * {@code damage / Swords.serratedStrikesModifier} to {@code CombatUtils#applyAbilityAoE}; the
+     * MC-typed half — finding the nearby entities and dealing the damage — lives in
+     * {@link com.gmail.nossr50.util.skills.CombatUtils#applyAbilityAoE}.
+     *
+     * <p>Unlike Skull Splitter, this is <em>not</em> scaled by attack strength: legacy scales only
+     * the Axes one. Deliberate asymmetry, preserved.
+     *
+     * @param damage the damage the triggering hit dealt to the primary target
+     * @return the per-entity AoE damage (before {@code applyAbilityAoE}'s floor of 1)
+     */
+    public double serratedStrikesDamage(double damage) {
+        return damage / McMMOMod.getAdvancedConfig().getSerratedStrikesModifier();
     }
 
     public double getStabDamage() {
