@@ -174,7 +174,7 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
 
 ## §D. Gathering active bodies & super abilities (need K6, some need K3)
 
-- [~] **Mining** — Super Breaker done (via K6). **Blast Mining detonation DONE** (commit TBD):
+- [~] **Mining** — Super Breaker done (via K6). **Blast Mining detonation DONE** (commit d76acf781):
       `MiningManager.canDetonate()` (sneak + pickaxe/detonator, MC-free via new
       `PlatformPlayer.isHoldingItem`) + `fabric/listeners/BlastMiningListener.remoteDetonation`
       (ray-cast ≤100 blocks → TNT block → spawn a fuse-0 `TntEntity`, stamp the `mcmmo:tracked_tnt`
@@ -256,7 +256,7 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       four arms could never run. Added the four. Same shape as the mossify bug above (table entry with
       no whitelist entry); `UnarmedTest` now asserts the table↔whitelist invariant in both directions,
       which is how it was caught. ⚠️ The other paired table/whitelist sets deserve the same invariant.
-- [x] **Fixed upstream bug — unreachable Blast Mining right-click-block guard** (commit TBD): in
+- [x] **Fixed upstream bug — unreachable Blast Mining right-click-block guard** (commit d76acf781): in
       `PlayerListener#onPlayerInteractLowest`, the `/* BLAST MINING CHECK */ else if
       (miningManager.canDetonate())` arm hangs off `if (!getAbilitiesOnlyActivateWhenSneaking() ||
       player.isSneaking())`, so it needs the player NOT sneaking — while `canDetonate()` requires
