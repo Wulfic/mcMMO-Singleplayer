@@ -184,7 +184,7 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       power argument of the `World#createExplosion` call inside `TntEntity#explode()` (replaces the
       `ExplosionPrimeEvent` handler); bytecode-verified applied. **Demolitions Expertise DONE**:
       `EntityDamageListener` reduces the blast's self-damage before (and instead of) Dodge, matching
-      legacy's early return. **Ore yield + XP DONE** (commit TBD): `fabric/mixin/ExplosionDropsMixin`
+      legacy's early return. **Ore yield + XP DONE** (commit 1679bcb1a): `fabric/mixin/ExplosionDropsMixin`
       replaces the `EntityExplodeEvent` handler with two injections into
       `ExplosionImpl#destroyBlocks` — a HEAD hook (blocks still standing = when the Bukkit event
       fired) driving `BlastMiningListener.processBlastDrops`, and a `@ModifyArg` swapping vanilla's
