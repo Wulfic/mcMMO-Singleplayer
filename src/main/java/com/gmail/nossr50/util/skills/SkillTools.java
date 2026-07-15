@@ -411,10 +411,10 @@ public class SkillTools {
     // PORT Phase 6/10: doesPlayerHaveSkillPermission(Player, PrimarySkillType) — dropped. Needs
     // Bukkit Player + Permissions; permission model is reworked for singleplayer in Phase 6.
 
-    // PORT Phase 10: canCombatSkillsTrigger(PrimarySkillType, Entity) — dropped. Needs Bukkit
-    // Entity/Tameable/Player; re-add against the platform/ entity adapter with the combat skills.
-    // (Faithful body just routed player/tamed targets to getPVPEnabled, everything else to
-    // getPVEEnabled.)
+    // PORT §C: canCombatSkillsTrigger(PrimarySkillType, Entity) now lives on the MC-typed
+    // util/skills/CombatUtils — deciding "player or tamed" needs the entity types, which this
+    // MC-free class cannot hold. It still reads the switches through getPVPEnabled/getPVEEnabled
+    // below.
 
     public String getCapitalizedPrimarySkillName(PrimarySkillType primarySkillType) {
         return StringUtils.getCapitalized(primarySkillType.toString());
