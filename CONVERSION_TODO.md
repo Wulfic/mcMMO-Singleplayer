@@ -183,11 +183,18 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
       In-game verification of a live fell pending. Deferred: Leaf Blower, splinter self-damage, fizz sound.
 - [~] **Herbalism** — **double/triple drops DONE**: single-block bonus drops wired in
       `BlockBreakListener` (`HerbalismManager.isBonusDropsEligible`/`rollBonusDropCount` → `BlockDrops`
-      re-roll, same model as Mining/Woodcutting; Green Terra active ⇒ triple). Deferred: ageable-maturity
-      gate on the roll (same live-age-read gap as the XP path), multi-block traversal
-      (`getBrokenHerbalismBlocks`), Green Thumb replant (`processGrowingPlants` + `DelayedCropReplant`),
-      Shroom Thumb, Green Terra super-ability effect (via K6), Hylian Luck (needs
-      `TreasureConfig.hylianMap` + block Tag adapter).
+      re-roll, same model as Mining/Woodcutting; Green Terra active ⇒ triple). **Green Terra
+      block-conversion effect DONE** (commit 81828aa87): `SuperAbilityListener.
+      maybeProcessGreenTerraConversion` ports legacy `processGreenTerraBlockConversion` — an active
+      Green Terra striking a mossify-able block converts it (`Herbalism.greenTerraConversionTarget` →
+      `world.setBlockState`) for one wheat seed, else the `GTe.NeedMore` notification. Runs *after*
+      the activation chain and outside its `canActivateAbilities` gate, mirroring legacy's
+      NORMAL-then-HIGHEST handler split (so the activating strike also converts). ⚠️ In-game
+      verification pending. Deferred: ageable-maturity gate on the bonus-drop roll (same live-age-read
+      gap as the XP path), multi-block traversal (`getBrokenHerbalismBlocks`), Green Thumb replant
+      (`processGrowingPlants` + `DelayedCropReplant`), Shroom Thumb (conversion table + RNG gate are
+      ported; needs the two-mushroom inventory check), Hylian Luck (needs `TreasureConfig.hylianMap`
+      + block Tag adapter).
 - [~] **Excavation** — Giga Drill Breaker **DONE** (commit c6215d163): `BlockBreakListener.
       maybeProcessGigaDrillBreaker` ports legacy `ExcavationManager#gigaDrillBreaker` — GIGA_DRILL_BREAKER
       active + `affectedByGigaDrillBreaker` block + shovel ⇒ two extra excavation checks (base XP +
@@ -217,6 +224,12 @@ hook (+ K5 for ability events, `MetadataStore` already exists for per-entity tra
 
 - [ ] As each body lands, cross-check its constants/formula against upstream mcMMO src (the deferred
       bodies are the ones NOT yet verified against real behaviour).
+- [x] **Fixed upstream bug — stale block name in `MaterialMapStore.fillMossyWhiteList`** (commit
+      81828aa87): upstream lists only `grass_path`, this block's pre-1.17 name, so against a modern
+      registry a dirt path could never be mossified by Green Terra / Green Thumb even though the
+      conversion table maps it (`dirt_path` → `grass_block`) — the branch was dead. Added `dirt_path`
+      (kept the old alias). ⚠️ Worth grepping the other `MaterialMapStore` lists for the same class of
+      staleness (pre-flattening / pre-1.17 names that silently match nothing).
 - [ ] **Suspected real bug:** `ProbabilityUtil.isSkillRNGSuccessful(subSkill, player, multiplier)` — the
       non-lucky branch calls `evaluate()` and **drops the `probabilityMultiplier`**; the lucky branch uses
       `evaluate(LUCKY, multiplier)`. Confirm against upstream; if upstream applies it in both, non-lucky
