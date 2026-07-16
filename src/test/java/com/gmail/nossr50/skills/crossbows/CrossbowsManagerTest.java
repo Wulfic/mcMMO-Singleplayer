@@ -1,6 +1,8 @@
 package com.gmail.nossr50.skills.crossbows;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -58,6 +60,18 @@ class CrossbowsManagerTest {
 
     private void atCrossbowsLevel(int level) {
         when(mmoPlayer.getSkillLevel(PrimarySkillType.CROSSBOWS)).thenReturn(level);
+    }
+
+    @Test
+    void poweredShotLockedBelowRankOne() {
+        atCrossbowsLevel(0);
+        assertFalse(crossbowsManager.canPoweredShot(), "rank 0 → Powered Shot locked");
+    }
+
+    @Test
+    void poweredShotUnlocksAtRankOne() {
+        atCrossbowsLevel(1); // RetroMode Powered Shot Rank_1 = 1
+        assertTrue(crossbowsManager.canPoweredShot(), "rank 1 → Powered Shot unlocked");
     }
 
     @Test

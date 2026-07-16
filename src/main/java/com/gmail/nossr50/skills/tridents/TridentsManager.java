@@ -4,11 +4,25 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.skills.SkillManager;
+import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.skills.RankUtils;
 
 public class TridentsManager extends SkillManager {
     public TridentsManager(McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.TRIDENTS);
+    }
+
+    /**
+     * Whether Impale may boost this player's trident damage. Mirrors the
+     * {@code SkillUtils.canUseSubskill(player, TRIDENTS_IMPALE)} gate legacy
+     * {@code CombatUtils#processTridentCombat*} checks before adding {@link #impaleDamageBonus()}.
+     */
+    public boolean canImpale() {
+        if (!RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.TRIDENTS_IMPALE)) {
+            return false;
+        }
+
+        return Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.TRIDENTS_IMPALE);
     }
 
     public double impaleDamageBonus() {
