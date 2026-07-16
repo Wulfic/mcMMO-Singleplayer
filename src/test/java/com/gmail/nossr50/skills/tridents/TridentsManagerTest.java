@@ -1,6 +1,8 @@
 package com.gmail.nossr50.skills.tridents;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -62,6 +64,18 @@ class TridentsManagerTest {
     void noBonusBelowRankOne() {
         atTridentsLevel(49);
         assertEquals(0.0D, tridentsManager.impaleDamageBonus(), 1e-9, "rank 0 → no bonus");
+    }
+
+    @Test
+    void impaleLockedBelowRankOne() {
+        atTridentsLevel(49);
+        assertFalse(tridentsManager.canImpale(), "rank 0 → Impale locked");
+    }
+
+    @Test
+    void impaleUnlocksAtRankOne() {
+        atTridentsLevel(50); // RetroMode Impale Rank_1 = 50
+        assertTrue(tridentsManager.canImpale(), "rank 1 → Impale unlocked");
     }
 
     @Test

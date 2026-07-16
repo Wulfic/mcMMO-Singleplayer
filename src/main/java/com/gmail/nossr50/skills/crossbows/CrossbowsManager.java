@@ -6,6 +6,7 @@ import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.SkillManager;
+import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
 
@@ -34,6 +35,20 @@ public class CrossbowsManager extends SkillManager {
     /** Trick Shot's maximum ricochet bounces equals the player's rank in the sub-skill. */
     public int getTrickShotMaxBounceCount() {
         return RankUtils.getRank(mmoPlayer, SubSkillType.CROSSBOWS_TRICK_SHOT);
+    }
+
+    /**
+     * Whether Powered Shot may boost this player's crossbow damage. Mirrors the
+     * {@code SkillUtils.canUseSubskill(player, CROSSBOWS_POWERED_SHOT)} gate legacy
+     * {@code CombatUtils#processCrossbowsCombat} checks before calling {@link #poweredShot(double)},
+     * and the twin of {@link com.gmail.nossr50.skills.archery.ArcheryManager#canSkillShot()}.
+     */
+    public boolean canPoweredShot() {
+        if (!RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.CROSSBOWS_POWERED_SHOT)) {
+            return false;
+        }
+
+        return Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.CROSSBOWS_POWERED_SHOT);
     }
 
     public double getPoweredShotBonusDamage(PlatformPlayer player, double oldDamage) {

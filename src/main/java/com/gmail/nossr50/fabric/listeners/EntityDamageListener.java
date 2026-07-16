@@ -11,9 +11,12 @@ import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.MeleeDamageBonus;
 import com.gmail.nossr50.skills.MeleeDamageBonus.MeleeWeapon;
 import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
+import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
+import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.taming.TamingManager;
+import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.player.NotificationManager;
@@ -32,7 +35,10 @@ import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.passive.WolfEntity;
 import net.minecraft.entity.projectile.ArrowEntity;
+import net.minecraft.entity.projectile.PersistentProjectileEntity;
+import net.minecraft.entity.projectile.TridentEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.registry.tag.DamageTypeTags;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundCategory;
@@ -57,8 +63,10 @@ import net.minecraft.sound.SoundCategory;
  * damage total. <b>Taming</b>'s damage modifiers ride both branches: a tamed wolf's bite carries its
  * owner's Gore / Sharpened Claws / Fast Food Service (see {@link #applyWolfAttackBonus}), and a hit
  * on that wolf is softened by Thick Fur / Shock Proof / Holy Hound (see {@link #handleWolfDamage}).
- * The remaining effect-only sub-skills (projectile skills, …) attach to this same entry point as
- * their entity/metadata adapters land.
+ * The <b>projectile</b> weapon skills ride the attacker branch too, keyed on the damaging projectile
+ * rather than the player: a bow arrow's <b>Skill Shot</b>, a crossbow bolt's <b>Powered Shot</b> and a
+ * thrown trident's <b>Impale</b> (see {@link #applyProjectileAttackBonus}). Their non-damage bodies
+ * (distance/force XP, Arrow Retrieval) still wait on a projectile-launch hook.
  *
  * <p>One branch does <em>not</em> ride the mixin: Unarmed's <b>Arrow Deflect</b> ({@link
  * #onAllowDamage}) has to cancel the hit outright, so it rides Fabric's cancel-only
@@ -156,6 +164,11 @@ public final class EntityDamageListener {
         // which adds the owner's Taming bonuses. Legacy branches on the damager's type in one
         // if/else-if chain, so at most one of these two can ever fire.
         result = applyWolfAttackBonus(entity, source, result);
+        // ...and the projectile arm of that same dispatch: the damager is the player's arrow,
+        // crossbow bolt or thrown trident (Archery Skill Shot / Crossbows Powered Shot / Trident
+        // Impale). Mutually exclusive with the two branches above — a hit's direct source is exactly
+        // one entity type — so at most one of the three fires.
+        result = applyProjectileAttackBonus(entity, source, result);
 
         // K1 defender / K2 branch: the entity *taking* damage is a player — fall damage feeds
         // Acrobatics Roll, an incoming entity hit feeds Acrobatics Dodge.
@@ -253,6 +266,95 @@ public final class EntityDamageListener {
             boostedDamage += taming.gore(amount);
         }
         return (float) boostedDamage;
+    }
+
+    /**
+     * K1 attacker branch, projectile half: a player's arrow, crossbow bolt or thrown trident carries
+     * that skill's on-hit damage bonus. Ports the {@code painSource instanceof Trident} /
+     * {@code instanceof AbstractArrow} arms of legacy {@code CombatUtils#processCombatAttack} plus
+     * {@code processArcheryCombat} / {@code processCrossbowsCombat} / {@code processTridentCombatRanged}.
+     *
+     * <p>Dispatch mirrors legacy: a thrown {@link TridentEntity} is peeled off first (Bukkit's
+     * {@code Trident} also implements {@code AbstractArrow}, and legacy's if/else-if tests it before
+     * the arrow arm), then everything else that is a {@link PersistentProjectileEntity} — a regular or
+     * spectral arrow — is Archery unless it was fired from a crossbow, in which case it is Crossbows.
+     * Bukkit's {@code AbstractArrow#isShotFromCrossbow()} was removed in 1.21.11, so the weapon that
+     * fired the projectile is read from {@link PersistentProjectileEntity#getWeaponStack()} instead
+     * ({@link ItemStack#isOf} is null-safe, so an arrow with no recorded weapon reads as a bow shot).
+     *
+     * <p>Only the damage bonus is applied here. Legacy additionally pays per-hit combat XP scaled by a
+     * distance and bow-force multiplier, but this port pays combat XP per <em>kill</em>
+     * ({@code CombatListener}) and both multipliers need a projectile-launch hook to stamp the
+     * fired-from location and draw force — deferred to the launch mixin, along with Arrow Retrieval.
+     * Limit Break is dropped across every combat skill in this port (PvP-only in singleplayer, and its
+     * {@code AllowPVE} switch defaults off), so it is not applied here either; and Daze only targets
+     * another player, of which singleplayer has none.
+     */
+    private static float applyProjectileAttackBonus(LivingEntity target, DamageSource source,
+            float amount) {
+        if (!(source.getSource() instanceof PersistentProjectileEntity projectile)) {
+            return amount; // not a projectile hit.
+        }
+        if (!(projectile.getOwner() instanceof ServerPlayerEntity shooter)) {
+            return amount; // wild/dispenser projectile, or not fired by this player.
+        }
+        if (target instanceof ArmorStandEntity) {
+            return amount; // legacy skips armor stands on every combat path (processCombatAttack top).
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(shooter.getUuid());
+        if (mmoPlayer == null) {
+            return amount; // data not loaded (e.g. mid-join).
+        }
+
+        if (projectile instanceof TridentEntity) {
+            return applyTridentImpale(mmoPlayer, target, amount);
+        }
+        if (projectile.getWeaponStack().isOf(Items.CROSSBOW)) {
+            return applyPoweredShot(mmoPlayer, target, amount);
+        }
+        return applySkillShot(mmoPlayer, target, amount);
+    }
+
+    /** Archery Skill Shot: a bow-fired arrow's damage bonus (legacy {@code processArcheryCombat}). */
+    private static float applySkillShot(McMMOPlayer mmoPlayer, LivingEntity target, float amount) {
+        if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.ARCHERY, target)) {
+            return amount;
+        }
+        final ArcheryManager archery = mmoPlayer.getArcheryManager();
+        if (archery == null || !archery.canSkillShot()) {
+            return amount;
+        }
+        return (float) archery.skillShot(amount); // not additive — Skill Shot replaces the damage.
+    }
+
+    /**
+     * Crossbows Powered Shot: a crossbow bolt's damage bonus (legacy {@code processCrossbowsCombat}).
+     */
+    private static float applyPoweredShot(McMMOPlayer mmoPlayer, LivingEntity target, float amount) {
+        if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.CROSSBOWS, target)) {
+            return amount;
+        }
+        final CrossbowsManager crossbows = mmoPlayer.getCrossbowsManager();
+        if (crossbows == null || !crossbows.canPoweredShot()) {
+            return amount;
+        }
+        return (float) crossbows.poweredShot(amount); // not additive — Powered Shot replaces it.
+    }
+
+    /**
+     * Tridents Impale (ranged): a thrown trident's flat damage bonus (legacy
+     * {@code processTridentCombatRanged}). Unlike the melee trident path, the ranged bonus is
+     * <em>not</em> scaled by attack strength — a thrown trident has no swing to charge.
+     */
+    private static float applyTridentImpale(McMMOPlayer mmoPlayer, LivingEntity target, float amount) {
+        if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.TRIDENTS, target)) {
+            return amount;
+        }
+        final TridentsManager tridents = mmoPlayer.getTridentsManager();
+        if (tridents == null || !tridents.canImpale()) {
+            return amount;
+        }
+        return amount + (float) tridents.impaleDamageBonus();
     }
 
     /**
