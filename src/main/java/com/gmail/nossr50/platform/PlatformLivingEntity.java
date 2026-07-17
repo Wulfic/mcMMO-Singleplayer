@@ -2,14 +2,17 @@ package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.util.ItemUtils;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.packet.s2c.play.PositionFlag;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
@@ -156,15 +159,44 @@ public final class PlatformLivingEntity {
     /**
      * Fling this entity along {@code source}'s look direction, scaled by {@code multiplier}. Ports
      * Bukkit's {@code target.setVelocity(player.getLocation().getDirection().normalize()
-     * .multiply(m))} — Axes' Greater Impact knockback.
+     * .multiply(m))} — Axes' Greater Impact knockback (the source is the attacking player).
      *
      * <p>Unlike {@code LivingEntity#takeKnockback} this overwrites the velocity outright and ignores
      * knockback resistance, matching what {@code setVelocity} did. {@code velocityDirty} is raised so
      * the change is sent to clients this tick rather than only surfacing as position drift.
      */
     public void setVelocityAlongLookDirection(@NotNull PlatformPlayer source, double multiplier) {
-        handle.setVelocity(source.unwrap().getRotationVector().normalize().multiply(multiplier));
+        flingAlong(source.unwrap(), multiplier);
+    }
+
+    /**
+     * As {@link #setVelocityAlongLookDirection(PlatformPlayer, double)} but flung along another
+     * <em>living entity</em>'s look direction — Taming's Pummel, where the source is the owner's wolf
+     * (a non-player) rather than the player. Legacy {@code target.setVelocity(wolf.getLocation()
+     * .getDirection().normalize().multiply(m))}.
+     */
+    public void setVelocityAlongLookDirection(@NotNull PlatformLivingEntity source, double multiplier) {
+        flingAlong(source.handle, multiplier);
+    }
+
+    private void flingAlong(@NotNull Entity source, double multiplier) {
+        handle.setVelocity(source.getRotationVector().normalize().multiply(multiplier));
         handle.velocityDirty = true;
+    }
+
+    // --- Teleport (Bukkit Entity#teleport) ----------------------------------
+
+    /**
+     * Teleport this entity to {@code owner}'s current world and position, keeping its own facing.
+     * Ports Bukkit {@code teleport(owner.getLocation())} — Taming's Environmentally Aware yanks a
+     * wolf out of harm's way and back to its owner. Uses the absolute-position form (no relative
+     * flags), so it also relocates the wolf across dimensions if the owner is in another, exactly as
+     * teleporting to the owner's full {@code Location} did.
+     */
+    public void teleportTo(@NotNull PlatformPlayer owner) {
+        final Vec3d dest = owner.getPos();
+        handle.teleport(owner.getWorld(), dest.x, dest.y, dest.z,
+                EnumSet.noneOf(PositionFlag.class), handle.getYaw(), handle.getPitch(), false);
     }
 
     // --- World / position (Bukkit getLocation/getWorld) ---------------------

@@ -2,6 +2,7 @@ package com.gmail.nossr50.skills.taming;
 
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
+import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
@@ -9,6 +10,7 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
 import org.jetbrains.annotations.NotNull;
@@ -34,10 +36,9 @@ import org.jetbrains.annotations.NotNull;
  *   <li>{@code awardTamingXP} — needs the {@code LivingEntity} target, the internal
  *       {@code McMMOPlayerTameEntityEvent} on the new event bus, and
  *       {@code ExperienceConfig.getTamingXP(entityConfigString)};</li>
- *   <li>{@code processEnvironmentallyAware}/{@code pummel}/{@code attackTarget}/{@code beastLore} —
- *       need an entity-teleport adapter (Environmentally Aware), a velocity-from-a-non-player-source
- *       adapter plus particles (Pummel), a nearby-entity target sweep ({@code attackTarget}), and a
- *       right-click-entity hook ({@code beastLore});</li>
+ *   <li>{@code attackTarget} — the "sic your wolves on it" nearby-entity sweep, still deferred (needs
+ *       a nearby-entity scan plus wolf-target mutation). Pummel, Environmentally Aware and Beast Lore
+ *       are now wired (see below);</li>
  *   <li>the whole Call of the Wild summon path ({@code summonOcelot}/{@code summonWolf}/
  *       {@code summonHorse}/{@code processCallOfTheWild}/{@code spawnCOTWEntity}/{@code isCOTWItem}/
  *       {@code cleanupAllSummons}) — needs the entity-spawn adapter, the transient-entity tracker,
@@ -47,9 +48,11 @@ import org.jetbrains.annotations.NotNull;
  * </ul>
  *
  * <p>The damage-modifier bodies are now driven by {@code fabric.listeners.EntityDamageListener} on
- * the K1 seam: Gore/Sharpened Claws/Fast Food Service on the wolf-<em>attacker</em> arm (legacy
+ * the K1 seam: Gore/Sharpened Claws/Fast Food Service/Pummel on the wolf-<em>attacker</em> arm (legacy
  * {@code CombatUtils#processTamingCombat}), and Thick Fur/Shock Proof/Holy Hound on the
  * wolf-<em>defender</em> arm (legacy {@code EntityListener#onEntityDamage}'s {@code Tameable} switch).
+ * Environmentally Aware's teleport arm rides that same defender seam, while its FALL arm and Beast
+ * Lore cancel their hit outright and so ride the listener's {@code ALLOW_DAMAGE} veto instead.
  */
 public class TamingManager extends SkillManager {
 
@@ -191,6 +194,35 @@ public class TamingManager extends SkillManager {
         return McMMOMod.getAdvancedConfig().getSharpenedClawsBonus();
     }
 
+    /** Pummel knockback multiplier (legacy hardcoded {@code 1.5D}). */
+    private static final double PUMMEL_KNOCKBACK = 1.5D;
+
+    /**
+     * Pummel: an owner's wolf may knock its target back on hit. Ports legacy
+     * {@code TamingManager#pummel(target, wolf)} — a rank gate, then the static Pummel chance roll,
+     * then flinging the target along the wolf's look direction. Pummel does not alter the hit's
+     * damage, so it runs as a side effect from the wolf-attacker arm rather than feeding the damage
+     * total (mirroring legacy, where {@code pummel} sits inside {@code processTamingCombat} but never
+     * touches {@code boostedDamage}).
+     *
+     * <p>Dropped: the {@code ParticleEffectUtils.playGreaterImpactEffect} call (no particle adapter,
+     * the same deferral as Dodge/Rupture/Greater Impact) and the {@code target instanceof Player}
+     * knocked-back notification (dead in singleplayer — the only player is the wolf's owner).
+     *
+     * @param target the entity the wolf hit, flung back on a successful roll
+     * @param wolf   the owner's wolf, whose look direction sets the knockback vector
+     */
+    public void processPummel(@NotNull PlatformLivingEntity target, @NotNull PlatformLivingEntity wolf) {
+        if (!RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.TAMING_PUMMEL)) {
+            return;
+        }
+        if (!ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.TAMING, mmoPlayer,
+                McMMOMod.getAdvancedConfig().getPummelChance())) {
+            return;
+        }
+        target.setVelocityAlongLookDirection(wolf, PUMMEL_KNOCKBACK);
+    }
+
     /**
      * Pure damage-reduction math extracted from legacy {@code Taming.processThickFur(Wolf, double)}:
      * a summoned wolf absorbs incoming damage divided by the Thick Fur modifier. The {@code WOLF_SHAKE}
@@ -213,6 +245,30 @@ public class TamingManager extends SkillManager {
      */
     public double processShockProof(double damage) {
         return damage / McMMOMod.getAdvancedConfig().getShockProofModifier();
+    }
+
+    /**
+     * Environmentally Aware (teleport arm): when a wolf takes environmental damage (cactus/berry
+     * bush/dripstone contact, standing fire, lava, magma block) its owner yanks it back to safety.
+     * Ports legacy {@code TamingManager#processEnvironmentallyAware(Wolf, double)} — teleport the wolf
+     * to the owner and notify, unless the hit would kill it outright ({@code damage > wolf.getHealth()}),
+     * in which case it is left to die.
+     *
+     * <p>The environmental damage itself still lands: legacy's CONTACT/FIRE/HOT_FLOOR/LAVA arm neither
+     * reduces nor cancels the hit, it only teleports the wolf clear of continued contact. Only the
+     * separate FALL arm cancels the damage, and that rides {@code EntityDamageListener}'s cancel-only
+     * {@code ALLOW_DAMAGE} veto (as Arrow Deflect does) rather than this body.
+     *
+     * @param wolf   the wolf that took environmental damage
+     * @param damage the incoming damage — the rescue is skipped when it would be lethal
+     */
+    public void processEnvironmentallyAware(@NotNull PlatformLivingEntity wolf, double damage) {
+        if (damage > wolf.getHealth()) {
+            return; // the hit is lethal — nothing to rescue.
+        }
+        wolf.teleportTo(getPlayer());
+        NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                "Taming.Listener.Wolf");
     }
 
     /**
