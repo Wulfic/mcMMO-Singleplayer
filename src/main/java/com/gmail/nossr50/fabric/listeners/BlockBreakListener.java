@@ -9,6 +9,7 @@ import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.BlockDrops;
 import com.gmail.nossr50.platform.ItemSpecBuilder;
+import com.gmail.nossr50.platform.Materials;
 import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.skills.BlockBreakXp;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
@@ -18,14 +19,21 @@ import com.gmail.nossr50.skills.woodcutting.TreeFellerProcessor;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.ItemUtils;
+import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillUtils;
+import com.gmail.nossr50.util.sounds.SoundManager;
+import com.gmail.nossr50.util.sounds.SoundType;
+import com.gmail.nossr50.util.text.ConfigStringUtils;
+import java.util.Optional;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -40,9 +48,10 @@ import org.jetbrains.annotations.Nullable;
  * skill, plus the block-break side effects — Mining/Woodcutting/Herbalism bonus (double/triple)
  * drops, Excavation treasure, and the Tree Feller / Giga Drill Breaker super abilities. Replaces the XP + drop slice of the
  * legacy {@code BlockListener#onBlockBreak} / {@code MiningManager#miningBlockCheck} /
- * {@code HerbalismManager#checkDoubleDropsOnBrokenPlants}. Remaining side effects (Herbalism Green
- * Thumb replant, super-ability tool damage) land as their inventory/scheduler seams follow this
- * same pattern.
+ * {@code HerbalismManager#checkDoubleDropsOnBrokenPlants}, plus the Herbalism Green Thumb crop
+ * replant (legacy {@code processGreenThumbPlants} → {@code DelayedCropReplant}). Remaining side
+ * effects (super-ability tool damage) land as their inventory/scheduler seams follow this same
+ * pattern.
  *
  * <p>Uses Fabric's {@link PlayerBlockBreakEvents#AFTER}, which fires only once the break actually
  * succeeded (server side), so we never award XP or drops for a cancelled or client-predicted break.
@@ -181,20 +190,136 @@ public final class BlockBreakListener {
      * anti-farm role legacy's placestore played for crops). Bonus drops stay creative-gated, as on
      * the generic path (a creative break spawns no vanilla loot to complement).
      *
-     * <p>PORT: legacy also suppressed an immature crop's own drops under Green Thumb and replanted it;
-     * the replant path ({@code processGreenThumbPlants}) is still deferred — this increment only wires
-     * the maturity-based XP/bonus-drop gate that Green Thumb's {@code isMature} input builds on.
+     * <p>Green Thumb replant runs first (see {@link #maybeProcessGreenThumbReplant}) whether or not
+     * the crop was mature — legacy replants immature crops at age 0 too. It only touches the
+     * inventory and schedules the block re-set; it never awards XP or drops, so the maturity gate
+     * below still owns those.
      */
     private static void processMaturityGatedCrop(McMMOPlayer mmoPlayer, HerbalismManager herbalism,
             ServerWorld world, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity,
             ServerPlayerEntity breaker, String blockId, BlockUtils.AgeableState ageable) {
-        if (!herbalism.isAgeableMature(blockId, ageable.age(), ageable.maxAge())) {
+        final boolean mature = herbalism.isAgeableMature(blockId, ageable.age(), ageable.maxAge());
+        maybeProcessGreenThumbReplant(mmoPlayer, herbalism, world, pos, state, breaker, blockId,
+                mature);
+        if (!mature) {
             return; // immature crop: no XP, no bonus drops (legacy's maturity gate).
         }
         awardBlockXp(mmoPlayer, blockId);
         if (!breaker.isCreative()) {
             awardHerbalismBonusDrops(mmoPlayer, world, pos, state, blockEntity, breaker, blockId);
         }
+    }
+
+    /**
+     * Attempt Green Thumb crop replant on a broken ageable crop, porting legacy
+     * {@code HerbalismManager#processGreenThumbPlants} → {@code processGrowingPlants} →
+     * {@code startReplantTask} → {@code DelayedCropReplant}. On a successful Green Thumb roll (or
+     * while Green Terra is active) the player spends one replant seed and the crop is re-set at a
+     * rank-scaled age a second later — an immature crop restarts at age 0, a mature one at the age
+     * {@link HerbalismManager#resolveGreenThumbReplant} decides.
+     *
+     * <p>Gate order is legacy's: not sneaking → the crop is a configured replantable
+     * ({@code Green_Thumb_Replanting_Crops}) → a hoe (or an axe, cocoa only) in the main hand → the
+     * crop has a known replant seed → the Green Thumb roll succeeds (Green Terra bypasses it) → the
+     * seed is present (main or off hand). Only then is the seed consumed and the replant scheduled.
+     *
+     * <p>PORT deviations, both forced by the {@code PlayerBlockBreakEvents.AFTER} seam (the block is
+     * already broken and its drops spawned when we run, unlike legacy's cancellable pre-break
+     * {@code BlockBreakEvent}):
+     * <ul>
+     *   <li><b>Immature-crop drop suppression is dropped.</b> Legacy called
+     *       {@code blockBreakEvent.setDropItems(false)} when it replanted an immature crop; the drops
+     *       are already out by the time this fires, so an immature crop keeps its (typically
+     *       one-seed) drop. Net: replanting an immature crop is one seed cheaper than legacy. The
+     *       common mature-crop path is unaffected — legacy never suppressed those drops.</li>
+     *   <li>The {@code RecentlyReplantedCropMeta} "don't let the player instantly re-break the fresh
+     *       sprout" guard is dropped (a cosmetic anti-accident polish); instead the deferred set only
+     *       lands if the position is still air (see {@link #scheduleReplant}), so it never overwrites
+     *       a block placed in the interim.</li>
+     * </ul>
+     */
+    private static void maybeProcessGreenThumbReplant(McMMOPlayer mmoPlayer,
+            HerbalismManager herbalism, ServerWorld world, BlockPos pos, BlockState state,
+            ServerPlayerEntity breaker, String blockId, boolean mature) {
+        if (breaker.isSneaking()) {
+            return; // legacy: sneaking suppresses Green Thumb replant.
+        }
+        final String materialConfigString = ConfigStringUtils.getMaterialConfigString(blockId);
+        if (!McMMOMod.getGeneralConfig().isGreenThumbReplantableCrop(materialConfigString)) {
+            return;
+        }
+        // A hoe replants any crop; an axe replants cocoa only (legacy processGreenThumbPlants).
+        final ItemStack tool = breaker.getMainHandStack();
+        final boolean hoe = ItemUtils.isHoe(tool);
+        final boolean axe = ItemUtils.isAxe(tool);
+        if (!hoe && !axe) {
+            return; // need a hoe or an axe in hand.
+        }
+        final boolean cocoa = "cocoa".equals(pathOf(state));
+        if (axe && !cocoa) {
+            return; // an axe only replants cocoa.
+        }
+        final Optional<String> seedPath = HerbalismManager.getGreenThumbReplantMaterial(blockId);
+        if (seedPath.isEmpty()) {
+            return; // not a replantable crop type.
+        }
+        if (!herbalism.rollGreenThumbReplant()) {
+            return; // RNG failed and Green Terra isn't active.
+        }
+        final Optional<Item> seed = Materials.item(seedPath.get());
+        if (seed.isEmpty()) {
+            return; // the replant seed isn't an item in this registry.
+        }
+        final int seedSlot = findItemSlot(breaker.getInventory(), seed.get());
+        if (seedSlot < 0) {
+            return; // no replant seed to spend (legacy's hasItemIncludingOffHand).
+        }
+        final Optional<HerbalismManager.GreenThumbReplant> decision =
+                herbalism.resolveGreenThumbReplant(blockId, mature, herbalism.isGreenTerraActive());
+        if (decision.isEmpty()) {
+            return; // crop can't replant (bizarre/unknown) — unreachable from the maturity path.
+        }
+        breaker.getInventory().removeStack(seedSlot, 1);
+        scheduleReplant(world, pos, state, decision.get().finalAge());
+        SoundManager.sendSound(mmoPlayer.getPlayer(), SoundType.ITEM_CONSUMED);
+    }
+
+    /**
+     * Re-set a harvested crop at {@code finalAge} a second later (legacy {@code startReplantTask} →
+     * {@code DelayedCropReplant}, {@code Misc.TICK_CONVERSION_FACTOR} ticks). The pre-break
+     * {@link BlockState} is reused verbatim except for its age, so a cocoa pod's facing (and any
+     * other property) is preserved for free — no {@code Directional} rebuild like legacy. The set
+     * only lands if the spot is still air, so a block the player placed in the interim is never
+     * overwritten (legacy's {@code blockIsAirOrExpectedCrop} guard).
+     */
+    private static void scheduleReplant(ServerWorld world, BlockPos pos, BlockState cropState,
+            int finalAge) {
+        final BlockState replant = BlockUtils.withAge(cropState, finalAge);
+        McMMOMod.getScheduler().runLater(() -> {
+            if (world.getBlockState(pos).isAir()) {
+                world.setBlockState(pos, replant);
+            }
+        }, Misc.TICK_CONVERSION_FACTOR);
+    }
+
+    /**
+     * First inventory slot holding {@code item}, or {@code -1} if none — matching legacy
+     * {@code PlayerInventory#containsAtLeast(stack, 1)}, whose paired {@code removeItem} then consumes
+     * one. Scans every slot (main, hotbar, off hand), covering legacy's
+     * {@code hasItemIncludingOffHand}; mirrors {@code SuperAbilityListener#findItemSlot}.
+     */
+    private static int findItemSlot(PlayerInventory inventory, Item item) {
+        for (int slot = 0; slot < inventory.size(); slot++) {
+            final ItemStack stack = inventory.getStack(slot);
+            if (!stack.isEmpty() && stack.isOf(item)) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    private static String pathOf(BlockState state) {
+        return Registries.BLOCK.getId(state.getBlock()).getPath();
     }
 
     private static void awardBlockXp(McMMOPlayer mmoPlayer, String blockId) {

@@ -241,11 +241,52 @@ public final class BlockUtils {
      * @return the age info, or {@code null} if the block has no {@code age} property
      */
     public static @Nullable AgeableState getAgeableState(@NotNull BlockState blockState) {
+        final IntProperty ageProperty = ageProperty(blockState);
+        if (ageProperty == null) {
+            return null;
+        }
+        final int maxAge = ageProperty.getValues().stream()
+                .mapToInt(Integer::intValue).max().orElse(0);
+        return new AgeableState(blockState.get(ageProperty), maxAge);
+    }
+
+    /**
+     * Returns {@code blockState} with its {@code age} state property set to {@code age} (clamped to
+     * the property's valid range), or the state unchanged if it has no {@code age} property. The
+     * vanilla equivalent of Bukkit's {@code Ageable.setAge(int)} that legacy {@code DelayedCropReplant}
+     * used to re-seed a harvested crop under Green Thumb. Every other property is preserved (notably a
+     * cocoa pod's facing), so a caller replanting off the pre-break state need not rebuild it. Clamping
+     * keeps {@link BlockState#with} from throwing when a high Green Thumb stage would exceed a short
+     * crop's maximum age.
+     *
+     * @param blockState the crop state to re-age
+     * @param age the desired age
+     * @return the re-aged state, or the original if it has no {@code age} property
+     */
+    public static @NotNull BlockState withAge(@NotNull BlockState blockState, int age) {
+        final IntProperty ageProperty = ageProperty(blockState);
+        if (ageProperty == null) {
+            return blockState;
+        }
+        int min = Integer.MAX_VALUE;
+        int max = Integer.MIN_VALUE;
+        for (int value : ageProperty.getValues()) {
+            min = Math.min(min, value);
+            max = Math.max(max, value);
+        }
+        return blockState.with(ageProperty, Math.max(min, Math.min(age, max)));
+    }
+
+    /**
+     * The {@link IntProperty} named {@code "age"} on a block, or {@code null} if it has none. Vanilla
+     * has no single {@code Ageable} interface, so both {@link #getAgeableState} and {@link #withAge}
+     * locate crop maturity through this one scan; every crop/plant legacy treated as ageable exposes
+     * exactly one such property, and the {@code "age"} filter skips {@code stage}/{@code layers}/etc.
+     */
+    private static @Nullable IntProperty ageProperty(@NotNull BlockState blockState) {
         for (Property<?> property : blockState.getProperties()) {
             if (property instanceof IntProperty ageProperty && "age".equals(ageProperty.getName())) {
-                final int maxAge = ageProperty.getValues().stream()
-                        .mapToInt(Integer::intValue).max().orElse(0);
-                return new AgeableState(blockState.get(ageProperty), maxAge);
+                return ageProperty;
             }
         }
         return null;

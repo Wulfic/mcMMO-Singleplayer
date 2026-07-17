@@ -530,9 +530,23 @@ effectively complete.**
       `world.setBlockState`) for one wheat seed, else the `GTe.NeedMore` notification. Runs *after*
       the activation chain and outside its `canActivateAbilities` gate, mirroring legacy's
       NORMAL-then-HIGHEST handler split (so the activating strike also converts). ⚠️ In-game
-      verification pending. Deferred: multi-block traversal (`getBrokenHerbalismBlocks`) + chorus
-      delayed XP, Green Thumb replant (`processGrowingPlants` + `DelayedCropReplant` — its `isMature`
-      input now exists), Shroom Thumb (conversion table + RNG gate are ported; needs the two-mushroom
+      verification pending. **Green Thumb replant DONE** (this pass): `BlockBreakListener.
+      maybeProcessGreenThumbReplant` ports legacy `processGreenThumbPlants`/`processGrowingPlants`/
+      `startReplantTask`/`DelayedCropReplant` — it hooks the maturity-gated-crop handler (green-thumb
+      crops ⊆ maturity-gated crops) and, on a successful Green Thumb roll (or Green Terra bypass),
+      spends one replant seed and re-sets the crop at a rank-scaled age (`resolveGreenThumbReplant`,
+      immature ⇒ age 0) a second later via the TickScheduler. **Key AFTER-seam win: the pre-break
+      `BlockState` is reused with only its age changed (new `BlockUtils.withAge`), so a cocoa pod's
+      facing is preserved for free — no legacy `Directional` rebuild.** New MC-free gate
+      `HerbalismManager.rollGreenThumbReplant()` (Green-Terra bypass + RNG). ⚠️ In-game verification
+      pending. **Deviations (both forced by the `PlayerBlockBreakEvents.AFTER` seam):** immature-crop
+      drop suppression is dropped (legacy's `setDropItems(false)` — drops are already out; net: an
+      immature replant is 1 seed cheaper than legacy), and the `RecentlyReplantedCropMeta`
+      re-break guard is dropped (replaced by an `isAir` check so the deferred set never overwrites a
+      block placed in the interim). Torchflower is the one replantable crop not covered — it isn't
+      maturity-gated (`torchflower_crop` gives 0 Herbalism XP), a pre-existing niche gap.
+      Deferred: multi-block traversal (`getBrokenHerbalismBlocks`) + chorus
+      delayed XP, Shroom Thumb (conversion table + RNG gate are ported; needs the two-mushroom
       inventory check), Hylian Luck (needs `TreasureConfig.hylianMap` + block Tag adapter), and the
       right-click berry-bush harvest (`processBerryBushHarvesting` — a distinct interaction, not a
       break; its age-scaled `getBerryBushXpReward` is ported).
@@ -554,7 +568,12 @@ effectively complete.**
 - [ ] **Rupture / Bleed DoT** (`RuptureTask`/`BleedContainer`) — entity-damage-over-time via K1.
 - [ ] **Alchemy** `AlchemyBrewTask`/`AlchemyBrewCheckTask` — via K7 + K8.
 - [ ] **Fishing** `MasterAnglerTask` — `FishHook` mutation via K7.
-- [ ] **Herbalism** `DelayedCropReplant`/`HerbalismBlockUpdaterTask`/`DelayedHerbalismXPCheckTask`.
+- [~] **Herbalism** `DelayedCropReplant` **DONE** — Green Thumb replant collapses to a single
+      `TickScheduler.runLater` block re-set (`BlockUtils.withAge` on the pre-break state) in
+      `BlockBreakListener.scheduleReplant`; no separate runnable class needed (the AFTER seam means the
+      block is already broken, so legacy's `PhysicsBlockUpdate`/`markPlantAsOld` machinery is unneeded).
+      See the §D Herbalism entry. Still deferred: `HerbalismBlockUpdaterTask`/`DelayedHerbalismXPCheckTask`
+      (the chorus-tree delayed-XP path).
 - [x] **Taming** Call of the Wild summons (`TamingSummon`/`CallOfTheWildType` + `TransientEntityTracker`)
       **DONE** — see the Taming entry in §C. Spawn/despawn/cap/attackTarget all wired; in-game verify pending.
 - [ ] `ExperienceBarHideTask` / XP-bar `processPostXpEvent` (cosmetic; can slip to Pass 2).
