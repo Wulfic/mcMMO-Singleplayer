@@ -7,6 +7,8 @@ import java.util.UUID;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
@@ -89,6 +91,29 @@ public final class PlatformLivingEntity {
      */
     public void extinguish() {
         handle.extinguish();
+    }
+
+    // --- Status effects (Bukkit addPotionEffect/getPotionEffect) ------------
+
+    /**
+     * Whether this entity currently has the Slowness effect. Ports the
+     * {@code target.getPotionEffect(SLOWNESS) != null} guard Maces Cripple uses to avoid stacking
+     * Cripple on an already-slowed target.
+     */
+    public boolean hasSlowness() {
+        return handle.hasStatusEffect(StatusEffects.SLOWNESS);
+    }
+
+    /**
+     * Apply the Slowness effect for {@code durationTicks} at the given {@code amplifier}. Ports
+     * Bukkit {@code addPotionEffect(SLOWNESS.createEffect(duration, amplifier))} — Maces Cripple.
+     *
+     * @param durationTicks effect duration in ticks
+     * @param amplifier     effect level, zero-based (Bukkit's amplifier, so {@code 1} is Slowness II)
+     */
+    public void applySlowness(int durationTicks, int amplifier) {
+        handle.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, durationTicks,
+                amplifier));
     }
 
     // --- Equipment (Bukkit EntityEquipment#getArmorContents) ----------------
