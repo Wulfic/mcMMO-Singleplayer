@@ -14,6 +14,7 @@ import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
 import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
+import com.gmail.nossr50.skills.maces.MacesManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.skills.tridents.TridentsManager;
@@ -53,11 +54,12 @@ import net.minecraft.sound.SoundCategory;
  * <p>Currently wired: <b>K2 — fall damage → Acrobatics Roll</b>, the defender half of <b>K1 — combat
  * damage → Acrobatics Dodge</b> (attacker resolved via {@link DamageSource#getAttacker()}), and the
  * attacker half of <b>K1 — melee weapon on-hit damage bonuses</b> (Swords Stab / Axe Mastery /
- * Unarmed Steel Arm + Berserk, composed MC-free in {@link MeleeDamageBonus}), and the on-hit
- * <em>effect</em> sub-skills: <b>Swords Rupture</b> (bleed DoT — see {@link #maybeProcessRupture})
+ * Unarmed Steel Arm + Berserk / Maces Crush, composed MC-free in {@link MeleeDamageBonus}), and the
+ * on-hit <em>effect</em> sub-skills: <b>Swords Rupture</b> (bleed DoT — see {@link #maybeProcessRupture})
  * and the two combat super abilities, <b>Serrated Strikes</b> and <b>Skull Splitter</b> (AoE — see
  * {@link #maybeProcessSerratedStrikes} / {@link #maybeProcessSkullSplitter}), and — on the defender
- * side again — <b>Swords Counter Attack</b> (see {@link #maybeProcessCounterAttack}). The Axes
+ * side again — <b>Swords Counter Attack</b> (see {@link #maybeProcessCounterAttack}) — and, after a
+ * mace hit the target survives, <b>Maces Cripple</b> (Slowness — see {@link #maybeProcessCripple}). The Axes
  * target-inspecting sub-skills (<b>Armor Impact</b> / <b>Greater Impact</b> / <b>Critical
  * Strikes</b>) ride the attacker branch inside {@link MeleeDamageBonus}, since they feed the same
  * damage total. <b>Taming</b>'s damage modifiers ride both branches: a tamed wolf's bite carries its
@@ -541,6 +543,8 @@ public final class EntityDamageListener {
             maybeProcessRupture(mmoPlayer, target, boostedDamage);
         } else if (weapon == MeleeWeapon.AXE) {
             maybeProcessSkullSplitter(mmoPlayer, attacker, platformTarget, target, amount);
+        } else if (weapon == MeleeWeapon.MACE) {
+            maybeProcessCripple(mmoPlayer, target, boostedDamage);
         }
         return boostedDamage;
     }
@@ -593,6 +597,25 @@ public final class EntityDamageListener {
         }
         mmoPlayer.getSwordsManager().processRupture(new PlatformLivingEntity(target),
                 mmoPlayer.getAttackStrength());
+    }
+
+    /**
+     * Maces Cripple: a mace hit that leaves the target alive may apply Slowness. Mirrors legacy
+     * {@code CombatUtils#processMacesCombat}, which calls {@code processCripple} only when
+     * {@code target.getHealth() - event.getFinalDamage() > 0} — no point crippling something the swing
+     * kills. As with Rupture, {@code modifyAppliedDamage} runs before vanilla writes the new health, so
+     * reading {@link LivingEntity#getHealth()} gives the pre-hit value that check compared against.
+     */
+    private static void maybeProcessCripple(McMMOPlayer mmoPlayer, LivingEntity target,
+            float boostedDamage) {
+        if (target.getHealth() - boostedDamage <= 0) {
+            return; // the swing itself is lethal.
+        }
+        final MacesManager maces = mmoPlayer.getMacesManager();
+        if (maces == null) {
+            return;
+        }
+        maces.processCripple(new PlatformLivingEntity(target), mmoPlayer.getAttackStrength());
     }
 
     /**
@@ -650,6 +673,7 @@ public final class EntityDamageListener {
         return switch (weapon) {
             case SWORD -> PrimarySkillType.SWORDS;
             case AXE -> PrimarySkillType.AXES;
+            case MACE -> PrimarySkillType.MACES;
             case UNARMED -> PrimarySkillType.UNARMED;
             case OTHER -> throw new IllegalArgumentException("OTHER has no skill; gate it first");
         };
@@ -662,6 +686,9 @@ public final class EntityDamageListener {
         }
         if (ItemUtils.isAxe(held)) {
             return MeleeWeapon.AXE;
+        }
+        if (ItemUtils.isMace(held)) {
+            return MeleeWeapon.MACE;
         }
         if (ItemUtils.isUnarmed(held)) {
             return MeleeWeapon.UNARMED;

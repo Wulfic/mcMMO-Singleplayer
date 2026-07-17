@@ -3,14 +3,15 @@ package com.gmail.nossr50.skills;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.axes.AxesManager;
+import com.gmail.nossr50.skills.maces.MacesManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import org.jetbrains.annotations.NotNull;
 
 /**
  * K1 attacker branch, MC-free half: the melee on-hit damage-bonus composition pulled out of the
- * legacy {@code CombatUtils#processSwordCombat}/{@code processAxeCombat}/{@code processUnarmedCombat}
- * so it's server-free and unit-testable. The {@code fabric.listeners.EntityDamageListener} owns the
+ * legacy {@code CombatUtils#processSwordCombat}/{@code processAxeCombat}/{@code processUnarmedCombat}/
+ * {@code processMacesCombat} so it's server-free and unit-testable. The {@code fabric.listeners.EntityDamageListener} owns the
  * MC-typed half — resolving the attacker, confirming a direct melee swing, and classifying the held
  * item into a {@link MeleeWeapon} — then defers the actual damage arithmetic here.
  *
@@ -21,15 +22,17 @@ import org.jetbrains.annotations.NotNull;
  *
  * <p>Still deferred behind their own adapters, matching the manager ports: Disarm, Arrow Deflect,
  * Taming's damage modifiers, and Limit Break (PvP-only). Rupture, the Serrated Strikes / Skull
- * Splitter AoEs and Counter Attack are live but sit in {@code EntityDamageListener} instead — none of
- * them contributes to the attacker's damage total, so they do not belong in this composition.
+ * Splitter AoEs, Counter Attack and Maces Cripple are live but sit in {@code EntityDamageListener}
+ * instead — none of them contributes to the attacker's damage total, so they do not belong in this
+ * composition.
  */
 public final class MeleeDamageBonus {
 
-    /** The three melee weapon classes that carry an on-hit damage bonus (plus the no-op fallback). */
+    /** The melee weapon classes that carry an on-hit damage bonus (plus the no-op fallback). */
     public enum MeleeWeapon {
         SWORD,
         AXE,
+        MACE,
         UNARMED,
         OTHER
     }
@@ -81,6 +84,15 @@ public final class MeleeDamageBonus {
                     if (axes.canCriticalHit(target)) {
                         boostedDamage += axes.criticalHit(boostedDamage) * attackStrength;
                     }
+                }
+            }
+            case MACE -> {
+                final MacesManager maces = mmoPlayer.getMacesManager();
+                if (maces != null) {
+                    // Crush is a flat rank-based bonus (getCrushDamage is 0 without the unlock), scaled
+                    // by attack strength like every other melee bonus. Its Cripple on-hit effect is not
+                    // a damage contribution, so it runs from EntityDamageListener, not here.
+                    boostedDamage += maces.getCrushDamage() * attackStrength;
                 }
             }
             case UNARMED -> {
