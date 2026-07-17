@@ -75,8 +75,13 @@ import net.minecraft.sound.SoundCategory;
  * rather than the player: a bow arrow's <b>Skill Shot</b>, a crossbow bolt's <b>Powered Shot</b> and a
  * thrown trident's <b>Impale</b> (see {@link #applyProjectileAttackBonus}), plus Archery's
  * <b>Arrow Retrieval</b> credit (see {@link #applyArcheryBonus}; the launch mark and the death drop
- * live on {@link ProjectileListener}). Distance/bow-force XP remain unported — they are per-hit XP
- * multipliers and this port pays combat XP per kill.
+ * live on {@link ProjectileListener}).
+ *
+ * <p>Every attacker arm also pays that skill's <b>per-hit combat XP</b> as its closing act, exactly
+ * where legacy's {@code processXCombat} methods did (see
+ * {@link CombatUtils#processCombatXP}). Damage mcMMO deals itself never reaches these arms — the
+ * {@code isProcessingMcMMODamage} guard below turns it away — so a Serrated Strikes AoE or a Rupture
+ * tick pays no XP, matching legacy's custom-damage marker.
  *
  * <p>Some branches do <em>not</em> ride the mixin — Unarmed's <b>Arrow Deflect</b>, Taming's
  * <b>Beast Lore</b> and Environmentally Aware's FALL arm (dispatched from {@link
@@ -85,6 +90,12 @@ import net.minecraft.sound.SoundCategory;
  * as well as a mixin entry point.
  */
 public final class EntityDamageListener {
+
+    /**
+     * Legacy's {@code processCombatXP(mmoPlayer, target, TAMING, 3)}: a wolf's bite trains its owner's
+     * Taming at triple rate — the whole point being that you are not swinging the weapon yourself.
+     */
+    private static final double WOLF_ASSIST_XP_MULTIPLIER = 3.0;
 
     private EntityDamageListener() {
     }
@@ -347,11 +358,8 @@ public final class EntityDamageListener {
      * the wolf's look direction on a successful roll but does not feed the damage total, so it runs as
      * a side effect rather than contributing to {@code boostedDamage}.
      *
-     * <p>Deferred (breadcrumb, CONVERSION_TODO §C): legacy's
-     * {@code processCombatXP(mmoPlayer, target, TAMING, 3)} — this port awards combat XP per *kill*
-     * ({@code CombatListener}), not per hit, and that listener only pays out when the killer is a
-     * player, so wolf-assisted Taming XP is a pre-existing §B gap rather than something this arm can
-     * drop in without picking an XP model for it.
+     * <p>The arm closes with legacy's {@code processCombatXP(mmoPlayer, target, TAMING, 3)} — the
+     * wolf-assisted Taming XP that the port's old per-kill model could not express at all.
      */
     private static float applyWolfAttackBonus(LivingEntity target, DamageSource source,
             float amount) {
@@ -394,6 +402,12 @@ public final class EntityDamageListener {
         if (taming.canUseGore()) {
             boostedDamage += taming.gore(amount);
         }
+
+        // Wolf-assisted Taming XP, at legacy's ×3 multiplier (processTamingCombat's closing line).
+        // This is one of the two things the old per-kill XP model structurally could not pay: that
+        // listener only fired when the *killer* was a player, so a wolf's kill paid nothing at all.
+        CombatUtils.processCombatXP(mmoPlayer, target, PrimarySkillType.TAMING, boostedDamage,
+                WOLF_ASSIST_XP_MULTIPLIER);
         return (float) boostedDamage;
     }
 
@@ -408,16 +422,15 @@ public final class EntityDamageListener {
      * the arrow arm), then everything else that is a {@link PersistentProjectileEntity} — a regular or
      * spectral arrow — is Archery unless it was fired from a crossbow, in which case it is Crossbows.
      * Bukkit's {@code AbstractArrow#isShotFromCrossbow()} was removed in 1.21.11, so the weapon that
-     * fired the projectile is read from {@link PersistentProjectileEntity#getWeaponStack()} instead
-     * ({@link ItemStack#isOf} is null-safe, so an arrow with no recorded weapon reads as a bow shot).
+     * fired the projectile is read from {@link PersistentProjectileEntity#getWeaponStack()} instead —
+     * a genuinely nullable field, hence {@link #isCrossbowShot} rather than a bare {@code isOf} call.
      *
-     * <p>Only the damage bonus is applied here. Legacy additionally pays per-hit combat XP scaled by a
-     * distance and bow-force multiplier, but this port pays combat XP per <em>kill</em>
-     * ({@code CombatListener}) and both multipliers need a projectile-launch hook to stamp the
-     * fired-from location and draw force — deferred to the launch mixin, along with Arrow Retrieval.
-     * Limit Break is dropped across every combat skill in this port (PvP-only in singleplayer, and its
-     * {@code AllowPVE} switch defaults off), so it is not applied here either; and Daze only targets
-     * another player, of which singleplayer has none.
+     * <p>Each arm pays its skill's per-hit XP. Legacy additionally scales the Archery and Crossbows
+     * awards by a fired-from-distance and a bow-draw-force multiplier, both stamped on the projectile
+     * at launch; those are still unported (CONVERSION_TODO §C). Limit Break is dropped across every
+     * combat skill in this port (PvP-only in singleplayer, and its {@code AllowPVE} switch defaults
+     * off), so it is not applied here either; and Daze only targets another player, of which
+     * singleplayer has none.
      */
     private static float applyProjectileAttackBonus(LivingEntity target, DamageSource source,
             float amount) {
@@ -467,9 +480,10 @@ public final class EntityDamageListener {
      * Archery: a bow-fired arrow's <b>Skill Shot</b> damage bonus and <b>Arrow Retrieval</b> credit
      * (legacy {@code processArcheryCombat}).
      *
-     * <p>The two are independent, as they are upstream — Arrow Retrieval sits in its own {@code if},
-     * so a player whose Skill Shot is locked (or disabled) still collects their arrows. Retrieval only
-     * credits the target here; the arrows themselves drop when it dies (see {@link ProjectileListener}).
+     * <p>Skill Shot, Arrow Retrieval and the XP award are independent, as they are upstream — each
+     * sits in its own {@code if}, so a player whose Skill Shot is locked (or disabled) still collects
+     * their arrows and still earns Archery XP. Retrieval only credits the target here; the arrows
+     * themselves drop when it dies (see {@link ProjectileListener}).
      */
     private static float applyArcheryBonus(McMMOPlayer mmoPlayer, LivingEntity target,
             PersistentProjectileEntity projectile, float amount) {
@@ -485,40 +499,56 @@ public final class EntityDamageListener {
             archery.retrieveArrows(target.getUuid(), projectile.getUuid());
         }
 
-        if (!archery.canSkillShot()) {
-            return amount;
+        float boostedDamage = amount;
+        if (archery.canSkillShot()) {
+            boostedDamage = (float) archery.skillShot(amount); // not additive — Skill Shot replaces it.
         }
-        return (float) archery.skillShot(amount); // not additive — Skill Shot replaces the damage.
+        CombatUtils.processCombatXP(mmoPlayer, target, PrimarySkillType.ARCHERY, boostedDamage);
+        return boostedDamage;
     }
 
     /**
-     * Crossbows Powered Shot: a crossbow bolt's damage bonus (legacy {@code processCrossbowsCombat}).
+     * Crossbows Powered Shot: a crossbow bolt's damage bonus (legacy {@code processCrossbowsCombat}),
+     * plus the bolt's per-hit Crossbows XP.
      */
     private static float applyPoweredShot(McMMOPlayer mmoPlayer, LivingEntity target, float amount) {
         if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.CROSSBOWS, target)) {
             return amount;
         }
         final CrossbowsManager crossbows = mmoPlayer.getCrossbowsManager();
-        if (crossbows == null || !crossbows.canPoweredShot()) {
+        if (crossbows == null) {
             return amount;
         }
-        return (float) crossbows.poweredShot(amount); // not additive — Powered Shot replaces it.
+
+        float boostedDamage = amount;
+        if (crossbows.canPoweredShot()) {
+            boostedDamage = (float) crossbows.poweredShot(amount); // not additive — it replaces it.
+        }
+        CombatUtils.processCombatXP(mmoPlayer, target, PrimarySkillType.CROSSBOWS, boostedDamage);
+        return boostedDamage;
     }
 
     /**
      * Tridents Impale (ranged): a thrown trident's flat damage bonus (legacy
-     * {@code processTridentCombatRanged}). Unlike the melee trident path, the ranged bonus is
-     * <em>not</em> scaled by attack strength — a thrown trident has no swing to charge.
+     * {@code processTridentCombatRanged}) plus its per-hit Tridents XP. Unlike the melee trident path,
+     * the ranged bonus is <em>not</em> scaled by attack strength — a thrown trident has no swing to
+     * charge.
      */
     private static float applyTridentImpale(McMMOPlayer mmoPlayer, LivingEntity target, float amount) {
         if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.TRIDENTS, target)) {
             return amount;
         }
         final TridentsManager tridents = mmoPlayer.getTridentsManager();
-        if (tridents == null || !tridents.canImpale()) {
+        if (tridents == null) {
             return amount;
         }
-        return amount + (float) tridents.impaleDamageBonus();
+
+        float boostedDamage = amount;
+        if (tridents.canImpale()) {
+            boostedDamage = amount + (float) tridents.impaleDamageBonus();
+        }
+        CombatUtils.processCombatXP(mmoPlayer, target, PrimarySkillType.TRIDENTS, boostedDamage);
+        return boostedDamage;
     }
 
     /**
@@ -737,6 +767,11 @@ public final class EntityDamageListener {
         } else if (weapon == MeleeWeapon.MACE) {
             maybeProcessCripple(mmoPlayer, target, boostedDamage);
         }
+
+        // Per-hit combat XP, paid on the *boosted* damage — legacy ends every processXCombat with
+        // this, after event.setDamage(boostedDamage), and its health-diff measured what actually
+        // landed. No multiplier on the melee path (legacy's 3-arg processCombatXP overload).
+        CombatUtils.processCombatXP(mmoPlayer, target, skillOf(weapon), boostedDamage);
         return boostedDamage;
     }
 
@@ -865,12 +900,24 @@ public final class EntityDamageListener {
             case SWORD -> PrimarySkillType.SWORDS;
             case AXE -> PrimarySkillType.AXES;
             case MACE -> PrimarySkillType.MACES;
+            case TRIDENT -> PrimarySkillType.TRIDENTS;
             case UNARMED -> PrimarySkillType.UNARMED;
             case OTHER -> throw new IllegalArgumentException("OTHER has no skill; gate it first");
         };
     }
 
-    /** Classify a held main-hand stack into the melee weapon whose bonus applies (legacy order). */
+    /**
+     * Classify a held main-hand stack into the melee weapon whose bonus applies. The set and the order
+     * are legacy's {@code processCombatAttack} dispatch chain, and the arms are mutually exclusive, so
+     * the order is cosmetic — except that {@code isUnarmed} must come last, since with
+     * {@code Unarmed_Items_As_Unarmed} on it matches any non-tool item and would otherwise swallow a
+     * mace or a trident.
+     *
+     * <p>{@code OTHER} means "not a weapon mcMMO trains" (a pickaxe, a block, a bow used as a club),
+     * and pays no bonus and no XP — matching legacy, whose dispatch simply has no arm for those.
+     * Spears are the one gap: legacy routes them off a {@code SPEAR} damage type rather than the held
+     * item, and this port has never paid Spears combat XP (CONVERSION_TODO §C).
+     */
     private static MeleeWeapon classifyMainHand(ItemStack held) {
         if (ItemUtils.isSword(held)) {
             return MeleeWeapon.SWORD;
@@ -880,6 +927,9 @@ public final class EntityDamageListener {
         }
         if (ItemUtils.isMace(held)) {
             return MeleeWeapon.MACE;
+        }
+        if (ItemUtils.isTrident(held)) {
+            return MeleeWeapon.TRIDENT;
         }
         if (ItemUtils.isUnarmed(held)) {
             return MeleeWeapon.UNARMED;

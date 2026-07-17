@@ -5,13 +5,15 @@ import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.maces.MacesManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
+import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import org.jetbrains.annotations.NotNull;
 
 /**
  * K1 attacker branch, MC-free half: the melee on-hit damage-bonus composition pulled out of the
  * legacy {@code CombatUtils#processSwordCombat}/{@code processAxeCombat}/{@code processUnarmedCombat}/
- * {@code processMacesCombat} so it's server-free and unit-testable. The {@code fabric.listeners.EntityDamageListener} owns the
+ * {@code processMacesCombat}/{@code processTridentCombatMelee} so it's server-free and unit-testable.
+ * The {@code fabric.listeners.EntityDamageListener} owns the
  * MC-typed half — resolving the attacker, confirming a direct melee swing, and classifying the held
  * item into a {@link MeleeWeapon} — then defers the actual damage arithmetic here.
  *
@@ -20,11 +22,11 @@ import org.jetbrains.annotations.NotNull;
  * legacy's ordering between them is load-bearing (see {@link #applyBonus}). They reach the entity
  * through the {@link PlatformLivingEntity} adapter, so this class stays server-free.
  *
- * <p>Still deferred behind their own adapters, matching the manager ports: Disarm, Arrow Deflect,
- * Taming's damage modifiers, and Limit Break (PvP-only). Rupture, the Serrated Strikes / Skull
- * Splitter AoEs, Counter Attack and Maces Cripple are live but sit in {@code EntityDamageListener}
- * instead — none of them contributes to the attacker's damage total, so they do not belong in this
- * composition.
+ * <p>Only damage <em>contributions</em> belong here. The on-hit sub-skills that act on the target
+ * without feeding this total — Rupture, the Serrated Strikes / Skull Splitter AoEs, Counter Attack,
+ * Maces Cripple — live in {@code EntityDamageListener}, as does per-hit combat XP. Limit Break is
+ * dropped across every combat skill in this port (PvP-only in singleplayer, and its {@code AllowPVE}
+ * switch defaults off); Disarm is unreachable in singleplayer and deliberately unported.
  */
 public final class MeleeDamageBonus {
 
@@ -33,6 +35,7 @@ public final class MeleeDamageBonus {
         SWORD,
         AXE,
         MACE,
+        TRIDENT,
         UNARMED,
         OTHER
     }
@@ -93,6 +96,15 @@ public final class MeleeDamageBonus {
                     // by attack strength like every other melee bonus. Its Cripple on-hit effect is not
                     // a damage contribution, so it runs from EntityDamageListener, not here.
                     boostedDamage += maces.getCrushDamage() * attackStrength;
+                }
+            }
+            case TRIDENT -> {
+                final TridentsManager tridents = mmoPlayer.getTridentsManager();
+                if (tridents != null && tridents.canImpale()) {
+                    // The MELEE Impale bonus is scaled by attack strength; the ranged one (a thrown
+                    // trident, in EntityDamageListener) is not — a throw has no swing to charge. That
+                    // asymmetry is legacy's, preserved deliberately.
+                    boostedDamage += tridents.impaleDamageBonus() * attackStrength;
                 }
             }
             case UNARMED -> {

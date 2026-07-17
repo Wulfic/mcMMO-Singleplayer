@@ -40,9 +40,11 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       **Projectile branch wired:** `applyProjectileAttackBonus` drives Archery Skill Shot / Crossbows
       Powered Shot / ranged Trident Impale off the damaging projectile, and the
       **projectile-launch Mixin now exists** (`ProjectileSpawnMixin` → `ProjectileListener`; see §C
-      Archery), which unblocked Arrow Retrieval. Still TODO on this seam: nothing adapter-shaped — the
-      remaining projectile work (distance/bow-force XP) is blocked on the per-hit-vs-per-kill XP-model
-      decision, and the effect-only on-hit sub-skills are tracked per skill in §C.
+      Archery), which unblocked Arrow Retrieval. **Per-hit combat XP now rides this seam too**: every
+      attacker arm closes with `CombatUtils#processCombatXP`, where legacy's `processXCombat` methods
+      called it (see §B). Still TODO on this seam: nothing adapter-shaped — the remaining projectile
+      work (distance/bow-force XP) just needs the launch stamp, and the effect-only on-hit sub-skills
+      are tracked per skill in §C.
       ⚠️ TUNING §F: bonuses land POST-armor (bypass armor) — flag for the tuning pass.
 - [x] **K2 — Fall-damage hook.** DONE. `EntityDamageListener` detects `DamageTypeTags.IS_FALL` and drives
       Acrobatics Roll (XP + damage reduction) via the K1 mixin seam above.
@@ -136,10 +138,36 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
 
 **All 19 skills now have an XP source wired** (the Pass-1 §B gate is feature-complete; every entry
 below is `[x]`/`[~]` with only deferred refinements remaining). Block-break (Mining/Woodcutting/
-Excavation/Herbalism) + combat-on-kill (weapon skills) were always wired; the rest landed via their §A
+Excavation/Herbalism) + combat (weapon skills) were always wired; the rest landed via their §A
 K7 hooks (Acrobatics fall/Dodge, Fishing catch, Repair/Salvage anvil, Taming, Smelting furnace, Alchemy
 brew). ⚠️ The K7 mixin/interaction hooks are MC-typed glue — **in-game (client) verification is still
 pending** for each; the boot-verify only proves the mixins apply. Per-skill status:
+
+- [x] **Combat XP is PER HIT** (decided 2026-07-17 by the project owner, resolving the fork that had
+      gated §C for several sessions). Legacy pays combat XP on every hit, proportional to the damage
+      that hit lands: `(int) (damage * Combat.Multiplier * 10 * multiplier)`. This port had simplified
+      that to a single award on `AFTER_DEATH` (Phase 3) — the per-hit damage fractions sum to the mob's
+      max health, so a clean solo kill totalled the same. That simplification is now **reverted**:
+      `fabric/listeners/CombatListener` is deleted and `util/skills/CombatUtils#processCombatXP` runs at
+      the close of each K1 attacker arm, with the MC-free arithmetic in `skills/CombatXp` (base XP,
+      the overkill clamp + `ExploitFix.Combat.XPCeiling` guard that legacy's `AwardCombatXpTask`
+      applied to its measured health delta, and the truncating award). Legacy measured the damage by
+      diffing health across a scheduled next-tick task because a Bukkit event handler could not know
+      what the hit would finally land; this port sits *inside* `damage()` on the `modifyAppliedDamage`
+      seam holding the post-armor figure about to be written, so the task collapses away.
+      **What the per-kill model structurally could not do, and now works:** wolf-assisted Taming XP
+      (×3 — it paid nothing at all, since the listener required a *player* killer), the Archery
+      distance / bow-force multipliers (still unported but no longer blocked — §C), and excluding
+      mcMMO's own AoE damage from XP (§F, now resolved). Also fixed in passing: an unrecognised held
+      item (a pickaxe, a block) used to pay **Unarmed** XP on a kill because the old `weaponSkill`
+      routed everything unmatched to Unarmed; the classifier now follows legacy's dispatch, which has
+      no arm for those, so they pay nothing. And legacy's `IRON_GOLEM && isPlayerCreated()` guard is
+      now ported — a player-built golem pays no XP (a golem farm was an XP exploit without it).
+      ⚠️ Still gapped (pre-existing, inherited not introduced): the **mob-origin multipliers**
+      (spawner / nether-portal / egg / bred / tamed, and the COTW-summon zero) ride `MobMetaFlagType`,
+      which is unported — the config getters exist and read nothing. ⚠️ Expect the XP *rate* to shift
+      materially: per-hit pays for damage on things you never kill. That is tuning (§F) — verify at
+      1.0× single-mode, not RetroMode 10×. ⚠️ In-game verification pending.
 
 - [x] **Acrobatics** — via K2: fall damage → Roll XP (gated by `canGainRollXP()`) + Roll/Graceful Roll
       damage negation **DONE**. Via K1 defender branch: **Dodge** damage reduction + XP **DONE** (per-mob
@@ -193,13 +221,20 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
 Port each on-hit body onto the K1 damage hook (+ K5 for ability events, `MetadataStore` already
 exists for per-entity tracking). **Swords, Axes and Unarmed are complete — every melee weapon skill
 is now fully ported — Taming is complete bar its summon path, and the projectile-launch hook now
-exists**, so Archery is complete too (bar the XP-model-blocked distance/force multipliers).
+exists**, so Archery is complete too (bar the distance/force XP multipliers).
 
-What remains in §C: **Crossbows** and **Tridents** each still want a look now that the launch hook
-exists (their on-hit damage bonuses are already wired), Taming's `attackTarget`/Call-of-the-Wild
-summon path (needs new adapters), and the per-hit-vs-per-kill **XP-model decision** that blocks
-Archery's distance/bow-force XP and wolf-assisted Taming XP alike. Note that decision is now the
-single largest thing gating §C — it is a design fork, not an adapter.
+**The XP-model fork is DECIDED (2026-07-17, by the project owner): combat XP is paid PER HIT, as
+legacy does — not per kill.** The per-kill `CombatListener` is deleted; `CombatUtils#processCombatXP`
+now runs at the close of every K1 attacker arm, exactly where legacy's `processXCombat` methods called
+it. That unblocked **wolf-assisted Taming XP** (the ×3 multiplier, which the per-kill model could not
+express at all — its listener only paid out when the *killer* was a player) and, in the same move,
+made the melee **Tridents** arm real (Impale × attack strength). See §B for the model's own entry.
+
+What remains in §C: **Archery/Crossbows distance + bow-force XP** (no longer blocked — they just need
+the fired-from location and draw force stamped at launch, which the existing `ProjectileSpawnMixin`
+can now carry), Taming's `attackTarget`/Call-of-the-Wild summon path (needs new adapters), and
+**Spears**, which has never earned combat XP in this port (legacy routes it off a `SPEAR` damage type
+rather than the held item — see `EntityDamageListener#classifyMainHand`).
 
 - [~] **Swords** — Stab on-hit damage **DONE** (via K1 attacker branch, `MeleeDamageBonus`).
       **Rupture (bleed DoT) DONE** — the first §C on-hit *effect* body: `SwordsManager.processRupture(
@@ -318,15 +353,22 @@ single largest thing gating §C — it is a design fork, not an adapter.
       round-trip; Piercing checks both hands, as legacy does. Registered separately from `CombatListener`
       because the arrows are owed regardless of what landed the killing blow. ⚠️ In-game verification
       pending. **Daze deliberately NOT ported — unreachable in singleplayer** (`canDaze` requires
-      `target instanceof Player`; same honest collapse as Disarm/Iron Grip). **Still TODO: distance-based
-      XP + bow-force XP** — these are *per-hit* XP multipliers, but this port pays combat XP *per kill*
-      (`CombatListener`), so they are blocked on a per-hit-vs-per-kill XP-model decision, **not** on an
-      adapter. Stamping `METADATA_KEY_ARROW_DISTANCE`/`METADATA_KEY_BOW_FORCE` at launch now would only
-      create state nothing reads — the "config that lies" family — so the launch handler deliberately
-      omits both.
-- [ ] **Maces** — Cripple effect (needs potion/entity adapter), on-hit bonuses.
-- [ ] **Tridents** — throw handling + on-hit (needs projectile adapter).
-- [ ] **Crossbows** — on-hit body (needs projectile/metadata adapter).
+      `target instanceof Player`; same honest collapse as Disarm/Iron Grip). Base per-hit Archery XP is
+      **DONE** (via the per-hit XP move). **Still TODO: distance-based XP + bow-force XP** — these are
+      *per-hit* XP multipliers, which the port now pays, so they are **no longer blocked**: what they
+      need is `METADATA_KEY_ARROW_DISTANCE`/`METADATA_KEY_BOW_FORCE` stamped on the arrow at launch
+      (the `ProjectileSpawnMixin` seam already exists and already marks arrows for Retrieval) and read
+      back in `applyArcheryBonus`/`applyPoweredShot` as the `processCombatXP` multiplier.
+- [x] **Maces** — Crush on-hit damage + Cripple (Slowness) **DONE** (commit 0acfa33ff), per-hit Maces
+      XP **DONE**. See §F upstream bug #9.
+- [~] **Tridents** — ranged Impale (thrown) **DONE** (via the K1 projectile arm); **melee Impale DONE**
+      (`MeleeDamageBonus`'s `TRIDENT` arm, ported from legacy `processTridentCombatMelee` — the melee
+      bonus *is* scaled by attack strength where the ranged one is not, an asymmetry preserved from
+      legacy). Per-hit Tridents XP **DONE** on both arms. Still TODO: nothing known.
+- [~] **Crossbows** — Powered Shot on-hit damage **DONE** (via the K1 projectile arm), per-hit Crossbows
+      XP **DONE**. Still TODO: the distance XP multiplier (shared with Archery — see above;
+      `processCrossbowsCombat` passes the same `distanceMultiplier`, with `forceMultiplier` hardcoded
+      to 1.0 since a crossbow has no draw force).
 - [~] **Taming** — the **damage modifiers are DONE**, on both sides of the K1 seam. *Attacker* arm
       (`EntityDamageListener#applyWolfAttackBonus`, porting legacy `CombatUtils#processTamingCombat`):
       a tamed wolf's bite carries its owner's **Fast Food Service** (heals the wolf for the unboosted
@@ -358,12 +400,13 @@ single largest thing gating §C — it is a design fork, not an adapter.
       cancelling outright via `ALLOW_DAMAGE`, as Arrow Deflect does; Beast Lore rides `ALLOW_DAMAGE`
       too — note its trigger is an **attack with a bone**, not a right-click, so no interact hook was
       needed. ⚠️ In-game verification pending for all three.
-      **Still TODO:** `attackTarget` (nearby-entity sweep), the Call-of-the-Wild summon path, and
-      **wolf-assisted Taming XP** — legacy's
-      `processTamingCombat` ends in `processCombatXP(mmoPlayer, target, TAMING, 3)`, but this port
-      awards combat XP *per kill* (`CombatListener`) and that listener only pays out when the
-      *killer* is a player, so a wolf's kill currently pays nothing. That is a pre-existing §B gap
-      needing an XP-model decision, not something the damage-modifier arm can drop in.
+      **Wolf-assisted Taming XP is DONE**: `applyWolfAttackBonus` closes with legacy's
+      `processCombatXP(mmoPlayer, target, TAMING, 3)`, unblocked by the per-hit XP decision. Under the
+      old per-kill model this paid *nothing* — that listener only fired when the *killer* was a player,
+      and a wolf is not one.
+      **Still TODO:** `attackTarget` (nearby-entity sweep) and the Call-of-the-Wild summon path (both
+      need new adapters). Note the COTW summon also owes `MobMetaFlagType.COTW_SUMMONED_MOB`, which
+      legacy uses to zero a summon's combat XP — see the mob-origin-multiplier gap in §B.
 
 ---
 
@@ -625,12 +668,13 @@ single largest thing gating §C — it is a design fork, not an adapter.
       normal Rupture duration. Ported faithfully (nothing reads it, so nothing to wire); decide later
       whether to fix the key or strip it. Third of this family — see `DebrisReduction` and Rupture
       `Explosion_Damage` below: a config knob that lies to the operator.
-- [ ] **Known deviation — AoE kills pay combat XP where legacy paid none:** legacy awards combat XP
-      *per hit* and its custom-damage marker excluded mcMMO-dealt damage, so Serrated Strikes /
-      Skull Splitter AoE damage earned nothing. This port awards combat XP *per kill*
-      (`CombatListener` on `AFTER_DEATH`, a deliberate Phase 3 simplification) and the AoE attributes
-      its damage to the player, so an entity finished off by the AoE pays full kill XP. Consistent
-      with the per-kill model and arguably what a player expects; flagged rather than patched.
+- [x] **Resolved deviation — AoE kills pay combat XP where legacy paid none:** this was an artefact of
+      the per-kill XP model (`CombatListener` on `AFTER_DEATH`, the Phase 3 simplification) — the AoE
+      attributes its damage to the player, so an entity it finished off paid full kill XP where legacy
+      paid nothing. Moot as of the per-hit XP move: XP is now awarded from the K1 attacker arms, which
+      `isProcessingMcMMODamage()` turns away for any damage mcMMO deals itself — precisely the role
+      legacy's `METADATA_KEY_CUSTOM_DAMAGE` marker played. Serrated Strikes / Skull Splitter AoE and
+      Rupture ticks now pay no XP, as upstream.
 - [ ] **Known deviation (whole-listener, not Blast Mining specific):** legacy gates its entire
       interact handler on `player.getGameMode() != CREATIVE`; `SuperAbilityListener` has no such
       gate, so super-ability readying/activation (and now remote detonation) also work in creative.

@@ -32,10 +32,10 @@ import java.util.UUID;
  * class-load, which is fragile in the port where the config is installed into the {@link McMMOMod}
  * service locator after the fact. Values are now pulled on demand.
  *
- * <p>Still dropped: {@code DISTANCE_XP_MULTIPLIER} and the fired-location distance bonus. It is a
- * <em>per-hit</em> XP multiplier, but this port pays combat XP per <em>kill</em>
- * ({@code CombatListener}), so consuming it needs an XP-model decision rather than an adapter —
- * stamping the fired-from location now would only create state nothing reads.
+ * <p>Still unported: {@code DISTANCE_XP_MULTIPLIER} and the fired-location distance bonus. It is a
+ * <em>per-hit</em> XP multiplier; the port's combat XP is now paid per hit (see
+ * {@link com.gmail.nossr50.util.skills.CombatUtils#processCombatXP}), so it is no longer blocked on
+ * an XP-model decision — it just needs the fired-from location stamped at launch (CONVERSION_TODO §C).
  */
 public final class Archery {
 
