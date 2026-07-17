@@ -53,6 +53,7 @@ public final class PlayerSessionListener {
 
             final McMMOPlayer mmoPlayer = new McMMOPlayer(player, profile);
             UserManager.track(mmoPlayer);
+            McMMOMod.getTransientEntityTracker().initPlayer(player.getUniqueId());
             McMMOMod.LOGGER.info("Loaded mcMMO data for {} ({} profile).",
                     player.getName(), isNew ? "new" : "existing");
         } catch (Exception e) {
@@ -72,6 +73,10 @@ public final class PlayerSessionListener {
                     mmoPlayer.getPlayerName(), e);
         } finally {
             UserManager.remove(vanilla.getUuid());
+            // Despawn the player's Call-of-the-Wild summons so persistent pets aren't orphaned in the
+            // saved world. Ordered after UserManager.remove: the summon's despawn resolves its owner
+            // through UserManager to notify them, which is correctly skipped for a leaving player.
+            McMMOMod.getTransientEntityTracker().cleanupPlayer(vanilla.getUuid());
         }
     }
 

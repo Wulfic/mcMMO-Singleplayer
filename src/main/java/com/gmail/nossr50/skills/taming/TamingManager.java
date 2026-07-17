@@ -56,6 +56,12 @@ import org.jetbrains.annotations.NotNull;
  */
 public class TamingManager extends SkillManager {
 
+    /** Minimum gap between Call-of-the-Wild summons (legacy's hardcoded 150 ms autofire guard). */
+    private static final long SUMMON_DEBOUNCE_MS = 150L;
+
+    /** Timestamp of this player's last COTW summon, for {@link #summonDebounceElapsed()}. */
+    private long lastSummonTimeStamp = 0L;
+
     public TamingManager(@NotNull McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.TAMING);
     }
@@ -123,6 +129,33 @@ public class TamingManager extends SkillManager {
     public boolean canUseBeastLore() {
         return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.TAMING_BEAST_LORE)
                 && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.TAMING_BEAST_LORE);
+    }
+
+    /**
+     * Whether the player may use Call of the Wild. Legacy gated each {@code summonWolf/Ocelot/Horse} on
+     * {@code hasUnlockedSubskill(CALL_OF_THE_WILD)} plus {@code Permissions.callOfTheWild(player, type)};
+     * the per-type permission collapses to the singleplayer-always-true {@code isSubSkillEnabled}, so
+     * one gate covers all three summons.
+     */
+    public boolean canCallOfTheWild() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.TAMING_CALL_OF_THE_WILD)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.TAMING_CALL_OF_THE_WILD);
+    }
+
+    /**
+     * Legacy's anti-autofire guard from {@code processCallOfTheWild}: a summon is only allowed if at
+     * least 150 ms have passed since the last one, so holding down the (left-click) summon key can't
+     * empty a stack of bones in a single tick-burst. Consumes the window when it returns {@code true}.
+     *
+     * @return {@code true} if a summon may proceed now (and the debounce window has been reset)
+     */
+    public boolean summonDebounceElapsed() {
+        final long now = System.currentTimeMillis();
+        if (lastSummonTimeStamp + SUMMON_DEBOUNCE_MS > now) {
+            return false;
+        }
+        lastSummonTimeStamp = now;
+        return true;
     }
 
     /**

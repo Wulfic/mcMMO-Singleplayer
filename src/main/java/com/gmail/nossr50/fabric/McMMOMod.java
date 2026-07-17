@@ -25,10 +25,12 @@ import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.scheduler.TickScheduler;
 import com.gmail.nossr50.skills.repair.repairables.RepairableManager;
 import com.gmail.nossr50.skills.salvage.salvageables.SalvageableManager;
+import com.gmail.nossr50.skills.taming.CallOfTheWild;
 import com.gmail.nossr50.runnables.SaveTimerTask;
 import com.gmail.nossr50.runnables.player.ClearRegisteredXPGainTask;
 import com.gmail.nossr50.util.experience.FormulaManager;
 import com.gmail.nossr50.util.MaterialMapStore;
+import com.gmail.nossr50.util.TransientEntityTracker;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillTools;
 import java.nio.file.Path;
@@ -87,6 +89,14 @@ public class McMMOMod implements ModInitializer {
      */
     private static final TickScheduler scheduler = new TickScheduler();
 
+    /**
+     * Per-player registry of Call-of-the-Wild summons (Taming §C). Created once at mod load and lives
+     * for the JVM; it holds only transient in-memory summon handles (cleared per player on logout and
+     * per summon on despawn), so one instance safely spans world open/close cycles. Replaces legacy
+     * {@code mcMMO.getTransientEntityTracker()}.
+     */
+    private static final TransientEntityTracker transientEntityTracker = new TransientEntityTracker();
+
     /** Ticks in one real-time minute (20 tps × 60 s). Autosave interval is configured in minutes. */
     private static final long TICKS_PER_MINUTE = 20L * 60L;
 
@@ -137,6 +147,7 @@ public class McMMOMod implements ModInitializer {
     private static volatile PotionConfig potionConfig;
     private static volatile RepairableManager repairableManager;
     private static volatile SalvageableManager salvageableManager;
+    private static volatile CallOfTheWild callOfTheWild;
 
     @Override
     public void onInitialize() {
@@ -276,6 +287,14 @@ public class McMMOMod implements ModInitializer {
      */
     public static @NotNull TickScheduler getScheduler() {
         return scheduler;
+    }
+
+    /**
+     * The Call-of-the-Wild summon registry (Taming §C). Never {@code null} — created at mod load and
+     * lives for the JVM. Replaces legacy {@code mcMMO.getTransientEntityTracker()}.
+     */
+    public static @NotNull TransientEntityTracker getTransientEntityTracker() {
+        return transientEntityTracker;
     }
 
     /**
@@ -461,6 +480,20 @@ public class McMMOMod implements ModInitializer {
     /** Wires the loaded {@link FishingTreasureConfig} at server start (K8). */
     public static void setFishingTreasureConfig(@Nullable FishingTreasureConfig config) {
         fishingTreasureConfig = config;
+    }
+
+    /**
+     * The Call-of-the-Wild lookup tables (item → summon), built from {@link GeneralConfig} at server
+     * start. Never {@code null} on an in-game code path (a summon can only be attempted inside a world
+     * session, after {@link com.gmail.nossr50.fabric.ConfigBootstrap#loadAll} has wired it).
+     */
+    public static @NotNull CallOfTheWild getCallOfTheWild() {
+        return callOfTheWild;
+    }
+
+    /** Wires the Call-of-the-Wild tables at server start (Taming §C). */
+    public static void setCallOfTheWild(@Nullable CallOfTheWild config) {
+        callOfTheWild = config;
     }
 
     /**

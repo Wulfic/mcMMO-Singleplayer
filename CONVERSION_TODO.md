@@ -232,9 +232,13 @@ made the melee **Tridents** arm real (Impale × attack strength). See §B for th
 
 The distance XP multiplier landed with it (Archery + Crossbows), and **Archery's bow-force XP has now
 landed too** (new `BowShootMixin` on `BowItem#onStoppedUsing`), so **Archery, Crossbows and Tridents
-are all complete**. What remains in §C: Taming's `attackTarget`/Call-of-the-Wild summon path (needs new
-adapters), and **Spears**, which has never earned combat XP in this port (legacy routes it off a
-`SPEAR` damage type rather than the held item — see `EntityDamageListener#classifyMainHand`).
+are all complete**. **Taming's Call of the Wild summon path + `attackTarget` are now DONE too** (see the
+Taming entry below). The only §C item left is **Spears — and it is unreachable in this port** (an honest
+collapse, not a gap): legacy fires it off a custom `spear` **damage type** dealt by custom spear items
+(`wooden_spear`…`netherite_spear`), none of which exist in vanilla 1.21.11 and no datapack here adds
+them, so a spear can never be held and nothing ever deals spear-typed damage. Wiring a classifier arm
+would be dead code that never runs — see `EntityDamageListener#classifyMainHand`. **With that, §C is
+effectively complete.**
 
 - [~] **Swords** — Stab on-hit damage **DONE** (via K1 attacker branch, `MeleeDamageBonus`).
       **Rupture (bleed DoT) DONE** — the first §C on-hit *effect* body: `SwordsManager.processRupture(
@@ -424,9 +428,23 @@ adapters), and **Spears**, which has never earned combat XP in this port (legacy
       `processCombatXP(mmoPlayer, target, TAMING, 3)`, unblocked by the per-hit XP decision. Under the
       old per-kill model this paid *nothing* — that listener only fired when the *killer* was a player,
       and a wolf is not one.
-      **Still TODO:** `attackTarget` (nearby-entity sweep) and the Call-of-the-Wild summon path (both
-      need new adapters). Note the COTW summon also owes `MobMetaFlagType.COTW_SUMMONED_MOB`, which
-      legacy uses to zero a summon's combat XP — see the mob-origin-multiplier gap in §B.
+      **Call of the Wild + `attackTarget` are now DONE.** New MC-free datatypes (`CallOfTheWildType`,
+      `TamingSummon`), the `CallOfTheWild` config-lookup tables, and a server-free
+      `TransientEntityTracker` (per-player/per-type cap counting via `isValid()` — the same
+      `TrackedEntity`→handle substitution Arrow Retrieval made) carry the bookkeeping; the MC-typed
+      `CotwSummon` (a live wolf/cat/horse + its despawn task) and `fabric.listeners.CallOfTheWildHandler`
+      (spawn via `MobEntity#initialize()` + `setTamedBy`/`setTame`+`setOwner` + `setPersistent`,
+      orchestrate the item cost + per-type cap, and the `attackTarget` nearby-wolf sweep) own the entity
+      handling. Trigger = a **sneaking left-click-block** with a summoning item (`SuperAbilityListener`);
+      left-click-**air** is deferred (Fabric exposes no attack-air callback). **No new mixin.** Legacy's
+      `COTW_SUMMONED_MOB` no-combat-XP flag collapses onto the tracker itself — `CombatUtils#processCombatXP`
+      skips any target the tracker knows is a live summon, so a player can't farm XP off their own pets.
+      Summons are despawned on logout (`PlayerSessionListener`) so persistent pets aren't orphaned in the
+      save. Config layer was already present (`GeneralConfig.getTamingCOTW*`); the tables build at
+      `ConfigBootstrap` (boot-verified). ⚠️ In-game verification pending — a summon can't be triggered
+      headless (the standing §G debt). **Deviations:** despawn uses `discard()` (silent) rather than
+      legacy's `setHealth(0)`+`remove()` (which fired death events and dropped loot); the despawn
+      sound/particle are dropped (no particle adapter, the standing Dodge/Rupture deferral).
 
 ---
 
@@ -505,7 +523,8 @@ adapters), and **Spears**, which has never earned combat XP in this port (legacy
 - [ ] **Alchemy** `AlchemyBrewTask`/`AlchemyBrewCheckTask` — via K7 + K8.
 - [ ] **Fishing** `MasterAnglerTask` — `FishHook` mutation via K7.
 - [ ] **Herbalism** `DelayedCropReplant`/`HerbalismBlockUpdaterTask`/`DelayedHerbalismXPCheckTask`.
-- [ ] **Taming** Call of the Wild summons (`TamingSummon`/`CallOfTheWildType` + transient-entity tracker).
+- [x] **Taming** Call of the Wild summons (`TamingSummon`/`CallOfTheWildType` + `TransientEntityTracker`)
+      **DONE** — see the Taming entry in §C. Spawn/despawn/cap/attackTarget all wired; in-game verify pending.
 - [ ] `ExperienceBarHideTask` / XP-bar `processPostXpEvent` (cosmetic; can slip to Pass 2).
 
 *(Already ported & scheduled: `SaveTimerTask`, `ClearRegisteredXPGainTask`, `ToolLowerTask`,

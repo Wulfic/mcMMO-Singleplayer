@@ -70,6 +70,11 @@ import net.minecraft.world.World;
  * right-click-<i>block</i> can only ever re-find the block just clicked, which the TNT arm has
  * already excluded — it could never detonate anything.
  *
+ * <p>Taming's <b>Call of the Wild</b> also rides the left-click (attack-block) path: a sneaking strike
+ * with a summoning item spawns a pet (see {@code onAttackBlock}). Only the left-click-<i>block</i> form
+ * is wired; Fabric has no left-click-<i>air</i> callback, so summoning while looking at open sky is the
+ * one deferred gesture (a mixin on the swing/action packet would be needed for it).
+ *
  * <p><b>Deferred (as their bodies land):</b> the Herbalism Green Thumb / Shroom Thumb / berry-bush
  * right-click paths, which need skill bodies that are still stubbed.
  */
@@ -158,6 +163,19 @@ public final class SuperAbilityListener {
         final BlockState state = world.getBlockState(pos);
         final ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
         final ItemStack held = serverPlayer.getMainHandStack();
+
+        // Taming Call of the Wild: a sneaking left-click while holding a summoning item (bones for a
+        // wolf, cod for a cat, an apple for a horse) summons the pet. Legacy fired this from the
+        // LEFT_CLICK arm of PlayerInteractEvent gated on isSneaking(). Only the left-click-BLOCK form is
+        // wired — Fabric exposes no left-click-air callback — which still covers summoning while looking
+        // at the ground or a wall (the common case; left-click-air is deferred, see the class note).
+        // Returning FAIL consumes the click so it doesn't also begin breaking the block.
+        if (serverPlayer.isSneaking()
+                && McMMOMod.getCallOfTheWild().isCOTWItem(itemPath(held))) {
+            CallOfTheWildHandler.processCallOfTheWild(mmoPlayer, serverPlayer);
+            return ActionResult.FAIL;
+        }
+
         boolean instaBroke = false;
 
         // Legacy splits this strike across two BlockDamageEvent handlers: activation at NORMAL
@@ -392,5 +410,9 @@ public final class SuperAbilityListener {
 
     private static String blockPath(BlockState state) {
         return Registries.BLOCK.getId(state.getBlock()).getPath();
+    }
+
+    private static String itemPath(ItemStack stack) {
+        return Registries.ITEM.getId(stack.getItem()).getPath();
     }
 }

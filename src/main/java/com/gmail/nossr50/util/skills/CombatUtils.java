@@ -257,6 +257,13 @@ public final class CombatUtils {
      */
     public static void processCombatXP(@NotNull McMMOPlayer mmoPlayer, @NotNull LivingEntity target,
             @NotNull PrimarySkillType skill, double damage, double multiplier) {
+        // A player must not farm XP off their own Call-of-the-Wild summons (hitting a summoned wolf /
+        // cat / horse). Legacy zeroed a COTW summon's XP via the COTW_SUMMONED_MOB mob-flag; the
+        // transient tracker already knows every live summon, so it answers the same question directly.
+        if (McMMOMod.getTransientEntityTracker().isTransient(target.getUuid())) {
+            return;
+        }
+
         // Legacy's `type == IRON_GOLEM && !ironGolem.isPlayerCreated()` gate: a village-spawned golem
         // pays its configured 2.0 multiplier, a player-built one pays nothing. Without it a golem farm
         // is an XP exploit — which is the whole reason upstream singles the check out.
