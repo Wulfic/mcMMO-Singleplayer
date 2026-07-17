@@ -12,6 +12,7 @@ import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.MeleeDamageBonus;
 import com.gmail.nossr50.skills.MeleeDamageBonus.MeleeWeapon;
 import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
+import com.gmail.nossr50.skills.archery.Archery;
 import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
@@ -425,11 +426,12 @@ public final class EntityDamageListener {
      * fired the projectile is read from {@link PersistentProjectileEntity#getWeaponStack()} instead —
      * a genuinely nullable field, hence {@link #isCrossbowShot} rather than a bare {@code isOf} call.
      *
-     * <p>Each arm pays its skill's per-hit XP. Legacy additionally scales the Archery and Crossbows
-     * awards by a fired-from-distance and a bow-draw-force multiplier, both stamped on the projectile
-     * at launch; those are still unported (CONVERSION_TODO §C). Limit Break is dropped across every
-     * combat skill in this port (PvP-only in singleplayer, and its {@code AllowPVE} switch defaults
-     * off), so it is not applied here either; and Daze only targets another player, of which
+     * <p>Each arm pays its skill's per-hit XP, and the Archery/Crossbows arms scale theirs by the
+     * shot's range (see {@link #distanceXpMultiplier}). Archery's second multiplier, bow draw force,
+     * is still unported (CONVERSION_TODO §C); legacy defaults it to {@code 1.0} for any arrow that
+     * missed its bow-shot handler, which is what omitting it amounts to. Limit Break is dropped across
+     * every combat skill in this port (PvP-only in singleplayer, and its {@code AllowPVE} switch
+     * defaults off), so it is not applied here either; and Daze only targets another player, of which
      * singleplayer has none.
      */
     private static float applyProjectileAttackBonus(LivingEntity target, DamageSource source,
@@ -452,7 +454,7 @@ public final class EntityDamageListener {
             return applyTridentImpale(mmoPlayer, target, amount);
         }
         if (isCrossbowShot(projectile)) {
-            return applyPoweredShot(mmoPlayer, target, amount);
+            return applyPoweredShot(mmoPlayer, target, projectile, amount);
         }
         return applyArcheryBonus(mmoPlayer, target, projectile, amount);
     }
@@ -503,15 +505,39 @@ public final class EntityDamageListener {
         if (archery.canSkillShot()) {
             boostedDamage = (float) archery.skillShot(amount); // not additive — Skill Shot replaces it.
         }
-        CombatUtils.processCombatXP(mmoPlayer, target, PrimarySkillType.ARCHERY, boostedDamage);
+        // Legacy pays `forceMultiplier * distanceMultiplier`. The bow-force half is still unported
+        // (CONVERSION_TODO §C), and legacy's own launch handler defaults it to 1.0 for any arrow that
+        // did not come through its bow-shot handler — so omitting it reads as that default rather
+        // than as a missing factor.
+        CombatUtils.processCombatXP(mmoPlayer, target, PrimarySkillType.ARCHERY, boostedDamage,
+                distanceXpMultiplier(target, projectile));
         return boostedDamage;
     }
 
     /**
-     * Crossbows Powered Shot: a crossbow bolt's damage bonus (legacy {@code processCrossbowsCombat}),
-     * plus the bolt's per-hit Crossbows XP.
+     * The fired-from-distance XP multiplier for a projectile hit — legacy's static
+     * {@code ArcheryManager#distanceXpBonusMultiplier(target, arrow)}, which both the Archery and the
+     * Crossbows arm call. This owns only the MC-typed reads (the struck entity's world and position);
+     * the measurement itself is MC-free on {@link Archery}.
      */
-    private static float applyPoweredShot(McMMOPlayer mmoPlayer, LivingEntity target, float amount) {
+    private static double distanceXpMultiplier(LivingEntity target,
+            PersistentProjectileEntity projectile) {
+        return Archery.distanceXpBonusMultiplier(projectile.getUuid(),
+                target.getEntityWorld().getRegistryKey().getValue().toString(),
+                target.getX(), target.getY(), target.getZ());
+    }
+
+    /**
+     * Crossbows Powered Shot: a crossbow bolt's damage bonus (legacy {@code processCrossbowsCombat}),
+     * plus the bolt's distance-scaled per-hit Crossbows XP.
+     *
+     * <p>The distance multiplier is the very same Archery static legacy calls from here. Legacy also
+     * hardcodes {@code forceMultiplier = 1.0} on this arm — a crossbow is loosed at full power, so
+     * there is no draw to scale by — which is why this arm is complete while Archery's still owes its
+     * force half.
+     */
+    private static float applyPoweredShot(McMMOPlayer mmoPlayer, LivingEntity target,
+            PersistentProjectileEntity projectile, float amount) {
         if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.CROSSBOWS, target)) {
             return amount;
         }
@@ -524,7 +550,8 @@ public final class EntityDamageListener {
         if (crossbows.canPoweredShot()) {
             boostedDamage = (float) crossbows.poweredShot(amount); // not additive — it replaces it.
         }
-        CombatUtils.processCombatXP(mmoPlayer, target, PrimarySkillType.CROSSBOWS, boostedDamage);
+        CombatUtils.processCombatXP(mmoPlayer, target, PrimarySkillType.CROSSBOWS, boostedDamage,
+                distanceXpMultiplier(target, projectile));
         return boostedDamage;
     }
 

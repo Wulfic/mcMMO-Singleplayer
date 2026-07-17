@@ -230,9 +230,9 @@ it. That unblocked **wolf-assisted Taming XP** (the ×3 multiplier, which the pe
 express at all — its listener only paid out when the *killer* was a player) and, in the same move,
 made the melee **Tridents** arm real (Impale × attack strength). See §B for the model's own entry.
 
-What remains in §C: **Archery/Crossbows distance + bow-force XP** (no longer blocked — they just need
-the fired-from location and draw force stamped at launch, which the existing `ProjectileSpawnMixin`
-can now carry), Taming's `attackTarget`/Call-of-the-Wild summon path (needs new adapters), and
+The distance XP multiplier landed with it (Archery + Crossbows), so **Crossbows and Tridents are now
+complete**. What remains in §C: **Archery's bow-force XP** (needs a new `BowItem#onStoppedUsing` seam —
+see Archery below), Taming's `attackTarget`/Call-of-the-Wild summon path (needs new adapters), and
 **Spears**, which has never earned combat XP in this port (legacy routes it off a `SPEAR` damage type
 rather than the held item — see `EntityDamageListener#classifyMainHand`).
 
@@ -353,22 +353,36 @@ rather than the held item — see `EntityDamageListener#classifyMainHand`).
       round-trip; Piercing checks both hands, as legacy does. Registered separately from `CombatListener`
       because the arrows are owed regardless of what landed the killing blow. ⚠️ In-game verification
       pending. **Daze deliberately NOT ported — unreachable in singleplayer** (`canDaze` requires
-      `target instanceof Player`; same honest collapse as Disarm/Iron Grip). Base per-hit Archery XP is
-      **DONE** (via the per-hit XP move). **Still TODO: distance-based XP + bow-force XP** — these are
-      *per-hit* XP multipliers, which the port now pays, so they are **no longer blocked**: what they
-      need is `METADATA_KEY_ARROW_DISTANCE`/`METADATA_KEY_BOW_FORCE` stamped on the arrow at launch
-      (the `ProjectileSpawnMixin` seam already exists and already marks arrows for Retrieval) and read
-      back in `applyArcheryBonus`/`applyPoweredShot` as the `processCombatXP` multiplier.
+      `target instanceof Player`; same honest collapse as Disarm/Iron Grip). Per-hit Archery XP
+      **DONE**, and **distance-based XP DONE** — the first consumer of the decided per-hit XP model:
+      `ProjectileListener.onProjectileSpawn` stamps the arrow's launch point (`Archery.markFiredFrom`,
+      legacy's `METADATA_KEY_ARROW_DISTANCE`) and `Archery.distanceXpBonusMultiplier` measures it at
+      the hit — `1 + min(distance, 50) * Experience_Values.Archery.Distance_Multiplier`, kept MC-free
+      via the `Archery.FiredFrom` record (world key + coords, which is all legacy's Bukkit `Location`
+      was asked for), so the stamp→measure cycle is unit-tested. **⚠️ The stamp sits ABOVE the Piercing
+      check, the retrieval roll and the profile lookup — legacy's order, and load-bearing: distance XP
+      is owed on a shot whether or not its arrow is retrievable.** The cleanup schedule moved up with
+      it (the mark is unconditional now, so every arrow would otherwise leak an entry) and strips both
+      keys at once, as legacy's `cleanupProjectileMetadata` does.
+      **Still TODO: bow-force XP** — the one remaining multiplier. Legacy stamps
+      `METADATA_KEY_BOW_FORCE = min(pull * AdvancedConfig.ForceMultiplier, 1.0)` from a *separate*
+      `EntityShootBowEvent` handler, and defaults it to `1.0` in the launch handler for any arrow that
+      missed it — so omitting it today reads as that default, not as a missing factor. It needs a new
+      seam: `BowItem#onStoppedUsing` is the analogue (both it and `BowItem.getPullProgress(int)` are
+      public — javap-confirmed), carrying the pull to the spawn TAIL via a ThreadLocal, the shape
+      `CombatUtils.IN_MCMMO_DAMAGE` already establishes. Crossbows needs none of this (see below).
 - [x] **Maces** — Crush on-hit damage + Cripple (Slowness) **DONE** (commit 0acfa33ff), per-hit Maces
       XP **DONE**. See §F upstream bug #9.
 - [~] **Tridents** — ranged Impale (thrown) **DONE** (via the K1 projectile arm); **melee Impale DONE**
       (`MeleeDamageBonus`'s `TRIDENT` arm, ported from legacy `processTridentCombatMelee` — the melee
       bonus *is* scaled by attack strength where the ranged one is not, an asymmetry preserved from
       legacy). Per-hit Tridents XP **DONE** on both arms. Still TODO: nothing known.
-- [~] **Crossbows** — Powered Shot on-hit damage **DONE** (via the K1 projectile arm), per-hit Crossbows
-      XP **DONE**. Still TODO: the distance XP multiplier (shared with Archery — see above;
-      `processCrossbowsCombat` passes the same `distanceMultiplier`, with `forceMultiplier` hardcoded
-      to 1.0 since a crossbow has no draw force).
+- [x] **Crossbows** — **COMPLETE**: Powered Shot on-hit damage **DONE** (via the K1 projectile arm),
+      per-hit distance-scaled Crossbows XP **DONE** (the same `Archery.distanceXpBonusMultiplier`
+      static legacy's `processCrossbowsCombat` calls; its arrows are stamped at launch by the same
+      handler, which narrows to `ArrowEntity` regardless of what fired it). Unlike Archery this arm
+      owes no force multiplier — legacy hardcodes `forceMultiplier = 1.0` here, a crossbow being
+      loosed at full power with no draw to scale by.
 - [~] **Taming** — the **damage modifiers are DONE**, on both sides of the K1 seam. *Attacker* arm
       (`EntityDamageListener#applyWolfAttackBonus`, porting legacy `CombatUtils#processTamingCombat`):
       a tamed wolf's bite carries its owner's **Fast Food Service** (heals the wolf for the unboosted

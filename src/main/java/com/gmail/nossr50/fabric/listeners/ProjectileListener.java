@@ -76,6 +76,18 @@ public final class ProjectileListener {
         if (!(arrow.getOwner() instanceof ServerPlayerEntity shooter)) {
             return; // wild/dispenser arrow — legacy's `getShooter() instanceof Player` check.
         }
+        final UUID arrowId = arrow.getUuid();
+
+        // ORDER IS LOAD-BEARING, and it is legacy's: the fired-from stamp and the cleanup schedule
+        // come before *every* later gate — the Piercing check, the retrieval roll, even the profile
+        // lookup. Distance XP is owed on a shot regardless of whether its arrow is retrievable, so
+        // sinking either of these below those early returns would silently drop it (and leak the
+        // mark) for exactly the shots that fail them.
+        Archery.markFiredFrom(arrowId, new Archery.FiredFrom(
+                world.getRegistryKey().getValue().toString(), arrow.getX(), arrow.getY(),
+                arrow.getZ()));
+        scheduleMarkCleanup(arrowId);
+
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(shooter.getUuid());
         if (mmoPlayer == null) {
             return; // data not loaded (e.g. mid-join).
@@ -92,10 +104,20 @@ public final class ProjectileListener {
         }
 
         MetadataStore.setFlag(arrow, Archery.TRACKED_ARROW_KEY);
-        final UUID arrowId = arrow.getUuid();
-        McMMOMod.getScheduler().runLater(
-                () -> MetadataStore.remove(arrowId, Archery.TRACKED_ARROW_KEY),
-                MARK_CLEANUP_DELAY_TICKS);
+    }
+
+    /**
+     * Legacy's {@code CombatUtils#delayArrowMetaCleanup} → {@code ProjectileUtils
+     * #cleanupProjectileMetadata}, which strips <em>every</em> mcMMO arrow key at once
+     * ({@code ARROW_METADATA_KEYS}); the two this port stamps are cleared together the same way.
+     * Scheduled once per player-fired arrow, as legacy does — the launch mark is unconditional now, so
+     * without this every arrow ever fired would leak an entry until server stop.
+     */
+    private static void scheduleMarkCleanup(UUID arrowId) {
+        McMMOMod.getScheduler().runLater(() -> {
+            MetadataStore.remove(arrowId, Archery.TRACKED_ARROW_KEY);
+            MetadataStore.remove(arrowId, Archery.FIRED_FROM_KEY);
+        }, MARK_CLEANUP_DELAY_TICKS);
     }
 
     /**
