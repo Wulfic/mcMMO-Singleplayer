@@ -16,7 +16,6 @@ import com.gmail.nossr50.event.EventBus;
 import com.gmail.nossr50.event.SimpleEventBus;
 import com.gmail.nossr50.fabric.listeners.AlchemyListener;
 import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
-import com.gmail.nossr50.fabric.listeners.CombatListener;
 import com.gmail.nossr50.fabric.listeners.EntityDamageListener;
 import com.gmail.nossr50.fabric.listeners.ProjectileListener;
 import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
@@ -160,9 +159,9 @@ public class McMMOMod implements ModInitializer {
         // Phase 4: register the Brigadier command tree (/mcmmo, /mcstats, /addlevels, /addxp).
         McMMOCommands.register();
 
-        // Phase 3: gameplay XP hooks — block-break gathering XP and mob-kill combat XP.
+        // Phase 3: gameplay XP hook — block-break gathering XP. (Combat XP is paid per hit from the
+        // K1 damage seam, so EntityDamageListener + its mixin carry it; there is no kill hook.)
         BlockBreakListener.register();
-        CombatListener.register();
         // K6 (Phase 11): super-ability activation trigger — right-click readies a tool, left-click
         // (block damage) with the prepared tool fires the ability.
         SuperAbilityListener.register();

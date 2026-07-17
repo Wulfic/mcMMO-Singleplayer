@@ -1,24 +1,33 @@
 package com.gmail.nossr50.util.skills;
 
+import com.gmail.nossr50.datatypes.experience.XPGainReason;
+import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
+import com.gmail.nossr50.skills.CombatXp;
 import com.gmail.nossr50.util.ItemUtils;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.Tameable;
 import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.mob.HostileEntity;
+import net.minecraft.entity.passive.AnimalEntity;
+import net.minecraft.entity.passive.IronGolemEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * The MC-typed combat helpers, ported from legacy {@code util/skills/CombatUtils}. Only the two
- * pieces the ported combat bodies need are here: {@link #safeDealDamage} (mcMMO dealing damage of
- * its own) and {@link #applyAbilityAoE} (the Serrated Strikes / Skull Splitter area-of-effect).
+ * The MC-typed combat helpers, ported from legacy {@code util/skills/CombatUtils}. Only the pieces
+ * the ported combat bodies need are here: {@link #safeDealDamage} (mcMMO dealing damage of its own),
+ * {@link #applyAbilityAoE} (the Serrated Strikes / Skull Splitter area-of-effect),
+ * {@link #canCombatSkillsTrigger} (the operator's PVE/PVP switches) and {@link #processCombatXP}
+ * (per-hit combat XP).
  *
  * <p>Legacy's damage-routing half of this class ({@code processCombatAttack} and its
  * {@code processSwordCombat}/{@code processAxeCombat}/… branches) is <em>not</em> ported here: that
@@ -135,13 +144,10 @@ public final class CombatUtils {
      *       helpers were not ported.</li>
      * </ul>
      *
-     * <p>DEVIATION (CONVERSION_TODO §F): legacy awards combat XP <em>per hit</em> and its
-     * custom-damage marker kept AoE-dealt damage from paying any, whereas this port awards combat XP
-     * <em>per kill</em> ({@code fabric.listeners.CombatListener} on {@code AFTER_DEATH}). The AoE
-     * attributes its damage to the player, so an entity finished off by the AoE pays kill XP here
-     * where legacy paid none. Flagged for the tuning pass rather than patched: the per-kill XP model
-     * is a deliberate, pre-existing port decision (Phase 3) and paying for an AoE kill is consistent
-     * with it.
+     * <p>AoE damage pays no combat XP, matching legacy: it deals its damage through
+     * {@link #safeDealDamage}, and the K1 seam passes anything dealt inside that window straight
+     * through untouched (see {@link #isProcessingMcMMODamage()}) — which is exactly the role legacy's
+     * {@code METADATA_KEY_CUSTOM_DAMAGE} marker played for its own per-hit XP handler.
      *
      * @param attacker the attacking player
      * @param mmoPlayer the attacking player's mcMMO profile
@@ -213,6 +219,78 @@ public final class CombatUtils {
         }
 
         return true;
+    }
+
+    /**
+     * Award a player the combat XP for a single hit. Ports legacy
+     * {@code CombatUtils#processCombatXP} plus the {@code AwardCombatXpTask} it scheduled; the
+     * arithmetic lives MC-free in {@link CombatXp}, and this owns the MC-typed reads — the victim's
+     * registry id, its category, and the health it has left.
+     *
+     * <p>Called from each attacker arm of {@code fabric.listeners.EntityDamageListener} exactly where
+     * legacy called it: at the end of the corresponding {@code processXCombat}, once the boosted damage
+     * is settled, with that boosted damage. This runs inside {@code modifyAppliedDamage}, before
+     * vanilla writes the new health, so {@link LivingEntity#getHealth()} is the pre-hit health legacy's
+     * task captured at construction — no next-tick health diff needed.
+     *
+     * <p>Two deliberate deviations, both benign and flagged for the tuning pass (CONVERSION_TODO §F):
+     * <ul>
+     *   <li><b>Absorption.</b> Vanilla subtracts absorption <em>after</em> this seam returns, so a hit
+     *       fully soaked by a mob's absorption hearts pays XP here where legacy's health diff would
+     *       have measured nothing. Vanilla mobs do not have absorption.</li>
+     *   <li><b>Mob-origin multipliers.</b> Legacy scales the base by where the mob came from (spawner /
+     *       nether portal / egg / bred / tamed) and zeroes it for a Call-of-the-Wild summon. Those
+     *       ride {@code MobMetaFlagType}, which is unported (the summon path itself is still deferred),
+     *       so the multipliers do nothing yet. A pre-existing §B gap this arm inherits, not one it
+     *       introduces.</li>
+     * </ul>
+     *
+     * <p>Dropped: legacy's PvP arm (there is no second player to hit) and its
+     * {@code runAtEntity}/{@code runAtEntity} scheduler hops, which existed to defer the health diff
+     * and to satisfy Folia's region threading.
+     *
+     * @param mmoPlayer  the attacking player's mcMMO profile
+     * @param target     the entity being hit
+     * @param skill      the skill the hit trains
+     * @param damage     the damage this hit is about to land, after mcMMO's own bonuses
+     * @param multiplier the skill's per-hit XP multiplier (legacy's {@code processCombatXP} 4th arg)
+     */
+    public static void processCombatXP(@NotNull McMMOPlayer mmoPlayer, @NotNull LivingEntity target,
+            @NotNull PrimarySkillType skill, double damage, double multiplier) {
+        // Legacy's `type == IRON_GOLEM && !ironGolem.isPlayerCreated()` gate: a village-spawned golem
+        // pays its configured 2.0 multiplier, a player-built one pays nothing. Without it a golem farm
+        // is an XP exploit — which is the whole reason upstream singles the check out.
+        if (target instanceof IronGolemEntity golem && golem.isPlayerCreated()) {
+            return;
+        }
+
+        final int xp = CombatXp.xpForHit(
+                Registries.ENTITY_TYPE.getId(target.getType()).toString(), categoryOf(target),
+                damage, target.getHealth(), multiplier);
+        if (xp <= 0) {
+            return;
+        }
+        mmoPlayer.beginXpGain(skill, xp, XPGainReason.PVE, XPGainSource.SELF);
+    }
+
+    /** {@link #processCombatXP} with legacy's default multiplier of {@code 1.0}. */
+    public static void processCombatXP(@NotNull McMMOPlayer mmoPlayer, @NotNull LivingEntity target,
+            @NotNull PrimarySkillType skill, double damage) {
+        processCombatXP(mmoPlayer, target, skill, damage, 1.0);
+    }
+
+    /**
+     * The victim's coarse category, mirroring legacy's {@code instanceof Animals} /
+     * {@code instanceof Monster} / else branch in {@code processCombatXP}.
+     */
+    private static CombatXp.MobCategory categoryOf(@NotNull LivingEntity entity) {
+        if (entity instanceof HostileEntity) {
+            return CombatXp.MobCategory.MONSTER;
+        }
+        if (entity instanceof AnimalEntity) {
+            return CombatXp.MobCategory.ANIMAL;
+        }
+        return CombatXp.MobCategory.OTHER;
     }
 
     /**

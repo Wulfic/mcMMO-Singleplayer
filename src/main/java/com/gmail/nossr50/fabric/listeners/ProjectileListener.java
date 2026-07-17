@@ -34,9 +34,9 @@ import net.minecraft.server.world.ServerWorld;
  * that nothing reads — the "config that lies" failure mode this port keeps hitting:
  * <ul>
  *   <li>{@code METADATA_KEY_ARROW_DISTANCE} / {@code METADATA_KEY_BOW_FORCE} — both feed
- *       <em>per-hit</em> Archery XP multipliers, but this port pays combat XP per <em>kill</em>
- *       ({@link CombatListener}). Stamping them now would be write-only state; consuming them needs a
- *       per-hit-vs-per-kill XP-model decision, not an adapter.</li>
+ *       <em>per-hit</em> Archery XP multipliers. The XP model is now per-hit (see
+ *       {@link com.gmail.nossr50.util.skills.CombatUtils#processCombatXP}), so these are no longer
+ *       blocked — just not yet ported (CONVERSION_TODO §C).</li>
  *   <li>{@code METADATA_KEY_MULTI_SHOT_ARROW} — write-only <em>upstream too</em>: legacy sets it here
  *       and nothing anywhere reads it (see the §F note in CONVERSION_TODO).</li>
  * </ul>
@@ -138,9 +138,9 @@ public final class ProjectileListener {
      * Death half: hand back every tracked arrow stuck in the entity that just died (legacy
      * {@code Archery.arrowRetrievalCheck}).
      *
-     * <p>Registered separately from {@link CombatListener}'s kill hook on purpose, even though legacy
-     * ran both from one {@code onEntityDeath}: that listener returns early unless a <em>player</em>
-     * landed the killing blow, whereas the arrows are owed regardless of what finished the mob off.
+     * <p>This is mcMMO's only remaining death hook: combat XP is paid per hit from the K1 damage seam,
+     * so nothing else needs to know what landed the killing blow — and the arrows are owed regardless
+     * of what did.
      *
      * <p>PORT deviation (benign): legacy spawned {@code count} separate one-arrow item entities;
      * this drops a single stack of {@code count}. The player picks up the same arrows either way —
