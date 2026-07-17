@@ -143,7 +143,11 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       the flag, then clears it since the block is gone), `BlastMiningListener` (per-ore blast skip),
       `TreeFellerProcessor.classify` (a placed log classifies OTHER, so the fell excludes it — legacy's
       `processTreeFellerTargetBlock` `return false`). Held as a JVM singleton on `McMMOMod`, cleared at
-      world close. **Still deferred (documented deviations, not skips):** cross-restart persistence
+      world close. **⚠️ Crop exception (added with the Herbalism maturity gate, §D):** ageable Herbalism
+      crops are the one case the placed-flag early-return does NOT apply to — legacy rewards them on
+      maturity, not on placed-ness (a mature planted crop pays XP; an immature one never does), so
+      `BlockBreakListener` diverts them before the placed early-return. Without that, seed-placing marks
+      the crop placed and zeroes all farmed-crop XP. **Still deferred (documented deviations, not skips):** cross-restart persistence
       (in-memory only ⇒ a placed block re-mined after a restart pays out again), multi-place upper
       halves (double plants), and piston-moved placed blocks. ⚠️ In-game verification pending (§G).
 
@@ -508,18 +512,30 @@ effectively complete.**
       Deferred: splinter self-damage, fizz sound.
 - [~] **Herbalism** — **double/triple drops DONE**: single-block bonus drops wired in
       `BlockBreakListener` (`HerbalismManager.isBonusDropsEligible`/`rollBonusDropCount` → `BlockDrops`
-      re-roll, same model as Mining/Woodcutting; Green Terra active ⇒ triple). **Green Terra
+      re-roll, same model as Mining/Woodcutting; Green Terra active ⇒ triple). **Ageable-maturity gate
+      DONE** (this pass — closes the live-age-read gap): the new MC-typed `BlockUtils.getAgeableState`
+      reads a broken block's `age` state property (scanning `state.getProperties()` for the
+      `IntProperty` named `age` — vanilla has no `Ageable` interface), and `BlockBreakListener` diverts
+      any non-bizarre ageable Herbalism crop (`HerbalismManager.isMaturityGatedCrop`) into a
+      maturity-gated handler that ports legacy `awardXPForPlantBlocks`/`checkDoubleDropsOnBrokenPlants`:
+      **XP + bonus drops are paid iff the crop is fully mature (`isAgeableMature`), regardless of the
+      placed-block flag** — so an immature crop (natural or planted) now pays nothing (was over-paying
+      flat XP), and a mature crop pays whether farmed or wild. **This also fixes a K9 interaction: a
+      player-planted crop is marked placed at seed-time, so before this the §A early-return zeroed all
+      farmed-crop XP — Herbalism's primary source.** Bizarre ageables (cactus/kelp/sugar cane/bamboo)
+      and chorus stay on the ordinary placed-flag path (deferred multi-block plants). **Green Terra
       block-conversion effect DONE** (commit 81828aa87): `SuperAbilityListener.
       maybeProcessGreenTerraConversion` ports legacy `processGreenTerraBlockConversion` — an active
       Green Terra striking a mossify-able block converts it (`Herbalism.greenTerraConversionTarget` →
       `world.setBlockState`) for one wheat seed, else the `GTe.NeedMore` notification. Runs *after*
       the activation chain and outside its `canActivateAbilities` gate, mirroring legacy's
       NORMAL-then-HIGHEST handler split (so the activating strike also converts). ⚠️ In-game
-      verification pending. Deferred: ageable-maturity gate on the bonus-drop roll (same live-age-read
-      gap as the XP path), multi-block traversal (`getBrokenHerbalismBlocks`), Green Thumb replant
-      (`processGrowingPlants` + `DelayedCropReplant`), Shroom Thumb (conversion table + RNG gate are
-      ported; needs the two-mushroom inventory check), Hylian Luck (needs `TreasureConfig.hylianMap`
-      + block Tag adapter).
+      verification pending. Deferred: multi-block traversal (`getBrokenHerbalismBlocks`) + chorus
+      delayed XP, Green Thumb replant (`processGrowingPlants` + `DelayedCropReplant` — its `isMature`
+      input now exists), Shroom Thumb (conversion table + RNG gate are ported; needs the two-mushroom
+      inventory check), Hylian Luck (needs `TreasureConfig.hylianMap` + block Tag adapter), and the
+      right-click berry-bush harvest (`processBerryBushHarvesting` — a distinct interaction, not a
+      break; its age-scaled `getBerryBushXpReward` is ported).
 - [~] **Excavation** — Giga Drill Breaker **DONE** (commit c6215d163): `BlockBreakListener.
       maybeProcessGigaDrillBreaker` ports legacy `ExcavationManager#gigaDrillBreaker` — GIGA_DRILL_BREAKER
       active + `affectedByGigaDrillBreaker` block + shovel ⇒ two extra excavation checks (base XP +

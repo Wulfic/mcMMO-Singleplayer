@@ -140,6 +140,40 @@ class HerbalismManagerTest {
         assertFalse(herbalismManager.isBizarreAgeable("wheat"));
     }
 
+    // --- Maturity-gate divert (which broken ageables reward on maturity, not the placed flag) ---
+
+    @Test
+    void isMaturityGatedCropAcceptsFarmCrops() {
+        // Every replantable single-block crop that grants Herbalism XP in experience.yml.
+        assertTrue(herbalismManager.isMaturityGatedCrop("minecraft:wheat"));
+        assertTrue(herbalismManager.isMaturityGatedCrop("carrots"));
+        assertTrue(herbalismManager.isMaturityGatedCrop("potatoes"));
+        assertTrue(herbalismManager.isMaturityGatedCrop("beetroots"));
+        assertTrue(herbalismManager.isMaturityGatedCrop("nether_wart"));
+        assertTrue(herbalismManager.isMaturityGatedCrop("cocoa"));
+        assertTrue(herbalismManager.isMaturityGatedCrop("sweet_berry_bush"));
+    }
+
+    @Test
+    void isMaturityGatedCropRejectsBizarreAgeablesAndChorus() {
+        // Bizarre ageables and chorus stay on the normal placed-flag gathering path (deferred
+        // multi-block plants whose age can't be trusted for maturity).
+        assertFalse(herbalismManager.isMaturityGatedCrop("cactus"));
+        assertFalse(herbalismManager.isMaturityGatedCrop("sugar_cane"));
+        assertFalse(herbalismManager.isMaturityGatedCrop("bamboo"));
+        assertFalse(herbalismManager.isMaturityGatedCrop("minecraft:kelp"));
+        assertFalse(herbalismManager.isMaturityGatedCrop("chorus_flower"));
+        assertFalse(herbalismManager.isMaturityGatedCrop("chorus_plant"));
+    }
+
+    @Test
+    void isMaturityGatedCropRejectsBlocksWithoutHerbalismXp() {
+        // A block that grants no Herbalism XP is never maturity-gated (the ageable-ness check is the
+        // listener's getAgeableState job; this predicate only rejects bizarre/chorus + non-XP blocks).
+        assertFalse(herbalismManager.isMaturityGatedCrop("minecraft:stone"));
+        assertFalse(herbalismManager.isMaturityGatedCrop("dirt"));
+    }
+
     @Test
     void isAgeableMatureSpecialCasesSweetBerryBush() {
         assertFalse(herbalismManager.isAgeableMature("sweet_berry_bush", 1, 3),

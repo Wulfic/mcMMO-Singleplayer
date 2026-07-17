@@ -1,12 +1,17 @@
 package com.gmail.nossr50.util;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.util.BlockUtils.AgeableState;
 import java.nio.file.Path;
 import net.minecraft.block.Blocks;
+import net.minecraft.state.property.Properties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -93,6 +98,37 @@ class BlockUtilsTest {
         // Woodcutting XP: an oak log yes, plain stone no.
         assertTrue(BlockUtils.hasWoodcuttingXP(Blocks.OAK_LOG));
         assertFalse(BlockUtils.hasWoodcuttingXP(Blocks.STONE));
+    }
+
+    // --- Crop maturity (age state property) ---------------------------------
+
+    @Test
+    void getAgeableStateReadsCropAgeAndMax() {
+        // Wheat's age property maxes at 7; a freshly-planted crop is age 0.
+        AgeableState freshWheat = BlockUtils.getAgeableState(Blocks.WHEAT.getDefaultState());
+        assertNotNull(freshWheat);
+        assertEquals(0, freshWheat.age());
+        assertEquals(7, freshWheat.maxAge());
+
+        AgeableState grownWheat =
+                BlockUtils.getAgeableState(Blocks.WHEAT.getDefaultState().with(Properties.AGE_7, 7));
+        assertNotNull(grownWheat);
+        assertEquals(7, grownWheat.age());
+        assertEquals(7, grownWheat.maxAge());
+
+        // Sweet berry bush maxes at 3.
+        AgeableState berries = BlockUtils.getAgeableState(
+                Blocks.SWEET_BERRY_BUSH.getDefaultState().with(Properties.AGE_3, 2));
+        assertNotNull(berries);
+        assertEquals(2, berries.age());
+        assertEquals(3, berries.maxAge());
+    }
+
+    @Test
+    void getAgeableStateIsNullForBlocksWithoutAnAgeProperty() {
+        // Stone has no state properties at all; a log has only an axis, not age.
+        assertNull(BlockUtils.getAgeableState(Blocks.STONE.getDefaultState()));
+        assertNull(BlockUtils.getAgeableState(Blocks.OAK_LOG.getDefaultState()));
     }
 
     @Test

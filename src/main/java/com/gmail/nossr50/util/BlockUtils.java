@@ -8,9 +8,12 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.registry.Registries;
+import net.minecraft.state.property.IntProperty;
+import net.minecraft.state.property.Property;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Block classification helpers — the singleplayer port of the legacy Bukkit {@code BlockUtils},
@@ -224,6 +227,35 @@ public final class BlockUtils {
     public static boolean canMakeShroomy(@NotNull BlockState blockState) {
         return canMakeShroomy(blockState.getBlock());
     }
+
+    // --- Crop maturity (legacy Bukkit Ageable) ------------------------------
+
+    /**
+     * The current and maximum value of a block's {@code age} state property — the vanilla equivalent
+     * of Bukkit's {@code Ageable} that legacy Herbalism read to decide crop maturity. Vanilla has no
+     * single {@code Ageable} interface, so this scans for the {@link IntProperty} named {@code "age"}
+     * (every crop/plant that legacy treated as ageable exposes exactly one), returning {@code null}
+     * for a block with no such property (stone, a log, a flower).
+     *
+     * @param blockState the (pre-break) block state to inspect
+     * @return the age info, or {@code null} if the block has no {@code age} property
+     */
+    public static @Nullable AgeableState getAgeableState(@NotNull BlockState blockState) {
+        for (Property<?> property : blockState.getProperties()) {
+            if (property instanceof IntProperty ageProperty && "age".equals(ageProperty.getName())) {
+                final int maxAge = ageProperty.getValues().stream()
+                        .mapToInt(Integer::intValue).max().orElse(0);
+                return new AgeableState(blockState.get(ageProperty), maxAge);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The current and maximum {@code age} of an ageable block (legacy {@code Ageable.getAge()} /
+     * {@code getMaximumAge()}).
+     */
+    public record AgeableState(int age, int maxAge) {}
 
     // --- Placed-block reward eligibility (legacy UserBlockTracker) ----------
 

@@ -77,11 +77,28 @@ public final class BlockBreakListener {
         // now, so its position is natural again and the tracker's memory is freed on the way out.
         final boolean handPlaced = BlockUtils.isRewardIneligible(serverWorld, pos);
         BlockUtils.markNatural(serverWorld, pos);
+
+        final String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
+
+        // Ageable farm crops (wheat/carrots/beetroots/…) are the exception to the placed-flag gate:
+        // legacy rewards them on MATURITY, not on who placed them (a mature crop pays whether the
+        // player planted it or found it wild, and an immature one never pays). So they bypass the
+        // hand-placed early-return below and are handled by maturity here. Bizarre ageables
+        // (cactus/kelp/sugar cane/bamboo) and chorus fall through to the normal gathering path — both
+        // are deferred multi-block plants whose age can't be trusted for maturity.
+        final BlockUtils.AgeableState ageable = BlockUtils.getAgeableState(state);
+        if (ageable != null) {
+            final HerbalismManager herbalism = mmoPlayer.getHerbalismManager();
+            if (herbalism != null && herbalism.isMaturityGatedCrop(blockId)) {
+                processMaturityGatedCrop(mmoPlayer, herbalism, serverWorld, pos, state, blockEntity,
+                        serverPlayer, blockId, ageable);
+                return; // a farm crop is never a Mining/Woodcutting/Excavation or super-ability block.
+            }
+        }
+
         if (handPlaced) {
             return; // placed by the player: no XP, no bonus drops, no treasure, no Tree Feller.
         }
-
-        final String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
 
         awardBlockXp(mmoPlayer, blockId);
         // Bonus drops never fire in creative (no vanilla loot spawns there to complement). Each
@@ -153,6 +170,31 @@ public final class BlockBreakListener {
         // Giga Drill Breaker wears the shovel harder than a normal break (extra ability tool damage).
         SkillUtils.handleDurabilityChange(new PlatformItem(tool),
                 McMMOMod.getGeneralConfig().getAbilityToolDamage());
+    }
+
+    /**
+     * Reward a broken ageable Herbalism crop when it was fully mature, mirroring legacy
+     * {@code awardXPForPlantBlocks} + {@code checkDoubleDropsOnBrokenPlants}: an immature crop pays
+     * nothing, a mature one pays its Herbalism XP and rolls double/triple drops. Maturity — not the
+     * placed-block flag — is the entire gate here (see the call site), so harvesting a crop you
+     * planted still earns XP once it grew, while spam-breaking immature crops earns nothing (the
+     * anti-farm role legacy's placestore played for crops). Bonus drops stay creative-gated, as on
+     * the generic path (a creative break spawns no vanilla loot to complement).
+     *
+     * <p>PORT: legacy also suppressed an immature crop's own drops under Green Thumb and replanted it;
+     * the replant path ({@code processGreenThumbPlants}) is still deferred — this increment only wires
+     * the maturity-based XP/bonus-drop gate that Green Thumb's {@code isMature} input builds on.
+     */
+    private static void processMaturityGatedCrop(McMMOPlayer mmoPlayer, HerbalismManager herbalism,
+            ServerWorld world, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity,
+            ServerPlayerEntity breaker, String blockId, BlockUtils.AgeableState ageable) {
+        if (!herbalism.isAgeableMature(blockId, ageable.age(), ageable.maxAge())) {
+            return; // immature crop: no XP, no bonus drops (legacy's maturity gate).
+        }
+        awardBlockXp(mmoPlayer, blockId);
+        if (!breaker.isCreative()) {
+            awardHerbalismBonusDrops(mmoPlayer, world, pos, state, blockEntity, breaker, blockId);
+        }
     }
 
     private static void awardBlockXp(McMMOPlayer mmoPlayer, String blockId) {
