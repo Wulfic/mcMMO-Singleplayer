@@ -111,8 +111,18 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       static `Registries.POTION`/`STATUS_EFFECT`; parses the bundled `potions.yml` (232/232 potions
       load, boot-verified) into the Concoctions ingredient tiers + brewing tree; `ExperienceConfig.
       getPotionXP(PotionStage)` added. Registry-backed `PotionConfigTest` ×9. Deferred (cosmetic):
-      custom potion name/lore/colour. **Still TODO:** `FishingTreasureConfig` (loot/enchant rarity
-      tables). These gate the XP + rewards for their skills.
+      custom potion name/lore/colour. **`FishingTreasureConfig` — Treasure-Hunter item table DONE**
+      (fishing-rewards slice): the `Fishing` plain-item rewards (bucketed by `Rarity`) + the
+      `Item_Drop_Rates` curve now load MC-free (kept as `ItemSpec` blueprints, resolved at spawn time,
+      exactly like the sibling `TreasureConfig`), wired in `ConfigBootstrap` →
+      `McMMOMod.getFishingTreasureConfig()`; plain-JUnit `FishingTreasureConfigTest` ×6; boot-verified
+      (70/71 entries, `ENCHANTED_BOOK` correctly deferred). New `Rarity` + `FishingTreasure` datatypes
+      ported. **Still deferred (each a real adapter gap, not a skip):** enchanted-book / Magic-Hunter
+      enchant tables (`Enchantments_Rarity`/`Enchantment_Drop_Rates`/`FishingTreasureBook` — need the
+      **dynamic** 1.21 enchant registry + the K3 enchant-write surface, and their `processMagicHunter`
+      consumer is itself deferred, so loading them now would be readerless state), the `Shake` map
+      (needs a Bukkit-`EntityType`→registry-entity mapping + the `shakeCheck` `LivingEntity` body), and
+      a potion base-type on `ItemSpec`. These gate the remaining Fishing rewards.
 
 ---
 
@@ -133,8 +143,11 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
       adapter) + `MobDodgeMetaCleanup` tracker-expiry task (transient store caps per session without it).
 - [~] **Fishing** — base fishing XP **DONE** (via K7 fishing-catch mixin → `awardFishingXP`, keyed by
       the caught item's material from `experience.yml`; anti-exploit spam/scarcity gate replicated). ⚠️
-      In-game verification pending. Still TODO (K8 `FishingTreasureConfig`): treasure/Magic Hunter/Shake
-      loot + Treasure Hunter, and the exploit item-removal punishment.
+      In-game verification pending. **K8 `FishingTreasureConfig` item table now landed** (the
+      Treasure-Hunter loot pool + `Item_Drop_Rates` load and are wired into `McMMOMod`). Still TODO: the
+      consumer body (`FishingManager#getFishingTreasure`/`processFishing` — the Treasure Hunter roll +
+      `ItemSpecBuilder` spawn, still deferred behind the reward-spawn path), Magic Hunter + Shake loot
+      (deferred with the config's enchant/entity tables — see K8), and the exploit item-removal punishment.
 - [~] **Repair** — repair action + Repair XP + Repair Mastery + Super Repair **DONE** (via K7 anvil →
       `RepairSalvageListener`; XP formula `RepairManager#awardRepairXp` MC-free vs real experience.yml).
       ⚠️ In-game verification pending. Still TODO (K3 enchant transfer): Arcane Forging enchant
