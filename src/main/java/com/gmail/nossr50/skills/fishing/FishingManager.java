@@ -1,14 +1,20 @@
 package com.gmail.nossr50.skills.fishing;
 
+import com.gmail.nossr50.config.treasure.FishingTreasureConfig;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
+import com.gmail.nossr50.datatypes.treasure.Rarity;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.skills.RankUtils;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.IntUnaryOperator;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -20,13 +26,13 @@ import org.jetbrains.annotations.NotNull;
  * adapters land — same convention as {@link com.gmail.nossr50.skills.woodcutting.WoodcuttingManager}
  * and {@link com.gmail.nossr50.skills.herbalism.HerbalismManager}.
  *
- * <p><b>Deferred until the entity/item/block adapters and {@code FishingTreasureConfig} port
- * (PORT Phase 10/11):</b>
+ * <p><b>Treasure Hunter item roll is now wired</b> ({@link #rollFishingTreasure} +
+ * {@link #awardFishingTreasureXP}, driven from {@code fabric.listeners.FishingListener} via
+ * {@code ItemSpecBuilder}). Still deferred until the entity/item/block/enchant adapters:</p>
  * <ul>
- *   <li>{@code processFishing}/{@code getFishingTreasure}/{@code processMagicHunter}/
- *       {@code getPossibleEnchantments} — Treasure Hunter + Magic Hunter item rolls, need
- *       {@code FishingTreasureConfig}'s rarity tables (still unported, same gap noted for
- *       Excavation's Hylian Luck) plus {@code ItemStack}/{@code Enchantment} construction;</li>
+ *   <li>{@code processMagicHunter}/{@code getPossibleEnchantments} — the Magic Hunter enchant roll on
+ *       a caught treasure needs the dynamic 1.21 enchantment registry + the K3 enchant-write surface
+ *       (its {@code FishingTreasureConfig} enchant tables are deferred for the same reason);</li>
  *   <li>{@code shakeCheck} — needs the {@code LivingEntity} target, {@code Fishing}'s shake-drop
  *       tables, and item-spawn/damage adapters;</li>
  *   <li>{@code canIceFish}/{@code iceFishing} — need the live {@code Block}/{@code Biome} adapter;</li>
@@ -166,6 +172,73 @@ public class FishingManager extends SkillManager {
             return; // caught item carries no configured Fishing XP (junk / treasure not in the table).
         }
         applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF);
+    }
+
+    /**
+     * Roll for a Treasure-Hunter fishing reward — the item core of legacy {@code getFishingTreasure}.
+     * Pure (no RNG, no Minecraft): the caller supplies the two random draws, so the whole selection is
+     * unit-testable, exactly as {@link #resolveMasterAnglerWaitTimes} did for Master Angler. Walks the
+     * per-tier/per-rarity {@code Item_Drop_Rates} curve (most-rare first, cumulative) and returns the
+     * chosen treasure, or empty when: fishing drops are disabled, the Treasure Hunter sub-skill is off,
+     * the roll clears every rarity band (no treasure this catch), or the selected rarity bucket is empty.
+     *
+     * <p>The Magic Hunter enchant path (and its enchanted-book / {@code Shake} rewards) is still deferred
+     * — see the class javadoc and {@link FishingTreasureConfig}. A rank-0 (unranked) player reads the
+     * absent {@code Tier_0} rates as {@code 0.0}, so an ordinary positive roll misses naturally — no
+     * rank gate is needed here (and there is no {@code rank-1} array index to overrun, unlike the Maces
+     * Cripple landmine).
+     *
+     * @param diceRoll a fresh roll in {@code [0, 100)} (the caller's {@code nextDouble() * 100})
+     * @param luckOfTheSea the Luck of the Sea level on the fishing rod (scales the roll toward rarer
+     *     bands — legacy scales rather than subtracts so it never floors every drop chance)
+     * @param bucketPicker picks an index in {@code [0, bucketSize)} for the chosen rarity (the caller's
+     *     {@code nextInt(bound)}); only invoked for a non-empty bucket
+     * @return the rolled treasure, or {@link Optional#empty()} if none was won
+     */
+    public @NotNull Optional<FishingTreasure> rollFishingTreasure(double diceRoll, int luckOfTheSea,
+            @NotNull IntUnaryOperator bucketPicker) {
+        if (!McMMOMod.getGeneralConfig().getFishingDropsEnabled()
+                || !Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.FISHING_TREASURE_HUNTER)) {
+            return Optional.empty();
+        }
+
+        // Scale (not subtract) by luck so it never imposes a minimum drop chance on every catch.
+        double scaledRoll = diceRoll * (1.0
+                - luckOfTheSea * McMMOMod.getGeneralConfig().getFishingLureModifier() / 100.0);
+
+        final int tier = getLootTier();
+        final FishingTreasureConfig config = McMMOMod.getFishingTreasureConfig();
+
+        for (Rarity rarity : Rarity.values()) {
+            final double dropRate = config.getItemDropRate(tier, rarity);
+
+            if (scaledRoll <= dropRate) {
+                final List<FishingTreasure> rewards = config.fishingRewards.get(rarity);
+                if (rewards.isEmpty()) {
+                    return Optional.empty();
+                }
+                return Optional.of(rewards.get(bucketPicker.applyAsInt(rewards.size())));
+            }
+
+            scaledRoll -= dropRate;
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Award the Treasure-Hunter bonus XP for a rolled treasure. This is the {@code treasureXp} slice of
+     * legacy {@code processFishing}, kept separate because this port already awards the base catch XP via
+     * {@link #awardFishingXP(String)} (legacy summed both into one {@code applyXpGain}). A no-op when the
+     * treasure carries no XP.
+     *
+     * @param treasureXp the rolled treasure's configured XP
+     */
+    public void awardFishingTreasureXP(int treasureXp) {
+        if (treasureXp <= 0) {
+            return;
+        }
+        applyXpGain(treasureXp, XPGainReason.PVE, XPGainSource.SELF);
     }
 
     protected int getVanillaXPBoostModifier() {

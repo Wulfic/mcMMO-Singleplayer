@@ -2,6 +2,7 @@ package com.gmail.nossr50.skills.fishing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -12,14 +13,19 @@ import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.config.treasure.FishingTreasureConfig;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
+import com.gmail.nossr50.datatypes.treasure.Rarity;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +47,7 @@ class FishingManagerTest {
 
     private McMMOPlayer mmoPlayer;
     private FishingManager fishingManager;
+    private FishingTreasureConfig fishingTreasureConfig;
 
     @BeforeEach
     void setUp(@TempDir Path dataFolder) {
@@ -48,6 +55,8 @@ class FishingManagerTest {
         McMMOMod.setRankConfig(new RankConfig(dataFolder));
         McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
         McMMOMod.setExperienceConfig(new ExperienceConfig(dataFolder));
+        fishingTreasureConfig = new FishingTreasureConfig(dataFolder);
+        McMMOMod.setFishingTreasureConfig(fishingTreasureConfig);
 
         PlatformPlayer platformPlayer = mock(PlatformPlayer.class);
         when(platformPlayer.getUniqueId())
@@ -66,6 +75,7 @@ class FishingManagerTest {
         McMMOMod.setRankConfig(null);
         McMMOMod.setAdvancedConfig(null);
         McMMOMod.setExperienceConfig(null);
+        McMMOMod.setFishingTreasureConfig(null);
         UserManager.clearAll();
     }
 
@@ -205,6 +215,75 @@ class FishingManagerTest {
     void awardFishingXpIsANoOpForMaterialsWithNoConfiguredXp() {
         // Stone is not in the Fishing XP table -> getXp returns 0 -> no award.
         fishingManager.awardFishingXP("Stone");
+        verify(mmoPlayer, never()).beginXpGain(ArgumentMatchers.any(), ArgumentMatchers.anyFloat(),
+                ArgumentMatchers.any(), ArgumentMatchers.any());
+    }
+
+    // fishing_treasures.yml Item_Drop_Rates.Tier_1, in the enum's most-rare-first walk order:
+    // MYTHIC 0.01, LEGENDARY 0.01, EPIC 0.10, RARE 0.25, UNCOMMON 1.25, COMMON 7.50 (sum 9.12).
+    // Level 1 -> Treasure Hunter rank 1 -> loot tier 1. The bucket picker (size -> index) fixes which
+    // reward in the chosen rarity band is returned, so the whole roll is deterministic.
+
+    @Test
+    void treasureRollLandsInTheRarestBandForTheLowestDice() {
+        atFishingLevel(1);
+        // diceRoll 0.0 is <= MYTHIC's 0.01 immediately -> first MYTHIC reward.
+        final Optional<FishingTreasure> rolled = fishingManager.rollFishingTreasure(0.0, 0, size -> 0);
+        assertTrue(rolled.isPresent(), "diceRoll 0 always wins the rarest band");
+        assertSame(fishingTreasureConfig.fishingRewards.get(Rarity.MYTHIC).get(0), rolled.get());
+    }
+
+    @Test
+    void treasureRollFallsThroughToCommon() {
+        atFishingLevel(1);
+        // diceRoll 5.0 clears MYTHIC..UNCOMMON (cumulative 1.62) then lands in COMMON (7.50).
+        final Optional<FishingTreasure> rolled = fishingManager.rollFishingTreasure(5.0, 0, size -> 0);
+        assertTrue(rolled.isPresent());
+        assertSame(fishingTreasureConfig.fishingRewards.get(Rarity.COMMON).get(0), rolled.get());
+    }
+
+    @Test
+    void treasureRollWinsNothingAboveTheSummedDropRates() {
+        atFishingLevel(1);
+        // 50.0 exceeds the 9.12 total across every band -> no treasure.
+        assertTrue(fishingManager.rollFishingTreasure(50.0, 0, size -> 0).isEmpty());
+    }
+
+    @Test
+    void luckOfTheSeaScalesAMissDownIntoAHit() {
+        atFishingLevel(1);
+        // No luck: 10.0 clears every band (leftover 0.88 after COMMON) -> miss.
+        assertTrue(fishingManager.rollFishingTreasure(10.0, 0, size -> 0).isEmpty(),
+                "without luck a roll of 10 wins nothing at tier 1");
+        // Lure_Modifier 4.0, luck 10 -> scaled 10 * (1 - 10*4/100) = 6.0 -> lands in COMMON.
+        final Optional<FishingTreasure> withLuck =
+                fishingManager.rollFishingTreasure(10.0, 10, size -> 0);
+        assertTrue(withLuck.isPresent(), "Luck of the Sea scales the same roll down into COMMON");
+        assertSame(fishingTreasureConfig.fishingRewards.get(Rarity.COMMON).get(0), withLuck.get());
+    }
+
+    @Test
+    void treasureRollHonoursTheBucketPicker() {
+        atFishingLevel(1);
+        final List<FishingTreasure> common = fishingTreasureConfig.fishingRewards.get(Rarity.COMMON);
+        assertTrue(common.size() > 1, "COMMON must have several rewards for this to prove anything");
+        assertSame(common.get(0),
+                fishingManager.rollFishingTreasure(5.0, 0, size -> 0).orElseThrow());
+        assertSame(common.get(common.size() - 1),
+                fishingManager.rollFishingTreasure(5.0, 0, size -> size - 1).orElseThrow(),
+                "the picker chooses which reward within the rolled rarity band");
+    }
+
+    @Test
+    void awardFishingTreasureXpAddsTheTreasuresXp() {
+        fishingManager.awardFishingTreasureXP(250);
+        verify(mmoPlayer).beginXpGain(PrimarySkillType.FISHING, 250f, XPGainReason.PVE,
+                XPGainSource.SELF);
+    }
+
+    @Test
+    void awardFishingTreasureXpIsANoOpForZeroXp() {
+        fishingManager.awardFishingTreasureXP(0);
         verify(mmoPlayer, never()).beginXpGain(ArgumentMatchers.any(), ArgumentMatchers.anyFloat(),
                 ArgumentMatchers.any(), ArgumentMatchers.any());
     }
