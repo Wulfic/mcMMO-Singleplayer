@@ -1,13 +1,20 @@
 package com.gmail.nossr50.fabric.listeners;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.ItemSpecBuilder;
+import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.skills.fishing.FishingManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.Collection;
+import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
+import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 
@@ -30,10 +37,18 @@ import net.minecraft.server.network.ServerPlayerEntity;
  * {@link FishingManager#processExploiting}/{@link FishingManager#isExploitingFishing()}, both keyed on
  * {@code ExploitFix.Fishing}) is replicated here using the bobber's position.
  *
- * <p><b>Deferred until the {@code FishingTreasureConfig} + ItemStack adapters (K7 remainder / K8):</b>
- * Treasure Hunter / Magic Hunter loot and its additive {@code treasureXp}, the Shake ability, Master
- * Angler wait-time mutation, and the exploit item-removal punishment (we skip the XP award but leave
- * the vanilla catch untouched — consistent with the award-only Smelting/Taming hooks).
+ * <p><b>Treasure Hunter loot is now wired</b> ({@link #maybeCatchTreasure}): after the base XP award,
+ * we roll {@link FishingManager#rollFishingTreasure} and, on a hit, build the reward with
+ * {@link ItemSpecBuilder} and inject it into the same caught-loot collection the mixin handed us — the
+ * exact {@code ObjectArrayList} that {@code FishingBobberEntity#use} iterates to spawn the reeled-in
+ * item entities (verified by bytecode), so the treasure flies to the player like a normal catch with no
+ * bespoke entity-spawn glue. Faithful to legacy: with {@code Extra_Fish} off (the shipped default) the
+ * treasure <i>replaces</i> the fish, with it on both are kept; the base catch XP is awarded either way.
+ *
+ * <p><b>Still deferred:</b> Magic Hunter enchant loot (needs the dynamic enchant registry + K3
+ * enchant-write; its {@code FishingTreasureConfig} enchant/book tables are deferred with it), the
+ * {@code Shake} ability, Master Angler wait-time mutation, and the exploit item-removal punishment (we
+ * skip the XP <i>and</i> the treasure roll on an exploiting catch — the same early-return gate).
  */
 public final class FishingListener {
 
@@ -75,6 +90,8 @@ public final class FishingListener {
             }
         }
 
+        // Base catch XP is awarded on the *original* caught items, before the treasure roll can replace
+        // them below — legacy pays base + treasure XP even when the treasure supplants the fish.
         for (ItemStack stack : caught) {
             if (stack.isEmpty()) {
                 continue;
@@ -83,5 +100,60 @@ public final class FishingListener {
                     Registries.ITEM.getId(stack.getItem()).getPath());
             fishingManager.awardFishingXP(materialConfigString);
         }
+
+        maybeCatchTreasure(serverPlayer, fishingManager, caught);
+    }
+
+    /**
+     * Roll the Treasure Hunter reward and, on a hit, inject it into {@code caught} (the loot collection
+     * vanilla spawns) and award its bonus XP. Ports the treasure half of legacy {@code processFishing}:
+     * with {@code Extra_Fish} off the treasure replaces the fish, with it on the fish is kept too.
+     */
+    private static void maybeCatchTreasure(ServerPlayerEntity serverPlayer,
+            FishingManager fishingManager, Collection<ItemStack> caught) {
+        final ThreadLocalRandom rng = ThreadLocalRandom.current();
+        final Optional<FishingTreasure> rolled = fishingManager.rollFishingTreasure(
+                rng.nextDouble() * 100.0, luckOfTheSeaLevel(serverPlayer), rng::nextInt);
+        if (rolled.isEmpty()) {
+            return;
+        }
+
+        final Optional<ItemStack> built = ItemSpecBuilder.build(rolled.get().getDrop());
+        if (built.isEmpty()) {
+            return; // treasure material has no vanilla item (logged by Materials) — no drop, no XP.
+        }
+        final ItemStack treasureStack = built.get();
+        applyRandomWear(treasureStack, rng);
+
+        // Extra_Fish off (the shipped default) => the treasure supplants the fish; on => keep both.
+        if (!McMMOMod.getGeneralConfig().getFishingExtraFish()) {
+            caught.clear();
+        }
+        caught.add(treasureStack);
+
+        fishingManager.awardFishingTreasureXP(rolled.get().getXp());
+    }
+
+    /**
+     * A fished tool/armor piece arrives worn: legacy set a random durability on any damageable treasure.
+     * Bukkit durability maps to vanilla damage, so a random damage in {@code [0, maxDamage)} reproduces
+     * it. A no-op for non-damageable items.
+     */
+    private static void applyRandomWear(ItemStack stack, ThreadLocalRandom rng) {
+        final int maxDamage = stack.getMaxDamage();
+        if (maxDamage > 0) {
+            stack.setDamage(rng.nextInt(maxDamage));
+        }
+    }
+
+    /**
+     * The Luck of the Sea level on the rod the player is fishing with. Reads the main hand when it holds
+     * a fishing rod, otherwise the off hand (a catch guarantees the rod is in one of them) — legacy's
+     * exact lookup. Enchantment level resolves off the stack's component with no world context needed.
+     */
+    private static int luckOfTheSeaLevel(ServerPlayerEntity player) {
+        final ItemStack main = player.getMainHandStack();
+        final ItemStack rod = main.isOf(Items.FISHING_ROD) ? main : player.getOffHandStack();
+        return new PlatformItem(rod).getEnchantmentLevel(Enchantments.LUCK_OF_THE_SEA);
     }
 }

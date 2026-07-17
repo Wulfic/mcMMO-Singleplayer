@@ -18,8 +18,13 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
  * <p>{@code use} runs only server-side (it early-returns when the world is client or the owner is
  * null before any trigger call), so no client guard is needed here. The criterion also fires for the
  * reel-in-a-hooked-entity branch, but there vanilla passes {@code Collections.emptyList()} — the
- * listener treats an empty collection as a no-op. We read the argument for its side effect (award XP)
- * and return it unchanged; the vanilla catch is never modified.
+ * listener treats an empty collection as a no-op.
+ *
+ * <p>The fourth argument is the very same {@code ObjectArrayList} the method then iterates to spawn the
+ * reeled-in item entities (bytecode-verified: the criterion call and the spawn loop both read the one
+ * local slot), so the listener may mutate it in place to inject a Treasure Hunter reward — that reward
+ * then flies to the player exactly like a normal catch. We return the (possibly mutated) collection;
+ * mutating it also lets the criterion see the reward, a harmless advancement-trigger deviation.
  */
 @Mixin(FishingBobberEntity.class)
 public abstract class FishingBobberUseMixin {
