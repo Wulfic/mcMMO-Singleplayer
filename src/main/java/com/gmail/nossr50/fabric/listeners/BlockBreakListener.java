@@ -71,6 +71,16 @@ public final class BlockBreakListener {
             return; // data not loaded (e.g. mid-join).
         }
 
+        // §A: a hand-placed block gives no gathering rewards — legacy gated its whole XP/drop/
+        // super-ability branch on !UserBlockTracker.isIneligible(block). Read the flag before clearing
+        // it (clearing marks the location eligible), then clear it unconditionally: the block is gone
+        // now, so its position is natural again and the tracker's memory is freed on the way out.
+        final boolean handPlaced = BlockUtils.isRewardIneligible(serverWorld, pos);
+        BlockUtils.markNatural(serverWorld, pos);
+        if (handPlaced) {
+            return; // placed by the player: no XP, no bonus drops, no treasure, no Tree Feller.
+        }
+
         final String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
 
         awardBlockXp(mmoPlayer, blockId);

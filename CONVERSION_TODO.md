@@ -131,6 +131,21 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       consumer is itself deferred, so loading them now would be readerless state), the `Shake` map
       (needs a Bukkit-`EntityType`→registry-entity mapping + the `shakeCheck` `LivingEntity` body), and
       a potion base-type on `ItemSpec`. These gate the remaining Fishing rewards.
+- [~] **K9 — Placed-block tracker (anti-exploit).** DONE (in-session slice): new MC-free
+      `util/PlacedBlockTracker` (worldKey + `BlockPos#asLong()` → ineligible-position set, unit-tested)
+      replaces legacy `util.blockmeta.UserBlockTracker`/`HashChunkManager` without its region-file
+      persistence. The **only** writer is the new `fabric/mixin/BlockPlaceMixin` (RETURN of the inner
+      `BlockItem#place(ItemPlacementContext,BlockState)Z`, bytecode-verified to be the setBlockState
+      wrapper), so grown/fallen/world-gen blocks are never marked and none of legacy's "reset to
+      natural" hooks are needed. MC-typed bridge lives on `BlockUtils` (`markPlaced`/`markNatural`/
+      `isRewardIneligible`, the ported `setUnnaturalBlock`/`setNaturalBlock`). Consumers gate on it:
+      `BlockBreakListener` (all gathering XP/bonus-drop/treasure/Tree-Feller/Giga-Drill paths — reads
+      the flag, then clears it since the block is gone), `BlastMiningListener` (per-ore blast skip),
+      `TreeFellerProcessor.classify` (a placed log classifies OTHER, so the fell excludes it — legacy's
+      `processTreeFellerTargetBlock` `return false`). Held as a JVM singleton on `McMMOMod`, cleared at
+      world close. **Still deferred (documented deviations, not skips):** cross-restart persistence
+      (in-memory only ⇒ a placed block re-mined after a restart pays out again), multi-place upper
+      halves (double plants), and piston-moved placed blocks. ⚠️ In-game verification pending (§G).
 
 ---
 
@@ -468,8 +483,9 @@ effectively complete.**
       and leaves block removal / block entities / TNT chain-detonation untouched. Ore/debris split,
       per-round yield rolls and bonus copies are MC-free on `MiningManager`
       (`blastMiningOreYield`/`rollOreDropRounds`/`rollBonusOreRounds`/`rollDebrisDrop`).
-      ⚠️ In-game verification pending. Deferred: `UserBlockTracker` placed-block skip (still unported
-      §A), so a blast on player-placed ore currently pays out.
+      ⚠️ In-game verification pending. **Placed-block skip now wired** — `BlastMiningListener.
+      processBlastDrops` skips (and clears the flag on) any ore the player hand-placed, via the new
+      `PlacedBlockTracker` (§A), so a blast on player-placed ore no longer pays out.
 - [~] **Unarmed** — Berserk's block effects **DONE** (commit 4f72a7344): `SuperAbilityListener.
       instaBreak` ports legacy's `event.setInstaBreak(true)` — an active Berserk bare-fisted strike on
       an affected block (`BlockUtils.affectedByBerserk`: Excavation-XP block / snow / glass) destroys

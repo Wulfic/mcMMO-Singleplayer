@@ -6,6 +6,7 @@
   "mixins": [
     "AbstractFurnaceSmeltMixin",
     "AbstractHorseBondMixin",
+    "BlockPlaceMixin",
     "BowShootMixin",
     "BrewingStandBlockEntityMixin",
     "ExplosionDropsMixin",

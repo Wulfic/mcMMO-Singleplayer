@@ -96,7 +96,15 @@ public final class TreeFellerProcessor {
 
     /** Classify the live block at a coordinate for the traversal (LOG / LEAF / OTHER). */
     private static @NotNull TreeBlockType classify(@NotNull ServerWorld world, int x, int y, int z) {
-        final BlockState state = world.getBlockState(new BlockPos(x, y, z));
+        final BlockPos pos = new BlockPos(x, y, z);
+        // §A: a hand-placed log/leaf is excluded from the fell entirely — legacy
+        // processTreeFellerTargetBlock returns false for an ineligible block, so it is never added to
+        // the removal set (neither felled nor rewarded) and does not act as a search center.
+        // Classifying it OTHER reproduces that: the traversal skips it and does not recurse through it.
+        if (BlockUtils.isRewardIneligible(world, pos)) {
+            return TreeBlockType.OTHER;
+        }
+        final BlockState state = world.getBlockState(pos);
         if (BlockUtils.hasWoodcuttingXP(state)) {
             return TreeBlockType.LOG;
         }
