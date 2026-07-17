@@ -41,6 +41,7 @@ import org.junit.jupiter.api.io.TempDir;
 class TamingManagerTest {
 
     private McMMOPlayer mmoPlayer;
+    private PlatformPlayer platformPlayer;
     private TamingManager tamingManager;
     private Path dataFolder;
 
@@ -52,7 +53,7 @@ class TamingManagerTest {
         McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
         McMMOMod.setExperienceConfig(new ExperienceConfig(dataFolder));
 
-        PlatformPlayer platformPlayer = mock(PlatformPlayer.class);
+        platformPlayer = mock(PlatformPlayer.class);
         when(platformPlayer.getUniqueId())
                 .thenReturn(UUID.fromString("00000000-0000-0000-0000-0000000000a1"));
 
@@ -220,11 +221,99 @@ class TamingManagerTest {
         verify(nearlyFull).setHealth(20f);
     }
 
+    // --- Environmentally Aware (teleport arm) -------------------------------
+    // The body itself is just the survivability check + teleport; its rank/permission gate lives on
+    // the listener (as in legacy). The notification is a no-op under the mocked player (chat
+    // notifications default off), so these assert only the teleport behaviour.
+
+    @Test
+    void environmentallyAwareTeleportsAWolfToItsOwnerWhenTheHitIsSurvivable() {
+        PlatformLivingEntity wolf = wolfAt(20f, 20f);
+
+        tamingManager.processEnvironmentallyAware(wolf, 5.0);
+
+        verify(wolf).teleportTo(platformPlayer);
+    }
+
+    @Test
+    void environmentallyAwareLeavesAWolfToDieWhenTheHitIsLethal() {
+        // Pins legacy's `damage > wolf.getHealth()` skip: a killing blow is not rescued.
+        PlatformLivingEntity wolf = wolfAt(4f, 20f);
+
+        tamingManager.processEnvironmentallyAware(wolf, 5.0);
+
+        verify(wolf, never()).teleportTo(ArgumentMatchers.any(PlatformPlayer.class));
+    }
+
+    @Test
+    void beastLoreGateUnlocksAtLevelOne() {
+        atTamingLevel(0);
+        assertFalse(tamingManager.canUseBeastLore(), "Beast Lore locked at level 0");
+        atTamingLevel(1);
+        assertTrue(tamingManager.canUseBeastLore(), "Beast Lore unlocks at level 1 (RetroMode)");
+    }
+
     @Test
     void beastLoreHorseJumpStrengthMatchesTheWikiPolynomial() {
         // raw jump-strength attribute of 0.7 -> ~2.8917 (verbatim wiki polynomial)
         assertEquals(2.8917, TamingManager.beastLoreHorseJumpStrength(0.7), 1.0e-3);
         // a raw value of 0 -> the polynomial's constant term
         assertEquals(-0.343930367, TamingManager.beastLoreHorseJumpStrength(0.0), 1.0e-9);
+    }
+
+    // --- Pummel -------------------------------------------------------------
+    // Pummel unlocks at Taming level 200 (RetroMode) and rolls the static Skills.Taming.Pummel.Chance,
+    // overridden here the same way withFastFoodChance overrides Fast Food Service, so a chance of 100
+    // always fires and 0 never does — making the roll deterministic without injecting an RNG.
+
+    private void withPummelChance(double chance) throws IOException {
+        final Path overrideFolder = dataFolder.resolve("pummel-" + chance);
+        Files.createDirectories(overrideFolder);
+        Files.writeString(overrideFolder.resolve("advanced.yml"), """
+                Skills:
+                    Taming:
+                        Pummel:
+                            Chance: %s
+                """.formatted(chance));
+        McMMOMod.setAdvancedConfig(new AdvancedConfig(overrideFolder));
+    }
+
+    @Test
+    void pummelKnocksTheTargetBackAlongTheWolfLookOnASuccessfulRoll() throws IOException {
+        atTamingLevel(200);
+        withPummelChance(100.0);
+        PlatformLivingEntity target = mock(PlatformLivingEntity.class);
+        PlatformLivingEntity wolf = mock(PlatformLivingEntity.class);
+
+        tamingManager.processPummel(target, wolf);
+
+        // Legacy's hardcoded 1.5 knockback, flung along the wolf (not the player).
+        verify(target).setVelocityAlongLookDirection(wolf, 1.5D);
+    }
+
+    @Test
+    void pummelDoesNothingWhenTheRollFails() throws IOException {
+        atTamingLevel(200);
+        withPummelChance(0.0);
+        PlatformLivingEntity target = mock(PlatformLivingEntity.class);
+        PlatformLivingEntity wolf = mock(PlatformLivingEntity.class);
+
+        tamingManager.processPummel(target, wolf);
+
+        verify(target, never()).setVelocityAlongLookDirection(
+                ArgumentMatchers.any(PlatformLivingEntity.class), ArgumentMatchers.anyDouble());
+    }
+
+    @Test
+    void pummelLockedBelowItsUnlockDoesNothing() throws IOException {
+        atTamingLevel(199); // one below the Pummel unlock — the roll must be skipped entirely
+        withPummelChance(100.0);
+        PlatformLivingEntity target = mock(PlatformLivingEntity.class);
+        PlatformLivingEntity wolf = mock(PlatformLivingEntity.class);
+
+        tamingManager.processPummel(target, wolf);
+
+        verify(target, never()).setVelocityAlongLookDirection(
+                ArgumentMatchers.any(PlatformLivingEntity.class), ArgumentMatchers.anyDouble());
     }
 }

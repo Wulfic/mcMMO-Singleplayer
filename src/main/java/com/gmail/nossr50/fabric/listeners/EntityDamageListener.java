@@ -6,6 +6,7 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.DodgeResult;
 import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.RollResult;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.MeleeDamageBonus;
@@ -25,15 +26,20 @@ import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.CombatUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
+import com.gmail.nossr50.util.text.TextUtils;
 import java.util.UUID;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LightningEntity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.Tameable;
+import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.passive.AbstractHorseEntity;
+import net.minecraft.entity.passive.LlamaEntity;
 import net.minecraft.entity.passive.WolfEntity;
 import net.minecraft.entity.projectile.ArrowEntity;
 import net.minecraft.entity.projectile.PersistentProjectileEntity;
@@ -70,8 +76,9 @@ import net.minecraft.sound.SoundCategory;
  * thrown trident's <b>Impale</b> (see {@link #applyProjectileAttackBonus}). Their non-damage bodies
  * (distance/force XP, Arrow Retrieval) still wait on a projectile-launch hook.
  *
- * <p>One branch does <em>not</em> ride the mixin: Unarmed's <b>Arrow Deflect</b> ({@link
- * #onAllowDamage}) has to cancel the hit outright, so it rides Fabric's cancel-only
+ * <p>Some branches do <em>not</em> ride the mixin — Unarmed's <b>Arrow Deflect</b>, Taming's
+ * <b>Beast Lore</b> and Environmentally Aware's FALL arm (dispatched from {@link
+ * #onAllowDamage}) — because they cancel the hit outright, so they ride Fabric's cancel-only
  * {@code ServerLivingEntityEvents.ALLOW_DAMAGE} veto — hence this class has a {@link #register()}
  * as well as a mixin entry point.
  */
@@ -81,57 +88,165 @@ public final class EntityDamageListener {
     }
 
     /**
-     * Subscribe the one branch of this listener that needs to <em>veto</em> a hit outright rather
-     * than reduce it: Unarmed's Arrow Deflect (see {@link #onAllowDamage}). Everything else here is
-     * driven by the {@code modifyAppliedDamage} mixin, which cannot cancel.
+     * Subscribe the branches of this listener that need to <em>veto</em> a hit outright rather than
+     * reduce it — Unarmed's Arrow Deflect, Taming's Beast Lore and Environmentally Aware's FALL arm
+     * (see {@link #onAllowDamage}). Everything else here is driven by the {@code modifyAppliedDamage}
+     * mixin, which cannot cancel.
      */
     public static void register() {
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(EntityDamageListener::onAllowDamage);
     }
 
     /**
-     * Unarmed Arrow Deflect: a bare-handed player may swat an incoming arrow out of the air. Ports
-     * legacy {@code EntityListener#onEntityDamageByEntity}'s deflect arm plus
-     * {@code UnarmedManager#deflectCheck}.
+     * Fabric's cancel-only {@code ALLOW_DAMAGE} veto: the dispatcher for every mcMMO damage branch
+     * that must abort a hit outright rather than merely reduce it (the {@code modifyAppliedDamage}
+     * mixin can only reduce). Legacy expressed all of these as {@code event.setCancelled(true)}, and
+     * like Bukkit's cancel this fires before knockback, i-frames and the hurt sound — returning
+     * {@code 0} from the mixin would zero the damage but still knock back, burn the i-frame window and
+     * consume the arrow, so the veto is the faithful seam, not a workaround.
      *
-     * <p>This is the one mcMMO damage branch that <b>cancels</b> instead of reducing, so it rides
-     * Fabric's cancel-only {@code ALLOW_DAMAGE} veto rather than the {@code modifyAppliedDamage}
-     * seam the rest of this class uses. That is not a workaround but the faithful seam: legacy
-     * called {@code event.setCancelled(true)}, and like Bukkit's cancel this fires before knockback,
-     * i-frames and the hurt sound. Returning {@code 0} from {@code modifyAppliedDamage} would zero
-     * the damage but still knock the player back, burn their invulnerability window and consume the
-     * arrow — a deflected arrow instead bounces off, which is vanilla's own behaviour when
-     * {@code damage()} returns false.
+     * <p>Branches, in dispatch order: Unarmed's <b>Arrow Deflect</b> (a bare-handed player swats an
+     * arrow; see {@link #isArrowDeflected}), Taming's <b>Beast Lore</b> (a player bone-whacks a
+     * tameable animal to inspect it; see {@link #maybeBeastLore}) and Taming's <b>Environmentally
+     * Aware</b> FALL arm (a tamed wolf's fall damage is negated; see {@link #isEnvironmentallyAwareFall}).
+     * Environmentally Aware's other environmental causes only teleport the wolf and leave the hit
+     * intact, so they ride the reduce-only mixin instead (see {@link #handleWolfDamage}).
      *
-     * <p>It also lands earlier than Dodge, matching legacy: the deflect arm sits in the damage
-     * handler ahead of {@code processCombatAttack}, so a deflected arrow is never also dodged.
-     *
-     * @return {@code false} to cancel the hit (the arrow was deflected), {@code true} to allow it
+     * @return {@code false} to cancel the hit, {@code true} to let it proceed
      */
     private static boolean onAllowDamage(LivingEntity entity, DamageSource source, float amount) {
-        if (!(entity instanceof ServerPlayerEntity serverPlayer)) {
-            return true; // legacy's `defender instanceof Player` — deflect is a player-only defence.
+        if (entity instanceof ServerPlayerEntity serverPlayer) {
+            return !isArrowDeflected(serverPlayer, source);
         }
+        if (maybeBeastLore(entity, source)) {
+            return false; // inspected with a bone — the blow is cancelled.
+        }
+        if (entity instanceof WolfEntity wolf && isEnvironmentallyAwareFall(wolf, source)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Unarmed Arrow Deflect: a bare-handed player may swat an incoming arrow out of the air. Ports
+     * legacy {@code EntityListener#onEntityDamageByEntity}'s deflect arm plus
+     * {@code UnarmedManager#deflectCheck}. It lands earlier than Dodge, matching legacy: the deflect
+     * arm sits ahead of {@code processCombatAttack}, so a deflected arrow is never also dodged.
+     *
+     * @return {@code true} if the arrow was deflected (the caller should cancel the hit)
+     */
+    private static boolean isArrowDeflected(ServerPlayerEntity serverPlayer, DamageSource source) {
         // Legacy checks the *direct* damager (`event.getDamager()`) for `instanceof Arrow`, which in
         // Bukkit is specifically a regular/tipped arrow — its sibling types (SpectralArrow, Trident)
         // implement AbstractArrow, not Arrow, so they were never deflectable. ArrowEntity draws that
         // same line here: its siblings extend PersistentProjectileEntity alongside it, not from it.
         if (!(source.getSource() instanceof ArrowEntity)) {
-            return true;
+            return false;
         }
-
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
         if (mmoPlayer == null) {
-            return true; // data not loaded (e.g. mid-join).
+            return false; // data not loaded (e.g. mid-join).
         }
         final UnarmedManager unarmed = mmoPlayer.getUnarmedManager();
         if (unarmed == null || !unarmed.canDeflect() || !unarmed.rollArrowDeflect()) {
-            return true;
+            return false;
         }
-
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
                 "Combat.ArrowDeflect");
-        return false;
+        return true;
+    }
+
+    /**
+     * Taming Environmentally Aware, FALL arm: a tamed wolf whose owner has the sub-skill takes no fall
+     * damage at all (legacy's {@code case FALL: event.setCancelled(true)}). The wolf's other
+     * environmental causes teleport it clear via {@link #handleWolfDamage} instead; only FALL cancels.
+     *
+     * @return {@code true} if the fall damage should be negated (the caller should cancel the hit)
+     */
+    private static boolean isEnvironmentallyAwareFall(WolfEntity wolf, DamageSource source) {
+        if (!source.isIn(DamageTypeTags.IS_FALL)) {
+            return false;
+        }
+        if (!(wolf.getOwner() instanceof ServerPlayerEntity owner)) {
+            return false; // wild wolf (getOwner() is null unless tamed).
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(owner.getUuid());
+        if (mmoPlayer == null) {
+            return false;
+        }
+        final TamingManager taming = mmoPlayer.getTamingManager();
+        return taming != null && taming.canUseEnvironmentallyAware();
+    }
+
+    /**
+     * Taming Beast Lore: a player who left-clicks a tameable animal while holding a bone inspects it
+     * instead of hitting it. Ports the {@code target instanceof Tameable} + {@code heldItem == BONE}
+     * arm of legacy {@code CombatUtils#processCombatAttack}, which prints the beast's stats and
+     * {@code event.setCancelled(true)}s the blow. Only a <em>direct</em> melee swing counts (legacy's
+     * {@code entityType == EntityType.PLAYER}, i.e. the player is the direct damager), so a bone can't
+     * inspect via a projectile.
+     *
+     * @return {@code true} if the animal was inspected (the caller should cancel the hit)
+     */
+    private static boolean maybeBeastLore(LivingEntity entity, DamageSource source) {
+        if (!(entity instanceof Tameable)) {
+            return false; // Beast Lore only inspects tameable animals.
+        }
+        if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)
+                || source.getSource() != attacker) {
+            return false; // not a direct melee swing by a player.
+        }
+        if (!attacker.getMainHandStack().isOf(Items.BONE)) {
+            return false;
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(attacker.getUuid());
+        if (mmoPlayer == null) {
+            return false;
+        }
+        final TamingManager taming = mmoPlayer.getTamingManager();
+        if (taming == null || !taming.canUseBeastLore()) {
+            return false;
+        }
+        sendBeastLore(attacker, entity);
+        return true;
+    }
+
+    /**
+     * Builds and sends the Beast Lore stat readout, porting legacy {@code TamingManager#beastLore}.
+     * MC-typed display glue: it reads the target's live health, tamed owner and (for the horse family)
+     * movement-speed / jump-strength attributes, and hands the jump attribute to the already-extracted
+     * pure conversion {@link TamingManager#beastLoreHorseJumpStrength}. The message is assembled as a
+     * legacy {@code §}-coded string exactly as upstream did, then parsed once into {@link Text}.
+     *
+     * <p>{@link Tameable#getOwner()} returns {@code null} unless the animal is tamed and its owner is
+     * resolvable, so it stands in for legacy's {@code isTamed() && getOwner() != null}. Llamas are
+     * excluded from the horse block just as legacy excluded them (they carry no rideable jump/speed
+     * stats worth showing).
+     */
+    private static void sendBeastLore(ServerPlayerEntity viewer, LivingEntity target) {
+        final Tameable beast = (Tameable) target;
+        String message = LocaleLoader.getString("Combat.BeastLore") + " ";
+
+        final LivingEntity owner = beast.getOwner();
+        if (owner != null) {
+            message += LocaleLoader.getString("Combat.BeastLoreOwner", owner.getName().getString())
+                    + " ";
+        }
+
+        message += LocaleLoader.getString("Combat.BeastLoreHealth", target.getHealth(),
+                target.getMaxHealth());
+
+        // Mules & donkeys share the horse's jump/speed stats; llamas do not.
+        if (target instanceof AbstractHorseEntity horse && !(target instanceof LlamaEntity)
+                && horse.getAttributeInstance(EntityAttributes.JUMP_STRENGTH) != null) {
+            final double jumpStrength = TamingManager.beastLoreHorseJumpStrength(
+                    horse.getAttributeValue(EntityAttributes.JUMP_STRENGTH));
+            final double speed = horse.getAttributeValue(EntityAttributes.MOVEMENT_SPEED) * 43;
+            message += "\n" + LocaleLoader.getString("Combat.BeastLoreHorseSpeed", speed)
+                    + "\n" + LocaleLoader.getString("Combat.BeastLoreHorseJumpStrength", jumpStrength);
+        }
+
+        viewer.sendMessage(TextUtils.toText(message));
     }
 
     /**
@@ -226,8 +341,11 @@ public final class EntityDamageListener {
      *       com.gmail.nossr50.util.skills.SkillTools}), as on every other attacker arm here.</li>
      * </ul>
      *
-     * <p>Deferred (breadcrumbs, CONVERSION_TODO §C): {@code pummel} (needs a
-     * velocity-along-a-non-player's-look-direction adapter plus particles) and legacy's
+     * <p>Pummel rides here too (see {@link TamingManager#processPummel}): it flings the target along
+     * the wolf's look direction on a successful roll but does not feed the damage total, so it runs as
+     * a side effect rather than contributing to {@code boostedDamage}.
+     *
+     * <p>Deferred (breadcrumb, CONVERSION_TODO §C): legacy's
      * {@code processCombatXP(mmoPlayer, target, TAMING, 3)} — this port awards combat XP per *kill*
      * ({@code CombatListener}), not per hit, and that listener only pays out when the killer is a
      * player, so wolf-assisted Taming XP is a pre-existing §B gap rather than something this arm can
@@ -256,9 +374,16 @@ public final class EntityDamageListener {
             return amount;
         }
 
+        final PlatformLivingEntity platformWolf = new PlatformLivingEntity(wolf);
         if (taming.canUseFastFoodService()) {
-            taming.fastFoodService(new PlatformLivingEntity(wolf), amount);
+            taming.fastFoodService(platformWolf, amount);
         }
+
+        // Pummel: called unconditionally, matching legacy's processTamingCombat — the rank gate and
+        // the static chance roll live inside the manager. It flings the target along the wolf's look
+        // direction but never touches the damage total, so it sits between Fast Food Service and the
+        // damage bonuses exactly as legacy sequences it.
+        taming.processPummel(new PlatformLivingEntity(target), platformWolf);
 
         double boostedDamage = amount;
         if (taming.canUseSharpenedClaws()) {
@@ -372,11 +497,10 @@ public final class EntityDamageListener {
      * arms are mutually exclusive and every one of them {@code return}s, exactly as legacy's
      * {@code switch} did.
      *
-     * <p>Deferred (breadcrumb, CONVERSION_TODO §C): Environmentally Aware, whose two arms
-     * ({@code CONTACT}/{@code FIRE}/{@code HOT_FLOOR}/{@code LAVA} → teleport the wolf to its owner,
-     * and {@code FALL} → cancel outright) need an entity-teleport adapter and a cancel-shaped seam
-     * ({@code ALLOW_DAMAGE}, as Arrow Deflect uses) respectively. Those causes currently fall through
-     * untouched.
+     * <p>Environmentally Aware rides both seams: its {@code CONTACT}/{@code FIRE}/{@code HOT_FLOOR}/
+     * {@code LAVA} arm teleports the wolf clear from here (see {@link #isEnvironmentallyAwareCause}),
+     * while its {@code FALL} arm cancels the hit outright and so rides the {@code ALLOW_DAMAGE} veto
+     * (see {@link #onAllowDamage}) rather than this reduce-only seam.
      */
     private static float handleWolfDamage(WolfEntity wolf, DamageSource source, float amount) {
         if (!(wolf.getOwner() instanceof ServerPlayerEntity owner)) {
@@ -407,6 +531,18 @@ public final class EntityDamageListener {
         if (source.isOf(DamageTypes.ON_FIRE)) {
             if (taming.canUseThickFur()) {
                 new PlatformLivingEntity(wolf).extinguish();
+            }
+            return amount;
+        }
+
+        // CONTACT / FIRE / HOT_FLOOR / LAVA -> Environmentally Aware teleports the wolf back to its
+        // owner (out of continued contact). The hit itself still lands — legacy's teleport arm neither
+        // reduces nor cancels the damage; only the FALL arm cancels, and it rides the ALLOW_DAMAGE veto
+        // (see onAllowDamage) since this seam cannot cancel. Note the FIRE half is IN_FIRE/CAMPFIRE,
+        // distinct from the ON_FIRE (FIRE_TICK) burning DoT the Thick Fur arm above handles.
+        if (isEnvironmentallyAwareCause(source)) {
+            if (taming.canUseEnvironmentallyAware()) {
+                taming.processEnvironmentallyAware(new PlatformLivingEntity(wolf), amount);
             }
             return amount;
         }
@@ -451,6 +587,24 @@ public final class EntityDamageListener {
         return source.isOf(DamageTypes.MAGIC)
                 || source.isOf(DamageTypes.INDIRECT_MAGIC)
                 || source.isOf(DamageTypes.WITHER);
+    }
+
+    /**
+     * Bukkit's {@code CONTACT} / {@code FIRE} / {@code HOT_FLOOR} / {@code LAVA} causes, which
+     * Environmentally Aware treats alike (teleport the wolf clear). {@code CONTACT} is cactus / sweet
+     * berry bush / dripstone, and {@code FIRE} is the <em>standing-in-fire</em> cause
+     * ({@link DamageTypes#IN_FIRE}/{@link DamageTypes#CAMPFIRE}) — deliberately not {@link
+     * DamageTypes#ON_FIRE}, the burning DoT Bukkit called {@code FIRE_TICK} and that the Thick Fur
+     * snuff arm handles instead.
+     */
+    private static boolean isEnvironmentallyAwareCause(DamageSource source) {
+        return source.isOf(DamageTypes.CACTUS)
+                || source.isOf(DamageTypes.SWEET_BERRY_BUSH)
+                || source.isOf(DamageTypes.STALAGMITE)
+                || source.isOf(DamageTypes.IN_FIRE)
+                || source.isOf(DamageTypes.CAMPFIRE)
+                || source.isOf(DamageTypes.HOT_FLOOR)
+                || source.isOf(DamageTypes.LAVA);
     }
 
     /**

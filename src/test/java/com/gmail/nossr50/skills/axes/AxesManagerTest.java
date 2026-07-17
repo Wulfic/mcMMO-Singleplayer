@@ -228,7 +228,7 @@ class AxesManagerTest {
         final PlatformLivingEntity target = targetWearing();
 
         assertEquals(0.0D, axesManager.greaterImpact(target), 1e-9, "no proc → no bonus damage");
-        verify(target, never()).setVelocityAlongLookDirection(any(), anyDouble());
+        verify(target, never()).setVelocityAlongLookDirection(any(PlatformPlayer.class), anyDouble());
     }
 
     /**
