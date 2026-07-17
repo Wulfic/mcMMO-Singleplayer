@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Arrays;
+import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.world.explosion.ExplosionImpl;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -49,5 +50,16 @@ class MixinApplicationTest {
         assertTrue(hasMixinField,
                 "ExplosionDropsMixin did not apply to ExplosionImpl — its blast-mining drop "
                         + "replacement would silently never run in-game");
+    }
+
+    @Test
+    void projectileSpawnMixinApplies() {
+        // ProjectileSpawnMixin injects into the four-argument ProjectileEntity#spawn static — the
+        // funnel every projectile spawn goes through. It adds no field to assert on (it is a pure
+        // @Inject), so class-loading is the whole test: with defaultRequire=1, a spawn signature that
+        // has drifted fails the injection and throws here rather than silently costing Archery its
+        // Arrow Retrieval marks in-game.
+        assertDoesNotThrow(() -> Class.forName(ProjectileEntity.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
     }
 }

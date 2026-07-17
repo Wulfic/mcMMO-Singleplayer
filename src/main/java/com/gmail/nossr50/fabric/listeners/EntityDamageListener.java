@@ -73,8 +73,10 @@ import net.minecraft.sound.SoundCategory;
  * on that wolf is softened by Thick Fur / Shock Proof / Holy Hound (see {@link #handleWolfDamage}).
  * The <b>projectile</b> weapon skills ride the attacker branch too, keyed on the damaging projectile
  * rather than the player: a bow arrow's <b>Skill Shot</b>, a crossbow bolt's <b>Powered Shot</b> and a
- * thrown trident's <b>Impale</b> (see {@link #applyProjectileAttackBonus}). Their non-damage bodies
- * (distance/force XP, Arrow Retrieval) still wait on a projectile-launch hook.
+ * thrown trident's <b>Impale</b> (see {@link #applyProjectileAttackBonus}), plus Archery's
+ * <b>Arrow Retrieval</b> credit (see {@link #applyArcheryBonus}; the launch mark and the death drop
+ * live on {@link ProjectileListener}). Distance/bow-force XP remain unported — they are per-hit XP
+ * multipliers and this port pays combat XP per kill.
  *
  * <p>Some branches do <em>not</em> ride the mixin — Unarmed's <b>Arrow Deflect</b>, Taming's
  * <b>Beast Lore</b> and Environmentally Aware's FALL arm (dispatched from {@link
@@ -436,19 +438,54 @@ public final class EntityDamageListener {
         if (projectile instanceof TridentEntity) {
             return applyTridentImpale(mmoPlayer, target, amount);
         }
-        if (projectile.getWeaponStack().isOf(Items.CROSSBOW)) {
+        if (isCrossbowShot(projectile)) {
             return applyPoweredShot(mmoPlayer, target, amount);
         }
-        return applySkillShot(mmoPlayer, target, amount);
+        return applyArcheryBonus(mmoPlayer, target, projectile, amount);
     }
 
-    /** Archery Skill Shot: a bow-fired arrow's damage bonus (legacy {@code processArcheryCombat}). */
-    private static float applySkillShot(McMMOPlayer mmoPlayer, LivingEntity target, float amount) {
+    /**
+     * Whether this projectile was loosed from a crossbow rather than a bow (Crossbows vs Archery).
+     * {@code AbstractArrow#isShotFromCrossbow()} was removed in 1.21.11, so the firing weapon is read
+     * from the arrow's own record instead.
+     *
+     * <p>The null guard is load-bearing, not defensive noise: {@code getWeaponStack()} returns a
+     * genuinely nullable field — vanilla's {@code readCustomData} restores it with
+     * {@code orElse(null)}, and the {@code (EntityType, World)} constructor leaves it null — so a
+     * player-owned arrow that never went through {@code RangedWeaponItem} (summoned with an
+     * {@code Owner} tag, restored from a world saved before the field existed, or spawned and adopted
+     * by another mod — the case legacy's own "some plugins spawn arrows and assign them to players"
+     * comment describes) would otherwise NPE here, inside the vanilla damage pipeline. A missing
+     * weapon reads as a bow shot, which is the correct fallback: "not a crossbow → Archery".
+     */
+    private static boolean isCrossbowShot(PersistentProjectileEntity projectile) {
+        final ItemStack weapon = projectile.getWeaponStack();
+        return weapon != null && weapon.isOf(Items.CROSSBOW);
+    }
+
+    /**
+     * Archery: a bow-fired arrow's <b>Skill Shot</b> damage bonus and <b>Arrow Retrieval</b> credit
+     * (legacy {@code processArcheryCombat}).
+     *
+     * <p>The two are independent, as they are upstream — Arrow Retrieval sits in its own {@code if},
+     * so a player whose Skill Shot is locked (or disabled) still collects their arrows. Retrieval only
+     * credits the target here; the arrows themselves drop when it dies (see {@link ProjectileListener}).
+     */
+    private static float applyArcheryBonus(McMMOPlayer mmoPlayer, LivingEntity target,
+            PersistentProjectileEntity projectile, float amount) {
         if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.ARCHERY, target)) {
             return amount;
         }
         final ArcheryManager archery = mmoPlayer.getArcheryManager();
-        if (archery == null || !archery.canSkillShot()) {
+        if (archery == null) {
+            return amount;
+        }
+
+        if (archery.canRetrieveArrows()) {
+            archery.retrieveArrows(target.getUuid(), projectile.getUuid());
+        }
+
+        if (!archery.canSkillShot()) {
             return amount;
         }
         return (float) archery.skillShot(amount); // not additive — Skill Shot replaces the damage.
