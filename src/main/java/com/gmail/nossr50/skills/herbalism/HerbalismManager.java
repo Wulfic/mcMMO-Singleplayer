@@ -216,6 +216,34 @@ public class HerbalismManager extends SkillManager {
     }
 
     /**
+     * Whether a broken ageable block is a single-block farm crop whose Herbalism rewards (XP + bonus
+     * drops) are gated on <i>maturity</i> rather than on the placed-block flag. This is the set of
+     * crops legacy's {@code awardXPForPlantBlocks} / {@code checkDoubleDropsOnBrokenPlants} reward
+     * only when fully grown — for a non-bizarre ageable, <b>both</b> the placed and natural branches
+     * require full maturity, so a crop pays the same whether the player planted it or found it wild.
+     *
+     * <p>Excluded (they stay on the ordinary placed-flag gathering path in
+     * {@link com.gmail.nossr50.fabric.listeners.BlockBreakListener}, matching legacy's non-ageable /
+     * bizarre-ageable branches):
+     * <ul>
+     *   <li>bizarre ageables (cactus / kelp / sugar cane / bamboo) — their {@code age} can't be
+     *       trusted for maturity, and legacy rewards them off the natural/placed flag, not maturity;</li>
+     *   <li>chorus (deferred multi-block plant here — its delayed, multi-block XP path is unported);</li>
+     *   <li>any ageable that grants no Herbalism XP (a non-crop age property).</li>
+     * </ul>
+     *
+     * @param blockRegistryId the broken block's vanilla registry id (namespaced or bare)
+     * @return whether this block's Herbalism rewards should be maturity-gated
+     */
+    public boolean isMaturityGatedCrop(@NotNull String blockRegistryId) {
+        final String path = stripToPath(blockRegistryId);
+        if (isBizarreAgeable(path) || path.equals("chorus_plant") || path.equals("chorus_flower")) {
+            return false;
+        }
+        return getExperienceFromPlant(ConfigStringUtils.getMaterialConfigString(path)) > 0;
+    }
+
+    /**
      * Sweet Berry Bush harvest XP, mirroring legacy {@code processBerryBushHarvesting}: age 2 gives
      * normal XP, age 3 gives double, anything else gives none.
      *
