@@ -38,6 +38,7 @@ import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.decoration.ArmorStandEntity;
+import net.minecraft.entity.mob.CreeperEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.passive.AbstractHorseEntity;
 import net.minecraft.entity.passive.LlamaEntity;
@@ -452,6 +453,15 @@ public final class EntityDamageListener {
         if (projectile instanceof TridentEntity) {
             return applyTridentImpale(mmoPlayer, target, amount);
         }
+
+        // Call of the Wild's attackTarget: legacy sics the shooter's nearby wolves on any non-creeper
+        // struck by an ARROW (bow or crossbow — not a trident, and not a melee hit). It runs regardless
+        // of the Skill Shot / Powered Shot outcome and has no Taming rank gate, only the permission
+        // (always granted in singleplayer), so a resolved player is the whole condition here.
+        if (!(target instanceof CreeperEntity)) {
+            CallOfTheWildHandler.attackTarget(shooter, target);
+        }
+
         if (isCrossbowShot(projectile)) {
             return applyPoweredShot(mmoPlayer, target, projectile, amount);
         }
@@ -942,8 +952,15 @@ public final class EntityDamageListener {
      *
      * <p>{@code OTHER} means "not a weapon mcMMO trains" (a pickaxe, a block, a bow used as a club),
      * and pays no bonus and no XP — matching legacy, whose dispatch simply has no arm for those.
-     * Spears are the one gap: legacy routes them off a {@code SPEAR} damage type rather than the held
-     * item, and this port has never paid Spears combat XP (CONVERSION_TODO §C).
+     *
+     * <p><b>Spears are deliberately absent — the skill is unreachable in this port, an honest collapse
+     * like Disarm/Daze.</b> Legacy fires Spears off a custom {@code spear} <em>damage type</em>
+     * ({@code event.getDamageSource().getDamageType() == "spear"}) dealt by custom spear items
+     * ({@code wooden_spear} … {@code netherite_spear}). Neither the {@code spear} damage type nor any
+     * spear item exists in vanilla 1.21.11, and this port ships no datapack that adds them, so a spear
+     * can never be held and nothing ever deals spear-typed damage. Wiring a classifier arm for it would
+     * be dead code that never runs — the exact "code that lies" trap this port avoids. See
+     * CONVERSION_TODO §C.
      */
     private static MeleeWeapon classifyMainHand(ItemStack held) {
         if (ItemUtils.isSword(held)) {

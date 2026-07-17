@@ -15,6 +15,7 @@ import com.gmail.nossr50.skills.repair.repairables.RepairableManager;
 import com.gmail.nossr50.skills.repair.repairables.SimpleRepairableManager;
 import com.gmail.nossr50.skills.salvage.salvageables.SalvageableManager;
 import com.gmail.nossr50.skills.salvage.salvageables.SimpleSalvageableManager;
+import com.gmail.nossr50.skills.taming.CallOfTheWild;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,6 +54,11 @@ public final class ConfigBootstrap {
         final GeneralConfig general = new GeneralConfig(dataFolder);
         McMMOMod.setGeneralConfig(general);
 
+        // Taming Call-of-the-Wild lookup tables (item → summon), derived from the general config's
+        // Call_Of_The_Wild section. MC-free (item ids kept as registry-path strings), so it is built
+        // here as soon as GeneralConfig is available.
+        McMMOMod.setCallOfTheWild(CallOfTheWild.fromConfig(general));
+
         McMMOMod.setExperienceConfig(new ExperienceConfig(dataFolder));
         McMMOMod.setCoreSkillsConfig(new CoreSkillsConfig(dataFolder));
         McMMOMod.setRankConfig(new RankConfig(dataFolder));
@@ -90,6 +96,7 @@ public final class ConfigBootstrap {
      */
     public static void unload() {
         McMMOMod.setGeneralConfig(null);
+        McMMOMod.setCallOfTheWild(null);
         McMMOMod.setExperienceConfig(null);
         McMMOMod.setCoreSkillsConfig(null);
         McMMOMod.setRankConfig(null);
