@@ -16,10 +16,11 @@ import org.jetbrains.annotations.NotNull;
  * half — reading block states, breaking blocks, spawning drops/XP — lives in
  * {@link TreeFellerProcessor}, which supplies the {@link BlockClassifier} over a real world.
  *
- * <p><b>Deliberate deviation from legacy:</b> the legacy {@code processTreeFellerTargetBlock} also
- * skips blocks the {@code UserBlockTracker} marks ineligible (player-placed, to stop XP farming).
- * That tracker isn't ported yet (see {@code BlockUtils} class doc), so every classified block is
- * eligible here — consistent with the rest of the port, which has no placed-block tracking.
+ * <p>Legacy {@code processTreeFellerTargetBlock} excludes blocks the {@code UserBlockTracker} marks
+ * ineligible (player-placed, to stop XP farming) by returning false for them — neither felling nor
+ * rewarding them. That is now honoured through the classifier: {@link TreeFellerProcessor}'s classify
+ * returns {@code OTHER} for a hand-placed block, so this traversal skips it and never recurses through
+ * it, exactly as legacy's {@code return false} did.
  */
 public final class TreeFellerTraversal {
 

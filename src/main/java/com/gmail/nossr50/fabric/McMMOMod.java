@@ -30,6 +30,7 @@ import com.gmail.nossr50.runnables.SaveTimerTask;
 import com.gmail.nossr50.runnables.player.ClearRegisteredXPGainTask;
 import com.gmail.nossr50.util.experience.FormulaManager;
 import com.gmail.nossr50.util.MaterialMapStore;
+import com.gmail.nossr50.util.PlacedBlockTracker;
 import com.gmail.nossr50.util.TransientEntityTracker;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillTools;
@@ -96,6 +97,14 @@ public class McMMOMod implements ModInitializer {
      * {@code mcMMO.getTransientEntityTracker()}.
      */
     private static final TransientEntityTracker transientEntityTracker = new TransientEntityTracker();
+
+    /**
+     * Registry of hand-placed blocks that must not give gathering rewards (the port's replacement for
+     * legacy {@code mcMMO.getUserBlockTracker()} — see §A). Created once at mod load; unlike legacy's
+     * region-file store it keeps its flags in memory only, so its per-world contents are dropped at
+     * world close ({@link #onServerStopping}), the same session-state lifecycle as {@link MetadataStore}.
+     */
+    private static final PlacedBlockTracker placedBlockTracker = new PlacedBlockTracker();
 
     /** Ticks in one real-time minute (20 tps × 60 s). Autosave interval is configured in minutes. */
     private static final long TICKS_PER_MINUTE = 20L * 60L;
@@ -254,6 +263,9 @@ public class McMMOMod implements ModInitializer {
             // owned it. The tasks those markers point at were just killed by cancelAll() above, and
             // a leaked rupture marker would make its target permanently immune to Rupture.
             MetadataStore.clearAll();
+            // §A: drop the hand-placed-block flags (in-memory only, no region-file persistence) so the
+            // next world session starts with every block eligible for rewards again.
+            placedBlockTracker.clear();
             // In-progress brews need no explicit flush: mcMMO reuses vanilla's brew timer (persisted
             // in the block entity's NBT), so a half-done brew simply resumes on the next world load.
             ConfigBootstrap.unload();
@@ -295,6 +307,15 @@ public class McMMOMod implements ModInitializer {
      */
     public static @NotNull TransientEntityTracker getTransientEntityTracker() {
         return transientEntityTracker;
+    }
+
+    /**
+     * The hand-placed-block registry (§A anti-exploit). Never {@code null} — created at mod load and
+     * lives for the JVM; its per-world flags are cleared at world close. Replaces legacy
+     * {@code mcMMO.getUserBlockTracker()}. The MC-typed bridge is {@link com.gmail.nossr50.util.BlockUtils}.
+     */
+    public static @NotNull PlacedBlockTracker getPlacedBlockTracker() {
+        return placedBlockTracker;
     }
 
     /**

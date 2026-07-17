@@ -8,6 +8,8 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.registry.Registries;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -31,10 +33,14 @@ import org.jetbrains.annotations.NotNull;
  * <p>The id-path extraction needs live registries, so these are exercised in {@code BlockUtilsTest}
  * under the {@code fabric-loader-junit} harness ({@code Bootstrap.initialize()} in a {@code @BeforeAll}).
  *
+ * <p>The placed-block eligibility bridge <em>is</em> ported here now (see {@link #markPlaced}/
+ * {@link #markNatural}/{@link #isRewardIneligible}), backed by the MC-free {@link PlacedBlockTracker} —
+ * this is legacy {@code setUnnaturalBlock}/{@code setNaturalBlock} on a live world + {@link BlockPos}.
+ *
  * <p><b>Deliberately NOT ported here</b> (each needs an adapter or config mcMMO doesn't have yet; PORT
- * breadcrumbs for when the consuming body lands): the metadata mutators
- * ({@code markDropsAsBonus}/{@code setUnnaturalBlock}/{@code cleanupBlockMetadata} — need the
- * block-tracker + Bukkit-metadata adapters), {@code checkDoubleDrops} (RNG + {@code McMMOPlayer}),
+ * breadcrumbs for when the consuming body lands): the remaining metadata mutators
+ * ({@code markDropsAsBonus}/{@code cleanupBlockMetadata} — need the Bukkit-metadata adapter),
+ * {@code checkDoubleDrops} (RNG + {@code McMMOPlayer}),
  * {@code shouldBeWatched} (a listener-filter convenience — the block-break listener already routes
  * XP), the live-state predicates ({@code isFullyGrown}/{@code Ageable}, {@code isWithinWorldBounds},
  * {@code isPistonPiece}), {@code getTransparentBlocks}/{@code getShortGrass} (whole-registry sweeps),
@@ -217,5 +223,45 @@ public final class BlockUtils {
 
     public static boolean canMakeShroomy(@NotNull BlockState blockState) {
         return canMakeShroomy(blockState.getBlock());
+    }
+
+    // --- Placed-block reward eligibility (legacy UserBlockTracker) ----------
+
+    /**
+     * Record that a player hand-placed the block at this position, so gathering skills give it no
+     * rewards (legacy {@code BlockUtils#setUnnaturalBlock} → {@code UserBlockTracker#setIneligible}).
+     * The sole caller is {@code BlockPlaceMixin} (vanilla's {@code BlockItem#place} being the only
+     * hand-placement seam), so — unlike legacy — grown/fallen/world-gen blocks are never marked.
+     *
+     * <p>A vanilla {@link BlockState} carries no location (Bukkit's {@code Block} did), so these take a
+     * live {@link World} + {@link BlockPos} and pack them into the MC-free
+     * {@link PlacedBlockTracker}'s two keys (the world's registry key + {@code BlockPos#asLong()}).
+     */
+    public static void markPlaced(@NotNull World world, @NotNull BlockPos pos) {
+        McMMOMod.getPlacedBlockTracker().setIneligible(worldKey(world), pos.asLong());
+    }
+
+    /**
+     * Clear the placed-block flag at this position — the block there is gone (broken / blasted /
+     * felled), so the location is natural again (legacy {@code setNaturalBlock} →
+     * {@code UserBlockTracker#setEligible}). Idempotent for a position that was never placed, and it
+     * bounds the tracker's memory to still-standing placed blocks.
+     */
+    public static void markNatural(@NotNull World world, @NotNull BlockPos pos) {
+        McMMOMod.getPlacedBlockTracker().setEligible(worldKey(world), pos.asLong());
+    }
+
+    /**
+     * Whether the block at this position must give no gathering rewards because a player placed it
+     * (legacy's {@code !mcMMO.getUserBlockTracker().isIneligible(block)} guard on every gathering
+     * branch). Any block never hand-placed reads as eligible (the default).
+     */
+    public static boolean isRewardIneligible(@NotNull World world, @NotNull BlockPos pos) {
+        return McMMOMod.getPlacedBlockTracker().isIneligible(worldKey(world), pos.asLong());
+    }
+
+    /** The world's registry key, stringified — the {@link PlacedBlockTracker}'s per-world key. */
+    private static @NotNull String worldKey(@NotNull World world) {
+        return world.getRegistryKey().getValue().toString();
     }
 }

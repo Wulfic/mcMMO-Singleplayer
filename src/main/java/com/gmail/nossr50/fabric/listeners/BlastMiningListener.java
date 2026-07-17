@@ -181,9 +181,13 @@ public final class BlastMiningListener {
 
         int xp = 0;
         for (BlockPos pos : blocks) {
-            // PORT: legacy also skipped blocks the UserBlockTracker knows were player-placed (an
-            // anti-farm measure). That tracker is still unported (CONVERSION_TODO §A), so a blast on
-            // placed ores currently pays out. Revisit when it lands.
+            // §A: skip ores the player placed — legacy gated the blast payout on the same
+            // UserBlockTracker check, without which a placed-ore blast is an XP/drop farm. The blast
+            // destroys the block regardless, so clear the flag too (the location is about to be air).
+            if (BlockUtils.isRewardIneligible(world, pos)) {
+                BlockUtils.markNatural(world, pos);
+                continue;
+            }
             final BlockState state = world.getBlockState(pos);
             if (miningManager.isDropIllegal(blockPath(state))) {
                 continue;

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Arrays;
 import net.minecraft.entity.projectile.ProjectileEntity;
+import net.minecraft.item.BlockItem;
 import net.minecraft.item.BowItem;
 import net.minecraft.world.explosion.ExplosionImpl;
 import org.junit.jupiter.api.BeforeAll;
@@ -72,6 +73,17 @@ class MixinApplicationTest {
         // that has drifted fails the injection and throws here rather than silently costing every bow
         // shot its force multiplier in-game.
         assertDoesNotThrow(() -> Class.forName(BowItem.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+    }
+
+    @Test
+    void blockPlaceMixinApplies() {
+        // BlockPlaceMixin injects at RETURN of the inner BlockItem#place(ItemPlacementContext,
+        // BlockState)Z to mark hand-placed blocks ineligible for gathering rewards (§A). It is a pure
+        // @Inject with no field to assert on, so class-loading BlockItem is the whole test: with
+        // defaultRequire=1, a place signature that has drifted fails the injection and throws here
+        // rather than silently letting placed-block XP farming back in-game.
+        assertDoesNotThrow(() -> Class.forName(BlockItem.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
     }
 }
