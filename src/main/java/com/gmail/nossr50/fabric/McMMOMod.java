@@ -2,6 +2,7 @@ package com.gmail.nossr50.fabric;
 
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.skills.alchemy.PotionConfig;
+import com.gmail.nossr50.config.treasure.FishingTreasureConfig;
 import com.gmail.nossr50.config.treasure.TreasureConfig;
 import com.gmail.nossr50.config.CoreSkillsConfig;
 import com.gmail.nossr50.config.GeneralConfig;
@@ -132,6 +133,7 @@ public class McMMOMod implements ModInitializer {
     private static volatile SoundConfig soundConfig;
     private static volatile AdvancedConfig advancedConfig;
     private static volatile TreasureConfig treasureConfig;
+    private static volatile FishingTreasureConfig fishingTreasureConfig;
     private static volatile PotionConfig potionConfig;
     private static volatile RepairableManager repairableManager;
     private static volatile SalvageableManager salvageableManager;
@@ -442,6 +444,20 @@ public class McMMOMod implements ModInitializer {
     /** Wires the loaded {@link TreasureConfig} at server start (PORT Phase 8). */
     public static void setTreasureConfig(@Nullable TreasureConfig config) {
         treasureConfig = config;
+    }
+
+    /**
+     * The loaded {@link FishingTreasureConfig} (Fishing Treasure-Hunter loot + drop-rate curve), or
+     * {@code null} outside a world session. Replaces legacy {@code FishingTreasureConfig.getInstance()}
+     * (K8).
+     */
+    public static @Nullable FishingTreasureConfig getFishingTreasureConfig() {
+        return fishingTreasureConfig;
+    }
+
+    /** Wires the loaded {@link FishingTreasureConfig} at server start (K8). */
+    public static void setFishingTreasureConfig(@Nullable FishingTreasureConfig config) {
+        fishingTreasureConfig = config;
     }
 
     /**

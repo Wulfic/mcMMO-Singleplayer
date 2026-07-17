@@ -9,6 +9,7 @@ import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.config.skills.alchemy.PotionConfig;
 import com.gmail.nossr50.config.skills.repair.RepairConfig;
 import com.gmail.nossr50.config.skills.salvage.SalvageConfig;
+import com.gmail.nossr50.config.treasure.FishingTreasureConfig;
 import com.gmail.nossr50.config.treasure.TreasureConfig;
 import com.gmail.nossr50.skills.repair.repairables.RepairableManager;
 import com.gmail.nossr50.skills.repair.repairables.SimpleRepairableManager;
@@ -58,6 +59,8 @@ public final class ConfigBootstrap {
         McMMOMod.setSoundConfig(new SoundConfig(dataFolder));
         McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
         McMMOMod.setTreasureConfig(new TreasureConfig(dataFolder));
+        // MC-free like TreasureConfig (materials kept as ItemSpec blueprints, resolved at spawn time).
+        McMMOMod.setFishingTreasureConfig(new FishingTreasureConfig(dataFolder));
 
         // K8: repair/salvage item tables. Each config resolves against the live item registry, so it
         // must load after Minecraft's bootstrap (it is, at server start). The parsed definitions are
@@ -93,6 +96,7 @@ public final class ConfigBootstrap {
         McMMOMod.setSoundConfig(null);
         McMMOMod.setAdvancedConfig(null);
         McMMOMod.setTreasureConfig(null);
+        McMMOMod.setFishingTreasureConfig(null);
         McMMOMod.setPotionConfig(null);
         McMMOMod.setRepairableManager(null);
         McMMOMod.setSalvageableManager(null);
