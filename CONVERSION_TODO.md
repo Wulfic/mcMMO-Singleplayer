@@ -37,8 +37,12 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       attributes its damage to the player, reads as a fresh swing and re-fires itself. Legacy needed
       a ThreadLocal *and* a target metadata marker for this; one ThreadLocal covers both roles here
       (our hook is a direct call made from inside `damage()`, not a Bukkit event handler).
-      Still TODO: projectile skills (Archery/Crossbows/
-      Tridents ranged) via a projectile-launch Mixin, and the effect-only on-hit sub-skills (§C).
+      **Projectile branch wired:** `applyProjectileAttackBonus` drives Archery Skill Shot / Crossbows
+      Powered Shot / ranged Trident Impale off the damaging projectile, and the
+      **projectile-launch Mixin now exists** (`ProjectileSpawnMixin` → `ProjectileListener`; see §C
+      Archery), which unblocked Arrow Retrieval. Still TODO on this seam: nothing adapter-shaped — the
+      remaining projectile work (distance/bow-force XP) is blocked on the per-hit-vs-per-kill XP-model
+      decision, and the effect-only on-hit sub-skills are tracked per skill in §C.
       ⚠️ TUNING §F: bonuses land POST-armor (bypass armor) — flag for the tuning pass.
 - [x] **K2 — Fall-damage hook.** DONE. `EntityDamageListener` detects `DamageTypeTags.IS_FALL` and drives
       Acrobatics Roll (XP + damage reduction) via the K1 mixin seam above.
@@ -188,10 +192,14 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
 
 Port each on-hit body onto the K1 damage hook (+ K5 for ability events, `MetadataStore` already
 exists for per-entity tracking). **Swords, Axes and Unarmed are complete — every melee weapon skill
-is now fully ported — and Taming's damage modifiers are done on both sides of the seam, closing the
-last melee gap.** What remains in §C is Taming's non-damage bodies (Beast Lore, Environmentally
-Aware, Pummel) and the projectile skills (Archery / Crossbows / Tridents), which still need a
-projectile-launch hook before any of their bodies can land.
+is now fully ported — Taming is complete bar its summon path, and the projectile-launch hook now
+exists**, so Archery is complete too (bar the XP-model-blocked distance/force multipliers).
+
+What remains in §C: **Crossbows** and **Tridents** each still want a look now that the launch hook
+exists (their on-hit damage bonuses are already wired), Taming's `attackTarget`/Call-of-the-Wild
+summon path (needs new adapters), and the per-hit-vs-per-kill **XP-model decision** that blocks
+Archery's distance/bow-force XP and wolf-assisted Taming XP alike. Note that decision is now the
+single largest thing gating §C — it is a design fork, not an adapter.
 
 - [~] **Swords** — Stab on-hit damage **DONE** (via K1 attacker branch, `MeleeDamageBonus`).
       **Rupture (bleed DoT) DONE** — the first §C on-hit *effect* body: `SwordsManager.processRupture(
@@ -291,7 +299,31 @@ projectile-launch hook before any of their bodies can land.
       `Disarm.AntiTheft` config, which exist only to serve `disarmCheck`. Both sub-skills remain in
       `SubSkillType` and the skill's command output, exactly as the dropped PvP arms elsewhere do.
       ⚠️ In-game verification pending.
-- [ ] **Archery** — Daze, distance-based XP, arrow retrieval, Skill Shot damage (needs projectile hooks).
+- [~] **Archery** — Skill Shot damage **DONE** (via the K1 projectile arm). **Arrow Retrieval DONE** —
+      the first use of the new **projectile-launch hook**: `fabric/mixin/ProjectileSpawnMixin` injects at
+      the TAIL of the four-argument `ProjectileEntity#spawn` static, which is vanilla's single
+      projectile-spawn funnel (bytecode-verified: the three-argument `spawn` and all three
+      `spawnWithVelocity` overloads delegate to it, and `RangedWeaponItem#shootAll` — the shared
+      bow/crossbow firing path — calls it once per arrow), making it the faithful analogue of Bukkit's
+      equally universal `ProjectileLaunchEvent`. The lifecycle: `ProjectileListener.onProjectileSpawn`
+      narrows to a player-owned `ArrowEntity` and rolls `ArcheryManager.rollArrowRetrieval()` → marks the
+      arrow on `MetadataStore`; `EntityDamageListener.applyArcheryBonus` credits the struck entity via
+      `ArcheryManager.retrieveArrows(targetId, projectileId)` (clearing the mark — legacy's "only 1 entity
+      per projectile"); `ProjectileListener`'s `AFTER_DEATH` hook drops the accumulated arrows. Legacy's
+      `Map<UUID, TrackedEntity>` — whose values were *scheduled runnables* existing only to notice the
+      entity had gone invalid — collapses to an `int` on the UUID-keyed `MetadataStore`, the same
+      substitution Rupture made for `RuptureTaskMeta`; the whole increment/credit/consume cycle is
+      therefore MC-free and unit-tested. Infinity is handled by reading the arrow's own recorded weapon
+      (`getWeaponStack()`) at launch rather than legacy's second handler + `METADATA_KEY_INF_ARROW`
+      round-trip; Piercing checks both hands, as legacy does. Registered separately from `CombatListener`
+      because the arrows are owed regardless of what landed the killing blow. ⚠️ In-game verification
+      pending. **Daze deliberately NOT ported — unreachable in singleplayer** (`canDaze` requires
+      `target instanceof Player`; same honest collapse as Disarm/Iron Grip). **Still TODO: distance-based
+      XP + bow-force XP** — these are *per-hit* XP multipliers, but this port pays combat XP *per kill*
+      (`CombatListener`), so they are blocked on a per-hit-vs-per-kill XP-model decision, **not** on an
+      adapter. Stamping `METADATA_KEY_ARROW_DISTANCE`/`METADATA_KEY_BOW_FORCE` at launch now would only
+      create state nothing reads — the "config that lies" family — so the launch handler deliberately
+      omits both.
 - [ ] **Maces** — Cripple effect (needs potion/entity adapter), on-hit bonuses.
 - [ ] **Tridents** — throw handling + on-hit (needs projectile adapter).
 - [ ] **Crossbows** — on-hit body (needs projectile/metadata adapter).
@@ -318,11 +350,16 @@ projectile-launch hook before any of their bodies can land.
       Impact/Rupture), `master.isOnline() && isValid()` (the `UserManager` lookup is the SP
       equivalent), the NPC skip and `doesPlayerHaveSkillPermission` (both already unported).
       ⚠️ In-game verification pending. See §F upstream bug #8.
-      **Still TODO:** **Beast Lore** (needs a right-click-entity hook), **Environmentally Aware**
-      (its `CONTACT`/`FIRE`/`HOT_FLOOR`/`LAVA` arm needs an entity-teleport adapter and its `FALL`
-      arm a cancel-shaped seam — `ALLOW_DAMAGE`, as Arrow Deflect uses; those causes currently fall
-      through untouched), **Pummel** (needs velocity-along-a-*non-player's* look direction plus
-      particles), `attackTarget` (nearby-entity sweep), and **wolf-assisted Taming XP** — legacy's
+      **Beast Lore / Environmentally Aware / Pummel are DONE** (commit 60489ac06 — this entry had gone
+      stale against the code): Pummel rides `applyWolfAttackBonus` (flinging the target along the
+      *wolf's* look direction, via a `PlatformLivingEntity.setVelocityAlongLookDirection` overload);
+      Environmentally Aware rides *both* seams, its `CONTACT`/`FIRE`/`HOT_FLOOR`/`LAVA` arm teleporting
+      the wolf to its owner via `modifyAppliedDamage` (the damage still lands) and its `FALL` arm
+      cancelling outright via `ALLOW_DAMAGE`, as Arrow Deflect does; Beast Lore rides `ALLOW_DAMAGE`
+      too — note its trigger is an **attack with a bone**, not a right-click, so no interact hook was
+      needed. ⚠️ In-game verification pending for all three.
+      **Still TODO:** `attackTarget` (nearby-entity sweep), the Call-of-the-Wild summon path, and
+      **wolf-assisted Taming XP** — legacy's
       `processTamingCombat` ends in `processCombatXP(mmoPlayer, target, TAMING, 3)`, but this port
       awards combat XP *per kill* (`CombatListener`) and that listener only pays out when the
       *killer* is a player, so a wolf's kill currently pays nothing. That is a pre-existing §B gap
@@ -510,6 +547,36 @@ projectile-launch hook before any of their bodies can land.
       only one branch of a two-branch dispatch.** Lesson: when a method branches on a privilege/perk
       flag, check that *every* branch still honours the ordinary parameters — and note that a bug on
       the un-privileged branch hits the common case, not the rare one.
+- [x] **Fixed port bug (ours, not upstream) — `getWeaponStack()` NPE in the projectile damage arm**
+      (Arrow Retrieval commit): `applyProjectileAttackBonus` chose Crossbows-vs-Archery with
+      `projectile.getWeaponStack().isOf(Items.CROSSBOW)`. That call is **genuinely nullable** — vanilla's
+      own `PersistentProjectileEntity#readCustomData` restores the field with `orElse(null)` (note the
+      line directly above it restores `stack` with `orElse(getDefaultItemStack())`, so Mojang made the
+      asymmetry deliberately), and the `(EntityType, World)` constructor sets it null. Any player-owned
+      arrow that never went through `RangedWeaponItem` therefore **NPEs inside the vanilla damage
+      pipeline**: one summoned with an `Owner` tag, one restored from a world saved before the field
+      existed, or one spawned and adopted by another mod — the last being the exact case legacy's own
+      "some plugins spawn arrows and assign them to players after the ProjectileLaunchEvent fires"
+      comment describes. Fixed by extracting `isCrossbowShot`, which null-guards and falls back to "not
+      a crossbow → Archery". ⚠️ **The mistake was believing a note instead of the bytecode**: this was
+      recorded at the time as safe because "`ItemStack.isOf` is null/EMPTY-safe" — true of the *argument*
+      and of an EMPTY receiver, but irrelevant to a **null receiver**. A null-safety claim about a method
+      says nothing about the nullability of the expression you call it on.
+- [ ] **Vendored-snapshot staleness (NOT an upstream bug) — `METADATA_KEY_MULTI_SHOT_ARROW`:** the
+      vendored `EntityListener#onProjectileLaunch` stamps this key and **nothing anywhere reads it**,
+      which looks exactly like the "fossil of a deleted branch" family (§F #8's lesson). **Checked
+      upstream rather than asserting:** `mcMMO-Dev/mcMMO@master` has **deleted the key outright** —
+      zero occurrences in `EntityListener`, `MetadataConstants` or `CombatUtils` (HTTP 200 on all
+      three, so this is a real absence, not a failed fetch) — and replaced the block with a comment
+      explaining that *"Multi-shot pickup handling is managed natively by Paper/Spigot. All crossbow
+      arrows inherit the same pickup mode unless in creative mode."* So the vendored tree is simply
+      **behind master here**, and not porting the key is both correct and what current upstream does.
+      No dupe risk either way: Multishot is crossbow-only, and `retrieveArrows` is called only from
+      the Archery arm (`processCrossbowsCombat` never calls it), so a crossbow arrow's mark is never
+      read. Recorded so the next person who greps this key does not "restore" a branch upstream
+      already removed. ⚠️ **Lesson (the inverse of #8's): a fossil in a vendored snapshot may mean
+      upstream already cleaned it up, not that the vendor mangled it. Check master before writing it
+      up as an upstream bug — I was one step from filing this as "#10, write-only key".**
 - [x] **Fixed port bug (ours, not upstream) — `MetadataStore` leaked across world sessions:**
       `MetadataStore.clearAll()` existed with an "e.g. on server stop" javadoc and **zero callers**.
       Bukkit dropped plugin metadata on disable, but our side-table is a static map and entity UUIDs

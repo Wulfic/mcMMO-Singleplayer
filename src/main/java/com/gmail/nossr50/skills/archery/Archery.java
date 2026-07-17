@@ -2,29 +2,87 @@ package com.gmail.nossr50.skills.archery;
 
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.skills.RankUtils;
+import java.util.UUID;
 
 /**
  * Static helpers backing the Archery skill. Port note (Phase 10.3): only the Skill Shot damage math
  * survives here — it is pure config + rank arithmetic and therefore provable without a server.
  *
- * <p>Dropped until the combat phase:
- * <ul>
- *   <li>the arrow tracker ({@code trackedEntities}/{@code TrackedEntity}/{@code arrowRetrievalCheck})
- *       — keyed on Bukkit {@code LivingEntity} UUIDs and spawns {@code ItemStack} drops;</li>
- *   <li>{@code DISTANCE_XP_MULTIPLIER} and the fired-location distance bonus — needs projectile
- *       metadata and world/location adapters.</li>
- * </ul>
+ * <p>Since then the <b>Arrow Retrieval tracker</b> has landed here too (see {@link
+ * #incrementTrackerValue}/{@link #arrowRetrievalCheck}). Legacy kept it as a
+ * {@code Map<UUID, TrackedEntity>} whose values were <em>scheduled runnables</em>: each
+ * {@code TrackedEntity} held a live Bukkit {@code LivingEntity} and re-ran every 12000 ticks purely to
+ * notice the entity had become invalid and evict itself. That whole class collapses to an {@code int}
+ * on the shared {@link MetadataStore} side-table, which is already keyed by entity {@link UUID} — the
+ * same substitution Rupture made for legacy's {@code RuptureTaskMeta}. Keeping the count MC-free (a
+ * bare UUID rather than a platform entity) is what lets the increment/consume cycle be unit-tested
+ * without the Knot harness.
+ *
+ * <p>Known deviation from legacy's eviction runnable: a tracked mob that despawns without dying keeps
+ * its (few bytes of) count until {@link MetadataStore#clearAll()} runs at server stop, whereas legacy
+ * evicted it within 12000 ticks. The counterpart is a small behavioural <em>improvement</em>: legacy
+ * dropped the count when the entity merely unloaded with its chunk, so a player who shot a mob, walked
+ * away and came back lost the arrows they had earned; here the count survives until the mob dies.
  *
  * <p>Config statics were made live reads: the legacy class cached
  * {@code skillShotMaxBonusDamage}/{@code DISTANCE_XP_MULTIPLIER} in {@code static final} fields at
  * class-load, which is fragile in the port where the config is installed into the {@link McMMOMod}
  * service locator after the fact. Values are now pulled on demand.
+ *
+ * <p>Still dropped: {@code DISTANCE_XP_MULTIPLIER} and the fired-location distance bonus. It is a
+ * <em>per-hit</em> XP multiplier, but this port pays combat XP per <em>kill</em>
+ * ({@code CombatListener}), so consuming it needs an XP-model decision rather than an adapter —
+ * stamping the fired-from location now would only create state nothing reads.
  */
 public final class Archery {
 
+    /**
+     * Marks an arrow whose Arrow Retrieval roll succeeded at launch (legacy
+     * {@code MetadataConstants.METADATA_KEY_TRACKED_ARROW}). Keyed on the arrow's UUID.
+     */
+    public static final String TRACKED_ARROW_KEY = "mcmmo:tracked_arrow";
+
+    /**
+     * Running count of tracked arrows that have struck an entity, keyed on that entity's UUID
+     * (legacy's {@code Archery.trackedEntities} map + {@code TrackedEntity#arrowCount}).
+     */
+    public static final String ARROW_COUNT_KEY = "mcmmo:tracked_arrow_count";
+
     private Archery() {
+    }
+
+    /**
+     * Record one more retrievable arrow stuck in {@code entityId} (legacy
+     * {@code incrementTrackerValue}).
+     *
+     * @param entityId the struck entity
+     */
+    static void incrementTrackerValue(UUID entityId) {
+        final Integer current = MetadataStore.get(entityId, ARROW_COUNT_KEY, Integer.class);
+        MetadataStore.set(entityId, ARROW_COUNT_KEY, current == null ? 1 : current + 1);
+    }
+
+    /**
+     * Consume the tracked-arrow count for a dying entity (legacy {@code arrowRetrievalCheck}, whose
+     * spawn half lives in {@code ProjectileListener} — the drop needs a world and an item stack, this
+     * does not).
+     *
+     * <p>Consuming rather than peeking is deliberate: legacy used {@code Map#remove}, so the arrows
+     * are handed out exactly once even if the entity's death is processed twice.
+     *
+     * @param entityId the entity that died
+     * @return how many arrows to drop; {@code 0} when nothing was tracked
+     */
+    public static int arrowRetrievalCheck(UUID entityId) {
+        final Integer count = MetadataStore.get(entityId, ARROW_COUNT_KEY, Integer.class);
+        if (count == null) {
+            return 0;
+        }
+        MetadataStore.remove(entityId, ARROW_COUNT_KEY);
+        return count;
     }
 
     /**

@@ -12,6 +12,7 @@ import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
@@ -60,10 +61,18 @@ class ArcheryManagerTest {
         McMMOMod.setRankConfig(null);
         McMMOMod.setAdvancedConfig(null);
         UserManager.clearAll();
+        MetadataStore.clearAll(); // the arrow marks/counts below live on the static side-table.
     }
 
     private void atArcheryLevel(int level) {
         when(mmoPlayer.getSkillLevel(PrimarySkillType.ARCHERY)).thenReturn(level);
+    }
+
+    /** Stand in for the launch mark {@code ProjectileListener} sets when the retrieval roll wins. */
+    private static UUID trackedArrow() {
+        final UUID arrowId = UUID.randomUUID();
+        MetadataStore.set(arrowId, Archery.TRACKED_ARROW_KEY, Boolean.TRUE);
+        return arrowId;
     }
 
     @Test
@@ -99,5 +108,80 @@ class ArcheryManagerTest {
     void skillShotIsNoOpBelowRankOne() {
         atArcheryLevel(0); // rank 0 → 0% bonus, damage unchanged
         assertEquals(10.0D, archeryManager.skillShot(10.0D), 1e-9, "rank 0 → no bonus");
+    }
+
+    // --- Arrow Retrieval -----------------------------------------------------
+    //
+    // The launch roll is deterministic at the top of the ladder: ArrowRetrieval is DYNAMIC with
+    // ChanceMax 100.0 at RetroMode MaxBonusLevel 1000, and a probability of 1.0 always beats
+    // nextDouble(1.0) over [0,1). (The bottom of the ladder is *not* pinned here: a 0% chance loses
+    // to nextDouble only ~always — 0.0 >= 0.0 holds — so asserting "never" would be flaky.)
+
+    @Test
+    void retrievalRollAlwaysWinsAtMaxBonusLevel() {
+        atArcheryLevel(1000);
+        assertTrue(archeryManager.rollArrowRetrieval(), "100% chance at MaxBonusLevel → always marks");
+    }
+
+    @Test
+    void aTrackedArrowCreditsItsTargetAndIsSpentOnTheFirstHit() {
+        final UUID target = UUID.randomUUID();
+        final UUID arrow = trackedArrow();
+
+        archeryManager.retrieveArrows(target, arrow);
+
+        assertFalse(MetadataStore.has(arrow, Archery.TRACKED_ARROW_KEY),
+                "the mark is cleared on the first hit — legacy's 'only 1 entity per projectile'");
+        assertEquals(1, Archery.arrowRetrievalCheck(target), "one arrow owed");
+    }
+
+    @Test
+    void aPiercingArrowCreditsOnlyTheFirstEntityItPassesThrough() {
+        final UUID firstTarget = UUID.randomUUID();
+        final UUID secondTarget = UUID.randomUUID();
+        final UUID arrow = trackedArrow();
+
+        archeryManager.retrieveArrows(firstTarget, arrow);
+        archeryManager.retrieveArrows(secondTarget, arrow); // same arrow, second victim
+
+        assertEquals(1, Archery.arrowRetrievalCheck(firstTarget), "first victim keeps the arrow");
+        assertEquals(0, Archery.arrowRetrievalCheck(secondTarget),
+                "a spent arrow must not be duplicated into a second victim");
+    }
+
+    @Test
+    void anUnmarkedArrowCreditsNothing() {
+        final UUID target = UUID.randomUUID();
+
+        archeryManager.retrieveArrows(target, UUID.randomUUID()); // roll lost at launch → no mark
+
+        assertEquals(0, Archery.arrowRetrievalCheck(target), "an unmarked arrow is not retrievable");
+    }
+
+    @Test
+    void arrowsAccumulateOnTheSameTarget() {
+        final UUID target = UUID.randomUUID();
+
+        archeryManager.retrieveArrows(target, trackedArrow());
+        archeryManager.retrieveArrows(target, trackedArrow());
+        archeryManager.retrieveArrows(target, trackedArrow());
+
+        assertEquals(3, Archery.arrowRetrievalCheck(target), "three tracked hits → three arrows");
+    }
+
+    @Test
+    void theDeathCheckConsumesTheCountSoArrowsAreHandedOutOnce() {
+        final UUID target = UUID.randomUUID();
+        archeryManager.retrieveArrows(target, trackedArrow());
+
+        assertEquals(1, Archery.arrowRetrievalCheck(target), "first death check pays out");
+        assertEquals(0, Archery.arrowRetrievalCheck(target),
+                "the count is consumed — a second death check must not duplicate the arrows");
+    }
+
+    @Test
+    void theDeathCheckIsANoOpForAnUntrackedEntity() {
+        assertEquals(0, Archery.arrowRetrievalCheck(UUID.randomUUID()),
+                "a mob nobody shot owes no arrows");
     }
 }

@@ -18,6 +18,7 @@ import com.gmail.nossr50.fabric.listeners.AlchemyListener;
 import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
 import com.gmail.nossr50.fabric.listeners.CombatListener;
 import com.gmail.nossr50.fabric.listeners.EntityDamageListener;
+import com.gmail.nossr50.fabric.listeners.ProjectileListener;
 import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
 import com.gmail.nossr50.fabric.listeners.SmeltingListener;
 import com.gmail.nossr50.fabric.listeners.SuperAbilityListener;
@@ -176,6 +177,9 @@ public class McMMOMod implements ModInitializer {
         // arrow outright. The rest of that listener rides the modifyAppliedDamage mixin, which can
         // reduce damage but not cancel it.
         EntityDamageListener.register();
+        // §C: Archery Arrow Retrieval — the death half (hand the arrows back). Its launch half is
+        // driven by ProjectileSpawnMixin, vanilla having no projectile-launch event.
+        ProjectileListener.register();
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
         // drive the legacy listeners, routing each to the ported skill managers. Preferred
