@@ -287,4 +287,14 @@ class HerbalismManagerTest {
         when(mmoPlayer.getAbilityMode(SuperAbilityType.GREEN_TERRA)).thenReturn(true);
         assertTrue(herbalismManager.isGreenTerraActive());
     }
+
+    @Test
+    void rollGreenThumbReplantBypassesRngWhileGreenTerraActive() {
+        // At level 0 the Green Thumb RNG can't succeed on its own; Green Terra must force the roll
+        // (legacy's greenTerra bypass in processGreenThumbPlants), independent of the probability.
+        atHerbalismLevel(0);
+        when(mmoPlayer.getAbilityMode(SuperAbilityType.GREEN_TERRA)).thenReturn(true);
+        assertTrue(herbalismManager.rollGreenThumbReplant(),
+                "Green Terra active -> replant roll always succeeds");
+    }
 }

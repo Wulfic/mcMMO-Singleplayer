@@ -10,8 +10,10 @@ import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.BlockUtils.AgeableState;
 import java.nio.file.Path;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.state.property.Properties;
+import net.minecraft.util.math.Direction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -129,6 +131,36 @@ class BlockUtilsTest {
         // Stone has no state properties at all; a log has only an axis, not age.
         assertNull(BlockUtils.getAgeableState(Blocks.STONE.getDefaultState()));
         assertNull(BlockUtils.getAgeableState(Blocks.OAK_LOG.getDefaultState()));
+    }
+
+    @Test
+    void withAgeSetsCropAgeClampsAndPreservesOtherProperties() {
+        // Re-age wheat (age 0-7) to 3 — the Green Thumb replant path.
+        AgeableState wheat3 = BlockUtils.getAgeableState(
+                BlockUtils.withAge(Blocks.WHEAT.getDefaultState(), 3));
+        assertNotNull(wheat3);
+        assertEquals(3, wheat3.age());
+
+        // An age above the crop's maximum clamps to it, so BlockState#with never throws (a high
+        // Green Thumb stage against a short crop).
+        AgeableState wheatOver = BlockUtils.getAgeableState(
+                BlockUtils.withAge(Blocks.WHEAT.getDefaultState(), 99));
+        assertNotNull(wheatOver);
+        assertEquals(7, wheatOver.age());
+
+        // Cocoa's age maxes at 2 and its facing must survive the re-age (the record-preserved
+        // property the AFTER-seam replant relies on instead of a Directional rebuild).
+        BlockState cocoa = Blocks.COCOA.getDefaultState()
+                .with(Properties.HORIZONTAL_FACING, Direction.SOUTH);
+        BlockState cocoa1 = BlockUtils.withAge(cocoa, 1);
+        AgeableState cocoaState = BlockUtils.getAgeableState(cocoa1);
+        assertNotNull(cocoaState);
+        assertEquals(1, cocoaState.age());
+        assertEquals(Direction.SOUTH, cocoa1.get(Properties.HORIZONTAL_FACING));
+
+        // A block with no age property is returned unchanged.
+        assertEquals(Blocks.STONE.getDefaultState(),
+                BlockUtils.withAge(Blocks.STONE.getDefaultState(), 3));
     }
 
     @Test

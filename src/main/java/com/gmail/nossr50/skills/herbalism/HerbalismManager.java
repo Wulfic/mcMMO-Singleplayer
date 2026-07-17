@@ -62,9 +62,13 @@ import org.jetbrains.annotations.NotNull;
  *       block-tag adapter for {@code Drops_From} groups — see
  *       {@link com.gmail.nossr50.config.treasure.TreasureConfig}); only the rank/permission gate
  *       ({@link #canUseHylianLuck()}) is ported;</li>
- *   <li>{@code processGreenThumbPlants} / {@code startReplantTask} — held-item (hoe/axe) checks,
- *       inventory consumption, and the delayed-replant scheduler task are not ported; the pure
- *       age-decision math is {@link #resolveGreenThumbReplant(String, boolean, boolean)}.</li>
+ *   <li>{@code processGreenThumbPlants} / {@code startReplantTask} — <b>now wired</b>: the held-item
+ *       (hoe/axe) check, the seed inventory read/consume and the delayed block re-set live on
+ *       {@link com.gmail.nossr50.fabric.listeners.BlockBreakListener}, driven by the pure age-decision
+ *       {@link #resolveGreenThumbReplant(String, boolean, boolean)} + the RNG/Green-Terra gate
+ *       {@link #rollGreenThumbReplant()}. The one dropped bit is immature-crop drop suppression
+ *       (legacy's {@code setDropItems(false)}): the {@code PlayerBlockBreakEvents.AFTER} seam has
+ *       already spawned the drops when we run — see the listener.</li>
  * </ul>
  */
 public class HerbalismManager extends SkillManager {
@@ -299,6 +303,21 @@ public class HerbalismManager extends SkillManager {
             return xpToReward;
         }
         return Math.min(xpToReward, limit * firstBlockXp);
+    }
+
+    /**
+     * Green Thumb replant RNG gate: succeeds automatically while Green Terra is active (legacy's
+     * {@code greenTerra} bypass in {@code processGreenThumbPlants}), otherwise rolls the
+     * {@code HERBALISM_GREEN_THUMB} subskill probability. Reads {@link #isGreenTerraActive()} on the
+     * manager (the same pattern as {@link #rollBonusDropCount()}) so the block-break glue only owns
+     * the MC-typed inventory read/consume and the block re-set.
+     *
+     * @return whether the harvested crop should be replanted this break
+     */
+    public boolean rollGreenThumbReplant() {
+        return isGreenTerraActive()
+                || ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HERBALISM_GREEN_THUMB,
+                mmoPlayer);
     }
 
     /**
