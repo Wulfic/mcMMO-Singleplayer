@@ -6,6 +6,7 @@ import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.skills.RankUtils;
 import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Static helpers backing the Archery skill. Port note (Phase 10.3): only the Skill Shot damage math
@@ -62,8 +63,46 @@ public final class Archery {
      */
     public static final String FIRED_FROM_KEY = "mcmmo:arrow_distance";
 
+    /**
+     * The bow-draw force multiplier a bow-fired arrow earns for its XP, keyed on the arrow's UUID
+     * (legacy {@code MetadataConstants.METADATA_KEY_BOW_FORCE}). Stored as the already-clamped
+     * {@code min(force * ForceMultiplier, 1.0)} value legacy stamped, so the hit side just reads it.
+     */
+    public static final String BOW_FORCE_KEY = "mcmmo:bow_force";
+
     /** Legacy's {@code Math.min(distance, 50)}: distance past this earns no further XP bonus. */
     private static final double MAX_XP_BONUS_DISTANCE = 50.0D;
+
+    /**
+     * Legacy caps the bow-force multiplier at {@code 1.0} ({@code Math.min(..., 1.0)}): a full draw at
+     * the shipped {@code ForceMultiplier: 2.0} already hits the ceiling, so force never boosts XP —
+     * it only <em>discounts</em> it for a half-drawn shot.
+     */
+    private static final double MAX_BOW_FORCE_MULTIPLIER = 1.0D;
+
+    /**
+     * Fallback for {@code Skills.Archery.ForceMultiplier} when no {@link com.gmail.nossr50.config
+     * .AdvancedConfig} is installed — matches that config getter's own default, so a shot processed
+     * before the config lands behaves as the shipped one would.
+     */
+    private static final double DEFAULT_FORCE_MULTIPLIER = 2.0D;
+
+    /**
+     * The draw force of the bow shot currently being processed, set at the head of {@code
+     * BowItem#onStoppedUsing} (see {@code fabric.mixin.BowShootMixin}) and read at the arrow spawn a
+     * few frames later (see {@code ProjectileListener#onProjectileSpawn}).
+     *
+     * <p>This is the port's stand-in for legacy's separate {@code EntityShootBowEvent}, which carried
+     * the draw force ({@code event.getForce()}) that its handler stamped on the arrow. Vanilla fires no
+     * such event, and the four-argument {@code ProjectileEntity#spawn} funnel the launch mark rides
+     * only sees the arrow, not the bow or its draw — so the force is captured one level up, where the
+     * bow is in hand, and handed down the call stack on this thread. The window is exactly one
+     * {@code onStoppedUsing} call (bow release &rarr; {@code shootAll} &rarr; spawn), all on the server
+     * thread, so a {@link ThreadLocal} is both sufficient and self-contained: {@code null} whenever the
+     * arrow came from anything but a bow (a crossbow, a dispenser, another mod), which is precisely when
+     * legacy's force default of {@code 1.0} applied.
+     */
+    private static final ThreadLocal<Double> CURRENT_BOW_FORCE = new ThreadLocal<>();
 
     /**
      * An arrow's launch point: the MC-free stand-in for the Bukkit {@code Location} legacy stamped on
@@ -88,6 +127,66 @@ public final class Archery {
      */
     public static void markFiredFrom(UUID arrowId, FiredFrom origin) {
         MetadataStore.set(arrowId, FIRED_FROM_KEY, origin);
+    }
+
+    /**
+     * Record the draw force of the bow shot in flight, so the arrow it spawns can be stamped with its
+     * force multiplier (see {@link #CURRENT_BOW_FORCE}). Called from the head of {@code
+     * BowItem#onStoppedUsing}; every call must be paired with a later {@link #endBowShot()}.
+     *
+     * @param drawForce the bow's pull progress, {@code 0..1} (vanilla's {@code getPullProgress})
+     */
+    public static void beginBowShot(double drawForce) {
+        CURRENT_BOW_FORCE.set(drawForce);
+    }
+
+    /** Clear the in-flight bow-shot force. Called from every return of {@code BowItem#onStoppedUsing}. */
+    public static void endBowShot() {
+        CURRENT_BOW_FORCE.remove();
+    }
+
+    /**
+     * The draw force of the bow shot currently being processed, or {@code null} if the arrow being
+     * spawned did not come from a bow (a crossbow bolt, a dispenser arrow, another mod's projectile).
+     */
+    public static @Nullable Double currentBowShotForce() {
+        return CURRENT_BOW_FORCE.get();
+    }
+
+    /**
+     * Stamp a bow-fired arrow with its force multiplier, legacy's {@code min(force * ForceMultiplier,
+     * 1.0)} (stamped in the {@code EntityShootBowEvent} handler). Stored already-clamped so the hit side
+     * reads a bare value, exactly as legacy did.
+     *
+     * @param arrowId   the arrow
+     * @param drawForce the bow's pull progress at release, {@code 0..1}
+     */
+    public static void markBowForce(UUID arrowId, double drawForce) {
+        final double multiplier = Math.min(drawForce * forceMultiplier(), MAX_BOW_FORCE_MULTIPLIER);
+        MetadataStore.set(arrowId, BOW_FORCE_KEY, multiplier);
+    }
+
+    /**
+     * The bow-force XP multiplier for a struck arrow. Ports legacy's read in {@code
+     * processArcheryCombat}, including its default: an arrow with no stamp (never came through the bow
+     * hook, or its mark aged out — legacy's "hacky fix" for "some plugins spawn arrows and assign them
+     * to players after the launch event") multiplies by {@code 1.0} rather than zeroing the XP.
+     *
+     * @param arrowId the arrow that struck
+     * @return the multiplier, {@code 0 < m <= 1}, or {@code 1.0} when unstamped
+     */
+    public static double bowForceMultiplier(UUID arrowId) {
+        final Double stored = MetadataStore.get(arrowId, BOW_FORCE_KEY, Double.class);
+        return stored == null ? 1.0D : stored;
+    }
+
+    /**
+     * {@code Skills.Archery.ForceMultiplier} (2.0 as shipped), read live like the distance multiplier —
+     * the config is installed into the {@link McMMOMod} service locator after class-load.
+     */
+    private static double forceMultiplier() {
+        final var config = McMMOMod.getAdvancedConfig();
+        return config == null ? DEFAULT_FORCE_MULTIPLIER : config.getForceMultiplier();
     }
 
     /**

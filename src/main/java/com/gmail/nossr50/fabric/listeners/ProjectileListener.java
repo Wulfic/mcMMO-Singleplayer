@@ -34,9 +34,9 @@ import net.minecraft.server.world.ServerWorld;
  * that nothing reads — the "config that lies" failure mode this port keeps hitting:
  * <ul>
  *   <li>{@code METADATA_KEY_ARROW_DISTANCE} / {@code METADATA_KEY_BOW_FORCE} — both feed
- *       <em>per-hit</em> Archery XP multipliers. The XP model is now per-hit (see
- *       {@link com.gmail.nossr50.util.skills.CombatUtils#processCombatXP}), so these are no longer
- *       blocked — just not yet ported (CONVERSION_TODO §C).</li>
+ *       <em>per-hit</em> Archery XP multipliers. Both are now ported onto the per-hit XP model (see
+ *       {@link com.gmail.nossr50.util.skills.CombatUtils#processCombatXP}): the distance stamp is set
+ *       above, and the draw-force stamp rides {@code BowShootMixin} (vanilla fires no shoot event).</li>
  *   <li>{@code METADATA_KEY_MULTI_SHOT_ARROW} — write-only <em>upstream too</em>: legacy sets it here
  *       and nothing anywhere reads it (see the §F note in CONVERSION_TODO).</li>
  * </ul>
@@ -86,6 +86,15 @@ public final class ProjectileListener {
         Archery.markFiredFrom(arrowId, new Archery.FiredFrom(
                 world.getRegistryKey().getValue().toString(), arrow.getX(), arrow.getY(),
                 arrow.getZ()));
+        // Bow draw force, captured one frame up by `BowShootMixin` (vanilla has no shoot event). Null
+        // for anything that did not come from a bow — a crossbow bolt, a dispenser arrow — which is
+        // exactly the arrow legacy's launch handler defaulted to a force of 1.0. Stamped here, above
+        // the retrieval gates, because force XP is owed on the shot regardless of whether it is
+        // retrievable, just as the fired-from mark is.
+        final Double drawForce = Archery.currentBowShotForce();
+        if (drawForce != null) {
+            Archery.markBowForce(arrowId, drawForce);
+        }
         scheduleMarkCleanup(arrowId);
 
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(shooter.getUuid());
@@ -117,6 +126,7 @@ public final class ProjectileListener {
         McMMOMod.getScheduler().runLater(() -> {
             MetadataStore.remove(arrowId, Archery.TRACKED_ARROW_KEY);
             MetadataStore.remove(arrowId, Archery.FIRED_FROM_KEY);
+            MetadataStore.remove(arrowId, Archery.BOW_FORCE_KEY);
         }, MARK_CLEANUP_DELAY_TICKS);
     }
 
