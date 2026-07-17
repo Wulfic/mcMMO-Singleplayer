@@ -427,12 +427,11 @@ public final class EntityDamageListener {
      * a genuinely nullable field, hence {@link #isCrossbowShot} rather than a bare {@code isOf} call.
      *
      * <p>Each arm pays its skill's per-hit XP, and the Archery/Crossbows arms scale theirs by the
-     * shot's range (see {@link #distanceXpMultiplier}). Archery's second multiplier, bow draw force,
-     * is still unported (CONVERSION_TODO §C); legacy defaults it to {@code 1.0} for any arrow that
-     * missed its bow-shot handler, which is what omitting it amounts to. Limit Break is dropped across
-     * every combat skill in this port (PvP-only in singleplayer, and its {@code AllowPVE} switch
-     * defaults off), so it is not applied here either; and Daze only targets another player, of which
-     * singleplayer has none.
+     * shot's range (see {@link #distanceXpMultiplier}). Archery additionally scales by bow draw force
+     * ({@link Archery#bowForceMultiplier}, stamped at launch by {@code BowShootMixin}); Crossbows does
+     * not, legacy hardcoding its force to {@code 1.0}. Limit Break is dropped across every combat skill
+     * in this port (PvP-only in singleplayer, and its {@code AllowPVE} switch defaults off), so it is
+     * not applied here either; and Daze only targets another player, of which singleplayer has none.
      */
     private static float applyProjectileAttackBonus(LivingEntity target, DamageSource source,
             float amount) {
@@ -505,12 +504,13 @@ public final class EntityDamageListener {
         if (archery.canSkillShot()) {
             boostedDamage = (float) archery.skillShot(amount); // not additive — Skill Shot replaces it.
         }
-        // Legacy pays `forceMultiplier * distanceMultiplier`. The bow-force half is still unported
-        // (CONVERSION_TODO §C), and legacy's own launch handler defaults it to 1.0 for any arrow that
-        // did not come through its bow-shot handler — so omitting it reads as that default rather
-        // than as a missing factor.
+        // Legacy pays `forceMultiplier * distanceMultiplier`. Bow force was stamped at launch by
+        // `BowShootMixin`; an arrow that skipped that hook (or whose mark aged out) reads back the flat
+        // 1.0 legacy defaulted it to, so the product degrades to distance-only rather than to zero.
+        final double xpMultiplier = Archery.bowForceMultiplier(projectile.getUuid())
+                * distanceXpMultiplier(target, projectile);
         CombatUtils.processCombatXP(mmoPlayer, target, PrimarySkillType.ARCHERY, boostedDamage,
-                distanceXpMultiplier(target, projectile));
+                xpMultiplier);
         return boostedDamage;
     }
 

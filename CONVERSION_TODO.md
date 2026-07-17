@@ -42,9 +42,9 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       **projectile-launch Mixin now exists** (`ProjectileSpawnMixin` → `ProjectileListener`; see §C
       Archery), which unblocked Arrow Retrieval. **Per-hit combat XP now rides this seam too**: every
       attacker arm closes with `CombatUtils#processCombatXP`, where legacy's `processXCombat` methods
-      called it (see §B). Still TODO on this seam: nothing adapter-shaped — the remaining projectile
-      work (distance/bow-force XP) just needs the launch stamp, and the effect-only on-hit sub-skills
-      are tracked per skill in §C.
+      called it (see §B). Nothing left TODO on this seam: the projectile XP multipliers (distance and
+      bow-force) both landed on their launch stamps, and the effect-only on-hit sub-skills are tracked
+      per skill in §C.
       ⚠️ TUNING §F: bonuses land POST-armor (bypass armor) — flag for the tuning pass.
 - [x] **K2 — Fall-damage hook.** DONE. `EntityDamageListener` detects `DamageTypeTags.IS_FALL` and drives
       Acrobatics Roll (XP + damage reduction) via the K1 mixin seam above.
@@ -157,7 +157,7 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
       seam holding the post-armor figure about to be written, so the task collapses away.
       **What the per-kill model structurally could not do, and now works:** wolf-assisted Taming XP
       (×3 — it paid nothing at all, since the listener required a *player* killer), the Archery
-      distance / bow-force multipliers (still unported but no longer blocked — §C), and excluding
+      distance / bow-force multipliers (both now ported — §C), and excluding
       mcMMO's own AoE damage from XP (§F, now resolved). Also fixed in passing: an unrecognised held
       item (a pickaxe, a block) used to pay **Unarmed** XP on a kill because the old `weaponSkill`
       routed everything unmatched to Unarmed; the classifier now follows legacy's dispatch, which has
@@ -230,11 +230,11 @@ it. That unblocked **wolf-assisted Taming XP** (the ×3 multiplier, which the pe
 express at all — its listener only paid out when the *killer* was a player) and, in the same move,
 made the melee **Tridents** arm real (Impale × attack strength). See §B for the model's own entry.
 
-The distance XP multiplier landed with it (Archery + Crossbows), so **Crossbows and Tridents are now
-complete**. What remains in §C: **Archery's bow-force XP** (needs a new `BowItem#onStoppedUsing` seam —
-see Archery below), Taming's `attackTarget`/Call-of-the-Wild summon path (needs new adapters), and
-**Spears**, which has never earned combat XP in this port (legacy routes it off a `SPEAR` damage type
-rather than the held item — see `EntityDamageListener#classifyMainHand`).
+The distance XP multiplier landed with it (Archery + Crossbows), and **Archery's bow-force XP has now
+landed too** (new `BowShootMixin` on `BowItem#onStoppedUsing`), so **Archery, Crossbows and Tridents
+are all complete**. What remains in §C: Taming's `attackTarget`/Call-of-the-Wild summon path (needs new
+adapters), and **Spears**, which has never earned combat XP in this port (legacy routes it off a
+`SPEAR` damage type rather than the held item — see `EntityDamageListener#classifyMainHand`).
 
 - [~] **Swords** — Stab on-hit damage **DONE** (via K1 attacker branch, `MeleeDamageBonus`).
       **Rupture (bleed DoT) DONE** — the first §C on-hit *effect* body: `SwordsManager.processRupture(
@@ -334,7 +334,7 @@ rather than the held item — see `EntityDamageListener#classifyMainHand`).
       `Disarm.AntiTheft` config, which exist only to serve `disarmCheck`. Both sub-skills remain in
       `SubSkillType` and the skill's command output, exactly as the dropped PvP arms elsewhere do.
       ⚠️ In-game verification pending.
-- [~] **Archery** — Skill Shot damage **DONE** (via the K1 projectile arm). **Arrow Retrieval DONE** —
+- [x] **Archery** — Skill Shot damage **DONE** (via the K1 projectile arm). **Arrow Retrieval DONE** —
       the first use of the new **projectile-launch hook**: `fabric/mixin/ProjectileSpawnMixin` injects at
       the TAIL of the four-argument `ProjectileEntity#spawn` static, which is vanilla's single
       projectile-spawn funnel (bytecode-verified: the three-argument `spawn` and all three
@@ -364,13 +364,19 @@ rather than the held item — see `EntityDamageListener#classifyMainHand`).
       is owed on a shot whether or not its arrow is retrievable.** The cleanup schedule moved up with
       it (the mark is unconditional now, so every arrow would otherwise leak an entry) and strips both
       keys at once, as legacy's `cleanupProjectileMetadata` does.
-      **Still TODO: bow-force XP** — the one remaining multiplier. Legacy stamps
+      **Bow-force XP DONE** — the last remaining multiplier, so Archery is now complete. Legacy stamped
       `METADATA_KEY_BOW_FORCE = min(pull * AdvancedConfig.ForceMultiplier, 1.0)` from a *separate*
-      `EntityShootBowEvent` handler, and defaults it to `1.0` in the launch handler for any arrow that
-      missed it — so omitting it today reads as that default, not as a missing factor. It needs a new
-      seam: `BowItem#onStoppedUsing` is the analogue (both it and `BowItem.getPullProgress(int)` are
-      public — javap-confirmed), carrying the pull to the spawn TAIL via a ThreadLocal, the shape
-      `CombatUtils.IN_MCMMO_DAMAGE` already establishes. Crossbows needs none of this (see below).
+      `EntityShootBowEvent` handler and defaulted it to `1.0` at launch; vanilla fires no shoot event,
+      so the new `fabric/mixin/BowShootMixin` injects at the HEAD and RETURN of `BowItem#onStoppedUsing`
+      (both it and `BowItem.getPullProgress(int)` are public — javap-confirmed) to capture
+      `getPullProgress(getMaxUseTime(stack, user) - remainingUseTicks)` — vanilla's own pull, bytecode-
+      verified — into an `Archery` `ThreadLocal` (the `CombatUtils.IN_MCMMO_DAMAGE` shape). That call
+      brackets `shootAll` -> the spawn funnel, so `ProjectileListener#onProjectileSpawn` reads the force
+      off the ThreadLocal and stamps `Archery.markBowForce` (the clamped `min(force * 2.0, 1.0)`) beside
+      the fired-from mark, above the retrieval gates; the mark cleanup now strips it too. The hit side
+      (`EntityDamageListener#applyArcheryBonus`) pays `bowForceMultiplier * distanceMultiplier`, with an
+      unstamped arrow reading back the flat `1.0` legacy defaulted to (a crossbow bolt, a dispenser
+      shot). Crossbows needs none of this — legacy hardcodes its force to `1.0`. **Nothing known left.**
 - [x] **Maces** — Crush on-hit damage + Cripple (Slowness) **DONE** (commit 0acfa33ff), per-hit Maces
       XP **DONE**. See §F upstream bug #9.
 - [~] **Tridents** — ranged Impale (thrown) **DONE** (via the K1 projectile arm); **melee Impale DONE**

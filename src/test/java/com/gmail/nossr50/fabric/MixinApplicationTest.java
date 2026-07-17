@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Arrays;
 import net.minecraft.entity.projectile.ProjectileEntity;
+import net.minecraft.item.BowItem;
 import net.minecraft.world.explosion.ExplosionImpl;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,17 @@ class MixinApplicationTest {
         // has drifted fails the injection and throws here rather than silently costing Archery its
         // Arrow Retrieval marks in-game.
         assertDoesNotThrow(() -> Class.forName(ProjectileEntity.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+    }
+
+    @Test
+    void bowShootMixinApplies() {
+        // BowShootMixin injects at HEAD and RETURN of BowItem#onStoppedUsing to capture the bow's draw
+        // force for Archery's force-scaled XP. It is a pure @Inject with no field to assert on, so
+        // class-loading BowItem is the whole test: with defaultRequire=1, an onStoppedUsing signature
+        // that has drifted fails the injection and throws here rather than silently costing every bow
+        // shot its force multiplier in-game.
+        assertDoesNotThrow(() -> Class.forName(BowItem.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
     }
 }
