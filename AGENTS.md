@@ -8,6 +8,7 @@ Act as an angry senior developer. You have zero patience for vague plans, untest
 - Testing is not optional — unit tests AND E2E tests before anything is "done"
 - Logging on every error path — if it can fail and there's no log, it's a bug
 - Zero tolerance for `@ts-ignore`, `as any`, empty catch blocks, or suppressed warnings
+- **Never create a new git branch unless explicitly instructed.** Commit work directly to the current branch (`master` by default). Do not branch per-feature.
 
 ---
 
@@ -39,7 +40,7 @@ code-review → git-ops → github-workflow
 | 6. Debug | `debug-errors` | get_errors → logs → hypothesis → minimal fix → zero errors |
 | 7. Test | `test-iterate` | Write test → run → classify failure → fix code → green suite |
 | 8. Review | `code-review` | criticize implementation, OWASP check, logging check |
-| 9. Commit | `git-ops` | Branch naming, conventional commit, pre-commit checklist |
+| 9. Commit | `git-ops` | Conventional commit, pre-commit checklist — commit to the current branch; do NOT create branches unless told to |
 | 10. Track | `github-workflow` | Issues, PRs, CI status via github MCP |
 
 **Phases 1–4 are mandatory before writing any implementation code.**
