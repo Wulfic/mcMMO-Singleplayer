@@ -28,20 +28,8 @@ import org.jetbrains.annotations.NotNull;
  * <p><b>Deferred until the block-break / held-item / inventory / item-spawn / scheduler adapters
  * (PORT Phase 10/11):</b>
  * <ul>
- *   <li>{@code canGreenThumbBlock} / {@code canUseShroomThumb} — need the held-{@code ItemStack}
- *       adapter, {@code BlockUtils.canMakeMossy}/{@code canMakeShroomy}, and new
- *       {@code Permissions.greenThumbBlock} nodes;</li>
- *   <li>{@code processBerryBushHarvesting} live wiring — the age→multiplier→XP math is ported as
- *       {@link #getBerryBushXpReward(String, int)}; the live block re-check a tick later needs the
- *       Phase 11 scheduler;</li>
  *   <li>{@code farmersDiet} — needs {@code SkillUtils.handleFoodSkills} (unported) and a food-event
  *       adapter;</li>
- *   <li>{@code processGreenTerraBlockConversion} / {@code processGreenThumbBlocks} /
- *       {@code processShroomThumb} block mutation — the RNG gates
- *       ({@link #rollGreenThumbBlockSuccess()}, {@link #rollShroomThumbSuccess()}) and the
- *       conversion-target lookups ({@link Herbalism#greenTerraConversionTarget}/
- *       {@link Herbalism#shroomThumbConversionTarget}) are ported; applying the target and
- *       consuming inventory items needs the block/inventory adapters;</li>
  *   <li>{@code processHerbalismBlockBreakEvent} / {@code processHerbalismOnBlocksBroken} /
  *       {@code getBrokenHerbalismBlocks} / the chorus-tree and cactus multi-block traversal — needs
  *       live {@code Block.getRelative}, the (unported) block-tracker/{@code MaterialMapStore}, and
@@ -193,6 +181,31 @@ public class HerbalismManager extends SkillManager {
     public boolean rollShroomThumbSuccess() {
         return ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HERBALISM_SHROOM_THUMB,
                 mmoPlayer);
+    }
+
+    /**
+     * The rank+enable half of legacy {@code canGreenThumbBlock} — whether the player has unlocked
+     * Green Thumb and has the sub-skill enabled. The MC-typed half (a {@code wheat_seeds} main hand
+     * on a {@link com.gmail.nossr50.util.BlockUtils#canMakeMossy mossify-able} block) lives on
+     * {@link com.gmail.nossr50.fabric.listeners.SuperAbilityListener}, as the MC-free/MC-typed split
+     * requires; the {@link #rollGreenThumbBlockSuccess()} RNG then decides whether the block converts.
+     */
+    public boolean canGreenThumbBlock() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HERBALISM_GREEN_THUMB)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.HERBALISM_GREEN_THUMB);
+    }
+
+    /**
+     * The rank+enable half of legacy {@code canUseShroomThumb}. The MC-typed half (a mushroom in the
+     * main hand, one brown + one red mushroom in the pack, and a
+     * {@link com.gmail.nossr50.util.BlockUtils#canMakeShroomy shroomy-able} block) lives on
+     * {@link com.gmail.nossr50.fabric.listeners.SuperAbilityListener}. Like Hylian Luck,
+     * {@code HERBALISM_SHROOM_THUMB} declares no ranks, so the unlock is always satisfied and the
+     * scaling {@link #rollShroomThumbSuccess()} RNG is the real gate.
+     */
+    public boolean canUseShroomThumb() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HERBALISM_SHROOM_THUMB)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.HERBALISM_SHROOM_THUMB);
     }
 
     /**
