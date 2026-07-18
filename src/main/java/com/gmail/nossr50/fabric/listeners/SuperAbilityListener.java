@@ -1,5 +1,7 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import com.gmail.nossr50.datatypes.experience.XPGainReason;
+import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
@@ -8,6 +10,7 @@ import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.Materials;
 import com.gmail.nossr50.skills.herbalism.Herbalism;
+import com.gmail.nossr50.skills.herbalism.HerbalismManager;
 import com.gmail.nossr50.skills.unarmed.Unarmed;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.ItemUtils;
@@ -26,6 +29,7 @@ import net.minecraft.block.Blocks;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.ActionResult;
@@ -75,8 +79,14 @@ import net.minecraft.world.World;
  * is wired; Fabric has no left-click-<i>air</i> callback, so summoning while looking at open sky is the
  * one deferred gesture (a mixin on the swing/action packet would be needed for it).
  *
- * <p><b>Deferred (as their bodies land):</b> the Herbalism Green Thumb / Shroom Thumb / berry-bush
- * right-click paths, which need skill bodies that are still stubbed.
+ * <p>The Herbalism right-click-block interactions ride {@code onUseBlock} too, porting the trailing
+ * arm of legacy {@code PlayerListener}'s {@code RIGHT_CLICK_BLOCK} case (see
+ * {@link #processHerbalismInteraction}): <b>Green Thumb</b> (wheat seeds mossify a block), <b>Shroom
+ * Thumb</b> (a mushroom turns dirt/grass to mycelium), and <b>berry-bush harvest</b> (a delayed XP
+ * award). Unlike the tool-skill activation above, these are <i>not</i> gated on
+ * {@code getAbilitiesEnabled()} — legacy runs them in a separate block — but they do sit behind the
+ * shared off-hand rule (legacy's {@code break} at the top of the case skips the whole arm).
+ * ⚠️ In-game verification pending (they can't be exercised headless — the standing §G debt).
  */
 public final class SuperAbilityListener {
 
@@ -101,7 +111,9 @@ public final class SuperAbilityListener {
             return ActionResult.PASS;
         }
 
-        final BlockState state = world.getBlockState(hitResult.getBlockPos());
+        final BlockPos pos = hitResult.getBlockPos();
+        final BlockState state = world.getBlockState(pos);
+        final ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
 
         // Blast Mining's "don't blow yourself up" guard: with the detonator (flint & steel, by
         // default) in hand, right-clicking a TNT block you're standing next to would light it the
@@ -112,18 +124,186 @@ public final class SuperAbilityListener {
             return ActionResult.FAIL;
         }
 
-        if (offhandBlocksActivation((ServerPlayerEntity) player)
-                || !McMMOMod.getGeneralConfig().getAbilitiesEnabled()) {
+        // The off-hand rule gates the whole RIGHT_CLICK_BLOCK arm — both the tool-skill activation
+        // below and the Herbalism interactions after it (legacy's break at the top of the case).
+        if (offhandBlocksActivation(serverPlayer)) {
             return ActionResult.PASS;
         }
 
-        if (BlockUtils.canActivateTools(state)) {
+        // Tool-skill activation: legacy nests this inside the abilities-enabled gate, so — unlike the
+        // Herbalism interactions below — it doesn't run when abilities are disabled.
+        if (McMMOMod.getGeneralConfig().getAbilitiesEnabled() && BlockUtils.canActivateTools(state)) {
             if (BlockUtils.canActivateHerbalism(state)) {
                 mmoPlayer.processAbilityActivation(PrimarySkillType.HERBALISM);
             }
             readyToolSkills(mmoPlayer);
         }
+
+        // Herbalism right-click interactions (Green Thumb / Shroom Thumb / berry bush) — legacy runs
+        // these in a separate block, outside the abilities-enabled gate.
+        return processHerbalismInteraction(mmoPlayer, serverPlayer, world, pos, state);
+    }
+
+    /**
+     * The trailing Herbalism arm of legacy {@code PlayerListener}'s {@code RIGHT_CLICK_BLOCK} case —
+     * a single if / else-if / else selecting at most one of Green Thumb, Shroom Thumb, or a berry-bush
+     * harvest for this right-click, in legacy's order.
+     *
+     * <p>PORT: legacy's leading {@code BONE_MEAL} branch (which reset the {@code UserBlockTracker}
+     * "eligible" flag on a bone-mealed crop) is dropped — the K9 {@code PlacedBlockTracker} only ever
+     * marks a block placed through {@code BlockItem#place}, never through bone meal, so there is no
+     * over-marking to walk back (the conservative-tracking collapse). A player-planted crop is instead
+     * maturity-gated on harvest, not placed-flag-gated (see {@code BlockBreakListener}).
+     *
+     * @return {@link ActionResult#FAIL} for a Shroom Thumb conversion (legacy's
+     *     {@code event.setCancelled(true)}, so the held mushroom isn't also placed); otherwise
+     *     {@link ActionResult#PASS} — Green Thumb consumes a seed but doesn't cancel the click (wheat
+     *     seeds don't place on a mossify-able block anyway) and a berry-bush click must reach vanilla
+     *     to actually reap the bush.
+     */
+    private static ActionResult processHerbalismInteraction(McMMOPlayer mmoPlayer,
+            ServerPlayerEntity serverPlayer, World world, BlockPos pos, BlockState state) {
+        final HerbalismManager herbalism = mmoPlayer.getHerbalismManager();
+        final ItemStack mainHand = serverPlayer.getMainHandStack();
+
+        if (canGreenThumbBlock(herbalism, mainHand, state)) {
+            processGreenThumbBlock(mmoPlayer, serverPlayer, world, pos, state);
+            return ActionResult.PASS;
+        }
+        if (canUseShroomThumb(herbalism, serverPlayer, mainHand, state)) {
+            processShroomThumb(mmoPlayer, serverPlayer, world, pos, state);
+            return ActionResult.FAIL;
+        }
+        maybeHarvestBerryBush(mmoPlayer, world, pos, state);
         return ActionResult.PASS;
+    }
+
+    /**
+     * Green Thumb block-conversion gate: the rank/enable half on the manager
+     * ({@link HerbalismManager#canGreenThumbBlock()}) plus the MC-typed half here — a non-empty
+     * {@code wheat_seeds} main hand on a mossify-able block (legacy {@code canGreenThumbBlock}).
+     */
+    private static boolean canGreenThumbBlock(HerbalismManager herbalism, ItemStack mainHand,
+            BlockState state) {
+        return herbalism.canGreenThumbBlock()
+                && !mainHand.isEmpty()
+                && mainHand.isOf(Items.WHEAT_SEEDS)
+                && BlockUtils.canMakeMossy(state);
+    }
+
+    /**
+     * Shroom Thumb gate: the rank/enable half on the manager
+     * ({@link HerbalismManager#canUseShroomThumb()}) plus the MC-typed half here — a mushroom in the
+     * main hand, a shroomy-able block, and one brown + one red mushroom somewhere in the pack (legacy
+     * {@code canUseShroomThumb}, whose {@code inventory.contains(..)} checks the whole inventory).
+     */
+    private static boolean canUseShroomThumb(HerbalismManager herbalism, ServerPlayerEntity player,
+            ItemStack mainHand, BlockState state) {
+        if (!BlockUtils.canMakeShroomy(state) || !herbalism.canUseShroomThumb()) {
+            return false;
+        }
+        if (!mainHand.isOf(Items.BROWN_MUSHROOM) && !mainHand.isOf(Items.RED_MUSHROOM)) {
+            return false;
+        }
+        final PlayerInventory inventory = player.getInventory();
+        return findItemSlot(inventory, Items.BROWN_MUSHROOM) >= 0
+                && findItemSlot(inventory, Items.RED_MUSHROOM) >= 0;
+    }
+
+    /**
+     * Green Thumb: spend one wheat seed and, on a successful roll, mossify the block. Legacy consumes
+     * the seed <i>before</i> the roll ({@code setAmount(amount - 1)} then {@code processGreenThumbBlocks}),
+     * so a failed Green Thumb still costs the seed. The conversion target reuses the shared Green
+     * Terra / Green Thumb table ({@link Herbalism#greenTerraConversionTarget}).
+     */
+    private static void processGreenThumbBlock(McMMOPlayer mmoPlayer, ServerPlayerEntity serverPlayer,
+            World world, BlockPos pos, BlockState state) {
+        serverPlayer.getMainHandStack().decrement(1);
+        if (!mmoPlayer.getHerbalismManager().rollGreenThumbBlockSuccess()) {
+            NotificationManager.sendPlayerInformation(mmoPlayer,
+                    NotificationType.SUBSKILL_MESSAGE_FAILED, "Herbalism.Ability.GTh.Fail");
+            return;
+        }
+        convertBlock(mmoPlayer, world, pos, state,
+                Herbalism.greenTerraConversionTarget(blockPath(state)));
+    }
+
+    /**
+     * Shroom Thumb: spend one brown + one red mushroom and, on a successful roll, turn the block to
+     * mycelium. {@link #canUseShroomThumb} has already proven both mushrooms are present; legacy removes
+     * them <i>before</i> the roll, so a failed Shroom Thumb still costs the pair.
+     */
+    private static void processShroomThumb(McMMOPlayer mmoPlayer, ServerPlayerEntity serverPlayer,
+            World world, BlockPos pos, BlockState state) {
+        final PlayerInventory inventory = serverPlayer.getInventory();
+        final int brownSlot = findItemSlot(inventory, Items.BROWN_MUSHROOM);
+        final int redSlot = findItemSlot(inventory, Items.RED_MUSHROOM);
+        if (brownSlot < 0 || redSlot < 0) {
+            return; // defensive: the gate already proved both present (brown/red are distinct slots).
+        }
+        inventory.removeStack(brownSlot, 1);
+        inventory.removeStack(redSlot, 1);
+        if (!mmoPlayer.getHerbalismManager().rollShroomThumbSuccess()) {
+            NotificationManager.sendPlayerInformation(mmoPlayer,
+                    NotificationType.SUBSKILL_MESSAGE_FAILED, "Herbalism.Ability.ShroomThumb.Fail");
+            return;
+        }
+        convertBlock(mmoPlayer, world, pos, state,
+                Herbalism.shroomThumbConversionTarget(blockPath(state)));
+    }
+
+    /**
+     * The shared Green Thumb / Shroom Thumb block swap: resolve the conversion-target path to a live
+     * block and set it. Mirrors {@link #processGreenTerraConversion}'s resolve-then-set shape, so a
+     * block that is whitelisted but has no specific target (or a target absent from this registry) is
+     * a safe no-op.
+     */
+    private static void convertBlock(McMMOPlayer mmoPlayer, World world, BlockPos pos,
+            BlockState state, Optional<String> targetPath) {
+        if (targetPath.isEmpty()) {
+            return; // whitelisted but with no conversion target for this specific block.
+        }
+        final Optional<Block> targetBlock = Materials.block(targetPath.get());
+        if (targetBlock.isEmpty()) {
+            LogUtils.debug(McMMOMod.LOGGER, "Herbalism conversion target '" + targetPath.get()
+                    + "' is not a block in this registry; skipping conversion of " + blockPath(state));
+            return;
+        }
+        world.setBlockState(pos, targetBlock.get().getDefaultState());
+    }
+
+    /**
+     * Berry-bush harvest XP, porting legacy {@code processBerryBushHarvesting} + its {@code CheckBushAge}
+     * runnable. A ripe sweet berry bush (age 2 or 3) is worth XP, but only if the right-click actually
+     * reaps it — a successful harvest resets the bush to age 1, so the reward is scheduled a tick later
+     * and paid only when the bush has dropped to age &le; 1. This runs on the {@code UseBlockCallback}
+     * (before vanilla reaps the bush), which is why the re-read a tick later sees the reset age.
+     */
+    private static void maybeHarvestBerryBush(McMMOPlayer mmoPlayer, World world, BlockPos pos,
+            BlockState state) {
+        if (!state.isOf(Blocks.SWEET_BERRY_BUSH)) {
+            return;
+        }
+        final BlockUtils.AgeableState age = BlockUtils.getAgeableState(state);
+        if (age == null) {
+            return; // no age property (unreachable for a sweet berry bush, but stay defensive).
+        }
+        final int reward = mmoPlayer.getHerbalismManager()
+                .getBerryBushXpReward(blockPath(state), age.age());
+        if (reward <= 0) {
+            return; // not ripe enough to pay (age < 2).
+        }
+        McMMOMod.getScheduler().runLater(() -> {
+            final BlockState now = world.getBlockState(pos);
+            if (!now.isOf(Blocks.SWEET_BERRY_BUSH)) {
+                return;
+            }
+            final BlockUtils.AgeableState nowAge = BlockUtils.getAgeableState(now);
+            if (nowAge != null && nowAge.age() <= 1) {
+                mmoPlayer.beginXpGain(PrimarySkillType.HERBALISM, reward, XPGainReason.PVE,
+                        XPGainSource.SELF);
+            }
+        }, 1);
     }
 
     /** Right-click the air → ready every tool skill, and fire Blast Mining's remote detonation. */

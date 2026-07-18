@@ -83,6 +83,27 @@ class HerbalismManagerTest {
         assertFalse(herbalismManager.canDoubleDrop(), "no Double Drops rank yet");
     }
 
+    @Test
+    void canGreenThumbBlockRequiresTheRankUnlock() {
+        // GreenThumb RetroMode Rank_1 = 250 (RetroMode defaults on); below it the block conversion is
+        // locked, so a low-level right-click never spends a seed on Green Thumb.
+        atHerbalismLevel(0);
+        assertFalse(herbalismManager.canGreenThumbBlock(), "Green Thumb locked at level 0");
+        atHerbalismLevel(250);
+        assertTrue(herbalismManager.canGreenThumbBlock(),
+                "Green Thumb unlocked at rank 1 (level 250)");
+    }
+
+    @Test
+    void canUseShroomThumbIsAlwaysUnlockedSinceItHasNoRanks() {
+        // HERBALISM_SHROOM_THUMB declares no rank count (like Hylian Luck), so the unlock is always
+        // satisfied and the scaling rollShroomThumbSuccess RNG is the real gate.
+        atHerbalismLevel(0);
+        assertTrue(herbalismManager.canUseShroomThumb());
+        atHerbalismLevel(10000);
+        assertTrue(herbalismManager.canUseShroomThumb());
+    }
+
     // --- Bonus-drop eligibility gate (deterministic; the RNG roll is verified in-game) ----------
 
     @Test

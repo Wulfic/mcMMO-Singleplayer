@@ -545,11 +545,28 @@ effectively complete.**
       re-break guard is dropped (replaced by an `isAir` check so the deferred set never overwrites a
       block placed in the interim). Torchflower is the one replantable crop not covered — it isn't
       maturity-gated (`torchflower_crop` gives 0 Herbalism XP), a pre-existing niche gap.
+      **Green Thumb block-conversion + Shroom Thumb + berry-bush harvest DONE** (this pass): the
+      trailing Herbalism arm of legacy `PlayerListener`'s `RIGHT_CLICK_BLOCK` case, ported as
+      `SuperAbilityListener.processHerbalismInteraction` (a single if/else-if/else, in legacy's order,
+      NOT behind the abilities-enabled gate but behind the shared off-hand rule). **Green Thumb**
+      (wheat seeds mossify a `canMakeMossy` block — reuses `Herbalism.greenTerraConversionTarget`) and
+      **Shroom Thumb** (a mushroom turns a `canMakeShroomy` block to mycelium, spending one brown + one
+      red mushroom found anywhere in the pack) both spend the item(s) *before* the roll (a failed roll
+      still costs them, faithful to legacy), with the rank/enable gates new on the manager
+      (`HerbalismManager.canGreenThumbBlock()`/`canUseShroomThumb()`) and the item/block/inventory
+      reads on the listener; the roll gates (`rollGreenThumbBlockSuccess`/`rollShroomThumbSuccess`) and
+      conversion tables were already ported. Shroom Thumb returns `ActionResult.FAIL` (legacy's
+      `event.setCancelled(true)`, so the mushroom isn't also placed); Green Thumb returns `PASS` (wheat
+      seeds don't place on a mossify-able block). **Berry-bush harvest** (`maybeHarvestBerryBush`,
+      porting `processBerryBushHarvesting` + its `CheckBushAge` runnable) awards `getBerryBushXpReward`
+      a tick later via the TickScheduler, but only if the right-click actually reaped the bush (a ripe
+      bush resets to age 1 on harvest, so the delayed re-read requires `age <= 1`). ⚠️ In-game
+      verification pending for all three (can't right-click headless — §G debt). **PORT: legacy's
+      leading `BONE_MEAL` UserBlockTracker-eligibility reset is dropped** — the K9 tracker only marks
+      blocks placed via `BlockItem#place`, never via bone meal, so there is no over-marking to walk
+      back (the conservative-tracking collapse; a planted crop is maturity-gated on harvest anyway).
       Deferred: multi-block traversal (`getBrokenHerbalismBlocks`) + chorus
-      delayed XP, Shroom Thumb (conversion table + RNG gate are ported; needs the two-mushroom
-      inventory check), Hylian Luck (needs `TreasureConfig.hylianMap` + block Tag adapter), and the
-      right-click berry-bush harvest (`processBerryBushHarvesting` — a distinct interaction, not a
-      break; its age-scaled `getBerryBushXpReward` is ported).
+      delayed XP, and Hylian Luck (needs `TreasureConfig.hylianMap` + block Tag adapter).
 - [~] **Excavation** — Giga Drill Breaker **DONE** (commit c6215d163): `BlockBreakListener.
       maybeProcessGigaDrillBreaker` ports legacy `ExcavationManager#gigaDrillBreaker` — GIGA_DRILL_BREAKER
       active + `affectedByGigaDrillBreaker` block + shovel ⇒ two extra excavation checks (base XP +
