@@ -5,16 +5,19 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
+import com.gmail.nossr50.datatypes.treasure.HylianTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.DoublePredicate;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -45,11 +48,13 @@ import org.jetbrains.annotations.NotNull;
  *       {@link #applyTallPlantXpCap(int, int, String)}; the live block-tracker iteration is not;</li>
  *   <li>{@code awardXPForBlockSnapshots} (chorus-tree delayed XP) — needs the unported
  *       {@code BlockSnapshot} datatype and block tracker;</li>
- *   <li>{@code processHylianLuck} — <b>doubly deferred</b>: needs the block-mutation/item-spawn
- *       adapters <i>and</i> {@code TreasureConfig.hylianMap}, which is currently always empty (no
- *       block-tag adapter for {@code Drops_From} groups — see
- *       {@link com.gmail.nossr50.config.treasure.TreasureConfig}); only the rank/permission gate
- *       ({@link #canUseHylianLuck()}) is ported;</li>
+ *   <li>{@code processHylianLuck} — <b>now wired</b>: the pure treasure-selection core is
+ *       {@link #rollHylianLuck(java.util.List, boolean, java.util.function.DoublePredicate)} (both RNG
+ *       draws are caller-supplied, so it is unit-tested, exactly like the Fishing treasure roll); the
+ *       rank/permission gate is {@link #canUseHylianLuck()}; the sword-break trigger, the live block
+ *       group classification ({@code BlockUtils.getHylianTreasureGroup}) and the drop-replacing item
+ *       spawn live on {@link com.gmail.nossr50.fabric.listeners.BlockBreakListener} (the
+ *       {@code PlayerBlockBreakEvents.BEFORE} seam, since Hylian replaces the block's normal drop);</li>
  *   <li>{@code processGreenThumbPlants} / {@code startReplantTask} — <b>now wired</b>: the held-item
  *       (hoe/axe) check, the seed inventory read/consume and the delayed block re-set live on
  *       {@link com.gmail.nossr50.fabric.listeners.BlockBreakListener}, driven by the pure age-decision
@@ -89,13 +94,45 @@ public class HerbalismManager extends SkillManager {
     }
 
     /**
-     * Rank/permission gate for Hylian Luck. The actual roll is deferred — see the class javadoc —
-     * so this only ever guards a no-op today, but it's ported now so the eventual roll can drop in
-     * without re-deriving the gate.
+     * Rank/permission gate for Hylian Luck (legacy {@code canUseHylianLuck}). The trigger listener
+     * checks this before rolling; {@code HERBALISM_HYLIAN_LUCK} declares no ranks, so the unlock is
+     * always satisfied and the scaling {@link #rollHylianLuck} RNG is the real gate.
      */
     public boolean canUseHylianLuck() {
         return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HERBALISM_HYLIAN_LUCK)
                 && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.HERBALISM_HYLIAN_LUCK);
+    }
+
+    /**
+     * The MC-free treasure-selection core of legacy {@code processHylianLuck}. Both random draws are
+     * supplied by the caller so the whole selection is unit-testable (the same shape as
+     * {@link com.gmail.nossr50.skills.fishing.FishingManager#rollFishingTreasure}): {@code mainRollWon}
+     * is the result of the {@code HERBALISM_HYLIAN_LUCK} sub-skill roll (the primary gate — legacy
+     * returns early if it fails), and {@code staticRoll} evaluates a treasure's per-drop
+     * {@code Drop_Chance} (legacy's {@code isStaticSkillRNGSuccessful(HERBALISM, chance)}).
+     *
+     * <p>Walks the candidate treasures in config order and returns the first whose {@code Drop_Level}
+     * the player has reached <em>and</em> whose static chance rolls (legacy iterates most-specific
+     * first and returns on the first hit). The block classification, the item spawn and the
+     * block-removal live on {@link com.gmail.nossr50.fabric.listeners.BlockBreakListener}.
+     *
+     * @param candidates the treasures for the broken block's Hylian group, in config order
+     * @param mainRollWon whether the {@code HERBALISM_HYLIAN_LUCK} sub-skill roll succeeded
+     * @param staticRoll given a treasure's {@code Drop_Chance} (0–100), whether its static roll wins
+     * @return the treasure to drop, or empty if none was won
+     */
+    public @NotNull Optional<HylianTreasure> rollHylianLuck(@NotNull List<HylianTreasure> candidates,
+            boolean mainRollWon, @NotNull DoublePredicate staticRoll) {
+        if (!mainRollWon || candidates.isEmpty()) {
+            return Optional.empty();
+        }
+        final int skillLevel = getSkillLevel();
+        for (HylianTreasure treasure : candidates) {
+            if (skillLevel >= treasure.getDropLevel() && staticRoll.test(treasure.getDropChance())) {
+                return Optional.of(treasure);
+            }
+        }
+        return Optional.empty();
     }
 
     /**

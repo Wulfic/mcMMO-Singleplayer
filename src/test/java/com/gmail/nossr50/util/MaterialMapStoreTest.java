@@ -87,4 +87,26 @@ class MaterialMapStoreTest {
         assertFalse(store.isArmor("not_a_real_item"));
         assertFalse(store.isOre("not_a_real_item"));
     }
+
+    @Test
+    void classifiesHylianLuckFlowers() {
+        // Exactly the nine small flowers legacy TreasureConfig lists individually for the Flowers group.
+        assertTrue(store.isHylianLuckFlower("poppy"));
+        assertTrue(store.isHylianLuckFlower("allium"));
+        assertTrue(store.isHylianLuckFlower("white_tulip"));
+        // Not one of the nine (oxeye_daisy is a small flower in vanilla, but legacy omits it).
+        assertFalse(store.isHylianLuckFlower("oxeye_daisy"));
+        assertFalse(store.isHylianLuckFlower("oak_sapling"));
+        assertFalse(store.isHylianLuckFlower("stone"));
+    }
+
+    @Test
+    void classifiesHylianLuckBushBlocks() {
+        // The non-sapling members of the Bushes group (saplings come from the live SAPLINGS tag).
+        assertTrue(store.isHylianLuckBushBlock("fern"));
+        assertTrue(store.isHylianLuckBushBlock("short_grass"));
+        assertTrue(store.isHylianLuckBushBlock("dead_bush"));
+        assertFalse(store.isHylianLuckBushBlock("oak_sapling"));
+        assertFalse(store.isHylianLuckBushBlock("poppy"));
+    }
 }

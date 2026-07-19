@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.datatypes.treasure.ExcavationTreasure;
+import com.gmail.nossr50.datatypes.treasure.HylianTreasure;
+import com.gmail.nossr50.datatypes.treasure.Treasure;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -20,6 +22,15 @@ import org.junit.jupiter.api.io.TempDir;
 class TreasureConfigTest {
 
     private static ExcavationTreasure findByMaterial(List<ExcavationTreasure> list, String id) {
+        return list.stream().filter(t -> t.getDrop().getMaterialId().equals(id)).findFirst()
+                .orElse(null);
+    }
+
+    private static boolean containsMaterial(List<? extends Treasure> list, String id) {
+        return list.stream().anyMatch(t -> t.getDrop().getMaterialId().equals(id));
+    }
+
+    private static HylianTreasure findHylian(List<HylianTreasure> list, String id) {
         return list.stream().filter(t -> t.getDrop().getMaterialId().equals(id)).findFirst()
                 .orElse(null);
     }
@@ -62,9 +73,45 @@ class TreasureConfigTest {
     }
 
     @Test
-    void hylianTreasuresAreDeferred(@TempDir Path dataFolder) {
-        // PORT Phase 10: Hylian Luck loading needs a block-tag adapter; the map stays empty for now.
+    void loadsHylianTreasuresIndexedByDropsFromGroup(@TempDir Path dataFolder) {
         final TreasureConfig config = new TreasureConfig(dataFolder);
-        assertTrue(config.hylianMap.isEmpty());
+
+        // The three groups the bundled treasures.yml defines.
+        assertTrue(config.hylianMap.containsKey("Bushes"), "Bushes is a Hylian group");
+        assertTrue(config.hylianMap.containsKey("Flowers"), "Flowers is a Hylian group");
+        assertTrue(config.hylianMap.containsKey("Pots"), "Pots is a Hylian group");
+
+        // Bushes drop seeds/cocoa; Flowers drop food; Pots drop valuables (verbatim from treasures.yml).
+        assertTrue(containsMaterial(config.getHylianTreasures("Bushes"), "melon_seeds"));
+        assertTrue(containsMaterial(config.getHylianTreasures("Bushes"), "pumpkin_seeds"));
+        assertTrue(containsMaterial(config.getHylianTreasures("Bushes"), "cocoa_beans"));
+        assertTrue(containsMaterial(config.getHylianTreasures("Flowers"), "carrot"));
+        assertTrue(containsMaterial(config.getHylianTreasures("Flowers"), "apple"));
+        assertTrue(containsMaterial(config.getHylianTreasures("Pots"), "emerald"));
+        assertTrue(containsMaterial(config.getHylianTreasures("Pots"), "copper_nugget"));
+    }
+
+    @Test
+    void parsesHylianTreasureFields(@TempDir Path dataFolder) {
+        final TreasureConfig config = new TreasureConfig(dataFolder);
+
+        // COPPER_NUGGET from Pots: 1×, 5 XP, 100% chance, Standard level 0.
+        final HylianTreasure copper = findHylian(config.getHylianTreasures("Pots"), "copper_nugget");
+        assertNotNull(copper, "Pots should drop a copper_nugget treasure");
+        assertEquals(1, copper.getDrop().getAmount());
+        assertEquals(5, copper.getXp());
+        assertEquals(100.0, copper.getDropChance());
+        assertEquals(0, copper.getDropLevel(), "Standard-mode level requirement");
+
+        // MELON_SEEDS from Bushes gives no XP.
+        final HylianTreasure melon = findHylian(config.getHylianTreasures("Bushes"), "melon_seeds");
+        assertNotNull(melon, "Bushes should drop a melon_seeds treasure");
+        assertEquals(0, melon.getXp());
+    }
+
+    @Test
+    void getHylianTreasuresReturnsEmptyForUnknownGroup(@TempDir Path dataFolder) {
+        final TreasureConfig config = new TreasureConfig(dataFolder);
+        assertTrue(config.getHylianTreasures("Nonexistent").isEmpty());
     }
 }

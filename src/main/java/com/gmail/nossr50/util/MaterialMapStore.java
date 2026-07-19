@@ -27,6 +27,8 @@ public class MaterialMapStore {
     private final @NotNull HashSet<String> multiBlockHangingPlant;
     private final @NotNull HashSet<String> foodItemWhiteList;
     private final @NotNull HashSet<String> glassBlocks;
+    private final @NotNull HashSet<String> hylianLuckFlowers;
+    private final @NotNull HashSet<String> hylianLuckBushBlocks;
 
     private final @NotNull HashSet<String> netheriteArmor;
     private final @NotNull HashSet<String> netheriteTools;
@@ -78,6 +80,8 @@ public class MaterialMapStore {
         multiBlockHangingPlant = new HashSet<>();
         foodItemWhiteList = new HashSet<>();
         glassBlocks = new HashSet<>();
+        hylianLuckFlowers = new HashSet<>();
+        hylianLuckBushBlocks = new HashSet<>();
 
         leatherArmor = new HashSet<>();
         ironArmor = new HashSet<>();
@@ -133,6 +137,8 @@ public class MaterialMapStore {
         fillMultiBlockHangingPlantSet();
         fillFoodWhiteList();
         fillGlassBlockWhiteList();
+        fillHylianLuckFlowers();
+        fillHylianLuckBushBlocks();
         fillArmors();
         fillTools();
         fillEnchantables();
@@ -176,6 +182,26 @@ public class MaterialMapStore {
 
     public boolean isShroomyWhiteListed(@NotNull String id) {
         return canMakeShroomyWhiteList.contains(id);
+    }
+
+    /**
+     * Whether the block is one of the nine small flowers that make up the Hylian Luck "Flowers" group.
+     * Legacy {@code TreasureConfig.registerHylianDrops} lists these nine explicitly (it does <em>not</em>
+     * use the vanilla {@code small_flowers} tag, which is a superset), so they are hardcoded here to
+     * match. See {@link com.gmail.nossr50.util.BlockUtils#getHylianTreasureGroup}.
+     */
+    public boolean isHylianLuckFlower(@NotNull String id) {
+        return hylianLuckFlowers.contains(id);
+    }
+
+    /**
+     * Whether the block is one of the non-tag members of the Hylian Luck "Bushes" group ({@code fern},
+     * {@code short_grass}, {@code dead_bush}). The saplings that also belong to that group are matched
+     * live against the {@code saplings} block tag (as legacy does) rather than hardcoded here — see
+     * {@link com.gmail.nossr50.util.BlockUtils#getHylianTreasureGroup}.
+     */
+    public boolean isHylianLuckBushBlock(@NotNull String id) {
+        return hylianLuckBushBlocks.contains(id);
     }
 
     private void fillTierMap() {
@@ -982,6 +1008,26 @@ public class MaterialMapStore {
         canMakeShroomyWhiteList.add("dirt");
         canMakeShroomyWhiteList.add("grass_block");
         canMakeShroomyWhiteList.add("dirt_path");
+    }
+
+    private void fillHylianLuckFlowers() {
+        // The nine small flowers legacy TreasureConfig lists individually for the "Flowers" group.
+        hylianLuckFlowers.add("poppy");
+        hylianLuckFlowers.add("dandelion");
+        hylianLuckFlowers.add("blue_orchid");
+        hylianLuckFlowers.add("allium");
+        hylianLuckFlowers.add("azure_bluet");
+        hylianLuckFlowers.add("orange_tulip");
+        hylianLuckFlowers.add("pink_tulip");
+        hylianLuckFlowers.add("red_tulip");
+        hylianLuckFlowers.add("white_tulip");
+    }
+
+    private void fillHylianLuckBushBlocks() {
+        // The non-sapling members of the "Bushes" group (saplings come from the live saplings tag).
+        hylianLuckBushBlocks.add("fern");
+        hylianLuckBushBlocks.add("short_grass");
+        hylianLuckBushBlocks.add("dead_bush");
     }
 
     private void fillBlockCrackerWhiteList() {

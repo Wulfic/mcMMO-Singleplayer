@@ -2,9 +2,12 @@ package com.gmail.nossr50.fabric.listeners;
 
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
+import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
+import com.gmail.nossr50.datatypes.treasure.HylianTreasure;
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.BlockDrops;
@@ -20,15 +23,19 @@ import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.Misc;
+import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.SkillUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
+import java.util.List;
 import java.util.Optional;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -58,15 +65,90 @@ import org.jetbrains.annotations.Nullable;
  * The creative-mode / level-cap guards for XP live in the shared pipeline
  * ({@link McMMOPlayer#beginXpGain}); bonus drops are guarded against creative separately here (a
  * creative break spawns no vanilla loot, so bonus copies would be a duplication bug).
+ *
+ * <p>Also registers the cancellable {@link PlayerBlockBreakEvents#BEFORE} for the one side effect that
+ * must <em>replace</em> a block's drop rather than add to it — <b>Hylian Luck</b> (sword-breaking a
+ * flower/bush/sapling/pot for treasure); see {@link #beforeBlockBroken}.
  */
 public final class BlockBreakListener {
 
     private BlockBreakListener() {
     }
 
-    /** Register the block-break hook. Called once at mod load from {@code McMMOMod#onInitialize}. */
+    /** Register the block-break hooks. Called once at mod load from {@code McMMOMod#onInitialize}. */
     public static void register() {
+        // BEFORE is cancellable — used only by Hylian Luck, which must REPLACE a block's normal drop
+        // (the AFTER seam below has already spawned that drop, so it can only ever supplement it).
+        PlayerBlockBreakEvents.BEFORE.register(BlockBreakListener::beforeBlockBroken);
         PlayerBlockBreakEvents.AFTER.register(BlockBreakListener::onBlockBroken);
+    }
+
+    /**
+     * Hylian Luck: breaking a flower, bush, sapling or flower pot with a sword has a chance to drop
+     * rare treasure <em>in place of</em> the block's normal drop (legacy {@code processHylianLuck},
+     * fired from {@code BlockListener#onBlockBreakHigher}). Legacy ran on a cancellable HIGHEST-priority
+     * {@code BlockBreakEvent} — it set the block to air, spawned the treasure and cancelled the break —
+     * so the faithful Fabric analogue is the cancellable {@link PlayerBlockBreakEvents#BEFORE} seam.
+     *
+     * @return {@code false} to cancel the vanilla break (Hylian consumed the block), {@code true} to
+     *     let it break normally
+     */
+    private static boolean beforeBlockBroken(World world, PlayerEntity player, BlockPos pos,
+            BlockState state, @Nullable BlockEntity blockEntity) {
+        if (!(player instanceof ServerPlayerEntity serverPlayer)
+                || !(world instanceof ServerWorld serverWorld)) {
+            return true; // client-side prediction / non-server context: let vanilla handle it.
+        }
+        // Cheapest gate first — Hylian triggers only on a sword break, and most breaks aren't swords.
+        if (!ItemUtils.isSword(serverPlayer.getMainHandStack())) {
+            return true;
+        }
+        if (serverPlayer.isCreative()) {
+            return true; // legacy gates its whole block-break handler on non-creative.
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        if (mmoPlayer == null) {
+            return true; // data not loaded (e.g. mid-join).
+        }
+        final HerbalismManager herbalism = mmoPlayer.getHerbalismManager();
+        if (herbalism == null || !herbalism.canUseHylianLuck()) {
+            return true;
+        }
+        final String group = BlockUtils.getHylianTreasureGroup(state);
+        if (group == null) {
+            return true; // not a Hylian Luck source block.
+        }
+
+        final List<HylianTreasure> candidates = McMMOMod.getTreasureConfig().getHylianTreasures(group);
+        final boolean mainRollWon = ProbabilityUtil.isSkillRNGSuccessful(
+                SubSkillType.HERBALISM_HYLIAN_LUCK, mmoPlayer);
+        final Optional<HylianTreasure> won = herbalism.rollHylianLuck(candidates, mainRollWon,
+                chance -> ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.HERBALISM,
+                        mmoPlayer, chance));
+
+        if (won.isPresent()) {
+            final Optional<ItemStack> built = ItemSpecBuilder.build(won.get().getDrop());
+            if (built.isPresent()) {
+                // Remove the block first (legacy order), then drop the treasure into the now-empty space.
+                serverWorld.setBlockState(pos, Blocks.AIR.getDefaultState());
+                Block.dropStack(serverWorld, pos, built.get());
+                NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                        "Herbalism.HylianLuck");
+                return false; // treasure replaces the normal drop — cancel the vanilla break.
+            }
+            // Treasure material has no vanilla item (logged by Materials): fall through to a normal
+            // break rather than consuming the block for nothing.
+        }
+
+        if ("Pots".equals(group)) {
+            // Legacy: a sword-struck flower pot is consumed even without a treasure (set to air, break
+            // cancelled so the pot's own drop is suppressed). Reachable whenever the main Hylian roll
+            // fails — the common case at low Herbalism level.
+            serverWorld.setBlockState(pos, Blocks.AIR.getDefaultState());
+            return false;
+        }
+
+        return true; // no treasure, not a pot: break the block normally.
     }
 
     private static void onBlockBroken(World world, PlayerEntity player, BlockPos pos,
