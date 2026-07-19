@@ -8,6 +8,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.state.property.IntProperty;
 import net.minecraft.state.property.Property;
 import net.minecraft.util.math.BlockPos;
@@ -226,6 +227,41 @@ public final class BlockUtils {
 
     public static boolean canMakeShroomy(@NotNull BlockState blockState) {
         return canMakeShroomy(blockState.getBlock());
+    }
+
+    /**
+     * Classify a block into its Hylian Luck {@code Drops_From} group ({@code "Flowers"},
+     * {@code "Bushes"} or {@code "Pots"}), or {@code null} if it is not a Hylian Luck source block.
+     * This is the live-block half of legacy {@code TreasureConfig.registerHylianDrops}: legacy expanded
+     * the three groups into a material-keyed {@code hylianMap} at config load, but two of the groups
+     * (Bushes' saplings, and all of Pots) come from the vanilla {@code saplings}/{@code flower_pots}
+     * block tags — which are only bound once the datapacks have loaded, not necessarily at the
+     * {@code SERVER_STARTING} config load. So the port keys {@code hylianMap} by the raw group name and
+     * resolves membership here, at block-break time, where the world session (and its tags) are fully
+     * live. The result is identical to legacy's expanded lookup: a block matches at most one group.
+     *
+     * <p>Matched exactly as legacy did: the nine small flowers are a hardcoded list (legacy lists them
+     * individually, not via the broader {@code small_flowers} tag — see
+     * {@link MaterialMapStore#isHylianLuckFlower}); {@code fern}/{@code short_grass}/{@code dead_bush}
+     * are hardcoded bush members; saplings come from {@link BlockTags#SAPLINGS} and flower pots from
+     * {@link BlockTags#FLOWER_POTS}.
+     *
+     * @param blockState the broken block's state
+     * @return the group name, or {@code null} if the block drops no Hylian treasure
+     */
+    public static @Nullable String getHylianTreasureGroup(@NotNull BlockState blockState) {
+        final String id = idPath(blockState.getBlock());
+        final MaterialMapStore store = McMMOMod.getMaterialMapStore();
+        if (store.isHylianLuckFlower(id)) {
+            return "Flowers";
+        }
+        if (store.isHylianLuckBushBlock(id) || blockState.isIn(BlockTags.SAPLINGS)) {
+            return "Bushes";
+        }
+        if (blockState.isIn(BlockTags.FLOWER_POTS)) {
+            return "Pots";
+        }
+        return null;
     }
 
     // --- Crop maturity (legacy Bukkit Ageable) ------------------------------

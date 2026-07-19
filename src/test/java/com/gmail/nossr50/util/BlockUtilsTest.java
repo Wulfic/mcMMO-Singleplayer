@@ -87,6 +87,22 @@ class BlockUtilsTest {
         assertFalse(BlockUtils.affectedByBlockCracker(Blocks.STONE));
     }
 
+    @Test
+    void classifiesHylianTreasureGroupsFromHardcodedMembers() {
+        // Only the MaterialMapStore-backed branches are exercised here — the nine flowers and the
+        // three non-tag bush blocks — because each returns before any tag check.
+        assertEquals("Flowers", BlockUtils.getHylianTreasureGroup(Blocks.POPPY.getDefaultState()));
+        assertEquals("Bushes", BlockUtils.getHylianTreasureGroup(Blocks.FERN.getDefaultState()));
+        assertEquals("Bushes",
+                BlockUtils.getHylianTreasureGroup(Blocks.SHORT_GRASS.getDefaultState()));
+        assertEquals("Bushes", BlockUtils.getHylianTreasureGroup(Blocks.DEAD_BUSH.getDefaultState()));
+        // NOTE: any block that is NOT a hardcoded flower/bush member falls through to a block-tag check
+        // (SAPLINGS→"Bushes", FLOWER_POTS→"Pots", else null). The Bootstrap.initialize() harness does
+        // not bind datapack tags — BlockState#isIn(TagKey) *throws* IllegalStateException there — so
+        // those branches (and the null return) can't be asserted here; they are verified in-game (§G).
+        // In a live world session tags are bound (as the DamageTypeTags checks elsewhere rely on).
+    }
+
     // --- ExperienceConfig-backed (config string key, needs experience.yml) ---
 
     @Test

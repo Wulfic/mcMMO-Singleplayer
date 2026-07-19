@@ -13,11 +13,14 @@ import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
+import com.gmail.nossr50.datatypes.treasure.HylianTreasure;
+import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager.GreenThumbReplant;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -307,6 +310,67 @@ class HerbalismManagerTest {
     void isGreenTerraActiveReadsAbilityMode() {
         when(mmoPlayer.getAbilityMode(SuperAbilityType.GREEN_TERRA)).thenReturn(true);
         assertTrue(herbalismManager.isGreenTerraActive());
+    }
+
+    // --- Hylian Luck treasure-selection core (deterministic; the RNG draws are caller-supplied) ---
+
+    private static HylianTreasure hylian(String id, int dropLevel, double dropChance) {
+        return new HylianTreasure(new ItemSpec(id, 1, null, List.of()), 0, dropChance, dropLevel);
+    }
+
+    @Test
+    void rollHylianLuckReturnsEmptyWhenTheMainRollIsLost() {
+        atHerbalismLevel(100);
+        // Even with a guaranteed static roll, a lost main gate means no treasure (legacy's early return).
+        assertTrue(herbalismManager.rollHylianLuck(List.of(hylian("emerald", 0, 100.0)), false,
+                chance -> true).isEmpty());
+    }
+
+    @Test
+    void rollHylianLuckReturnsEmptyForNoCandidates() {
+        atHerbalismLevel(100);
+        assertTrue(herbalismManager.rollHylianLuck(List.of(), true, chance -> true).isEmpty());
+    }
+
+    @Test
+    void rollHylianLuckReturnsFirstEligibleTreasureInOrder() {
+        atHerbalismLevel(0);
+        // Two reachable treasures; the walk returns the first (legacy iterates config order, first hit).
+        Optional<HylianTreasure> won = herbalismManager.rollHylianLuck(
+                List.of(hylian("emerald", 0, 100.0), hylian("diamond", 0, 100.0)), true,
+                chance -> true);
+        assertTrue(won.isPresent());
+        assertEquals("emerald", won.get().getDrop().getMaterialId());
+    }
+
+    @Test
+    void rollHylianLuckSkipsTreasuresAboveTheSkillLevel() {
+        atHerbalismLevel(10);
+        // The first treasure needs level 50 (skipped at level 10); the second needs level 0.
+        Optional<HylianTreasure> won = herbalismManager.rollHylianLuck(
+                List.of(hylian("diamond", 50, 100.0), hylian("emerald", 0, 100.0)), true,
+                chance -> true);
+        assertTrue(won.isPresent());
+        assertEquals("emerald", won.get().getDrop().getMaterialId(),
+                "the level-gated diamond is skipped, the level-0 emerald wins");
+    }
+
+    @Test
+    void rollHylianLuckReturnsEmptyWhenEveryStaticRollIsLost() {
+        atHerbalismLevel(100);
+        assertTrue(herbalismManager.rollHylianLuck(List.of(hylian("emerald", 0, 100.0)), true,
+                chance -> false).isEmpty());
+    }
+
+    @Test
+    void rollHylianLuckEvaluatesTheStaticRollAgainstTheTreasureDropChance() {
+        atHerbalismLevel(0);
+        // The predicate is handed each candidate's Drop_Chance — win only the one at exactly 42%.
+        Optional<HylianTreasure> won = herbalismManager.rollHylianLuck(
+                List.of(hylian("diamond", 0, 10.0), hylian("emerald", 0, 42.0)), true,
+                chance -> chance == 42.0);
+        assertTrue(won.isPresent());
+        assertEquals("emerald", won.get().getDrop().getMaterialId());
     }
 
     @Test

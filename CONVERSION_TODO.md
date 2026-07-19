@@ -565,8 +565,27 @@ effectively complete.**
       leading `BONE_MEAL` UserBlockTracker-eligibility reset is dropped** — the K9 tracker only marks
       blocks placed via `BlockItem#place`, never via bone meal, so there is no over-marking to walk
       back (the conservative-tracking collapse; a planted crop is maturity-gated on harvest anyway).
-      Deferred: multi-block traversal (`getBrokenHerbalismBlocks`) + chorus
-      delayed XP, and Hylian Luck (needs `TreasureConfig.hylianMap` + block Tag adapter).
+      **Hylian Luck DONE** (this pass): sword-breaking a flower/bush/sapling/flower-pot has a chance to
+      drop rare treasure *in place of* the block's normal drop (legacy `processHylianLuck`, fired from
+      `BlockListener#onBlockBreakHigher`). Because it **replaces** the drop, it rides the cancellable
+      **`PlayerBlockBreakEvents.BEFORE`** seam (new — the rest of `BlockBreakListener` uses `AFTER`,
+      which has already spawned the vanilla loot): on a win it `Block.dropStack`s the treasure,
+      `setBlockState(AIR)`s the block and returns `false`; on a loss a flower **pot** is still consumed
+      (legacy quirk, reachable when the main roll fails at low level), everything else breaks normally.
+      **The block-tag adapter the old deferral wanted is sidestepped:** legacy expanded the `Drops_From`
+      groups (`Bushes`/`Flowers`/`Pots`) into a material-keyed `hylianMap` at config load via
+      `Tag.SAPLINGS`/`Tag.FLOWER_POTS`, but block tags may not be bound at the `SERVER_STARTING` config
+      load, so `TreasureConfig` now keys `hylianMap` by the **raw group name** and the new
+      `BlockUtils.getHylianTreasureGroup` resolves a broken block's group **live at break time** (where
+      tags are bound) — the nine small flowers + `fern`/`short_grass`/`dead_bush` are hardcoded in
+      `MaterialMapStore` (legacy lists the flowers individually too, *not* via `small_flowers`), saplings
+      and flower pots come from `BlockTags.SAPLINGS`/`FLOWER_POTS`. The pure treasure-selection core is
+      `HerbalismManager.rollHylianLuck(candidates, mainRollWon, staticRoll)` (both RNG draws
+      caller-supplied ⇒ unit-tested, same shape as the Fishing treasure roll); the item spawn reuses the
+      existing `ItemSpecBuilder`. ⚠️ In-game verification pending, AND the sapling/pot **tag branches are
+      in-game-only verified** — `Bootstrap.initialize()` doesn't bind datapack tags (`isIn(TagKey)`
+      *throws* there), so the flower/bush-extra branches are unit-tested but the tag branches aren't.
+      Deferred: multi-block traversal (`getBrokenHerbalismBlocks`) + chorus delayed XP.
 - [~] **Excavation** — Giga Drill Breaker **DONE** (commit c6215d163): `BlockBreakListener.
       maybeProcessGigaDrillBreaker` ports legacy `ExcavationManager#gigaDrillBreaker` — GIGA_DRILL_BREAKER
       active + `affectedByGigaDrillBreaker` block + shovel ⇒ two extra excavation checks (base XP +
