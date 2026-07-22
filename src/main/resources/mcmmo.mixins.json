@@ -9,6 +9,7 @@
     "BlockPlaceMixin",
     "BowShootMixin",
     "BrewingStandBlockEntityMixin",
+    "BrewingStandBrewTimeAccessor",
     "ExplosionDropsMixin",
     "FishingBobberUseMixin",
     "FishingWaitTimeMixin",

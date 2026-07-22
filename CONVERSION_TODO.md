@@ -247,8 +247,12 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
 - [~] **Alchemy** — brew action + per-stage brew XP **DONE** (via K7 brewing-stand mixin →
       `AlchemyPotionBrewer.finishBrewing`: transform bottles→child potions, consume ingredient, award
       `handlePotionBrewSuccesses`; owner tracked by `AlchemyListener`). Custom (non-vanilla) mcMMO
-      potions now brew. ⚠️ In-game verification pending. Still TODO (deferred, breadcrumbed): Catalysis
-      brew-speed (brew-timer-rate mixin) + Concoctions ingredient-tier gating.
+      potions now brew. **Catalysis brew-speed DONE** (this pass) — a third injector on
+      `BrewingStandBlockEntityMixin`, at the HEAD of `BrewingStandBlockEntity#tick`, burns the owner's
+      *extra* brew-timer ticks off before vanilla's own one-per-tick decrement, so the two together
+      run the brew at `calculateBrewSpeed` (shipped MaxSpeed 4.0 ⇒ a 400-tick brew in 100 ticks,
+      exactly what legacy's `AlchemyBrewTask` timer produced — see §E). ⚠️ In-game verification
+      pending. Still TODO (deferred, breadcrumbed): Concoctions ingredient-tier gating.
 - [~] **Taming** — base tame XP **DONE** (via K7 entity-tame mixins → `awardTamingXP`/`getTamingXP`;
       per-entity XP from `experience.yml`, K5 cancellable event dropped). ⚠️ In-game verification
       pending. Still TODO: wolf-assisted combat XP (via K1) + the summon/damage-modifier bodies (§C/§D).
@@ -632,7 +636,42 @@ effectively complete.**
       (the marker is what stops a second bleed stacking, replacing legacy's `BleedContainer` bookkeeping)
       and schedules `RuptureTask` on the `TickScheduler`; driven from `CombatUtils` and
       `EntityDamageListener`. ⚠️ In-game verification pending (§G).
-- [ ] **Alchemy** `AlchemyBrewTask`/`AlchemyBrewCheckTask` — via K7 + K8.
+- [x] **Alchemy** `AlchemyBrewTask`/`AlchemyBrewCheckTask` **DONE** — both runnables collapse; nothing
+      is scheduled. Legacy ran its *own* brew loop (a 1-tick repeating task holding a `double brewTimer`
+      from 400, subtracting `calculateBrewSpeed` each tick and writing `(int) brewTimer` back to the
+      stand) because Bukkit gave it no way into vanilla's timer, and `AlchemyBrewCheckTask` existed
+      only to start/cancel that task as the stand's contents changed. Here vanilla already runs the
+      loop — `BrewingStandBlockEntity#tick` decrements `brewTime` by one per tick and zeroes it itself
+      the moment the recipe stops being craftable — so **Catalysis only has to subtract the
+      difference**: a new HEAD injector on that `tick` (third on `BrewingStandBlockEntityMixin`) calls
+      `AlchemyListener.applyCatalysis`, which burns `brewSpeed - 1` extra ticks ahead of vanilla's own
+      decrement. Net rate is `brewSpeed` timer-ticks per game tick, and because the countdown still
+      starts at 400 the GUI keeps legacy's "bar starts full, drains fast" look (setting a shorter
+      initial timer instead would have started the bar part-filled).
+      **🔑 The clamp is load-bearing:** `CatalysisTimer.MIN_BREW_TIME` stops the speed-up at 1, never 0
+      — vanilla reads `brewTime > 0` as "a brew is in progress" and only crafts when *its own*
+      decrement lands on zero, so reaching zero first would make it start a **fresh** brew (burning
+      another blaze powder, resetting to 400) instead of finishing this one. Vanilla stays the thing
+      that fires the craft.
+      **🔑 The accessor that replaced a `@Shadow`:** `brewTime` is package-private and `tick` is
+      `static`, so a shadow field on the sibling mixin is unreachable from its static handlers — new
+      `fabric/mixin/BrewingStandBrewTimeAccessor` (`@Accessor`, an interface mixin) generates the
+      getter/setter onto the target instead. **Reuse this shape for any package-private field a static
+      injection handler needs.** No client guard is needed: `BrewingStandBlock#getTicker` returns null
+      on a client world (bytecode-verified).
+      Speed is fractional (MinSpeed 1.0 → MaxSpeed 4.0, ×4/3 with the Lucky perk) while brew timers
+      are integers, so the MC-free `skills/alchemy/CatalysisTimer` carries the leftover fraction per
+      stand (keyed by `BlockPos#asLong()`, opaque — unit-tested without Knot, ×12) until it matures
+      into a whole tick; entries are dropped when the brew ends and on world close. A stand with no
+      tracked owner brews at vanilla speed, which is legacy's own fallback when it could not resolve
+      the container owner.
+      **⚠️ The speed is resolved ONCE PER BREW, not per tick** — `extraTicks` takes a `DoubleSupplier`
+      it consults only on a brew's first tick. That is legacy's semantics (its task captured the speed
+      in its constructor, so levelling up mid-brew did not accelerate the brew already running), and
+      it also keeps an owner lookup + three `AdvancedConfig` reads (each a `String.split` path walk)
+      off a path that runs 20×/second for **every brewing stand in a loaded chunk**, idle or not. The
+      no-bonus case caches too, or the commonest player — sitting at MinSpeed 1.0 — would pay the
+      lookup on all 400 ticks of every brew. ⚠️ In-game verification pending (a real brew — §G).
 - [x] **Fishing** `MasterAnglerTask` **DONE** — the runnable collapses entirely. Legacy scheduled it a
       tick after `PlayerFishEvent`/`FISHING` purely so the Lure bonus was already applied, then mutated
       the hook via `setMinWaitTime`/`setMaxWaitTime`/`setApplyLure`; the new

@@ -1,6 +1,7 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.AlchemyListener;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BrewingStandBlockEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.recipe.BrewingRecipeRegistry;
@@ -19,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * Alchemy XP, so recipe recognition and the craft are both replaced — while vanilla still owns the
  * fuel, the brew timer, the progress bar, and the particles.
  *
- * <p>Two injections into the block entity's private statics:
+ * <p>Three injections, all into {@code static} vanilla methods (hence the {@code static} handlers):
  * <ul>
  *   <li>{@code canCraft} (HEAD, cancellable) — forces the return value to {@code true} when the stand
  *       holds a recognised mcMMO brew ({@link AlchemyListener#isValidBrew}). This is what lets a
@@ -29,14 +30,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *       {@link AlchemyListener#onBrewCraft} (transform bottles → child potions, consume the
  *       ingredient, award XP) and cancels vanilla's craft. A recipe mcMMO does not recognise falls
  *       through to vanilla unchanged.</li>
+ *   <li>{@code tick} (HEAD) — the Catalysis brew-speed hook: {@link AlchemyListener#applyCatalysis}
+ *       burns extra ticks off the stand's brew timer <i>before</i> vanilla's own decrement, which is
+ *       what replaces the legacy {@code AlchemyBrewTask}'s hand-rolled brew loop.</li>
  * </ul>
  *
  * <p>{@code craft} is only invoked by {@code tick} once the brew timer reaches zero (with
  * {@code canCraft} still true), so it is the faithful analogue of the legacy Bukkit {@code BrewEvent}
- * completion. Both injected methods are {@code static} because the vanilla targets are static.
+ * completion — and it stays that way under Catalysis, because the speed-up never drives the timer to
+ * zero itself (see {@code CatalysisTimer.MIN_BREW_TIME}).
  *
- * <p><b>Deferred</b> (breadcrumb): the Catalysis brew-speed reduction — vanilla's fixed brew timer is
- * reused; see {@link com.gmail.nossr50.skills.alchemy.AlchemyPotionBrewer}.
+ * <p>The {@code tick} hook needs no client-side guard: {@code BrewingStandBlock#getTicker} returns
+ * {@code null} on a client world (bytecode-verified), so this only ever runs server-side.
  */
 @Mixin(BrewingStandBlockEntity.class)
 public abstract class BrewingStandBlockEntityMixin {
@@ -56,5 +61,11 @@ public abstract class BrewingStandBlockEntityMixin {
             AlchemyListener.onBrewCraft(world, pos, slots);
             ci.cancel();
         }
+    }
+
+    @Inject(method = "tick", at = @At("HEAD"))
+    private static void mcmmo$applyCatalysisBrewSpeed(World world, BlockPos pos, BlockState state,
+            BrewingStandBlockEntity blockEntity, CallbackInfo ci) {
+        AlchemyListener.applyCatalysis(pos, blockEntity);
     }
 }
