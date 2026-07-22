@@ -1,7 +1,12 @@
 package com.gmail.nossr50.fabric.listeners;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.fabric.mixin.BrewingStandBrewTimeAccessor;
 import com.gmail.nossr50.skills.alchemy.AlchemyPotionBrewer;
+import com.gmail.nossr50.skills.alchemy.CatalysisTimer;
+import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.UserManager;
 import java.util.Map;
 import java.util.UUID;
@@ -32,6 +37,11 @@ import net.minecraft.world.World;
  *       the block entity's private {@code canCraft}/{@code craft} statics and calls
  *       {@link #isValidBrew} / {@link #onBrewCraft}. The brew resolution + inventory mutation live in
  *       {@link AlchemyPotionBrewer}; this listener only supplies the owner for the XP award.</li>
+ *   <li><b>Catalysis brew speed</b> — the same mixin's {@code tick} hook calls
+ *       {@link #applyCatalysis}, which shortens the owner's brew by the Catalysis multiplier. This is
+ *       what replaces the legacy {@code AlchemyBrewTask}, whose only other job (running the brew
+ *       itself) vanilla already does. Fraction carrying lives in the MC-free
+ *       {@link CatalysisTimer}.</li>
  * </ul>
  *
  * <p><b>Port caveat</b> (same as {@code SmeltingListener}): owners are keyed by block position only
@@ -42,6 +52,9 @@ public final class AlchemyListener {
 
     /** Brewing-stand {@link BlockPos#asLong()} → owner UUID. See the class doc for the single-key caveat. */
     private static final Map<Long, UUID> BREWING_STAND_OWNERS = new ConcurrentHashMap<>();
+
+    /** Per-stand Catalysis state: the speed captured at brew start, plus its carried fraction. */
+    private static final CatalysisTimer CATALYSIS_TIMER = new CatalysisTimer();
 
     private AlchemyListener() {
     }
@@ -54,6 +67,7 @@ public final class AlchemyListener {
     /** Drop all tracked brewing-stand owners (called on server stop so the next world starts clean). */
     public static void clearOwners() {
         BREWING_STAND_OWNERS.clear();
+        CATALYSIS_TIMER.clear();
     }
 
     /** Right-click a brewing stand → remember this player as its owner for XP-award purposes. */
@@ -93,5 +107,63 @@ public final class AlchemyListener {
             owner = UserManager.getPlayer(ownerId);
         }
         AlchemyPotionBrewer.finishBrewing(slots, owner);
+    }
+
+    /**
+     * Shorten a running brew by the stand owner's Catalysis brew speed. Called at the head of every
+     * {@code BrewingStandBlockEntity#tick}, i.e. before vanilla's own one-tick decrement, so the two
+     * together burn {@code brewSpeed} timer ticks per game tick — the rate the legacy
+     * {@code AlchemyBrewTask} drove its own timer at.
+     *
+     * <p>No validity re-check is needed here: vanilla zeroes {@code brewTime} itself the moment the
+     * recipe stops being craftable, so a non-zero timer already means a brew is genuinely in progress
+     * — one this mod either recognises itself or let vanilla keep (both were sped up by legacy too,
+     * since its potion tree subsumes the vanilla recipes).
+     *
+     * <p>This runs every tick for every brewing stand in a loaded chunk, so the owner lookup and the
+     * speed calculation sit behind {@link CatalysisTimer}'s supplier and happen once per brew rather
+     * than once per tick — which is also exactly when legacy resolved them.
+     *
+     * @param pos   the brewing stand position (the key the owner map is built on)
+     * @param stand the ticking brewing stand
+     */
+    public static void applyCatalysis(BlockPos pos, BrewingStandBlockEntity stand) {
+        final long standKey = pos.asLong();
+        final BrewingStandBrewTimeAccessor timer = (BrewingStandBrewTimeAccessor) stand;
+        final int brewTime = timer.getBrewTime();
+
+        if (brewTime <= 0) {
+            // Idle stand (or a brew that just completed) — forget it, so the next brew re-resolves
+            // the owner's speed instead of inheriting this one's.
+            CATALYSIS_TIMER.reset(standKey);
+            return;
+        }
+
+        final int extraTicks = CATALYSIS_TIMER.extraTicks(standKey,
+                () -> resolveBrewSpeed(standKey));
+        if (extraTicks > 0) {
+            timer.setBrewTime(CatalysisTimer.reducedBrewTime(brewTime, extraTicks));
+        }
+    }
+
+    /**
+     * The Catalysis brew speed for whoever owns this stand, or {@link CatalysisTimer#VANILLA_BREW_SPEED}
+     * when there is no owner to credit. Legacy fell back to the same 1.0 whenever it could not resolve
+     * the container's owner.
+     */
+    private static double resolveBrewSpeed(long standKey) {
+        final UUID ownerId = BREWING_STAND_OWNERS.get(standKey);
+        if (ownerId == null) {
+            return CatalysisTimer.VANILLA_BREW_SPEED;
+        }
+        final McMMOPlayer owner = UserManager.getPlayer(ownerId);
+        if (owner == null) {
+            return CatalysisTimer.VANILLA_BREW_SPEED;
+        }
+        if (!Permissions.isSubSkillEnabled(owner.getPlayer(), SubSkillType.ALCHEMY_CATALYSIS)) {
+            return CatalysisTimer.VANILLA_BREW_SPEED;
+        }
+        return owner.getAlchemyManager().calculateBrewSpeed(
+                Permissions.lucky(owner.getPlayer(), PrimarySkillType.ALCHEMY));
     }
 }

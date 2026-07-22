@@ -31,10 +31,14 @@ import org.jetbrains.annotations.NotNull;
  *   <li>{@code getIngredients}/{@code getIngredientList} — need the still-unported {@code PotionConfig}
  *       ingredient tables and {@code ItemStack}/{@code ConfigStringUtils};</li>
  *   <li>{@code handlePotionBrewSuccesses} — needs {@code PotionStage} and
- *       {@code ExperienceConfig.getPotionXP(PotionStage)} (still unported);</li>
- *   <li>the whole brewing-stand machinery ({@code Alchemy.brewingStandMap}, {@code AlchemyBrewTask},
- *       {@code AlchemyPotionBrewer}) — needs the Phase 11 scheduler and block/inventory adapters.</li>
+ *       {@code ExperienceConfig.getPotionXP(PotionStage)} (still unported).</li>
  * </ul>
+ *
+ * <p>The brewing-stand machinery has since landed: {@link AlchemyPotionBrewer} owns brew resolution
+ * and the XP award over the vanilla brewing stand, and {@link #calculateBrewSpeed} now has its
+ * consumer in {@code fabric/listeners/AlchemyListener#applyCatalysis} (via the MC-free
+ * {@link CatalysisTimer}). Legacy's {@code Alchemy.brewingStandMap} / {@code AlchemyBrewTask} have no
+ * analogue here — vanilla already runs the brew loop this port hooks into.
  */
 public class AlchemyManager extends SkillManager {
     private static final double LUCKY_MODIFIER = 4.0 / 3.0;

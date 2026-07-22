@@ -3,8 +3,10 @@ package com.gmail.nossr50.fabric;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.gmail.nossr50.fabric.mixin.BrewingStandBrewTimeAccessor;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Arrays;
+import net.minecraft.block.entity.BrewingStandBlockEntity;
 import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.item.BlockItem;
@@ -113,5 +115,30 @@ class MixinApplicationTest {
         assertTrue(hasShakeHook,
                 "FishingBobberUseMixin's Shake injector did not apply to FishingBobberEntity — the "
                         + "Shake sub-skill would silently never fire in-game");
+    }
+
+    @Test
+    void brewingStandMixinsApply() {
+        // Nothing during boot loads BrewingStandBlockEntity, so class-loading it here is what forces
+        // both of its mixins to apply: the canCraft/craft/tick injections (mcMMO's brewing takeover
+        // plus the Catalysis speed-up) and the brewTime accessor.
+        assertDoesNotThrow(() -> Class.forName(BrewingStandBlockEntity.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+
+        // An applied accessor mixin makes the target implement the interface — and without it,
+        // AlchemyListener.applyCatalysis would ClassCastException on the first brewing-stand tick
+        // rather than fail quietly.
+        assertTrue(BrewingStandBrewTimeAccessor.class.isAssignableFrom(BrewingStandBlockEntity.class),
+                "BrewingStandBrewTimeAccessor did not apply to BrewingStandBlockEntity — Catalysis "
+                        + "could not read or shorten a brew timer in-game");
+
+        // The tick hook is a pure @Inject with no field to assert on, but an applied @Inject leaves
+        // its handler method on the transformed target.
+        final boolean hasCatalysisHook = Arrays.stream(
+                        BrewingStandBlockEntity.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().contains("applyCatalysisBrewSpeed"));
+        assertTrue(hasCatalysisHook,
+                "BrewingStandBlockEntityMixin's Catalysis injector did not apply to "
+                        + "BrewingStandBlockEntity — every brew would run at vanilla speed in-game");
     }
 }

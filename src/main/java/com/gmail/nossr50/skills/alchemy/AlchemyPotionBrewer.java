@@ -24,7 +24,8 @@ import org.jetbrains.annotations.Nullable;
  * {@code canCraft}/{@code craft} statics, forcing {@code canCraft} true for a recognised mcMMO brew
  * (so vanilla still runs the fuel/timer/particles/GUI) and replacing {@code craft} with
  * {@link #finishBrewing}. {@code fabric/listeners/AlchemyListener} supplies the brewing player (owner)
- * for the XP award.
+ * for the XP award, and shortens the timer vanilla runs by the owner's Catalysis brew speed
+ * ({@link CatalysisTimer}) — between them, that is the whole of the legacy {@code AlchemyBrewTask}.
  *
  * <p>The five brewing-stand slots follow vanilla's layout: three potion bottles (0–2), the ingredient
  * ({@link #INGREDIENT_SLOT} = 3), and the blaze-powder fuel (4). All logic here operates directly on
@@ -34,9 +35,6 @@ import org.jetbrains.annotations.Nullable;
  * <p><b>Deferred vs legacy</b> (breadcrumbs — the numeric cores are ported + tested, only the
  * MC-typed wiring is deferred):
  * <ul>
- *   <li><b>Catalysis brew-speed</b> — the Catalysis sub-skill shortens the brew. Vanilla's fixed brew
- *       timer is reused for now; applying {@link AlchemyManager#calculateBrewSpeed} needs a separate
- *       brew-timer-rate mixin (the legacy {@code AlchemyBrewTask} drove its own timer).</li>
  *   <li><b>Concoctions ingredient-tier gating</b> — {@link #isValidBrew} recognises any configured
  *       Concoctions ingredient (max tier) because the {@code canCraft} injection point has no
  *       {@code BlockPos} to resolve the brewing player's Concoctions rank. Gating recipe recognition
