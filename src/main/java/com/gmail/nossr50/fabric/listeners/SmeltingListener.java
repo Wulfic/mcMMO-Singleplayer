@@ -40,8 +40,16 @@ import net.minecraft.world.World;
  * "Iron_Ore"}) is the config string {@code ExperienceConfig.getSmeltingXP} is keyed on; the MC-free
  * award lives on {@link SmeltingManager#awardSmeltingXP(String)}.
  *
- * <p><b>Deferred (K3 ItemStack/inventory adapter):</b> the Second Smelt result-doubling and the
- * vanilla-XP boost application — both mutate the furnace {@code ItemStack}s / dropped experience.
+ * <p>Two more furnace behaviours ride the same owner map and the same mixin:
+ * <ul>
+ *   <li><b>Second Smelt</b> ({@link #onSmeltComplete}) — a chance at a second copy of the result,
+ *       applied just after vanilla's {@code craftRecipe} has merged the first one in;</li>
+ *   <li><b>Fuel Efficiency</b> ({@link #boostFuelTime}) — multiplies vanilla's burn time for the fuel
+ *       item the furnace is about to consume.</li>
+ * </ul>
+ *
+ * <p><b>Deferred:</b> the Understanding the Art vanilla-XP boost — see {@link SmeltingManager} for
+ * the seam and what still blocks it.
  *
  * <p><b>Port caveat:</b> owners are keyed by block position only (not dimension). In singleplayer the
  * owner is always the one player, so a same-coordinates furnace in another dimension awards the same
@@ -91,21 +99,97 @@ public final class SmeltingListener {
         if (input.isEmpty()) {
             return;
         }
-        final UUID ownerId = FURNACE_OWNERS.get(pos.asLong());
-        if (ownerId == null) {
-            return; // no one has interacted with this furnace this session — nobody to award.
-        }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(ownerId);
-        if (mmoPlayer == null) {
-            return; // owner data not loaded (offline / not yet joined).
-        }
-        final SmeltingManager smelting = mmoPlayer.getSmeltingManager();
+        final SmeltingManager smelting = ownerSkill(pos);
         if (smelting == null) {
             return;
         }
+        smelting.awardSmeltingXP(materialConfigString(input));
+    }
 
-        final String materialConfigString = ConfigStringUtils.getMaterialConfigString(
-                Registries.ITEM.getId(input.getItem()).getPath());
-        smelting.awardSmeltingXP(materialConfigString);
+    /**
+     * Second Smelt: give the owner a chance at one extra copy of a just-finished smelt. Called from
+     * the furnace mixin at the point vanilla has already merged the smelt result into the output slot
+     * (legacy {@code processDoubleSmelt}, which ran on {@code FurnaceSmeltEvent} and bumped the
+     * event's result stack by one).
+     *
+     * <p>The room check reads the output stack <em>after</em> that merge — see
+     * {@link SmeltingManager#hasRoomForSecondSmelt} for why that is the same test legacy made against
+     * the pre-merge count. The stack is the furnace's live inventory entry (bytecode-verified:
+     * {@code LockableContainerBlockEntity#getStack} returns {@code getHeldStacks().get(slot)}, not a
+     * copy), so {@code increment} mutates the furnace exactly as vanilla's own {@code craftRecipe}
+     * does, and vanilla's end-of-tick {@code markDirty} covers it.
+     *
+     * <p><b>Deviation (deliberate, and non-observable under the shipped configs):</b> legacy reached
+     * {@code processDoubleSmelt} only after {@code onFurnaceSmeltEvent}'s {@code ItemUtils.isSmeltable}
+     * gate on the furnace's <em>input</em>. We cannot re-check that here — {@code craftRecipe} has
+     * already decremented the input, which is empty whenever the last of it was just consumed — so the
+     * only gate is the {@code Bonus_Drops.Smelting} entry for the <em>result</em>. Those two coincide
+     * for every vanilla furnace recipe: each result listed under {@code Bonus_Drops.Smelting} is
+     * produced only from inputs that carry Smelting XP. An operator who added, say, a cooked food to
+     * {@code Bonus_Drops.Smelting} would get a Second Smelt where legacy gave none.
+     *
+     * @param output the furnace's output slot stack, holding the freshly smelted result
+     */
+    public static void onSmeltComplete(BlockPos pos, ItemStack output) {
+        if (output.isEmpty()) {
+            return; // craftRecipe always fills this; guard anyway so an odd recipe can't NPE the tick.
+        }
+        if (!SmeltingManager.hasRoomForSecondSmelt(output.getCount(), output.getMaxCount())) {
+            return; // no room for the extra item — checked before the RNG, as legacy did.
+        }
+        final SmeltingManager smelting = ownerSkill(pos);
+        if (smelting == null) {
+            return;
+        }
+        if (smelting.canSecondSmelt(materialConfigString(output))) {
+            output.increment(1);
+        }
+    }
+
+    /**
+     * Fuel Efficiency: multiply the burn time of the fuel item a furnace is about to consume, for the
+     * furnace's owner. This is the legacy {@code onFurnaceBurnEvent} arm — including its gate that the
+     * furnace must actually be smelting something mcMMO counts as smeltable, so cooking food burns at
+     * vanilla speed.
+     *
+     * @param burnTime vanilla's own burn time for the fuel
+     * @param input    the furnace's input slot stack (what it is about to smelt)
+     * @return the boosted burn time, or {@code burnTime} unchanged when the bonus does not apply
+     */
+    public static int boostFuelTime(int burnTime, BlockPos pos, ItemStack input) {
+        if (burnTime <= 0 || input.isEmpty()) {
+            return burnTime;
+        }
+        if (!SmeltingManager.isSmeltable(materialConfigString(input))) {
+            return burnTime;
+        }
+        final SmeltingManager smelting = ownerSkill(pos);
+        if (smelting == null) {
+            return burnTime;
+        }
+        return smelting.boostFuelTime(burnTime);
+    }
+
+    /**
+     * The {@link SmeltingManager} of the player who owns the furnace at {@code pos}, or {@code null}
+     * when nobody has interacted with it this session or the owner's data is not loaded. A furnace
+     * with no tracked owner behaves exactly like vanilla.
+     */
+    private static SmeltingManager ownerSkill(BlockPos pos) {
+        final UUID ownerId = FURNACE_OWNERS.get(pos.asLong());
+        if (ownerId == null) {
+            return null; // no one has interacted with this furnace this session.
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(ownerId);
+        if (mmoPlayer == null) {
+            return null; // owner data not loaded (offline / not yet joined).
+        }
+        return mmoPlayer.getSmeltingManager();
+    }
+
+    /** e.g. {@code minecraft:iron_ore} → {@code "Iron_Ore"}, the key the smelting configs use. */
+    private static String materialConfigString(ItemStack stack) {
+        return ConfigStringUtils.getMaterialConfigString(
+                Registries.ITEM.getId(stack.getItem()).getPath());
     }
 }

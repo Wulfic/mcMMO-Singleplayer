@@ -1,6 +1,8 @@
 package com.gmail.nossr50.skills.smelting;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -113,5 +115,66 @@ class SmeltingManagerTest {
         smeltingManager.awardSmeltingXP("Raw_Beef");
         verify(mmoPlayer, never()).beginXpGain(ArgumentMatchers.any(), ArgumentMatchers.anyFloat(),
                 ArgumentMatchers.any(), ArgumentMatchers.any());
+    }
+
+    @Test
+    void isSmeltableTracksWhetherTheInputCarriesSmeltingXp() {
+        // Legacy ItemUtils.isSmeltable was literally "Smelting.getSmeltXP(item) >= 1". This is the
+        // gate that keeps Fuel Efficiency off a furnace that is only cooking food.
+        assertTrue(SmeltingManager.isSmeltable("Iron_Ore"), "ore carries Smelting XP");
+        assertTrue(SmeltingManager.isSmeltable("Ancient_Debris"), "ore carries Smelting XP");
+        assertFalse(SmeltingManager.isSmeltable("Raw_Beef"), "food carries none");
+        assertFalse(SmeltingManager.isSmeltable("Iron_Ingot"),
+                "the smelt RESULT is not itself smeltable — the gate reads the input slot");
+    }
+
+    @Test
+    void hasRoomForSecondSmeltMatchesTheLegacyStackBound() {
+        // Legacy tested the PRE-merge count against maxStackSize - 2; our seam is post-merge, where
+        // the count is one higher, so the same test is "count < maxCount".
+        assertTrue(SmeltingManager.hasRoomForSecondSmelt(1, 64), "fresh single result → room");
+        assertTrue(SmeltingManager.hasRoomForSecondSmelt(63, 64),
+                "legacy's boundary: 62 pre-merge ≤ 64-2 → still allowed");
+        assertFalse(SmeltingManager.hasRoomForSecondSmelt(64, 64),
+                "a full stack must not overflow");
+        assertFalse(SmeltingManager.hasRoomForSecondSmelt(1, 1),
+                "an unstackable result can never take a second copy");
+    }
+
+    @Test
+    void secondSmeltCannotTriggerBelowTheBonusCurve() {
+        atSmeltingLevel(0); // 0% chance at level 0 (SecondSmelt ChanceMax 50 @ MaxBonusLevel 1000).
+        assertFalse(smeltingManager.canSecondSmelt("Iron_Ingot"), "no roll can succeed at level 0");
+    }
+
+    @Test
+    void secondSmeltRequiresTheRESULTToBeBonusDropEnabled() {
+        // config.yml keys Bonus_Drops.Smelting by the smelt RESULT (Iron_Ingot), not the ore that
+        // went in. Cooked_Beef has no entry, so the config gate must veto it outright — while the
+        // enabled material still wins sometimes at the top of the bonus curve (50%).
+        atSmeltingLevel(1000); // RetroMode MaxBonusLevel → ChanceMax 50%.
+
+        int enabledWins = 0;
+        int disabledWins = 0;
+        for (int i = 0; i < 200; i++) {
+            if (smeltingManager.canSecondSmelt("Iron_Ingot")) {
+                enabledWins++;
+            }
+            if (smeltingManager.canSecondSmelt("Cooked_Beef")) {
+                disabledWins++;
+            }
+        }
+
+        assertTrue(enabledWins > 0, "a bonus-drop-enabled result should win some of 200 rolls at 50%");
+        assertEquals(0, disabledWins, "a result with no Bonus_Drops.Smelting entry never doubles");
+    }
+
+    @Test
+    void boostFuelTimeAppliesTheFuelEfficiencyTier() {
+        atSmeltingLevel(0);
+        assertEquals(1600, smeltingManager.boostFuelTime(1600), "rank 0 → vanilla burn time");
+
+        atSmeltingLevel(100); // rank 1 → x2
+        assertEquals(3200, smeltingManager.boostFuelTime(1600), "rank 1 → doubled");
     }
 }

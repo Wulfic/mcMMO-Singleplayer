@@ -87,6 +87,8 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       **furnace-smelt (Smelting) DONE** (commit 071674e8f) — `AbstractFurnaceSmeltMixin` @Injects at
       the `craftRecipe` call in `AbstractFurnaceBlockEntity#tick` → `fabric/listeners/SmeltingListener`
       (furnace-owner map via `UseBlockCallback`) → `SmeltingManager.awardSmeltingXP(materialConfigString)`.
+      That same mixin now also carries Second Smelt (anchored on `setLastRecipe`) and Fuel Efficiency
+      (a `@ModifyExpressionValue` on `getFuelTime`) — see the Smelting entry in §B.
       **fishing-catch (Fishing) DONE** — `FishingBobberUseMixin` `@ModifyArg`s the caught-loot
       `Collection<ItemStack>` argument of the `FishingRodHookedCriterion.trigger` call inside
       `FishingBobberEntity#use` → `fabric/listeners/FishingListener` (replicates the legacy CAUGHT_FISH
@@ -257,8 +259,47 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
       per-entity XP from `experience.yml`, K5 cancellable event dropped). ⚠️ In-game verification
       pending. Still TODO: wolf-assisted combat XP (via K1) + the summon/damage-modifier bodies (§C/§D).
 - [~] **Smelting** — base smelt XP **DONE** (via K7 furnace-smelt mixin → `awardSmeltingXP`, keyed by
-      input material from `experience.yml`; commit 071674e8f). ⚠️ In-game verification pending. Still
-      TODO (K3 ItemStack adapter): Second Smelt result-doubling + vanilla-XP boost application.
+      input material from `experience.yml`; commit 071674e8f). **Second Smelt + Fuel Efficiency DONE**
+      (this pass) — two more injectors on the same `AbstractFurnaceBlockEntity#tick`, so no new mixin
+      class and no K3 adapter was needed after all:
+      **Second Smelt** anchors on the `setLastRecipe` call, which vanilla reaches *only* on the branch
+      where `craftRecipe` returned true (bytecode-verified) — a free "the smelt succeeded" marker, and
+      by then the result is already merged into the output slot, which is what the bonus item has to be
+      added to. That split is why there are two hooks rather than one: the XP hook anchors *before*
+      `craftRecipe` so it can still read the input, the bonus hook *after* so it can read the output.
+      **🔑 The room check moved sides but is the same test.** Legacy ran on `FurnaceSmeltEvent`, i.e.
+      pre-merge, so `canDoubleSmeltItemStack` compared the output count against `maxStackSize - 2`; we
+      sit post-merge where the count is one higher, so the bound is `maxCount - 1` — `before <= max-2`
+      ⇔ `before+1 < max`. Note `Bonus_Drops.Smelting` is keyed by the smelt **result** (`Iron_Ingot`),
+      not the ore that went in, and upstream's list does already carry the modern item names
+      (`Quartz`/`Copper_Ingot`/`Netherite_Scrap` alongside the legacy `Nether_Quartz`) — checked,
+      *not* an instance of the stale-config-key bug family.
+      **⚠️ One deliberate deviation:** legacy reached `processDoubleSmelt` only past
+      `onFurnaceSmeltEvent`'s `isSmeltable` gate on the **input**, which we cannot re-check at a
+      post-craft seam — `craftRecipe` has already decremented the input, and it is empty whenever the
+      last of it was just consumed. So the result-keyed `Bonus_Drops.Smelting` entry is the only gate.
+      The two coincide for every vanilla furnace recipe (each listed result is produced only from
+      inputs that carry Smelting XP); an operator who added a cooked food to that list would get a
+      Second Smelt where legacy gave none.
+      **Fuel Efficiency** modifies the value returned by `getFuelTime`, which `tick` assigns straight
+      into `litTimeRemaining` and then `litTotalTime`, so the fuel gauge scales with it. That call is
+      reached only on the branch that starts a new burn — exactly when the legacy `FurnaceBurnEvent`
+      fired. It keeps legacy's gate that the furnace must be smelting something mcMMO counts as
+      smeltable (`ItemUtils.isSmeltable` ≡ "the input carries Smelting XP"), so cooking food still
+      burns at vanilla speed. `getFuelTime` is protected and `tick` is static, so MixinExtras'
+      `@ModifyExpressionValue` is used rather than a `@Redirect` that would have needed an `@Invoker`
+      just to call the original.
+      All three injectors carry **`allow = 1`**: each target appears exactly once in `tick` today, and
+      a silent second bind would double-apply the bonus — `defaultRequire = 1` does not catch that,
+      since `require` is a minimum (see the Master Angler `@Slice` finding).
+      ⚠️ In-game verification pending (§G). Still TODO: the **Understanding the Art vanilla-XP boost**.
+      The `vanillaXPBoost` math is ported but unwired — legacy hooked `FurnaceExtractEvent`, whose
+      nearest vanilla seam is `FurnaceOutputSlot#onTakeItem` (has the player and the stack) →
+      `AbstractFurnaceBlockEntity#dropExperienceForRecipesUsed` → the private static `dropExperience`
+      → `ExperienceOrbEntity.spawn`. Wiring it means carrying the multiplier from the slot down to the
+      orb spawn (a ThreadLocal, the `CombatUtils.IN_MCMMO_DAMAGE` shape) and deciding what to do with
+      legacy's extra `ItemUtils.isSmelted` gate — "this result came from a furnace recipe whose input
+      was an ore" — which the drop path no longer knows.
 
 > When this section is all checked, every skill can gain XP and the *first meaningful play test* becomes
 > possible. This is the minimum bar for "Pass 1 testable."
