@@ -243,6 +243,55 @@ class FishingManagerTest {
                 ArgumentMatchers.any(), ArgumentMatchers.any());
     }
 
+    // fishing_treasures.yml Shake.CAVE_SPIDER, in config order: SPIDER_EYE 49%, STRING 49%,
+    // COBWEB 1%, POTION|0|POISON 1% (the potion is deferred, so the loaded chances sum to 99, not 100).
+    // The integer roll is caller-supplied, so the whole selection is deterministic.
+
+    @Test
+    void shakeRollWalksDropChancesInConfigOrder() {
+        assertEquals("spider_eye",
+                fishingManager.rollShakeTreasure("cave_spider", 0).orElseThrow().getDrop()
+                        .getMaterialId(), "roll 0 lands in the first band");
+        assertEquals("spider_eye",
+                fishingManager.rollShakeTreasure("cave_spider", 48).orElseThrow().getDrop()
+                        .getMaterialId(), "48 is the last roll inside the 49% first band");
+        assertEquals("string",
+                fishingManager.rollShakeTreasure("cave_spider", 49).orElseThrow().getDrop()
+                        .getMaterialId(), "49 is the first roll of the second band");
+        assertEquals("cobweb",
+                fishingManager.rollShakeTreasure("cave_spider", 98).orElseThrow().getDrop()
+                        .getMaterialId(), "98 lands in the 1% cobweb band");
+    }
+
+    @Test
+    void shakeRollWinsNothingAboveTheSummedDropChances() {
+        // 99 exceeds the loaded 99% total — the gap the deferred poison potion used to fill. Legacy
+        // behaves the same way for any entity whose chances sum below 100 (chooseDrop returns null).
+        assertTrue(fishingManager.rollShakeTreasure("cave_spider", 99).isEmpty());
+    }
+
+    @Test
+    void shakeRollIsEmptyForAnEntityWithNoConfiguredDrops() {
+        assertTrue(fishingManager.rollShakeTreasure("bat", 0).isEmpty());
+    }
+
+    @Test
+    void shakeDamageIsAQuarterOfHealthFlooredAtOneAndCappedAtTen() {
+        assertEquals(5.0, FishingManager.shakeDamage(20.0), 1.0e-9, "a zombie: 20/4");
+        assertEquals(1.0, FishingManager.shakeDamage(2.0), 1.0e-9, "floored at 1, never 0.5");
+        assertEquals(10.0, FishingManager.shakeDamage(100.0), 1.0e-9,
+                "capped at 10 so a tanky mob survives more than four shakes");
+    }
+
+    @Test
+    void awardShakeXpPaysTheFlatConfiguredValue() {
+        // experience.yml: Experience_Values.Fishing.Shake = 50 (paid regardless of the drop's own XP,
+        // which is 0 for every shipped shake entry).
+        fishingManager.awardShakeXP();
+        verify(mmoPlayer).beginXpGain(PrimarySkillType.FISHING, 50f, XPGainReason.PVE,
+                XPGainSource.SELF);
+    }
+
     // fishing_treasures.yml Item_Drop_Rates.Tier_1, in the enum's most-rare-first walk order:
     // MYTHIC 0.01, LEGENDARY 0.01, EPIC 0.10, RARE 0.25, UNCOMMON 1.25, COMMON 7.50 (sum 9.12).
     // Level 1 -> Treasure Hunter rank 1 -> loot tier 1. The bucket picker (size -> index) fixes which

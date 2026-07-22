@@ -4,9 +4,11 @@ import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.datatypes.treasure.Rarity;
+import com.gmail.nossr50.datatypes.treasure.ShakeTreasure;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -35,11 +37,19 @@ import org.slf4j.LoggerFactory;
  *       — same dynamic-enchant-registry gap, and their only consumer ({@code FishingManager#processMagicHunter}/
  *       {@code getPossibleEnchantments}) is itself deferred. Loading a table nothing reads would be
  *       readerless state, so it's left out entirely (see §F "config that lies").</li>
- *   <li><b>{@code Shake} map</b> ({@code EntityType} → drops, incl. potions and the {@code INVENTORY}
- *       steal) — needs a Bukkit-{@code EntityType}→registry-entity mapping <i>and</i> the
- *       {@code FishingManager#shakeCheck} body (a {@code LivingEntity} target), both unported. Left
- *       out for the same readerless-state reason.</li>
  * </ul>
+ *
+ * <p><b>The {@code Shake} map is now loaded</b> ({@link #shakeMap}, consumed by
+ * {@code FishingManager#rollShakeTreasure}). Legacy keyed it by Bukkit {@code EntityType} and built it
+ * by iterating {@code EntityType.values()}; this port keys it by the entity's <b>vanilla registry
+ * path</b> ({@code "cave_spider"}) and iterates the config's own section names instead — the same
+ * resolve-at-use-time shape the sibling {@link TreasureConfig} uses for its Hylian groups, and it keeps
+ * this config MC-free (no entity registry read at load). Section names are lower-cased, with an alias
+ * table for the three sections whose Bukkit enum names no longer match the registry (see
+ * {@link #ENTITY_SECTION_ALIASES}). Two entry shapes are skipped by name, each a real adapter gap:
+ * potion drops (Cave Spider's poison potion, the Witch's splash potions — {@link ItemSpec} carries no
+ * potion base type yet) and the {@code PLAYER.INVENTORY} steal (legacy's magic-{@code BEDROCK}
+ * inventory raid, unreachable in singleplayer where the only player is the angler).
  *
  * <p><b>Faithfulness note:</b> unlike legacy, unknown/unsupported materials are not filtered here —
  * an entry's {@code materialId} is resolved to a real item only at spawn time (by the shared
@@ -53,8 +63,32 @@ public class FishingTreasureConfig extends ConfigLoader {
 
     public static final String FILENAME = "fishing_treasures.yml";
 
+    /**
+     * The three {@code Shake} section names whose Bukkit enum spelling no longer matches the vanilla
+     * entity registry, mapped to their registry paths.
+     *
+     * <p><b>This table is a deliberate fix, not a transcription (CONVERSION_TODO §F).</b> Legacy builds
+     * the shake map by iterating the live {@code EntityType.values()} and reading
+     * {@code "Shake." + entity}, so a section whose name is not a current enum constant is never
+     * looked up: {@code PIG_ZOMBIE} was removed from Bukkit in 1.16 (it is {@code ZOMBIFIED_PIGLIN}),
+     * and {@code MUSHROOM_COW}/{@code SNOWMAN} were renamed to {@code MOOSHROOM}/{@code SNOW_GOLEM} in
+     * 1.20.5 — the very API version the vendored tree builds against. All three sections still ship in
+     * {@code fishing_treasures.yml}, so upstream promises drops for those mobs and delivers none.
+     * Aliasing them here makes the shipped config mean what it says.
+     */
+    private static final Map<String, String> ENTITY_SECTION_ALIASES = Map.of(
+            "mushroom_cow", "mooshroom",
+            "pig_zombie", "zombified_piglin",
+            "snowman", "snow_golem");
+
     /** Treasure-Hunter fishing rewards, bucketed by rarity. Every rarity is present (possibly empty). */
     public final @NotNull Map<Rarity, List<FishingTreasure>> fishingRewards = new EnumMap<>(Rarity.class);
+
+    /**
+     * Shake drops keyed by the target's vanilla entity registry path (e.g. {@code "cave_spider"}).
+     * Entities with no configured drops are simply absent — use {@link #getShakeTreasures(String)}.
+     */
+    public final @NotNull Map<String, List<ShakeTreasure>> shakeMap = new HashMap<>();
 
     public FishingTreasureConfig(Path dataFolder) {
         super(FILENAME, dataFolder);
@@ -69,9 +103,11 @@ public class FishingTreasureConfig extends ConfigLoader {
         }
 
         loadFishingRewards();
+        loadShakeTreasures();
 
-        LOGGER.info("Loaded {} fishing treasures from {}",
-                fishingRewards.values().stream().mapToInt(List::size).sum(), FILENAME);
+        LOGGER.info("Loaded {} fishing treasures and {} shake drops across {} entities from {}",
+                fishingRewards.values().stream().mapToInt(List::size).sum(),
+                shakeMap.values().stream().mapToInt(List::size).sum(), shakeMap.size(), FILENAME);
     }
 
     private void loadFishingRewards() {
@@ -88,7 +124,7 @@ public class FishingTreasureConfig extends ConfigLoader {
 
             // Deferred reward shapes (see class javadoc): enchanted books need the dynamic enchant
             // registry + K3 enchant-write; potions need a potion base-type on ItemSpec. Skip by name.
-            if (materialName.equalsIgnoreCase("ENCHANTED_BOOK") || materialName.contains("POTION")) {
+            if (materialName.equalsIgnoreCase("ENCHANTED_BOOK") || isPotionEntry(materialName)) {
                 LOGGER.debug("Skipping deferred fishing reward '{}' (book/potion — needs enchant/potion"
                         + " adapter).", treasureName);
                 continue;
@@ -121,6 +157,101 @@ public class FishingTreasureConfig extends ConfigLoader {
 
             fishingRewards.get(rarity).add(new FishingTreasure(item, xp));
         }
+    }
+
+    /**
+     * Load the {@code Shake} section — the per-mob drops the Shake sub-skill knocks loose. Ports the
+     * shake half of legacy {@code loadTreasures}, with two structural differences (both in the class
+     * javadoc): we walk the config's own entity sections rather than {@code EntityType.values()}, and
+     * we key by vanilla registry path so no entity registry is touched at load.
+     */
+    private void loadShakeTreasures() {
+        final var shakeSection = config.getConfigurationSection("Shake");
+        if (shakeSection == null) {
+            LOGGER.warn("No Shake section in {}; the Shake sub-skill will drop nothing.", FILENAME);
+            return;
+        }
+
+        for (String entitySectionName : shakeSection.getKeys(false)) {
+            final String entityPath = toEntityRegistryPath(entitySectionName);
+            final var dropsSection = config.getConfigurationSection("Shake." + entitySectionName);
+            if (dropsSection == null) {
+                continue;
+            }
+
+            for (String dropName : dropsSection.getKeys(false)) {
+                // Legacy's "MATERIAL|data|potionType" form: the block-data short is meaningless in
+                // modern flattened MC, and the potion arms are deferred (see below), so keep the head.
+                final String materialName = dropName.split("[|]")[0];
+
+                // Deferred/dropped entry shapes, skipped by name (class javadoc): potion drops need a
+                // potion base type on ItemSpec, and INVENTORY is legacy's magic-BEDROCK player-inventory
+                // steal, which cannot fire in singleplayer (its only target is the angler themselves).
+                if (isPotionEntry(materialName) || materialName.equalsIgnoreCase("INVENTORY")) {
+                    LOGGER.debug("Skipping Shake drop '{}.{}' (potion/inventory-steal — deferred or"
+                            + " unreachable in singleplayer).", entitySectionName, dropName);
+                    continue;
+                }
+
+                final String base = "Shake." + entitySectionName + "." + dropName;
+
+                int amount = config.getInt(base + ".Amount");
+                if (amount <= 0) {
+                    amount = 1;
+                }
+
+                final int xp = config.getInt(base + ".XP");
+                if (xp < 0) {
+                    LOGGER.warn("Shake drop {} has an invalid XP value: {}, skipping.", base, xp);
+                    continue;
+                }
+
+                final double dropChance = config.getDouble(base + ".Drop_Chance");
+                if (dropChance < 0.0) {
+                    LOGGER.warn("Shake drop {} has an invalid Drop_Chance: {}, skipping.", base,
+                            dropChance);
+                    continue;
+                }
+
+                final ItemSpec item = new ItemSpec(materialName.toLowerCase(Locale.ROOT), amount,
+                        config.getString(base + ".Custom_Name", null),
+                        config.getStringList(base + ".Lore"));
+
+                shakeMap.computeIfAbsent(entityPath, key -> new ArrayList<>())
+                        .add(new ShakeTreasure(item, xp, dropChance,
+                                config.getInt(base + ".Drop_Level")));
+            }
+        }
+    }
+
+    /**
+     * The vanilla entity registry path a {@code Shake} section addresses. Bukkit enum names are
+     * upper-snake and the registry is lower-snake, so this is a lower-case plus the rename fixes in
+     * {@link #ENTITY_SECTION_ALIASES}.
+     */
+    private static String toEntityRegistryPath(@NotNull String entitySectionName) {
+        final String lowerCased = entitySectionName.toLowerCase(Locale.ROOT);
+        return ENTITY_SECTION_ALIASES.getOrDefault(lowerCased, lowerCased);
+    }
+
+    /**
+     * Whether a config entry names a potion. Matches legacy's own loose test (its {@code POTION},
+     * {@code SPLASH_POTION} and {@code LINGERING_POTION} entries all carry a {@code PotionData} block
+     * that {@link ItemSpec} cannot yet express).
+     */
+    private static boolean isPotionEntry(@NotNull String materialName) {
+        return materialName.toUpperCase(Locale.ROOT).contains("POTION");
+    }
+
+    /**
+     * The Shake drops configured for an entity, in config order (the order legacy's cumulative
+     * drop-chance walk depends on).
+     *
+     * @param entityRegistryPath the target's vanilla entity registry path, e.g. {@code "cave_spider"}
+     * @return the configured drops, or an empty list when the entity has none
+     */
+    public @NotNull List<ShakeTreasure> getShakeTreasures(@NotNull String entityRegistryPath) {
+        return shakeMap.getOrDefault(entityRegistryPath, List.of());
     }
 
     /**

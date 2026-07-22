@@ -3,24 +3,30 @@ package com.gmail.nossr50.fabric.listeners;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
+import com.gmail.nossr50.datatypes.treasure.ShakeTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.ItemSpecBuilder;
 import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.skills.fishing.FishingManager;
 import com.gmail.nossr50.skills.fishing.FishingManager.MasterAnglerWaitTimes;
 import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.skills.CombatUtils;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.enchantment.Enchantments;
+import net.minecraft.entity.ItemEntity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.passive.SheepEntity;
 import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.entity.vehicle.AbstractBoatEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.random.Random;
 
@@ -56,10 +62,14 @@ import net.minecraft.util.math.random.Random;
  * {@code MasterAnglerTask}, which needed a scheduled task only because a Bukkit event handler could
  * not sit where the wait is actually drawn.
  *
+ * <p><b>Shake is wired here too</b> ({@link #onEntityHooked}), driven by the second injector in
+ * {@code FishingBobberUseMixin}: reeling in a hooked mob is legacy's {@code CAUGHT_ENTITY} state, and
+ * a successful roll knocks a configured drop off the mob, damages it and pays flat Shake XP.
+ *
  * <p><b>Still deferred:</b> Magic Hunter enchant loot (needs the dynamic enchant registry + K3
- * enchant-write; its {@code FishingTreasureConfig} enchant/book tables are deferred with it), the
- * {@code Shake} ability, and the exploit item-removal punishment (we skip the XP <i>and</i> the
- * treasure roll on an exploiting catch — the same early-return gate).
+ * enchant-write; its {@code FishingTreasureConfig} enchant/book tables are deferred with it) and the
+ * exploit item-removal punishment (we skip the XP <i>and</i> the treasure roll on an exploiting catch —
+ * the same early-return gate).
  */
 public final class FishingListener {
 
@@ -155,6 +165,91 @@ public final class FishingListener {
         if (maxDamage > 0) {
             stack.setDamage(rng.nextInt(maxDamage));
         }
+    }
+
+    /**
+     * Shake: a player reels in a mob they hooked, and it drops something. Ports legacy
+     * {@code FishingManager#shakeCheck}, reached from the {@code CAUGHT_ENTITY} arm of the legacy
+     * {@code PlayerFishEvent} monitor. Called from {@code FishingBobberUseMixin} at the
+     * {@code pullHookedEntity} call inside {@code FishingBobberEntity#use} — i.e. <i>before</i> vanilla
+     * yanks the mob, which is exactly where CraftBukkit fired that event.
+     *
+     * <p>Unlike {@link #onFishCaught}, no anti-exploit gate applies: legacy's spam/same-spot checks
+     * guard only the {@code CAUGHT_FISH} state.
+     *
+     * <p>Legacy's trailing {@code setFishingTarget()} is dropped for the same reason Master Angler drops
+     * it — it discards the value it computes. Dropped with it: the {@code PLAYER} arm (the player-head
+     * owner stamp and the {@code INVENTORY} steal), unreachable in singleplayer where the only player is
+     * the angler — an honest collapse, the same call made for Disarm and Daze.
+     *
+     * @param bobber the bobber being reeled in (source of the owner and the hooked entity)
+     */
+    public static void onEntityHooked(FishingBobberEntity bobber) {
+        if (!(bobber.getHookedEntity() instanceof LivingEntity target)) {
+            return; // legacy canShake's `target instanceof LivingEntity` half (a hooked boat/item).
+        }
+        if (!(bobber.getPlayerOwner() instanceof ServerPlayerEntity serverPlayer)) {
+            return; // client-side / null owner.
+        }
+        if (!(target.getEntityWorld() instanceof ServerWorld world)) {
+            return; // the drop spawn and the damage are server-side only.
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        if (mmoPlayer == null) {
+            return; // data not loaded (e.g. mid-join).
+        }
+        final FishingManager fishingManager = mmoPlayer.getFishingManager();
+        if (fishingManager == null || !fishingManager.canShake()
+                || !fishingManager.rollShakeSuccess()) {
+            return;
+        }
+
+        final String entityPath = Registries.ENTITY_TYPE.getId(target.getType()).getPath();
+        final Optional<ShakeTreasure> rolled = fishingManager.rollShakeTreasure(entityPath,
+                ThreadLocalRandom.current().nextInt(100));
+        if (rolled.isEmpty()) {
+            return; // this mob has no configured drops, or the roll cleared them all.
+        }
+        final Optional<ItemStack> built = ItemSpecBuilder.build(rolled.get().getDrop());
+        if (built.isEmpty()) {
+            return; // drop material has no vanilla item (logged by Materials) — no drop, no damage.
+        }
+        // Built before shearing so an unresolvable material can never shear a sheep for nothing. Legacy
+        // could not hit that case (it held a real ItemStack from config load), so this is order-only.
+        if (!shearIfWool(target, rolled.get().getDrop().getMaterialId())) {
+            return; // an already-sheared sheep: legacy bails entirely — no drop, no damage, no XP.
+        }
+
+        final ItemEntity drop = new ItemEntity(world, target.getX(), target.getY(), target.getZ(),
+                built.get());
+        drop.setToDefaultPickupDelay(); // Bukkit's World#dropItem behaviour.
+        world.spawnEntity(drop);
+
+        // Attributed to the player, so it is mcMMO's own damage: the K1 seam passes it through and it
+        // pays no combat XP — the role legacy's CUSTOM_DAMAGE marker played.
+        CombatUtils.safeDealDamage(target, FishingManager.shakeDamage(target.getMaxHealth()),
+                serverPlayer);
+        fishingManager.awardShakeXP();
+    }
+
+    /**
+     * Legacy's {@code SHEEP} arm of {@code shakeCheck}: shaking wool off a sheep shears it, and a sheep
+     * that is already sheared yields nothing. A no-op (returning {@code true}) for any other mob, or for
+     * a non-wool drop off a sheep.
+     *
+     * @param target the shaken mob
+     * @param materialId the rolled drop's registry path, e.g. {@code "white_wool"}
+     * @return whether the shake may proceed
+     */
+    private static boolean shearIfWool(LivingEntity target, String materialId) {
+        if (!(target instanceof SheepEntity sheep) || !materialId.endsWith("wool")) {
+            return true;
+        }
+        if (sheep.isSheared()) {
+            return false;
+        }
+        sheep.setSheared(true);
+        return true;
     }
 
     /**

@@ -8,9 +8,11 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
 import com.gmail.nossr50.datatypes.treasure.Rarity;
+import com.gmail.nossr50.datatypes.treasure.ShakeTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
 import java.util.List;
 import java.util.Optional;
@@ -28,13 +30,14 @@ import org.jetbrains.annotations.NotNull;
  *
  * <p><b>Treasure Hunter item roll is now wired</b> ({@link #rollFishingTreasure} +
  * {@link #awardFishingTreasureXP}, driven from {@code fabric.listeners.FishingListener} via
- * {@code ItemSpecBuilder}). Still deferred until the entity/item/block/enchant adapters:</p>
+ * {@code ItemSpecBuilder}), and so is <b>Shake</b> ({@link #rollShakeSuccess} +
+ * {@link #rollShakeTreasure} + {@link #shakeDamage} + {@link #awardShakeXP}, driven from the same
+ * listener when a hooked mob is reeled in). Still deferred until the entity/item/block/enchant
+ * adapters:</p>
  * <ul>
  *   <li>{@code processMagicHunter}/{@code getPossibleEnchantments} — the Magic Hunter enchant roll on
  *       a caught treasure needs the dynamic 1.21 enchantment registry + the K3 enchant-write surface
  *       (its {@code FishingTreasureConfig} enchant tables are deferred for the same reason);</li>
- *   <li>{@code shakeCheck} — needs the {@code LivingEntity} target, {@code Fishing}'s shake-drop
- *       tables, and item-spawn/damage adapters;</li>
  *   <li>{@code canIceFish}/{@code iceFishing} — need the live {@code Block}/{@code Biome} adapter;</li>
  *   <li>{@code masterAngler}/{@code processMasterAngler} — need the {@code FishHook} adapter and the
  *       Folia-scheduler {@code MasterAnglerTask}; the wait-time math itself is extracted below as
@@ -157,6 +160,79 @@ public class FishingManager extends SkillManager {
     public double getShakeChance() {
         return McMMOMod.getAdvancedConfig().getShakeChance(
                 RankUtils.getRank(getPlayer(), SubSkillType.FISHING_SHAKE));
+    }
+
+    /**
+     * The Shake sub-skill roll — whether reeling in this hooked mob shakes anything loose at all
+     * (legacy {@code shakeCheck}'s leading {@code isStaticSkillRNGSuccessful}). Owns its RNG, like
+     * {@link com.gmail.nossr50.skills.herbalism.HerbalismManager#rollGreenThumbReplant()}; the
+     * <i>which drop</i> decision is the caller-fed {@link #rollShakeTreasure} below.
+     *
+     * @return whether the shake succeeded
+     */
+    public boolean rollShakeSuccess() {
+        return ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.FISHING, mmoPlayer,
+                getShakeChance());
+    }
+
+    /**
+     * Pick which drop a successful Shake knocks off the target — legacy {@code Fishing.findPossibleDrops}
+     * + {@code chooseDrop}, fused into one pure function. The random draw is supplied by the caller so
+     * the whole selection is unit-testable, exactly as {@link #rollFishingTreasure} and
+     * {@code HerbalismManager#rollHylianLuck} do.
+     *
+     * <p>Walks the entity's configured drops in config order accumulating their {@code Drop_Chance}s and
+     * returns the first whose running total exceeds {@code dropRoll}. Legacy's quirks are preserved:
+     * the roll is an <b>integer</b> in {@code [0, 100)} (so a {@code 0.5} chance still wins on a roll of
+     * {@code 0}), and a list whose chances sum below 100 simply yields nothing on a high roll — that is
+     * how the {@code PLAYER} section, whose every chance is {@code 0.0}, drops nothing at all.
+     *
+     * <p>Neither a treasure's {@code Drop_Level} nor its {@code XP} is consulted, because legacy's
+     * {@code chooseDrop} consults neither (Shake pays the flat {@link #awardShakeXP()} instead) — see
+     * {@link com.gmail.nossr50.datatypes.treasure.ShakeTreasure}.
+     *
+     * @param entityRegistryPath the target's vanilla entity registry path, e.g. {@code "cave_spider"}
+     * @param dropRoll a fresh integer roll in {@code [0, 100)} (the caller's {@code nextInt(100)})
+     * @return the drop to shake loose, or empty when this entity has no drops or the roll cleared them
+     */
+    public @NotNull Optional<ShakeTreasure> rollShakeTreasure(@NotNull String entityRegistryPath,
+            int dropRoll) {
+        final List<ShakeTreasure> possibleDrops = McMMOMod.getFishingTreasureConfig()
+                .getShakeTreasures(entityRegistryPath);
+
+        double cumulativeChance = 0.0;
+        for (ShakeTreasure treasure : possibleDrops) {
+            cumulativeChance += treasure.getDropChance();
+            if (dropRoll < cumulativeChance) {
+                return Optional.of(treasure);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The damage a successful Shake deals to the target, from legacy {@code shakeCheck}: a quarter of
+     * the mob's maximum health, floored at 1 and capped at 10 — "so you can shake a mob no more than 4
+     * times", as legacy's own comment puts it (the cap is what saves high-health mobs from dying in
+     * four shakes).
+     *
+     * @param maxHealth the target's maximum health
+     * @return the damage to deal
+     */
+    public static double shakeDamage(double maxHealth) {
+        return Math.min(Math.max(maxHealth / 4, 1), 10);
+    }
+
+    /**
+     * Award the flat Shake XP ({@code Experience_Values.Fishing.Shake}). Legacy pays this on every
+     * successful shake that actually drops something, independent of the drop's own configured XP.
+     */
+    public void awardShakeXP() {
+        final int xp = McMMOMod.getExperienceConfig().getFishingShakeXP();
+        if (xp <= 0) {
+            return;
+        }
+        applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF);
     }
 
     /**
