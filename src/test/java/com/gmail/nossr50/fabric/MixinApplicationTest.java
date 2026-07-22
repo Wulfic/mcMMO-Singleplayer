@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.gmail.nossr50.fabric.mixin.BrewingStandBrewTimeAccessor;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Arrays;
+import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.block.entity.BrewingStandBlockEntity;
 import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.entity.projectile.ProjectileEntity;
@@ -140,5 +141,28 @@ class MixinApplicationTest {
         assertTrue(hasCatalysisHook,
                 "BrewingStandBlockEntityMixin's Catalysis injector did not apply to "
                         + "BrewingStandBlockEntity — every brew would run at vanilla speed in-game");
+    }
+
+    @Test
+    void furnaceMixinApplies() {
+        // All three Smelting hooks ride AbstractFurnaceBlockEntity#tick, and each is anchored on a
+        // different call inside it, so they drift independently. Class-loading forces application;
+        // the per-handler assertions below are what prove each one actually bound.
+        assertDoesNotThrow(() -> Class.forName(AbstractFurnaceBlockEntity.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+
+        final var methods = Arrays.stream(AbstractFurnaceBlockEntity.class.getDeclaredMethods())
+                .map(java.lang.reflect.Method::getName)
+                .toList();
+
+        assertTrue(methods.stream().anyMatch(name -> name.contains("onSmeltComplete")),
+                "the craftRecipe-anchored injector did not apply — a finished smelt would award no "
+                        + "Smelting XP in-game");
+        assertTrue(methods.stream().anyMatch(name -> name.contains("onSecondSmelt")),
+                "the setLastRecipe-anchored injector did not apply — Second Smelt would silently "
+                        + "never grant its extra item in-game");
+        assertTrue(methods.stream().anyMatch(name -> name.contains("applyFuelEfficiency")),
+                "the getFuelTime modifier did not apply — Fuel Efficiency would silently leave every "
+                        + "furnace at vanilla burn times in-game");
     }
 }
