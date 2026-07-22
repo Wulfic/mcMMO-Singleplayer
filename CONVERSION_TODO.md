@@ -258,10 +258,10 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
 - [~] **Taming** — base tame XP **DONE** (via K7 entity-tame mixins → `awardTamingXP`/`getTamingXP`;
       per-entity XP from `experience.yml`, K5 cancellable event dropped). ⚠️ In-game verification
       pending. Still TODO: wolf-assisted combat XP (via K1) + the summon/damage-modifier bodies (§C/§D).
-- [~] **Smelting** — base smelt XP **DONE** (via K7 furnace-smelt mixin → `awardSmeltingXP`, keyed by
-      input material from `experience.yml`; commit 071674e8f). **Second Smelt + Fuel Efficiency DONE**
-      (this pass) — two more injectors on the same `AbstractFurnaceBlockEntity#tick`, so no new mixin
-      class and no K3 adapter was needed after all:
+- [x] **Smelting** — all three sub-skills wired. Base smelt XP **DONE** (via K7 furnace-smelt mixin →
+      `awardSmeltingXP`, keyed by input material from `experience.yml`; commit 071674e8f).
+      **Second Smelt + Fuel Efficiency DONE** (commit 66853d289) — two more injectors on the same
+      `AbstractFurnaceBlockEntity#tick`, so no new mixin class and no K3 adapter was needed after all:
       **Second Smelt** anchors on the `setLastRecipe` call, which vanilla reaches *only* on the branch
       where `craftRecipe` returned true (bytecode-verified) — a free "the smelt succeeded" marker, and
       by then the result is already merged into the output slot, which is what the bonus item has to be
@@ -292,14 +292,33 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
       All three injectors carry **`allow = 1`**: each target appears exactly once in `tick` today, and
       a silent second bind would double-apply the bonus — `defaultRequire = 1` does not catch that,
       since `require` is a minimum (see the Master Angler `@Slice` finding).
-      ⚠️ In-game verification pending (§G). Still TODO: the **Understanding the Art vanilla-XP boost**.
-      The `vanillaXPBoost` math is ported but unwired — legacy hooked `FurnaceExtractEvent`, whose
-      nearest vanilla seam is `FurnaceOutputSlot#onTakeItem` (has the player and the stack) →
-      `AbstractFurnaceBlockEntity#dropExperienceForRecipesUsed` → the private static `dropExperience`
-      → `ExperienceOrbEntity.spawn`. Wiring it means carrying the multiplier from the slot down to the
-      orb spawn (a ThreadLocal, the `CombatUtils.IN_MCMMO_DAMAGE` shape) and deciding what to do with
-      legacy's extra `ItemUtils.isSmelted` gate — "this result came from a furnace recipe whose input
-      was an ore" — which the drop path no longer knows.
+      **Understanding the Art DONE** (this pass) — the vanilla-XP boost, legacy's `FurnaceExtractEvent`
+      arm. Vanilla splits what Bukkit made one event: the trigger knows the player and the item, the
+      code that spawns the XP knows neither. So it is two hooks joined by a thread-local, the
+      `CombatUtils.IN_MCMMO_DAMAGE` shape.
+      **The trigger is `FurnaceOutputSlot#onCrafted(ItemStack)`, not `onTakeItem`.** Both ways out of
+      a furnace output slot funnel through it (bytecode-verified: a normal take is `onTakeItem` →
+      `onCrafted(stack)`; a **shift-click is `onQuickTransfer` → `onCrafted(stack, amount)` →
+      `onCrafted(stack)` and never reaches `onTakeItem` in time**), and it is the only caller of
+      `dropExperienceForRecipesUsed`. Bracketing it at HEAD/RETURN spans exactly the orb spawns that
+      belong to one extraction.
+      **The payload hook is a `@ModifyArg` on the `ExperienceOrbEntity#spawn` call inside the private
+      static `dropExperience`** — not the `dropExperience` call site inside
+      `getRecipesUsedAndDropExperience`, which lives in a lambda. By then vanilla has already done its
+      floor-plus-fractional-chance rounding, which is precisely the figure Bukkit handed to
+      `getExpToDrop`, so scaling there reproduces legacy's arithmetic rather than approximating it.
+      Breaking a furnace with stored XP reaches `dropExperience` too, but leaves no multiplier in the
+      thread-local, so it still drops vanilla XP — matching legacy, whose event was player-only.
+      **Legacy's `ItemUtils.isSmelted` gate is ported for real, not approximated.** It asked the server
+      for every recipe producing the extracted item and kept the ones that were furnace recipes with an
+      ore-block input. `ServerRecipeManager#values()` gives the same recipe set, so the answer set is
+      derived once and cached: every `SmeltingRecipe` (not blasting/smoking — legacy matched Bukkit's
+      `FurnaceRecipe`) whose ingredient accepts a known ore block contributes its result item. The test
+      is asked in that direction — "does this ingredient accept an ore?" rather than "list the
+      ingredient's items" — both because an `Ingredient` can accept several items and because
+      `Ingredient#getMatchingItems` is deprecated in 1.21.11. The index is dropped on a data-pack
+      reload and on server stop.
+      ⚠️ In-game verification pending (§G) for all four behaviours.
 
 > When this section is all checked, every skill can gain XP and the *first meaningful play test* becomes
 > possible. This is the minimum bar for "Pass 1 testable."

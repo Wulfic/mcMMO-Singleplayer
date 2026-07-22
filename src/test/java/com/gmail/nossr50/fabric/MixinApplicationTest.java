@@ -12,6 +12,7 @@ import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.BowItem;
+import net.minecraft.screen.slot.FurnaceOutputSlot;
 import net.minecraft.world.explosion.ExplosionImpl;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -145,9 +146,10 @@ class MixinApplicationTest {
 
     @Test
     void furnaceMixinApplies() {
-        // All three Smelting hooks ride AbstractFurnaceBlockEntity#tick, and each is anchored on a
-        // different call inside it, so they drift independently. Class-loading forces application;
-        // the per-handler assertions below are what prove each one actually bound.
+        // Three of the four Smelting hooks ride AbstractFurnaceBlockEntity#tick, and each is anchored
+        // on a different call inside it, so they drift independently. The fourth sits on the private
+        // static dropExperience. Class-loading forces application; the per-handler assertions below
+        // are what prove each one actually bound.
         assertDoesNotThrow(() -> Class.forName(AbstractFurnaceBlockEntity.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
 
@@ -164,5 +166,29 @@ class MixinApplicationTest {
         assertTrue(methods.stream().anyMatch(name -> name.contains("applyFuelEfficiency")),
                 "the getFuelTime modifier did not apply — Fuel Efficiency would silently leave every "
                         + "furnace at vanilla burn times in-game");
+        assertTrue(methods.stream().anyMatch(name -> name.contains("boostVanillaXp")),
+                "the dropExperience orb-size modifier did not apply — Understanding the Art would "
+                        + "silently leave furnace XP at vanilla amounts in-game");
+    }
+
+    @Test
+    void furnaceOutputSlotMixinApplies() {
+        // The other half of Understanding the Art: nothing during boot loads FurnaceOutputSlot, so
+        // class-loading it here is what forces its mixin to apply. Both handlers are asserted because
+        // they are separate injections — losing the RETURN one alone would leak the multiplier onto
+        // the next furnace extraction on the same thread.
+        assertDoesNotThrow(() -> Class.forName(FurnaceOutputSlot.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+
+        final var methods = Arrays.stream(FurnaceOutputSlot.class.getDeclaredMethods())
+                .map(java.lang.reflect.Method::getName)
+                .toList();
+
+        assertTrue(methods.stream().anyMatch(name -> name.contains("beginFurnaceExtract")),
+                "FurnaceOutputSlotMixin's HEAD injector did not apply — no extraction would ever "
+                        + "carry an Understanding the Art multiplier in-game");
+        assertTrue(methods.stream().anyMatch(name -> name.contains("endFurnaceExtract")),
+                "FurnaceOutputSlotMixin's RETURN injector did not apply — the multiplier would "
+                        + "leak past the extraction that set it");
     }
 }

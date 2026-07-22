@@ -24,17 +24,10 @@ import org.jetbrains.annotations.NotNull;
  *   <li>{@link #canSecondSmelt} + {@link #hasRoomForSecondSmelt} — Second Smelt, the legacy
  *       {@code processDoubleSmelt} / {@code canDoubleSmeltItemStack};</li>
  *   <li>{@link #boostFuelTime} — Fuel Efficiency, the legacy {@code InventoryListener}
- *       {@code onFurnaceBurnEvent} arm.</li>
+ *       {@code onFurnaceBurnEvent} arm;</li>
+ *   <li>{@link #getVanillaXpBoostMultiplier} — Understanding the Art, the legacy
+ *       {@code InventoryListener} {@code onFurnaceExtractEvent} arm.</li>
  * </ul>
- *
- * <p><b>Still deferred:</b> the Understanding the Art vanilla-XP boost. The {@link #vanillaXPBoost}
- * math is ported, but the wiring is not: legacy hooked Bukkit's {@code FurnaceExtractEvent}, whose
- * nearest vanilla seam is {@code FurnaceOutputSlot#onTakeItem} →
- * {@code AbstractFurnaceBlockEntity#dropExperienceForRecipesUsed} → the private static
- * {@code dropExperience}. That split needs the multiplier carried from the slot (which knows the
- * player) down into the orb spawn (which does not), and legacy additionally gated the boost on
- * {@code ItemUtils.isSmelted} — "this result came from a furnace recipe whose input was an ore" —
- * which the drop path no longer knows. See CONVERSION_TODO §B.
  */
 public class SmeltingManager extends SkillManager {
     public SmeltingManager(McMMOPlayer mmoPlayer) {
@@ -147,6 +140,23 @@ public class SmeltingManager extends SkillManager {
 
     public int vanillaXPBoost(int experience) {
         return experience * getVanillaXpMultiplier();
+    }
+
+    /**
+     * Understanding the Art, gated: the factor by which the vanilla furnace XP a player collects on
+     * taking a smelted ore product out of a furnace is multiplied. This is the legacy
+     * {@code onFurnaceExtractEvent} arm, which checked the sub-skill was allowed before touching
+     * {@code event.setExpToDrop}. Returns {@code 1} — no change — when the sub-skill is off, the same
+     * shape as {@link #boostFuelTime}.
+     *
+     * <p>{@link #getVanillaXpMultiplier} already floors at 1, so an unranked player is a no-op too.
+     */
+    public int getVanillaXpBoostMultiplier() {
+        if (!Permissions.isSubSkillEnabled(getPlayer(),
+                SubSkillType.SMELTING_UNDERSTANDING_THE_ART)) {
+            return 1;
+        }
+        return getVanillaXpMultiplier();
     }
 
     /**
