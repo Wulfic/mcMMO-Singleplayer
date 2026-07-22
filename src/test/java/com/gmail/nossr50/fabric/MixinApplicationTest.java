@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Arrays;
+import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.BowItem;
@@ -85,5 +86,23 @@ class MixinApplicationTest {
         // rather than silently letting placed-block XP farming back in-game.
         assertDoesNotThrow(() -> Class.forName(BlockItem.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
+    }
+
+    @Test
+    void fishingBobberMixinsApply() {
+        // Unlike the cases above, class-loading is NOT the test here: EntityType's static init already
+        // loads FishingBobberEntity during McTestRegistries.bootstrap(), so by now the class is
+        // transformed (or the failure has already surfaced as an error in @BeforeAll). What is worth
+        // asserting is that the Master Angler @Redirect actually bound — an applied @Redirect leaves
+        // its handler method on the transformed target.
+        final boolean hasRedirect = Arrays.stream(FishingBobberEntity.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().contains("masterAnglerWaitCountdown"));
+        assertTrue(hasRedirect,
+                "FishingWaitTimeMixin did not apply to FishingBobberEntity — Master Angler would "
+                        + "silently never reduce the bite wait in-game");
+
+        // The binding *count* is guarded in the mixin itself (allow = 1), because tickFishingLogic
+        // makes three MathHelper#nextInt calls and a slice that fails to resolve is silently dropped
+        // rather than raised — see FishingWaitTimeMixin's class doc for the mutation that proved it.
     }
 }
