@@ -47,6 +47,12 @@ import org.jetbrains.annotations.NotNull;
  */
 public class FishingManager extends SkillManager {
 
+    /**
+     * Wait-tick reduction one level of the vanilla Lure enchantment is worth (5 seconds), i.e. legacy's
+     * {@code lureLevel * 100} conversion and vanilla's own {@code fishing_time_reduction} effect.
+     */
+    static final int LURE_TICKS_PER_LEVEL = 100;
+
     private long lastFishCaughtTimestamp = 0L;
     private CastBox lastCastBox;
     private boolean sameTarget;
@@ -303,8 +309,13 @@ public class FishingManager extends SkillManager {
      * The Master Angler decision extracted from legacy {@code processMasterAngler}'s live
      * {@code FishHook} mutation: given the hook's current wait ticks and the player's situation, work
      * out the reduced wait ticks (and whether the caller must disable the hook's vanilla Lure
-     * application to avoid the lure-level-above-3 Minecraft bug). Pure function — the eventual
-     * {@code FishHook}-mutating caller becomes a thin wrapper around this.
+     * application to avoid the lure-level-above-3 Minecraft bug). Pure function — the
+     * hook-mutating caller ({@code fabric.listeners.FishingListener#resolveWaitCountdown}) is a thin
+     * wrapper around this.
+     *
+     * <p>Legacy took the Lure <i>enchantment level</i> and converted it to ticks itself; a caller that
+     * already holds the reduction in ticks (as vanilla's bobber does) should use
+     * {@link #resolveMasterAnglerWaitTimesFromLureTicks} instead and skip the enchant lookup.
      *
      * @param minWaitTicks the hook's current minimum wait ticks
      * @param maxWaitTicks the hook's current maximum wait ticks
@@ -315,9 +326,34 @@ public class FishingManager extends SkillManager {
      */
     public MasterAnglerWaitTimes resolveMasterAnglerWaitTimes(int minWaitTicks, int maxWaitTicks,
             int masterAnglerRank, boolean boatBonus, int lureLevel) {
+        return resolveMasterAnglerWaitTimesFromLureTicks(minWaitTicks, maxWaitTicks,
+                masterAnglerRank, boatBonus, lureLevel * LURE_TICKS_PER_LEVEL);
+    }
+
+    /**
+     * {@link #resolveMasterAnglerWaitTimes} taking the Lure reduction already expressed in ticks.
+     *
+     * <p>This is the faithful shape for the Fabric port: legacy computed
+     * {@code convertedLureBonus = lureLevel * 100} from the Bukkit enchantment level, and vanilla's
+     * {@code FishingBobberEntity.waitTimeReductionTicks} — the value the bobber subtracts from its
+     * freshly drawn wait countdown — is <i>exactly</i> that same figure (the {@code Lure} enchantment's
+     * {@code fishing_time_reduction} effect is 5 seconds per level, i.e. {@value #LURE_TICKS_PER_LEVEL}
+     * ticks per level). So the mixin can hand us the bobber's own field and no enchantment-registry
+     * read is needed — and a non-vanilla Lure of any level converts without the integer-level rounding
+     * the {@code lureLevel} overload would impose.
+     *
+     * @param minWaitTicks the hook's current minimum wait ticks
+     * @param maxWaitTicks the hook's current maximum wait ticks
+     * @param masterAnglerRank the player's Master Angler rank
+     * @param boatBonus whether the player is fishing from a boat
+     * @param lureReductionTicks the wait-tick reduction the hook's Lure enchantment would apply
+     * @return the resolved wait times
+     */
+    public MasterAnglerWaitTimes resolveMasterAnglerWaitTimesFromLureTicks(int minWaitTicks,
+            int maxWaitTicks, int masterAnglerRank, boolean boatBonus, int lureReductionTicks) {
         // This avoids a Minecraft bug where lure levels above 3 break fishing
-        boolean disableLure = lureLevel > 0;
-        int convertedLureBonus = disableLure ? lureLevel * 100 : 0;
+        boolean disableLure = lureReductionTicks > 0;
+        int convertedLureBonus = disableLure ? lureReductionTicks : 0;
 
         int minWaitReduction = getMasterAnglerTickMinWaitReduction(masterAnglerRank, boatBonus);
         int maxWaitReduction = getMasterAnglerTickMaxWaitReduction(masterAnglerRank, boatBonus,

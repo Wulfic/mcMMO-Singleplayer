@@ -165,6 +165,30 @@ class FishingManagerTest {
     }
 
     @Test
+    void resolveMasterAnglerWaitTimesFromLureTicksMatchesTheLureLevelOverload() {
+        // The Fabric seam hands us vanilla's waitTimeReductionTicks instead of an enchantment level.
+        // That field is exactly lureLevel * 100, so both entry points must resolve identically —
+        // if the conversion constant drifts, this catches it.
+        for (int lureLevel = 0; lureLevel <= 4; lureLevel++) {
+            assertEquals(fishingManager.resolveMasterAnglerWaitTimes(600, 6000, 3, false, lureLevel),
+                    fishingManager.resolveMasterAnglerWaitTimesFromLureTicks(600, 6000, 3, false,
+                            lureLevel * 100),
+                    "lure level " + lureLevel + " must convert to " + (lureLevel * 100) + " ticks");
+        }
+    }
+
+    @Test
+    void resolveMasterAnglerWaitTimesFromLureTicksCarriesTheFullReduction() {
+        // A tick reduction that is not a whole number of levels still applies in full — the reason the
+        // port takes ticks rather than re-deriving a level (which would round the bonus away).
+        FishingManager.MasterAnglerWaitTimes waitTimes =
+                fishingManager.resolveMasterAnglerWaitTimesFromLureTicks(600, 6000, 1, false, 150);
+        assertEquals(5820, waitTimes.maxWaitTicks(), "6000 - (30 rank bonus + 150 lure ticks)");
+        assertEquals(590, waitTimes.minWaitTicks(), "lure never reduces the minimum wait");
+        assertTrue(waitTimes.disableLure(), "a non-zero reduction must cancel vanilla's own subtraction");
+    }
+
+    @Test
     void resolveMasterAnglerWaitTimesCorrectsInvertedBounds() {
         // A pathological config where max ends up below min gets nudged back above it.
         FishingManager.MasterAnglerWaitTimes waitTimes =

@@ -601,9 +601,39 @@ effectively complete.**
 
 ## §E. Runnables / DoT still to port (need K1 / K3 / K7)
 
-- [ ] **Rupture / Bleed DoT** (`RuptureTask`/`BleedContainer`) — entity-damage-over-time via K1.
+- [x] **Rupture / Bleed DoT** (`RuptureTask`) **DONE** (stale checkbox corrected — it landed with the
+      melee combat wiring): `SwordsManager.processRupture` rolls, marks the target on `MetadataStore`
+      (the marker is what stops a second bleed stacking, replacing legacy's `BleedContainer` bookkeeping)
+      and schedules `RuptureTask` on the `TickScheduler`; driven from `CombatUtils` and
+      `EntityDamageListener`. ⚠️ In-game verification pending (§G).
 - [ ] **Alchemy** `AlchemyBrewTask`/`AlchemyBrewCheckTask` — via K7 + K8.
-- [ ] **Fishing** `MasterAnglerTask` — `FishHook` mutation via K7.
+- [x] **Fishing** `MasterAnglerTask` **DONE** — the runnable collapses entirely. Legacy scheduled it a
+      tick after `PlayerFishEvent`/`FISHING` purely so the Lure bonus was already applied, then mutated
+      the hook via `setMinWaitTime`/`setMaxWaitTime`/`setApplyLure`; the new
+      `fabric/mixin/FishingWaitTimeMixin` instead sits *at* the one place vanilla draws a wait —
+      `FishingBobberEntity#tickFishingLogic`'s closing
+      `waitCountdown = MathHelper.nextInt(random, 100, 600) - waitTimeReductionTicks` — so there is
+      nothing to schedule and nothing to race. Those hardcoded `100`/`600` are exactly Bukkit's default
+      min/max wait, so the `@Redirect` receives vanilla's own bounds (nothing hardcoded on our side),
+      draws from the mcMMO-reduced range via `fabric/listeners/FishingListener.resolveWaitCountdown`,
+      and adds `waitTimeReductionTicks` back so vanilla's own subtraction on the next line cancels —
+      which *is* legacy's `setApplyLure(false)`.
+      **🔑 No enchant adapter needed:** vanilla's `waitTimeReductionTicks` is precisely legacy's
+      `convertedLureBonus = lureLevel * 100` (the `Lure` enchantment's `fishing_time_reduction` effect
+      is 5s/level), so the bobber hands us the figure and the blocked dynamic-enchant-registry read is
+      sidestepped. New `FishingManager.resolveMasterAnglerWaitTimesFromLureTicks` holds the (already
+      ported and tested) math; the `lureLevel` overload now delegates to it.
+      **⚠️ `allow = 1` on the redirect is load-bearing — mutation-verified.** `tickFishingLogic` makes
+      three `MathHelper.nextInt` calls; the injector is restricted to the wait-countdown one by a
+      `@Slice` anchored on the `600` constant, but **an unresolvable slice is silently dropped, not
+      raised** — pointing it at a non-existent constant bound the redirect to all three (hijacking the
+      hook and fish-travel countdowns, corrupting vanilla fishing timings) while `defaultRequire=1`
+      still reported success. Capping the count turns that into a loud startup failure. Any future
+      slice-anchored injector in this mod wants the same guard.
+      **Deviations (documented):** applies on every wait redraw rather than once per cast (a multi-bite
+      cast keeps the bonus instead of reverting to vanilla timings), and the rod/off-hand/rank gates are
+      read at draw time rather than cast time. Legacy's trailing `setFishingTarget()` is dropped — it
+      discards the value it computes, i.e. dead code upstream. ⚠️ In-game verification pending (§G).
 - [~] **Herbalism** `DelayedCropReplant` **DONE** — Green Thumb replant collapses to a single
       `TickScheduler.runLater` block re-set (`BlockUtils.withAge` on the pre-break state) in
       `BlockBreakListener.scheduleReplant`; no separate runnable class needed (the AFTER seam means the

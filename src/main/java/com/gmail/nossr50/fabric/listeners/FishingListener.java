@@ -1,22 +1,28 @@
 package com.gmail.nossr50.fabric.listeners;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.ItemSpecBuilder;
 import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.skills.fishing.FishingManager;
+import com.gmail.nossr50.skills.fishing.FishingManager.MasterAnglerWaitTimes;
 import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.projectile.FishingBobberEntity;
+import net.minecraft.entity.vehicle.AbstractBoatEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.random.Random;
 
 /**
  * The K7 Fishing XP hook: awards base Fishing XP when a player reels in a catch (CONVERSION_TODO §B).
@@ -45,10 +51,15 @@ import net.minecraft.server.network.ServerPlayerEntity;
  * bespoke entity-spawn glue. Faithful to legacy: with {@code Extra_Fish} off (the shipped default) the
  * treasure <i>replaces</i> the fish, with it on both are kept; the base catch XP is awarded either way.
  *
+ * <p><b>Master Angler is also wired here</b> ({@link #resolveWaitCountdown}), driven by
+ * {@code fabric/mixin/FishingWaitTimeMixin} — see that class for the seam. It replaces legacy's
+ * {@code MasterAnglerTask}, which needed a scheduled task only because a Bukkit event handler could
+ * not sit where the wait is actually drawn.
+ *
  * <p><b>Still deferred:</b> Magic Hunter enchant loot (needs the dynamic enchant registry + K3
  * enchant-write; its {@code FishingTreasureConfig} enchant/book tables are deferred with it), the
- * {@code Shake} ability, Master Angler wait-time mutation, and the exploit item-removal punishment (we
- * skip the XP <i>and</i> the treasure roll on an exploiting catch — the same early-return gate).
+ * {@code Shake} ability, and the exploit item-removal punishment (we skip the XP <i>and</i> the
+ * treasure roll on an exploiting catch — the same early-return gate).
  */
 public final class FishingListener {
 
@@ -144,6 +155,70 @@ public final class FishingListener {
         if (maxDamage > 0) {
             stack.setDamage(rng.nextInt(maxDamage));
         }
+    }
+
+    /**
+     * Draw the bobber's next wait countdown, applying Master Angler when the owner qualifies. Ports
+     * legacy {@code processMasterAngler}; called from {@code FishingWaitTimeMixin} in place of
+     * vanilla's own {@code MathHelper.nextInt(random, 100, 600)}.
+     *
+     * <p>Any gate miss falls through to an unmodified vanilla draw, so a non-mcMMO player, an
+     * unqualified one, or a bobber whose owner has left all fish exactly as they would without the mod.
+     *
+     * @param bobber the bobber drawing a new wait (source of the owner)
+     * @param random the bobber's own RNG — used for both the vanilla and the reduced draw
+     * @param vanillaMinWaitTicks vanilla's minimum wait bound (Bukkit's {@code getMinWaitTime})
+     * @param vanillaMaxWaitTicks vanilla's maximum wait bound (Bukkit's {@code getMaxWaitTime})
+     * @param lureReductionTicks the bobber's Lure reduction, which vanilla subtracts after this call
+     * @return the wait countdown to store, in ticks
+     */
+    public static int resolveWaitCountdown(FishingBobberEntity bobber, Random random,
+            int vanillaMinWaitTicks, int vanillaMaxWaitTicks, int lureReductionTicks) {
+        final MasterAnglerWaitTimes times = masterAnglerWaitTimes(bobber, vanillaMinWaitTicks,
+                vanillaMaxWaitTicks, lureReductionTicks);
+        if (times == null) {
+            return MathHelper.nextInt(random, vanillaMinWaitTicks, vanillaMaxWaitTicks);
+        }
+
+        final int drawn = MathHelper.nextInt(random, times.minWaitTicks(), times.maxWaitTicks());
+        // Legacy's fishHook.setApplyLure(false): the Lure reduction has already been folded into the
+        // max-wait reduction, so cancel the subtraction vanilla performs immediately after this call
+        // rather than letting it apply twice.
+        return times.disableLure() ? drawn + lureReductionTicks : drawn;
+    }
+
+    /**
+     * The Master Angler gates from the legacy {@code PlayerFishEvent} {@code FISHING} arm, plus the
+     * owner lookup. Returns {@code null} when Master Angler must not apply.
+     *
+     * <p>Legacy required a fishing rod in the main hand and skipped entirely when one was also in the
+     * off hand ("prevent any potential odd behavior"); both are kept. Legacy read them at cast time and
+     * we read them at wait-draw time — see {@code FishingWaitTimeMixin} for that deviation. Legacy's
+     * trailing {@code setFishingTarget()} call is dropped: it discards the value it computes
+     * ({@code getTargetBlock(...)} with no assignment), so it is dead code upstream.
+     */
+    private static MasterAnglerWaitTimes masterAnglerWaitTimes(FishingBobberEntity bobber,
+            int minWaitTicks, int maxWaitTicks, int lureReductionTicks) {
+        if (!(bobber.getPlayerOwner() instanceof ServerPlayerEntity serverPlayer)) {
+            return null; // client-side / null owner.
+        }
+        if (!serverPlayer.getMainHandStack().isOf(Items.FISHING_ROD)
+                || serverPlayer.getOffHandStack().isOf(Items.FISHING_ROD)) {
+            return null;
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        if (mmoPlayer == null) {
+            return null; // data not loaded (e.g. mid-join).
+        }
+        final FishingManager fishingManager = mmoPlayer.getFishingManager();
+        if (fishingManager == null || !fishingManager.canMasterAngler()) {
+            return null;
+        }
+
+        final boolean boatBonus = serverPlayer.getVehicle() instanceof AbstractBoatEntity;
+        return fishingManager.resolveMasterAnglerWaitTimesFromLureTicks(minWaitTicks, maxWaitTicks,
+                RankUtils.getRank(mmoPlayer, SubSkillType.FISHING_MASTER_ANGLER), boatBonus,
+                lureReductionTicks);
     }
 
     /**
