@@ -1,7 +1,9 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.Materials;
@@ -19,21 +21,29 @@ import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import com.gmail.nossr50.util.text.StringUtils;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.block.Block;
 import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.ItemEnchantmentsComponent;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * The K7 anvil hook: performs mcMMO Repair and Salvage when a player right-clicks the configured
@@ -54,8 +64,12 @@ import net.minecraft.world.World;
  * repair-material inventory scan/consumption, the Super Repair RNG roll, the durability write, the
  * salvaged-item consumption + result spawn, and sounds.
  *
- * <p><b>Deferred</b> (breadcrumbs inline): Arcane Forging enchant loss/downgrade + Arcane Salvage
- * enchant extraction (K3 enchant-transfer surface), the custom-model-data reject
+ * <p>Both arcane sub-skills are wired here too: {@link #applyArcaneForging} (repairing may cost the
+ * item enchantments) and {@link #buildArcaneSalvageBook} (salvaging may return an enchanted book).
+ * Their per-enchantment decisions stay MC-free on the managers; this owns the enchantment-component
+ * reads and writes.
+ *
+ * <p><b>Deferred</b> (breadcrumbs inline): the custom-model-data reject
  * ({@code CustomItemSupportConfig} unported), the enchanted-repair-material avoidance branch, the
  * repair/salvage-check events (K5, no singleplayer listeners), and the block-place "you placed an
  * anvil" notification (cosmetic, Pass 2).
@@ -187,8 +201,15 @@ public final class RepairSalvageListener {
 
         // PORT: SkillUtils.removeAbilityBuff(item) — clear a Super/Giga Breaker Efficiency buff before
         // repairing a boosted tool. Deferred; only matters when repairing mid-super-ability.
-        // PORT: the enchanted-repair-material avoidance branch (getAllowEnchantedRepairMaterials) and
-        // Arcane Forging enchant loss/downgrade (addEnchants) — both need the enchant-transfer surface.
+        // PORT: the enchanted-repair-material avoidance branch (getAllowEnchantedRepairMaterials).
+
+        // Arcane Forging: the repair may cost the item some or all of its enchantments. Legacy gates
+        // the whole check on May_Lose_Enchants (off ⇒ repairs never touch enchantments) and on the
+        // repair enchant-bypass perk, both outside the per-enchantment roll.
+        if (repairManager.isArcaneForgingEnchantLossEnabled()
+                && !Permissions.hasRepairEnchantBypassPerk(mmoPlayer.getPlayer())) {
+            applyArcaneForging(mmoPlayer, repairManager, item);
+        }
 
         final int baseRepairAmount = repairable.getBaseRepairDurability();
         final boolean superRepair = rollSuperRepair(mmoPlayer, repairManager);
@@ -209,6 +230,82 @@ public final class RepairSalvageListener {
 
         // Repair the item.
         item.setDamage(newDurability);
+    }
+
+    /**
+     * Arcane Forging (legacy {@code RepairManager#addEnchants}): repairing an enchanted item rolls
+     * each enchantment separately, and it may survive intact, drop a level, or be stripped. This is
+     * the MC-typed half — read the stack's enchantments, apply the outcome
+     * {@link RepairManager#resolveEnchantOutcome} picks, and report the overall result.
+     *
+     * <p>Note the harsh legacy rule preserved here: a player with <em>no</em> Arcane Forging rank
+     * loses every enchantment on the item. Repairing enchanted gear below the first rank threshold
+     * (Repair 100 in RetroMode) is a guaranteed total loss, not merely a poor keep-chance.
+     *
+     * <p>Both RNG draws are made eagerly, where legacy drew the downgrade roll only after the keep
+     * roll had already succeeded. The draws are independent and the port's RNG is unseeded, so this
+     * costs at most one extra draw per enchantment and cannot shift the outcome distribution.
+     */
+    private static void applyArcaneForging(McMMOPlayer mmoPlayer, RepairManager repairManager,
+            ItemStack item) {
+        final ItemEnchantmentsComponent enchants = EnchantmentHelper.getEnchantments(item);
+        if (enchants.isEmpty()) {
+            return; // an unenchanted item has nothing to lose.
+        }
+
+        // Administrative bypass — never held in singleplayer, but kept for faithfulness.
+        if (Permissions.arcaneBypass(mmoPlayer.getPlayer())) {
+            NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                    "Repair.Arcane.Perfect");
+            return;
+        }
+
+        // No Arcane Forging rank ⇒ the arcane energies are lost entirely.
+        if (!repairManager.canKeepEnchants()) {
+            EnchantmentHelper.set(item, ItemEnchantmentsComponent.DEFAULT);
+            NotificationManager.sendPlayerInformation(mmoPlayer,
+                    NotificationType.SUBSKILL_MESSAGE_FAILED, "Repair.Arcane.Lost");
+            return;
+        }
+
+        final boolean allowUnsafe = allowUnsafeEnchantments();
+        final int startingCount = enchants.getSize();
+        final Map<RegistryEntry<Enchantment>, Integer> survivors = new LinkedHashMap<>();
+        boolean downgraded = false;
+
+        for (RegistryEntry<Enchantment> enchantment : enchants.getEnchantments()) {
+            // Legacy clamps an over-levelled ("unsafe") enchantment down to the vanilla maximum
+            // before rolling, so a repair also launders illegally-high levels unless allowed.
+            int level = enchants.getLevel(enchantment);
+            if (!allowUnsafe) {
+                level = Math.min(level, enchantment.value().getMaxLevel());
+            }
+
+            final RepairManager.ArcaneOutcome outcome = repairManager.resolveEnchantOutcome(level,
+                    ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.REPAIR, mmoPlayer,
+                            repairManager.getKeepEnchantChance()),
+                    ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.REPAIR, mmoPlayer,
+                            100.0D - repairManager.getDowngradeEnchantChance()));
+
+            switch (outcome) {
+                case KEPT -> survivors.put(enchantment, level);
+                case DOWNGRADED -> {
+                    survivors.put(enchantment, level - 1);
+                    downgraded = true;
+                }
+                case LOST -> { /* stripped: simply not carried over to the new component. */ }
+            }
+        }
+
+        EnchantmentHelper.set(item, componentOf(survivors));
+
+        if (survivors.isEmpty()) {
+            NotificationManager.sendPlayerInformationChatOnly(mmoPlayer, "Repair.Arcane.Fail");
+        } else if (downgraded || survivors.size() < startingCount) {
+            NotificationManager.sendPlayerInformationChatOnly(mmoPlayer, "Repair.Arcane.Downgrade");
+        } else {
+            NotificationManager.sendPlayerInformationChatOnly(mmoPlayer, "Repair.Arcane.Perfect");
+        }
     }
 
     /**
@@ -289,8 +386,9 @@ public final class RepairSalvageListener {
             return; // misconfigured salvageable — nothing to yield.
         }
 
-        // PORT: Arcane Salvage enchant extraction (build an enchanted book from the item's enchants) —
-        // deferred with the enchant-transfer surface (K3); base material recovery lands here.
+        // Arcane Salvage: an enchanted item may also yield a book holding what could be extracted.
+        // Built before the item is consumed, since its enchantments are the source.
+        final ItemStack enchantBook = buildArcaneSalvageBook(mmoPlayer, salvageManager, item);
 
         NotificationManager.sendPlayerInformationChatOnly(mmoPlayer, "Salvage.Skills.Lottery.Normal",
                 String.valueOf(potentialSalvageYield), StringUtils.getPrettyString(itemPath));
@@ -299,6 +397,9 @@ public final class RepairSalvageListener {
         serverPlayer.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
 
         // Pop the recovered materials out of the top of the anvil.
+        if (enchantBook != null) {
+            Block.dropStack(world, pos.up(), enchantBook);
+        }
         Block.dropStack(world, pos.up(), new ItemStack(salvageItemOpt.get(), potentialSalvageYield));
 
         if (McMMOMod.getGeneralConfig().getSalvageAnvilUseSoundsEnabled()) {
@@ -306,6 +407,104 @@ public final class RepairSalvageListener {
         }
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
                 "Salvage.Skills.Success");
+    }
+
+    /**
+     * Arcane Salvage (legacy {@code SalvageManager#arcaneSalvageCheck}): salvaging an enchanted item
+     * may return an enchanted book carrying the enchantments that survived extraction, each at full
+     * or one reduced level. This is the MC-typed half — read the stack's enchantments, apply the
+     * outcome {@link SalvageManager#resolveEnchantOutcome} picks, and build the book.
+     *
+     * <p>Returns {@code null} when there is no book to give: an unenchanted item, a player without
+     * the Arcane Salvage rank, or every enchantment failing its roll. As in {@code applyArcaneForging},
+     * both RNG draws are made eagerly.
+     *
+     * @return the enchanted book to drop, or {@code null} if nothing was extracted
+     */
+    private static @Nullable ItemStack buildArcaneSalvageBook(McMMOPlayer mmoPlayer,
+            SalvageManager salvageManager, ItemStack item) {
+        final ItemEnchantmentsComponent enchants = EnchantmentHelper.getEnchantments(item);
+        if (enchants.isEmpty()) {
+            return null; // an unenchanted item yields no book (legacy skips the check entirely).
+        }
+
+        if (!salvageManager.canArcaneSalvage()) {
+            NotificationManager.sendPlayerInformationChatOnly(mmoPlayer,
+                    "Salvage.Skills.ArcaneFailed");
+            return null;
+        }
+
+        final boolean allowUnsafe = allowUnsafeEnchantments();
+        final Map<RegistryEntry<Enchantment>, Integer> extracted = new LinkedHashMap<>();
+        int arcaneFailureCount = 0;
+        boolean downgraded = false;
+
+        for (RegistryEntry<Enchantment> enchantment : enchants.getEnchantments()) {
+            // Unlike Arcane Forging this clamp only bounds what the book receives — the source item
+            // is being destroyed, so there is nothing to write the clamped level back to.
+            int level = enchants.getLevel(enchantment);
+            if (!allowUnsafe) {
+                level = Math.min(level, enchantment.value().getMaxLevel());
+            }
+
+            final SalvageManager.ArcaneOutcome outcome = salvageManager.resolveEnchantOutcome(level,
+                    ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.SALVAGE, mmoPlayer,
+                            salvageManager.getExtractFullEnchantChance()),
+                    ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.SALVAGE, mmoPlayer,
+                            salvageManager.getExtractPartialEnchantChance()));
+
+            switch (outcome) {
+                case FULL -> extracted.put(enchantment, level);
+                case PARTIAL -> {
+                    extracted.put(enchantment, level - 1);
+                    downgraded = true;
+                }
+                case FAILED -> arcaneFailureCount++;
+            }
+        }
+
+        if (salvageManager.failedAllEnchants(arcaneFailureCount, enchants.getSize())) {
+            NotificationManager.sendPlayerInformationChatOnly(mmoPlayer,
+                    "Salvage.Skills.ArcaneFailed");
+            return null;
+        }
+        if (downgraded) {
+            NotificationManager.sendPlayerInformationChatOnly(mmoPlayer,
+                    "Salvage.Skills.ArcanePartial");
+        }
+
+        // An enchanted book carries its enchantments as STORED_ENCHANTMENTS, not ENCHANTMENTS —
+        // the legacy EnchantmentStorageMeta.addStoredEnchant(.., ignoreLevelRestriction=true) that
+        // built this book maps onto the component builder, which applies no level restriction.
+        // Set explicitly rather than via EnchantmentHelper.set: the two are equivalent here
+        // (bytecode-verified — its private getEnchantmentsComponentType picks STORED_ENCHANTMENTS
+        // exactly when the stack isOf(ENCHANTED_BOOK)), but naming the component documents the
+        // book/tool distinction that applyArcaneForging relies on the helper to make for it.
+        final ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+        book.set(DataComponentTypes.STORED_ENCHANTMENTS, componentOf(extracted));
+        return book;
+    }
+
+    /**
+     * Build an {@link ItemEnchantmentsComponent} from a resolved enchantment→level map. Used for
+     * both the repaired item's surviving enchantments and the salvage book's extracted ones.
+     */
+    private static ItemEnchantmentsComponent componentOf(
+            Map<RegistryEntry<Enchantment>, Integer> levels) {
+        final ItemEnchantmentsComponent.Builder builder =
+                new ItemEnchantmentsComponent.Builder(ItemEnchantmentsComponent.DEFAULT);
+        levels.forEach(builder::set);
+        return builder.build();
+    }
+
+    /**
+     * experience.yml {@code ExploitFix.UnsafeEnchantments} — whether over-vanilla enchantment levels
+     * survive a repair/salvage untouched. Defaults to {@code false} (clamp them) when the config has
+     * not loaded, matching the shipped default.
+     */
+    private static boolean allowUnsafeEnchantments() {
+        final ExperienceConfig experienceConfig = McMMOMod.getExperienceConfig();
+        return experienceConfig != null && experienceConfig.allowUnsafeEnchantments();
     }
 
     /**

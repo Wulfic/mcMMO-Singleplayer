@@ -101,6 +101,39 @@ class SalvageManagerTest {
     }
 
     @Test
+    void arcaneSalvageRequiresTheSubskillToBeUnlocked() {
+        atSalvageLevel(0);
+        assertFalse(salvageManager.canArcaneSalvage(), "no rank -> no book, enchants lost");
+
+        atSalvageLevel(100); // Arcane Salvage rank 1 (RetroMode)
+        assertTrue(salvageManager.canArcaneSalvage(), "rank 1 -> the per-enchant roll runs");
+    }
+
+    @Test
+    void arcaneSalvageExtractsFullyPartiallyOrNotAtAllByTheTwoRolls() {
+        // EnchantLossEnabled + EnchantDowngradeEnabled both default true.
+        atSalvageLevel(100);
+        assertEquals(SalvageManager.ArcaneOutcome.FULL,
+                salvageManager.resolveEnchantOutcome(3, true, false),
+                "the full-extract roll wins outright");
+        assertEquals(SalvageManager.ArcaneOutcome.PARTIAL,
+                salvageManager.resolveEnchantOutcome(3, false, true),
+                "full failed, partial succeeded -> one level lower");
+        assertEquals(SalvageManager.ArcaneOutcome.FAILED,
+                salvageManager.resolveEnchantOutcome(3, false, false),
+                "both rolls failed -> nothing extracted");
+    }
+
+    @Test
+    void aLevelOneEnchantHasNoPartialExtraction() {
+        // There is no level 0 to extract, so it is all or nothing.
+        atSalvageLevel(100);
+        assertEquals(SalvageManager.ArcaneOutcome.FAILED,
+                salvageManager.resolveEnchantOutcome(1, false, true),
+                "level 1 cannot be partially extracted even when the partial roll succeeds");
+    }
+
+    @Test
     void checkConfirmationArmsOnFirstClickThenProceedsOnSecond() {
         // Confirm_Required defaults true. A stale last-use is expired -> first click only arms
         // (returns false); recording "now" makes the next click within the 3s window proceed.

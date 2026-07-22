@@ -1,6 +1,7 @@
 package com.gmail.nossr50.config.treasure;
 
 import com.gmail.nossr50.config.ConfigLoader;
+import com.gmail.nossr50.datatypes.treasure.EnchantmentTreasure;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.datatypes.treasure.Rarity;
@@ -28,16 +29,23 @@ import org.slf4j.LoggerFactory;
  * rather than a mechanical skip:
  * <ul>
  *   <li><b>{@code ENCHANTED_BOOK} / potion Fishing rewards</b> — a book reward is a legacy
- *       {@code FishingTreasureBook} (an enchant whitelist/blacklist resolved through the <b>dynamic</b>
- *       1.21 enchantment registry, which isn't populated at config-load) and its reward path
- *       (Magic Hunter) needs the K3 enchant-write surface; {@link ItemSpec} likewise carries no
- *       potion base-type yet. Both are skipped by name with a log, so the shipped {@code ENCHANTED_BOOK}
- *       entry simply doesn't enter the pool until that adapter lands.</li>
- *   <li><b>Magic Hunter enchant tables</b> ({@code Enchantments_Rarity} / {@code Enchantment_Drop_Rates})
- *       — same dynamic-enchant-registry gap, and their only consumer ({@code FishingManager#processMagicHunter}/
- *       {@code getPossibleEnchantments}) is itself deferred. Loading a table nothing reads would be
- *       readerless state, so it's left out entirely (see §F "config that lies").</li>
+ *       {@code FishingTreasureBook}, whose per-book {@code Enchantments_Whitelist}/{@code _Blacklist}
+ *       picks a <i>random</i> enchantment from the whole registry rather than from the Magic Hunter
+ *       table below, and {@link ItemSpec} carries no potion base-type yet. Both are skipped by name
+ *       with a log, so the shipped {@code ENCHANTED_BOOK} entry simply doesn't enter the pool.</li>
  * </ul>
+ *
+ * <p><b>The Magic Hunter enchant tables are now loaded</b> ({@link #fishingEnchantments} +
+ * {@link #getEnchantmentDropRate}, consumed by {@code FishingManager#rollMagicHunterRarity} /
+ * {@code selectMagicHunterEnchants}). Legacy resolved each {@code Enchantments_Rarity} key to a live
+ * Bukkit {@code Enchantment} at load; 1.21's enchantment registry is <b>dynamic</b> and does not exist
+ * at config-load, so entries are kept as {@link EnchantmentTreasure} registry-path strings and resolved
+ * at drop time — the same resolve-at-use shape as the Shake map's entity paths. <b>The "dynamic enchant
+ * registry adapter" that deferred this turned out to be one {@code toLowerCase}:</b> every name the
+ * shipped config uses ({@code EFFICIENCY}, {@code BANE_OF_ARTHROPODS}, …) is the modern Bukkit spelling,
+ * which since 1.20.5 <i>is</i> the vanilla registry path. Legacy's {@code EnchantmentUtils} alias table
+ * (which mapped those names back to pre-1.20.5 Bukkit enums like {@code DIG_SPEED}) is therefore not
+ * ported: no shipped key needs it, and a hand-edited unknown name is reported at drop time.
  *
  * <p><b>The {@code Shake} map is now loaded</b> ({@link #shakeMap}, consumed by
  * {@code FishingManager#rollShakeTreasure}). Legacy keyed it by Bukkit {@code EntityType} and built it
@@ -90,6 +98,14 @@ public class FishingTreasureConfig extends ConfigLoader {
      */
     public final @NotNull Map<String, List<ShakeTreasure>> shakeMap = new HashMap<>();
 
+    /**
+     * Magic Hunter enchantments, bucketed by rarity. Every rarity is present (possibly empty); each
+     * entry names a vanilla enchantment registry path, resolved against the dynamic registry at drop
+     * time. Use {@link #getEnchantmentTreasures(Rarity)}.
+     */
+    public final @NotNull Map<Rarity, List<EnchantmentTreasure>> fishingEnchantments =
+            new EnumMap<>(Rarity.class);
+
     public FishingTreasureConfig(Path dataFolder) {
         super(FILENAME, dataFolder);
         loadKeys();
@@ -100,13 +116,17 @@ public class FishingTreasureConfig extends ConfigLoader {
         // Seed every rarity so the reward roll can index any bucket without a null check (legacy parity).
         for (Rarity rarity : Rarity.values()) {
             fishingRewards.put(rarity, new ArrayList<>());
+            fishingEnchantments.put(rarity, new ArrayList<>());
         }
 
         loadFishingRewards();
         loadShakeTreasures();
+        loadEnchantments();
 
-        LOGGER.info("Loaded {} fishing treasures and {} shake drops across {} entities from {}",
+        LOGGER.info("Loaded {} fishing treasures, {} magic-hunter enchantments and {} shake drops"
+                        + " across {} entities from {}",
                 fishingRewards.values().stream().mapToInt(List::size).sum(),
+                fishingEnchantments.values().stream().mapToInt(List::size).sum(),
                 shakeMap.values().stream().mapToInt(List::size).sum(), shakeMap.size(), FILENAME);
     }
 
@@ -225,6 +245,37 @@ public class FishingTreasureConfig extends ConfigLoader {
     }
 
     /**
+     * Load the {@code Enchantments_Rarity} section — the Magic Hunter enchantment pool, bucketed by
+     * rarity. Ports legacy {@code loadEnchantments} with one structural difference (see the class
+     * javadoc): the enchantment is kept as a registry-path string rather than resolved to a live
+     * {@code Enchantment} here, because 1.21's enchantment registry is dynamic and unavailable at
+     * config-load. An unresolvable name therefore cannot be reported until drop time — which is where
+     * {@code FishingListener} logs it — so this method only validates the level.
+     */
+    private void loadEnchantments() {
+        for (Rarity rarity : Rarity.values()) {
+            final var enchantmentSection = config.getConfigurationSection(
+                    "Enchantments_Rarity." + rarity);
+            if (enchantmentSection == null) {
+                continue; // a rarity with no configured enchantments keeps its empty bucket.
+            }
+
+            for (String enchantmentName : enchantmentSection.getKeys(false)) {
+                final int level = config.getInt("Enchantments_Rarity." + rarity + "."
+                        + enchantmentName);
+                if (level <= 0) {
+                    LOGGER.warn("Enchantment {} ({}) has an invalid level: {}, skipping.",
+                            enchantmentName, rarity, level);
+                    continue;
+                }
+
+                fishingEnchantments.get(rarity).add(new EnchantmentTreasure(
+                        enchantmentName.toLowerCase(Locale.ROOT), level));
+            }
+        }
+    }
+
+    /**
      * The vanilla entity registry path a {@code Shake} section addresses. Bukkit enum names are
      * upper-snake and the registry is lower-snake, so this is a lower-case plus the rename fixes in
      * {@link #ENTITY_SECTION_ALIASES}.
@@ -261,5 +312,25 @@ public class FishingTreasureConfig extends ConfigLoader {
      */
     public double getItemDropRate(int tier, @NotNull Rarity rarity) {
         return config.getDouble("Item_Drop_Rates.Tier_" + tier + "." + rarity);
+    }
+
+    /**
+     * The chance (percent) that a caught treasure at loot {@code tier} is enchanted at {@code rarity}
+     * by Magic Hunter. Reads the bundled {@code Enchantment_Drop_Rates.Tier_&lt;tier&gt;} curve — a
+     * table entirely separate from {@link #getItemDropRate}, so the item roll and the enchant roll are
+     * independent draws (as in legacy).
+     */
+    public double getEnchantmentDropRate(int tier, @NotNull Rarity rarity) {
+        return config.getDouble("Enchantment_Drop_Rates.Tier_" + tier + "." + rarity);
+    }
+
+    /**
+     * The Magic Hunter enchantments configured for a rarity, in config order (they are shuffled before
+     * selection, so the order carries no weight — see {@code FishingManager#selectMagicHunterEnchants}).
+     *
+     * @return the configured enchantments, or an empty list when the rarity has none
+     */
+    public @NotNull List<EnchantmentTreasure> getEnchantmentTreasures(@NotNull Rarity rarity) {
+        return fishingEnchantments.getOrDefault(rarity, List.of());
     }
 }
