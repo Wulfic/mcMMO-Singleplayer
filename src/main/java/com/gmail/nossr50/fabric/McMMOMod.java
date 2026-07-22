@@ -254,7 +254,9 @@ public class McMMOMod implements ModInitializer {
             UserManager.saveAll();
             UserManager.clearAll();
             McMMOMod.setProfileStore(null);
-            // K7: drop the furnace- and brewing-stand-owner trackers so the next session starts clean.
+            // K7: drop the furnace- and brewing-stand-owner trackers so the next session starts
+            // clean. The furnace one also drops the recipe-derived smelted-ore index, which belongs
+            // to the recipe set the stopping server loaded.
             SmeltingListener.clearOwners();
             AlchemyListener.clearOwners();
             // Drop transient per-entity markers (Rupture bleeds, dodge-XP counters, tracked TNT).

@@ -102,6 +102,21 @@ class SmeltingManagerTest {
     }
 
     @Test
+    void vanillaXpBoostMultiplierIsOneUntilTheFirstRankIsWorthIt() {
+        // What the furnace-extract hook actually consumes. It has to be exactly 1 below rank 2,
+        // because 1 is the "leave vanilla alone" signal the orb hook checks for: max(1, rank) makes
+        // rank 0 and rank 1 both x1, so nothing is boosted until Understanding the Art rank 2.
+        atSmeltingLevel(0);
+        assertEquals(1, smeltingManager.getVanillaXpBoostMultiplier(), "rank 0 → vanilla XP");
+
+        atSmeltingLevel(100); // RetroMode rank 1 → max(1,1) = 1
+        assertEquals(1, smeltingManager.getVanillaXpBoostMultiplier(), "rank 1 is still x1");
+
+        atSmeltingLevel(250); // RetroMode rank 2 → x2
+        assertEquals(2, smeltingManager.getVanillaXpBoostMultiplier(), "rank 2 → x2");
+    }
+
+    @Test
     void awardSmeltingXpLooksUpPerMaterialXpAndGainsIt() {
         // experience.yml default: Experience_Values.Smelting.Iron_Ore = 25.
         smeltingManager.awardSmeltingXP("Iron_Ore");
