@@ -125,6 +125,50 @@ class RepairManagerTest {
     }
 
     @Test
+    void withoutAnArcaneForgingRankEnchantsCannotBeKeptAtAll() {
+        // Legacy strips every enchantment from a repaired item below the first rank threshold.
+        atRepairLevel(0);
+        assertFalse(repairManager.canKeepEnchants(), "no rank -> total enchantment loss");
+
+        atRepairLevel(100); // Arcane Forging rank 1 (RetroMode)
+        assertTrue(repairManager.canKeepEnchants(), "rank 1 -> the per-enchant roll runs");
+    }
+
+    @Test
+    void arcaneForgingKeepsDowngradesOrLosesAnEnchantByTheTwoRolls() {
+        atRepairLevel(100);
+        // Downgrades_Enabled defaults true. The second roll is inverted: success = NOT downgraded.
+        assertEquals(RepairManager.ArcaneOutcome.LOST,
+                repairManager.resolveEnchantOutcome(3, false, true),
+                "a failed keep roll strips the enchantment regardless of the downgrade roll");
+        assertEquals(RepairManager.ArcaneOutcome.KEPT,
+                repairManager.resolveEnchantOutcome(3, true, true),
+                "kept, and the downgrade was avoided");
+        assertEquals(RepairManager.ArcaneOutcome.DOWNGRADED,
+                repairManager.resolveEnchantOutcome(3, true, false),
+                "kept, but the downgrade was not avoided");
+    }
+
+    @Test
+    void arcaneForgingConfigTogglesDefaultToOn() {
+        // Both ship enabled, so a repair can cost enchantments and a kept one can be downgraded.
+        // These gate the roll from outside it (May_Lose_Enchants) and inside it (Downgrades_Enabled).
+        assertTrue(repairManager.isArcaneForgingEnchantLossEnabled(),
+                "May_Lose_Enchants defaults true");
+        assertTrue(repairManager.isArcaneForgingDowngradeEnabled(),
+                "Downgrades_Enabled defaults true");
+    }
+
+    @Test
+    void aLevelOneEnchantIsNeverDowngraded() {
+        // There is no level 0 to drop to, so a surviving level-1 enchant is kept outright.
+        atRepairLevel(100);
+        assertEquals(RepairManager.ArcaneOutcome.KEPT,
+                repairManager.resolveEnchantOutcome(1, true, false),
+                "level 1 cannot be downgraded even when the downgrade roll is not avoided");
+    }
+
+    @Test
     void awardRepairXpUsesTheDurabilityFractionMaterialFactorAndBase() {
         // Iron repairable: max durability 250, XP multiplier 1.0. experience.yml Repair.Base = 1000.0,
         // Repair.Iron = 2.5. Fully repaired (250 -> 0 damage): 1.0 * 1.0 * 1000 * 2.5 = 2500 XP.

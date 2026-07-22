@@ -18,12 +18,14 @@ import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.treasure.EnchantmentTreasure;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
 import com.gmail.nossr50.datatypes.treasure.Rarity;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -359,5 +361,122 @@ class FishingManagerTest {
         fishingManager.awardFishingTreasureXP(0);
         verify(mmoPlayer, never()).beginXpGain(ArgumentMatchers.any(), ArgumentMatchers.anyFloat(),
                 ArgumentMatchers.any(), ArgumentMatchers.any());
+    }
+
+    // ---- Magic Hunter ------------------------------------------------------------------------
+    // fishing_treasures.yml Enchantment_Drop_Rates.Tier_1, in the enum's most-rare-first walk order:
+    // MYTHIC 0.01, LEGENDARY 0.01, EPIC 0.01, RARE 0.10, UNCOMMON 1.00, COMMON 5.00 (sum 6.13).
+    // This is a different table from Item_Drop_Rates, so these numbers deliberately differ from the
+    // treasure-roll tests above.
+
+    @Test
+    void magicHunterRollLandsInTheRarestBandForTheLowestDice() {
+        atFishingLevel(1);
+        assertEquals(Optional.of(Rarity.MYTHIC), fishingManager.rollMagicHunterRarity(0.0),
+                "diceRoll 0 always wins the rarest band");
+    }
+
+    @Test
+    void magicHunterRollFallsThroughToCommon() {
+        atFishingLevel(1);
+        // 2.0 clears MYTHIC..UNCOMMON (cumulative 1.13) leaving 0.87, which lands inside COMMON (5.00).
+        assertEquals(Optional.of(Rarity.COMMON), fishingManager.rollMagicHunterRarity(2.0));
+    }
+
+    @Test
+    void magicHunterRollWinsNothingAboveTheSummedDropRates() {
+        atFishingLevel(1);
+        // 50.0 exceeds the 6.13 total across every band -> the treasure arrives unenchanted.
+        assertTrue(fishingManager.rollMagicHunterRarity(50.0).isEmpty());
+    }
+
+    @Test
+    void magicHunterRollWinsNothingAtLootTierZero() {
+        atFishingLevel(0);
+        // Tier_0 is absent from the config, so every band reads 0.0 and any positive roll misses.
+        assertTrue(fishingManager.rollMagicHunterRarity(0.01).isEmpty(),
+                "an unranked player cannot win an enchant band");
+    }
+
+    @Test
+    void magicHunterRollUsesTheEnchantCurveNotTheItemCurve() {
+        atFishingLevel(1);
+        // 6.5 is inside the item curve's COMMON band (7.50) but past the whole enchant curve (6.13).
+        assertTrue(fishingManager.rollFishingTreasure(6.5, 0, size -> 0).isPresent());
+        assertTrue(fishingManager.rollMagicHunterRarity(6.5).isEmpty());
+    }
+
+    private static EnchantmentTreasure enchant(String id) {
+        return new EnchantmentTreasure(id, 1);
+    }
+
+    @Test
+    void magicHunterSelectionTakesEveryCandidateWhenEveryDrawSucceeds() {
+        final List<EnchantmentTreasure> candidates =
+                List.of(enchant("sharpness"), enchant("looting"), enchant("unbreaking"));
+
+        assertEquals(candidates, fishingManager.selectMagicHunterEnchants(candidates,
+                (selected, candidate) -> false, bound -> 0),
+                "a draw of 0 is legacy's success, so all three land in order");
+    }
+
+    @Test
+    void magicHunterSelectionHalvesTheOddsOnlyAfterAnAcceptance() {
+        final List<EnchantmentTreasure> candidates =
+                List.of(enchant("sharpness"), enchant("looting"), enchant("unbreaking"));
+        final List<Integer> bounds = new ArrayList<>();
+
+        // Succeeds only while the walk is still at 1-in-1, i.e. exactly the first candidate.
+        final List<EnchantmentTreasure> selected = fishingManager.selectMagicHunterEnchants(
+                candidates, (alreadySelected, candidate) -> false, bound -> {
+                    bounds.add(bound);
+                    return bound == 1 ? 0 : 1;
+                });
+
+        assertEquals(List.of(enchant("sharpness")), selected);
+        assertEquals(List.of(1, 2, 2), bounds,
+                "the 1-in-N counter doubles on an acceptance and never on a rejection");
+    }
+
+    @Test
+    void magicHunterSelectionSkipsAConflictWithoutSpendingADraw() {
+        final List<EnchantmentTreasure> candidates =
+                List.of(enchant("sharpness"), enchant("looting"), enchant("unbreaking"));
+        final List<Integer> bounds = new ArrayList<>();
+
+        final List<EnchantmentTreasure> selected = fishingManager.selectMagicHunterEnchants(
+                candidates,
+                (alreadySelected, candidate) -> candidate.enchantmentId().equals("sharpness"),
+                bound -> {
+                    bounds.add(bound);
+                    return 0;
+                });
+
+        assertEquals(List.of(enchant("looting"), enchant("unbreaking")), selected);
+        assertEquals(List.of(1, 2), bounds,
+                "the conflicting candidate short-circuits before the draw, so it consumes no roll");
+    }
+
+    @Test
+    void magicHunterSelectionOffersTheRunningSelectionToTheConflictTest() {
+        // The port's deviation from upstream: legacy only tested conflicts against enchantments
+        // already on the item (none, on a freshly built treasure), so it could grant Sharpness,
+        // Smite and Bane of Arthropods together. The running selection is now visible to the test.
+        final List<EnchantmentTreasure> candidates =
+                List.of(enchant("sharpness"), enchant("smite"), enchant("bane_of_arthropods"));
+
+        final List<EnchantmentTreasure> selected = fishingManager.selectMagicHunterEnchants(
+                candidates,
+                (alreadySelected, candidate) -> !alreadySelected.isEmpty(),
+                bound -> 0);
+
+        assertEquals(List.of(enchant("sharpness")), selected,
+                "once one damage enchant is picked the mutually exclusive siblings are skipped");
+    }
+
+    @Test
+    void magicHunterSelectionOfNoCandidatesEnchantsNothing() {
+        assertTrue(fishingManager.selectMagicHunterEnchants(List.of(),
+                (selected, candidate) -> false, bound -> 0).isEmpty());
     }
 }

@@ -6,6 +6,7 @@ import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.datatypes.treasure.EnchantmentTreasure;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
 import com.gmail.nossr50.datatypes.treasure.Rarity;
 import com.gmail.nossr50.datatypes.treasure.ShakeTreasure;
@@ -14,8 +15,11 @@ import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiPredicate;
 import java.util.function.IntUnaryOperator;
 import org.jetbrains.annotations.NotNull;
 
@@ -32,12 +36,12 @@ import org.jetbrains.annotations.NotNull;
  * {@link #awardFishingTreasureXP}, driven from {@code fabric.listeners.FishingListener} via
  * {@code ItemSpecBuilder}), and so is <b>Shake</b> ({@link #rollShakeSuccess} +
  * {@link #rollShakeTreasure} + {@link #shakeDamage} + {@link #awardShakeXP}, driven from the same
- * listener when a hooked mob is reeled in). Still deferred until the entity/item/block/enchant
- * adapters:</p>
+ * listener when a hooked mob is reeled in), and so is <b>Magic Hunter</b>
+ * ({@link #rollMagicHunterRarity} + {@link #selectMagicHunterEnchants}, which together port legacy
+ * {@code processMagicHunter}; the listener owns the registry resolution, the {@code isAcceptableItem}
+ * filter that replaces legacy {@code getPossibleEnchantments}, and the enchant write). Still deferred
+ * until the entity/item/block adapters:</p>
  * <ul>
- *   <li>{@code processMagicHunter}/{@code getPossibleEnchantments} — the Magic Hunter enchant roll on
- *       a caught treasure needs the dynamic 1.21 enchantment registry + the K3 enchant-write surface
- *       (its {@code FishingTreasureConfig} enchant tables are deferred for the same reason);</li>
  *   <li>{@code canIceFish}/{@code iceFishing} — need the live {@code Block}/{@code Biome} adapter;</li>
  *   <li>{@code masterAngler}/{@code processMasterAngler} — need the {@code FishHook} adapter and the
  *       Folia-scheduler {@code MasterAnglerTask}; the wait-time math itself is extracted below as
@@ -321,6 +325,90 @@ public class FishingManager extends SkillManager {
             return;
         }
         applyXpGain(treasureXp, XPGainReason.PVE, XPGainSource.SELF);
+    }
+
+    /**
+     * Roll which enchantment-rarity band Magic Hunter grants on a caught treasure — the rarity half of
+     * legacy {@code processMagicHunter}. Pure (no RNG, no Minecraft): the caller supplies the draw.
+     * Walks the per-tier {@code Enchantment_Drop_Rates} curve most-rare first and cumulatively, exactly
+     * as {@link #rollFishingTreasure} walks the item curve, but against the <b>separate</b>
+     * {@code Enchantment_Drop_Rates} table — the item roll and this one are independent draws.
+     *
+     * <p>A rank-0 player reads the absent {@code Tier_0} rates as {@code 0.0}, so an ordinary positive
+     * roll misses every band naturally; the real gate is {@link #isMagicHunterEnabled()}, which the
+     * caller checks first.
+     *
+     * <p><b>Not ported:</b> legacy's {@code ENCHANTED_BOOK} arm, which forced a book past the band it
+     * had won into the next (more common) one so a book was never left unenchanted. Enchanted-book
+     * treasures are skipped at config load (see {@link FishingTreasureConfig}), so that branch is
+     * unreachable here — it returns with the book path when the book path lands.
+     *
+     * @param diceRoll a fresh roll in {@code [0, 100)} (the caller's {@code nextDouble() * 100})
+     * @return the winning rarity band, or {@link Optional#empty()} when the roll clears every band
+     */
+    public @NotNull Optional<Rarity> rollMagicHunterRarity(double diceRoll) {
+        final int tier = getLootTier();
+        final FishingTreasureConfig config = McMMOMod.getFishingTreasureConfig();
+
+        for (Rarity rarity : Rarity.values()) {
+            final double dropRate = config.getEnchantmentDropRate(tier, rarity);
+
+            if (diceRoll <= dropRate) {
+                return Optional.of(rarity);
+            }
+
+            diceRoll -= dropRate;
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Pick which of a rarity band's candidate enchantments actually land on the treasure — the
+     * selection half of legacy {@code processMagicHunter}. Pure (no RNG, no Minecraft): the caller
+     * supplies the shuffled candidate list, the conflict test and the draw.
+     *
+     * <p>Legacy's halving walk is preserved exactly: the first candidate is certain
+     * ({@code nextInt(1) == 0}), the second lands 1 in 2, the third 1 in 4, and so on — but the counter
+     * <b>only doubles on an accepted enchantment</b>, so a candidate rejected by the draw or the
+     * conflict test does not make the next one rarer. The conflict test is evaluated first and
+     * short-circuits, so a conflicting candidate consumes no draw (this matters for reproducibility,
+     * not for balance).
+     *
+     * <p><b>Deviation — upstream's conflict guard never fired (CONVERSION_TODO §F).</b> Legacy tests
+     * {@code treasureDrop.getItemMeta().hasConflictingEnchant(...)}, i.e. against the enchantments
+     * <i>already on the item</i>. A fished treasure is freshly built from the config and carries none,
+     * and the enchantments chosen here are applied in one batch only after the walk finishes — so the
+     * guard is vacuous upstream and mcMMO can hand you a sword with Sharpness, Smite <i>and</i> Bane of
+     * Arthropods, a combination no vanilla anvil permits. This port passes the running selection to
+     * {@code conflicts} as well, making the guard mean what it says.
+     *
+     * @param shuffledCandidates the band's enchantments that may go on this item, pre-shuffled by the
+     *     caller (legacy shuffles so early entries are not permanently favoured by the halving walk)
+     * @param conflicts given the enchantments selected so far (unmodifiable) and a candidate, whether
+     *     that candidate conflicts and must be skipped
+     * @param chanceRoller draws {@code nextInt(bound)} for the halving walk
+     * @return the enchantments to apply, in selection order (empty when none won a draw)
+     */
+    public @NotNull List<EnchantmentTreasure> selectMagicHunterEnchants(
+            @NotNull List<EnchantmentTreasure> shuffledCandidates,
+            @NotNull BiPredicate<List<EnchantmentTreasure>, EnchantmentTreasure> conflicts,
+            @NotNull IntUnaryOperator chanceRoller) {
+        final List<EnchantmentTreasure> selected = new ArrayList<>();
+        final List<EnchantmentTreasure> selectedView = Collections.unmodifiableList(selected);
+        int specificChance = 1;
+
+        for (EnchantmentTreasure candidate : shuffledCandidates) {
+            if (conflicts.test(selectedView, candidate)
+                    || chanceRoller.applyAsInt(specificChance) != 0) {
+                continue;
+            }
+
+            selected.add(candidate);
+            specificChance *= 2;
+        }
+
+        return selected;
     }
 
     protected int getVanillaXPBoostModifier() {

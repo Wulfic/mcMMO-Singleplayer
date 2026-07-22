@@ -38,8 +38,9 @@ import org.jetbrains.annotations.NotNull;
  *   <li>{@code handleRepair} — the whole repair action: needs {@code RepairableManager},
  *       {@code ItemStack}/{@code PlayerInventory} mutation, the repair-check event, the
  *       {@code getRepairXP(MaterialType)} XP getter (still unported), and {@code SkillUtils};</li>
- *   <li>{@code addEnchants} — Arcane Forging enchant loss/downgrade, needs live {@code Enchantment}
- *       mutation (the chances themselves are ported below);</li>
+ *   <li>{@code addEnchants} — <b>DONE</b>: its per-enchantment decision is
+ *       {@link #resolveEnchantOutcome} here, and the enchant mutation lives in
+ *       {@code RepairSalvageListener} (the only MC-typed part left);</li>
  *   <li>{@code placedAnvilCheck} — needs notification/sound adapters (the anvil-placed state itself
  *       is ported below);</li>
  *   <li>{@code checkConfirmation} — the anvil-use hook (K7) + notification; {@link
@@ -152,6 +153,88 @@ public class RepairManager extends SkillManager {
      */
     public double getDowngradeEnchantChance() {
         return McMMOMod.getAdvancedConfig().getArcaneForgingDowngradeChance(getArcaneForgingRank());
+    }
+
+    /**
+     * What Arcane Forging does to one enchantment on a repaired item.
+     *
+     * <p>Legacy expressed this by mutating the {@code ItemStack} inline; splitting it into an
+     * outcome keeps the decision unit-testable and leaves the enchant write to the MC-typed caller.
+     */
+    public enum ArcaneOutcome {
+        /** The enchantment survives the repair at its current level. */
+        KEPT,
+        /** The enchantment survives but drops one level. */
+        DOWNGRADED,
+        /** The enchantment is stripped from the item. */
+        LOST
+    }
+
+    /**
+     * Whether this player's Arcane Forging can preserve enchantments at all. Legacy strips
+     * <em>every</em> enchantment from a repaired item when the player has no Arcane Forging rank —
+     * repairing an enchanted item below the first rank threshold (level 100 in RetroMode) is a
+     * guaranteed total loss, not merely a low keep-chance.
+     *
+     * @return {@code true} if the per-enchantment roll should run, {@code false} to strip them all
+     */
+    public boolean canKeepEnchants() {
+        return getArcaneForgingRank() != 0
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.REPAIR_ARCANE_FORGING);
+    }
+
+    /**
+     * Whether the "keep, but at a lower level" outcome is reachable at all
+     * (advanced.yml {@code Skills.Repair.ArcaneForging.Downgrades_Enabled}). With downgrades off, a
+     * kept enchantment always keeps its full level. Legacy read this through the static
+     * {@code ArcaneForging.arcaneForgingDowngrades} field, which snapshotted the config at plugin
+     * load; reading it live here is equivalent for a config that is never reloaded mid-session.
+     *
+     * @return whether Arcane Forging may downgrade a kept enchantment
+     */
+    public boolean isArcaneForgingDowngradeEnabled() {
+        return McMMOMod.getAdvancedConfig().getArcaneForgingDowngradeEnabled();
+    }
+
+    /**
+     * Whether repairing may cost an item its enchantments at all
+     * (advanced.yml {@code Skills.Repair.ArcaneForging.May_Lose_Enchants}). With it off, Arcane
+     * Forging is skipped outright and a repaired item keeps every enchantment untouched — legacy
+     * gates the whole {@code addEnchants} call on this, not on any individual roll. Legacy read it
+     * through the static {@code ArcaneForging.arcaneForgingEnchantLoss} field, snapshotted at plugin
+     * load; reading it live is equivalent for a config that is never reloaded mid-session.
+     *
+     * @return whether the Arcane Forging enchantment roll should run at all
+     */
+    public boolean isArcaneForgingEnchantLossEnabled() {
+        return McMMOMod.getAdvancedConfig().getArcaneForgingEnchantLossEnabled();
+    }
+
+    /**
+     * Resolve one enchantment's fate on repair. Both RNG draws are supplied by the caller (the
+     * port's RNG convention — {@code ProbabilityUtil} has no test seam), so the branching itself is
+     * deterministic and fully testable.
+     *
+     * <p>Note the inverted sense of the second draw, which is legacy's: it rolls against
+     * {@code 100 - getDowngradeEnchantChance()}, and a <em>success</em> means the enchantment
+     * escaped being downgraded. A level-1 enchantment can never be downgraded (there is no level 0
+     * to drop to) so it is kept outright.
+     *
+     * @param enchantLevel the enchantment's current level
+     * @param keptRoll result of the keep roll against {@link #getKeepEnchantChance()}
+     * @param downgradeAvoidedRoll result of the roll against
+     *     {@code 100 - }{@link #getDowngradeEnchantChance()}; {@code true} means no downgrade
+     * @return the outcome to apply to the item
+     */
+    public @NotNull ArcaneOutcome resolveEnchantOutcome(int enchantLevel, boolean keptRoll,
+            boolean downgradeAvoidedRoll) {
+        if (!keptRoll) {
+            return ArcaneOutcome.LOST;
+        }
+        if (isArcaneForgingDowngradeEnabled() && enchantLevel > 1 && !downgradeAvoidedRoll) {
+            return ArcaneOutcome.DOWNGRADED;
+        }
+        return ArcaneOutcome.KEPT;
     }
 
     /*

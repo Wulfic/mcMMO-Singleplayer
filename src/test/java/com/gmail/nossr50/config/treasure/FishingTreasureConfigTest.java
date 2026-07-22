@@ -2,9 +2,11 @@ package com.gmail.nossr50.config.treasure;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.gmail.nossr50.datatypes.treasure.EnchantmentTreasure;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
 import com.gmail.nossr50.datatypes.treasure.Rarity;
 import com.gmail.nossr50.datatypes.treasure.ShakeTreasure;
@@ -26,6 +28,12 @@ class FishingTreasureConfigTest {
                 .orElse(null);
     }
 
+    /** The configured level for an enchantment path in a band, or {@code -1} when it isn't there. */
+    private static int levelOf(List<EnchantmentTreasure> band, String enchantmentId) {
+        return band.stream().filter(t -> t.enchantmentId().equals(enchantmentId))
+                .mapToInt(EnchantmentTreasure::level).findFirst().orElse(-1);
+    }
+
     private static boolean anyBucketHas(FishingTreasureConfig config, String id) {
         return config.fishingRewards.values().stream()
                 .flatMap(List::stream)
@@ -42,7 +50,9 @@ class FishingTreasureConfigTest {
     void everyRarityBucketIsInitialised(@TempDir Path dataFolder) {
         final FishingTreasureConfig config = new FishingTreasureConfig(dataFolder);
         for (Rarity rarity : Rarity.values()) {
-            assertNotNull(config.fishingRewards.get(rarity), rarity + " bucket must exist");
+            assertNotNull(config.fishingRewards.get(rarity), rarity + " reward bucket must exist");
+            assertNotNull(config.fishingEnchantments.get(rarity),
+                    rarity + " enchantment bucket must exist");
         }
     }
 
@@ -150,5 +160,51 @@ class FishingTreasureConfigTest {
         assertEquals(7.50, config.getItemDropRate(1, Rarity.COMMON));
         assertEquals(0.01, config.getItemDropRate(1, Rarity.MYTHIC));
         assertEquals(7.50, config.getItemDropRate(8, Rarity.EPIC));
+    }
+
+    @Test
+    void loadsMagicHunterEnchantmentsBucketedByRarity(@TempDir Path dataFolder) {
+        final FishingTreasureConfig config = new FishingTreasureConfig(dataFolder);
+
+        // Enchantments_Rarity.COMMON ships EFFICIENCY: 1; LEGENDARY ships SHARPNESS: 5.
+        assertEquals(1, levelOf(config.getEnchantmentTreasures(Rarity.COMMON), "efficiency"));
+        assertEquals(5, levelOf(config.getEnchantmentTreasures(Rarity.LEGENDARY), "sharpness"));
+        // A multi-word key must lower-case to the vanilla registry path, not stay upper-snake.
+        assertEquals(4, levelOf(config.getEnchantmentTreasures(Rarity.EPIC), "bane_of_arthropods"));
+        assertEquals(-1, levelOf(config.getEnchantmentTreasures(Rarity.EPIC), "BANE_OF_ARTHROPODS"),
+                "entries must be keyed by registry path, never by the config's Bukkit spelling");
+
+        // COMMON is the widest low band; MYTHIC carries the top-level entries.
+        assertEquals(14, config.getEnchantmentTreasures(Rarity.COMMON).size());
+        assertEquals(1, levelOf(config.getEnchantmentTreasures(Rarity.MYTHIC), "infinity"));
+    }
+
+    @Test
+    void everyShippedEnchantmentNameLooksLikeARegistryPath(@TempDir Path dataFolder) {
+        // The port resolves these against the dynamic enchantment registry at drop time, so a name
+        // that isn't a legal lower-case path can never resolve. Guards the toLowerCase mapping.
+        final FishingTreasureConfig config = new FishingTreasureConfig(dataFolder);
+
+        for (Rarity rarity : Rarity.values()) {
+            for (EnchantmentTreasure treasure : config.getEnchantmentTreasures(rarity)) {
+                assertTrue(treasure.enchantmentId().matches("[a-z0-9_.\\-/:]+"),
+                        rarity + " enchantment '" + treasure.enchantmentId()
+                                + "' is not a legal registry path");
+                assertTrue(treasure.level() > 0, "levels must be positive");
+            }
+        }
+    }
+
+    @Test
+    void loadsEnchantmentDropRatesPerTierAndRarity(@TempDir Path dataFolder) {
+        final FishingTreasureConfig config = new FishingTreasureConfig(dataFolder);
+
+        // Enchantment_Drop_Rates is a table of its own — deliberately not Item_Drop_Rates.
+        assertEquals(5.00, config.getEnchantmentDropRate(1, Rarity.COMMON));
+        assertEquals(0.01, config.getEnchantmentDropRate(1, Rarity.MYTHIC));
+        assertEquals(10.0, config.getEnchantmentDropRate(8, Rarity.UNCOMMON));
+        assertNotEquals(config.getItemDropRate(1, Rarity.COMMON),
+                config.getEnchantmentDropRate(1, Rarity.COMMON),
+                "the item and enchant curves must not be read from the same section");
     }
 }

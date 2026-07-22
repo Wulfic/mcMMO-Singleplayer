@@ -54,8 +54,14 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       `removeSuperAbilityBoostsFromInventory()` — set/remove Efficiency via `EnchantmentHelper.apply`
       (dynamic-registry `Efficiency` entry) + a `custom_data` marker (`NbtComponent`) stashing the
       pre-boost level; plus `getEnchantmentLevel`/`getUnbreakingLevel` (registry-free scan) and durability
-      set from before. **Still TODO:** Alchemy potion-content read/write, Arcane Forging/Arcane Salvage
-      enchant transfer (need the general enchant read/modify surface on repaired/salvaged items).
+      set from before. **Arcane Forging / Arcane Salvage enchant transfer DONE** — and it needed no new
+      adapter: the "general enchant read/modify surface" the old deferral wanted already existed in the
+      haste-boost work. Reading is `EnchantmentHelper.getEnchantments(stack)` →
+      `ItemEnchantmentsComponent#getEnchantments()`/`getLevel(entry)`; writing is
+      `EnchantmentHelper.set(stack, component)` built through `ItemEnchantmentsComponent.Builder`; and an
+      enchanted book is that same component stored under `DataComponentTypes.STORED_ENCHANTMENTS`
+      (Bukkit's `EnchantmentStorageMeta`). `Enchantment#getMaxLevel()` supplies the unsafe-level clamp.
+      See the Repair/Salvage entries in §B. **Still TODO:** Alchemy potion-content read/write.
 - [~] **K4 — Port `SkillUtils`.** **Core DONE** (commit b26096c56): `cooldownExpired` +
       `handleDurabilityChange`/`handleArmorDurabilityChange`. **Haste-boost orchestration DONE**:
       `handleAbilitySpeedIncrease`/`removeAbilityBuffFromMainHand`/`removeAbilityBoostsFromInventory`
@@ -236,16 +242,51 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
       guard only `CAUGHT_FISH`). **Dropped:** the `PLAYER` arm (player-head owner stamp +
       `INVENTORY` steal) as unreachable in singleplayer, the `McMMOPlayerShakeEvent` (K5 plugin veto),
       and legacy's trailing dead `setFishingTarget()`. ⚠️ In-game verification pending (a mob cannot be
-      hooked headless). Still TODO: Magic Hunter enchant loot (needs the dynamic enchant registry + K3
-      enchant-write; its `FishingTreasureConfig` enchant/book tables are deferred with it), the potion
-      shake drops (need a potion base type on `ItemSpec`), and the exploit item-removal punishment.
-- [~] **Repair** — repair action + Repair XP + Repair Mastery + Super Repair **DONE** (via K7 anvil →
+      hooked headless). **Magic Hunter DONE** — a caught treasure that is enchantable can now arrive
+      enchanted. The two decisions are MC-free on the manager (`rollMagicHunterRarity` walks the
+      **`Enchantment_Drop_Rates`** tier curve — a table separate from the item curve, so the item roll
+      and the enchant roll are independent draws; `selectMagicHunterEnchants` runs legacy's halving walk
+      over the shuffled band, where the 1-in-N counter doubles **only on an acceptance**).
+      `FishingListener#maybeApplyMagicHunter` owns the three MC-typed pieces: resolving the config's
+      registry paths against the **dynamic** enchantment registry
+      (`player.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT)`), filtering to enchantments
+      the item accepts (`Enchantment#isAcceptableItem` = legacy `getPossibleEnchantments`' Bukkit
+      `canEnchantItem`; legacy's per-Material cache dropped as worthless against a
+      `RegistryEntryList#contains`), and the unsafe write via `ItemEnchantmentsComponent.Builder#set`.
+      🔑 **The "dynamic enchant registry adapter" that deferred this for the whole port was one
+      `toLowerCase`** — every name the shipped config uses is the modern Bukkit spelling, which since
+      1.20.5 *is* the vanilla registry path, so legacy's `EnchantmentUtils` alias table (mapping them
+      back to `DIG_SPEED` &c.) is not ported; an unknown name is warned at drop time. Gated on
+      `isMagicHunterEnabled()` (Magic Hunter **and** Treasure Hunter unlocked+enabled) and on
+      `MaterialMapStore.isEnchantable` (legacy `ItemUtils.isEnchantable`, deliberately the mcMMO
+      whitelist rather than the vanilla check). ⚠️ In-game verification pending. See §F upstream bug #11
+      for the conflict-guard deviation. Still TODO: enchanted-book treasures (legacy
+      `FishingTreasureBook` draws a *random* registry enchantment under a per-book
+      whitelist/blacklist — a different mechanism from the Magic Hunter table), the potion shake drops
+      (need a potion base type on `ItemSpec`), and the exploit item-removal punishment.
+- [x] **Repair** — repair action + Repair XP + Repair Mastery + Super Repair **DONE** (via K7 anvil →
       `RepairSalvageListener`; XP formula `RepairManager#awardRepairXp` MC-free vs real experience.yml).
-      ⚠️ In-game verification pending. Still TODO (K3 enchant transfer): Arcane Forging enchant
-      keep/downgrade (`addEnchants`), enchanted-repair-material avoidance branch.
-- [~] **Salvage** — salvage action + yield (Scrap Collector) + material recovery **DONE** (via K7 anvil;
-      no XP by design). ⚠️ In-game verification pending. Still TODO (K3 enchant transfer): Arcane
-      Salvage enchant extraction (`arcaneSalvageCheck` enchanted-book build).
+      **Arcane Forging DONE** — repairing an enchanted item now rolls each enchantment separately
+      (`RepairManager#resolveEnchantOutcome` → KEPT / DOWNGRADED / LOST, both RNG draws injected so the
+      branching is unit-tested; `RepairSalvageListener#applyArcaneForging` owns the component write).
+      **The harsh legacy rule is preserved deliberately: a player with NO Arcane Forging rank loses
+      every enchantment on the item** (`canKeepEnchants()` is `rank != 0`), so repairing enchanted gear
+      below Repair 100 (RetroMode) is a guaranteed total loss, not merely a poor keep-chance.
+      Note legacy's inverted second draw — it rolls against `100 - DowngradeChance`, so a *success*
+      means the enchantment escaped downgrading; a level-1 enchant can never downgrade. The
+      `allowUnsafeEnchantments` clamp is ported too (a repair launders over-vanilla levels down to
+      `Enchantment#getMaxLevel()` unless `ExploitFix.UnsafeEnchantments` is set).
+      ⚠️ In-game verification pending. Still TODO: the enchanted-repair-material avoidance branch
+      (`getAllowEnchantedRepairMaterials`) and `SkillUtils.removeAbilityBuff` before repairing a
+      haste-boosted tool.
+- [x] **Salvage** — salvage action + yield (Scrap Collector) + material recovery **DONE** (via K7 anvil;
+      no XP by design). **Arcane Salvage DONE** — salvaging an enchanted item now yields an enchanted
+      book carrying what survived extraction (`SalvageManager#resolveEnchantOutcome` → FULL / PARTIAL /
+      FAILED, both draws injected; `RepairSalvageListener#buildArcaneSalvageBook` builds the book and
+      drops it beside the recovered materials). No book is produced for an unenchanted item, a player
+      below the Arcane Salvage rank, or when every enchantment fails its roll — the last two also
+      report `Salvage.Skills.ArcaneFailed`, matching legacy. The book is built before the salvaged item
+      is consumed, since the item's enchantments are the source. ⚠️ In-game verification pending.
 - [~] **Alchemy** — brew action + per-stage brew XP **DONE** (via K7 brewing-stand mixin →
       `AlchemyPotionBrewer.finishBrewing`: transform bottles→child potions, consume ingredient, award
       `handlePotionBrewSuccesses`; owner tracked by `AlchemyListener`). Custom (non-vanilla) mcMMO
@@ -903,6 +944,27 @@ effectively complete.**
       every rename of that enum silently orphans a section — grep the bundled YAML for names the
       current platform no longer defines. ⚠️ The port sidesteps the whole class of failure going
       forward by keying on registry paths, which do not get renamed out from under the config.
+- [x] **Fixed upstream bug #11 — Magic Hunter's conflicting-enchant guard can never fire** (Magic
+      Hunter commit): `processMagicHunter` walks the rarity band's candidates and skips any whose
+      `treasureDrop.getItemMeta().hasConflictingEnchant(possibleEnchantment)` is true — i.e. it tests
+      the candidate against the enchantments **already on the item**. But the treasure was built from
+      the config moments earlier and carries none, and the enchantments chosen by this very loop are
+      collected into a local `Map` that is only applied *afterwards*, in one
+      `addUnsafeEnchantments(enchants)` call. So the guard tests an always-empty set: nothing is ever
+      skipped, and the loop can hand you a sword with Sharpness, Smite **and** Bane of Arthropods, or
+      boots with two mutually exclusive protections — combinations no vanilla anvil or enchanting table
+      permits. Not rare, either: the halving walk makes the second pick 1-in-2 and the third 1-in-4, and
+      the widest bands ship all three damage enchants together. Fixed here by passing the **running
+      selection** to the conflict test as well (`selectMagicHunterEnchants` takes a
+      `BiPredicate<List<EnchantmentTreasure>, EnchantmentTreasure>`; `FishingListener#conflictsWithAny`
+      checks both the item's existing enchantments and the ones already picked, via vanilla
+      `Enchantment#canBeCombined` — bytecode-verified to be exactly CraftBukkit's `conflictsWith`).
+      `FishingManagerTest` pins it. ⚠️ **New shape in this family: not a stale key (#1/#2/#10) and not a
+      wrong operand (#6/#9) — the guard reads the *right* field at the *wrong time*.** Lesson: when a
+      loop accumulates its results into a local collection and applies them in one batch at the end, any
+      guard inside that loop which inspects the *target* rather than the accumulator is inert. The
+      deviation is documented on `selectMagicHunterEnchants`; reverting it is a one-line change to
+      `conflictsWithAny` if faithfulness to the broken behaviour is ever preferred.
 - [ ] **Suspected dead config — Shake `Drop_Level` and per-drop `XP`:** every `Shake` entry in
       `fishing_treasures.yml` carries both, and `loadTreasures` parses both onto the `ShakeTreasure`,
       but `Fishing.chooseDrop` consults **neither** — it walks `getDropChance()` alone, and
@@ -911,6 +973,16 @@ effectively complete.**
       gating at all. Benign as shipped (every value is `0`), so ported faithfully (both fields are
       parsed and carried, neither is read) rather than inventing a gate upstream never had. Fifth of the
       "config knob that lies to the operator" family — see `DebrisReduction`, Rupture
+      `Explosion_Damage`, SerratedStrikes `BleedTicks`, Gore `ChanceMax`.
+- [ ] **Suspected dead locale string — `Salvage.Skills.ArcaneSuccess`** (found while porting Arcane
+      Salvage): the string ships in `locale_en_US.properties` ("&aYou were able to extract all the
+      knowledge contained within this item!") and reads exactly like the counterpart to
+      `ArcaneFailed`/`ArcanePartial`, but `arcaneSalvageCheck` **never sends it** — it notifies only on
+      total failure and on a partial extraction, so a *perfect* full-level extraction is silent. Compare
+      Arcane Forging, whose equivalent three-way report does fire all three
+      (`Repair.Arcane.Fail`/`Downgrade`/`Perfect`). Ported faithfully (the string exists, nothing sends
+      it) rather than inventing a message upstream never showed. Sixth of the "shipped knob/string that
+      lies about what the code does" family — see Shake `Drop_Level`, `DebrisReduction`, Rupture
       `Explosion_Damage`, SerratedStrikes `BleedTicks`, Gore `ChanceMax`.
 - [ ] **Vendored-snapshot staleness (NOT an upstream bug) — `METADATA_KEY_MULTI_SHOT_ARROW`:** the
       vendored `EntityListener#onProjectileLaunch` stamps this key and **nothing anywhere reads it**,

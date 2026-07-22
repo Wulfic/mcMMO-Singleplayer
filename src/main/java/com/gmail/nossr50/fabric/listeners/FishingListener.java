@@ -1,21 +1,34 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.datatypes.treasure.EnchantmentTreasure;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
+import com.gmail.nossr50.datatypes.treasure.Rarity;
 import com.gmail.nossr50.datatypes.treasure.ShakeTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.ItemSpecBuilder;
 import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.skills.fishing.FishingManager;
 import com.gmail.nossr50.skills.fishing.FishingManager.MasterAnglerWaitTimes;
+import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.CombatUtils;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import net.minecraft.component.type.ItemEnchantmentsComponent;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
@@ -25,8 +38,12 @@ import net.minecraft.entity.vehicle.AbstractBoatEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.Registry;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.random.Random;
 
@@ -66,10 +83,15 @@ import net.minecraft.util.math.random.Random;
  * {@code FishingBobberUseMixin}: reeling in a hooked mob is legacy's {@code CAUGHT_ENTITY} state, and
  * a successful roll knocks a configured drop off the mob, damages it and pays flat Shake XP.
  *
- * <p><b>Still deferred:</b> Magic Hunter enchant loot (needs the dynamic enchant registry + K3
- * enchant-write; its {@code FishingTreasureConfig} enchant/book tables are deferred with it) and the
- * exploit item-removal punishment (we skip the XP <i>and</i> the treasure roll on an exploiting catch —
- * the same early-return gate).
+ * <p><b>Magic Hunter is wired here too</b> ({@link #maybeApplyMagicHunter}): a caught treasure that is
+ * enchantable can arrive enchanted, rolled off the {@code Enchantment_Drop_Rates} tier curve and the
+ * {@code Enchantments_Rarity} table. See that method for the three MC-typed pieces it owns (dynamic
+ * registry resolution, applicability filtering, and the unsafe enchant write).
+ *
+ * <p><b>Still deferred:</b> enchanted-book treasures (legacy {@code FishingTreasureBook} draws a random
+ * enchantment from the whole registry under a per-book whitelist/blacklist, a different mechanism from
+ * the Magic Hunter table — see {@code FishingTreasureConfig}) and the exploit item-removal punishment
+ * (we skip the XP <i>and</i> the treasure roll on an exploiting catch — the same early-return gate).
  */
 public final class FishingListener {
 
@@ -122,7 +144,7 @@ public final class FishingListener {
             fishingManager.awardFishingXP(materialConfigString);
         }
 
-        maybeCatchTreasure(serverPlayer, fishingManager, caught);
+        maybeCatchTreasure(serverPlayer, mmoPlayer, fishingManager, caught);
     }
 
     /**
@@ -130,7 +152,7 @@ public final class FishingListener {
      * vanilla spawns) and award its bonus XP. Ports the treasure half of legacy {@code processFishing}:
      * with {@code Extra_Fish} off the treasure replaces the fish, with it on the fish is kept too.
      */
-    private static void maybeCatchTreasure(ServerPlayerEntity serverPlayer,
+    private static void maybeCatchTreasure(ServerPlayerEntity serverPlayer, McMMOPlayer mmoPlayer,
             FishingManager fishingManager, Collection<ItemStack> caught) {
         final ThreadLocalRandom rng = ThreadLocalRandom.current();
         final Optional<FishingTreasure> rolled = fishingManager.rollFishingTreasure(
@@ -146,6 +168,11 @@ public final class FishingListener {
         final ItemStack treasureStack = built.get();
         applyRandomWear(treasureStack, rng);
 
+        if (maybeApplyMagicHunter(serverPlayer, fishingManager, treasureStack, rng)) {
+            NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                    "Fishing.Ability.TH.MagicFound");
+        }
+
         // Extra_Fish off (the shipped default) => the treasure supplants the fish; on => keep both.
         if (!McMMOMod.getGeneralConfig().getFishingExtraFish()) {
             caught.clear();
@@ -153,6 +180,133 @@ public final class FishingListener {
         caught.add(treasureStack);
 
         fishingManager.awardFishingTreasureXP(rolled.get().getXp());
+    }
+
+    /**
+     * Magic Hunter: enchant a caught treasure. The MC-typed half of legacy
+     * {@code FishingManager#processMagicHunter} — the two decisions it makes (which rarity band wins,
+     * and which of that band's enchantments land) are MC-free on the manager; this method owns the
+     * three things that need Minecraft:
+     *
+     * <ol>
+     *   <li><b>Resolving the registry paths.</b> 1.21 enchantments live in a <i>dynamic</i>
+     *       (datapack-driven) registry, so they cannot be resolved when {@code FishingTreasureConfig}
+     *       loads — the table holds {@link EnchantmentTreasure} paths and we look them up here off the
+     *       player's {@code DynamicRegistryManager}. This was the "dynamic enchant registry adapter"
+     *       that deferred Magic Hunter for the whole port; it is one {@code Registry#getEntry} call.</li>
+     *   <li><b>Filtering to applicable enchantments</b> — legacy {@code getPossibleEnchantments}, whose
+     *       Bukkit {@code canEnchantItem} is vanilla's {@code Enchantment#isAcceptableItem}
+     *       (bytecode-verified: {@code definition.supportedItems().contains(item)}). Legacy cached this
+     *       per {@code Material}; the vanilla call is a {@code RegistryEntryList#contains} on a list of
+     *       at most a few dozen items, so the cache buys nothing and is dropped.</li>
+     *   <li><b>Writing the enchantments</b>, via the same {@code ItemEnchantmentsComponent.Builder}
+     *       surface Arcane Forging uses. {@code Builder#set} applies no level restriction, so it is
+     *       exactly legacy's {@code addUnsafeEnchantments} — which matters, because the shipped table
+     *       is within vanilla limits but an operator's need not be.</li>
+     * </ol>
+     *
+     * <p>Gated on {@link FishingManager#isMagicHunterEnabled()} (both Magic Hunter <i>and</i> Treasure
+     * Hunter unlocked and enabled) and on the drop being enchantable at all — legacy
+     * {@code ItemUtils.isEnchantable}, kept as the mcMMO {@code MaterialMapStore} whitelist rather than
+     * re-derived from vanilla, so the set of items Magic Hunter will touch stays exactly upstream's.
+     * It is the stricter of the two gates and short-circuits the whole path for an ordinary catch.
+     *
+     * @return whether any enchantment was applied (the caller sends the notification if so)
+     */
+    private static boolean maybeApplyMagicHunter(ServerPlayerEntity serverPlayer,
+            FishingManager fishingManager, ItemStack treasureStack, ThreadLocalRandom rng) {
+        if (!fishingManager.isMagicHunterEnabled()) {
+            return false;
+        }
+        final String itemId = Registries.ITEM.getId(treasureStack.getItem()).getPath();
+        if (!McMMOMod.getMaterialMapStore().isEnchantable(itemId)) {
+            return false;
+        }
+
+        final Optional<Rarity> rarity = fishingManager.rollMagicHunterRarity(
+                rng.nextDouble() * 100.0);
+        if (rarity.isEmpty()) {
+            return false; // the enchant roll cleared every band — an ordinary unenchanted treasure.
+        }
+
+        final Registry<Enchantment> enchantmentRegistry =
+                serverPlayer.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT);
+        final Map<String, RegistryEntry<Enchantment>> resolved = new HashMap<>();
+        final List<EnchantmentTreasure> candidates = new ArrayList<>();
+
+        for (EnchantmentTreasure candidate : McMMOMod.getFishingTreasureConfig()
+                .getEnchantmentTreasures(rarity.get())) {
+            final Identifier id = Identifier.tryParse(candidate.enchantmentId());
+            final Optional<RegistryEntry.Reference<Enchantment>> entry = id == null
+                    ? Optional.empty()
+                    : enchantmentRegistry.getEntry(id);
+
+            if (entry.isEmpty()) {
+                McMMOMod.LOGGER.warn("Skipping unknown Magic Hunter enchantment '{}' ({} band in"
+                        + " fishing_treasures.yml) — no such enchantment in this world's registry.",
+                        candidate.enchantmentId(), rarity.get());
+                continue;
+            }
+            if (!entry.get().value().isAcceptableItem(treasureStack)) {
+                continue; // legacy getPossibleEnchantments: this enchantment doesn't fit this item.
+            }
+
+            resolved.put(candidate.enchantmentId(), entry.get());
+            candidates.add(candidate);
+        }
+
+        if (candidates.isEmpty()) {
+            return false;
+        }
+
+        // Legacy shuffles so the halving walk doesn't permanently favour whoever is first in the file.
+        Collections.shuffle(candidates, rng);
+
+        final Set<RegistryEntry<Enchantment>> alreadyOnItem =
+                EnchantmentHelper.getEnchantments(treasureStack).getEnchantments();
+        final List<EnchantmentTreasure> chosen = fishingManager.selectMagicHunterEnchants(candidates,
+                (selectedSoFar, candidate) -> conflictsWithAny(alreadyOnItem, selectedSoFar, resolved,
+                        candidate),
+                rng::nextInt);
+
+        if (chosen.isEmpty()) {
+            return false;
+        }
+
+        final ItemEnchantmentsComponent.Builder builder = new ItemEnchantmentsComponent.Builder(
+                EnchantmentHelper.getEnchantments(treasureStack));
+        for (EnchantmentTreasure treasure : chosen) {
+            builder.set(resolved.get(treasure.enchantmentId()), treasure.level());
+        }
+        EnchantmentHelper.set(treasureStack, builder.build());
+        return true;
+    }
+
+    /**
+     * Whether {@code candidate} conflicts with anything already on the item or already picked in this
+     * roll — legacy's {@code ItemMeta#hasConflictingEnchant}, whose CraftBukkit implementation is
+     * vanilla's {@code Enchantment#canBeCombined} (bytecode-verified: not the same enchantment, and in
+     * neither party's {@code exclusiveSet}).
+     *
+     * <p>The {@code selectedSoFar} half is this port's deviation — see
+     * {@link FishingManager#selectMagicHunterEnchants} for why upstream's guard never fires.
+     */
+    private static boolean conflictsWithAny(Set<RegistryEntry<Enchantment>> alreadyOnItem,
+            List<EnchantmentTreasure> selectedSoFar,
+            Map<String, RegistryEntry<Enchantment>> resolved, EnchantmentTreasure candidate) {
+        final RegistryEntry<Enchantment> entry = resolved.get(candidate.enchantmentId());
+
+        for (RegistryEntry<Enchantment> existing : alreadyOnItem) {
+            if (!Enchantment.canBeCombined(existing, entry)) {
+                return true;
+            }
+        }
+        for (EnchantmentTreasure selected : selectedSoFar) {
+            if (!Enchantment.canBeCombined(resolved.get(selected.enchantmentId()), entry)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

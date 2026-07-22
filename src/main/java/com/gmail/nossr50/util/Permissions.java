@@ -153,4 +153,40 @@ public final class Permissions {
     public static boolean hasSalvageEnchantBypassPerk(@Nullable PlatformPlayer player) {
         return false;
     }
+
+    /**
+     * The Repair enchant-bypass perk ({@code mcmmo.perks.bypass.repairenchant}), which exempted a
+     * player from Arcane Forging's enchantment loss entirely. Like {@link #lucky}, it's an opt-in
+     * perk node no player holds in singleplayer, so it never applies.
+     *
+     * @param player the player (unused — retained to mirror the legacy call sites)
+     * @return always {@code false} — no perk-permission backend in singleplayer
+     */
+    public static boolean hasRepairEnchantBypassPerk(@Nullable PlatformPlayer player) {
+        return false;
+    }
+
+    /**
+     * Arcane Salvage sub-skill ({@code mcmmo.ability.salvage.arcanesalvage}), which extracts an
+     * enchanted book from a salvaged item. A gameplay check, so it defaults to "allowed".
+     *
+     * @param player the player (unused — retained to mirror the legacy call sites)
+     * @return always {@code true} — no permission backend in singleplayer
+     */
+    public static boolean arcaneSalvage(@Nullable PlatformPlayer player) {
+        return true;
+    }
+
+    /**
+     * The Arcane Forging bypass node ({@code mcmmo.bypass.arcanebypass}), which made a repair keep
+     * every enchantment at full level regardless of Arcane Forging rank. An administrative bypass
+     * rather than a gameplay check — nobody holds it in singleplayer, so it never applies and the
+     * ordinary keep/downgrade/lose roll always runs.
+     *
+     * @param player the player (unused — retained to mirror the legacy call sites)
+     * @return always {@code false} — no permission backend in singleplayer
+     */
+    public static boolean arcaneBypass(@Nullable PlatformPlayer player) {
+        return false;
+    }
 }
