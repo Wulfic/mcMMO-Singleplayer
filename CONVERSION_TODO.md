@@ -125,12 +125,19 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       (70/71 entries, `ENCHANTED_BOOK` correctly deferred). New `Rarity` + `FishingTreasure` datatypes
       ported. **The Treasure-Hunter consumer is now wired** (`FishingManager#rollFishingTreasure` +
       `FishingListener#maybeCatchTreasure` — see §B Fishing), so this table is no longer readerless.
+      **The `Shake` map is now loaded too** (this pass): `shakeMap` is keyed by the target's **vanilla
+      entity registry path** (`"cave_spider"`) rather than a Bukkit `EntityType`, and it is built by
+      walking the config's own section names instead of `EntityType.values()` — so no
+      `EntityType`→registry adapter was needed and the config stays MC-free, the same
+      resolve-at-use-time shape `TreasureConfig`'s Hylian groups use. Section names lower-case to
+      registry paths, with a three-entry alias table for the renamed ones (see §F upstream bug #10).
+      Boot-verified: 54 drops across all 24 shipped entity sections.
       **Still deferred (each a real adapter gap, not a skip):** enchanted-book / Magic-Hunter
       enchant tables (`Enchantments_Rarity`/`Enchantment_Drop_Rates`/`FishingTreasureBook` — need the
       **dynamic** 1.21 enchant registry + the K3 enchant-write surface, and their `processMagicHunter`
-      consumer is itself deferred, so loading them now would be readerless state), the `Shake` map
-      (needs a Bukkit-`EntityType`→registry-entity mapping + the `shakeCheck` `LivingEntity` body), and
-      a potion base-type on `ItemSpec`. These gate the remaining Fishing rewards.
+      consumer is itself deferred, so loading them now would be readerless state), and a potion
+      base-type on `ItemSpec` (which also skips the Cave Spider / Witch potion shake drops). These gate
+      the remaining Fishing rewards.
 - [~] **K9 — Placed-block tracker (anti-exploit).** DONE (in-session slice): new MC-free
       `util/PlacedBlockTracker` (worldKey + `BlockPos#asLong()` → ineligible-position set, unit-tested)
       replaces legacy `util.blockmeta.UserBlockTracker`/`HashChunkManager` without its region-file
@@ -207,10 +214,29 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
       entity-spawn glue. Faithful to legacy: `Extra_Fish` off (shipped default) ⇒ treasure replaces the
       fish, on ⇒ both kept; base + treasure XP both paid. Exploiting catches skip the treasure roll on the
       same early-return gate. ⚠️ In-game verification pending (the roll/replace can't be exercised
-      headless). Still TODO: Magic Hunter enchant loot (needs the dynamic enchant registry + K3
-      enchant-write; its `FishingTreasureConfig` enchant/book tables are deferred with it), Shake loot
-      (needs the Bukkit-`EntityType`→registry mapping + `shakeCheck` body), and the exploit item-removal
-      punishment.
+      headless).
+      **Shake DONE** (this pass) — reeling in a hooked mob (legacy's `CAUGHT_ENTITY` state) can now
+      knock a configured drop off it. The seam is a second injector on `FishingBobberUseMixin`, at the
+      `pullHookedEntity` call inside `FishingBobberEntity#use`: that call is the only one in the class,
+      and injecting *before* it reproduces CraftBukkit's ordering exactly (it fired `PlayerFishEvent`
+      and only then performed the pull, so mcMMO's shake always ran first). The decision cores are
+      MC-free on `FishingManager` — `rollShakeSuccess()` (the `ShakeChance` sub-skill roll),
+      `rollShakeTreasure(entityRegistryPath, dropRoll)` (legacy `Fishing.findPossibleDrops` +
+      `chooseDrop` fused into one caller-fed cumulative walk, so it is unit-tested like the treasure and
+      Hylian rolls), `shakeDamage(maxHealth)` (a quarter of max health, floored at 1 and capped at 10 —
+      legacy's "no more than 4 shakes") and `awardShakeXP()` (the flat
+      `Experience_Values.Fishing.Shake`, which legacy pays regardless of the drop's own XP). The
+      listener owns the entity-typed half: the `instanceof LivingEntity` gate, the registry-path lookup,
+      the `ItemEntity` spawn at the mob, the sheep-shearing arm (shaking wool off an unsheared sheep
+      shears it; an already-sheared one yields nothing at all) and the damage through
+      `CombatUtils.safeDealDamage`, which means the shake's own damage pays no combat XP — the role
+      legacy's `CUSTOM_DAMAGE` marker played. No exploit gate applies (legacy's spam/same-spot checks
+      guard only `CAUGHT_FISH`). **Dropped:** the `PLAYER` arm (player-head owner stamp +
+      `INVENTORY` steal) as unreachable in singleplayer, the `McMMOPlayerShakeEvent` (K5 plugin veto),
+      and legacy's trailing dead `setFishingTarget()`. ⚠️ In-game verification pending (a mob cannot be
+      hooked headless). Still TODO: Magic Hunter enchant loot (needs the dynamic enchant registry + K3
+      enchant-write; its `FishingTreasureConfig` enchant/book tables are deferred with it), the potion
+      shake drops (need a potion base type on `ItemSpec`), and the exploit item-removal punishment.
 - [~] **Repair** — repair action + Repair XP + Repair Mastery + Super Repair **DONE** (via K7 anvil →
       `RepairSalvageListener`; XP formula `RepairManager#awardRepairXp` MC-free vs real experience.yml).
       ⚠️ In-game verification pending. Still TODO (K3 enchant transfer): Arcane Forging enchant
@@ -761,6 +787,32 @@ effectively complete.**
       recorded at the time as safe because "`ItemStack.isOf` is null/EMPTY-safe" — true of the *argument*
       and of an EMPTY receiver, but irrelevant to a **null receiver**. A null-safety claim about a method
       says nothing about the nullability of the expression you call it on.
+- [x] **Fixed upstream bug #10 — three `Shake` config sections address entity names Bukkit no longer
+      has** (Fishing Shake commit): `FishingTreasureConfig` builds its shake map by iterating the live
+      `EntityType.values()` and reading `"Shake." + entity`, so a section whose name is not a current
+      enum constant is simply never looked up. The bundled `fishing_treasures.yml` still ships
+      `MUSHROOM_COW`, `PIG_ZOMBIE` and `SNOWMAN` — `PIG_ZOMBIE` was removed from Bukkit in 1.16
+      (`ZOMBIFIED_PIGLIN`), and `MUSHROOM_COW`/`SNOWMAN` were renamed to `MOOSHROOM`/`SNOW_GOLEM` in
+      **1.20.5, the exact API version the vendored `pom.xml` builds against**. Player-visible: the
+      config promises leather and mushroom stew off a mooshroom, gold nuggets off a zombified piglin and
+      snowballs off a snow golem, and shaking any of the three yields **nothing**, forever, with no
+      warning logged. Fixed here by aliasing the three section names onto their registry paths
+      (`ENTITY_SECTION_ALIASES`), so the shipped config means what it says; `FishingTreasureConfigTest`
+      pins both directions (the alias resolves, the raw name does not). ⚠️ **Same family as #1 and #2
+      (a table entry no lookup can ever reach), but a new shape: the stale key is in the shipped
+      *config*, not in a code-side whitelist.** Lesson: when a config is keyed by a platform enum,
+      every rename of that enum silently orphans a section — grep the bundled YAML for names the
+      current platform no longer defines. ⚠️ The port sidesteps the whole class of failure going
+      forward by keying on registry paths, which do not get renamed out from under the config.
+- [ ] **Suspected dead config — Shake `Drop_Level` and per-drop `XP`:** every `Shake` entry in
+      `fishing_treasures.yml` carries both, and `loadTreasures` parses both onto the `ShakeTreasure`,
+      but `Fishing.chooseDrop` consults **neither** — it walks `getDropChance()` alone, and
+      `shakeCheck` pays the flat `Experience_Values.Fishing.Shake` instead of the treasure's XP. So an
+      operator who sets `Drop_Level: 50` on the wither-skeleton skull to gate it behind a level gets no
+      gating at all. Benign as shipped (every value is `0`), so ported faithfully (both fields are
+      parsed and carried, neither is read) rather than inventing a gate upstream never had. Fifth of the
+      "config knob that lies to the operator" family — see `DebrisReduction`, Rupture
+      `Explosion_Damage`, SerratedStrikes `BleedTicks`, Gore `ChanceMax`.
 - [ ] **Vendored-snapshot staleness (NOT an upstream bug) — `METADATA_KEY_MULTI_SHOT_ARROW`:** the
       vendored `EntityListener#onProjectileLaunch` stamps this key and **nothing anywhere reads it**,
       which looks exactly like the "fossil of a deleted branch" family (§F #8's lesson). **Checked

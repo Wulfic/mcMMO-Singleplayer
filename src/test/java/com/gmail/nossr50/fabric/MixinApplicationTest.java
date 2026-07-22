@@ -104,5 +104,14 @@ class MixinApplicationTest {
         // The binding *count* is guarded in the mixin itself (allow = 1), because tickFishingLogic
         // makes three MathHelper#nextInt calls and a slice that fails to resolve is silently dropped
         // rather than raised — see FishingWaitTimeMixin's class doc for the mutation that proved it.
+
+        // Same reasoning for the Shake @Inject on FishingBobberUseMixin: an applied @Inject leaves its
+        // handler on the target, so its absence means reeling in a hooked mob would silently never
+        // shake anything loose.
+        final boolean hasShakeHook = Arrays.stream(FishingBobberEntity.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().contains("onEntityHooked"));
+        assertTrue(hasShakeHook,
+                "FishingBobberUseMixin's Shake injector did not apply to FishingBobberEntity — the "
+                        + "Shake sub-skill would silently never fire in-game");
     }
 }
