@@ -2,6 +2,7 @@ package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.fabric.McMMOMod;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
@@ -32,19 +33,41 @@ public final class Materials {
     private Materials() {}
 
     /**
+     * Pre-1.13 Bukkit {@code Material} names that still ship in mcMMO's own YAML, mapped to their
+     * modern registry paths.
+     *
+     * <p><b>A deliberate fix, not a transcription (CONVERSION_TODO §F, upstream defect #16.)</b>
+     * Bukkit renamed these in the 1.13 "flattening"; a name that is no longer a {@code Material}
+     * constant resolves to nothing upstream either, so the shipped entry silently does nothing —
+     * the same shape as the stale {@code Shake} section names in {@code fishing_treasures.yml}
+     * (defect #10). Aliasing here makes the shipped config mean what it says.
+     *
+     * <p>Kept deliberately minimal: only names the bundled configs actually contain go in, so this
+     * never becomes a speculative port of Bukkit's whole legacy-material table. Today that is one
+     * entry — {@code potions.yml}'s {@code WATER_LILY} ingredient, which boot logged as unresolvable.
+     */
+    private static final Map<String, String> LEGACY_NAME_ALIASES = Map.of(
+            "water_lily", "lily_pad");
+
+    /**
      * Normalize a Bukkit {@code Material} name (or an already-namespaced id) to an
-     * {@link Identifier}. Unqualified names resolve to the {@code minecraft} namespace.
+     * {@link Identifier}. Unqualified names resolve to the {@code minecraft} namespace, and the
+     * handful of pre-1.13 names still present in the shipped configs are aliased to their modern
+     * registry paths first (see {@link #LEGACY_NAME_ALIASES}).
      *
      * @return the identifier, or {@code null} if the string is not a valid identifier
      */
     public static @Nullable Identifier idOf(@NotNull String name) {
-        final String normalized = name.trim().toLowerCase(Locale.ROOT);
-        if (normalized.isEmpty()) {
+        final String trimmed = name.trim().toLowerCase(Locale.ROOT);
+        if (trimmed.isEmpty()) {
             return null;
         }
-        return normalized.indexOf(':') >= 0
-                ? Identifier.tryParse(normalized)
-                : Identifier.ofVanilla(normalized);
+        // Alias only unqualified names: an explicitly namespaced id is the caller being specific,
+        // and another mod's "foo:water_lily" is not ours to rewrite.
+        if (trimmed.indexOf(':') >= 0) {
+            return Identifier.tryParse(trimmed);
+        }
+        return Identifier.ofVanilla(LEGACY_NAME_ALIASES.getOrDefault(trimmed, trimmed));
     }
 
     /** Resolve an item by Bukkit-style name / namespaced id, empty if unknown. */
