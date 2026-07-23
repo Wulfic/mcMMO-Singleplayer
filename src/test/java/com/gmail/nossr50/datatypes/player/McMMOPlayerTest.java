@@ -17,6 +17,8 @@ import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.util.Misc;
+import com.gmail.nossr50.util.skills.SkillUtils;
 import java.nio.file.Path;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -258,5 +260,42 @@ class McMMOPlayerTest {
 
         mmoPlayer.addLevels(skill, 950); // level 1200, capped at 1000 → 2 + 1000/50 = 22
         assertEquals(22, mmoPlayer.calculateAbilityActivationTicks(skill, ability));
+    }
+
+    // --- respawn exploit timestamp ------------------------------------------
+
+    /**
+     * Pins the unit contract, which is the whole trap here:
+     * {@link com.gmail.nossr50.util.skills.SkillUtils#cooldownExpired} multiplies its timestamp by
+     * {@link Misc#TIME_CONVERSION_FACTOR}, so storing millis would push every grace deadline ~31,000
+     * years out and silently disable the payouts the timestamp gates, rather than failing loudly.
+     */
+    @Test
+    void respawnTimestampIsStampedOnLoginInSecondsNotMillis() {
+        final long nowSeconds = System.currentTimeMillis() / Misc.TIME_CONVERSION_FACTOR;
+
+        // Within a couple of seconds of "now" — and, critically, ~1000x smaller than a millis value.
+        assertTrue(Math.abs(nowSeconds - mmoPlayer.getRespawnATS()) <= 2,
+                "ctor stamps the timestamp (legacy did it from PlayerProfileLoadingTask), in seconds");
+        assertTrue(SkillUtils.cooldownExpired(mmoPlayer.getRespawnATS(), 0),
+                "a seconds-unit timestamp is already in the past at a zero cooldown");
+        assertFalse(SkillUtils.cooldownExpired(mmoPlayer.getRespawnATS(),
+                        Misc.PLAYER_RESPAWN_COOLDOWN_SECONDS),
+                "a fresh login is inside the grace window");
+    }
+
+    @Test
+    void actualizeRespawnATSAdvancesTheTimestampPastAnOlderOne() {
+        // Backdate past the window, then re-stamp the way PlayerSessionListener#onRespawn does.
+        final int stale = (int) (System.currentTimeMillis() / Misc.TIME_CONVERSION_FACTOR)
+                - (Misc.PLAYER_RESPAWN_COOLDOWN_SECONDS * 10);
+        assertTrue(SkillUtils.cooldownExpired(stale, Misc.PLAYER_RESPAWN_COOLDOWN_SECONDS));
+
+        mmoPlayer.actualizeRespawnATS();
+
+        assertTrue(mmoPlayer.getRespawnATS() > stale, "a respawn moves the timestamp forward");
+        assertFalse(SkillUtils.cooldownExpired(mmoPlayer.getRespawnATS(),
+                        Misc.PLAYER_RESPAWN_COOLDOWN_SECONDS),
+                "and re-opens the grace window");
     }
 }
