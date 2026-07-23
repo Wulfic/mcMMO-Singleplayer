@@ -395,6 +395,27 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
       9th cast with the shipped limit of 10), giving one catch of notice before confiscation starts.
       Both are pinned by counting `useChatNotifications()` — the first thing every `NotificationManager`
       send consults, which makes a send attempt observable against a mocked player.
+      **Ice Fishing DONE** (2026-07-23) — the *one remaining unported Fishing sub-skill*, surfaced by the
+      deep legacy↔port audit (it had been deferred only in a `FishingManager` class-doc, tracked nowhere).
+      Reeling a rod whose bobber is stuck on an ice sheet over water now melts a 3×3 hole.
+      **🔑 Seam: `FishingBobberEntity#use` HEAD** (the reel), a 4th injector on the existing
+      `FishingBobberUseMixin`. Legacy fired on CraftBukkit's synthetic `PlayerFishEvent.State.IN_GROUND`;
+      modern vanilla has **no such state** (the `State` enum is only `FLYING/HOOKED_IN_ENTITY/BOBBING`),
+      so the port reconstructs the precondition without the private field: **no hooked entity** (that is
+      the Shake path) **and the bobber is not in water** (`getFluidState(getBlockPos()).isIn(WATER)` — a
+      bobbing/caught bobber is, a stuck-on-ice one is not). The ice block is resolved from the player's
+      raycast, exactly as legacy used `player.getTargetBlock(null, 100)` — **not** the bobber position.
+      `FishingManager#canIceFish()` is the MC-free rank/permission gate (unit-pinned,
+      `canIceFishGatedOnRankAndPermission`); the listener owns the ICE check, the body-of-water scan, and
+      the melt. **⚠️ Two documented deviations:** (1) dropped legacy's icy-biome OR-shortcut — there is no
+      stable vanilla "icy biome" tag, so it scans the 1–4 blocks under the ice for water instead (a real
+      frozen body has water near its surface regardless of biome, and this still refuses a decorative ice
+      block with nothing beneath); (2) **no auto-recast** — legacy's `EventUtils.callFakeFishEvent` needs
+      bespoke bobber-spawn glue (a fresh `FishingBobberEntity` wired to `player.fishHook`), deferred as a
+      UX nicety, so the reel discards its bobber and the player casts again into the hole. Legacy's
+      `EventUtils.simulateBlockBreak` protection probe dropped as elsewhere. Boot-verified (0 mixin
+      failures, `Done (1.061s)`); **the melt-on-reel behaviour is interaction-driven and unverified
+      headless — see §G.**
 - [x] **Repair** — repair action + Repair XP + Repair Mastery + Super Repair **DONE** (via K7 anvil →
       `RepairSalvageListener`; XP formula `RepairManager#awardRepairXp` MC-free vs real experience.yml).
       **Arcane Forging DONE** — repairing an enchanted item now rolls each enchantment separately

@@ -159,6 +159,14 @@ class FishingManagerTest {
     }
 
     @Test
+    void canIceFishGatedOnRankAndPermission() {
+        atFishingLevel(0);
+        assertFalse(fishingManager.canIceFish(), "no Ice Fishing rank yet");
+        atFishingLevel(1000);
+        assertTrue(fishingManager.canIceFish(), "Ice Fishing unlocked well past its rank-1 level");
+    }
+
+    @Test
     void vanillaXpBoostScalesWithLootTier() {
         atFishingLevel(1); // Treasure Hunter rank 1 -> VanillaXPMultiplier x1
         assertEquals(10, fishingManager.handleVanillaXpBoost(10));

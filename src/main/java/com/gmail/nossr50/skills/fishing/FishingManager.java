@@ -42,17 +42,13 @@ import org.jetbrains.annotations.NotNull;
  * listener when a hooked mob is reeled in), and so is <b>Magic Hunter</b>
  * ({@link #rollMagicHunterRarity} + {@link #selectMagicHunterEnchants}, which together port legacy
  * {@code processMagicHunter}; the listener owns the registry resolution, the {@code isAcceptableItem}
- * filter that replaces legacy {@code getPossibleEnchantments}, and the enchant write). Still deferred
- * until the entity/item/block adapters:</p>
- * <ul>
- *   <li>{@code canIceFish}/{@code iceFishing} — need the live {@code Block}/{@code Biome} adapter;</li>
- *   <li>{@code masterAngler}/{@code processMasterAngler} — need the {@code FishHook} adapter and the
- *       Folia-scheduler {@code MasterAnglerTask}; the wait-time math itself is extracted below as
- *       {@link #resolveMasterAnglerWaitTimes} so the eventual body is a thin FishHook-mutation
- *       wrapper around it (same "buried pure decision" extraction as Herbalism's
- *       {@code resolveGreenThumbReplant});</li>
- *   <li>{@code isInBoat} — needs the vehicle/{@code Boat} adapter.</li>
- * </ul>
+ * filter that replaces legacy {@code getPossibleEnchantments}, and the enchant write), and so is
+ * <b>Master Angler</b> ({@link #resolveMasterAnglerWaitTimes}, driven from {@code FishingWaitTimeMixin}
+ * via {@code FishingListener#resolveWaitCountdown} — the {@code MasterAnglerTask} collapsed), and so
+ * is <b>Ice Fishing</b> ({@link #canIceFish()} — the rank/permission gate; {@code FishingListener}
+ * owns the reel seam, the ice-block + body-of-water reads and the 3&times;3 melt that legacy
+ * {@code canIceFish}/{@code iceFishing} did with a live world). Legacy's {@code isInBoat} collapsed
+ * into the listener's {@code getVehicle() instanceof AbstractBoatEntity} check.</p>
  *
  * <p><b>Fisherman's Diet is wired</b> ({@link #handleFishermanDiet(int)} +
  * {@link #isFishermansDietFood(String)}, driven from {@code fabric.listeners.FoodListener}).
@@ -124,6 +120,20 @@ public class FishingManager extends SkillManager {
     public boolean canShake() {
         return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.FISHING_SHAKE)
                 && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.FISHING_SHAKE);
+    }
+
+    /**
+     * Whether Ice Fishing is unlocked and enabled for this player — the MC-free half of legacy
+     * {@code canIceFish}. The listener owns the other two thirds of legacy's check (the block is ICE,
+     * and it sits over a body of water) because those need a live world.
+     *
+     * <p>Legacy also ran {@code EventUtils.simulateBlockBreak(block, player)} as a build-protection
+     * probe; with no region/claim plugins in singleplayer it is always true, so it is dropped as the
+     * other simulated-permission checks are throughout the port.
+     */
+    public boolean canIceFish() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.FISHING_ICE_FISHING)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.FISHING_ICE_FISHING);
     }
 
     public boolean canMasterAngler() {
