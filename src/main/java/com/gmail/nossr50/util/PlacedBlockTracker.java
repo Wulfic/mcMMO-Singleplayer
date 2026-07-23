@@ -1,5 +1,6 @@
 package com.gmail.nossr50.util;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,23 +17,30 @@ import org.jetbrains.annotations.NotNull;
  * set/get/clear cycle is unit-testable outside the Knot harness. The MC-typed extraction (live world +
  * {@code BlockPos} → these two keys) lives in {@link BlockUtils#markPlaced}/
  * {@link BlockUtils#isRewardIneligible}, exactly where legacy's {@code BlockUtils#setUnnaturalBlock}
- * sat. Held for the JVM as a singleton on {@code McMMOMod} (sibling of {@link TransientEntityTracker})
- * and {@linkplain #clear() cleared} at world close, since its contents are per-world session state.
+ * sat. Held for the JVM as a singleton on {@code McMMOMod} (sibling of {@link TransientEntityTracker}).
+ *
+ * <p>Its contents are per-world state: {@linkplain #restore loaded} from the world save at server
+ * start and {@linkplain #snapshot written back} at autosave / server stop by
+ * {@link com.gmail.nossr50.database.PlacedBlockStore}, then {@linkplain #clear() cleared} so the next
+ * world session starts from that world's own flags.
  *
  * <p><b>Deliberate deviations from legacy</b> (each a documented gap, not an oversight):
  * <ul>
- *   <li><b>No cross-restart persistence.</b> Legacy serialised the flags to per-chunk region files
- *       ({@code McMMOSimpleRegionFile}); this holds them in memory only and drops them at world close,
- *       so a placed block re-mined <em>after</em> a restart pays out again. The in-session exploit
- *       (place ore → mine → repeat) is the one that matters and is fully closed; the cross-restart
- *       reset is a future slice.</li>
+ *   <li><b>One flat file instead of per-chunk region files.</b> Legacy sharded the flags into
+ *       {@code McMMOSimpleRegionFile}s loaded and evicted with their chunk; this keeps every flag
+ *       resident and writes them in one document. Sound here because the set is bounded by
+ *       <em>still-standing hand-placed</em> blocks (see below) rather than by world size, and a
+ *       singleplayer world has exactly one player filling it.</li>
  *   <li><b>Only hand-placed blocks are tracked.</b> Because the sole writer is the {@code BlockItem.place}
  *       seam, world-gen / grown / fallen blocks are never marked, so unlike legacy this needs no
  *       "reset to natural" hooks to walk back over-marking — at the cost of not following a placed
  *       block a piston pushes to a new position (a rare edge, breadcrumbed).</li>
- *   <li><b>Memory is bounded by breaking, not chunk-unloading.</b> The break / blast / fell paths
- *       {@link #setEligible clear} a position once its block is removed, so only still-standing placed
- *       blocks are retained; legacy additionally evicted on chunk unload.</li>
+ *   <li><b>Memory is bounded by breaking, not chunk-unloading.</b> Every player block break
+ *       {@link #setEligible clears} its position before any skill branch runs, so only still-standing
+ *       placed blocks are retained; legacy additionally evicted on chunk unload. Blocks removed
+ *       without a player break (creeper blast, fire, lava) leave a stale flag behind — harmless
+ *       unless a natural block later occupies that exact position, and self-healing the first time
+ *       one is broken there.</li>
  * </ul>
  */
 public class PlacedBlockTracker {
@@ -65,9 +73,51 @@ public class PlacedBlockTracker {
         return !isIneligible(worldKey, packedPos);
     }
 
-    /** Forget every tracked position — called at world close (server stop). */
+    /**
+     * Forget every tracked position — called at world close (server stop), <em>after</em> the flags
+     * have been {@linkplain #snapshot() written} to the world save.
+     */
     public void clear() {
         ineligibleByWorld.clear();
+    }
+
+    /**
+     * A stable copy of every tracked flag, for persistence. Each world's positions are copied into a
+     * {@code long[]} rather than handed out live, so a caller iterating the snapshot cannot observe a
+     * half-applied concurrent mark. Worlds with no tracked positions are omitted.
+     */
+    public @NotNull Map<String, long[]> snapshot() {
+        final Map<String, long[]> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, Set<Long>> entry : ineligibleByWorld.entrySet()) {
+            final Long[] boxed = entry.getValue().toArray(new Long[0]);
+            if (boxed.length == 0) {
+                continue; // a world whose last placed block was broken: nothing to write.
+            }
+            final long[] positions = new long[boxed.length];
+            for (int i = 0; i < boxed.length; i++) {
+                positions[i] = boxed[i];
+            }
+            copy.put(entry.getKey(), positions);
+        }
+        return copy;
+    }
+
+    /**
+     * Replace every tracked flag with the given ones (the load half of {@link #snapshot()}). Any flag
+     * held before the call is discarded, so a failed or partial load can never leave the tracker
+     * holding another world's positions.
+     */
+    public void restore(@NotNull Map<String, long[]> byWorld) {
+        ineligibleByWorld.clear();
+        for (Map.Entry<String, long[]> entry : byWorld.entrySet()) {
+            final Set<Long> positions = ConcurrentHashMap.<Long>newKeySet();
+            for (long packedPos : entry.getValue()) {
+                positions.add(packedPos);
+            }
+            if (!positions.isEmpty()) {
+                ineligibleByWorld.put(entry.getKey(), positions);
+            }
+        }
     }
 
     /** Total tracked positions across all worlds (for tests / memory reasoning). */

@@ -11,6 +11,7 @@ import com.gmail.nossr50.config.SoundConfig;
 import com.gmail.nossr50.commands.McMMOCommands;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.database.FlatFileProfileStore;
+import com.gmail.nossr50.database.PlacedBlockStore;
 import com.gmail.nossr50.database.ProfileStore;
 import com.gmail.nossr50.event.EventBus;
 import com.gmail.nossr50.event.SimpleEventBus;
@@ -100,11 +101,20 @@ public class McMMOMod implements ModInitializer {
 
     /**
      * Registry of hand-placed blocks that must not give gathering rewards (the port's replacement for
-     * legacy {@code mcMMO.getUserBlockTracker()} — see §A). Created once at mod load; unlike legacy's
-     * region-file store it keeps its flags in memory only, so its per-world contents are dropped at
-     * world close ({@link #onServerStopping}), the same session-state lifecycle as {@link MetadataStore}.
+     * legacy {@code mcMMO.getUserBlockTracker()} — see §A). Created once at mod load; its flags are
+     * per-world, so they are loaded from the world save at server start and written back and dropped
+     * at world close ({@link #onServerStarting} / {@link #onServerStopping}) via
+     * {@link #placedBlockStore}.
      */
     private static final PlacedBlockTracker placedBlockTracker = new PlacedBlockTracker();
+
+    /**
+     * Cross-restart persistence for {@link #placedBlockTracker} (legacy's {@code McMMOSimpleRegionFile}
+     * shard set, collapsed to one flat file). Bound at server start once the world save path is known
+     * and cleared at server stop; {@code null} outside a world session, in which case the flags are
+     * session-only — the pre-persistence behaviour.
+     */
+    private static volatile PlacedBlockStore placedBlockStore;
 
     /** Ticks in one real-time minute (20 tps × 60 s). Autosave interval is configured in minutes. */
     private static final long TICKS_PER_MINUTE = 20L * 60L;
@@ -216,6 +226,10 @@ public class McMMOMod implements ModInitializer {
     /** Equivalent of {@code onEnable}: per-session init when a world's server starts. */
     private void onServerStarting(MinecraftServer startingServer) {
         server = startingServer;
+        // Unbind the previous session's placed-block store before anything below can throw. A world
+        // whose stop handler never ran (a crash) leaves the old store bound, and if this start then
+        // failed part-way the autosave would write THIS world's flags into THAT world's file.
+        placedBlockStore = null;
         try {
             LOGGER.info("mcMMO enabling for server session.");
             // Phase 8: load config files from <configDir>/mcmmo. Resolved via FabricLoader so the
@@ -223,9 +237,16 @@ public class McMMOMod implements ModInitializer {
             ConfigBootstrap.loadAll(FabricLoader.getInstance().getConfigDir().resolve(MOD_ID));
             // Phase 5: bind the per-world profile store under <worldRoot>/mcmmo/players/. Player
             // profiles load lazily on join (PlayerSessionListener), not eagerly here.
-            final Path playersDir = startingServer.getSavePath(WorldSavePath.ROOT)
-                    .resolve(MOD_ID).resolve("players");
-            McMMOMod.setProfileStore(new FlatFileProfileStore(playersDir));
+            final Path modDataDir = startingServer.getSavePath(WorldSavePath.ROOT).resolve(MOD_ID);
+            McMMOMod.setProfileStore(new FlatFileProfileStore(modDataDir.resolve("players")));
+            // §A/K9: load this world's hand-placed-block flags before any block can be broken, so a
+            // block placed in a previous session is still ineligible for gathering rewards. Bound
+            // per world (the flags are world state, like the profiles above), and re-saved on the
+            // autosave tick and at server stop.
+            final PlacedBlockStore blockStore =
+                    new PlacedBlockStore(modDataDir.resolve("placed_blocks.dat"));
+            blockStore.load(placedBlockTracker);
+            placedBlockStore = blockStore;
             // PORT Phase 10: register core skills / interaction maps.
             // Phase 11: schedule the periodic autosave (interval = General.Save_Interval minutes,
             // floored at 1 minute). Cancelled in onServerStopping.
@@ -265,8 +286,12 @@ public class McMMOMod implements ModInitializer {
             // owned it. The tasks those markers point at were just killed by cancelAll() above, and
             // a leaked rupture marker would make its target permanently immune to Rupture.
             MetadataStore.clearAll();
-            // §A: drop the hand-placed-block flags (in-memory only, no region-file persistence) so the
-            // next world session starts with every block eligible for rewards again.
+            // §A/K9: write this world's hand-placed-block flags back to its save, THEN drop them —
+            // the order matters, since clearing first would persist an empty set and hand the
+            // place → mine → repeat farm back to the player on the next load. The store swallows and
+            // logs its own IO failures, so a bad disk costs the flags, not the rest of this teardown.
+            savePlacedBlocks();
+            placedBlockStore = null;
             placedBlockTracker.clear();
             // In-progress brews need no explicit flush: mcMMO reuses vanilla's brew timer (persisted
             // in the block entity's NBT), so a half-done brew simply resumes on the next world load.
@@ -318,6 +343,19 @@ public class McMMOMod implements ModInitializer {
      */
     public static @NotNull PlacedBlockTracker getPlacedBlockTracker() {
         return placedBlockTracker;
+    }
+
+    /**
+     * Flush the hand-placed-block flags to the world save (§A/K9). Called on the autosave tick for
+     * crash safety and once more at server stop; a no-op outside a world session, where there is no
+     * save to write to. Never throws — {@link PlacedBlockStore#save} logs and swallows its own IO
+     * failures so this can sit alongside the profile flush without being able to abort it.
+     */
+    public static void savePlacedBlocks() {
+        final PlacedBlockStore store = placedBlockStore;
+        if (store != null) {
+            store.save(placedBlockTracker);
+        }
     }
 
     /**
