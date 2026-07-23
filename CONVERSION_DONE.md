@@ -16,7 +16,7 @@ relevant entry before touching a subsystem — several of them exist specificall
 
 **Status as of 2026-07-23:** all 19 skill managers live; §A keystones all landed or collapsed; §B (every
 skill earns XP) feature-complete; §C (combat on-hit) effectively complete; §D/§E bodies all ported.
-Unit suite **712 green**, headless boot clean (`Done (1.097s)`, 0 exceptions, 0 mixin failures).
+Unit suite **717 green**, headless boot clean (`Done (1.159s)`, 0 exceptions, 0 mixin failures).
 **The port's remaining risk is concentrated in §G: everything below is "boot-verified, never played."**
 
 ---
@@ -82,10 +82,22 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       out algebraically**, so the whole method is `eventFoodLevel + curRank` and the "`Player` food
       access" adapter was never needed — it stays MC-free on `SkillUtils`. The "food-level change event"
       is the new `FoodComponentMixin` (see K7). Drives Herbalism Farmer's Diet + Fishing Fisherman's
-      Diet (§B/§D). **Still TODO:** the legacy Haste-*potion* fallback branch (unreachable with bundled
-      `hidden.yml`) and the `RepairableManager` max-durability override. (`getRepairAndSalvage*` has
-      since landed as `SkillUtils.getRepairAndSalvageQuantities`, derived from the item's registry path
-      instead of the live recipe iterator.)
+      Diet (§B/§D). **The `RepairableManager` max-durability override is now DONE too** (2026-07-23):
+      both durability formulas clamp against a registered `Repairable`'s configured
+      `MaximumDurability` when `repair.yml` names the item, else the vanilla value — legacy's exact
+      ternary, extracted to one `maxDurabilityOf` helper and kept MC-free by the new
+      `PlatformItem#getTypePath()` (bare registry path, the key the MC-free repair tables use).
+      ⚠️ **Worth knowing before "fixing" it: this override is inert for every shipped repairable, by
+      construction.** This port's `RepairConfig` already resolves `MaximumDurability` from the item's own
+      `getMaxDamage()` and only falls back to the config key when vanilla reports no durability at all,
+      so the two sources agree for all 77 entries in the bundled `repair.vanilla.yml` (legacy read the
+      config key first, so there the two genuinely could differ). It was wired rather than collapsed
+      because the one case it still bites — a user-edited config registering a non-damageable item as
+      repairable — is exactly what legacy's branch existed for.
+      **Still TODO:** only the legacy Haste-*potion* fallback branch (unreachable with the bundled
+      `hidden.yml`). (`getRepairAndSalvage*` has since landed as
+      `SkillUtils.getRepairAndSalvageQuantities`, derived from the item's registry path instead of the
+      live recipe iterator.)
 - [x] **K5 — `EventUtils` COLLAPSES ENTIRELY** (audited 2026-07-23; no code was needed). The keystone was
       carried as "port the internal-bus event fires several bodies expect", but an audit of legacy
       `EventUtils`' whole public surface finds **nothing left to port**. Every method falls into one of
@@ -364,7 +376,25 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
       ⚠️ **This shifted a shake probability, deliberately:** the Cave Spider's four bands now sum to
       exactly 100 instead of 99, so a roll of 99 wins the poison potion where it previously won nothing.
       That is the config's stated intent; `FishingManagerTest` pins the new band.
-      Still TODO: the exploit item-removal punishment.
+      **The overfishing punishment is now DONE too** (2026-07-23), so Fishing's anti-exploit arm is
+      complete. **🔑 A two-action legacy punishment collapses to one line.** Legacy needed both
+      `caughtItem.remove()` (destroy the already-spawned item entity) and `event.setExpToDrop(0)`
+      (suppress the vanilla XP orb), because CraftBukkit spawns the item, fires the event, then drops
+      the orb separately. In vanilla `FishingBobberEntity#use` the `ExperienceOrbEntity` construction
+      and `spawnEntity` sit **inside the loop over the caught-loot collection** (bytecode-verified:
+      they fall between the item spawn and the loop's back-edge), so emptying the collection the mixin
+      already hands us yields neither items nor orbs. `FishingListener#punishOverfishing` is therefore
+      a `ScarcityTip` message plus `caught.clear()`. The rod still takes its durability hit and the
+      bobber still reels in — matching legacy leaving the event uncancelled.
+      **Also restored: the two warning messages the port had dropped**, both now sent straight from
+      `FishingManager` (the same place legacy sends them — `NotificationManager` is manager-callable,
+      as `RepairManager#checkConfirmation` already shows, so no listener callback was needed).
+      `Fishing.Scared` fires from `isFishingTooOften`, throttled by its own `lastWarned` stamp to one
+      per second so a recast burst warns once; `Fishing.LowResourcesTip` fires from `processExploiting`
+      on the catch immediately *before* the limit (`fishCaughtCounter + 1 == OverFishLimit`, i.e. the
+      9th cast with the shipped limit of 10), giving one catch of notice before confiscation starts.
+      Both are pinned by counting `useChatNotifications()` — the first thing every `NotificationManager`
+      send consults, which makes a send attempt observable against a mocked player.
 - [x] **Repair** — repair action + Repair XP + Repair Mastery + Super Repair **DONE** (via K7 anvil →
       `RepairSalvageListener`; XP formula `RepairManager#awardRepairXp` MC-free vs real experience.yml).
       **Arcane Forging DONE** — repairing an enchanted item now rolls each enchantment separately
@@ -377,9 +407,24 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
       means the enchantment escaped downgrading; a level-1 enchant can never downgrade. The
       `allowUnsafeEnchantments` clamp is ported too (a repair launders over-vanilla levels down to
       `Enchantment#getMaxLevel()` unless `ExploitFix.UnsafeEnchantments` is set).
-      ⚠️ In-game verification pending. Still TODO: the enchanted-repair-material avoidance branch
-      (`getAllowEnchantedRepairMaterials`) and `SkillUtils.removeAbilityBuff` before repairing a
-      haste-boosted tool.
+      **Both trailing branches now DONE too** (2026-07-23), so Repair is complete:
+      **(a) the ability-buff strip** — a live Super/Giga Breaker Efficiency boost is removed from the
+      tool *before* the repair, otherwise the repair preserves the temporary levels as the tool's own
+      and the buff becomes permanent. **No new adapter:** legacy's `SkillUtils.removeAbilityBuff(item)`
+      maps onto the existing `PlatformPlayer` boost-removal, which only needed its private
+      per-stack helper exposed as `removeSuperAbilityBoost(ItemStack)`. Passing the stack the listener
+      already holds (rather than re-reading the main hand) means the two can never diverge.
+      **(b) the enchanted-repair-material avoidance branch** (`getAllowEnchantedRepairMaterials`) —
+      with the knob off, an enchanted copy of the repair material is skipped in favour of the first
+      unenchanted one, and the repair is refused outright when only enchanted copies are on hand;
+      legacy reports the identical `Skills.NeedMore.Extra` failure on both that path and "no material at
+      all", so the two now share one `notifyMissingRepairMaterial` helper. Ordering is legacy's: the
+      unfiltered presence check still runs *before* the stacked-item reject, so a stacked item with only
+      enchanted materials on hand still reports `StackedItems` first. **One deliberate one-line
+      divergence:** legacy tested Bukkit's item-only `getEnchantments()`; the port uses
+      `EnchantmentHelper.getEnchantments`, which also counts an enchanted book's `STORED_ENCHANTMENTS`.
+      That matches the knob's intent (don't consume an enchanted item as scrap) and is only reachable
+      through a custom `repair.yml`. ⚠️ In-game verification pending.
 - [x] **Salvage** — salvage action + yield (Scrap Collector) + material recovery **DONE** (via K7 anvil;
       no XP by design). **Arcane Salvage DONE** — salvaging an enchanted item now yields an enchanted
       book carrying what survived extraction (`SalvageManager#resolveEnchantOutcome` → FULL / PARTIAL /

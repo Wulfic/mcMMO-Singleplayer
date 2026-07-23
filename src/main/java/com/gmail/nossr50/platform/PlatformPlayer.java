@@ -343,6 +343,18 @@ public final class PlatformPlayer {
     }
 
     /**
+     * Remove the dig-speed boost from a stack the caller already holds, rather than re-reading it
+     * from the main hand (legacy {@code SkillUtils.removeAbilityBuff(ItemStack)}). Used by the repair
+     * anvil, which must strip a live Super/Giga Breaker Efficiency buff before repairing the tool —
+     * otherwise the temporary buff is what the repair preserves and it becomes permanent.
+     *
+     * @param stack the stack to clean up; a no-op unless it is a boosted pickaxe/shovel
+     */
+    public void removeSuperAbilityBoost(@NotNull ItemStack stack) {
+        removeSuperAbilityBoostFromStack(stack);
+    }
+
+    /**
      * Undo the boost on one stack: only touches boosted pickaxes/shovels. Restores the stashed
      * original Efficiency level (or strips Efficiency entirely if the tool had none pre-boost) and
      * clears the marker. Mirrors legacy {@code ItemMetadataUtils.removeBonusDigSpeedOnSuperAbilityTool}.

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -225,6 +226,45 @@ class FishingManagerTest {
     void isFishingTooOftenDetectsRapidRecast() {
         assertFalse(fishingManager.isFishingTooOften(), "first catch, nothing to compare against");
         assertTrue(fishingManager.isFishingTooOften(), "immediate recast within the same millisecond window");
+    }
+
+    /**
+     * The "you're scaring the fish" warning is throttled to one per second, so a burst of rapid
+     * recasts produces a single message rather than one per catch. {@code useChatNotifications} is the
+     * first thing every {@code NotificationManager} send consults, so counting it counts attempts.
+     */
+    @Test
+    void scaredWarningIsThrottledToOnePerSecond() {
+        fishingManager.isFishingTooOften(); // first catch: not "too often", no warning.
+        verify(mmoPlayer, never()).useChatNotifications();
+
+        fishingManager.isFishingTooOften(); // too often: warns.
+        fishingManager.isFishingTooOften(); // still too often, same second: throttled.
+        fishingManager.isFishingTooOften();
+
+        verify(mmoPlayer, times(1)).useChatNotifications();
+    }
+
+    /**
+     * Legacy warns on the catch immediately <em>before</em> the OverFishLimit (10 in the bundled
+     * experience.yml), i.e. when {@code fishCaughtCounter + 1 == limit} — the 9th cast at one spot —
+     * giving the player one catch's notice before {@link FishingManager#isExploitingFishing()} starts
+     * confiscating. It must not repeat once the limit is passed.
+     */
+    @Test
+    void lowResourcesWarningFiresOnceOnTheCatchBeforeTheOverFishLimit() {
+        for (int i = 0; i < 8; i++) {
+            fishingManager.processExploiting(0, 64, 0);
+        }
+        verify(mmoPlayer, never()).useChatNotifications();
+
+        fishingManager.processExploiting(0, 64, 0); // 9th: counter 9, 9 + 1 == limit -> warn.
+        verify(mmoPlayer, times(1)).useChatNotifications();
+
+        fishingManager.processExploiting(0, 64, 0); // 10th: over the limit, no second warning.
+        fishingManager.processExploiting(0, 64, 0);
+        verify(mmoPlayer, times(1)).useChatNotifications();
+        assertTrue(fishingManager.isExploitingFishing());
     }
 
     @Test

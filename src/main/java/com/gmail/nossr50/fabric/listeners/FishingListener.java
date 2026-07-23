@@ -95,8 +95,9 @@ import net.minecraft.util.math.random.Random;
  * under its own whitelist/blacklist. It is a <i>different</i> mechanism from Magic Hunter, and the two
  * are mutually exclusive — see that method.
  *
- * <p><b>Still deferred:</b> the exploit item-removal punishment (we skip the XP <i>and</i> the treasure
- * roll on an exploiting catch — the same early-return gate).
+ * <p><b>The overfishing punishment is wired</b> ({@link #punishOverfishing}): once a player is past the
+ * {@code OverFishLimit} on one spot the catch is confiscated outright, on top of the XP and treasure
+ * roll the exploit gate already skipped.
  */
 public final class FishingListener {
 
@@ -134,7 +135,8 @@ public final class FishingListener {
             }
             fishingManager.processExploiting(bobber.getX(), bobber.getY(), bobber.getZ());
             if (fishingManager.isExploitingFishing()) {
-                return; // fishing the same spot past the OverFishLimit — no XP.
+                punishOverfishing(mmoPlayer, caught);
+                return; // fishing the same spot past the OverFishLimit — catch confiscated, no XP.
             }
         }
 
@@ -150,6 +152,25 @@ public final class FishingListener {
         }
 
         maybeCatchTreasure(serverPlayer, mmoPlayer, fishingManager, caught);
+    }
+
+    /**
+     * The overfishing punishment (legacy's {@code CAUGHT_FISH} exploit branch): tell the player the
+     * area is fished out and confiscate the catch.
+     *
+     * <p>Legacy needed two separate actions here — {@code caughtItem.remove()} to destroy the
+     * already-spawned item entity and {@code event.setExpToDrop(0)} to suppress the vanilla XP orb.
+     * Emptying the loot collection does <b>both</b>: vanilla spawns the orb <em>inside</em> its loop
+     * over this very collection (bytecode-verified in {@code FishingBobberEntity#use} — the
+     * {@code ExperienceOrbEntity} constructor and {@code spawnEntity} sit between the item spawn and
+     * the loop's back-edge), so an emptied catch yields neither items nor orbs. The rod still takes its
+     * durability hit and the bobber still reels in, exactly as when legacy left the event uncancelled.
+     */
+    private static void punishOverfishing(McMMOPlayer mmoPlayer, Collection<ItemStack> caught) {
+        NotificationManager.sendPlayerInformationChatOnly(mmoPlayer, "Fishing.ScarcityTip",
+                String.valueOf(
+                        McMMOMod.getExperienceConfig().getFishingExploitingOptionMoveRange()));
+        caught.clear();
     }
 
     /**

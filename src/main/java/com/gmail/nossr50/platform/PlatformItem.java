@@ -55,6 +55,14 @@ public final class PlatformItem {
         return Registries.ITEM.getId(handle.getItem());
     }
 
+    /**
+     * Registry <em>path</em> of the item, e.g. {@code diamond_pickaxe} — the key the MC-free
+     * repair/salvage tables are built on, so callers can look a stack up without an {@link Identifier}.
+     */
+    public @NotNull String getTypePath() {
+        return getTypeId().getPath();
+    }
+
     // --- Amount -------------------------------------------------------------
 
     public int getAmount() {
