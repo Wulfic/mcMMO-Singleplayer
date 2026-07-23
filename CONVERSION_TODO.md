@@ -15,7 +15,7 @@ deviations, and the 15 upstream defects found on the way — is in
 | §B — every skill earns XP | ✅ feature-complete |
 | §C — combat on-hit sub-skills | ✅ complete |
 | §D/§E — gathering bodies, super abilities, runnables | ✅ all ported |
-| Unit suite | ✅ **717 green** |
+| Unit suite | ✅ **726 green** |
 | Headless boot | ✅ `Done (1.159s)`, 0 exceptions, 0 mixin failures, shutdown verified |
 | **§G — real gameplay verification** | ❌ **never done** |
 
@@ -57,9 +57,11 @@ None of this can be closed by a headless boot. It needs a real client session.
       one spot the fish *and* the vanilla XP orbs are destroyed, not merely unpaid — plus two warnings
       the port previously dropped ("scaring the fish", "low resources"). Verify the two warnings read
       sensibly and the confiscation isn't reachable by accident during normal play.
-- [ ] **Anything that reads the player through `mmoPlayer.getPlayer()` after a death.** See the stale
-      `PlatformPlayer` handle item under *Newly found* — a death/respawn cycle is the cheapest way to
-      confirm or clear it.
+- [ ] **Anything that reads the player through `mmoPlayer.getPlayer()` after a death — and after an
+      End exit.** The stale-handle bug is now fixed and unit-tested (see *Newly found*), but the fix
+      itself is unobserved. Die once, then check that sounds, action-bar notifications and a super
+      ability all still work; repeat for an End-portal return, which recreates the entity without any
+      death. Also confirm Dodge XP is withheld for the first 5s after respawning.
 
 ---
 
@@ -89,13 +91,31 @@ Nothing here blocks §G.
 
 ### Newly found, unscheduled
 
-- [ ] **⚠️ `PlatformPlayer` holds a `ServerPlayerEntity` for the whole session and is never rebound.**
-      `PlayerSessionListener` builds it once on `ServerPlayConnectionEvents.JOIN`, but a respawn
-      replaces the vanilla entity without re-firing that event, so every MC-typed call through
-      `mmoPlayer.getPlayer()` (sounds, action-bar/chat notifications, main-hand reads, the Super/Giga
-      Breaker dig-boost sweep) would target a dead entity after the first death. **Not verified in a
-      live world** — it is inferred from the join-only binding, and it is exactly the class of bug §G
-      exists to catch. Fix shape if confirmed: rebind the handle on `ServerPlayerEvents.AFTER_RESPAWN`.
+- [x] **⚠️ `PlatformPlayer` stale handle — FIXED.** Was inferred; now **confirmed by bytecode**:
+      `PlayerManager#respawnPlayer` calls `ServerWorld.removePlayer(old, reason)` and then
+      `new ServerPlayerEntity(...)`. Worse than "after death" — the End-exit path routes through the
+      same method (`alive == true`), so no death is needed to break it. Fixed by making the handle
+      `volatile` + `PlatformPlayer#rebind` (UUID-guarded, logs a refusal), driven from a new
+      `ServerPlayerEvents.AFTER_RESPAWN` handler in `PlayerSessionListener`. **Rebinding in place
+      rather than rebuilding the `McMMOPlayer`** is load-bearing: `AbilityCooldownTask` /
+      `AbilityDisableTask` capture the wrapper directly and must survive a mid-ability death.
+      *Still needs §G confirmation in a live world — the seam is proven, the gameplay effect is not.*
+- [x] **Legacy's respawn handler was never ported — now wired.** `McMMOPlayer#getRespawnATS` /
+      `actualizeRespawnATS` (legacy `PlayerListener#onPlayerRespawn` +
+      `PlayerProfileLoadingTask`) plus the Acrobatics Dodge XP grace period that reads them, which
+      un-deadens `Misc.PLAYER_RESPAWN_COOLDOWN_SECONDS` (a constant nothing consulted). Seconds, not
+      millis — `cooldownExpired` multiplies by `TIME_CONVERSION_FACTOR`, so millis would push every
+      deadline ~31,000 years out and silently kill Dodge XP for the session. Legacy's other consumer
+      of the timestamp is the PvP combat-XP branch, unreachable in singleplayer.
+- [ ] **Decided NOT to port: legacy `PlayerListener#onPlayerDeathNormal`** (strip super-ability dig
+      boosts on death). Recorded so nobody "restores" it. With the rebind above, the already-scheduled
+      `AbilityDisableTask` now sweeps the *correct* inventory, which covers the `keepInventory` case.
+      The items-dropped case is not covered — but it is not covered upstream either: Bukkit populates
+      `PlayerDeathEvent#getDrops()` from the inventory *before* that handler runs, so mutating the
+      inventory there cannot change what drops. Porting it would add a handler that fixes nothing.
+      Residual (narrow, self-healing): dying with `keepInventory=false` mid-Super-Breaker drops a tool
+      whose `+EnchantBuff` Efficiency is never stripped — re-activating the ability on that tool strips
+      it, since activation calls `removeSuperAbilityBoostFromMainHand` first. **Confirm in §G.**
 - [ ] **Upstream defect #16 — `potions.yml` ships the pre-1.13 name `WATER_LILY`.** Boot logs
       `No vanilla item for material name 'WATER_LILY'` (one WARN, one ingredient), so that Alchemy
       ingredient silently does nothing; the modern registry path is `lily_pad`. Same shape as #1/#2/#10

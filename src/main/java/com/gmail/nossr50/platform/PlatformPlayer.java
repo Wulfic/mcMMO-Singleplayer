@@ -51,10 +51,20 @@ import org.jetbrains.annotations.NotNull;
  *
  * <p>Singleplayer note: {@code sendMessage} already targets {@link Text}, the locked text type
  * (no Adventure), so messaging maps 1:1. Server-side only ({@link ServerPlayerEntity}).
+ *
+ * <p><b>The wrapped entity is NOT stable for a session</b> — see {@link #rebind}. One
+ * {@code PlatformPlayer} is built per login and handed to the player's {@code McMMOPlayer} (and,
+ * transitively, to every skill manager and every scheduled task that captured it), so the wrapper
+ * identity must outlive the entity it wraps.
  */
 public final class PlatformPlayer {
 
-    private final ServerPlayerEntity handle;
+    /**
+     * Volatile because the integrated server writes it from the server thread (respawn) while the
+     * client thread can read player state during world open/close — the same thread split that made
+     * {@link com.gmail.nossr50.util.player.UserManager}'s registry a {@code ConcurrentHashMap}.
+     */
+    private volatile ServerPlayerEntity handle;
 
     public PlatformPlayer(@NotNull ServerPlayerEntity handle) {
         this.handle = handle;
@@ -63,6 +73,40 @@ public final class PlatformPlayer {
     /** The wrapped vanilla player. Use when the mimicked surface is insufficient. */
     public @NotNull ServerPlayerEntity unwrap() {
         return handle;
+    }
+
+    /**
+     * Point this wrapper at the player's replacement entity after a respawn.
+     *
+     * <p>Vanilla does not reuse the {@link ServerPlayerEntity} across a respawn:
+     * {@code PlayerManager#respawnPlayer} calls {@code ServerWorld.removePlayer(old, reason)} and
+     * then constructs a brand-new one (bytecode-verified against 1.21.11). Both the death path and
+     * the "returned from the End" path route through it, so a wrapper bound once at login goes
+     * stale on the first death <i>or</i> the first End exit, and every MC-typed call through it
+     * (sounds, action-bar/chat notifications, main-hand reads, the Super/Giga Breaker dig-boost
+     * sweep) would silently target a removed entity.
+     *
+     * <p>Rebinding in place — rather than rebuilding the {@code McMMOPlayer} around a fresh wrapper
+     * — is deliberate: scheduled tasks such as
+     * {@link com.gmail.nossr50.runnables.skills.AbilityCooldownTask} and
+     * {@code AbilityDisableTask} capture this object directly, and they must keep working across a
+     * death that happens mid-ability.
+     *
+     * <p>Driven by {@code PlayerSessionListener} on Fabric's {@code ServerPlayerEvents.AFTER_RESPAWN}.
+     *
+     * @param replacement the freshly constructed entity for the same player
+     */
+    public void rebind(@NotNull ServerPlayerEntity replacement) {
+        if (!replacement.getUuid().equals(handle.getUuid())) {
+            // Never swap one player's handle for another's; a mis-wired caller would silently
+            // redirect every skill side effect onto the wrong player.
+            McMMOMod.LOGGER.error(
+                    "Refusing to rebind mcMMO player handle for {} ({}) to a different player {} ({}).",
+                    getName(), handle.getUuid(), replacement.getName().getString(),
+                    replacement.getUuid());
+            return;
+        }
+        this.handle = replacement;
     }
 
     // --- Identity -----------------------------------------------------------
