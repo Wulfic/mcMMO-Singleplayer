@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,13 +27,17 @@ import org.slf4j.LoggerFactory;
  * (bucketed by {@link Rarity}) and the {@code Item_Drop_Rates} table — everything the Treasure Hunter
  * item roll needs. Like the MC-free sibling {@link TreasureConfig}, each reward is kept as an
  * {@link ItemSpec} blueprint and its real {@code ItemStack} is built at spawn time, so this config is
- * MC-free and plain-JUnit testable. One reward shape is still deferred, a genuine adapter gap rather
- * than a mechanical skip:
- * <ul>
- *   <li><b>Potion Fishing rewards</b> — {@link ItemSpec} carries no potion base-type yet, so these are
- *       skipped by name with a log (the shipped {@code Fishing} section has none; the {@code Shake}
- *       section does).</li>
- * </ul>
+ * MC-free and plain-JUnit testable.
+ *
+ * <p><b>Potion rewards are now loaded</b> — the last unloaded shape in this file. An entry whose
+ * material name contains {@code POTION} carries its {@code PotionData} block ({@code PotionType} plus
+ * the {@code Upgraded}/{@code Extended} flags) onto the blueprint as an {@link ItemSpec.PotionSpec},
+ * verbatim; {@code ItemSpecBuilder} resolves it against {@code Registries.POTION} at spawn time via
+ * {@code PotionUtil#matchPotion}, which also translates the legacy Bukkit type names the shipped
+ * config still uses ({@code INSTANT_HEAL} → {@code healing}, {@code SPEED} → {@code swiftness}). That
+ * keeps this config MC-free, at the cost of reporting an unresolvable type at drop time rather than
+ * rejecting the treasure at load as legacy did. The shipped {@code Fishing} section has no potion
+ * rewards; the {@code Shake} section has four (Cave Spider, Witch).
  *
  * <p><b>Enchanted-book rewards are now loaded</b> as {@link FishingTreasureBook}, the one reward whose
  * enchantments do <i>not</i> come from the Magic Hunter table below: it draws one random enchantment
@@ -61,10 +66,10 @@ import org.slf4j.LoggerFactory;
  * resolve-at-use-time shape the sibling {@link TreasureConfig} uses for its Hylian groups, and it keeps
  * this config MC-free (no entity registry read at load). Section names are lower-cased, with an alias
  * table for the three sections whose Bukkit enum names no longer match the registry (see
- * {@link #ENTITY_SECTION_ALIASES}). Two entry shapes are skipped by name, each a real adapter gap:
- * potion drops (Cave Spider's poison potion, the Witch's splash potions — {@link ItemSpec} carries no
- * potion base type yet) and the {@code PLAYER.INVENTORY} steal (legacy's magic-{@code BEDROCK}
- * inventory raid, unreachable in singleplayer where the only player is the angler).
+ * {@link #ENTITY_SECTION_ALIASES}). Exactly one entry shape is still skipped by name, and it is a
+ * deliberate drop rather than a gap: the {@code PLAYER.INVENTORY} steal (legacy's
+ * magic-{@code BEDROCK} inventory raid, unreachable in singleplayer where the only player is the
+ * angler). The Cave Spider's poison potion and the Witch's three splash potions now load.
  *
  * <p><b>Faithfulness note:</b> unlike legacy, unknown/unsupported materials are not filtered here —
  * an entry's {@code materialId} is resolved to a real item only at spawn time (by the shared
@@ -149,13 +154,6 @@ public class FishingTreasureConfig extends ConfigLoader {
             // modern flattened MC, so keep only the material portion (the Fishing section uses none).
             final String materialName = treasureName.split("[|]")[0];
 
-            // Deferred reward shape (see class javadoc): potions need a potion base-type on ItemSpec.
-            if (isPotionEntry(materialName)) {
-                LOGGER.debug("Skipping deferred fishing reward '{}' (potion — ItemSpec carries no"
-                        + " potion base type).", treasureName);
-                continue;
-            }
-
             final String base = "Fishing." + treasureName;
             final String materialId = materialName.toLowerCase(Locale.ROOT);
 
@@ -194,7 +192,8 @@ public class FishingTreasureConfig extends ConfigLoader {
             }
 
             final List<String> lore = config.getStringList(base + ".Lore");
-            final ItemSpec item = new ItemSpec(materialId, amount, customName, lore);
+            final ItemSpec item = new ItemSpec(materialId, amount, customName, lore,
+                    readPotionData(base, materialName));
 
             fishingRewards.get(rarity).add(new FishingTreasure(item, xp));
         }
@@ -222,15 +221,16 @@ public class FishingTreasureConfig extends ConfigLoader {
 
             for (String dropName : dropsSection.getKeys(false)) {
                 // Legacy's "MATERIAL|data|potionType" form: the block-data short is meaningless in
-                // modern flattened MC, and the potion arms are deferred (see below), so keep the head.
+                // modern flattened MC and the trailing potion-type token merely repeats the
+                // PotionData block below, so only the material portion is kept.
                 final String materialName = dropName.split("[|]")[0];
 
-                // Deferred/dropped entry shapes, skipped by name (class javadoc): potion drops need a
-                // potion base type on ItemSpec, and INVENTORY is legacy's magic-BEDROCK player-inventory
-                // steal, which cannot fire in singleplayer (its only target is the angler themselves).
-                if (isPotionEntry(materialName) || materialName.equalsIgnoreCase("INVENTORY")) {
-                    LOGGER.debug("Skipping Shake drop '{}.{}' (potion/inventory-steal — deferred or"
-                            + " unreachable in singleplayer).", entitySectionName, dropName);
+                // The one dropped entry shape (class javadoc): INVENTORY is legacy's magic-BEDROCK
+                // player-inventory steal, which cannot fire in singleplayer (its only target is the
+                // angler themselves).
+                if (materialName.equalsIgnoreCase("INVENTORY")) {
+                    LOGGER.debug("Skipping Shake drop '{}.{}' (inventory-steal — unreachable in"
+                            + " singleplayer).", entitySectionName, dropName);
                     continue;
                 }
 
@@ -256,7 +256,8 @@ public class FishingTreasureConfig extends ConfigLoader {
 
                 final ItemSpec item = new ItemSpec(materialName.toLowerCase(Locale.ROOT), amount,
                         config.getString(base + ".Custom_Name", null),
-                        config.getStringList(base + ".Lore"));
+                        config.getStringList(base + ".Lore"),
+                        readPotionData(base, materialName));
 
                 shakeMap.computeIfAbsent(entityPath, key -> new ArrayList<>())
                         .add(new ShakeTreasure(item, xp, dropChance,
@@ -307,9 +308,29 @@ public class FishingTreasureConfig extends ConfigLoader {
     }
 
     /**
-     * Whether a config entry names a potion. Matches legacy's own loose test (its {@code POTION},
-     * {@code SPLASH_POTION} and {@code LINGERING_POTION} entries all carry a {@code PotionData} block
-     * that {@link ItemSpec} cannot yet express).
+     * Read the {@code PotionData} block of a potion entry, or {@code null} when the entry is not a
+     * potion. Ports the {@code PotionMeta} arm of legacy {@code loadTreasures}, minus the resolution:
+     * the three strings are carried on the {@link ItemSpec} and resolved against
+     * {@code Registries.POTION} at spawn time (see {@link ItemSpec.PotionSpec}).
+     *
+     * <p>{@code "WATER"} is legacy's own default for a potion entry with no declared type, so a
+     * malformed block yields a water bottle rather than nothing.
+     */
+    private @Nullable ItemSpec.PotionSpec readPotionData(@NotNull String base,
+            @NotNull String materialName) {
+        if (!isPotionEntry(materialName)) {
+            return null;
+        }
+        return new ItemSpec.PotionSpec(
+                config.getString(base + ".PotionData.PotionType", "WATER"),
+                config.getBoolean(base + ".PotionData.Upgraded", false),
+                config.getBoolean(base + ".PotionData.Extended", false));
+    }
+
+    /**
+     * Whether a config entry names a potion. Matches legacy's own loose {@code contains} test, which
+     * is what lets one check cover its {@code POTION}, {@code SPLASH_POTION} and
+     * {@code LINGERING_POTION} entries alike.
      */
     private static boolean isPotionEntry(@NotNull String materialName) {
         return materialName.toUpperCase(Locale.ROOT).contains("POTION");

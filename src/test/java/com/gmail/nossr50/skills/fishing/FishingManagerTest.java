@@ -2,6 +2,7 @@ package com.gmail.nossr50.skills.fishing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -20,6 +21,7 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.treasure.EnchantmentTreasure;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
+import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.datatypes.treasure.Rarity;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
@@ -246,7 +248,7 @@ class FishingManagerTest {
     }
 
     // fishing_treasures.yml Shake.CAVE_SPIDER, in config order: SPIDER_EYE 49%, STRING 49%,
-    // COBWEB 1%, POTION|0|POISON 1% (the potion is deferred, so the loaded chances sum to 99, not 100).
+    // COBWEB 1%, POTION|0|POISON 1% — all four now load, so the chances sum to exactly 100.
     // The integer roll is caller-supplied, so the whole selection is deterministic.
 
     @Test
@@ -266,10 +268,21 @@ class FishingManagerTest {
     }
 
     @Test
+    void shakeRollReachesThePotionBandThatUsedToBeDeferred() {
+        // Roll 99 is the last band, which is only reachable now that potion drops load: before, the
+        // loaded chances stopped at 99 and this roll won nothing at all.
+        final ItemSpec poison = fishingManager.rollShakeTreasure("cave_spider", 99)
+                .orElseThrow().getDrop();
+        assertEquals("potion", poison.getMaterialId());
+        assertNotNull(poison.getPotion(), "the drop must carry its base potion type");
+        assertEquals("POISON", poison.getPotion().potionType());
+    }
+
+    @Test
     void shakeRollWinsNothingAboveTheSummedDropChances() {
-        // 99 exceeds the loaded 99% total — the gap the deferred poison potion used to fill. Legacy
-        // behaves the same way for any entity whose chances sum below 100 (chooseDrop returns null).
-        assertTrue(fishingManager.rollShakeTreasure("cave_spider", 99).isEmpty());
+        // The cave spider's bands now total exactly 100, so 100 is the first roll past them. Legacy
+        // behaves the same way for any entity whose chances sum below the roll (chooseDrop → null).
+        assertTrue(fishingManager.rollShakeTreasure("cave_spider", 100).isEmpty());
     }
 
     @Test

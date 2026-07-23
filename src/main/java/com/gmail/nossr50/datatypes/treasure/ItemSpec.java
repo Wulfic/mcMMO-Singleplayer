@@ -20,33 +20,62 @@ import org.jetbrains.annotations.Nullable;
  * </ul>
  *
  * <p>So we keep the parsed <i>intent</i> here — a vanilla registry-path material id (e.g.
- * {@code "heart_of_the_sea"}), a stack size, and optional §-coded display name / lore — and defer
- * the actual {@code ItemStack} construction to spawn time via a post-bootstrap builder.
+ * {@code "heart_of_the_sea"}), a stack size, optional §-coded display name / lore, and an optional
+ * {@link PotionSpec} base type — and defer the actual {@code ItemStack} construction to spawn time
+ * via a post-bootstrap builder ({@code platform/ItemSpecBuilder}).
  *
- * <p><b>PORT Phase 10 (item-spawn):</b> the builder that turns an {@code ItemSpec} into a real
- * {@code net.minecraft.item.ItemStack} (via {@code platform/Materials} + {@code PlatformItem}, and
- * the registry manager for name/lore data-components) lands with the item-spawn adapter, when the
- * first skill that actually drops treasure ({@code ExcavationManager#excavationBlockCheck}) is fully
- * wired. Potion / enchantment fields are intentionally omitted here until {@code FishingTreasureConfig}
- * ports and needs them.
+ * <p><b>The potion base type is carried as the config's own strings, not a resolved registry
+ * entry.</b> {@code Registries.POTION} is a <i>static</i> registry and would in fact be populated by
+ * the time configs load, but resolving here would drag {@code net.minecraft} into this datatype and
+ * into {@code FishingTreasureConfig}, both of which are deliberately MC-free and plain-JUnit
+ * testable. Deferring the lookup to {@code ItemSpecBuilder} keeps that property and matches the
+ * resolve-at-use-time shape the Shake entity paths and the Magic Hunter enchantment paths already
+ * use. The one behavioural consequence is that an unresolvable potion type is reported at drop time
+ * rather than rejected at load, where legacy dropped the whole treasure.
  */
 public final class ItemSpec {
+
+    /**
+     * The parsed {@code PotionData} block of a potion treasure — legacy's {@code PotionType} name
+     * plus its two variant flags, verbatim from the config.
+     *
+     * <p>In modern Minecraft "upgraded" and "extended" are not flags but distinct registry entries
+     * with {@code strong_} / {@code long_} id prefixes, so these three fields collapse into a single
+     * lookup at build time; see {@code PotionUtil#matchPotion}, which also translates the legacy
+     * Bukkit type names the shipped config still uses ({@code INSTANT_HEAL}, {@code SPEED}, …).
+     *
+     * @param potionType the {@code PotionData.PotionType} string ({@code "WATER"} when unset, as legacy)
+     * @param upgraded   the {@code PotionData.Upgraded} flag (amplified — {@code strong_} variant)
+     * @param extended   the {@code PotionData.Extended} flag ({@code long_} variant)
+     */
+    public record PotionSpec(@NotNull String potionType, boolean upgraded, boolean extended) {
+        public PotionSpec {
+            Objects.requireNonNull(potionType, "potionType");
+        }
+    }
 
     private final @NotNull String materialId;
     private final int amount;
     private final @Nullable String customName;
     private final @NotNull List<String> lore;
+    private final @Nullable PotionSpec potion;
 
     public ItemSpec(@NotNull String materialId, int amount, @Nullable String customName,
-            @NotNull List<String> lore) {
+            @NotNull List<String> lore, @Nullable PotionSpec potion) {
         this.materialId = Objects.requireNonNull(materialId, "materialId");
         this.amount = amount;
         this.customName = customName;
         this.lore = List.copyOf(Objects.requireNonNull(lore, "lore"));
+        this.potion = potion;
+    }
+
+    public ItemSpec(@NotNull String materialId, int amount, @Nullable String customName,
+            @NotNull List<String> lore) {
+        this(materialId, amount, customName, lore, null);
     }
 
     public ItemSpec(@NotNull String materialId, int amount) {
-        this(materialId, amount, null, List.of());
+        this(materialId, amount, null, List.of(), null);
     }
 
     /** Vanilla registry path of the item (namespace stripped, e.g. {@code "heart_of_the_sea"}). */
@@ -68,10 +97,20 @@ public final class ItemSpec {
         return lore;
     }
 
+    /**
+     * The potion base type this item carries, or {@code null} when it is not a potion. Only
+     * meaningful for the three potion items ({@code potion}, {@code splash_potion},
+     * {@code lingering_potion}); the builder ignores it otherwise.
+     */
+    public @Nullable PotionSpec getPotion() {
+        return potion;
+    }
+
     @Override
     public String toString() {
         return "ItemSpec{materialId='" + materialId + '\'' + ", amount=" + amount
-                + ", customName='" + customName + '\'' + ", lore=" + lore + '}';
+                + ", customName='" + customName + '\'' + ", lore=" + lore
+                + ", potion=" + potion + '}';
     }
 
     @Override
@@ -83,11 +122,12 @@ public final class ItemSpec {
             return false;
         }
         return amount == other.amount && materialId.equals(other.materialId)
-                && Objects.equals(customName, other.customName) && lore.equals(other.lore);
+                && Objects.equals(customName, other.customName) && lore.equals(other.lore)
+                && Objects.equals(potion, other.potion);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(materialId, amount, customName, lore);
+        return Objects.hash(materialId, amount, customName, lore, potion);
     }
 }

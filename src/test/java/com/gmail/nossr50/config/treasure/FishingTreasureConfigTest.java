@@ -5,11 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.datatypes.treasure.EnchantmentTreasure;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasureBook;
+import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.datatypes.treasure.Rarity;
 import com.gmail.nossr50.datatypes.treasure.ShakeTreasure;
 import java.io.IOException;
@@ -177,19 +179,55 @@ class FishingTreasureConfigTest {
         assertTrue(config.getShakeTreasures("snowman").isEmpty());
     }
 
+    /** The {@link ItemSpec.PotionSpec} of the one drop in {@code entity} whose material is {@code id}. */
+    private static ItemSpec.PotionSpec potionOf(FishingTreasureConfig config, String entity,
+            String id) {
+        return config.getShakeTreasures(entity).stream()
+                .map(ShakeTreasure::getDrop)
+                .filter(spec -> spec.getMaterialId().equals(id))
+                .map(ItemSpec::getPotion)
+                .filter(java.util.Objects::nonNull)
+                .findFirst().orElse(null);
+    }
+
     @Test
-    void potionAndInventoryShakeEntriesAreSkipped(@TempDir Path dataFolder) {
+    void loadsPotionShakeDropsWithTheirBaseType(@TempDir Path dataFolder) {
         final FishingTreasureConfig config = new FishingTreasureConfig(dataFolder);
 
-        // CAVE_SPIDER ships a POTION|0|POISON entry; ItemSpec carries no potion base type yet.
-        assertTrue(config.getShakeTreasures("cave_spider").stream()
-                        .noneMatch(t -> t.getDrop().getMaterialId().contains("potion")),
-                "potion shake drops must be deferred, not loaded as a bogus material");
-        // WITCH is mostly splash potions — its non-potion drops must still load.
-        assertFalse(config.getShakeTreasures("witch").isEmpty(),
-                "the witch's non-potion drops must survive the potion skip");
-        assertTrue(config.getShakeTreasures("witch").stream()
-                .noneMatch(t -> t.getDrop().getMaterialId().contains("potion")));
+        // CAVE_SPIDER ships POTION|0|POISON — the material head is the item, PotionData is the type.
+        final ItemSpec.PotionSpec poison = potionOf(config, "cave_spider", "potion");
+        assertNotNull(poison, "the cave spider's poison potion must load");
+        assertEquals("POISON", poison.potionType());
+        assertFalse(poison.upgraded(), "no Upgraded flag is set in the shipped config");
+        assertFalse(poison.extended(), "no Extended flag is set in the shipped config");
+
+        // WITCH ships three SPLASH_POTION entries; all three must land on the splash_potion item.
+        final List<ShakeTreasure> witch = config.getShakeTreasures("witch");
+        final Set<String> witchPotionTypes = witch.stream()
+                .map(ShakeTreasure::getDrop)
+                .filter(spec -> spec.getPotion() != null)
+                .map(spec -> spec.getMaterialId() + "/" + spec.getPotion().potionType())
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(Set.of("splash_potion/INSTANT_HEAL", "splash_potion/FIRE_RESISTANCE",
+                "splash_potion/SPEED"), witchPotionTypes);
+    }
+
+    @Test
+    void nonPotionEntriesCarryNoPotionData(@TempDir Path dataFolder) {
+        // Guards the isPotionEntry gate in both directions: reading PotionData for every entry would
+        // silently turn ordinary drops into water bottles at spawn time.
+        final FishingTreasureConfig config = new FishingTreasureConfig(dataFolder);
+
+        assertNull(potionOf(config, "witch", "glass_bottle"),
+                "a non-potion shake drop must carry no potion base type");
+        assertTrue(config.fishingRewards.values().stream().flatMap(List::stream)
+                        .allMatch(t -> t.getDrop().getPotion() == null),
+                "the shipped Fishing section has no potion rewards");
+    }
+
+    @Test
+    void inventoryShakeEntryIsSkipped(@TempDir Path dataFolder) {
+        final FishingTreasureConfig config = new FishingTreasureConfig(dataFolder);
 
         // PLAYER.INVENTORY is legacy's magic-BEDROCK inventory steal — unreachable in singleplayer.
         assertTrue(config.getShakeTreasures("player").stream()

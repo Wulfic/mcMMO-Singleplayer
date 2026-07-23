@@ -25,8 +25,9 @@ import org.slf4j.LoggerFactory;
  *   <li><b>Live {@code ItemStack} construction</b> → each treasure now carries an MC-free
  *       {@link ItemSpec} blueprint (registries aren't populated at config-load; see {@link ItemSpec}).
  *       The potion / {@code ItemMeta} (custom-name/lore) branches collapse into the blueprint's
- *       optional §-coded name + lore fields; potion base-type data is <b>PORT Phase 10 (fishing)</b>
- *       — no Excavation treasure uses it.</li>
+ *       optional §-coded name + lore fields. {@link ItemSpec} now also carries a potion base type
+ *       (added for the Fishing Shake drops), but nothing here reads it — no {@code treasures.yml}
+ *       entry is a potion, so this loader never populates one.</li>
  *   <li><b>Hylian Luck</b> is keyed by its raw {@code Drops_From} <b>group name</b>
  *       ({@code Bushes}/{@code Flowers}/{@code Pots}) rather than expanded into individual blocks at
  *       load time. Legacy expanded the groups through Bukkit {@code Tag.SAPLINGS}/{@code Tag.FLOWER_POTS}

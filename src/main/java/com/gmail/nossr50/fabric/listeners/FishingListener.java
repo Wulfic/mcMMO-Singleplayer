@@ -168,7 +168,7 @@ public final class FishingListener {
 
         final Optional<ItemStack> built = ItemSpecBuilder.build(rolled.get().getDrop());
         if (built.isEmpty()) {
-            return; // treasure material has no vanilla item (logged by Materials) — no drop, no XP.
+            return; // unknown material or potion type (logged by the builder) — no drop, no XP.
         }
         final ItemStack treasureStack = built.get();
         applyRandomWear(treasureStack, rng);
@@ -477,7 +477,7 @@ public final class FishingListener {
         }
         final Optional<ItemStack> built = ItemSpecBuilder.build(rolled.get().getDrop());
         if (built.isEmpty()) {
-            return; // drop material has no vanilla item (logged by Materials) — no drop, no damage.
+            return; // unknown material or potion type (logged by the builder) — no drop, no damage.
         }
         // Built before shearing so an unresolvable material can never shear a sheep for nothing. Legacy
         // could not hit that case (it held a real ItemStack from config load), so this is order-only.
