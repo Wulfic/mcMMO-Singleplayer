@@ -15,10 +15,12 @@ import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.skills.SkillUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.function.IntUnaryOperator;
 import org.jetbrains.annotations.NotNull;
@@ -48,9 +50,11 @@ import org.jetbrains.annotations.NotNull;
  *       {@link #resolveMasterAnglerWaitTimes} so the eventual body is a thin FishHook-mutation
  *       wrapper around it (same "buried pure decision" extraction as Herbalism's
  *       {@code resolveGreenThumbReplant});</li>
- *   <li>{@code isInBoat} — needs the vehicle/{@code Boat} adapter;</li>
- *   <li>{@code handleFishermanDiet} — needs {@code SkillUtils.handleFoodSkills}, still unported.</li>
+ *   <li>{@code isInBoat} — needs the vehicle/{@code Boat} adapter.</li>
  * </ul>
+ *
+ * <p><b>Fisherman's Diet is wired</b> ({@link #handleFishermanDiet(int)} +
+ * {@link #isFishermansDietFood(String)}, driven from {@code fabric.listeners.FoodListener}).
  */
 public class FishingManager extends SkillManager {
 
@@ -59,6 +63,14 @@ public class FishingManager extends SkillManager {
      * {@code lureLevel * 100} conversion and vanilla's own {@code fishing_time_reduction} effect.
      */
     static final int LURE_TICKS_PER_LEVEL = 100;
+
+    /**
+     * Foods whose hunger restoration Fisherman's Diet improves, by vanilla registry path. Mirrors the
+     * fish arm of legacy {@code EntityListener#onFoodLevelChange} verbatim — note that
+     * {@code cooked_tropical_fish} does not exist in vanilla and pufferfish is deliberately absent.
+     */
+    private static final Set<String> FISHERMANS_DIET_FOODS = Set.of(
+            "cod", "salmon", "tropical_fish", "cooked_cod", "cooked_salmon");
 
     private long lastFishCaughtTimestamp = 0L;
     private CastBox lastCastBox;
@@ -75,6 +87,36 @@ public class FishingManager extends SkillManager {
         this.masterAnglerMinWaitLowerBound = Math.max(bonusCapMin, 0);
         this.masterAnglerMaxWaitLowerBound = Math.max(bonusCapMax,
                 masterAnglerMinWaitLowerBound + 40);
+    }
+
+    /**
+     * Whether a food improves with Fisherman's Diet.
+     *
+     * @param itemRegistryPath the eaten item's vanilla registry path (e.g. {@code "cooked_salmon"})
+     * @return whether Fisherman's Diet applies to it
+     */
+    public static boolean isFishermansDietFood(@NotNull String itemRegistryPath) {
+        return FISHERMANS_DIET_FOODS.contains(itemRegistryPath);
+    }
+
+    /**
+     * Permission gate for Fisherman's Diet, mirroring the {@code isSubSkillEnabled} check legacy makes
+     * at the food-event call site. There is no rank-unlock gate: rank 0 simply adds nothing.
+     */
+    public boolean canUseFishermansDiet() {
+        return Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.FISHING_FISHERMANS_DIET);
+    }
+
+    /**
+     * Fisherman's Diet — extra hunger restored from fished foods, one point per rank (legacy
+     * {@code handleFishermanDiet}).
+     *
+     * @param eventFoodLevel the food restoration before the bonus
+     * @return the food restoration after the bonus
+     */
+    public int handleFishermanDiet(int eventFoodLevel) {
+        return SkillUtils.handleFoodSkills(mmoPlayer, eventFoodLevel,
+                SubSkillType.FISHING_FISHERMANS_DIET);
     }
 
     public boolean canShake() {
@@ -268,8 +310,8 @@ public class FishingManager extends SkillManager {
      * chosen treasure, or empty when: fishing drops are disabled, the Treasure Hunter sub-skill is off,
      * the roll clears every rarity band (no treasure this catch), or the selected rarity bucket is empty.
      *
-     * <p>The Magic Hunter enchant path (and its enchanted-book / {@code Shake} rewards) is still deferred
-     * — see the class javadoc and {@link FishingTreasureConfig}. A rank-0 (unranked) player reads the
+     * <p>A rolled treasure may be a {@link com.gmail.nossr50.datatypes.treasure.FishingTreasureBook},
+     * which the caller enchants via {@link #pickBookEnchantment} instead of Magic Hunter. A rank-0 (unranked) player reads the
      * absent {@code Tier_0} rates as {@code 0.0}, so an ordinary positive roll misses naturally — no
      * rank gate is needed here (and there is no {@code rank-1} array index to overrun, unlike the Maces
      * Cripple landmine).
@@ -338,10 +380,15 @@ public class FishingManager extends SkillManager {
      * roll misses every band naturally; the real gate is {@link #isMagicHunterEnabled()}, which the
      * caller checks first.
      *
-     * <p><b>Not ported:</b> legacy's {@code ENCHANTED_BOOK} arm, which forced a book past the band it
-     * had won into the next (more common) one so a book was never left unenchanted. Enchanted-book
-     * treasures are skipped at config load (see {@link FishingTreasureConfig}), so that branch is
-     * unreachable here — it returns with the book path when the book path lands.
+     * <p><b>Not ported — legacy's {@code ENCHANTED_BOOK} arm is dead code (CONVERSION_TODO §F).</b>
+     * Inside this walk upstream tests {@code treasureDrop.getType() == Material.ENCHANTED_BOOK} and,
+     * on a match, forces the roll past the band it just won into the next (more common) one so a book
+     * is never left unenchanted. It can never run: the only treasure whose material is
+     * {@code ENCHANTED_BOOK} is a {@code FishingTreasureBook} (its config branch builds nothing else),
+     * and {@code processFishing} routes those down the {@code instanceof FishingTreasureBook} branch
+     * that skips {@code processMagicHunter} entirely. The guarantee the arm was written to provide is
+     * real, but it comes from the book path itself — see {@link #pickBookEnchantment}, which always
+     * returns an enchantment.
      *
      * @param diceRoll a fresh roll in {@code [0, 100)} (the caller's {@code nextDouble() * 100})
      * @return the winning rarity band, or {@link Optional#empty()} when the roll clears every band
@@ -409,6 +456,39 @@ public class FishingManager extends SkillManager {
         }
 
         return selected;
+    }
+
+    /**
+     * Pick the single enchantment a fished {@link com.gmail.nossr50.datatypes.treasure.FishingTreasureBook}
+     * arrives with — the selection core of legacy {@code ItemUtils.createEnchantBook}. Pure (no RNG, no
+     * Minecraft): the caller builds the pool from the live registry and supplies the draw.
+     *
+     * <p>This is <b>not</b> the Magic Hunter path: a book takes exactly one enchantment, drawn
+     * uniformly from every enchantment the book allows expanded over every legal level, and neither
+     * the {@code Enchantments_Rarity} table nor {@link #rollMagicHunterRarity} is consulted. Because
+     * the pool holds one entry per (enchantment, level) pair, enchantments with more levels are
+     * proportionally likelier — see {@code FishingTreasureBook} for why that weighting is upstream's.
+     *
+     * <p><b>Legacy's shuffle collapses.</b> {@code getRandomEnchantment} shuffles the list and
+     * <i>then</i> draws a random index from it; the shuffle cannot change a uniform draw's
+     * distribution, and upstream's shuffle also mutates the book's cached list as a side effect. Only
+     * the draw is kept.
+     *
+     * @param legalEnchantments the (enchantment, level) pool this book may roll, already filtered by
+     *     the book's whitelist/blacklist and expanded per level by the caller
+     * @param indexPicker picks an index in {@code [0, poolSize)} (the caller's {@code nextInt(bound)});
+     *     only invoked for a non-empty pool
+     * @return the enchantment to store on the book, or {@link Optional#empty()} for an empty pool —
+     *     which upstream never guards (it calls {@code nextInt(0)} and throws), reachable here only if
+     *     a datapack strips the enchantment registry or a book blacklists every enchantment in it
+     */
+    public @NotNull Optional<EnchantmentTreasure> pickBookEnchantment(
+            @NotNull List<EnchantmentTreasure> legalEnchantments,
+            @NotNull IntUnaryOperator indexPicker) {
+        if (legalEnchantments.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(legalEnchantments.get(indexPicker.applyAsInt(legalEnchantments.size())));
     }
 
     protected int getVanillaXPBoostModifier() {

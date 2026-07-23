@@ -3,6 +3,7 @@ package com.gmail.nossr50.config.treasure;
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.datatypes.treasure.EnchantmentTreasure;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
+import com.gmail.nossr50.datatypes.treasure.FishingTreasureBook;
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.datatypes.treasure.Rarity;
 import com.gmail.nossr50.datatypes.treasure.ShakeTreasure;
@@ -25,15 +26,21 @@ import org.slf4j.LoggerFactory;
  * (bucketed by {@link Rarity}) and the {@code Item_Drop_Rates} table — everything the Treasure Hunter
  * item roll needs. Like the MC-free sibling {@link TreasureConfig}, each reward is kept as an
  * {@link ItemSpec} blueprint and its real {@code ItemStack} is built at spawn time, so this config is
- * MC-free and plain-JUnit testable. The following pieces are deferred, each a genuine adapter gap
- * rather than a mechanical skip:
+ * MC-free and plain-JUnit testable. One reward shape is still deferred, a genuine adapter gap rather
+ * than a mechanical skip:
  * <ul>
- *   <li><b>{@code ENCHANTED_BOOK} / potion Fishing rewards</b> — a book reward is a legacy
- *       {@code FishingTreasureBook}, whose per-book {@code Enchantments_Whitelist}/{@code _Blacklist}
- *       picks a <i>random</i> enchantment from the whole registry rather than from the Magic Hunter
- *       table below, and {@link ItemSpec} carries no potion base-type yet. Both are skipped by name
- *       with a log, so the shipped {@code ENCHANTED_BOOK} entry simply doesn't enter the pool.</li>
+ *   <li><b>Potion Fishing rewards</b> — {@link ItemSpec} carries no potion base-type yet, so these are
+ *       skipped by name with a log (the shipped {@code Fishing} section has none; the {@code Shake}
+ *       section does).</li>
  * </ul>
+ *
+ * <p><b>Enchanted-book rewards are now loaded</b> as {@link FishingTreasureBook}, the one reward whose
+ * enchantments do <i>not</i> come from the Magic Hunter table below: it draws one random enchantment
+ * from the whole registry, narrowed by its own {@code Enchantments_Whitelist}/{@code _Blacklist}. Both
+ * lists are kept as registry-path strings and resolved at drop time for the same dynamic-registry
+ * reason as the Magic Hunter table. Faithful to legacy, a book ignores its configured {@code Amount}
+ * and {@code Lore} (legacy builds it as {@code new ItemStack(material, 1)} and applies only the custom
+ * name).
  *
  * <p><b>The Magic Hunter enchant tables are now loaded</b> ({@link #fishingEnchantments} +
  * {@link #getEnchantmentDropRate}, consumed by {@code FishingManager#rollMagicHunterRarity} /
@@ -142,11 +149,10 @@ public class FishingTreasureConfig extends ConfigLoader {
             // modern flattened MC, so keep only the material portion (the Fishing section uses none).
             final String materialName = treasureName.split("[|]")[0];
 
-            // Deferred reward shapes (see class javadoc): enchanted books need the dynamic enchant
-            // registry + K3 enchant-write; potions need a potion base-type on ItemSpec. Skip by name.
-            if (materialName.equalsIgnoreCase("ENCHANTED_BOOK") || isPotionEntry(materialName)) {
-                LOGGER.debug("Skipping deferred fishing reward '{}' (book/potion — needs enchant/potion"
-                        + " adapter).", treasureName);
+            // Deferred reward shape (see class javadoc): potions need a potion base-type on ItemSpec.
+            if (isPotionEntry(materialName)) {
+                LOGGER.debug("Skipping deferred fishing reward '{}' (potion — ItemSpec carries no"
+                        + " potion base type).", treasureName);
                 continue;
             }
 
@@ -172,6 +178,21 @@ public class FishingTreasureConfig extends ConfigLoader {
             final Rarity rarity = Rarity.getRarity(rarityStr);
 
             final String customName = config.getString(base + ".Custom_Name", null);
+
+            // An enchanted book is its own treasure type: it always arrives carrying one random
+            // enchantment (see FishingTreasureBook), so it carries the two enchantment filters
+            // instead of a stack size and lore. Legacy builds it with `new ItemStack(material, 1)`
+            // and applies only the custom name, so a configured Amount/Lore is ignored for books —
+            // kept faithfully rather than "fixed", since a stack of enchanted books cannot hold
+            // per-book enchantments anyway.
+            if (materialName.equalsIgnoreCase("ENCHANTED_BOOK")) {
+                fishingRewards.get(rarity).add(new FishingTreasureBook(
+                        new ItemSpec(materialId, 1, customName, List.of()), xp,
+                        config.getStringList(base + ".Enchantments_Blacklist"),
+                        config.getStringList(base + ".Enchantments_Whitelist")));
+                continue;
+            }
+
             final List<String> lore = config.getStringList(base + ".Lore");
             final ItemSpec item = new ItemSpec(materialId, amount, customName, lore);
 
