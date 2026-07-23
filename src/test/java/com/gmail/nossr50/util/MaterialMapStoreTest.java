@@ -101,6 +101,30 @@ class MaterialMapStoreTest {
     }
 
     @Test
+    void classifiesMultiBlockPlantsByGrowthDirection() {
+        // Grow upwards from the ground: a break takes the column above it.
+        assertTrue(store.isMultiBlockPlant("sugar_cane"));
+        assertTrue(store.isMultiBlockPlant("bamboo"));
+        assertTrue(store.isMultiBlockPlant("chorus_plant"));
+        assertTrue(store.isMultiBlockPlant("tall_grass"));
+
+        // Hang downwards from a ceiling: a break takes the vines below it.
+        assertTrue(store.isMultiBlockHangingPlant("weeping_vines_plant"));
+        assertTrue(store.isMultiBlockHangingPlant("cave_vines_plant"));
+        assertTrue(store.isMultiBlockHangingPlant("pale_hanging_moss"));
+
+        // PORT (upstream bug, fixed): legacy listed the misspelled "twisted_vines_plant" as a hanging
+        // plant. The real block is `twisting_vines_plant` and it grows *upwards*.
+        assertTrue(store.isMultiBlockPlant("twisting_vines_plant"));
+        assertFalse(store.isMultiBlockHangingPlant("twisting_vines_plant"));
+        assertFalse(store.isMultiBlockHangingPlant("twisted_vines_plant"));
+        assertFalse(store.isMultiBlockPlant("twisted_vines_plant"));
+
+        assertFalse(store.isMultiBlockPlant("stone"));
+        assertFalse(store.isMultiBlockHangingPlant("stone"));
+    }
+
+    @Test
     void classifiesHylianLuckBushBlocks() {
         // The non-sapling members of the Bushes group (saplings come from the live SAPLINGS tag).
         assertTrue(store.isHylianLuckBushBlock("fern"));

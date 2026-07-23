@@ -242,6 +242,27 @@ class HerbalismManagerTest {
     }
 
     @Test
+    void isOneBlockPlantSeparatesMultiBlockPlantsFromEverythingElse() {
+        // Drives the BlockBreakListener divert: a false here is what makes a break capture the rest of
+        // the plant before vanilla removes it.
+        assertFalse(herbalismManager.isOneBlockPlant("minecraft:sugar_cane"));
+        assertFalse(herbalismManager.isOneBlockPlant("cactus"));
+        assertFalse(herbalismManager.isOneBlockPlant("chorus_plant"));
+        assertFalse(herbalismManager.isOneBlockPlant("weeping_vines_plant"));
+
+        assertTrue(herbalismManager.isOneBlockPlant("minecraft:wheat"));
+        assertTrue(herbalismManager.isOneBlockPlant("poppy"));
+        assertTrue(herbalismManager.isOneBlockPlant("stone"));
+    }
+
+    @Test
+    void isHerbalismAfkPreventedReadsTheShippedConfig() {
+        // Skills.Herbalism.Prevent_AFK_Leveling — the guard behind the minecart-parked farm check.
+        // It ships ON (config.yml), so a player breaking plants while riding earns nothing.
+        assertTrue(herbalismManager.isHerbalismAfkPrevented());
+    }
+
+    @Test
     void resolveGreenThumbReplantRestartsImmatureCropsAtZero() {
         atHerbalismLevel(0);
         Optional<GreenThumbReplant> result =
