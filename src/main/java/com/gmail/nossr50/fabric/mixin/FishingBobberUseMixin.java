@@ -67,6 +67,19 @@ public abstract class FishingBobberUseMixin {
     }
 
     /**
+     * The Ice Fishing seam (legacy's {@code IN_GROUND} state). Modern vanilla has no such bobber state
+     * — it was a CraftBukkit synthesis fired when a player reeled a bobber resting on solid ground — so
+     * this taps the {@code HEAD} of the same {@code use} reel method and lets the listener reconstruct
+     * the precondition (no hooked entity, and the bobber is not in water). A plain non-cancelling inject:
+     * the reel proceeds and discards the bobber as normal; the only side effect is melting the ice sheet
+     * the player is looking at into a fishing hole. See {@link FishingListener#tryIceFishing}.
+     */
+    @Inject(method = "use", at = @At("HEAD"))
+    private void mcmmo$tryIceFishing(ItemStack usedItem, CallbackInfoReturnable<Integer> cir) {
+        FishingListener.tryIceFishing((FishingBobberEntity) (Object) this);
+    }
+
+    /**
      * The Treasure Hunter vanilla-XP-boost seam (legacy's {@code event.setExpToDrop(...)} on
      * {@code PlayerFishEvent}). Vanilla builds the orb inline in {@code use}'s loot loop as
      * {@code new ExperienceOrbEntity(world, x, y + 0.5, z + 0.5, this.random.nextInt(6) + 1)}, so the

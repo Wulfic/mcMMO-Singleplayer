@@ -53,6 +53,11 @@ None of this can be closed by a headless boot. It needs a real client session.
 - [ ] Interaction-driven bodies that no headless test can reach: Green Thumb block / Shroom Thumb /
       berry-bush harvest, Hylian Luck's sapling + flower-pot **tag** branches (unit tests cover only the
       hardcoded flower/bush members), Call of the Wild summons, a real brew, a real fished-up book.
+- [ ] **Ice Fishing melt-on-reel** *(newly implemented 2026-07-23)*. Cast a rod onto an ice sheet over
+      a lake/ocean, then **reel** while looking at the ice: a 3×3 water hole should open. Confirm (a) it
+      only fires when the bobber is stuck on ice, never on a normal water catch; (b) the water-below
+      scan correctly refuses a decorative ice block with no water beneath; (c) the missing auto-recast
+      feels acceptable (you cast again into the hole) or is worth adding the bobber-spawn glue.
 - [ ] **Overfishing now confiscates the catch.** Past `ExploitFix.Fishing.OverFishLimit` (10) casts at
       one spot the fish *and* the vanilla XP orbs are destroyed, not merely unpaid — plus two warnings
       the port previously dropped ("scaring the fish", "low resources"). Verify the two warnings read
@@ -97,6 +102,13 @@ Nothing here blocks §G.
       `BrewingStandBlockEntity#canCraft` is a static with no `BlockPos`, so the owner's tier cannot be
       resolved there without risking a never-completing brew loop. Recipe recognition is currently
       tier-permissive (any player can brew any mcMMO potion). Needs a different seam.
+- [x] **Fishing — Ice Fishing (`FISHING_ICE_FISHING`) — DONE** (2026-07-23, uncommitted). Was the one
+      remaining unported Fishing sub-skill. Full writeup in `CONVERSION_DONE.md` §B. Reeling a bobber
+      stuck on an ice sheet over water now melts a 3×3 hole. **Two documented deviations** carried to
+      §G: dropped legacy's icy-biome shortcut (no stable vanilla tag — scans for water below instead),
+      and **no auto-recast** (legacy's `callFakeFishEvent` needs bespoke bobber-spawn glue — the player
+      recasts into the fresh hole). Boot-verified (0 mixin failures), suite 760 green; the melt-on-reel
+      behaviour itself is interaction-driven and **unverified headless — see §G.**
 
 ### §E — cosmetic
 - [ ] `ExperienceBarHideTask` / XP-bar `processPostXpEvent`. Cosmetic; fine to slip to Pass 2.
@@ -202,6 +214,25 @@ is deferred to the tuning pass. **Seven of these are the same family**, which is
       behaviour (no cap on the delayed path) rather than inventing a tuning decision.
 
 **Dead configs / strings — ported faithfully, decide whether to wire or strip:**
+- [ ] **Limit Break — the whole mechanic is dropped, and its `AllowPVE` knob now lies.** *(Found by the
+      2026-07-23 deep audit — not previously in this list.)* Legacy adds a flat level-scaled
+      `getLimitBreakDamage(...)` to **every** weapon skill in `CombatUtils` (Swords/Axes/Unarmed/
+      Archery/Crossbows/Tridents/Maces/Spears), gated by `canUseLimitBreak` = `target instanceof
+      Player || canApplyLimitBreakPVE()`. The port applies **none** of it (documented as a deliberate
+      drop in `MeleeDamageBonus`/`EntityDamageListener`). **Faithful at the default** (`advanced.yml`
+      ships `Skills.General.LimitBreak.AllowPVE: false`, and SP is PvE-only ⇒ the gate is always
+      false). **The wrinkle:** the port still ships `AdvancedConfig.canApplyLimitBreakPVE()` reading
+      that key, and **nothing consumes it** — an operator who flips `AllowPVE: true` expecting legacy's
+      PvE Limit Break gets silently nothing. Unlike Disarm/Iron Grip (structurally unreachable in SP),
+      this one *is* reachable via config. Decide: honor `AllowPVE:true` (wire the per-weapon bonus in
+      the melee/ranged damage path) or strip the getter + the `LimitBreak` keys/strings so the config
+      stops lying.
+- [ ] **Chimaera Wing — config shipped, item behavior never ported, and it's undocumented.** *(Found
+      by the 2026-07-23 deep audit.)* `GeneralConfig` exposes `getChimaeraUseCost()` /
+      `getChimaeraRecipeCost()` / `getChimaeraItemName()` and validates them, but **no listener/mixin
+      implements the wing** (the teleport-on-use + the crafting recipe). It is a standalone convenience
+      item, not a skill, so a cut is defensible — but right now it's a silent one. Decide: implement the
+      item, or strip the three getters + the `Items.Chimaera_Wing.*` keys and record the cut.
 - [ ] `DebrisReduction` — `MiningManager.getDebrisReduction()` reads a per-rank value
       `blastMiningDropProcessing` never consults; the debris chance is a hardcoded 10%.
 - [ ] Rupture `Explosion_Damage` — the getter and `METADATA_KEY_EXPLOSION_FROM_RUPTURE` have zero

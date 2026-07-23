@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import net.minecraft.block.Blocks;
 import net.minecraft.component.type.ItemEnchantmentsComponent;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
@@ -43,9 +44,13 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.random.Random;
 
@@ -573,6 +578,101 @@ public final class FishingListener {
         }
         sheep.setSheared(true);
         return true;
+    }
+
+    /**
+     * Ice Fishing: reeling in a rod whose bobber is stuck on an ice sheet over water melts a 3&times;3
+     * hole so the player can fish there. Ports legacy {@code FishingManager#iceFishing}, reached from the
+     * {@code IN_GROUND} arm of the legacy {@code PlayerFishEvent} monitor.
+     *
+     * <p><b>Seam.</b> Modern vanilla has no {@code IN_GROUND} state (the {@code State} enum is only
+     * {@code FLYING/HOOKED_IN_ENTITY/BOBBING}); that state was a CraftBukkit synthesis fired when the
+     * player reeled a bobber resting on solid ground. So this runs at the {@code HEAD} of
+     * {@code FishingBobberEntity#use} (the reel), the same method the catch/shake seams use, and
+     * reconstructs the precondition without the private state: the bobber has no hooked entity (that is
+     * the Shake path) and is <em>not</em> sitting in water (a bobbing/caught bobber is, a stuck-on-ice
+     * one is not). Legacy resolved the ice block from {@code player.getTargetBlock(null, 100)} — the
+     * player's crosshair, not the bobber — so this raycasts the player likewise.
+     *
+     * <p><b>Body-of-water check.</b> Legacy required the block 3 below to be water <em>or</em> an icy
+     * biome. There is no stable vanilla "icy biome" tag, and a genuine frozen lake/ocean has water
+     * within a few blocks of its surface regardless of biome, so this scans the 1–4 blocks under the ice
+     * for water and drops the biome-OR shortcut (documented deviation; guards against melting a
+     * decorative ice block with nothing beneath it). Legacy's {@code EventUtils.simulateBlockBreak}
+     * protection probe is dropped on {@link FishingManager#canIceFish()} as elsewhere.
+     *
+     * <p><b>Deviation — no auto-recast.</b> Legacy recast the hook in place
+     * ({@code EventUtils.callFakeFishEvent}) so the reel that melted the ice immediately dropped the line
+     * into the new water. That needs bespoke bobber-spawn glue (a fresh {@code FishingBobberEntity} wired
+     * to {@code player.fishHook}); it is deferred as a UX nicety. The reel still discards its bobber as
+     * normal, so the player simply casts again into the fresh hole. <b>§G:</b> the whole path is
+     * interaction-driven and unverified headless — confirm the reel-on-ice melt and the recast feel.
+     *
+     * @param bobber the bobber being reeled in (source of the owner and the world)
+     */
+    public static void tryIceFishing(FishingBobberEntity bobber) {
+        if (bobber.getHookedEntity() != null) {
+            return; // a hooked mob is the Shake path, not a stuck-on-ice reel.
+        }
+        if (!(bobber.getPlayerOwner() instanceof ServerPlayerEntity serverPlayer)) {
+            return; // client-side / null owner.
+        }
+        if (!(bobber.getEntityWorld() instanceof ServerWorld world)) {
+            return; // the block reads and the melt are server-side only.
+        }
+        // Reconstruct legacy's IN_GROUND precondition: a bobber in water is bobbing/caught, not stuck.
+        if (world.getFluidState(bobber.getBlockPos()).isIn(FluidTags.WATER)) {
+            return;
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        if (mmoPlayer == null) {
+            return; // data not loaded (e.g. mid-join).
+        }
+        final FishingManager fishingManager = mmoPlayer.getFishingManager();
+        if (fishingManager == null || !fishingManager.canIceFish()) {
+            return;
+        }
+
+        final HitResult hit = serverPlayer.raycast(100.0, 1.0F, false);
+        if (hit.getType() != HitResult.Type.BLOCK) {
+            return;
+        }
+        final BlockPos target = ((BlockHitResult) hit).getBlockPos();
+        if (!world.getBlockState(target).isOf(Blocks.ICE) || !sitsOverWater(world, target)) {
+            return;
+        }
+
+        // Melt the clicked ice and its 8 horizontal neighbours into water — legacy's 3x3 hole.
+        meltIce(world, target);
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dx == 0 && dz == 0) {
+                    continue;
+                }
+                final BlockPos neighbour = target.add(dx, 0, dz);
+                if (world.getBlockState(neighbour).isOf(Blocks.ICE)) {
+                    meltIce(world, neighbour);
+                }
+            }
+        }
+    }
+
+    /**
+     * Whether an ice block sits over a body of water: any of the 1–4 blocks directly beneath it is
+     * water (see {@link #tryIceFishing} for why the scan replaces legacy's exact "3 below or icy biome").
+     */
+    private static boolean sitsOverWater(ServerWorld world, BlockPos icePos) {
+        for (int dy = 1; dy <= 4; dy++) {
+            if (world.getFluidState(icePos.down(dy)).isIn(FluidTags.WATER)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Turns one block into a water source — legacy {@code block.setType(Material.WATER)}. */
+    private static void meltIce(ServerWorld world, BlockPos pos) {
+        world.setBlockState(pos, Blocks.WATER.getDefaultState());
     }
 
     /**
