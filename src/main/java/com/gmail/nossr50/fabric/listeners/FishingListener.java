@@ -174,6 +174,43 @@ public final class FishingListener {
     }
 
     /**
+     * Treasure Hunter's vanilla-XP boost: multiply the experience orb a catch drops by the player's
+     * loot-tier multiplier ({@code advanced.yml} → {@code Skills.Fishing.VanillaXPMultiplier}). Ports
+     * the arm of legacy's {@code CAUGHT_FISH} handler that did
+     * {@code event.setExpToDrop(fishingManager.handleVanillaXpBoost(event.getExpToDrop()))}.
+     *
+     * <p>The arithmetic — including legacy's load-bearing "don't modify XP below vanilla values"
+     * guard, which is what stops an unranked player's fishing XP being multiplied by zero — lives
+     * MC-free on {@link FishingManager#applyVanillaXpBoost(int)}. See that method for why the guard
+     * matters.
+     *
+     * <p>Legacy applied this once per {@code PlayerFishEvent}; vanilla spawns one orb per caught stack,
+     * so this runs once per stack. The fishing loot table yields a single stack and the Treasure Hunter
+     * path either replaces it or adds one, so the arithmetic matches in practice.
+     *
+     * <p>Legacy also gated on {@code Permissions.vanillaXpBoost}; singleplayer grants every mcMMO
+     * permission (Phase 6, by design), so that gate is dropped as everywhere else.
+     *
+     * @param bobber     the bobber whose owner made the catch
+     * @param experience vanilla's own orb amount for this catch
+     * @return the boosted orb amount, or {@code experience} unchanged when the boost does not apply
+     */
+    public static int boostVanillaXp(FishingBobberEntity bobber, int experience) {
+        if (!(bobber.getPlayerOwner() instanceof ServerPlayerEntity serverPlayer)) {
+            return experience; // client-side / null owner.
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        if (mmoPlayer == null) {
+            return experience; // data not loaded (e.g. mid-join).
+        }
+        final FishingManager fishingManager = mmoPlayer.getFishingManager();
+        if (fishingManager == null) {
+            return experience;
+        }
+        return fishingManager.applyVanillaXpBoost(experience);
+    }
+
+    /**
      * Roll the Treasure Hunter reward and, on a hit, inject it into {@code caught} (the loot collection
      * vanilla spawns) and award its bonus XP. Ports the treasure half of legacy {@code processFishing}:
      * with {@code Extra_Fish} off the treasure replaces the fish, with it on the fish is kept too.

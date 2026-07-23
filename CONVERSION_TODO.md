@@ -15,8 +15,8 @@ deviations, and the 15 upstream defects found on the way — is in
 | §B — every skill earns XP | ✅ feature-complete |
 | §C — combat on-hit sub-skills | ✅ complete |
 | §D/§E — gathering bodies, super abilities, runnables | ✅ all ported |
-| Unit suite | ✅ **750 green** |
-| Headless boot | ✅ `Done (1.159s)`, 0 exceptions, 0 mixin failures, shutdown verified |
+| Unit suite | ✅ **759 green** |
+| Headless boot | ✅ `Done (1.136s)`, 0 exceptions, 0 mixin failures, shutdown verified |
 | **§G — real gameplay verification** | ❌ **never done** |
 
 > **🔴 The critical path is §G, not more code.** Pass 1's remaining code work is a short tail of
@@ -103,6 +103,39 @@ Nothing here blocks §G.
 
 ### Newly found, unscheduled
 
+- [x] **⚠️⚠️ SERRATED STRIKES + SKULL SPLITTER COULD NEVER ACTIVATE — FIXED.** Legacy flips readied →
+      active in *two* places: the block path (`BlockListener#onBlockDamage`, ported as
+      `SuperAbilityListener#onAttackBlock`) **and** the combat path —
+      `CombatUtils#processSwordCombat`/`processAxeCombat`/`processUnarmedCombat` each open with
+      `if (manager.canActivateAbility()) mmoPlayer.checkAbilityActivation(<skill>);`. Only the block
+      path had been ported, and it covers Herbalism / Woodcutting / Mining / Excavation / Unarmed.
+      The tell was that `canActivateAbility()` was defined on `SwordsManager`, `AxesManager`,
+      `UnarmedManager` and `HerbalismManager` with **zero call sites in the whole port**. Swords/Axes
+      readied fine but `getAbilityMode(...)` was never set, so the AoE effect bodies already wired in
+      `EntityDamageListener` were unreachable, and Berserk lost its punch-a-mob activation.
+      **Fixed** by `EntityDamageListener#maybeActivateSuperAbility`, called from
+      `applyAttackerWeaponBonus` *after* the `canCombatSkillsTrigger` gate and *before*
+      `MeleeDamageBonus.applyBonus` — legacy's order, which is load-bearing twice over: the
+      activating hit is itself buffed (Berserk scales the very swing that turned it on) and is itself
+      eligible for the AoE arms. Unit-covered by `MeleeSuperAbilityActivationTest` (×6: the
+      weapon→skill mapping, the readiness gate, and that Maces/Tridents stay inert). **Note what that
+      cannot prove** — it pins the dispatch, not that `applyAttackerWeaponBonus` still calls it, which
+      is the defect shape itself; the call site is confirmed by a live swing (§G session 2, SS/SK).
+
+- [x] **Fishing's Treasure Hunter vanilla-XP boost was never wired — FIXED.** Same shape as the above,
+      found by the same sweep: `FishingManager#handleVanillaXpBoost` and
+      `AdvancedConfig#getFishingVanillaXPModifier` were both ported, `advanced.yml` ships the
+      documented `Skills.Fishing.VanillaXPMultiplier` ladder `{1,2,3,3,4,4,5,5}`, and **nothing called
+      any of it** — while the *Smelting* sibling (Understanding the Art) was fully wired. Now driven by
+      a `@ModifyArg` on the `ExperienceOrbEntity` constructor inside `FishingBobberEntity#use`'s loot
+      loop (`allow = 1`; bytecode-verified as the only orb spawn there), routed through
+      `FishingListener#boostVanillaXp` → `FishingManager#applyVanillaXpBoost`.
+      **⚠️ Legacy's `> 1` guard is load-bearing and was nearly missed:** the multiplier is indexed by
+      *Treasure Hunter rank*, which is `0` until the sub-skill unlocks, and there is no `Rank_0` key —
+      so the raw boost is a multiply by **zero**. Wiring it unguarded would have silently deleted
+      vanilla fishing XP for every unranked player. Both halves are pinned by
+      `FishingManagerTest` (the raw multiply-by-zero *and* the guarded pass-through).
+
 - [x] **⚠️ `PlatformPlayer` stale handle — FIXED.** Was inferred; now **confirmed by bytecode**:
       `PlayerManager#respawnPlayer` calls `ServerWorld.removePlayer(old, reason)` and then
       `new ServerPlayerEntity(...)`. Worse than "after death" — the End-exit path routes through the
@@ -183,6 +216,14 @@ is deferred to the tuning pass. **Seven of these are the same family**, which is
       identically-behaving Farmer's Diet ships no such knob at all.
 - [ ] `Salvage.Skills.ArcaneSuccess` — a shipped locale string nothing ever sends, so a *perfect*
       extraction is silent. Compare Arcane Forging, whose equivalent three-way report does fire all three.
+- [ ] **Flux Mining — dead upstream, deliberately not ported.** `advanced.yml`
+      (`Skills.Smelting.FluxMining.Chance`), `config.yml` (`Items.Flux_Pickaxe`, `Particles.Flux`) and
+      seven locale strings all ship, and `AdvancedConfig`/`GeneralConfig` still expose their getters —
+      but upstream's only call site is **commented out** inside `BlockListener` (`/* … */` around
+      `smeltingManager.canUseFluxMining` / `processFluxMining`), and no `SMELTING_FLUX_MINING`
+      sub-skill exists. So the sub-skill is unreachable upstream too. Recorded so nobody "restores" a
+      call site that upstream deliberately disabled. Decide: strip the keys + strings, or leave the
+      dead config as-is for parity.
 - [ ] `METADATA_KEY_MULTI_SHOT_ARROW` — **not an upstream bug; recorded so nobody "restores" it.** The
       vendored snapshot stamps a key nothing reads, but upstream master has *deleted* it outright
       (Paper/Spigot handles multishot pickup natively). The vendored tree is simply behind master. No

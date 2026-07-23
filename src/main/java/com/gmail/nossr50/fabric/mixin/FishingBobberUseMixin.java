@@ -65,4 +65,31 @@ public abstract class FishingBobberUseMixin {
     private void mcmmo$onEntityHooked(ItemStack usedItem, CallbackInfoReturnable<Integer> cir) {
         FishingListener.onEntityHooked((FishingBobberEntity) (Object) this);
     }
+
+    /**
+     * The Treasure Hunter vanilla-XP-boost seam (legacy's {@code event.setExpToDrop(...)} on
+     * {@code PlayerFishEvent}). Vanilla builds the orb inline in {@code use}'s loot loop as
+     * {@code new ExperienceOrbEntity(world, x, y + 0.5, z + 0.5, this.random.nextInt(6) + 1)}, so the
+     * amount is the 5th constructor argument (index 4 of {@code (World, D, D, D, I)}) — modifying it
+     * is exactly equivalent to overwriting Bukkit's {@code expToDrop} before the orb is spawned.
+     *
+     * <p>Bytecode-verified: that constructor is invoked exactly once in {@code use}, hence
+     * {@code allow = 1} — an unconstrained injector here would silently bind to any future orb spawn
+     * added to the method.
+     *
+     * <p>The overfishing punishment empties the loot collection, so this loop body never runs for a
+     * confiscated catch and the orb is destroyed rather than boosted, as intended.
+     */
+    @ModifyArg(
+            method = "use",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/entity/ExperienceOrbEntity;<init>("
+                            + "Lnet/minecraft/world/World;DDDI)V"),
+            index = 4,
+            require = 1,
+            allow = 1)
+    private int mcmmo$boostVanillaFishingXp(int experience) {
+        return FishingListener.boostVanillaXp((FishingBobberEntity) (Object) this, experience);
+    }
 }

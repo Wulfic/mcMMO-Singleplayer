@@ -118,6 +118,16 @@ class MixinApplicationTest {
         assertTrue(hasShakeHook,
                 "FishingBobberUseMixin's Shake injector did not apply to FishingBobberEntity — the "
                         + "Shake sub-skill would silently never fire in-game");
+
+        // Same again for the Treasure Hunter vanilla-XP boost, which rides a @ModifyArg on the
+        // ExperienceOrbEntity constructor inside use()'s loot loop. It is capped at allow = 1 because
+        // that constructor is invoked exactly once there today — an unconstrained injector would bind
+        // to any future orb spawn added to the method.
+        final boolean hasVanillaXpHook = Arrays.stream(FishingBobberEntity.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().contains("boostVanillaFishingXp"));
+        assertTrue(hasVanillaXpHook,
+                "FishingBobberUseMixin's vanilla-XP injector did not apply to FishingBobberEntity — "
+                        + "Treasure Hunter would silently leave every catch at vanilla XP in-game");
     }
 
     @Test

@@ -781,6 +781,18 @@ public final class EntityDamageListener {
         if (!CombatUtils.canCombatSkillsTrigger(skillOf(weapon), target)) {
             return amount;
         }
+        // Legacy's COMBAT-path super-ability activation. processSwordCombat / processAxeCombat /
+        // processUnarmedCombat each open with `if (manager.canActivateAbility())
+        // mmoPlayer.checkAbilityActivation(<skill>)`, which is what flips a *readied* tool into an
+        // *active* super ability when the player strikes a mob rather than a block. Without it
+        // Serrated Strikes and Skull Splitter can never activate at all — they have no block path,
+        // unlike the five block-struck abilities in SuperAbilityListener#onAttackBlock.
+        //
+        // Position is legacy's and load-bearing: activation runs BEFORE the damage bonus, so the
+        // activating hit is itself buffed (Berserk scales the very swing that turned it on) and is
+        // itself eligible for the AoE arms below.
+        maybeActivateSuperAbility(mmoPlayer, weapon);
+
         // TUNING (CONVERSION_TODO §F): modifyAppliedDamage is POST-armor, so these bonuses bypass the
         // target's armor mitigation — a discrepancy vs legacy, which boosted the pre-armor damage.
         // Flagged for the tuning pass; the correct seam is a pre-armor hook once one exists.
@@ -810,6 +822,54 @@ public final class EntityDamageListener {
         // landed. No multiplier on the melee path (legacy's 3-arg processCombatXP overload).
         CombatUtils.processCombatXP(mmoPlayer, target, skillOf(weapon), boostedDamage);
         return boostedDamage;
+    }
+
+    /**
+     * The combat half of the super-ability activation trigger: a strike on a living entity with a
+     * readied sword / axe / fist activates Serrated Strikes / Skull Splitter / Berserk. Ports the
+     * {@code canActivateAbility()} guard that opens legacy's {@code processSwordCombat},
+     * {@code processAxeCombat} and {@code processUnarmedCombat}.
+     *
+     * <p>The block half lives in {@code SuperAbilityListener#onAttackBlock} and covers the five
+     * abilities that are struck onto a block (Green Terra, Tree Feller, Super Breaker, Giga Drill
+     * Breaker, Berserk). Berserk is deliberately in <em>both</em>: legacy activates Unarmed off a
+     * punched mob as well as a punched block, and {@code checkAbilityActivation} is idempotent — it
+     * returns immediately when the ability is already running.
+     *
+     * <p>Only these three skills have a combat activation upstream. Maces and Tridents have no super
+     * ability, and Archery/Crossbows are not melee.
+     *
+     * <p>Package-private rather than private so the weapon→skill dispatch can be unit-tested MC-free
+     * (both parameters are MC-free). Note what that test can and cannot prove: it pins the mapping and
+     * the {@code canActivateAbility()} gate, but <b>not</b> that {@code applyAttackerWeaponBonus} still
+     * calls this — that call site is what was missing in the first place, and confirming it needs a
+     * real swing (§G session 2, items SS/SK).
+     */
+    static void maybeActivateSuperAbility(McMMOPlayer mmoPlayer, MeleeWeapon weapon) {
+        switch (weapon) {
+            case SWORD -> {
+                final SwordsManager swords = mmoPlayer.getSwordsManager();
+                if (swords != null && swords.canActivateAbility()) {
+                    mmoPlayer.checkAbilityActivation(PrimarySkillType.SWORDS);
+                }
+            }
+            case AXE -> {
+                final AxesManager axes = mmoPlayer.getAxesManager();
+                if (axes != null && axes.canActivateAbility()) {
+                    mmoPlayer.checkAbilityActivation(PrimarySkillType.AXES);
+                }
+            }
+            case UNARMED -> {
+                final UnarmedManager unarmed = mmoPlayer.getUnarmedManager();
+                if (unarmed != null && unarmed.canActivateAbility()) {
+                    mmoPlayer.checkAbilityActivation(PrimarySkillType.UNARMED);
+                }
+            }
+            case MACE, TRIDENT, OTHER -> {
+                // No super ability on these skills — legacy has no activation call in their combat
+                // paths either.
+            }
+        }
     }
 
     /**
