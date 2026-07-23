@@ -525,6 +525,34 @@ public class FishingManager extends SkillManager {
         return experience * getVanillaXPBoostModifier();
     }
 
+    /**
+     * Treasure Hunter's vanilla-XP boost as the call site must apply it: the multiplied amount, or the
+     * untouched vanilla amount when the boost does not apply. Ports the guard legacy wrapped around
+     * {@link #handleVanillaXpBoost} at its only call site (the {@code CAUGHT_FISH} handler):
+     *
+     * <pre>{@code
+     * // Don't modify XP below vanilla values
+     * if (fishingManager.handleVanillaXpBoost(event.getExpToDrop()) > 1) {
+     *     event.setExpToDrop(fishingManager.handleVanillaXpBoost(event.getExpToDrop()));
+     * }
+     * }</pre>
+     *
+     * <p><b>That guard is load-bearing.</b> {@link #getVanillaXPBoostModifier()} indexes
+     * {@code advanced.yml}'s {@code Skills.Fishing.VanillaXPMultiplier} by {@link #getLootTier()},
+     * which is the player's <i>Treasure Hunter rank</i> — {@code 0} until the sub-skill unlocks. There
+     * is no {@code Rank_0} key, so the lookup returns 0 and the raw "boost" is a multiply by zero.
+     * Without the guard, every player below Treasure Hunter rank 1 would lose their vanilla fishing XP
+     * entirely. The guard lives here rather than at the call site so it is unit-testable MC-free; the
+     * arithmetic is legacy's exactly.
+     *
+     * @param experience vanilla's own XP amount for this catch
+     * @return the boosted amount, or {@code experience} unchanged when the boost would not raise it
+     */
+    public int applyVanillaXpBoost(int experience) {
+        final int boosted = handleVanillaXpBoost(experience);
+        return boosted > 1 ? boosted : experience;
+    }
+
     public boolean isMagicHunterEnabled() {
         return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.FISHING_MAGIC_HUNTER)
                 && RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.FISHING_TREASURE_HUNTER)

@@ -99,6 +99,42 @@ class FishingManagerTest {
     }
 
     @Test
+    void rawVanillaXpBoostMultipliesByZeroBelowTreasureHunterRank1() {
+        // Documents the landmine the call-site guard exists for: getVanillaXPBoostModifier() indexes
+        // VanillaXPMultiplier by Treasure Hunter RANK, and there is no Rank_0 key — so the raw boost
+        // is a multiply by zero for any unranked player. This is upstream's shape, kept faithfully.
+        atFishingLevel(0);
+        assertEquals(0, fishingManager.handleVanillaXpBoost(6),
+                "tier 0 has no VanillaXPMultiplier key -> raw boost multiplies by zero");
+    }
+
+    @Test
+    void appliedVanillaXpBoostNeverLowersTheVanillaAmount() {
+        // ...and the guard is what stops that reaching the player. Legacy: "Don't modify XP below
+        // vanilla values".
+        atFishingLevel(0);
+        assertEquals(6, fishingManager.applyVanillaXpBoost(6),
+                "below Treasure Hunter rank 1 the vanilla XP must pass through untouched");
+
+        // Rank 1's multiplier is 1, so the boost is a no-op rather than a change.
+        atFishingLevel(1);
+        assertEquals(6, fishingManager.applyVanillaXpBoost(6), "rank 1 multiplier is 1 -> unchanged");
+
+        // A 1-XP catch at rank 1 boosts to exactly 1, which fails the `> 1` test and falls back to the
+        // vanilla amount — the same 1. Pinned because the guard is `> 1`, not `> experience`.
+        assertEquals(1, fishingManager.applyVanillaXpBoost(1), "1 XP at rank 1 stays 1");
+    }
+
+    @Test
+    void appliedVanillaXpBoostScalesWithTreasureHunterRank() {
+        atFishingLevel(250); // Treasure Hunter rank 2 -> multiplier 2
+        assertEquals(12, fishingManager.applyVanillaXpBoost(6));
+
+        atFishingLevel(1000); // rank 8 (max) -> multiplier 5
+        assertEquals(30, fishingManager.applyVanillaXpBoost(6));
+    }
+
+    @Test
     void shakeChanceScalesWithShakeRank() {
         atFishingLevel(150); // Shake rank 1
         assertEquals(15.0, fishingManager.getShakeChance(), 1.0e-9);
