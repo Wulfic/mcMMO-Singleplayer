@@ -8,6 +8,7 @@ import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Arrays;
 import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.block.entity.BrewingStandBlockEntity;
+import net.minecraft.component.type.FoodComponent;
 import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.item.BlockItem;
@@ -169,6 +170,19 @@ class MixinApplicationTest {
         assertTrue(methods.stream().anyMatch(name -> name.contains("boostVanillaXp")),
                 "the dropExperience orb-size modifier did not apply — Understanding the Art would "
                         + "silently leave furnace XP at vanilla amounts in-game");
+    }
+
+    @Test
+    void foodComponentMixinApplies() {
+        // Class-loading is not the test here: Items' static init builds food components during
+        // McTestRegistries.bootstrap(), so FoodComponent is already transformed by now. An applied
+        // @Inject leaves its handler method on the target, and its absence is the failure that
+        // matters — both diet sub-skills would silently do nothing on every meal in-game.
+        final boolean hasConsumeHook = Arrays.stream(FoodComponent.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().contains("onFoodConsumed"));
+        assertTrue(hasConsumeHook,
+                "FoodComponentMixin did not apply to FoodComponent — Farmer's Diet and Fisherman's "
+                        + "Diet would silently never restore their extra hunger in-game");
     }
 
     @Test

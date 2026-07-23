@@ -1,10 +1,14 @@
 package com.gmail.nossr50.util.skills;
 
 import com.gmail.nossr50.config.HiddenConfig;
+import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.Misc;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Singleplayer port of the legacy {@code util.skills.SkillUtils} grab-bag. Only the pieces whose
@@ -24,7 +28,6 @@ import com.gmail.nossr50.util.Misc;
  *       {@code PlatformPlayer} Haste-effect method only if that knob is ever exposed to users.</li>
  *   <li>{@code getRepairAndSalvageItem} (runtime crafted-material lookup) — gated on the
  *       {@code RepairConfig}/{@code SalvageConfig} tables and the vanilla recipe iterator (K8).</li>
- *   <li>{@code handleFoodSkills} — needs a food-level change event (K7) + {@code Player} food access.</li>
  *   <li>{@code calculateLengthDisplayValues} / {@code sendSkillMessage} / {@code isSkill} — display and
  *       multiplayer-broadcast surfaces not needed by any ported body.</li>
  *   <li>The {@code RepairableManager} custom max-durability override inside
@@ -211,5 +214,31 @@ public final class SkillUtils {
             case "fishing_rod" -> 2;    // 2 string
             default -> 0;               // unknown shape: caller supplies the config value / floor of 1
         };
+    }
+
+    /**
+     * The food-level a diet sub-skill (Herbalism Farmer's Diet / Fishing Fisherman's Diet) restores,
+     * given what the food would have restored on its own. Legacy {@code handleFoodSkills}.
+     *
+     * <p><b>No live food-level access is needed</b>, which is why this no longer waits on the K4
+     * "{@code Player} food access" adapter the old breadcrumb called for. Legacy computed
+     * {@code currentFoodLevel + ((eventFoodLevel - currentFoodLevel) + curRank)} — the current level
+     * cancels out algebraically, leaving {@code eventFoodLevel + curRank}. Because only the
+     * <em>difference</em> survives, the caller may equally pass the absolute post-eat food level
+     * (Bukkit's {@code FoodLevelChangeEvent} value, as legacy did) or the raw nutrition delta (what the
+     * vanilla {@code FoodComponent} seam hands us); the bonus is {@code curRank} either way.
+     *
+     * @param mmoPlayer    the eating player, or {@code null} if their data is not loaded
+     * @param eventFoodLevel the food restoration before the sub-skill bonus
+     * @param subSkillType the diet sub-skill being applied
+     * @return the food restoration after adding the player's rank in that sub-skill
+     */
+    public static int handleFoodSkills(@Nullable McMMOPlayer mmoPlayer, int eventFoodLevel,
+            @NotNull SubSkillType subSkillType) {
+        final int curRank = RankUtils.getRank(mmoPlayer, subSkillType);
+
+        // getRank returns -1 for sub-skills that declare no ranks; both diets declare five, but a
+        // negative rank must never *cost* the player food if that ever changes upstream.
+        return eventFoodLevel + Math.max(curRank, 0);
     }
 }

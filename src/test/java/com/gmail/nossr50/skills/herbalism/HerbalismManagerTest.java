@@ -374,6 +374,32 @@ class HerbalismManagerTest {
     }
 
     @Test
+    void farmersDietAddsOneFoodPointPerRank() {
+        // RetroMode skillranks.yml: Farmer's Diet ranks 1..5 unlock at herbalism 200/400/600/800/1000.
+        // Bread restores 5 nutrition on its own; each rank adds one more point on top.
+        atHerbalismLevel(0);
+        assertEquals(5, herbalismManager.farmersDiet(5), "unranked -> vanilla restoration");
+        atHerbalismLevel(200);
+        assertEquals(6, herbalismManager.farmersDiet(5), "rank 1 -> +1");
+        atHerbalismLevel(1000);
+        assertEquals(10, herbalismManager.farmersDiet(5), "rank 5 -> +5");
+    }
+
+    @Test
+    void farmersDietCoversLegacysFarmedFoodsOnly() {
+        // Both of legacy's Herbalism switch groups plus its separate glow_berries arm...
+        assertTrue(HerbalismManager.isFarmersDietFood("bread"));
+        assertTrue(HerbalismManager.isFarmersDietFood("mushroom_stew"));
+        assertTrue(HerbalismManager.isFarmersDietFood("poisonous_potato"));
+        assertTrue(HerbalismManager.isFarmersDietFood("glow_berries"));
+        // ...and nothing else. Fished food belongs to Fisherman's Diet, and foods upstream never
+        // listed (apple, sweet berries) stay unboosted rather than being "fixed" here.
+        assertFalse(HerbalismManager.isFarmersDietFood("cooked_salmon"));
+        assertFalse(HerbalismManager.isFarmersDietFood("apple"));
+        assertFalse(HerbalismManager.isFarmersDietFood("sweet_berries"));
+    }
+
+    @Test
     void rollGreenThumbReplantBypassesRngWhileGreenTerraActive() {
         // At level 0 the Green Thumb RNG can't succeed on its own; Green Terra must force the roll
         // (legacy's greenTerra bypass in processGreenThumbPlants), independent of the probability.

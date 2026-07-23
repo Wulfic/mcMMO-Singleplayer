@@ -66,9 +66,16 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       `handleDurabilityChange`/`handleArmorDurabilityChange`. **Haste-boost orchestration DONE**:
       `handleAbilitySpeedIncrease`/`removeAbilityBuffFromMainHand`/`removeAbilityBoostsFromInventory`
       (MC-free mode decision from `HiddenConfig.useEnchantmentBuffs` + `AdvancedConfig.getEnchantBuff`,
-      delegating the mutation to `PlatformPlayer` K3-write). **Still TODO:** the legacy Haste-*potion*
-      fallback branch (unreachable with bundled `hidden.yml`), `getRepairAndSalvage*` (K8 + recipe
-      iterator), `handleFoodSkills` (K7 food event), and the `RepairableManager` max-durability override.
+      delegating the mutation to `PlatformPlayer` K3-write). **`handleFoodSkills` DONE** — and it needed
+      **neither** of the two things its breadcrumb asked for. Legacy computes
+      `currentFoodLevel + ((eventFoodLevel - currentFoodLevel) + curRank)`; the current level **cancels
+      out algebraically**, so the whole method is `eventFoodLevel + curRank` and the "`Player` food
+      access" adapter was never needed — it stays MC-free on `SkillUtils`. The "food-level change event"
+      is the new `FoodComponentMixin` (see K7). Drives Herbalism Farmer's Diet + Fishing Fisherman's
+      Diet (§B/§D). **Still TODO:** the legacy Haste-*potion* fallback branch (unreachable with bundled
+      `hidden.yml`) and the `RepairableManager` max-durability override. (`getRepairAndSalvage*` has
+      since landed as `SkillUtils.getRepairAndSalvageQuantities`, derived from the item's registry path
+      instead of the live recipe iterator.)
 - [ ] **K5 — Port `EventUtils`.** The internal-bus event fires (ability activate/deactivate, XP events)
       several bodies expect. Port onto the existing `event/` bus (or no-op the ones with no SP listener,
       with a breadcrumb).
@@ -111,6 +118,16 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       `skills/alchemy/AlchemyPotionBrewer` does ingredient→child resolution + inventory mutation +
       per-stage XP over the vanilla `DefaultedList`, and `fabric/listeners/AlchemyListener` tracks the
       brewing-stand owner (right-click `UseBlockCallback`, like the furnace map) for the XP award.
+      **food-consume (Herbalism + Fishing diets) DONE** — `fabric/mixin/FoodComponentMixin` injects at
+      `TAIL` of `FoodComponent#onConsume` (bytecode-verified as the method that calls
+      `getHungerManager().eat(this)`) → `fabric/listeners/FoodListener`, the port's replacement for
+      Bukkit's `FoodLevelChangeEvent`. **The seam is handed the eaten `ItemStack`, which Bukkit's event
+      was not** — that collapses legacy's whole main-hand/off-hand `isFood` probe, which only existed to
+      guess what had been eaten. Injecting at TAIL (topping the hunger bar up afterwards) rather than
+      modifying the nutrition on the way in is deliberate: `FoodComponent` is a record shared by every
+      stack of that item and must never be rewritten per-player. ⚠️ `finishConsumption` calls
+      `onConsume` on **both** sides in singleplayer (its own `isClient` check comes later, guarding only
+      the consume effects), so the listener's client gate is load-bearing.
       All K7 hooks are now wired. In-game verification pending (a real brew). **Deferred (breadcrumbs):**
       Catalysis brew-speed (needs a brew-timer-rate mixin; `calculateBrewSpeed` is ported+tested) and
       Concoctions ingredient-tier gating (recipe recognition is tier-permissive — `canCraft` has no
@@ -140,12 +157,13 @@ Each of these is currently missing and blocks multiple skills. Nothing downstrea
       resolve-at-use-time shape `TreasureConfig`'s Hylian groups use. Section names lower-case to
       registry paths, with a three-entry alias table for the renamed ones (see §F upstream bug #10).
       Boot-verified: 54 drops across all 24 shipped entity sections.
-      **Still deferred (each a real adapter gap, not a skip):** enchanted-book / Magic-Hunter
-      enchant tables (`Enchantments_Rarity`/`Enchantment_Drop_Rates`/`FishingTreasureBook` — need the
-      **dynamic** 1.21 enchant registry + the K3 enchant-write surface, and their `processMagicHunter`
-      consumer is itself deferred, so loading them now would be readerless state), and a potion
-      base-type on `ItemSpec` (which also skips the Cave Spider / Witch potion shake drops). These gate
-      the remaining Fishing rewards.
+      **The Magic Hunter enchant tables are loaded too** (`Enchantments_Rarity` +
+      `Enchantment_Drop_Rates`, kept as registry-path strings and resolved against the dynamic
+      enchantment registry at drop time — see §B Fishing), **and so is the `ENCHANTED_BOOK` reward**,
+      which loads as the new `FishingTreasureBook` carrying its `Enchantments_Whitelist`/`_Blacklist`
+      (boot-verified: 71/71 `Fishing` entries now enter the pool, up from 70).
+      **Still deferred (a real adapter gap, not a skip):** a potion base-type on `ItemSpec`, which
+      skips the Cave Spider / Witch potion shake drops. That is the last unloaded piece of this file.
 - [~] **K9 — Placed-block tracker (anti-exploit).** DONE (in-session slice): new MC-free
       `util/PlacedBlockTracker` (worldKey + `BlockPos#asLong()` → ineligible-position set, unit-tested)
       replaces legacy `util.blockmeta.UserBlockTracker`/`HashChunkManager` without its region-file
@@ -260,10 +278,37 @@ pending** for each; the boot-verify only proves the mixins apply. Per-skill stat
       `isMagicHunterEnabled()` (Magic Hunter **and** Treasure Hunter unlocked+enabled) and on
       `MaterialMapStore.isEnchantable` (legacy `ItemUtils.isEnchantable`, deliberately the mcMMO
       whitelist rather than the vanilla check). ⚠️ In-game verification pending. See §F upstream bug #11
-      for the conflict-guard deviation. Still TODO: enchanted-book treasures (legacy
-      `FishingTreasureBook` draws a *random* registry enchantment under a per-book
-      whitelist/blacklist — a different mechanism from the Magic Hunter table), the potion shake drops
-      (need a potion base type on `ItemSpec`), and the exploit item-removal punishment.
+      for the conflict-guard deviation.
+      **Enchanted-book treasures DONE** — the shipped LEGENDARY `ENCHANTED_BOOK` reward no longer
+      skips config load; it loads as the new MC-free `datatypes/treasure/FishingTreasureBook`
+      (`FishingTreasure` + the two enchantment filters as registry-path strings). **It is a different
+      mechanism from Magic Hunter and the two are mutually exclusive** — a book always gets exactly one
+      enchantment, drawn from the *whole* registry under its own `Enchantments_Whitelist`/`_Blacklist`,
+      never from the `Enchantments_Rarity` table; `FishingListener#maybeCatchTreasure` branches on
+      `instanceof FishingTreasureBook` exactly where legacy's `processFishing` does.
+      Split as usual: `FishingTreasureBook#resolveAllowedEnchantmentIds(registryPaths)` (legacy
+      `isEnchantAllowed` + the load-time name resolution that fed it) and
+      `FishingManager#pickBookEnchantment(pool, indexPicker)` are MC-free and unit-tested;
+      `FishingListener#applyBookEnchantment` owns the three MC-typed pieces (walking
+      `Registry#getIndexedEntries()`, expanding each allowed enchantment over `1..getMaxLevel()`, and
+      the component write — **no book/tool branch needed**, `EnchantmentHelper` routes an
+      `enchanted_book` to `STORED_ENCHANTMENTS` itself, so it is legacy's `addStoredEnchant`).
+      🔑 **The level expansion is the odds:** one pool entry per (enchantment, level) means a book is
+      5× likelier to be some Efficiency than Silk Touch — upstream's weighting, preserved.
+      ⚠️ Two faithful legacy quirks kept and documented: a book's configured `Amount`/`Lore` are ignored
+      (legacy builds `new ItemStack(material, 1)` + custom name only), and an all-typo whitelist
+      degrades to *allowing everything* rather than nothing (upstream dropped unmatched names at load;
+      this port intersects with the live registry at drop time to reproduce it — mutation-verified).
+      Legacy's `allowUnsafeEnchantments` flag is inert on this path and not read (the level always
+      comes from the `getMaxLevel` expansion). Upstream's `nextInt(0)` crash on an empty pool is
+      guarded instead. See §F upstream bug #12 for the dead `ENCHANTED_BOOK` arm inside
+      `processMagicHunter`. ⚠️ In-game verification pending (a book must actually be fished).
+      **Fisherman's Diet DONE** (this pass, alongside Herbalism's Farmer's Diet — same seam, see §D
+      Herbalism and the K4/K7 entries in §A): eating cod/salmon/tropical fish restores one extra hunger
+      point per rank, via MC-free `FishingManager.handleFishermanDiet` + `isFishermansDietFood`.
+      ⚠️ In-game verification pending.
+      Still TODO: the potion shake drops (need a potion base type on `ItemSpec`) and the exploit
+      item-removal punishment.
 - [x] **Repair** — repair action + Repair XP + Repair Mastery + Super Repair **DONE** (via K7 anvil →
       `RepairSalvageListener`; XP formula `RepairManager#awardRepairXp` MC-free vs real experience.yml).
       **Arcane Forging DONE** — repairing an enchanted item now rolls each enchantment separately
@@ -654,7 +699,13 @@ effectively complete.**
       flat XP), and a mature crop pays whether farmed or wild. **This also fixes a K9 interaction: a
       player-planted crop is marked placed at seed-time, so before this the §A early-return zeroed all
       farmed-crop XP — Herbalism's primary source.** Bizarre ageables (cactus/kelp/sugar cane/bamboo)
-      and chorus stay on the ordinary placed-flag path (deferred multi-block plants). **Green Terra
+      and chorus stay on the ordinary placed-flag path (deferred multi-block plants).
+      **Farmer's Diet DONE** (this pass): eating a farmed food restores one extra hunger point per
+      rank. `HerbalismManager.farmersDiet` + `isFarmersDietFood` are MC-free (the food table is legacy's
+      two Herbalism switch groups plus its separate `glow_berries` arm — **both groups called
+      `farmersDiet` identically, so upstream's "3 vs 5 ranks" split is vestigial** and collapses into
+      one set); the new `FoodComponentMixin` → `FoodListener` owns the seam. See the K4/K7 entries in
+      §A for why this needed no food-level adapter. ⚠️ In-game verification pending. **Green Terra
       block-conversion effect DONE** (commit 81828aa87): `SuperAbilityListener.
       maybeProcessGreenTerraConversion` ports legacy `processGreenTerraBlockConversion` — an active
       Green Terra striking a mossify-able block converts it (`Herbalism.greenTerraConversionTarget` →
@@ -965,6 +1016,29 @@ effectively complete.**
       guard inside that loop which inspects the *target* rather than the accumulator is inert. The
       deviation is documented on `selectMagicHunterEnchants`; reverting it is a one-line change to
       `conflictsWithAny` if faithfulness to the broken behaviour is ever preferred.
+- [x] **Upstream dead code #12 — `processMagicHunter`'s `ENCHANTED_BOOK` arm is unreachable**
+      (enchanted-book commit). Inside the rarity walk, upstream tests
+      `treasureDrop.getType() == Material.ENCHANTED_BOOK` and, on a match, forces the roll past the band
+      it just won into the next (more common) one — commented *"Make sure enchanted books always get
+      some kind of enchantment. --hoorigan"*. It can never execute: the **only** treasure whose material
+      is `ENCHANTED_BOOK` is a `FishingTreasureBook` (the config's `material == Material.ENCHANTED_BOOK`
+      branch builds nothing else and `continue`s), and `processFishing` routes those down the
+      `instanceof FishingTreasureBook` branch that skips `processMagicHunter` altogether. Harmless —
+      the guarantee it was written to give is delivered by the book path itself, which always draws an
+      enchantment — so nothing is ported and nothing is lost; recorded because it looks load-bearing on
+      a first read of `processMagicHunter` and would otherwise be "faithfully" reproduced. ⚠️ **New
+      shape: a dead branch guarding an invariant that a *sibling* code path already guarantees.**
+      Documented on `FishingManager#rollMagicHunterRarity`.
+- [ ] **Suspected dead config — `Fishing.FishermansDiet.RankChange` (found while porting the diet
+      sub-skills):** `advanced.yml` ships it with a comment claiming it "determines when Fisherman's
+      Diet adds extra hunger recovery to food" (`RankChange: 20`), but **no code anywhere in upstream
+      reads it** — the rank thresholds come from `skillranks.yml`
+      (`FishermansDiet.RetroMode.Rank_1..5 = 200..1000`), so an operator who edits `RankChange` moves
+      nothing. Note the asymmetry that makes it look real: Herbalism's Farmer's Diet, which behaves
+      identically, ships **no** such knob at all. Not ported (there is no behaviour to port); the port
+      reads `skillranks.yml` like upstream does. Sixth of the "config knob that lies to the operator"
+      family — see Shake `Drop_Level` below, `DebrisReduction`, Rupture `Explosion_Damage`,
+      SerratedStrikes `BleedTicks`, Gore `ChanceMax`.
 - [ ] **Suspected dead config — Shake `Drop_Level` and per-drop `XP`:** every `Shake` entry in
       `fishing_treasures.yml` carries both, and `loadTreasures` parses both onto the `ShakeTreasure`,
       but `Fishing.chooseDrop` consults **neither** — it walks `getDropChance()` alone, and

@@ -2,17 +2,21 @@ package com.gmail.nossr50.config.treasure;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.datatypes.treasure.EnchantmentTreasure;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
+import com.gmail.nossr50.datatypes.treasure.FishingTreasureBook;
 import com.gmail.nossr50.datatypes.treasure.Rarity;
 import com.gmail.nossr50.datatypes.treasure.ShakeTreasure;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -86,12 +90,52 @@ class FishingTreasureConfigTest {
     }
 
     @Test
-    void enchantedBookRewardIsDeferred(@TempDir Path dataFolder) {
-        // The bundled config ships a LEGENDARY ENCHANTED_BOOK, but book rewards need the dynamic
-        // enchant registry + K3 enchant-write, so they are skipped by name until that adapter lands.
+    void loadsTheShippedEnchantedBookAsATreasureBook(@TempDir Path dataFolder) {
+        // The bundled config ships a LEGENDARY ENCHANTED_BOOK with both enchantment filters commented
+        // out, so it loads as a book that may roll anything.
         final FishingTreasureConfig config = new FishingTreasureConfig(dataFolder);
-        assertFalse(anyBucketHas(config, "enchanted_book"),
-                "enchanted_book reward should be deferred, not loaded into any bucket");
+
+        final FishingTreasure book = findByMaterial(config.fishingRewards.get(Rarity.LEGENDARY),
+                "enchanted_book");
+        assertInstanceOf(FishingTreasureBook.class, book,
+                "an ENCHANTED_BOOK reward must load as a FishingTreasureBook, not a plain treasure");
+        assertEquals(400, book.getXp());
+        assertEquals(1, book.getDrop().getAmount(), "a book reward is always a single book");
+        assertTrue(((FishingTreasureBook) book).getWhitelistedEnchantmentIds().isEmpty());
+        assertTrue(((FishingTreasureBook) book).getBlacklistedEnchantmentIds().isEmpty());
+    }
+
+    @Test
+    void parsesEnchantedBookFiltersAsRegistryPaths(@TempDir Path dataFolder) throws IOException {
+        // Both filters ship commented out, so a hand-written config is the only way to cover them.
+        // Amount and Lore are deliberately set to values the loader must ignore for a book (legacy
+        // builds it as `new ItemStack(material, 1)` and applies only the custom name).
+        Files.writeString(dataFolder.resolve("fishing_treasures.yml"), """
+                Fishing:
+                    ENCHANTED_BOOK:
+                        Amount: 4
+                        XP: 250
+                        Rarity: EPIC
+                        Lore:
+                            - '&7ignored for books'
+                        Enchantments_Whitelist:
+                            - Fortune
+                            - Silk_Touch
+                        Enchantments_Blacklist:
+                            - Vanishing_Curse
+                """);
+
+        final FishingTreasureConfig config = new FishingTreasureConfig(dataFolder);
+        final FishingTreasureBook book = (FishingTreasureBook) findByMaterial(
+                config.fishingRewards.get(Rarity.EPIC), "enchanted_book");
+
+        assertNotNull(book, "the hand-written ENCHANTED_BOOK must load into its configured rarity");
+        assertEquals(Set.of("fortune", "silk_touch"), book.getWhitelistedEnchantmentIds(),
+                "filter names must lower-case to registry paths, as the Magic Hunter table does");
+        assertEquals(Set.of("vanishing_curse"), book.getBlacklistedEnchantmentIds());
+        assertEquals(250, book.getXp());
+        assertEquals(1, book.getDrop().getAmount(), "a configured Amount is ignored for books");
+        assertTrue(book.getDrop().getLore().isEmpty(), "configured Lore is ignored for books");
     }
 
     @Test

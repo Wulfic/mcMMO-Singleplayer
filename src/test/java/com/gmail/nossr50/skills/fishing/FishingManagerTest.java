@@ -479,4 +479,74 @@ class FishingManagerTest {
         assertTrue(fishingManager.selectMagicHunterEnchants(List.of(),
                 (selected, candidate) -> false, bound -> 0).isEmpty());
     }
+
+    @Test
+    void bookEnchantmentIsDrawnUniformlyFromThePool() {
+        final List<EnchantmentTreasure> pool = List.of(
+                new EnchantmentTreasure("efficiency", 1),
+                new EnchantmentTreasure("efficiency", 2),
+                new EnchantmentTreasure("silk_touch", 1));
+        final List<Integer> bounds = new ArrayList<>();
+
+        final Optional<EnchantmentTreasure> picked = fishingManager.pickBookEnchantment(pool,
+                bound -> {
+                    bounds.add(bound);
+                    return 2;
+                });
+
+        assertEquals(Optional.of(new EnchantmentTreasure("silk_touch", 1)), picked);
+        assertEquals(List.of(3), bounds,
+                "one draw over the whole pool — legacy's shuffle-then-index collapses to the index");
+    }
+
+    @Test
+    void bookEnchantmentPoolWeightsByLevelCount() {
+        // The pool holds one entry per (enchantment, level), so an index inside Efficiency's five
+        // entries can never land on Silk Touch: high-max-level enchantments really are likelier.
+        final List<EnchantmentTreasure> pool = new ArrayList<>();
+        for (int level = 1; level <= 5; level++) {
+            pool.add(new EnchantmentTreasure("efficiency", level));
+        }
+        pool.add(new EnchantmentTreasure("silk_touch", 1));
+
+        for (int index = 0; index < 5; index++) {
+            final int draw = index;
+            assertEquals("efficiency",
+                    fishingManager.pickBookEnchantment(pool, bound -> draw).orElseThrow()
+                            .enchantmentId());
+        }
+        assertEquals("silk_touch", fishingManager.pickBookEnchantment(pool, bound -> 5)
+                .orElseThrow().enchantmentId());
+    }
+
+    @Test
+    void fishermanDietAddsOneFoodPointPerRank() {
+        // RetroMode skillranks.yml: Fisherman's Diet ranks 1..5 unlock at fishing 200/400/600/800/1000.
+        // Cooked salmon restores 6 nutrition on its own; each rank adds one more point on top.
+        atFishingLevel(0);
+        assertEquals(6, fishingManager.handleFishermanDiet(6), "unranked -> vanilla restoration");
+        atFishingLevel(200);
+        assertEquals(7, fishingManager.handleFishermanDiet(6), "rank 1 -> +1");
+        atFishingLevel(1000);
+        assertEquals(11, fishingManager.handleFishermanDiet(6), "rank 5 -> +5");
+    }
+
+    @Test
+    void fishermanDietCoversLegacysFishedFoodsOnly() {
+        assertTrue(FishingManager.isFishermansDietFood("cod"));
+        assertTrue(FishingManager.isFishermansDietFood("cooked_salmon"));
+        assertTrue(FishingManager.isFishermansDietFood("tropical_fish"));
+        // Pufferfish is deliberately absent upstream, and farmed food belongs to Farmer's Diet.
+        assertFalse(FishingManager.isFishermansDietFood("pufferfish"));
+        assertFalse(FishingManager.isFishermansDietFood("bread"));
+    }
+
+    @Test
+    void bookEnchantmentOfAnEmptyPoolIsEmptyRatherThanAThrow() {
+        // Upstream calls nextInt(0) here and throws; the book path guards instead and drops the
+        // book unenchanted (reachable only via a blacklist covering the whole registry).
+        assertTrue(fishingManager.pickBookEnchantment(List.of(), bound -> {
+            throw new AssertionError("an empty pool must not be drawn from");
+        }).isEmpty());
+    }
 }

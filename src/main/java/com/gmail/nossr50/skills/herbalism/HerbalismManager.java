@@ -11,6 +11,7 @@ import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.skills.SkillUtils;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.List;
 import java.util.Locale;
@@ -28,11 +29,12 @@ import org.jetbrains.annotations.NotNull;
  * adapters land (same convention as {@link com.gmail.nossr50.skills.mining.MiningManager} and
  * {@link com.gmail.nossr50.skills.woodcutting.WoodcuttingManager}).
  *
+ * <p><b>Farmer's Diet is wired</b> ({@link #farmersDiet(int)} + {@link #isFarmersDietFood(String)},
+ * driven from {@code fabric.listeners.FoodListener}).
+ *
  * <p><b>Deferred until the block-break / held-item / inventory / item-spawn / scheduler adapters
  * (PORT Phase 10/11):</b>
  * <ul>
- *   <li>{@code farmersDiet} — needs {@code SkillUtils.handleFoodSkills} (unported) and a food-event
- *       adapter;</li>
  *   <li>{@code processHerbalismBlockBreakEvent} / {@code processHerbalismOnBlocksBroken} /
  *       {@code getBrokenHerbalismBlocks} / the chorus-tree and cactus multi-block traversal — needs
  *       live {@code Block.getRelative}, the (unported) block-tracker/{@code MaterialMapStore}, and
@@ -89,8 +91,50 @@ public class HerbalismManager extends SkillManager {
     private static final Set<String> BIZARRE_AGEABLES = Set.of("cactus", "kelp", "sugar_cane",
             "bamboo");
 
+    /**
+     * Foods whose hunger restoration Farmer's Diet improves, by vanilla registry path. Mirrors legacy
+     * {@code EntityListener#onFoodLevelChange}'s two Herbalism switch groups plus its separate
+     * {@code glow_berries} arm — upstream split them by how "common" the food is and commented that the
+     * groups carry 3 vs 5 ranks, but <b>both groups call {@code farmersDiet} identically</b>, so the
+     * split is vestigial and collapses into one set here. Foods upstream never listed (apple, sweet
+     * berries, dried kelp…) stay out on purpose.
+     */
+    private static final Set<String> FARMERS_DIET_FOODS = Set.of(
+            "baked_potato", "beetroot", "bread", "carrot", "golden_carrot", "mushroom_stew",
+            "pumpkin_pie", "cookie", "melon_slice", "poisonous_potato", "potato", "glow_berries");
+
     public HerbalismManager(@NotNull McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.HERBALISM);
+    }
+
+    /**
+     * Whether a food improves with Farmer's Diet.
+     *
+     * @param itemRegistryPath the eaten item's vanilla registry path (e.g. {@code "bread"})
+     * @return whether Farmer's Diet applies to it
+     */
+    public static boolean isFarmersDietFood(@NotNull String itemRegistryPath) {
+        return FARMERS_DIET_FOODS.contains(itemRegistryPath);
+    }
+
+    /**
+     * Permission gate for Farmer's Diet, mirroring the {@code isSubSkillEnabled} check legacy makes at
+     * the food-event call site. There is no rank-unlock gate: rank 0 simply adds nothing.
+     */
+    public boolean canUseFarmersDiet() {
+        return Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.HERBALISM_FARMERS_DIET);
+    }
+
+    /**
+     * Farmer's Diet — extra hunger restored from farmed foods, one point per rank (legacy
+     * {@code farmersDiet}).
+     *
+     * @param eventFoodLevel the food restoration before the bonus
+     * @return the food restoration after the bonus
+     */
+    public int farmersDiet(int eventFoodLevel) {
+        return SkillUtils.handleFoodSkills(mmoPlayer, eventFoodLevel,
+                SubSkillType.HERBALISM_FARMERS_DIET);
     }
 
     /**

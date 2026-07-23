@@ -5,6 +5,7 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.treasure.EnchantmentTreasure;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
+import com.gmail.nossr50.datatypes.treasure.FishingTreasureBook;
 import com.gmail.nossr50.datatypes.treasure.Rarity;
 import com.gmail.nossr50.datatypes.treasure.ShakeTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
@@ -21,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -88,10 +90,13 @@ import net.minecraft.util.math.random.Random;
  * {@code Enchantments_Rarity} table. See that method for the three MC-typed pieces it owns (dynamic
  * registry resolution, applicability filtering, and the unsafe enchant write).
  *
- * <p><b>Still deferred:</b> enchanted-book treasures (legacy {@code FishingTreasureBook} draws a random
- * enchantment from the whole registry under a per-book whitelist/blacklist, a different mechanism from
- * the Magic Hunter table — see {@code FishingTreasureConfig}) and the exploit item-removal punishment
- * (we skip the XP <i>and</i> the treasure roll on an exploiting catch — the same early-return gate).
+ * <p><b>Enchanted-book treasures are wired here too</b> ({@link #applyBookEnchantment}): a caught
+ * {@link FishingTreasureBook} always arrives carrying one enchantment drawn from the whole registry
+ * under its own whitelist/blacklist. It is a <i>different</i> mechanism from Magic Hunter, and the two
+ * are mutually exclusive — see that method.
+ *
+ * <p><b>Still deferred:</b> the exploit item-removal punishment (we skip the XP <i>and</i> the treasure
+ * roll on an exploiting catch — the same early-return gate).
  */
 public final class FishingListener {
 
@@ -168,7 +173,14 @@ public final class FishingListener {
         final ItemStack treasureStack = built.get();
         applyRandomWear(treasureStack, rng);
 
-        if (maybeApplyMagicHunter(serverPlayer, fishingManager, treasureStack, rng)) {
+        // A book is enchanted by its own mechanism and never by Magic Hunter — legacy's
+        // `treasure instanceof FishingTreasureBook` branch in processFishing. Both paths report
+        // whether anything landed, and both send the same notification when it did.
+        final boolean enchanted = rolled.get() instanceof FishingTreasureBook book
+                ? applyBookEnchantment(serverPlayer, fishingManager, book, treasureStack, rng)
+                : maybeApplyMagicHunter(serverPlayer, fishingManager, treasureStack, rng);
+
+        if (enchanted) {
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
                     "Fishing.Ability.TH.MagicFound");
         }
@@ -180,6 +192,105 @@ public final class FishingListener {
         caught.add(treasureStack);
 
         fishingManager.awardFishingTreasureXP(rolled.get().getXp());
+    }
+
+    /**
+     * Enchant a fished {@link FishingTreasureBook}. The MC-typed half of legacy
+     * {@code ItemUtils.createEnchantBook}: a caught book always arrives carrying exactly one
+     * enchantment, drawn from the <i>whole</i> enchantment registry under the book's own
+     * whitelist/blacklist — not from the curated Magic Hunter table, which this path never touches.
+     *
+     * <p>Three things need Minecraft here, and the rest is MC-free:
+     *
+     * <ol>
+     *   <li><b>Enumerating the registry.</b> Legacy walked {@code Enchantment.values()} at config
+     *       load; 1.21's enchantment registry is dynamic (datapack-driven), so the walk moves here and
+     *       reads the player's {@code DynamicRegistryManager}. That is also why the whitelist/blacklist
+     *       are matched against live paths — see
+     *       {@link FishingTreasureBook#resolveAllowedEnchantmentIds}, which reproduces legacy's
+     *       drop-unknown-names-then-check-empty precedence.</li>
+     *   <li><b>Expanding each allowed enchantment over its levels</b> ({@code 1..getMaxLevel()}), the
+     *       weighting legacy's {@code legalEnchantments} list encodes — only the registry knows an
+     *       enchantment's maximum level.</li>
+     *   <li><b>Writing it as a <i>stored</i> enchantment.</b> {@code EnchantmentHelper} picks the
+     *       component for us: its private {@code getEnchantmentsComponentType} is literally
+     *       {@code isOf(ENCHANTED_BOOK) ? STORED_ENCHANTMENTS : ENCHANTMENTS} (bytecode-verified), and
+     *       both {@code getEnchantments} and {@code set} route through it — so the same
+     *       {@code ItemEnchantmentsComponent.Builder} surface Magic Hunter and Arcane Forging use
+     *       writes a book's stored enchantment with no book/tool branch of our own. That is legacy's
+     *       {@code EnchantmentStorageMeta#addStoredEnchant}.</li>
+     * </ol>
+     *
+     * <p><b>Legacy's {@code allowUnsafeEnchantments} flag is inert on this path and is not read.</b>
+     * Upstream passes it as {@code addStoredEnchant}'s {@code ignoreLevelRestriction} argument, but the
+     * level always comes from the {@code 1..getMaxLevel()} expansion above, so the restriction it would
+     * waive can never bind. (It is read where it does matter — Arcane Forging and Arcane Salvage, see
+     * {@code RepairSalvageListener}.)
+     *
+     * <p>Unlike Magic Hunter there is no rank or sub-skill gate: the book is a Treasure Hunter reward
+     * like any other, and the enchantment is part of what the reward <i>is</i>, so drawing it is not a
+     * separate perk. Legacy likewise reaches this with no further check.
+     *
+     * <p><b>Known simplification:</b> the pool is keyed by registry <i>path</i>, with the namespace
+     * dropped, because that is what the config's filters name — legacy matches on Bukkit's
+     * {@code getKey().getKey()}, which is likewise the namespace-less key. If a mod ever registered an
+     * enchantment whose path collides with a vanilla one ({@code somemod:fortune}), only one of the two
+     * would reach the pool. Upstream would carry both and let the filter match either; the difference
+     * is unreachable in this singleplayer port's vanilla registry and is not built for.
+     *
+     * @return whether an enchantment was applied (the caller sends the notification if so)
+     */
+    private static boolean applyBookEnchantment(ServerPlayerEntity serverPlayer,
+            FishingManager fishingManager, FishingTreasureBook book, ItemStack treasureStack,
+            ThreadLocalRandom rng) {
+        final Map<String, RegistryEntry<Enchantment>> byId = new LinkedHashMap<>();
+        for (RegistryEntry<Enchantment> entry : serverPlayer.getRegistryManager()
+                .getOrThrow(RegistryKeys.ENCHANTMENT).getIndexedEntries()) {
+            entry.getKey().ifPresent(key -> byId.put(key.getValue().getPath(), entry));
+        }
+        warnUnknownWhitelistedEnchantments(book, byId.keySet());
+
+        final List<EnchantmentTreasure> pool = new ArrayList<>();
+        for (String enchantmentId : book.resolveAllowedEnchantmentIds(byId.keySet())) {
+            final int maxLevel = byId.get(enchantmentId).value().getMaxLevel();
+            for (int level = 1; level <= maxLevel; level++) {
+                pool.add(new EnchantmentTreasure(enchantmentId, level));
+            }
+        }
+
+        final Optional<EnchantmentTreasure> picked = fishingManager.pickBookEnchantment(pool,
+                rng::nextInt);
+        if (picked.isEmpty()) {
+            McMMOMod.LOGGER.warn("A fished enchanted book had no legal enchantment to roll — its"
+                    + " Enchantments_Blacklist in fishing_treasures.yml excludes every enchantment"
+                    + " this world has. Dropping the book unenchanted.");
+            return false;
+        }
+
+        final ItemEnchantmentsComponent.Builder builder = new ItemEnchantmentsComponent.Builder(
+                EnchantmentHelper.getEnchantments(treasureStack));
+        builder.set(byId.get(picked.get().enchantmentId()), picked.get().level());
+        EnchantmentHelper.set(treasureStack, builder.build());
+        return true;
+    }
+
+    /**
+     * Report whitelist entries that name no enchantment in this world — legacy's load-time
+     * "[Fishing Treasure Init] Could not find any enchantments which matched..." debug, moved to drop
+     * time because the registry does not exist at config load. Worth a warning rather than a debug: a
+     * whitelist whose every name is a typo silently degrades to "allow everything" (the precedence
+     * {@link FishingTreasureBook#resolveAllowedEnchantmentIds} preserves), so the operator sees a
+     * working book doing the opposite of what they configured.
+     */
+    private static void warnUnknownWhitelistedEnchantments(FishingTreasureBook book,
+            Set<String> knownEnchantmentIds) {
+        for (String enchantmentId : book.getWhitelistedEnchantmentIds()) {
+            if (!knownEnchantmentIds.contains(enchantmentId)) {
+                McMMOMod.LOGGER.warn("Enchanted-book Enchantments_Whitelist entry '{}' in"
+                        + " fishing_treasures.yml names no enchantment in this world's registry —"
+                        + " ignoring it.", enchantmentId);
+            }
+        }
     }
 
     /**
