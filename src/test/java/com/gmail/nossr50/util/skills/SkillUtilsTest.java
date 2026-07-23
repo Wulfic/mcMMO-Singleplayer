@@ -5,11 +5,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.skills.repair.repairables.Repairable;
+import com.gmail.nossr50.skills.repair.repairables.RepairableManager;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.nio.file.Path;
 import net.minecraft.component.DataComponentTypes;
@@ -95,6 +98,67 @@ class SkillUtilsTest {
         SkillUtils.handleDurabilityChange(item, max, 0.5);
 
         assertEquals(max / 2, item.getDurability());
+    }
+
+    // --- RepairableManager max-durability override (legacy K4) ---------------
+
+    @Test
+    void durabilityChangeClampsToTheRepairableConfiguredMaxDurability() {
+        ItemStack pick = new ItemStack(Items.DIAMOND_PICKAXE);
+        PlatformItem item = new PlatformItem(pick);
+        assertTrue(item.getMaxDurability() > 100, "vanilla diamond pickaxe outlasts the override");
+
+        Repairable repairable = mock(Repairable.class);
+        when(repairable.getMaximumDurability()).thenReturn((short) 100);
+        RepairableManager repairableManager = mock(RepairableManager.class);
+        when(repairableManager.getRepairable("diamond_pickaxe")).thenReturn(repairable);
+        McMMOMod.setRepairableManager(repairableManager);
+        try {
+            SkillUtils.handleDurabilityChange(item, 5000);
+
+            // The configured 100, not the vanilla 1561 — and looked up by bare registry path.
+            assertEquals(100, item.getDurability());
+            verify(repairableManager).getRepairable("diamond_pickaxe");
+        } finally {
+            McMMOMod.setRepairableManager(null);
+        }
+    }
+
+    @Test
+    void durabilityChangeFallsBackToVanillaMaxWhenTheItemIsNotRepairable() {
+        ItemStack pick = new ItemStack(Items.DIAMOND_PICKAXE);
+        PlatformItem item = new PlatformItem(pick);
+        int vanillaMax = item.getMaxDurability();
+
+        RepairableManager repairableManager = mock(RepairableManager.class);
+        when(repairableManager.getRepairable("diamond_pickaxe")).thenReturn(null);
+        McMMOMod.setRepairableManager(repairableManager);
+        try {
+            SkillUtils.handleDurabilityChange(item, vanillaMax * 10.0);
+
+            assertEquals(vanillaMax, item.getDurability());
+        } finally {
+            McMMOMod.setRepairableManager(null);
+        }
+    }
+
+    @Test
+    void armorDurabilityChangeAlsoHonoursTheRepairableOverride() {
+        ItemStack chest = new ItemStack(Items.DIAMOND_CHESTPLATE);
+        PlatformItem item = new PlatformItem(chest);
+
+        Repairable repairable = mock(Repairable.class);
+        when(repairable.getMaximumDurability()).thenReturn((short) 40);
+        RepairableManager repairableManager = mock(RepairableManager.class);
+        when(repairableManager.getRepairable("diamond_chestplate")).thenReturn(repairable);
+        McMMOMod.setRepairableManager(repairableManager);
+        try {
+            SkillUtils.handleArmorDurabilityChange(item, 5000, 1.0);
+
+            assertEquals(40, item.getDurability());
+        } finally {
+            McMMOMod.setRepairableManager(null);
+        }
     }
 
     @Test

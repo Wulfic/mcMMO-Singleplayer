@@ -13,6 +13,7 @@ import com.gmail.nossr50.datatypes.treasure.ShakeTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
@@ -73,6 +74,7 @@ public class FishingManager extends SkillManager {
             "cod", "salmon", "tropical_fish", "cooked_cod", "cooked_salmon");
 
     private long lastFishCaughtTimestamp = 0L;
+    private long lastWarned = 0L;
     private CastBox lastCastBox;
     private boolean sameTarget;
     private int fishCaughtCounter = 1;
@@ -131,14 +133,21 @@ public class FishingManager extends SkillManager {
 
     /**
      * Whether the player has caught a fish within the last second. Mutates the internal
-     * last-catch timestamp as a side effect (legacy parity). The "you're fishing too fast" warning
-     * message is dropped — PORT once {@code NotificationManager}/{@code LocaleLoader.getText} land.
+     * last-catch timestamp as a side effect (legacy parity), and warns the player that they are
+     * scaring the fish — throttled to at most one warning per second by its own timestamp, so a spam
+     * of rapid recasts produces one message rather than one per catch.
      *
      * @return whether the player has had a previous catch within the last second
      */
     public boolean isFishingTooOften() {
         long currentTime = System.currentTimeMillis();
         boolean hasFishedRecently = lastFishCaughtTimestamp + 1000 > currentTime;
+
+        if (hasFishedRecently && currentTime > lastWarned + 1000) {
+            NotificationManager.sendPlayerInformationChatOnly(mmoPlayer, "Fishing.Scared");
+            lastWarned = currentTime;
+        }
+
         lastFishCaughtTimestamp = currentTime;
         return hasFishedRecently;
     }
@@ -147,6 +156,10 @@ public class FishingManager extends SkillManager {
      * Updates the fishing-exploit tracking state for a new cast, mirroring legacy
      * {@code processExploiting}. Retargeted from a Bukkit {@code Vector}/{@code BoundingBox} to raw
      * coordinates so the state machine is fully MC-free and unit-testable.
+     *
+     * <p>Also issues legacy's early warning: on the catch immediately <em>before</em> the overfish
+     * limit ({@code fishCaughtCounter + 1 == limit}) the player is told the spot is running dry, giving
+     * them one catch to move before {@link #isExploitingFishing()} starts confiscating.
      *
      * @param castX the X coordinate of the center of the cast
      * @param castY the Y coordinate of the center of the cast
@@ -164,6 +177,13 @@ public class FishingManager extends SkillManager {
 
         if (!this.sameTarget) {
             lastCastBox = newCastBox;
+        }
+
+        if (fishCaughtCounter + 1 == McMMOMod.getExperienceConfig()
+                .getFishingExploitingOptionOverFishLimit()) {
+            NotificationManager.sendPlayerInformationChatOnly(mmoPlayer, "Fishing.LowResourcesTip",
+                    String.valueOf(McMMOMod.getExperienceConfig()
+                            .getFishingExploitingOptionMoveRange()));
         }
     }
 

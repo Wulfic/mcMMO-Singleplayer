@@ -6,6 +6,8 @@ import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.skills.repair.repairables.Repairable;
+import com.gmail.nossr50.skills.repair.repairables.RepairableManager;
 import com.gmail.nossr50.util.Misc;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -30,8 +32,6 @@ import org.jetbrains.annotations.Nullable;
  *       {@code RepairConfig}/{@code SalvageConfig} tables and the vanilla recipe iterator (K8).</li>
  *   <li>{@code calculateLengthDisplayValues} / {@code sendSkillMessage} / {@code isSkill} — display and
  *       multiplayer-broadcast surfaces not needed by any ported body.</li>
- *   <li>The {@code RepairableManager} custom max-durability override inside
- *       {@link #handleDurabilityChange} — Repair config unported, so vanilla max durability is used.</li>
  * </ul>
  */
 public final class SkillUtils {
@@ -119,9 +119,7 @@ public final class SkillUtils {
             return;
         }
 
-        // PORT K8: RepairableManager custom max-durability override (Repair config unported) — vanilla
-        // max durability is used; only differs for items with a configured repairable override.
-        int maxDurability = item.getMaxDurability();
+        int maxDurability = maxDurabilityOf(item);
         durabilityModifier = (int) Math.min(
                 durabilityModifier / (item.getUnbreakingLevel() + 1),
                 maxDurability * maxDamageModifier);
@@ -143,12 +141,37 @@ public final class SkillUtils {
             return;
         }
 
-        int maxDurability = item.getMaxDurability();
+        int maxDurability = maxDurabilityOf(item);
         durabilityModifier = (int) Math.min(
                 durabilityModifier * (0.6 + 0.4 / (item.getUnbreakingLevel() + 1)),
                 maxDurability * maxDamageModifier);
 
         item.setDurability((int) Math.min(item.getDurability() + durabilityModifier, maxDurability));
+    }
+
+    /**
+     * The maximum durability skill damage is measured against: a registered {@link Repairable}'s
+     * configured {@code MaximumDurability} when {@code repair.yml} names the item, otherwise the
+     * vanilla value (legacy's {@code mcMMO.getRepairableManager().isRepairable(type) ? ... :
+     * type.getMaxDurability()}, applied identically by both durability formulas).
+     *
+     * <p><b>Inert for every shipped repairable, by construction.</b> This port's {@code RepairConfig}
+     * resolves {@code MaximumDurability} from the item's own {@code getMaxDamage()} and only consults
+     * the config key when vanilla reports no durability at all, so the two sources agree for every
+     * damageable item in the bundled {@code repair.vanilla.yml}. The override therefore only bites on a
+     * user-edited config that registers a non-damageable item as repairable — which is exactly the case
+     * legacy's branch existed for, so it is wired rather than collapsed.
+     *
+     * @param item the stack being damaged
+     * @return the max durability to clamp against
+     */
+    private static int maxDurabilityOf(PlatformItem item) {
+        final RepairableManager repairableManager = McMMOMod.getRepairableManager();
+        if (repairableManager == null) {
+            return item.getMaxDurability(); // configs not loaded (no world session).
+        }
+        final Repairable repairable = repairableManager.getRepairable(item.getTypePath());
+        return repairable != null ? repairable.getMaximumDurability() : item.getMaxDurability();
     }
 
     /**

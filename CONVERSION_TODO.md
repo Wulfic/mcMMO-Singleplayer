@@ -15,8 +15,8 @@ deviations, and the 15 upstream defects found on the way — is in
 | §B — every skill earns XP | ✅ feature-complete |
 | §C — combat on-hit sub-skills | ✅ complete |
 | §D/§E — gathering bodies, super abilities, runnables | ✅ all ported |
-| Unit suite | ✅ **712 green** |
-| Headless boot | ✅ `Done (1.097s)`, 0 exceptions, 0 mixin failures |
+| Unit suite | ✅ **717 green** |
+| Headless boot | ✅ `Done (1.159s)`, 0 exceptions, 0 mixin failures, shutdown verified |
 | **§G — real gameplay verification** | ❌ **never done** |
 
 > **🔴 The critical path is §G, not more code.** Pass 1's remaining code work is a short tail of
@@ -53,6 +53,13 @@ None of this can be closed by a headless boot. It needs a real client session.
 - [ ] Interaction-driven bodies that no headless test can reach: Green Thumb block / Shroom Thumb /
       berry-bush harvest, Hylian Luck's sapling + flower-pot **tag** branches (unit tests cover only the
       hardcoded flower/bush members), Call of the Wild summons, a real brew, a real fished-up book.
+- [ ] **Overfishing now confiscates the catch.** Past `ExploitFix.Fishing.OverFishLimit` (10) casts at
+      one spot the fish *and* the vanilla XP orbs are destroyed, not merely unpaid — plus two warnings
+      the port previously dropped ("scaring the fish", "low resources"). Verify the two warnings read
+      sensibly and the confiscation isn't reachable by accident during normal play.
+- [ ] **Anything that reads the player through `mmoPlayer.getPlayer()` after a death.** See the stale
+      `PlatformPlayer` handle item under *Newly found* — a death/respawn cycle is the cheapest way to
+      confirm or clear it.
 
 ---
 
@@ -61,8 +68,10 @@ None of this can be closed by a headless boot. It needs a real client session.
 Nothing here blocks §G.
 
 ### §A — keystone residuals
-- [ ] **K4 `SkillUtils`** — two leftovers: the legacy Haste-*potion* fallback branch (unreachable with
-      the bundled `hidden.yml`, so this is optional) and the `RepairableManager` max-durability override.
+- [ ] **K4 `SkillUtils`** — one leftover: the legacy Haste-*potion* fallback branch of
+      `handleAbilitySpeedIncrease`, unreachable with the bundled `hidden.yml`
+      (`Options.EnchantmentBuffs=true`), so this is optional. *(The `RepairableManager` max-durability
+      override is now wired — see `CONVERSION_DONE.md`.)*
 - [ ] **K9 placed-block tracker — cross-restart persistence.** In-memory only today, dropped at world
       close, so a placed block re-mined **after a restart** pays out again. The in-session
       place→mine→repeat farm is fully closed; this is the residual hole. Legacy used region files
@@ -74,13 +83,23 @@ Nothing here blocks §G.
       `BrewingStandBlockEntity#canCraft` is a static with no `BlockPos`, so the owner's tier cannot be
       resolved there without risking a never-completing brew loop. Recipe recognition is currently
       tier-permissive (any player can brew any mcMMO potion). Needs a different seam.
-- [ ] **Repair** — the enchanted-repair-material avoidance branch (`getAllowEnchantedRepairMaterials`),
-      and calling `SkillUtils.removeAbilityBuff` before repairing a haste-boosted tool.
-- [ ] **Fishing** — the exploit item-removal punishment (the spam/scarcity *detection* is already wired;
-      only the confiscation half is missing).
 
 ### §E — cosmetic
 - [ ] `ExperienceBarHideTask` / XP-bar `processPostXpEvent`. Cosmetic; fine to slip to Pass 2.
+
+### Newly found, unscheduled
+
+- [ ] **⚠️ `PlatformPlayer` holds a `ServerPlayerEntity` for the whole session and is never rebound.**
+      `PlayerSessionListener` builds it once on `ServerPlayConnectionEvents.JOIN`, but a respawn
+      replaces the vanilla entity without re-firing that event, so every MC-typed call through
+      `mmoPlayer.getPlayer()` (sounds, action-bar/chat notifications, main-hand reads, the Super/Giga
+      Breaker dig-boost sweep) would target a dead entity after the first death. **Not verified in a
+      live world** — it is inferred from the join-only binding, and it is exactly the class of bug §G
+      exists to catch. Fix shape if confirmed: rebind the handle on `ServerPlayerEvents.AFTER_RESPAWN`.
+- [ ] **Upstream defect #16 — `potions.yml` ships the pre-1.13 name `WATER_LILY`.** Boot logs
+      `No vanilla item for material name 'WATER_LILY'` (one WARN, one ingredient), so that Alchemy
+      ingredient silently does nothing; the modern registry path is `lily_pad`. Same shape as #1/#2/#10
+      (a stale Bukkit key in shipped YAML). Decide: alias it or strip the ingredient.
 
 ---
 

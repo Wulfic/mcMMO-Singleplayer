@@ -70,9 +70,8 @@ import org.jetbrains.annotations.Nullable;
  * reads and writes.
  *
  * <p><b>Deferred</b> (breadcrumbs inline): the custom-model-data reject
- * ({@code CustomItemSupportConfig} unported), the enchanted-repair-material avoidance branch, the
- * repair/salvage-check events (K5, no singleplayer listeners), and the block-place "you placed an
- * anvil" notification (cosmetic, Pass 2).
+ * ({@code CustomItemSupportConfig} unported), the repair/salvage-check events (K5, no singleplayer
+ * listeners), and the block-place "you placed an anvil" notification (cosmetic, Pass 2).
  */
 public final class RepairSalvageListener {
 
@@ -182,13 +181,10 @@ public final class RepairSalvageListener {
             return; // misconfigured repairable — nothing to consume.
         }
         final Item repairItem = repairItemOpt.get();
-        final int materialSlot = findMaterialSlot(serverPlayer.getInventory(), repairItem);
+        final PlayerInventory inventory = serverPlayer.getInventory();
+        int materialSlot = findMaterialSlot(inventory, repairItem, false);
         if (materialSlot < 0) {
-            final String prettyName = repairable.getRepairMaterialPrettyName() != null
-                    ? repairable.getRepairMaterialPrettyName()
-                    : StringUtils.getPrettyString(repairable.getRepairMaterial());
-            NotificationManager.sendPlayerInformation(mmoPlayer,
-                    NotificationType.SUBSKILL_MESSAGE_FAILED, "Skills.NeedMore.Extra", prettyName, "");
+            notifyMissingRepairMaterial(mmoPlayer, repairable);
             return;
         }
 
@@ -199,9 +195,24 @@ public final class RepairSalvageListener {
             return;
         }
 
-        // PORT: SkillUtils.removeAbilityBuff(item) — clear a Super/Giga Breaker Efficiency buff before
-        // repairing a boosted tool. Deferred; only matters when repairing mid-super-ability.
-        // PORT: the enchanted-repair-material avoidance branch (getAllowEnchantedRepairMaterials).
+        // Clear a live Super/Giga Breaker dig-speed buff off the tool before repairing it (legacy
+        // `SkillUtils.removeAbilityBuff(item)`). Without this the repair preserves the temporary
+        // Efficiency levels as if they were the tool's own, making the buff permanent. Passed the
+        // stack we already hold rather than re-reading the main hand, so the two can never diverge.
+        mmoPlayer.getPlayer().removeSuperAbilityBoost(item);
+
+        // Enchanted repair materials: a player may hold an enchanted copy of the repair material
+        // (creative, /enchant, or a datapack-granted item). Unless advanced.yml allows consuming them,
+        // fall back to the first *unenchanted* stack, and refuse the repair when only enchanted ones
+        // are on hand — legacy reports the identical "you need more material" failure either way.
+        if (!McMMOMod.getAdvancedConfig().getAllowEnchantedRepairMaterials()
+                && isEnchanted(inventory.getStack(materialSlot))) {
+            materialSlot = findMaterialSlot(inventory, repairItem, true);
+            if (materialSlot < 0) {
+                notifyMissingRepairMaterial(mmoPlayer, repairable);
+                return;
+            }
+        }
 
         // Arcane Forging: the repair may cost the item some or all of its enchantments. Legacy gates
         // the whole check on May_Lose_Enchants (off ⇒ repairs never touch enchantments) and on the
@@ -217,7 +228,7 @@ public final class RepairSalvageListener {
                 repairManager.repairCalculate(startDurability, baseRepairAmount, superRepair);
 
         // Consume one repair material.
-        serverPlayer.getInventory().removeStack(materialSlot, 1);
+        inventory.removeStack(materialSlot, 1);
 
         // Award Repair XP (MC-free formula on the manager).
         repairManager.awardRepairXp(startDurability, newDurability, repairable);
@@ -536,14 +547,45 @@ public final class RepairSalvageListener {
      * First inventory slot holding {@code material}, or {@code -1} if none. Scans every slot (matching
      * legacy {@code PlayerInventory#contains}); {@link PlayerInventory#removeStack(int, int)} then
      * consumes one from the returned slot.
+     *
+     * @param requireUnenchanted skip enchanted stacks, for the
+     *     {@code Repair.AllowEnchantedRepairMaterials} avoidance pass (legacy's second, filtered scan)
      */
-    private static int findMaterialSlot(PlayerInventory inventory, Item material) {
+    private static int findMaterialSlot(PlayerInventory inventory, Item material,
+            boolean requireUnenchanted) {
         for (int slot = 0; slot < inventory.size(); slot++) {
             final ItemStack stack = inventory.getStack(slot);
-            if (!stack.isEmpty() && stack.isOf(material)) {
-                return slot;
+            if (stack.isEmpty() || !stack.isOf(material)) {
+                continue;
             }
+            if (requireUnenchanted && isEnchanted(stack)) {
+                continue;
+            }
+            return slot;
         }
         return -1;
+    }
+
+    /**
+     * Whether a candidate repair material carries any enchantment. Legacy read Bukkit's
+     * {@code ItemStack#getEnchantments()} (item enchantments only); {@link EnchantmentHelper} also
+     * treats an enchanted book's {@code STORED_ENCHANTMENTS} as enchanted, which is the intent of the
+     * knob (do not consume an enchanted item as scrap) and only reachable via a custom repair.yml.
+     */
+    private static boolean isEnchanted(ItemStack stack) {
+        return !EnchantmentHelper.getEnchantments(stack).isEmpty();
+    }
+
+    /**
+     * The shared "you don't have the repair material" failure, sent both when the player holds none at
+     * all and when {@code Repair.AllowEnchantedRepairMaterials} rejects every copy they do hold —
+     * legacy sends the same {@code Skills.NeedMore.Extra} message on both paths.
+     */
+    private static void notifyMissingRepairMaterial(McMMOPlayer mmoPlayer, Repairable repairable) {
+        final String prettyName = repairable.getRepairMaterialPrettyName() != null
+                ? repairable.getRepairMaterialPrettyName()
+                : StringUtils.getPrettyString(repairable.getRepairMaterial());
+        NotificationManager.sendPlayerInformation(mmoPlayer,
+                NotificationType.SUBSKILL_MESSAGE_FAILED, "Skills.NeedMore.Extra", prettyName, "");
     }
 }
