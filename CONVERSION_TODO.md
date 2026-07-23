@@ -15,7 +15,7 @@ deviations, and the 15 upstream defects found on the way — is in
 | §B — every skill earns XP | ✅ feature-complete |
 | §C — combat on-hit sub-skills | ✅ complete |
 | §D/§E — gathering bodies, super abilities, runnables | ✅ all ported |
-| Unit suite | ✅ **726 green** |
+| Unit suite | ✅ **750 green** |
 | Headless boot | ✅ `Done (1.159s)`, 0 exceptions, 0 mixin failures, shutdown verified |
 | **§G — real gameplay verification** | ❌ **never done** |
 
@@ -57,6 +57,10 @@ None of this can be closed by a headless boot. It needs a real client session.
       one spot the fish *and* the vanilla XP orbs are destroyed, not merely unpaid — plus two warnings
       the port previously dropped ("scaring the fish", "low resources"). Verify the two warnings read
       sensibly and the confiscation isn't reachable by accident during normal play.
+- [ ] **Placed blocks stay ineligible across a world reload.** Place ore, quit to title, reopen the
+      world, mine it: it must pay no XP and no bonus drops. Then break a *natural* block next to it to
+      confirm the flags didn't over-apply. The store is unit-proven and boot-proven, but the
+      place→save→reload→mine loop has never been walked in a client.
 - [ ] **Anything that reads the player through `mmoPlayer.getPlayer()` after a death — and after an
       End exit.** The stale-handle bug is now fixed and unit-tested (see *Newly found*), but the fix
       itself is unobserved. Die once, then check that sounds, action-bar notifications and a super
@@ -74,11 +78,19 @@ Nothing here blocks §G.
       `handleAbilitySpeedIncrease`, unreachable with the bundled `hidden.yml`
       (`Options.EnchantmentBuffs=true`), so this is optional. *(The `RepairableManager` max-durability
       override is now wired — see `CONVERSION_DONE.md`.)*
-- [ ] **K9 placed-block tracker — cross-restart persistence.** In-memory only today, dropped at world
-      close, so a placed block re-mined **after a restart** pays out again. The in-session
-      place→mine→repeat farm is fully closed; this is the residual hole. Legacy used region files
-      (`HashChunkManager`). Also still open, both rare: multi-place upper halves (double plants) are
-      unmarked, and piston-moved placed blocks are not followed.
+- [x] **K9 placed-block tracker — cross-restart persistence DONE.** New `PlacedBlockStore` writes the
+      flags to `<worldRoot>/mcmmo/placed_blocks.dat` (binary: magic + version + per-world
+      `worldKey`/count/packed `long`s), loaded at server start, saved on the autosave tick and at
+      server stop *before* the tracker is cleared. Collapses legacy's per-chunk
+      `McMMOSimpleRegionFile` shard set to one document — sound because the tracked set is bounded by
+      *still-standing hand-placed* blocks (every player break clears its position before any skill
+      branch runs), not by world size. Every load failure is fail-open + logged (missing / foreign /
+      truncated / future-version / corrupt count all leave the tracker empty rather than throwing
+      into world load); writes go via a `.tmp` + `ATOMIC_MOVE`. **Still open, both rare and
+      pre-existing:** multi-place upper halves (double plants) are unmarked, and piston-moved placed
+      blocks are not followed. Newly noted: a block removed *without* a player break (creeper blast,
+      fire, lava) leaves a stale flag, which now survives restarts too — harmless unless a natural
+      block later occupies that exact position, and self-healing the first time one is broken there.
 
 ### §B — sub-skill residuals
 - [ ] **Alchemy — Concoctions ingredient-tier gating.** *Genuinely blocked, not deferred by choice:*
@@ -116,10 +128,15 @@ Nothing here blocks §G.
       Residual (narrow, self-healing): dying with `keepInventory=false` mid-Super-Breaker drops a tool
       whose `+EnchantBuff` Efficiency is never stripped — re-activating the ability on that tool strips
       it, since activation calls `removeSuperAbilityBoostFromMainHand` first. **Confirm in §G.**
-- [ ] **Upstream defect #16 — `potions.yml` ships the pre-1.13 name `WATER_LILY`.** Boot logs
+- [x] **Upstream defect #16 — `potions.yml`'s pre-1.13 `WATER_LILY` — FIXED (aliased).** Boot logged
       `No vanilla item for material name 'WATER_LILY'` (one WARN, one ingredient), so that Alchemy
-      ingredient silently does nothing; the modern registry path is `lily_pad`. Same shape as #1/#2/#10
-      (a stale Bukkit key in shipped YAML). Decide: alias it or strip the ingredient.
+      ingredient silently did nothing upstream too; the modern registry path is `lily_pad`. Same shape
+      as #1/#2/#10 (a stale Bukkit key in shipped YAML), so it took the same remedy: a
+      `LEGACY_NAME_ALIASES` table on `Materials#idOf` — the one funnel every config material name
+      passes through — rather than editing the vendored YAML. Deliberately minimal (one entry, only
+      names the bundled configs actually contain) so it never becomes a speculative port of Bukkit's
+      whole legacy-material table. **Aliases unqualified names only:** an explicitly namespaced
+      `foo:water_lily` is another mod being specific and is not ours to rewrite.
 
 ---
 
