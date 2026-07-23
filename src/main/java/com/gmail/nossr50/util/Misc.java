@@ -17,6 +17,10 @@ public final class Misc {
     /** Game ticks per second — converts an ability duration in seconds to scheduler ticks. */
     public static final int TICK_CONVERSION_FACTOR = 20;
 
+    /** Seconds after a respawn during which XP-farm-prone payouts are withheld. Paired with
+     *  {@link com.gmail.nossr50.datatypes.player.McMMOPlayer#getRespawnATS()} — in singleplayer the
+     *  only live consumer is the Acrobatics Dodge XP gate (legacy's other one is the PvP combat-XP
+     *  branch, unreachable here). */
     public static final int PLAYER_RESPAWN_COOLDOWN_SECONDS = 5;
 
     private Misc() {

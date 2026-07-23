@@ -11,10 +11,12 @@ import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.RollResult;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.SkillManager;
+import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.random.Probability;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.skills.SkillUtils;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -168,6 +170,13 @@ public class AcrobaticsManager extends SkillManager {
      * Acrobatics XP (when the attacker is eligible) and hands back the reduced damage. Called from the
      * damage listener with the (post-armor/protection) combat damage.
      *
+     * <p>Dodge XP is additionally suppressed for {@link Misc#PLAYER_RESPAWN_COOLDOWN_SECONDS} after
+     * the player respawns (legacy's {@code cooldownExpired(mmoPlayer.getRespawnATS(), ...)} guard):
+     * a fresh respawn is a cheap way to reset the per-mob dodge-XP tracker, so the grace period
+     * closes that loop. Damage reduction is deliberately NOT gated — only the payout is, exactly as
+     * upstream. (Legacy's other consumer of this timestamp is the PvP combat-XP branch, which is
+     * unreachable in singleplayer.)
+     *
      * @param baseDamage        the incoming combat damage
      * @param attackerXpEligible whether the attacker may grant dodge XP (the listener resolves this:
      *                          the attacker is a mob, under the per-mob dodge-XP cap); a successful
@@ -182,11 +191,27 @@ public class AcrobaticsManager extends SkillManager {
         }
         final boolean rngSuccess = ProbabilityUtil.isSkillRNGSuccessful(
                 SubSkillType.ACROBATICS_DODGE, mmoPlayer);
-        final DodgeResult result = dodgeCheck(baseDamage, rngSuccess, attackerXpEligible);
+        final DodgeResult result = dodgeCheck(baseDamage, rngSuccess,
+                attackerXpEligible && isRespawnGracePeriodOver());
         if (result != null && result.getXpGain() > 0) {
             applyXpGain(result.getXpGain(), XPGainReason.PVE, XPGainSource.SELF);
         }
         return result;
+    }
+
+    /**
+     * Whether this player is far enough past their last respawn to be paid Dodge XP again (legacy
+     * {@code SkillUtils.cooldownExpired(mmoPlayer.getRespawnATS(), Misc.PLAYER_RESPAWN_COOLDOWN_SECONDS)}).
+     *
+     * <p>Split out of {@link #processDodge} so the gate is provable without the skill RNG, which has
+     * no injection seam. Also true on a fresh login — {@code McMMOPlayer}'s constructor stamps the
+     * timestamp, exactly as legacy's profile-loading task did.
+     *
+     * @return {@code true} once {@link Misc#PLAYER_RESPAWN_COOLDOWN_SECONDS} have elapsed
+     */
+    public boolean isRespawnGracePeriodOver() {
+        return SkillUtils.cooldownExpired(mmoPlayer.getRespawnATS(),
+                Misc.PLAYER_RESPAWN_COOLDOWN_SECONDS);
     }
 
     /**

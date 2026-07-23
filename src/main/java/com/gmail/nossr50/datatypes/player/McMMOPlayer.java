@@ -97,6 +97,14 @@ public class McMMOPlayer {
 
     private boolean isUsingUnarmed;
 
+    /**
+     * Time of the player's last respawn, as a UNIX timestamp in <b>seconds</b> (legacy stored the
+     * same {@code int} seconds value, and {@link com.gmail.nossr50.util.skills.SkillUtils#cooldownExpired}
+     * expects seconds — do not switch this to millis). Read by the post-respawn exploit grace
+     * period; see {@link #actualizeRespawnATS()}.
+     */
+    private int respawnATS;
+
     // Combat-captured attack-cooldown charge (0.0–1.0) at the moment of the hit that a combat
     // handler is processing. The vanilla attack-cooldown read that fills it lands with the combat
     // pipeline (PORT Phase 10.3+); until then it stays at the "fully charged" default so the
@@ -126,6 +134,10 @@ public class McMMOPlayer {
         for (ToolType toolType : ToolType.values()) {
             toolMode.put(toolType, false);
         }
+
+        // Legacy stamped this from PlayerProfileLoadingTask immediately after constructing the
+        // McMMOPlayer, so a fresh login carries the same post-respawn grace period a respawn does.
+        actualizeRespawnATS();
 
         debugMode = false; //Debug mode helps solve support issues, players can toggle it on or off
     }
@@ -572,6 +584,34 @@ public class McMMOPlayer {
 
     public @NotNull PlayerProfile getProfile() {
         return profile;
+    }
+
+    /*
+     * Exploit prevention
+     */
+
+    /**
+     * The player's last respawn time, in seconds, for the post-respawn XP grace period. Feed it to
+     * {@link com.gmail.nossr50.util.skills.SkillUtils#cooldownExpired} with
+     * {@link com.gmail.nossr50.util.Misc#PLAYER_RESPAWN_COOLDOWN_SECONDS}.
+     *
+     * @return the UNIX timestamp, in seconds, of the last respawn (or of login, if none since)
+     */
+    public int getRespawnATS() {
+        return respawnATS;
+    }
+
+    /**
+     * Stamp the respawn timestamp to now. Called on login (constructor) and on every respawn
+     * ({@code PlayerSessionListener#onRespawn}), matching legacy's two call sites.
+     *
+     * <p>Seconds, not millis: {@link com.gmail.nossr50.util.skills.SkillUtils#cooldownExpired}
+     * multiplies its timestamp by {@link com.gmail.nossr50.util.Misc#TIME_CONVERSION_FACTOR}, so a
+     * millisecond value would push the deadline ~31,000 years out and the grace period would never
+     * expire.
+     */
+    public void actualizeRespawnATS() {
+        respawnATS = (int) (System.currentTimeMillis() / Misc.TIME_CONVERSION_FACTOR);
     }
 
     /*
