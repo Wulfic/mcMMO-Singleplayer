@@ -6,6 +6,7 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.player.UserManager;
+import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.network.ServerPlayerEntity;
 
@@ -18,15 +19,25 @@ import net.minecraft.server.network.ServerPlayerEntity;
  * Bukkit player via metadata and scheduled an async DB load). In the integrated singleplayer server
  * the local player joins immediately after the server starts — after {@link McMMOMod#onServerStarting}
  * has bound the store — so the store is always present by the time {@link #onJoin} fires.
+ *
+ * <p>Also owns the respawn half of the lifecycle ({@link #onRespawn}), which legacy split across
+ * {@code PlayerListener#onPlayerRespawn} and a Bukkit {@code Player} object that stayed valid for the
+ * whole session. Vanilla gives no such guarantee, so the respawn hook is load-bearing here in a way
+ * it never was upstream.
  */
 public final class PlayerSessionListener {
 
     private PlayerSessionListener() {
     }
 
-    /** Register the join/disconnect handlers. Called once at mod load from {@link McMMOMod#onInitialize}. */
+    /**
+     * Register the join/respawn/disconnect handlers. Called once at mod load from
+     * {@link McMMOMod#onInitialize}.
+     */
     public static void register() {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> onJoin(handler.player));
+        ServerPlayerEvents.AFTER_RESPAWN.register(
+                (oldPlayer, newPlayer, alive) -> onRespawn(newPlayer));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> onQuit(handler.player));
     }
 
@@ -59,6 +70,38 @@ public final class PlayerSessionListener {
         } catch (Exception e) {
             McMMOMod.LOGGER.error("Failed to load mcMMO data for {} on join.", player.getName(), e);
         }
+    }
+
+    /**
+     * Re-point the player's mcMMO state at the entity vanilla just built for them, and stamp the
+     * respawn timestamp the exploit guards read.
+     *
+     * <p>Legacy only did the second half ({@code PlayerListener#onPlayerRespawn} →
+     * {@code actualizeRespawnATS}) because a Bukkit {@code Player} was a stable session-long handle.
+     * Vanilla's {@code PlayerManager#respawnPlayer} removes the old {@link ServerPlayerEntity} and
+     * constructs a replacement, so without {@link PlatformPlayer#rebind} every MC-typed call for the
+     * rest of the session would target a removed entity. Note this fires for the End-exit path too
+     * ({@code alive == true}), not just death — hence rebinding unconditionally rather than on death.
+     *
+     * <p>{@code respawnPlayer} is the <i>only</i> path that recreates the entity: ordinary dimension
+     * travel goes through {@code ServerPlayerEntity#teleportTo(TeleportTarget)}, which contains no
+     * {@code new ServerPlayerEntity} at all (bytecode-verified) and moves the existing one. So this
+     * one hook is sufficient — don't go looking for a nether-portal equivalent.
+     *
+     * @param vanilla the replacement entity for the respawned player
+     */
+    private static void onRespawn(ServerPlayerEntity vanilla) {
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(vanilla.getUuid());
+        if (mmoPlayer == null) {
+            // Only reachable if the join load failed or was skipped; the player simply has no mcMMO
+            // state to re-point, but log it because a silent miss here degrades the whole session.
+            McMMOMod.LOGGER.warn(
+                    "No mcMMO data tracked for {} on respawn; skill data will not follow them.",
+                    vanilla.getName().getString());
+            return;
+        }
+        mmoPlayer.getPlayer().rebind(vanilla);
+        mmoPlayer.actualizeRespawnATS();
     }
 
     private static void onQuit(ServerPlayerEntity vanilla) {
