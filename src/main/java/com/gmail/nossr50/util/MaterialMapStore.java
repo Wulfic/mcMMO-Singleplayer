@@ -995,11 +995,18 @@ public class MaterialMapStore {
         multiBlockPlant.add("large_fern");
         multiBlockPlant.add("tall_grass");
         multiBlockPlant.add("bamboo");
+        // PORT (upstream bug, fixed): legacy lists "twisted_vines_plant" in the *hanging* set, which
+        // is wrong twice over. The block is registered as `twisting_vines_plant` (both experience.yml
+        // and config.yml spell it correctly), so the misspelled key never matched anything and
+        // twisting vines were treated as a single-block plant. And they grow *upwards*
+        // (`TwistingVinesBlock` passes `Direction.UP` to `AbstractPlantStemBlock`, bytecode-verified),
+        // so breaking one detaches the column above it — an upward scan, i.e. this set, not the
+        // hanging one. Weeping vines / cave vines / pale hanging moss really do hang downwards.
+        multiBlockPlant.add("twisting_vines_plant");
     }
 
     private void fillMultiBlockHangingPlantSet() {
         multiBlockHangingPlant.add("weeping_vines_plant");
-        multiBlockHangingPlant.add("twisted_vines_plant");
         multiBlockHangingPlant.add("cave_vines_plant");
         multiBlockHangingPlant.add("pale_hanging_moss");
     }

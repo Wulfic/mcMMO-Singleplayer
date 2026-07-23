@@ -699,7 +699,50 @@ effectively complete.**
       flat XP), and a mature crop pays whether farmed or wild. **This also fixes a K9 interaction: a
       player-planted crop is marked placed at seed-time, so before this the §A early-return zeroed all
       farmed-crop XP — Herbalism's primary source.** Bizarre ageables (cactus/kelp/sugar cane/bamboo)
-      and chorus stay on the ordinary placed-flag path (deferred multi-block plants).
+      and chorus are excluded from the maturity gate — they are multi-block plants, and are claimed by
+      the multi-block handler below before the maturity divert is reached.
+      **Multi-block plants DONE** (this pass) — breaking one block of a sugar cane / cactus / kelp /
+      bamboo / chorus / tall-grass / vine plant now rewards **every** block that comes down with it,
+      porting legacy `processHerbalismBlockBreakEvent` / `processHerbalismOnBlocksBroken` /
+      `getBrokenHerbalismBlocks` / `awardXPForPlantBlocks` / `awardXPForBlockSnapshots`. The search is
+      the new MC-free `skills/herbalism/MultiBlockPlantTraversal` (legacy's three shapes: chorus flood
+      fill up+sideways capped at 256, cactus column up+down capped at 4, and a plain vertical scan up —
+      or *down* for a hanging plant — stopping at the first non-plant); the MC-typed half is
+      `BlockBreakListener`.
+      **🔑 THE SNAPSHOT HAS TO BE TAKEN ON THE *PRE*-BREAK SEAM, and that is not a stylistic choice.**
+      Vanilla removes the rest of a broken plant on two different schedules: sugar cane, cactus, kelp,
+      bamboo and chorus all `scheduleBlockTick(pos, this, 1)` from `getStateForNeighborUpdate` and so
+      are still standing when `AFTER` fires, but a double plant's other half is replaced with
+      `Blocks.AIR` **synchronously** inside that same neighbour update (`TallPlantBlock`, both
+      bytecode-verified) — so a live read in `AFTER` finds tall grass and large ferns already gone.
+      `PlayerBlockBreakEvents.BEFORE` (already registered for Hylian Luck) captures the coordinates
+      *and* the `BlockState`s into a one-slot `pendingPlantBreak` field, which `AFTER` consumes
+      unconditionally; holding the states is also what lets the delayed chorus check roll bonus loot
+      for blocks that fell long ago. **Reuse the BEFORE→AFTER capture for any side effect that needs
+      to see a block's *neighbourhood* rather than just the block.**
+      **🔑 CHORUS IS THE ONE DELAYED CASE.** A chorus tree collapses a layer per tick and the traversal
+      deliberately over-collects (predicting which branches survive a root break is more expensive than
+      looking afterwards), so non-origin chorus blocks are re-checked 40 ticks later and only the ones
+      that actually became air are paid — `scheduleChorusXpCheck`, which collapses legacy's
+      `DelayedHerbalismXPCheckTask` **and** its `BlockSnapshot` datatype into one lambda. The origin is
+      always paid immediately even when it is chorus (legacy did the same, for XP-bar responsiveness);
+      legacy additionally routed a *hand-placed* chorus origin into the delayed list, which collapses
+      away because both paths reward a placed block with nothing and merely mark it natural again.
+      **Per block, faithful to legacy:** a hand-placed block pays nothing (and its §A tracker flag is
+      cleared, since the block is gone), an ageable pays only once mature *unless* it is a bizarre
+      ageable, non-ageables always pay, and the total passes through `applyTallPlantXpCap`. Bonus drops
+      are rolled per block through the existing `isBonusDropsEligible`/`rollBonusDropCount`/`BlockDrops`
+      chain, creative-gated as everywhere else.
+      **This uncovered four upstream defects — see §F, bugs #13, #14, #15 and the tall-plant-cap
+      nondeterminism.** #13 is the big one: legacy's chorus and cactus traversals **never ran at all**.
+      **⚠️ `Skills.Herbalism.Prevent_AFK_Leveling` is now actually consulted** (it ships `true` and was
+      being read from disk and ignored): breaking a multi-block plant or a maturity-gated crop while
+      riding anything earns nothing, per legacy's opening guard in `processHerbalismBlockBreakEvent`.
+      Narrower than legacy, which applied it to *every* Herbalism break — this port's single-block
+      gathering XP runs through a path shared with Mining/Woodcutting/Excavation, so the guard sits on
+      the two Herbalism-specific handlers, which is where the AFK farms are. **⚠️ Flag for §G: this is a
+      user-visible behaviour change — harvesting crops from horseback now pays nothing.**
+      ⚠️ In-game verification pending for all of it (headless boot can't break a plant).
       **Farmer's Diet DONE** (this pass): eating a farmed food restores one extra hunger point per
       rank. `HerbalismManager.farmersDiet` + `isFarmersDietFood` are MC-free (the food table is legacy's
       two Herbalism switch groups plus its separate `glow_berries` arm — **both groups called
@@ -767,7 +810,8 @@ effectively complete.**
       existing `ItemSpecBuilder`. ⚠️ In-game verification pending, AND the sapling/pot **tag branches are
       in-game-only verified** — `Bootstrap.initialize()` doesn't bind datapack tags (`isIn(TagKey)`
       *throws* there), so the flower/bush-extra branches are unit-tested but the tag branches aren't.
-      Deferred: multi-block traversal (`getBrokenHerbalismBlocks`) + chorus delayed XP.
+      Multi-block traversal (`getBrokenHerbalismBlocks`) + chorus delayed XP are **now DONE** — see the
+      Herbalism entry above.
 - [~] **Excavation** — Giga Drill Breaker **DONE** (commit c6215d163): `BlockBreakListener.
       maybeProcessGigaDrillBreaker` ports legacy `ExcavationManager#gigaDrillBreaker` — GIGA_DRILL_BREAKER
       active + `affectedByGigaDrillBreaker` block + shovel ⇒ two extra excavation checks (base XP +
@@ -851,12 +895,17 @@ effectively complete.**
       cast keeps the bonus instead of reverting to vanilla timings), and the rod/off-hand/rank gates are
       read at draw time rather than cast time. Legacy's trailing `setFishingTarget()` is dropped — it
       discards the value it computes, i.e. dead code upstream. ⚠️ In-game verification pending (§G).
-- [~] **Herbalism** `DelayedCropReplant` **DONE** — Green Thumb replant collapses to a single
+- [x] **Herbalism** `DelayedCropReplant` **DONE** — Green Thumb replant collapses to a single
       `TickScheduler.runLater` block re-set (`BlockUtils.withAge` on the pre-break state) in
       `BlockBreakListener.scheduleReplant`; no separate runnable class needed (the AFTER seam means the
       block is already broken, so legacy's `PhysicsBlockUpdate`/`markPlantAsOld` machinery is unneeded).
-      See the §D Herbalism entry. Still deferred: `HerbalismBlockUpdaterTask`/`DelayedHerbalismXPCheckTask`
-      (the chorus-tree delayed-XP path).
+      **`DelayedHerbalismXPCheckTask` DONE** — the chorus-tree delayed-XP path is now
+      `BlockBreakListener.scheduleChorusXpCheck`, another `runLater` lambda, so legacy's task class *and*
+      its `BlockSnapshot` datatype both collapse into the capture record. See the §D Herbalism entry.
+      **`HerbalismBlockUpdaterTask` DROPPED (collapse, not a skip)** — its whole body is
+      `blockState.update(true)`, a Bukkit-only "push my detached BlockState snapshot back into the
+      world" call. This port never detaches a snapshot to begin with: it captures immutable
+      `BlockState`s and writes through `world.setBlockState`, so there is nothing to flush.
 - [x] **Taming** Call of the Wild summons (`TamingSummon`/`CallOfTheWildType` + `TransientEntityTracker`)
       **DONE** — see the Taming entry in §C. Spawn/despawn/cap/attackTarget all wired; in-game verify pending.
 - [ ] `ExperienceBarHideTask` / XP-bar `processPostXpEvent` (cosmetic; can slip to Pass 2).
@@ -1029,6 +1078,54 @@ effectively complete.**
       a first read of `processMagicHunter` and would otherwise be "faithfully" reproduced. ⚠️ **New
       shape: a dead branch guarding an invariant that a *sibling* code path already guarantees.**
       Documented on `FishingManager#rollMagicHunterRarity`.
+- [x] **Upstream bug #13 — the chorus-tree and cactus multi-block traversals never ran** (multi-block
+      plant commit). `addChorusTreeBrokenBlocks` / `addCactusBlocks` are recursive and guard against
+      re-visiting a block with `if (!traversed.add(currentBlock)) return;` — but their only caller,
+      `getBrokenHerbalismBlocks`, does `blocksBroken.add(originBlockState.getBlock())` **one line before**
+      handing that same set to them as the visited-set. Bukkit's `CraftBlock` has value equality by
+      world + coordinates, so the very first `add` returns `false` and the recursion bails **before
+      looking at a single neighbour**. Net upstream behaviour: breaking a chorus tree or a cactus column
+      rewards exactly one block, and the entire recursive search, the `chorus_plant: 22` tall-plant
+      limit and `DelayedHerbalismXPCheckTask` are all dead code. Fixed by seeding the traversal with an
+      empty set so the origin is added by the recursion itself. ⚠️ **New shape: a correct re-visit guard
+      poisoned by a caller that pre-seeded the very set it guards against.** Regression-tested in
+      `MultiBlockPlantTraversalTest` (chorus + cactus).
+- [x] **Upstream bug #14 — `twisted_vines_plant` is a misspelling, and it is in the wrong table**
+      (multi-block plant commit). `MaterialMapStore.multiBlockHangingPlant` lists
+      `"twisted_vines_plant"`; the vanilla block is **`twisting_vines_plant`** (both `experience.yml`
+      and `config.yml` spell it correctly, and `Twisting_Vines_Plant: 10` XP is configured), so the key
+      never matched and twisting vines were treated as a single-block plant. Fixing only the spelling
+      would have been wrong too: `TwistingVinesBlock` passes `Direction.UP` to `AbstractPlantStemBlock`
+      (bytecode-verified), i.e. twisting vines grow **upwards**, so breaking one detaches the column
+      *above* it — it belongs in `multiBlockPlant`, not the hanging set. Weeping vines / cave vines /
+      pale hanging moss really do hang. ⚠️ **Same family as #10 (a stale key in a code-side whitelist),
+      with a second layer: fixing the typo alone would have swapped one wrong behaviour for another.**
+- [x] **Upstream bug #15 — the delayed chorus XP check ran on the wrong timescale** (multi-block plant
+      commit). Legacy schedules `DelayedHerbalismXPCheckTask` with `runAtEntity(player, task)` — no
+      delay, i.e. next tick — directly beneath a comment reading *"Large delay because the tree takes a
+      while to break"*, with a second inline comment saying *"1 tick later"*. A chorus tree collapses one
+      layer per scheduled block tick, and the task skips any block that isn't air yet, so every layer
+      beyond the first was silently dropped and tall trees under-paid. The port waits 40 ticks
+      (`CHORUS_COLLAPSE_DELAY_TICKS`), comfortably clear of upstream's own 22-block estimate of the
+      tallest tree worth rewarding. Unreachable upstream anyway, because bug #13 meant the task only
+      ever received the origin block.
+- [x] **Upstream nondeterminism — the tall-plant XP cap keyed off an arbitrary set element**
+      (multi-block plant commit). `awardXPForPlantBlocks` picks the block whose type decides whether the
+      cap applies with `brokenPlants.stream().findFirst()` on an **unordered `HashSet`**. For a
+      single-type plant that is harmless, but a mixed one (a cactus column with a `cactus_flower` on
+      top, or a chorus tree with flower tips) resolves to whichever member hash order happened to put
+      first — and `cactus` is a capped type while `cactus_flower` is not, so whether the cap applied at
+      all was luck. The port keys it off the block the player actually broke, which is unambiguously
+      what the cap means; the traversal returns its blocks in discovery order with the origin first so
+      that is always available.
+- [ ] **Suspected dead config — the `chorus_plant: 22` tall-plant limit:** `plantBreakLimits` carries an
+      entry for `chorus_plant`, but chorus blocks are routed to the delayed snapshot path, and
+      `awardXPForBlockSnapshots` — unlike `awardXPForPlantBlocks` — never applies the cap. So the entry
+      is consulted only for a chorus *origin* block, alone, where a 22× cap can never bind. The port
+      keeps legacy's behaviour (no cap on the delayed path) rather than inventing a tuning decision, so
+      the entry stays dead here too. **Revisit during §G:** now that a chorus break actually rewards the
+      whole tree (bug #13), whether chorus XP needs a cap is a real balance question rather than a
+      hypothetical — a big tree pays every `Chorus_Flower: 25` tip.
 - [ ] **Suspected dead config — `Fishing.FishermansDiet.RankChange` (found while porting the diet
       sub-skills):** `advanced.yml` ships it with a comment claiming it "determines when Fisherman's
       Diet adds extra hunger recovery to food" (`RankChange: 20`), but **no code anywhere in upstream

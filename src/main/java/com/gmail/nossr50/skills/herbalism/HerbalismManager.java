@@ -36,20 +36,20 @@ import org.jetbrains.annotations.NotNull;
  * (PORT Phase 10/11):</b>
  * <ul>
  *   <li>{@code processHerbalismBlockBreakEvent} / {@code processHerbalismOnBlocksBroken} /
- *       {@code getBrokenHerbalismBlocks} / the chorus-tree and cactus multi-block traversal — needs
- *       live {@code Block.getRelative}, the (unported) block-tracker/{@code MaterialMapStore}, and
- *       the Phase 11 scheduler for delayed chorus XP;</li>
- *   <li>{@code checkDoubleDropsOnBrokenPlants} / {@code markForBonusDrops} — the single-block
- *       double/triple-drop path is now <b>wired</b> via {@link #isBonusDropsEligible(String)} +
- *       {@link #rollBonusDropCount()} (spawned by
- *       {@link com.gmail.nossr50.fabric.listeners.BlockBreakListener}, same re-roll model as Mining);
- *       still deferred are the multi-block traversal ({@code getBrokenHerbalismBlocks}, one break
- *       event = one block here) and the ageable-maturity gate (see
- *       {@link #isBonusDropsEligible(String)});</li>
- *   <li>{@code awardXPForPlantBlocks} — the tall-plant XP cap math is ported as
- *       {@link #applyTallPlantXpCap(int, int, String)}; the live block-tracker iteration is not;</li>
- *   <li>{@code awardXPForBlockSnapshots} (chorus-tree delayed XP) — needs the unported
- *       {@code BlockSnapshot} datatype and block tracker;</li>
+ *       {@code getBrokenHerbalismBlocks} / the chorus-tree and cactus multi-block traversal —
+ *       <b>now wired</b>: the search itself is the MC-free {@link MultiBlockPlantTraversal}, driven
+ *       from {@link com.gmail.nossr50.fabric.listeners.BlockBreakListener}, which snapshots the plant
+ *       on the pre-break seam (vanilla starts removing the rest of it before the post-break seam
+ *       fires) and rewards every block. {@link #isOneBlockPlant(String)} is the divert;</li>
+ *   <li>{@code checkDoubleDropsOnBrokenPlants} / {@code markForBonusDrops} — <b>wired</b> via
+ *       {@link #isBonusDropsEligible(String)} + {@link #rollBonusDropCount()} (spawned by
+ *       {@link com.gmail.nossr50.fabric.listeners.BlockBreakListener}, same re-roll model as Mining),
+ *       for single blocks and for every block of a multi-block plant;</li>
+ *   <li>{@code awardXPForPlantBlocks} — <b>wired</b>; the tall-plant XP cap math is
+ *       {@link #applyTallPlantXpCap(int, int, String)};</li>
+ *   <li>{@code awardXPForBlockSnapshots} (chorus-tree delayed XP) — <b>wired</b>: the listener
+ *       schedules the re-check on the tick scheduler, so legacy's {@code BlockSnapshot} datatype and
+ *       {@code DelayedHerbalismXPCheckTask} both collapse into it;</li>
  *   <li>{@code processHylianLuck} — <b>now wired</b>: the pure treasure-selection core is
  *       {@link #rollHylianLuck(java.util.List, boolean, java.util.function.DoublePredicate)} (both RNG
  *       draws are caller-supplied, so it is unit-tested, exactly like the Fishing treasure roll); the
@@ -209,13 +209,13 @@ public class HerbalismManager extends SkillManager {
      * {@link com.gmail.nossr50.skills.mining.MiningManager#isBonusDropsEligible(String, boolean)};
      * there is no Silk Touch gate here because Herbalism plants don't drop via Silk Touch.
      *
-     * <p>PORT (deferred, needs the live-{@code Ageable} adapter): legacy additionally requires an
-     * ageable crop to be <i>mature</i> (or a bizarre ageable) before it double-drops — the maturity
-     * math is ported MC-free as {@link #isAgeableMature(String, int, int)} /
-     * {@link #isBizarreAgeable(String)}, but reading a block's live age generically is the same
-     * gap that defers the age-based XP path, so immature crops currently pass this gate (their
-     * age-appropriate loot is still what {@code BlockDrops} re-rolls). Reinstate the maturity check
-     * in the caller once age reads exist.
+     * <p>Legacy additionally requires an ageable crop to be <i>mature</i> (or a bizarre ageable)
+     * before it double-drops. That check is the caller's, since it needs the block's live age: both
+     * Herbalism handlers in {@link com.gmail.nossr50.fabric.listeners.BlockBreakListener} (the
+     * maturity-gated crop path and the multi-block plant path) apply it via
+     * {@link #isAgeableMature(String, int, int)} / {@link #isBizarreAgeable(String)} before calling
+     * this. An ageable that reaches the generic single-block gathering path is not maturity-checked,
+     * but by construction that path only sees blocks {@link #isMaturityGatedCrop(String)} rejected.
      *
      * @param blockRegistryId the broken block's vanilla registry id (namespaced or bare)
      * @return whether a bonus-drop roll should be attempted for this block
@@ -290,6 +290,29 @@ public class HerbalismManager extends SkillManager {
     }
 
     /**
+     * Whether a broken block stands alone, or is part of a multi-block plant (sugar cane, a cactus
+     * column, a chorus tree, tall grass…) whose other blocks come down with it. Legacy
+     * {@code isOneBlockPlant}; the traversal that finds those other blocks is
+     * {@link MultiBlockPlantTraversal}.
+     *
+     * @param blockRegistryId the broken block's vanilla registry id (namespaced or bare)
+     */
+    public boolean isOneBlockPlant(@NotNull String blockRegistryId) {
+        return MultiBlockPlantTraversal.isOneBlockPlant(stripToPath(blockRegistryId),
+                McMMOMod.getMaterialMapStore());
+    }
+
+    /**
+     * Whether Herbalism rewards are suppressed while the player is riding something —
+     * {@code Skills.Herbalism.Prevent_AFK_Leveling} in {@code config.yml} (ships on). Aimed at the classic
+     * "sit in a minecart next to a sugar-cane farm" setup; the caller pairs it with the live
+     * {@code hasVehicle()} read (legacy {@code processHerbalismBlockBreakEvent}'s opening guard).
+     */
+    public boolean isHerbalismAfkPrevented() {
+        return McMMOMod.getGeneralConfig().getHerbalismPreventAFK();
+    }
+
+    /**
      * Whether a block's {@code Ageable} age can't be trusted for maturity/XP purposes.
      *
      * @param blockRegistryPath the block's vanilla registry id (namespaced or bare)
@@ -320,15 +343,18 @@ public class HerbalismManager extends SkillManager {
      * only when fully grown — for a non-bizarre ageable, <b>both</b> the placed and natural branches
      * require full maturity, so a crop pays the same whether the player planted it or found it wild.
      *
-     * <p>Excluded (they stay on the ordinary placed-flag gathering path in
-     * {@link com.gmail.nossr50.fabric.listeners.BlockBreakListener}, matching legacy's non-ageable /
-     * bizarre-ageable branches):
+     * <p>Excluded, matching legacy's non-ageable / bizarre-ageable branches:
      * <ul>
      *   <li>bizarre ageables (cactus / kelp / sugar cane / bamboo) — their {@code age} can't be
      *       trusted for maturity, and legacy rewards them off the natural/placed flag, not maturity;</li>
-     *   <li>chorus (deferred multi-block plant here — its delayed, multi-block XP path is unported);</li>
+     *   <li>chorus — rewarded per collapsed block after a delay, not on maturity.</li>
      *   <li>any ageable that grants no Herbalism XP (a non-crop age property).</li>
      * </ul>
+     *
+     * <p>Every one of those exclusions is a multi-block plant, so in
+     * {@link com.gmail.nossr50.fabric.listeners.BlockBreakListener} they are already claimed by the
+     * multi-block handler before this divert is consulted; anything left over falls through to the
+     * ordinary placed-flag gathering path.
      *
      * @param blockRegistryId the broken block's vanilla registry id (namespaced or bare)
      * @return whether this block's Herbalism rewards should be maturity-gated
