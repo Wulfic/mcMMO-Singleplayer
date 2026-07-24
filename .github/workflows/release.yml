@@ -1,0 +1,214 @@
+# ---------------------------------------------------------------------------
+# Build & Release
+#
+# On every push that can affect the built jar, this workflow:
+#   1. Derives a NEW, monotonically-increasing version:  <base>-build.<run#>
+#      (base = mod_version from gradle.properties, minus the -SNAPSHOT suffix).
+#      GITHUB_RUN_NUMBER is used so nothing is ever committed back to the repo,
+#      which means the workflow can never re-trigger itself.
+#   2. Creates + pushes the git tag  mc<MCVER>-v<version>  BEFORE building, so
+#      that if the build fails there is a concrete tag to remove.
+#   3. Builds the Fabric mod with Gradle/Loom (this also runs the JUnit suite,
+#      so a red test == a failed build).
+#   4. On FAILURE of the tag / build / publish steps -> deletes that tag (and any
+#      half-created release) and fails the run.
+#   5. On SUCCESS -> publishes a GitHub Release with the jar(s), then deletes the
+#      PREVIOUS release + tag on the SAME Minecraft line (mc<MCVER>-v...),
+#      keeping exactly one "latest" per Minecraft version.
+#   6. Ensures a per-Minecraft-version release branch  mc/<MCVER>  exists. A new
+#      Minecraft version (bump minecraft_version in gradle.properties) therefore
+#      spawns its own branch the first time it is built; existing branches are
+#      never overwritten, so back-port commits on old lines are safe. Pushing to
+#      any mc/** branch builds + releases that line.
+#
+# Why the branch push does not cause an infinite loop: pushes made with the
+# built-in GITHUB_TOKEN do NOT trigger further workflow runs (GitHub's
+# anti-recursion rule), and the run-number versioning never writes to the repo.
+#
+# To release on EVERY push (even docs-only), delete the `paths:` block below.
+# ---------------------------------------------------------------------------
+name: Build & Release
+
+on:
+  push:
+    branches:
+      - master
+      - 'mc/**'
+    paths:
+      - 'src/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/release.yml'
+  workflow_dispatch: {}   # allow manual re-release from the Actions tab
+
+# Create/delete tags, releases and branches, and push the mc/** branch.
+permissions:
+  contents: write
+
+# One release at a time per branch; don't cancel a run that may be mid-publish.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history: tag ops + branch push + notes
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4   # dependency + build caching
+
+      # --- Derive version / tag / branch names from gradle.properties ---------
+      - name: Compute version metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          mc=$(grep -E '^minecraft_version=' gradle.properties | head -n1 | cut -d= -f2- | tr -d '[:space:]')
+          base=$(grep -E '^mod_version=' gradle.properties | head -n1 | cut -d= -f2- | tr -d '[:space:]')
+          base=${base%-SNAPSHOT}
+          version="${base}-build.${GITHUB_RUN_NUMBER}"
+          tag="mc${mc}-v${version}"
+          branch="mc/${mc}"
+          if [ -z "$mc" ] || [ -z "$base" ]; then
+            echo "::error::Could not read minecraft_version / mod_version from gradle.properties"
+            exit 1
+          fi
+          {
+            echo "mc_version=$mc"
+            echo "base_version=$base"
+            echo "release_version=$version"
+            echo "tag=$tag"
+            echo "mc_branch=$branch"
+          } >> "$GITHUB_OUTPUT"
+          echo "MC=$mc  version=$version  tag=$tag  branch=$branch"
+
+      # --- Push the tag FIRST so failure has something concrete to delete -----
+      - name: Create and push tag
+        id: tag
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Idempotent across re-runs of the same run number.
+          git push origin ":refs/tags/${TAG}" || true
+          git tag -f "${TAG}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${TAG}"
+
+      # --- Build (compiles, remaps, and runs the JUnit suite) -----------------
+      - name: Build
+        id: build
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace build \
+            -Pmod_version="${{ steps.meta.outputs.release_version }}"
+
+      # --- Publish the release with the jar(s) --------------------------------
+      - name: Publish release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.meta.outputs.release_version }}
+          MC_VERSION: ${{ steps.meta.outputs.mc_version }}
+        run: |
+          set -euo pipefail
+          main="build/libs/mcmmo-${RELEASE_VERSION}.jar"
+          sources="build/libs/mcmmo-${RELEASE_VERSION}-sources.jar"
+          ls -la build/libs || true
+          if [ ! -f "$main" ]; then
+            echo "::error::Expected mod jar not found: $main"
+            exit 1
+          fi
+          assets=( "$main" )
+          [ -f "$sources" ] && assets+=( "$sources" )
+
+          {
+            printf '%s\n\n' "Automated build of **mcMMO (singleplayer Fabric)** for **Minecraft ${MC_VERSION}**."
+            printf '%s\n' "- **Mod version:** \`${RELEASE_VERSION}\`"
+            printf '%s\n' "- **Minecraft:** \`${MC_VERSION}\` · **Loader:** Fabric · **Java:** 21+"
+            printf '%s\n' "- **Requires:** Fabric API"
+            printf '%s\n\n' "- Built from \`${GITHUB_REF_NAME}\` @ \`${GITHUB_SHA:0:7}\`"
+            printf '%s\n' "Drop the \`mcmmo-*.jar\` into your \`mods/\` folder. Optional: ModMenu + Cloth Config for the in-game settings screen."
+          } > release-notes.md
+
+          gh release create "$TAG" "${assets[@]}" \
+            --title "mcMMO ${RELEASE_VERSION} — Minecraft ${MC_VERSION}" \
+            --notes-file release-notes.md
+
+          echo "### :rocket: Released \`${TAG}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Minecraft \`${MC_VERSION}\` · assets: ${assets[*]}" >> "$GITHUB_STEP_SUMMARY"
+
+      # --- Keep exactly one release per Minecraft line ------------------------
+      - name: Delete previous release on this Minecraft line
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          MC_VERSION: ${{ steps.meta.outputs.mc_version }}
+        run: |
+          set -euo pipefail
+          prefix="mc${MC_VERSION}-v"
+          gh release list --limit 200 --json tagName --jq '.[].tagName' | while read -r t; do
+            [ -z "$t" ] && continue
+            [ "$t" = "$TAG" ] && continue           # keep the one we just made
+            case "$t" in
+              "${prefix}"*)
+                echo "Deleting superseded release on the MC ${MC_VERSION} line: $t"
+                gh release delete "$t" --yes --cleanup-tag || echo "::warning::could not delete $t"
+                ;;
+            esac
+          done
+
+      # --- Ensure this Minecraft version has its own release branch -----------
+      - name: Ensure Minecraft release branch
+        env:
+          MC_BRANCH: ${{ steps.meta.outputs.mc_branch }}
+          MC_VERSION: ${{ steps.meta.outputs.mc_version }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin "refs/heads/${MC_BRANCH}" >/dev/null 2>&1; then
+            echo "Release branch ${MC_BRANCH} already exists — leaving it untouched."
+          else
+            echo "New Minecraft version ${MC_VERSION} — creating release branch ${MC_BRANCH}."
+            git push origin "${GITHUB_SHA}:refs/heads/${MC_BRANCH}"
+          fi
+
+      # --- On build failure: delete the tag (and any partial release) ---------
+      # Scoped to the tag/build/publish steps only, so successful releases whose
+      # later housekeeping hiccuped are NEVER torn down.
+      - name: Clean up tag on failure
+        if: >-
+          failure() &&
+          ( steps.tag.outcome == 'failure' ||
+            steps.build.outcome == 'failure' ||
+            steps.release.outcome == 'failure' )
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -uo pipefail
+          if [ -z "${TAG:-}" ]; then
+            echo "No tag was computed; nothing to clean up."
+            exit 0
+          fi
+          echo "Build failed — removing tag/release ${TAG}"
+          gh release delete "${TAG}" --yes --cleanup-tag 2>/dev/null \
+            || git push origin ":refs/tags/${TAG}" 2>/dev/null \
+            || true
