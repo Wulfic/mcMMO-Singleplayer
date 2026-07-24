@@ -109,6 +109,25 @@ public class GeneralConfig extends ConfigLoader {
         return config.getBoolean("General.LevelUp_Sounds", true);
     }
 
+    /**
+     * Whether milestone advancements are granted (the optional <em>Advancement Plaques</em> support).
+     * When on, hitting a skill milestone grants a hidden vanilla advancement so Advancement Plaques —
+     * or, with no such mod, a plain vanilla toast — celebrates it. Default on; mcMMO carries no
+     * dependency on the mod either way.
+     */
+    public boolean getMilestoneAdvancementsEnabled() {
+        return config.getBoolean("General.Milestone_Advancements.Enabled", true);
+    }
+
+    /**
+     * Bracket size for round-level milestone plaques: a plaque fires each time a skill crosses a
+     * multiple of this value (e.g. 100 → 100, 200, 300…). Clamped to at least 1 so the crossing math
+     * can never divide by zero. Rank, power-tier and skill-maxed plaques ignore this value.
+     */
+    public int getMilestoneLevelInterval() {
+        return Math.max(1, config.getInt("General.Milestone_Advancements.Level_Interval", 100));
+    }
+
     public boolean getRefreshChunksEnabled() {
         return config.getBoolean("General.Refresh_Chunks", false);
     }

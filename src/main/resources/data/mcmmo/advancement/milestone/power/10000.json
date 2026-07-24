@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/root",
+  "display": {
+    "icon": {
+      "id": "minecraft:nether_star"
+    },
+    "title": {
+      "text": "Power Level 10000",
+      "color": "gold",
+      "bold": true
+    },
+    "description": {
+      "text": "Your total mcMMO power level reached 10000!",
+      "color": "yellow"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

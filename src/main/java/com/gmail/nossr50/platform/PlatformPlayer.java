@@ -5,6 +5,8 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.ItemUtils;
 import java.util.UUID;
+import net.minecraft.advancement.AdvancementEntry;
+import net.minecraft.advancement.PlayerAdvancementTracker;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.enchantment.Enchantment;
@@ -17,6 +19,7 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
@@ -217,6 +220,44 @@ public final class PlatformPlayer {
         Vec3d pos = getPos();
         // except = null → all players in range hear it (the one player, in singleplayer).
         getWorld().playSound(null, pos.x, pos.y, pos.z, soundEvent, category, volume, pitch);
+    }
+
+    // --- Milestone advancements (Advancement Plaques support) ----------------
+
+    /** Criterion name shared by every {@code mcmmo:milestone/…} advancement (see the bundled JSON). */
+    private static final String MILESTONE_CRITERION = "milestone";
+
+    /**
+     * Grants the milestone advancement at {@code mcmmo:milestone/<path>} to this player, which makes
+     * the vanilla advancement toast fire — and, if the client has the optional <em>Advancement
+     * Plaques</em> mod, renders it as a plaque instead. mcMMO carries no dependency on that mod; this
+     * is the whole of the "support" (Advancement Plaques exposes no API — it re-skins vanilla toasts).
+     *
+     * <p>When {@code repeatable}, the advancement's criterion is revoked first so the re-grant re-pops
+     * the toast/plaque (round-level and rank milestones recur); otherwise it is granted once and stays
+     * earned. Safe to call outside a world session (no server ⇒ no-op) and for an unknown id (logged
+     * and skipped) — a milestone can never break gameplay.
+     *
+     * @param path advancement id path under {@code mcmmo:milestone/} (e.g. {@code level/mining})
+     * @param repeatable re-pop the toast on recurrence via revoke+grant, rather than granting once
+     */
+    public void grantMilestoneAdvancement(@NotNull String path, boolean repeatable) {
+        final MinecraftServer server = McMMOMod.getServer();
+        if (server == null) {
+            return; // No integrated server (unit tests / between world sessions).
+        }
+        final Identifier id = Identifier.of("mcmmo", "milestone/" + path);
+        final AdvancementEntry entry = server.getAdvancementLoader().get(id);
+        if (entry == null) {
+            McMMOMod.LOGGER.warn("Milestone advancement '{}' is not loaded; skipping plaque.", id);
+            return;
+        }
+        final PlayerAdvancementTracker tracker = handle.getAdvancementTracker();
+        if (repeatable) {
+            // Clear the completion so the re-grant re-shows the toast/plaque.
+            tracker.revokeCriterion(entry, MILESTONE_CRITERION);
+        }
+        tracker.grantCriterion(entry, MILESTONE_CRITERION);
     }
 
     // --- Held items ---------------------------------------------------------

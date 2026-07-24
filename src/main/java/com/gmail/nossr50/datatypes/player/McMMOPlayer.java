@@ -37,13 +37,16 @@ import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.NotificationManager;
+import com.gmail.nossr50.util.skills.Milestones;
 import com.gmail.nossr50.util.skills.PerksUtils;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
 import com.gmail.nossr50.util.skills.SkillUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
@@ -384,6 +387,21 @@ public class McMMOPlayer {
             return;
         }
 
+        // Milestone-advancement pre-state (Advancement Plaques support): captured before the level-up
+        // loop so the awards are computed from the before/after delta. Skipped entirely when the
+        // feature is off, so it can never touch the XP path for players who don't want it.
+        final boolean milestonesEnabled =
+                McMMOMod.getGeneralConfig().getMilestoneAdvancementsEnabled();
+        // Rank-unlock plaques need the rank config; if it isn't wired (e.g. a unit test that only
+        // exercises the XP pipeline) we still fire level/power/maxed plaques but skip the rank compare,
+        // rather than making a plain level-up newly depend on RankConfig being present.
+        final boolean rankMilestones = milestonesEnabled && McMMOMod.getRankConfig() != null;
+        final int oldSkillLevel = milestonesEnabled ? profile.getSkillLevel(primarySkillType) : 0;
+        final int oldPowerLevel = milestonesEnabled ? getPowerLevel() : 0;
+        final List<SubSkillType> milestoneSubSkills =
+                rankMilestones ? rankedSubSkillsOf(primarySkillType) : List.of();
+        final int[] oldRanks = rankMilestones ? currentRanks(milestoneSubSkills) : null;
+
         int levelsGained = 0;
 
         while (getSkillXpLevelRaw(primarySkillType) >= getXpToLevel(primarySkillType)) {
@@ -411,10 +429,77 @@ public class McMMOPlayer {
 
             NotificationManager.sendPlayerLevelUpNotification(this, primarySkillType, levelsGained,
                     profile.getSkillLevel(primarySkillType));
+
+            if (milestonesEnabled) {
+                awardMilestoneAdvancements(primarySkillType, oldSkillLevel, oldPowerLevel,
+                        milestoneSubSkills, oldRanks);
+            }
         }
 
         // PORT Phase 11: the skill-unlock notification sweep and the XP-bar update still ride with
         // the deferred experience-bar subsystem (processPostXpEvent).
+    }
+
+    /**
+     * Grants any milestone advancements (optional <em>Advancement Plaques</em> support) earned by the
+     * level-up that just completed for {@code skill}. Computes the round-level / skill-maxed /
+     * power-tier / rank-unlock awards from the pre-loop snapshot via the Minecraft-free
+     * {@link Milestones} core and hands each to the {@link PlatformPlayer} advancement seam. Only
+     * called with the feature enabled (see {@code checkXp}).
+     *
+     * @param skill the skill that leveled
+     * @param oldSkillLevel the skill's level before the level-up loop
+     * @param oldPowerLevel the player's total power level before the level-up loop
+     * @param subSkills the ranked sub-skills of {@code skill}, snapshotted for the rank compare
+     * @param oldRanks each of {@code subSkills}' rank before the level-up loop, in list order
+     */
+    private void awardMilestoneAdvancements(PrimarySkillType skill, int oldSkillLevel,
+            int oldPowerLevel, List<SubSkillType> subSkills, int[] oldRanks) {
+        final int newSkillLevel = profile.getSkillLevel(skill);
+        // GeneralConfig (not SkillTools) is the cap authority SkillTools#getLevelCap delegates to, and
+        // it is guaranteed wired on the XP path (modifyXpGain already reads it) — so this keeps the
+        // milestone hook from depending on SkillTools being wired.
+        final int levelCap = McMMOMod.getGeneralConfig().getLevelCap(skill);
+        final int interval = McMMOMod.getGeneralConfig().getMilestoneLevelInterval();
+
+        final List<Milestones.MilestoneAward> awards = new ArrayList<>(
+                Milestones.skillLevelAwards(skill, oldSkillLevel, newSkillLevel, levelCap, interval));
+        awards.addAll(Milestones.powerAwards(oldPowerLevel, getPowerLevel()));
+        awards.addAll(Milestones.rankAwards(skill, unlockedNewRank(subSkills, oldRanks)));
+
+        for (Milestones.MilestoneAward award : awards) {
+            player.grantMilestoneAdvancement(award.path(), award.repeatable());
+        }
+    }
+
+    /** The ranked sub-skills whose parent is {@code skill}; rank-unlock milestones only track these. */
+    private static List<SubSkillType> rankedSubSkillsOf(PrimarySkillType skill) {
+        final List<SubSkillType> out = new ArrayList<>();
+        for (SubSkillType subSkill : SubSkillType.values()) {
+            if (subSkill.getParentSkill() == skill && subSkill.getNumRanks() > 0) {
+                out.add(subSkill);
+            }
+        }
+        return out;
+    }
+
+    /** Snapshot of this player's current rank in each of {@code subSkills}, in list order. */
+    private int[] currentRanks(List<SubSkillType> subSkills) {
+        final int[] ranks = new int[subSkills.size()];
+        for (int i = 0; i < subSkills.size(); i++) {
+            ranks[i] = RankUtils.getRank(this, subSkills.get(i));
+        }
+        return ranks;
+    }
+
+    /** Whether any of {@code subSkills} climbed to a higher rank than its {@code oldRanks} snapshot. */
+    private boolean unlockedNewRank(List<SubSkillType> subSkills, int[] oldRanks) {
+        for (int i = 0; i < subSkills.size(); i++) {
+            if (RankUtils.getRank(this, subSkills.get(i)) > oldRanks[i]) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
