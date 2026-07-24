@@ -13,6 +13,16 @@ base {
 repositories {
     // Add repositories here as ported code needs them. Fabric/MC come from Loom.
     mavenCentral() // JUnit (and future plain-Java test/util deps)
+
+    // Optional client-integration mods (ModMenu, Cloth Config). Dev classpath only — see below.
+    maven {
+        name = 'Terraformers'
+        url = 'https://maven.terraformersmc.com/releases/'
+    }
+    maven {
+        name = 'shedaniel'
+        url = 'https://maven.shedaniel.me/'
+    }
 }
 
 dependencies {
@@ -26,6 +36,20 @@ dependencies {
     // so the mod ships it at runtime; `implementation` puts it on the compile/test classpath.
     implementation "org.yaml:snakeyaml:${project.snakeyaml_version}"
     include "org.yaml:snakeyaml:${project.snakeyaml_version}"
+
+    // Optional client integrations: ModMenu (in-game config screen entry) + Cloth Config (the
+    // editable options UI). Compile-only so the mod builds against their APIs, plus localRuntime so
+    // `./gradlew runClient` loads them for in-game verification. NEVER bundled (no `include`): they
+    // are the player's own choice to install. The `modmenu` entrypoint class is lazily loaded only
+    // by ModMenu, and Cloth classes are referenced only behind a FabricLoader.isModLoaded("cloth-
+    // config") guard, so the mod runs cleanly when either/both are absent.
+    modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+    modLocalRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
+    modCompileOnly "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
+    modLocalRuntime("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}") {
+        // cloth-config-fabric declares ModMenu as an optional dep; avoid pulling a second copy.
+        exclude(group: 'net.fabricmc.fabric-api')
+    }
 
     // Unit tests for MC-free code (the platform/ + event/ + skill-manager + config layers).
     testImplementation platform("org.junit:junit-bom:${project.junit_version}")

@@ -10,7 +10,8 @@
   ],
   "contact": {
     "homepage": "https://github.com/mcMMO-Dev/mcMMO",
-    "sources": "https://github.com/mcMMO-Dev/mcMMO"
+    "sources": "https://github.com/mcMMO-Dev/mcMMO",
+    "issues": "https://github.com/mcMMO-Dev/mcMMO/issues"
   },
   "license": "GPL-3.0-only",
   "icon": "assets/mcmmo/icon.png",
@@ -21,6 +22,9 @@
     ],
     "client": [
       "com.gmail.nossr50.fabric.client.McMMOClient"
+    ],
+    "modmenu": [
+      "com.gmail.nossr50.fabric.client.modmenu.McMMOModMenuIntegration"
     ]
   },
   "mixins": [
@@ -35,5 +39,9 @@
     "minecraft": "~1.21.11",
     "java": ">=21",
     "fabric-api": "*"
+  },
+  "suggests": {
+    "modmenu": "*",
+    "cloth-config": "*"
   }
 }
