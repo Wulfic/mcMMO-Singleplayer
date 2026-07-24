@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/root",
+  "display": {
+    "icon": {
+      "id": "minecraft:oak_log"
+    },
+    "title": {
+      "text": "Woodcutting Milestone",
+      "color": "gold",
+      "bold": true
+    },
+    "description": {
+      "text": "Your Woodcutting skill reached a new milestone!",
+      "color": "yellow"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

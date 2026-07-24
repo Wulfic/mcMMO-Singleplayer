@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/root",
+  "display": {
+    "icon": {
+      "id": "minecraft:wheat"
+    },
+    "title": {
+      "text": "Mastered Herbalism",
+      "color": "light_purple",
+      "bold": true
+    },
+    "description": {
+      "text": "You reached the level cap in Herbalism!",
+      "color": "yellow"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

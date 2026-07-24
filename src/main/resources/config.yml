@@ -48,6 +48,16 @@ General:
         # This change is purely cosmetic, it retains the old feel of mcMMO where you could level up thousands of times
     RetroMode:
         Enabled: true
+    # Optional support for the client-side "Advancement Plaques" mod. When enabled, reaching a skill
+    # milestone grants a hidden vanilla advancement, which Advancement Plaques renders as a custom
+    # plaque. With no such mod installed you simply get a normal advancement toast instead. mcMMO does
+    # not depend on the mod either way; set Enabled to false to switch milestone advancements off.
+    Milestone_Advancements:
+        Enabled: true
+        # A "round level" plaque fires whenever a skill crosses a multiple of this number (e.g. 100 ->
+        # plaques at 100, 200, 300...). Rank unlocks, power-level tiers and maxing a skill always fire
+        # their own plaques regardless of this value.
+        Level_Interval: 100
     Locale: en_US
     PowerLevel:
         Skill_Mastery:

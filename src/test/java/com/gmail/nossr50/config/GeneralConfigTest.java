@@ -35,6 +35,24 @@ class GeneralConfigTest {
     }
 
     @Test
+    void milestoneAdvancementDefaults(@TempDir Path dataFolder) {
+        final GeneralConfig config = new GeneralConfig(dataFolder);
+        // Advancement Plaques support ships on by default with a 100-level round-level bracket.
+        assertTrue(config.getMilestoneAdvancementsEnabled());
+        assertEquals(100, config.getMilestoneLevelInterval());
+    }
+
+    @Test
+    void milestoneLevelIntervalIsClampedAboveZero(@TempDir Path dataFolder) {
+        final GeneralConfig generalConfig = new GeneralConfig(dataFolder);
+        // Even if someone sets a nonsensical 0/negative interval, the getter never returns something
+        // that would divide-by-zero in the crossing math. (config is protected in ConfigLoader, which
+        // shares this package.)
+        generalConfig.config.set("General.Milestone_Advancements.Level_Interval", 0);
+        assertTrue(generalConfig.getMilestoneLevelInterval() >= 1);
+    }
+
+    @Test
     void readsItemAndAbilitySettings(@TempDir Path dataFolder) {
         final GeneralConfig config = new GeneralConfig(dataFolder);
         assertEquals("FEATHER", config.getChimaeraItemName());

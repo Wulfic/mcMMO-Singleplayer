@@ -100,6 +100,15 @@ public final class McMMOSettings {
                 "Autosave Interval (minutes)", null));
         list.add(ConfigSetting.integer(CAT_GENERAL, CONFIG_YML, "General.Power_Level_Cap", 0, 0,
                 100000, "Power Level Cap", "0 disables the power-level cap."));
+        list.add(ConfigSetting.bool(CAT_GENERAL, CONFIG_YML,
+                "General.Milestone_Advancements.Enabled", true, "Milestone Plaque Advancements",
+                "Grant a hidden advancement at skill milestones so the Advancement Plaques mod "
+                        + "shows a plaque (or, without it, a normal toast). mcMMO does not require "
+                        + "the mod."));
+        list.add(ConfigSetting.integer(CAT_GENERAL, CONFIG_YML,
+                "General.Milestone_Advancements.Level_Interval", 100, 1, 1000,
+                "Milestone Level Interval",
+                "A round-level plaque fires each time a skill crosses a multiple of this value."));
         list.add(ConfigSetting.decimal(CAT_GENERAL, CONFIG_YML, "Sounds.MasterVolume", 1.0, 0.0, 1.0,
                 "Master Sound Volume", "mcMMO sound volume. 1.0 = full, 0.0 = muted."));
         list.add(ConfigSetting.bool(CAT_GENERAL, CONFIG_YML, "Skills.Fishing.Drops_Enabled", true,
