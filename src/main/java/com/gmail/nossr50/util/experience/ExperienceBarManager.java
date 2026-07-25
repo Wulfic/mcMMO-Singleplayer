@@ -19,7 +19,7 @@ import org.jetbrains.annotations.NotNull;
  * <p>Legacy {@code ExperienceBarManager}, ported for singleplayer. Each XP gain calls
  * {@link #updateExperienceBar}, which shows/updates that skill's bar and (re)arms a hide task; the
  * bar fades once the player stops training that skill for {@code Hide_Delay_Seconds}
- * (default 30 — legacy hard-coded 3). Every time the player gains more XP in the same skill the
+ * (default 10 — legacy hard-coded 3). Every time the player gains more XP in the same skill the
  * pending hide is cancelled and re-scheduled, so the bar only disappears after a real lull.
  *
  * <p>All Minecraft types are kept out of this class: the bar itself is the injected

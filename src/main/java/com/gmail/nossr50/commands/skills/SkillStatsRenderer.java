@@ -34,8 +34,8 @@ import org.jetbrains.annotations.NotNull;
  *
  * <p>Rendering is to a {@code Consumer<Text>} sink rather than straight to a player, so the output can
  * be captured and asserted in unit tests. Effect lines are built as legacy §-coded strings (a near
- * verbatim port of each skill's {@code statsDisplay}) and converted to vanilla {@link Text} via
- * {@link TextUtils#toText} on the way out.
+ * verbatim port of each skill's {@code statsDisplay}) and converted to vanilla {@link Text} by
+ * {@link #toLine} on the way out, which normalises simplified {@code &} codes first.
  */
 public abstract class SkillStatsRenderer {
 
@@ -152,8 +152,22 @@ public abstract class SkillStatsRenderer {
                 LocaleLoader.getString("Effects.SubSkills.Overhaul")));
 
         for (SubSkillType subSkill : subSkills) {
-            out.accept(TextUtils.toText(subSkillLine(subSkill)));
+            out.accept(toLine(subSkillLine(subSkill)));
         }
+    }
+
+    /**
+     * Converts one rendered line into {@link Text}.
+     *
+     * <p>{@link TextUtils#toText} only understands section-sign ({@code §}) codes, but renderer-built
+     * lines are written with the simplified {@code &} codes the locale files use, so they are
+     * normalised here first — without this they render as literal "{@code &8Clean Cuts}" text. Lines
+     * that came from the locale bundle have already been normalised by {@link LocaleLoader#getString},
+     * and {@link LocaleLoader#addColors} is idempotent over them (it rewrites {@code &} codes and
+     * {@code [[TOKEN]]}s, never {@code §}), so a second pass is a no-op.
+     */
+    private static @NotNull Text toLine(@NotNull String legacy) {
+        return TextUtils.toText(LocaleLoader.addColors(legacy));
     }
 
     private String subSkillLine(SubSkillType subSkill) {
@@ -179,7 +193,7 @@ public abstract class SkillStatsRenderer {
         out.accept(LocaleLoader.getText("Skills.Overhaul.Header",
                 LocaleLoader.getString("Commands.Stats.Self.Overhaul")));
         for (String message : statsMessages) {
-            out.accept(TextUtils.toText(message));
+            out.accept(toLine(message));
         }
     }
 

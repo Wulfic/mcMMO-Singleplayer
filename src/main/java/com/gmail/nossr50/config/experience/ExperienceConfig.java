@@ -328,10 +328,10 @@ public class ExperienceConfig extends ConfigLoader {
 
     /**
      * Seconds of inactivity in a skill before its XP bar fades. Legacy hard-coded 3; exposed as a
-     * config knob here and defaulted to 30 (the singleplayer default requested for this port).
+     * config knob here and defaulted to 10 (the singleplayer default requested for this port).
      */
     public int getExperienceBarHideDelaySeconds() {
-        return config.getInt("Experience_Bars.Hide_Delay_Seconds", 30);
+        return config.getInt("Experience_Bars.Hide_Delay_Seconds", 10);
     }
 
     /* Acrobatics */

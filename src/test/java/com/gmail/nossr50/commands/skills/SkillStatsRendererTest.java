@@ -14,9 +14,14 @@ import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
+import com.gmail.nossr50.skills.alchemy.AlchemyManager;
+import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
+import com.gmail.nossr50.skills.fishing.FishingManager;
+import com.gmail.nossr50.skills.herbalism.HerbalismManager;
 import com.gmail.nossr50.skills.maces.MacesManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
 import com.gmail.nossr50.skills.repair.RepairManager;
@@ -24,14 +29,17 @@ import com.gmail.nossr50.skills.salvage.SalvageManager;
 import com.gmail.nossr50.skills.smelting.SmeltingManager;
 import com.gmail.nossr50.skills.spears.SpearsManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
+import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
+import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import net.minecraft.text.Text;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -49,6 +57,9 @@ import org.junit.jupiter.api.io.TempDir;
 class SkillStatsRendererTest {
 
     private static final UUID PLAYER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000e7");
+
+    /** An unparsed legacy colour code: the simplified {@code &} form the locale files are written in. */
+    private static final Pattern LEGACY_CODE = Pattern.compile("&[0-9a-fk-orA-FK-OR]");
 
     private McMMOPlayer mmoPlayer;
 
@@ -86,6 +97,13 @@ class SkillStatsRendererTest {
         when(mmoPlayer.getRepairManager()).thenReturn(new RepairManager(mmoPlayer));
         when(mmoPlayer.getSalvageManager()).thenReturn(new SalvageManager(mmoPlayer));
         when(mmoPlayer.getSmeltingManager()).thenReturn(new SmeltingManager(mmoPlayer));
+        when(mmoPlayer.getWoodcuttingManager()).thenReturn(new WoodcuttingManager(mmoPlayer));
+        when(mmoPlayer.getHerbalismManager()).thenReturn(new HerbalismManager(mmoPlayer));
+        when(mmoPlayer.getArcheryManager()).thenReturn(new ArcheryManager(mmoPlayer));
+        when(mmoPlayer.getAcrobaticsManager()).thenReturn(new AcrobaticsManager(mmoPlayer));
+        when(mmoPlayer.getTamingManager()).thenReturn(new TamingManager(mmoPlayer));
+        when(mmoPlayer.getFishingManager()).thenReturn(new FishingManager(mmoPlayer));
+        when(mmoPlayer.getAlchemyManager()).thenReturn(new AlchemyManager(mmoPlayer));
         UserManager.track(mmoPlayer);
     }
 
@@ -184,6 +202,24 @@ class SkillStatsRendererTest {
             when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
             assertTrue(anyLineContains(render(SkillStatsRenderer.forSkill(s)), "Stats"),
                     s.name() + " shows effect stats at max level");
+        }
+    }
+
+    @Test
+    void noRenderedLineLeaksARawColourCode() {
+        // Regression: sub-skill lines are built with the simplified "&8"/"&a"/"&7" codes the locale
+        // files use, but TextUtils only understands section signs — without normalising first they
+        // reached the client as literal "&8Clean Cuts &7- Locked" text. Text#getString() drops applied
+        // styles, so any surviving "&<code>" here is an unparsed code, not a real colour.
+        // Levels 0 / 500 / 1000 cover the locked, ranked, and fully-unlocked line shapes.
+        for (PrimarySkillType s : PrimarySkillType.values()) {
+            for (int level : new int[] {0, 500, 1000}) {
+                when(mmoPlayer.getSkillLevel(s)).thenReturn(level);
+                for (String line : render(SkillStatsRenderer.forSkill(s))) {
+                    assertFalse(LEGACY_CODE.matcher(line).find(),
+                            s.name() + " @" + level + " leaked an unparsed colour code: " + line);
+                }
+            }
         }
     }
 
