@@ -21,6 +21,9 @@ super abilities for vanilla Minecraft — no server, no database, no plugin plat
 3. Drop the mcMMO jar from [Releases](../../releases) into `.minecraft/mods/`.
 4. Launch. Configs are generated on first world load.
 
+Optionally add **Mod Menu + Cloth Config** (in‑game settings screen) and **Advancement Plaques**
+(fancy milestone popups) — see [Optional mod integrations](#optional-mod-integrations).
+
 The mod runs on both sides (`"environment": "*"`) and works in single‑player, on LAN, and on a
 dedicated Fabric server — but the multiplayer feature set (parties, chat channels, scoreboards,
 admin broadcasts, MySQL) was **removed** during the port, so a server install is just "everyone has
@@ -109,12 +112,62 @@ callback.
   disable it in `experience.yml` under `Experience_Bars` (`Enable`, `Hide_Delay_Seconds`, default
   `10`).
 - **Milestone advancements** — hidden vanilla advancements are granted on round levels, rank
-  unlocks, maxing a skill, and power‑level tiers (500 / 1 000 / 2 000 / 3 500 / 5 000 / 10 000).
-  These render as normal advancement toasts, or as custom plaques if you also run the client‑side
-  [Advancement Plaques](https://modrinth.com/mod/advancement-plaques) mod. mcMMO does **not** depend
-  on it. Toggle in `config.yml` → `General.Milestone_Advancements`.
+  unlocks, maxing a skill, and power‑level tiers. Optionally rendered as plaques — see
+  [Optional mod integrations](#optional-mod-integrations).
 - **Action‑bar + chat notifications** and **sound cues** for ability start/stop, level‑ups and
   sub‑skill procs.
+
+---
+
+## Optional mod integrations
+
+mcMMO works fully standalone. These mods are **purely optional** — none are bundled, none are
+declared as dependencies, and mcMMO detects each at runtime and degrades gracefully if it's absent.
+
+| Mod | Side | What you get without it | What you get with it |
+|---|---|---|---|
+| **[Mod Menu](https://modrinth.com/mod/modmenu)** + **[Cloth Config](https://modrinth.com/mod/cloth-config)** | Client | Edit the YAML files by hand. | An in‑game **settings screen** for mcMMO, reachable from the mod list. |
+| **[Advancement Plaques](https://modrinth.com/mod/advancement-plaques)** | Client | Milestones show as normal vanilla advancement toasts. | Milestones show as large animated **plaques**. |
+
+### Mod Menu + Cloth Config — in‑game config editor
+
+Install **both** (Cloth Config builds the widgets, Mod Menu provides the entry point) and mcMMO gains
+a config screen from the mod list. Versions targeting MC 1.21.11: Mod Menu `17.0.0`, Cloth Config
+`21.11.153`.
+
+Edits are written straight back to the YAML on disk and take effect on the **next world load** — not
+instantly, since most values are read once at load time.
+
+With **Mod Menu but no Cloth Config**, the button still works but opens a small info screen with an
+*Open Config Folder* shortcut instead of the editor. With **neither**, nothing is lost — hand‑editing
+YAML remains the way in, and the mod runs identically.
+
+### Advancement Plaques — milestone plaques
+
+Advancement Plaques has **no API**, so there is nothing to hook. Instead mcMMO grants *hidden vanilla
+advancements* at each milestone, which Advancement Plaques picks up and renders on its own. That
+means **zero dependency in either direction**: with the mod you get plaques, without it you get the
+ordinary toast, and the advancements are granted identically either way.
+
+Milestones that fire a plaque:
+
+| Milestone | Trigger |
+|---|---|
+| **Round level** | A skill crosses a multiple of `Level_Interval` (default `100`). |
+| **Rank unlock** | Any sub‑skill of a skill reaches a new rank. |
+| **Skill maxed** | A skill hits its level cap. |
+| **Power tier** | Total power level crosses 500 / 1 000 / 2 000 / 3 500 / 5 000 / 10 000. |
+
+Configure or switch the whole system off in `config.yml`:
+
+```yaml
+General:
+    Milestone_Advancements:
+        Enabled: true
+        Level_Interval: 100
+```
+
+Because the advancements are hidden, they never clutter the vanilla advancement tree.
 
 ---
 
@@ -142,15 +195,6 @@ Configs are plain YAML, written on first load to:
 > ⚠️ **Editing defaults in the jar does not update an existing config.** New keys are back‑filled on
 > load, but keys already present on disk are left alone. To pick up a changed default, delete the key
 > (or the file) and let it regenerate.
-
-### In‑game config editor (optional)
-
-Install **[Mod Menu](https://modrinth.com/mod/modmenu)** + **[Cloth
-Config](https://modrinth.com/mod/cloth-config)** to get a settings screen from the mod list. Neither
-is bundled and neither is required — without them mcMMO just falls back to editing YAML by hand.
-Edits are written to disk and applied on the **next world load**.
-
----
 
 ## Save data
 
