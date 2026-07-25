@@ -14,9 +14,13 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.axes.AxesManager;
+import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
+import com.gmail.nossr50.skills.maces.MacesManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
+import com.gmail.nossr50.skills.spears.SpearsManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
+import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
@@ -71,6 +75,10 @@ class SkillStatsRendererTest {
         when(mmoPlayer.getSwordsManager()).thenReturn(new SwordsManager(mmoPlayer));
         when(mmoPlayer.getAxesManager()).thenReturn(new AxesManager(mmoPlayer));
         when(mmoPlayer.getUnarmedManager()).thenReturn(new UnarmedManager(mmoPlayer));
+        when(mmoPlayer.getCrossbowsManager()).thenReturn(new CrossbowsManager(mmoPlayer));
+        when(mmoPlayer.getTridentsManager()).thenReturn(new TridentsManager(mmoPlayer));
+        when(mmoPlayer.getMacesManager()).thenReturn(new MacesManager(mmoPlayer));
+        when(mmoPlayer.getSpearsManager()).thenReturn(new SpearsManager(mmoPlayer));
         UserManager.track(mmoPlayer);
     }
 
@@ -149,6 +157,17 @@ class SkillStatsRendererTest {
         when(mmoPlayer.getSkillLevel(PrimarySkillType.UNARMED)).thenReturn(1000);
         assertTrue(anyLineContains(render(new UnarmedStatsRenderer()), "Stats"),
                 "Unarmed shows effect stats at max level");
+    }
+
+    @Test
+    void weaponAndTamingRenderersEmitAStatsSectionAtMaxLevel() {
+        for (PrimarySkillType s : List.of(PrimarySkillType.ARCHERY, PrimarySkillType.CROSSBOWS,
+                PrimarySkillType.TRIDENTS, PrimarySkillType.MACES, PrimarySkillType.SPEARS,
+                PrimarySkillType.TAMING)) {
+            when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
+            assertTrue(anyLineContains(render(SkillStatsRenderer.forSkill(s)), "Stats"),
+                    s.name() + " shows effect stats at max level");
+        }
     }
 
     @Test

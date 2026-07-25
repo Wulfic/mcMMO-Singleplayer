@@ -67,6 +67,12 @@ public abstract class SkillStatsRenderer {
             case SWORDS -> new SwordsStatsRenderer();
             case AXES -> new AxesStatsRenderer();
             case UNARMED -> new UnarmedStatsRenderer();
+            case ARCHERY -> new ArcheryStatsRenderer();
+            case CROSSBOWS -> new CrossbowsStatsRenderer();
+            case TRIDENTS -> new TridentsStatsRenderer();
+            case MACES -> new MacesStatsRenderer();
+            case SPEARS -> new SpearsStatsRenderer();
+            case TAMING -> new TamingStatsRenderer();
             default -> new GenericSkillStatsRenderer(skill);
         };
     }
