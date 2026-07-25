@@ -43,6 +43,8 @@ Fishing_ExploitFix_Options:
 Experience_Bars:
     # Turn this to false if you want to disable XP bars
     Enable: true
+    # Seconds a skill's XP bar stays on screen after you stop gaining XP in it, then it fades.
+    Hide_Delay_Seconds: 30
     Update:
         # XP that you gained from your party but not yourself
         Party: true

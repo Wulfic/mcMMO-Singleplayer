@@ -1,0 +1,154 @@
+package com.gmail.nossr50.util.experience;
+
+import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.locale.LocaleLoader;
+import com.gmail.nossr50.util.text.StringUtils;
+import java.util.Locale;
+import net.minecraft.entity.boss.BossBar;
+import net.minecraft.entity.boss.ServerBossBar;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
+
+/**
+ * The concrete, {@code ServerBossBar}-backed {@link ExperienceBar}: mcMMO's on-screen XP progress
+ * bar for one skill of one player.
+ *
+ * <p><b>Port note.</b> Legacy mcMMO built this on Bukkit's {@code BossBar}, whose player set was
+ * keyed on the session-stable Bukkit {@code Player}. Fabric's integrated server drives boss bars to
+ * the client through the same {@code ServerBossBar} the vanilla {@code /bossbar} command uses, but
+ * the {@link ServerPlayerEntity} is <b>recreated on respawn / End-exit</b> (see
+ * {@link com.gmail.nossr50.platform.PlatformPlayer#rebind}). So this wrapper never captures the
+ * entity at construction; {@link #show()} re-subscribes the live handle from
+ * {@link McMMOPlayer#getPlayer()} whenever the bar is shown, which keeps it rendering across a death.
+ */
+public final class ExperienceBarWrapper implements ExperienceBar {
+
+    private final PrimarySkillType primarySkillType;
+    private final McMMOPlayer mmoPlayer;
+    private final ServerBossBar bossBar;
+
+    /** Capitalised skill name used for the {@code XPBar.<Skill>} locale key (e.g. "Mining"). */
+    private final String niceSkillName;
+
+    /** The skill level the title currently reflects, so it is only re-rendered on a level change. */
+    private int lastLevelRendered;
+
+    public ExperienceBarWrapper(PrimarySkillType primarySkillType, McMMOPlayer mmoPlayer) {
+        this.primarySkillType = primarySkillType;
+        this.mmoPlayer = mmoPlayer;
+        this.niceSkillName = StringUtils.getCapitalized(primarySkillType.toString());
+        this.lastLevelRendered = mmoPlayer.getSkillLevel(primarySkillType);
+
+        final ExperienceConfig config = McMMOMod.getExperienceConfig();
+        this.bossBar = new ServerBossBar(
+                renderTitle(),
+                mapColor(config.getExperienceBarColorName(primarySkillType)),
+                mapStyle(config.getExperienceBarStyleName(primarySkillType)));
+        // Built hidden and with no subscriber; show() adds the live player entity on demand.
+        this.bossBar.setVisible(false);
+    }
+
+    @Override
+    public void setProgress(double progress) {
+        this.bossBar.setPercent((float) clamp01(progress));
+
+        // The bar title carries the level; refresh it only when the level actually changed (or when
+        // the always-update knob is on), matching legacy's title-update throttle.
+        final int level = mmoPlayer.getSkillLevel(primarySkillType);
+        if (level != lastLevelRendered
+                || McMMOMod.getExperienceConfig().getDoExperienceBarsAlwaysUpdateTitle()) {
+            this.bossBar.setName(renderTitle());
+            lastLevelRendered = level;
+        }
+    }
+
+    @Override
+    public void show() {
+        final ServerPlayerEntity current = mmoPlayer.getPlayer().unwrap();
+        // Re-point at the live handle: after a respawn/End-exit the entity captured previously is
+        // stale, and the bar must follow the current one (see the class javadoc). In the steady
+        // state the handle is already subscribed and this is a no-op.
+        if (!bossBar.getPlayers().contains(current)) {
+            bossBar.clearPlayers();
+            bossBar.addPlayer(current);
+        }
+        bossBar.setVisible(true);
+    }
+
+    @Override
+    public void hide() {
+        bossBar.setVisible(false);
+    }
+
+    // --- title ---------------------------------------------------------------
+
+    private Text renderTitle() {
+        final ExperienceConfig config = McMMOMod.getExperienceConfig();
+        final int level = mmoPlayer.getSkillLevel(primarySkillType);
+
+        if (config.getAddExtraDetails()) {
+            // {0} = the plain skill+level string, {1}=current XP, {2}=XP to level, {3}=power level,
+            // {4}=percent. Legacy nested one locale lookup inside the other; getString returns the
+            // raw §-coded string so it drops straight into the {0} slot of the complex template.
+            final String skillTitle = LocaleLoader.getString("XPBar." + niceSkillName, level);
+            return LocaleLoader.getText("XPBar.Complex.Template",
+                    skillTitle,
+                    mmoPlayer.getProfile().getSkillXpLevel(primarySkillType),
+                    mmoPlayer.getProfile().getXpToLevel(primarySkillType),
+                    mmoPlayer.getPowerLevel(),
+                    percentOfLevel());
+        }
+
+        return LocaleLoader.getText("XPBar." + niceSkillName, level);
+    }
+
+    private int percentOfLevel() {
+        return (int) (mmoPlayer.getProgressInCurrentSkillLevel(primarySkillType) * 100);
+    }
+
+    // --- Bukkit-name -> vanilla-enum mapping ---------------------------------
+
+    /**
+     * Map a legacy {@code BarColor} name to the vanilla {@link BossBar.Color}. Bukkit's colour names
+     * (PINK/BLUE/RED/GREEN/YELLOW/PURPLE/WHITE) are identical to vanilla's, so this is a direct
+     * {@code valueOf} with a PINK fallback for an unrecognised config value.
+     */
+    static BossBar.Color mapColor(String barColorName) {
+        try {
+            return BossBar.Color.valueOf(barColorName.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            McMMOMod.LOGGER.warn("Unknown XP bar color '{}', defaulting to PINK", barColorName);
+            return BossBar.Color.PINK;
+        }
+    }
+
+    /**
+     * Map a legacy {@code BarStyle} name to the vanilla {@link BossBar.Style}: {@code SOLID} becomes
+     * {@code PROGRESS} and {@code SEGMENTED_n} becomes {@code NOTCHED_n}. Falls back to
+     * {@code NOTCHED_6} (the bundled default) for an unrecognised value.
+     */
+    static BossBar.Style mapStyle(String barStyleName) {
+        return switch (barStyleName.trim().toUpperCase(Locale.ROOT)) {
+            case "SOLID", "PROGRESS" -> BossBar.Style.PROGRESS;
+            case "SEGMENTED_6", "NOTCHED_6" -> BossBar.Style.NOTCHED_6;
+            case "SEGMENTED_10", "NOTCHED_10" -> BossBar.Style.NOTCHED_10;
+            case "SEGMENTED_12", "NOTCHED_12" -> BossBar.Style.NOTCHED_12;
+            case "SEGMENTED_20", "NOTCHED_20" -> BossBar.Style.NOTCHED_20;
+            default -> {
+                McMMOMod.LOGGER.warn("Unknown XP bar style '{}', defaulting to NOTCHED_6",
+                        barStyleName);
+                yield BossBar.Style.NOTCHED_6;
+            }
+        };
+    }
+
+    private static double clamp01(double v) {
+        if (v < 0.0) {
+            return 0.0;
+        }
+        return Math.min(v, 1.0);
+    }
+}

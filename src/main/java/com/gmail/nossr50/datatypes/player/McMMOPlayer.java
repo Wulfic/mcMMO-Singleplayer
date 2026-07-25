@@ -36,6 +36,7 @@ import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.Misc;
+import com.gmail.nossr50.util.experience.ExperienceBarManager;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.skills.Milestones;
 import com.gmail.nossr50.util.skills.PerksUtils;
@@ -113,6 +114,13 @@ public class McMMOPlayer {
     // pipeline (PORT Phase 10.3+); until then it stays at the "fully charged" default so the
     // damage-math skills (Berserk, Critical Strikes, Rupture odds, …) read a neutral 1.0.
     private float attackStrength = 1.0f;
+
+    /**
+     * Lazily-built on-screen XP-bar controller (legacy created it eagerly in the constructor). Held
+     * per player; created on the first XP gain that reaches {@link #processPostXpEvent}, so a player
+     * who never gains XP — and every headless/unit-test McMMOPlayer — pays nothing for it.
+     */
+    private ExperienceBarManager experienceBarManager;
 
     public McMMOPlayer(@NotNull PlatformPlayer player, @NotNull PlayerProfile profile) {
         requireNonNull(player, "player cannot be null");
@@ -368,6 +376,45 @@ public class McMMOPlayer {
 
         isUsingUnarmed = (primarySkillType == PrimarySkillType.UNARMED);
         checkXp(primarySkillType, xpGainReason, xpGainSource);
+
+        // PORT Phase 11 (now wired): the deferred processPostXpEvent — refresh the on-screen XP bar
+        // for the skill that just gained. Only non-child skills reach here (the child branch above
+        // returns early after splitting to parents), which is exactly what should show a bar.
+        processPostXpEvent(primarySkillType);
+    }
+
+    /**
+     * Post-XP-gain hook (legacy {@code processPostXpEvent}). Shows/refreshes the on-screen XP bar for
+     * {@code primarySkillType} and re-arms its fade timer, so the bar tracks the skill the player is
+     * actively training and disappears after the configured lull. A no-op — and it never even builds
+     * the {@link ExperienceBarManager} — when XP bars are globally disabled.
+     *
+     * <p>Legacy also drove the "skill unlocked" notification sweep from here; that rides with the
+     * notification subsystem and is out of scope for the XP-bar wiring.
+     */
+    public void processPostXpEvent(@NotNull PrimarySkillType primarySkillType) {
+        // No integrated server ⇒ no client to render a bar to (headless boot, between world sessions,
+        // and every MC-free unit test). Same guard PlatformPlayer#grantMilestoneAdvancement uses to
+        // stay a no-op outside a live world; it also keeps the XP pipeline from loading boss-bar
+        // classes under the MC-free test harness.
+        if (McMMOMod.getServer() == null) {
+            return;
+        }
+
+        // getExperienceConfig() is @Nullable (null between world sessions); no config ⇒ no bar.
+        final var experienceConfig = McMMOMod.getExperienceConfig();
+        if (experienceConfig == null || !experienceConfig.isExperienceBarsEnabled()) {
+            return;
+        }
+        getExperienceBarManager().updateExperienceBar(primarySkillType);
+    }
+
+    /** The player's XP-bar controller, created on first use. */
+    public @NotNull ExperienceBarManager getExperienceBarManager() {
+        if (experienceBarManager == null) {
+            experienceBarManager = new ExperienceBarManager(this);
+        }
+        return experienceBarManager;
     }
 
     /**

@@ -28,9 +28,11 @@ import java.util.Map;
  * overloads.
  *
  * <p><b>Deferred (re-add with their Phase 10 skills):</b> {@code getPotionXP(PotionStage)} +
- * alchemy validation (alchemy not ported), {@code getRepairXP(MaterialType)} (repair not ported),
- * and the boss-bar {@code BarColor}/{@code BarStyle} experience-bar getters (HUD reworked for
- * singleplayer). The boolean experience-bar toggles are kept as plain config reads.
+ * alchemy validation (alchemy not ported), {@code getRepairXP(MaterialType)} (repair not ported).
+ * The boss-bar colour/style getters now ship as Minecraft-free String reads
+ * ({@link #getExperienceBarColorName}/{@link #getExperienceBarStyleName}); the vanilla
+ * {@code BossBar.Color}/{@code Style} mapping lives in
+ * {@link com.gmail.nossr50.util.experience.ExperienceBarWrapper}.
  */
 public class ExperienceConfig extends ConfigLoader {
 
@@ -300,6 +302,36 @@ public class ExperienceConfig extends ConfigLoader {
         return config.getBoolean(
                 "Experience_Bars.ThisMayCauseLag.AlwaysUpdateTitlesWhenXPIsGained.ExtraDetails",
                 false);
+    }
+
+    /**
+     * The bar colour for a skill as the raw config name (a legacy Bukkit {@code BarColor} value such
+     * as {@code YELLOW}). Kept as a String so this config class stays Minecraft-free; the mapping to
+     * the vanilla {@code BossBar.Color} lives in {@link
+     * com.gmail.nossr50.util.experience.ExperienceBarWrapper}. Defaults to {@code PINK}.
+     */
+    public String getExperienceBarColorName(PrimarySkillType primarySkillType) {
+        return config.getString("Experience_Bars."
+                + StringUtils.getCapitalized(primarySkillType.toString()) + ".Color", "PINK");
+    }
+
+    /**
+     * The bar style for a skill as the raw config name (a legacy Bukkit {@code BarStyle} value such
+     * as {@code SEGMENTED_6}). Mapped to the vanilla {@code BossBar.Style} by {@link
+     * com.gmail.nossr50.util.experience.ExperienceBarWrapper}. Defaults to {@code SEGMENTED_6}.
+     */
+    public String getExperienceBarStyleName(PrimarySkillType primarySkillType) {
+        return config.getString("Experience_Bars."
+                + StringUtils.getCapitalized(primarySkillType.toString()) + ".BarStyle",
+                "SEGMENTED_6");
+    }
+
+    /**
+     * Seconds of inactivity in a skill before its XP bar fades. Legacy hard-coded 3; exposed as a
+     * config knob here and defaulted to 30 (the singleplayer default requested for this port).
+     */
+    public int getExperienceBarHideDelaySeconds() {
+        return config.getInt("Experience_Bars.Hide_Delay_Seconds", 30);
     }
 
     /* Acrobatics */
