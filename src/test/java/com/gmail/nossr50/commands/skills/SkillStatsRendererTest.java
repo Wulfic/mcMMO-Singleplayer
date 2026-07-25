@@ -13,8 +13,11 @@ import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
+import com.gmail.nossr50.skills.swords.SwordsManager;
+import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
@@ -65,6 +68,9 @@ class SkillStatsRendererTest {
 
         when(mmoPlayer.getMiningManager()).thenReturn(new MiningManager(mmoPlayer));
         when(mmoPlayer.getExcavationManager()).thenReturn(new ExcavationManager(mmoPlayer));
+        when(mmoPlayer.getSwordsManager()).thenReturn(new SwordsManager(mmoPlayer));
+        when(mmoPlayer.getAxesManager()).thenReturn(new AxesManager(mmoPlayer));
+        when(mmoPlayer.getUnarmedManager()).thenReturn(new UnarmedManager(mmoPlayer));
         UserManager.track(mmoPlayer);
     }
 
@@ -128,6 +134,21 @@ class SkillStatsRendererTest {
         when(mmoPlayer.getSkillLevel(PrimarySkillType.HERBALISM)).thenReturn(1000);
         assertTrue(anyLineContains(render(new HerbalismStatsRenderer()), "Stats"),
                 "Herbalism shows effect stats at max level");
+    }
+
+    @Test
+    void combatRenderersEmitAStatsSectionAtMaxLevel() {
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.SWORDS)).thenReturn(1000);
+        assertTrue(anyLineContains(render(new SwordsStatsRenderer()), "Stats"),
+                "Swords shows effect stats at max level");
+
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.AXES)).thenReturn(1000);
+        assertTrue(anyLineContains(render(new AxesStatsRenderer()), "Stats"),
+                "Axes shows effect stats at max level");
+
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.UNARMED)).thenReturn(1000);
+        assertTrue(anyLineContains(render(new UnarmedStatsRenderer()), "Stats"),
+                "Unarmed shows effect stats at max level");
     }
 
     @Test

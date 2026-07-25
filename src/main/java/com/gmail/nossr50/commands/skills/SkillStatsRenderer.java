@@ -64,6 +64,9 @@ public abstract class SkillStatsRenderer {
             case WOODCUTTING -> new WoodcuttingStatsRenderer();
             case EXCAVATION -> new ExcavationStatsRenderer();
             case HERBALISM -> new HerbalismStatsRenderer();
+            case SWORDS -> new SwordsStatsRenderer();
+            case AXES -> new AxesStatsRenderer();
+            case UNARMED -> new UnarmedStatsRenderer();
             default -> new GenericSkillStatsRenderer(skill);
         };
     }
