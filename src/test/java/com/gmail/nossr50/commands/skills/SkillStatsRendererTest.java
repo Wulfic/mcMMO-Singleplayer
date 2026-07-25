@@ -13,6 +13,7 @@ import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
 import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
@@ -63,6 +64,7 @@ class SkillStatsRendererTest {
         when(mmoPlayer.getProfile()).thenReturn(profile);
 
         when(mmoPlayer.getMiningManager()).thenReturn(new MiningManager(mmoPlayer));
+        when(mmoPlayer.getExcavationManager()).thenReturn(new ExcavationManager(mmoPlayer));
         UserManager.track(mmoPlayer);
     }
 
@@ -109,6 +111,23 @@ class SkillStatsRendererTest {
         assertTrue(anyLineContains(lines, "Locked"), "locked sub-skills are marked Locked");
         assertFalse(anyLineContains(lines, "Double Drop Chance"),
                 "no effect stats before anything is unlocked");
+    }
+
+    @Test
+    void gatheringRenderersEmitAStatsSectionAtMaxLevel() {
+        // The stats-section header ("Stats") only appears when a dedicated renderer produced effect
+        // lines — a robust discriminator from the generic fallback, which never emits it.
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.WOODCUTTING)).thenReturn(1000);
+        assertTrue(anyLineContains(render(new WoodcuttingStatsRenderer()), "Stats"),
+                "Woodcutting shows effect stats at max level");
+
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.EXCAVATION)).thenReturn(1000);
+        assertTrue(anyLineContains(render(new ExcavationStatsRenderer()), "Stats"),
+                "Excavation shows effect stats at max level");
+
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HERBALISM)).thenReturn(1000);
+        assertTrue(anyLineContains(render(new HerbalismStatsRenderer()), "Stats"),
+                "Herbalism shows effect stats at max level");
     }
 
     @Test

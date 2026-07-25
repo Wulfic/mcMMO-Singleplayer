@@ -61,6 +61,9 @@ public abstract class SkillStatsRenderer {
     public static @NotNull SkillStatsRenderer forSkill(@NotNull PrimarySkillType skill) {
         return switch (skill) {
             case MINING -> new MiningStatsRenderer();
+            case WOODCUTTING -> new WoodcuttingStatsRenderer();
+            case EXCAVATION -> new ExcavationStatsRenderer();
+            case HERBALISM -> new HerbalismStatsRenderer();
             default -> new GenericSkillStatsRenderer(skill);
         };
     }
