@@ -3,6 +3,7 @@ package com.gmail.nossr50.commands;
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
+import com.gmail.nossr50.commands.skills.SkillStatsRenderer;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
@@ -37,6 +38,9 @@ import net.minecraft.util.Formatting;
  * <ul>
  *   <li>{@code /mcmmo} — mod + version banner.</li>
  *   <li>{@code /mcstats} — the caller's level and XP for every skill, plus power level.</li>
+ *   <li>{@code /mcstats <skill>} — the full-detail per-skill screen (legacy {@code /<skillname>}):
+ *       XP-gain method, level/XP, sub-skill ranks, and each sub-skill's current effect values,
+ *       rendered by {@link SkillStatsRenderer}.</li>
  *   <li>{@code /mcability} — toggle whether super abilities may be readied/activated.</li>
  *   <li>{@code /mcrefresh} — clear the caller's super-ability cooldowns and active modes.</li>
  *   <li>{@code /addlevels <skill|all> <amount>} — admin: grant skill levels (op level 2).</li>
@@ -59,7 +63,12 @@ public final class McMMOCommands {
 
     private static void registerAll(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(literal("mcmmo").executes(ctx -> info(ctx.getSource())));
-        dispatcher.register(literal("mcstats").executes(ctx -> stats(ctx.getSource())));
+        dispatcher.register(literal("mcstats")
+                .executes(ctx -> stats(ctx.getSource()))
+                .then(argument("skill", StringArgumentType.word())
+                        .suggests(skillOnlySuggestions())
+                        .executes(ctx -> statsForSkill(ctx.getSource(),
+                                StringArgumentType.getString(ctx, "skill")))));
         dispatcher.register(literal("mcability").executes(ctx -> ability(ctx.getSource())));
         dispatcher.register(literal("mcrefresh").executes(ctx -> refresh(ctx.getSource())));
 
@@ -119,6 +128,33 @@ public final class McMMOCommands {
         final int power = mmoPlayer.getPowerLevel();
         source.sendFeedback(() -> Text.literal("Power Level: ").formatted(Formatting.GOLD)
                 .append(Text.literal(String.valueOf(power)).formatted(Formatting.GREEN)), false);
+        source.sendFeedback(() -> Text.literal("Use ").formatted(Formatting.GRAY)
+                .append(Text.literal("/mcstats <skill>").formatted(Formatting.YELLOW))
+                .append(Text.literal(" for a skill's full details.").formatted(Formatting.GRAY)),
+                false);
+        return 1;
+    }
+
+    // --- /mcstats <skill> ---------------------------------------------------
+
+    /** Full-detail per-skill screen (legacy {@code /<skillname>}), rendered by {@link
+     * SkillStatsRenderer}. */
+    private static int statsForSkill(ServerCommandSource source, String token)
+            throws CommandSyntaxException {
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrThrow().getUuid());
+        if (mmoPlayer == null) {
+            source.sendError(Text.literal("Your mcMMO data has not loaded yet."));
+            return 0;
+        }
+
+        final PrimarySkillType skill = McMMOMod.getSkillTools().matchSkill(token);
+        if (skill == null) {
+            source.sendError(Text.literal("Unknown skill: " + token));
+            return 0;
+        }
+
+        SkillStatsRenderer.forSkill(skill)
+                .render(mmoPlayer, line -> source.sendFeedback(() -> line, false));
         return 1;
     }
 
@@ -248,6 +284,16 @@ public final class McMMOCommands {
         return (ctx, builder) -> {
             builder.suggest(ALL_TOKEN);
             for (PrimarySkillType skill : SkillTools.NON_CHILD_SKILLS) {
+                builder.suggest(skill.name().toLowerCase(Locale.ROOT));
+            }
+            return builder.buildFuture();
+        };
+    }
+
+    /** Suggests every skill name (including child skills) for {@code /mcstats <skill>}; no "all". */
+    private static SuggestionProvider<ServerCommandSource> skillOnlySuggestions() {
+        return (ctx, builder) -> {
+            for (PrimarySkillType skill : PrimarySkillType.values()) {
                 builder.suggest(skill.name().toLowerCase(Locale.ROOT));
             }
             return builder.buildFuture();
