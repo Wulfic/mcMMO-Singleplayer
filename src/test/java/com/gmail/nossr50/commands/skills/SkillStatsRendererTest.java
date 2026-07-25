@@ -1,6 +1,7 @@
 package com.gmail.nossr50.commands.skills;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -18,6 +19,9 @@ import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.maces.MacesManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
+import com.gmail.nossr50.skills.repair.RepairManager;
+import com.gmail.nossr50.skills.salvage.SalvageManager;
+import com.gmail.nossr50.skills.smelting.SmeltingManager;
 import com.gmail.nossr50.skills.spears.SpearsManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.tridents.TridentsManager;
@@ -79,6 +83,9 @@ class SkillStatsRendererTest {
         when(mmoPlayer.getTridentsManager()).thenReturn(new TridentsManager(mmoPlayer));
         when(mmoPlayer.getMacesManager()).thenReturn(new MacesManager(mmoPlayer));
         when(mmoPlayer.getSpearsManager()).thenReturn(new SpearsManager(mmoPlayer));
+        when(mmoPlayer.getRepairManager()).thenReturn(new RepairManager(mmoPlayer));
+        when(mmoPlayer.getSalvageManager()).thenReturn(new SalvageManager(mmoPlayer));
+        when(mmoPlayer.getSmeltingManager()).thenReturn(new SmeltingManager(mmoPlayer));
         UserManager.track(mmoPlayer);
     }
 
@@ -167,6 +174,25 @@ class SkillStatsRendererTest {
             when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
             assertTrue(anyLineContains(render(SkillStatsRenderer.forSkill(s)), "Stats"),
                     s.name() + " shows effect stats at max level");
+        }
+    }
+
+    @Test
+    void miscRenderersEmitAStatsSectionAtMaxLevel() {
+        for (PrimarySkillType s : List.of(PrimarySkillType.ACROBATICS, PrimarySkillType.REPAIR,
+                PrimarySkillType.SALVAGE, PrimarySkillType.SMELTING)) {
+            when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
+            assertTrue(anyLineContains(render(SkillStatsRenderer.forSkill(s)), "Stats"),
+                    s.name() + " shows effect stats at max level");
+        }
+    }
+
+    @Test
+    void everySkillResolvesToANonNullRenderer() {
+        // Guards the forSkill switch: every PrimarySkillType maps to a renderer (dedicated or the
+        // generic fallback), none throws or returns null.
+        for (PrimarySkillType s : PrimarySkillType.values()) {
+            assertNotNull(SkillStatsRenderer.forSkill(s), s.name() + " must resolve to a renderer");
         }
     }
 

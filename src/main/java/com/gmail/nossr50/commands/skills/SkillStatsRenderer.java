@@ -73,6 +73,14 @@ public abstract class SkillStatsRenderer {
             case MACES -> new MacesStatsRenderer();
             case SPEARS -> new SpearsStatsRenderer();
             case TAMING -> new TamingStatsRenderer();
+            case ACROBATICS -> new AcrobaticsStatsRenderer();
+            case ALCHEMY -> new AlchemyStatsRenderer();
+            case REPAIR -> new RepairStatsRenderer();
+            case SALVAGE -> new SalvageStatsRenderer();
+            case SMELTING -> new SmeltingStatsRenderer();
+            case FISHING -> new FishingStatsRenderer();
+            // Every current skill has a dedicated renderer; the fallback keeps a future
+            // PrimarySkillType (Pass 2 new skills) working with header + sub-skill list.
             default -> new GenericSkillStatsRenderer(skill);
         };
     }
