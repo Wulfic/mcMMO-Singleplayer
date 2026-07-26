@@ -349,7 +349,7 @@ class AgilityMovementTest {
         assertFalse(early.canSmash(), "Smash unlocks at 150 in RetroMode");
         assertFalse(early.rollSmash(), "a locked sub-skill must never roll");
         assertFalse(early.canLakeRaider(), "Lake Raider unlocks at 500 in RetroMode");
-        assertFalse(early.rollLakeRaiderTreasure());
+        assertFalse(early.rollLakeRaiderSuccess());
 
         final AgilityManager maxed = managerAtLevel(1000);
         assertTrue(maxed.canSmash());

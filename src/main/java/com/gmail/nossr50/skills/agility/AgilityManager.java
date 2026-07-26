@@ -603,8 +603,11 @@ public class AgilityManager extends SkillManager {
                 && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_LAKE_RAIDER);
     }
 
-    /** Rolls Lake Raider for an underwater block break. */
-    public boolean rollLakeRaiderTreasure() {
+    /**
+     * The main Lake Raider roll for an underwater block break — the primary gate, before any
+     * individual treasure's own drop chance is consulted.
+     */
+    public boolean rollLakeRaiderSuccess() {
         return canLakeRaider()
                 && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.AGILITY_LAKE_RAIDER, mmoPlayer);
     }

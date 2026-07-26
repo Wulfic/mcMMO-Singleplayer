@@ -819,7 +819,7 @@ public final class BlockBreakListener {
             return; // Not a block anything is buried in.
         }
         final Optional<ExcavationTreasure> won = agility.rollLakeRaiderTreasure(candidates,
-                agility.rollLakeRaiderTreasure(),
+                agility.rollLakeRaiderSuccess(),
                 chance -> ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.AGILITY,
                         mmoPlayer, chance));
         if (won.isEmpty()) {
