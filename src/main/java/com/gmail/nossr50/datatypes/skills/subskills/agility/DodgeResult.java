@@ -1,8 +1,8 @@
-package com.gmail.nossr50.datatypes.skills.subskills.acrobatics;
+package com.gmail.nossr50.datatypes.skills.subskills.agility;
 
 /**
- * Immutable outcome of a successful Acrobatics Dodge (see
- * {@link com.gmail.nossr50.skills.acrobatics.AcrobaticsManager#dodgeCheck}).
+ * Immutable outcome of a successful Agility Dodge (see
+ * {@link com.gmail.nossr50.skills.agility.AgilityManager#dodgeCheck}).
  *
  * <p>Unlike {@link RollResult}, a Dodge only produces a result when it <em>succeeds</em>: the
  * evaluator returns {@code null} when the player fails the roll (or the reduced hit would still be
@@ -24,7 +24,7 @@ public final class DodgeResult {
         return modifiedDamage;
     }
 
-    /** The Acrobatics XP to award for this dodge (0 when the attacker is not XP-eligible). */
+    /** The Agility XP to award for this dodge (0 when the attacker is not XP-eligible). */
     public float getXpGain() {
         return xpGain;
     }

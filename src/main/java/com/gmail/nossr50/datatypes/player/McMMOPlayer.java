@@ -15,7 +15,7 @@ import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.runnables.skills.AbilityDisableTask;
 import com.gmail.nossr50.runnables.skills.ToolLowerTask;
 import com.gmail.nossr50.skills.SkillManager;
-import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
+import com.gmail.nossr50.skills.agility.AgilityManager;
 import com.gmail.nossr50.skills.alchemy.AlchemyManager;
 import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
@@ -167,7 +167,7 @@ public class McMMOPlayer {
     private void initManager(PrimarySkillType primarySkillType) {
         final SkillManager manager = switch (primarySkillType) {
             // PORT Phase 10.2/10.3: uncomment each case as the manager class ports.
-            case ACROBATICS -> new AcrobaticsManager(this);
+            case AGILITY -> new AgilityManager(this);
             case ALCHEMY -> new AlchemyManager(this);
             case ARCHERY -> new ArcheryManager(this);
             case AXES -> new AxesManager(this);
@@ -198,11 +198,11 @@ public class McMMOPlayer {
      * Skill-manager accessors (Phase 10.2/10.3). Each is the one-liner:
      *     public XxxManager getXxxManager() { return (XxxManager) skillManagers.get(PrimarySkillType.XXX); }
      * Uncomment/add one per manager as it ports, alongside its initManager() case above. The
-     * manager ↔ skill mapping is the commented switch above (AcrobaticsManager↔ACROBATICS, …).
+     * manager ↔ skill mapping is the commented switch above (AgilityManager↔AGILITY, …).
      */
 
-    public AcrobaticsManager getAcrobaticsManager() {
-        return (AcrobaticsManager) skillManagers.get(PrimarySkillType.ACROBATICS);
+    public AgilityManager getAgilityManager() {
+        return (AgilityManager) skillManagers.get(PrimarySkillType.AGILITY);
     }
 
     public AlchemyManager getAlchemyManager() {

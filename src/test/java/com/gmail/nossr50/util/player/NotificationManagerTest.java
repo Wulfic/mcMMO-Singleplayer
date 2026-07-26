@@ -123,7 +123,7 @@ class NotificationManagerTest {
 
     @Test
     void unlockNotificationSendsSkillUnlockMessageToChat() {
-        SubSkillType subSkillType = SubSkillType.ACROBATICS_DODGE;
+        SubSkillType subSkillType = SubSkillType.AGILITY_DODGE;
         // Build the expectation from the same inputs the manager uses, so the assertion is robust to
         // the concrete rank the (unstubbed) player resolves to.
         Text expected = LocaleLoader.getText("JSON.SkillUnlockMessage",
@@ -140,7 +140,7 @@ class NotificationManagerTest {
     void unlockNotificationIsNoOpWhenChatNotificationsDisabled() {
         when(mmoPlayer.useChatNotifications()).thenReturn(false);
 
-        NotificationManager.sendPlayerUnlockNotification(mmoPlayer, SubSkillType.ACROBATICS_DODGE);
+        NotificationManager.sendPlayerUnlockNotification(mmoPlayer, SubSkillType.AGILITY_DODGE);
 
         // Gated before both the message and the unlock sound.
         verifyNoInteractions(platformPlayer);
@@ -149,7 +149,7 @@ class NotificationManagerTest {
     @Test
     void unlockNotificationIsNoOpForNullPlayer() {
         // Must not throw and must not touch config/player.
-        NotificationManager.sendPlayerUnlockNotification(null, SubSkillType.ACROBATICS_DODGE);
+        NotificationManager.sendPlayerUnlockNotification(null, SubSkillType.AGILITY_DODGE);
     }
 
     @Test

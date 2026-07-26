@@ -5,12 +5,12 @@
       "id": "minecraft:feather"
     },
     "title": {
-      "text": "Acrobatics Milestone",
+      "text": "Agility Milestone",
       "color": "gold",
       "bold": true
     },
     "description": {
-      "text": "Your Acrobatics skill reached a new milestone!",
+      "text": "Your Agility skill reached a new milestone!",
       "color": "yellow"
     },
     "frame": "goal",

@@ -174,7 +174,7 @@ public final class PlatformPlayer {
 
     /**
      * Bukkit {@code Player#isBlocking()}: whether the player is actively raising a shield. Maps to
-     * vanilla {@link net.minecraft.entity.LivingEntity#isBlocking()}. Consumed by the Acrobatics
+     * vanilla {@link net.minecraft.entity.LivingEntity#isBlocking()}. Consumed by the Agility
      * Dodge gate, which suppresses a dodge while the player is blocking.
      */
     public boolean isBlocking() {
@@ -277,10 +277,10 @@ public final class PlatformPlayer {
         return handle.getOffHandStack();
     }
 
-    // --- Acrobatics fall/roll support (K2) ----------------------------------
+    // --- Agility fall/roll support (K2) ----------------------------------
 
     /**
-     * Whether either hand holds an Ender Pearl. Consumed by the Acrobatics exploit check (throwing
+     * Whether either hand holds an Ender Pearl. Consumed by the Agility exploit check (throwing
      * pearls to trigger fall damage is a known XP-farm). Bukkit
      * {@code ItemUtils.hasItemInEitherHand(player, Material.ENDER_PEARL)}.
      */
@@ -291,7 +291,7 @@ public final class PlatformPlayer {
 
     /**
      * Whether the player is riding an entity (Bukkit {@code Player#isInsideVehicle()} →
-     * {@link net.minecraft.entity.Entity#hasVehicle()}). Consumed by the Acrobatics exploit check
+     * {@link net.minecraft.entity.Entity#hasVehicle()}). Consumed by the Agility exploit check
      * (fall damage while mounted is disallowed for XP).
      */
     public boolean isInsideVehicle() {
@@ -313,7 +313,7 @@ public final class PlatformPlayer {
 
     /**
      * The packed key ({@link BlockPos#asLong()}) of the block the player is standing in, used by the
-     * Acrobatics fall-location history to throttle repeat XP farming on the same block.
+     * Agility fall-location history to throttle repeat XP farming on the same block.
      */
     public long getFeetBlockKey() {
         return handle.getBlockPos().asLong();

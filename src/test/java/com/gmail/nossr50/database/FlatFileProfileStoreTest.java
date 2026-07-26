@@ -17,8 +17,9 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Round-trips {@link PlayerProfile} data through the {@link FlatFileProfileStore} (MC-free, temp
  * directory). Verifies fresh-profile creation, save→reload fidelity of levels/xp, forward-compat
- * back-fill for skills absent from an old file, and that {@link PlayerProfile#save} is a no-op when
- * no store is bound.
+ * back-fill for skills absent from an old file, the legacy-save-key migration for a skill that has
+ * been renamed ({@link com.gmail.nossr50.util.skills.SkillRenames}), and that
+ * {@link PlayerProfile#save} is a no-op when no store is bound.
  */
 class FlatFileProfileStoreTest {
 
@@ -79,6 +80,76 @@ class FlatFileProfileStoreTest {
         assertEquals(9, profile.getSkillLevel(PrimarySkillType.MINING));
         // A skill absent from the file falls back to the supplied starting level.
         assertEquals(2, profile.getSkillLevel(PrimarySkillType.SWORDS));
+    }
+
+    // --- Renamed-skill migration (ACROBATICS → AGILITY, Pass 2 / D5) --------------------------
+    //
+    // A skill's name() IS its save key, so the rename would otherwise silently reset every profile
+    // written before it: the new key is absent, the default wins, and nothing is logged. These
+    // three cases pin the whole contract — legacy key honoured, current key preferred, neither
+    // present defaults cleanly.
+
+    @Test
+    void readsRenamedSkillFromItsLegacySaveKey(@TempDir Path dir) throws Exception {
+        final UUID uuid = UUID.randomUUID();
+        // A profile written before ACROBATICS was renamed AGILITY. Level AND xp must both survive.
+        Files.writeString(dir.resolve(uuid + ".yml"),
+                "uuid: " + uuid + "\nname: Veteran\n"
+                        + "skills:\n  ACROBATICS: 47\n"
+                        + "experience:\n  ACROBATICS: 812.5\n");
+
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        final PlayerProfile profile = store.loadProfile(uuid, "Veteran", STARTING_LEVEL);
+
+        assertEquals(47, profile.getSkillLevel(PrimarySkillType.AGILITY));
+        assertEquals(812.5F, profile.getSkillXpLevelRaw(PrimarySkillType.AGILITY));
+    }
+
+    @Test
+    void prefersCurrentSaveKeyOverLegacyWhenBothPresent(@TempDir Path dir) throws Exception {
+        final UUID uuid = UUID.randomUUID();
+        // A file touched by both a pre- and post-rename build. The current key is authoritative.
+        Files.writeString(dir.resolve(uuid + ".yml"),
+                "uuid: " + uuid + "\nname: Mixed\n"
+                        + "skills:\n  ACROBATICS: 47\n  AGILITY: 63\n"
+                        + "experience:\n  ACROBATICS: 812.5\n  AGILITY: 100.0\n");
+
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        final PlayerProfile profile = store.loadProfile(uuid, "Mixed", STARTING_LEVEL);
+
+        assertEquals(63, profile.getSkillLevel(PrimarySkillType.AGILITY));
+        assertEquals(100.0F, profile.getSkillXpLevelRaw(PrimarySkillType.AGILITY));
+    }
+
+    @Test
+    void defaultsCleanlyWhenNeitherSaveKeyPresent(@TempDir Path dir) throws Exception {
+        final UUID uuid = UUID.randomUUID();
+        Files.writeString(dir.resolve(uuid + ".yml"),
+                "uuid: " + uuid + "\nname: Fresh\nskills:\n  MINING: 9\n");
+
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        final PlayerProfile profile = store.loadProfile(uuid, "Fresh", 2);
+
+        assertEquals(2, profile.getSkillLevel(PrimarySkillType.AGILITY));
+        assertEquals(0F, profile.getSkillXpLevelRaw(PrimarySkillType.AGILITY));
+    }
+
+    @Test
+    void writesRenamedSkillUnderItsCurrentKeyOnly(@TempDir Path dir) throws Exception {
+        final UUID uuid = UUID.randomUUID();
+        Files.writeString(dir.resolve(uuid + ".yml"),
+                "uuid: " + uuid + "\nname: Veteran\n"
+                        + "skills:\n  ACROBATICS: 47\n"
+                        + "experience:\n  ACROBATICS: 812.5\n");
+
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        McMMOMod.setProfileStore(store);
+        store.loadProfile(uuid, "Veteran", STARTING_LEVEL).save(true);
+
+        // The orphaned legacy key is dropped by the rewrite — the migration is one-way and settles.
+        final String written = Files.readString(dir.resolve(uuid + ".yml"));
+        assertTrue(written.contains("AGILITY: 47"), written);
+        assertFalse(written.contains("ACROBATICS"), written);
     }
 
     @Test

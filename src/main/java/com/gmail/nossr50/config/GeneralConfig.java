@@ -408,13 +408,13 @@ public class GeneralConfig extends ConfigLoader {
         return config.getInt("Skills.Axes.Ability_Activation_Level_Gate", 10);
     }
 
-    /* Acrobatics */
+    /* Agility */
     public boolean getDodgeLightningDisabled() {
-        return config.getBoolean("Skills.Acrobatics.Prevent_Dodge_Lightning", false);
+        return config.getBoolean("Skills.Agility.Prevent_Dodge_Lightning", false);
     }
 
     public int getXPAfterTeleportCooldown() {
-        return config.getInt("Skills.Acrobatics.XP_After_Teleport_Cooldown", 5);
+        return config.getInt("Skills.Agility.XP_After_Teleport_Cooldown", 5);
     }
 
     /* Alchemy */

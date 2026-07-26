@@ -105,9 +105,9 @@ Skills:
 
 
     #
-    #  Settings for Acrobatics
+    #  Settings for Agility
     ###
-    Acrobatics:
+    Agility:
         Dodge:
             # ChanceMax: Maximum chance of dodging when on <MaxBonusLevel> or higher
             # MaxBonusLevel: On this level or higher, the dodge chance will not go higher than <ChanceMax>

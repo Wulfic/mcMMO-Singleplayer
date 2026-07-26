@@ -223,7 +223,7 @@ Hardcore:
         Penalty_Percentage: 75.0
         Level_Threshold: 0
         Enabled:
-            Acrobatics: false
+            Agility: false
             Alchemy: false
             Archery: false
             Axes: false
@@ -244,7 +244,7 @@ Hardcore:
         Leech_Percentage: 5.0
         Level_Threshold: 0
         Enabled:
-            Acrobatics: false
+            Agility: false
             Alchemy: false
             Archery: false
             Axes: false
@@ -366,11 +366,11 @@ Abilities:
 #  Level cap of 0 for no limit
 ###
 Skills:
-    Acrobatics:
+    Agility:
         Enabled_For_PVP: true
         Enabled_For_PVE: true
         Prevent_Dodge_Lightning: false
-        # Prevent earning Acrobatics XP a few seconds after teleporting
+        # Prevent earning Agility XP a few seconds after teleporting
         XP_After_Teleport_Cooldown: 5
         Level_Cap: 0
     Alchemy:

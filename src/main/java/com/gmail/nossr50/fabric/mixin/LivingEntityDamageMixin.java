@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.At;
 
 /**
  * The K1/K2 damage hook. mcMMO needs to see and <em>reduce</em> the final damage applied to a living
- * entity (Acrobatics Roll cuts fall damage), which no Fabric API event exposes —
+ * entity (Agility Roll cuts fall damage), which no Fabric API event exposes —
  * {@code ServerLivingEntityEvents.ALLOW_DAMAGE} is cancel-only. So we intercept the return of
  * {@link LivingEntity#modifyAppliedDamage(DamageSource, float)}, the vanilla method that yields the
  * post-armor/enchantment damage about to be dealt, and route it through

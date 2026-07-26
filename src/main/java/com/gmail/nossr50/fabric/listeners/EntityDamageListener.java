@@ -3,15 +3,15 @@ package com.gmail.nossr50.fabric.listeners;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
-import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.DodgeResult;
-import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.RollResult;
+import com.gmail.nossr50.datatypes.skills.subskills.agility.DodgeResult;
+import com.gmail.nossr50.datatypes.skills.subskills.agility.RollResult;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.MeleeDamageBonus;
 import com.gmail.nossr50.skills.MeleeDamageBonus.MeleeWeapon;
-import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
+import com.gmail.nossr50.skills.agility.AgilityManager;
 import com.gmail.nossr50.skills.archery.Archery;
 import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
@@ -56,11 +56,11 @@ import net.minecraft.sound.SoundCategory;
  * The K1/K2 damage hook: mcMMO's window into the vanilla damage pipeline. Driven by a mixin on
  * {@link LivingEntity#modifyAppliedDamage(DamageSource, float)} (see
  * {@code fabric.mixin.LivingEntityDamageMixin}) rather than a Fabric event, because mcMMO needs to
- * <em>modify</em> the applied damage (Acrobatics Roll reduces fall damage) and Fabric's
+ * <em>modify</em> the applied damage (Agility Roll reduces fall damage) and Fabric's
  * {@code ServerLivingEntityEvents.ALLOW_DAMAGE} is a cancel-only veto.
  *
- * <p>Currently wired: <b>K2 — fall damage → Acrobatics Roll</b>, the defender half of <b>K1 — combat
- * damage → Acrobatics Dodge</b> (attacker resolved via {@link DamageSource#getAttacker()}), and the
+ * <p>Currently wired: <b>K2 — fall damage → Agility Roll</b>, the defender half of <b>K1 — combat
+ * damage → Agility Dodge</b> (attacker resolved via {@link DamageSource#getAttacker()}), and the
  * attacker half of <b>K1 — melee weapon on-hit damage bonuses</b> (Swords Stab / Axe Mastery /
  * Unarmed Steel Arm + Berserk / Maces Crush, composed MC-free in {@link MeleeDamageBonus}), and the
  * on-hit <em>effect</em> sub-skills: <b>Swords Rupture</b> (bleed DoT — see {@link #maybeProcessRupture})
@@ -303,7 +303,7 @@ public final class EntityDamageListener {
         result = applyProjectileAttackBonus(entity, source, result);
 
         // K1 defender / K2 branch: the entity *taking* damage is a player — fall damage feeds
-        // Acrobatics Roll, an incoming entity hit feeds Acrobatics Dodge.
+        // Agility Roll, an incoming entity hit feeds Agility Dodge.
         if (entity instanceof ServerPlayerEntity serverPlayer) {
             if (source.isIn(DamageTypeTags.IS_FALL)) {
                 result = handleFallDamage(serverPlayer, result);
@@ -1046,20 +1046,20 @@ public final class EntityDamageListener {
         if (mmoPlayer == null) {
             return amount; // data not loaded (e.g. mid-join).
         }
-        final AcrobaticsManager acrobatics = mmoPlayer.getAcrobaticsManager();
-        if (acrobatics == null) {
+        final AgilityManager agility = mmoPlayer.getAgilityManager();
+        if (agility == null) {
             return amount;
         }
 
         // The manager awards XP + tracks the landing block internally; it hands back the outcome so we
         // can apply the damage reduction + feedback (the MC-typed half) here.
-        final RollResult result = acrobatics.processFallDamage(amount);
+        final RollResult result = agility.processFallDamage(amount);
         if (result == null || !result.isRollSuccess()) {
             return amount;
         }
 
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
-                result.isGraceful() ? "Acrobatics.Ability.Proc" : "Acrobatics.Roll.Text");
+                result.isGraceful() ? "Agility.Ability.Proc" : "Agility.Roll.Text");
         SoundManager.sendCategorizedSound(mmoPlayer.getPlayer(), SoundType.ROLL_ACTIVATED,
                 SoundCategory.PLAYERS, 0.5F);
         return (float) result.getModifiedDamage();
@@ -1072,12 +1072,12 @@ public final class EntityDamageListener {
 
     /**
      * K1 defender branch: a player taking a hit from an entity may Dodge, reducing the damage and
-     * (against an eligible mob) gaining Acrobatics XP. Mirrors legacy
+     * (against an eligible mob) gaining Agility XP. Mirrors legacy
      * {@code CombatUtils.processCombatAttack}'s dodge path. (The attacker-side melee weapon bonuses
      * are handled separately in {@link #applyAttackerWeaponBonus}.)
      */
     private static float handleDodge(ServerPlayerEntity serverPlayer, Entity attacker, float amount) {
-        // Lightning dodge can be excluded by config (legacy Acrobatics.dodgeLightningDisabled).
+        // Lightning dodge can be excluded by config (legacy Agility.dodgeLightningDisabled).
         if (attacker instanceof LightningEntity
                 && McMMOMod.getGeneralConfig().getDodgeLightningDisabled()) {
             return amount;
@@ -1087,8 +1087,8 @@ public final class EntityDamageListener {
         if (mmoPlayer == null) {
             return amount;
         }
-        final AcrobaticsManager acrobatics = mmoPlayer.getAcrobaticsManager();
-        if (acrobatics == null) {
+        final AgilityManager agility = mmoPlayer.getAgilityManager();
+        if (agility == null) {
             return amount;
         }
 
@@ -1096,7 +1096,7 @@ public final class EntityDamageListener {
         // when the attacker is XP-ineligible, it just pays nothing.
         final boolean xpEligible = attacker instanceof MobEntity && dodgeXpUncapped((MobEntity) attacker);
 
-        final DodgeResult result = acrobatics.processDodge(amount, xpEligible);
+        final DodgeResult result = agility.processDodge(amount, xpEligible);
         if (result == null) {
             return amount; // no dodge — leave the hit untouched.
         }
@@ -1106,7 +1106,7 @@ public final class EntityDamageListener {
         }
         if (mmoPlayer.useChatNotifications()) {
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
-                    "Acrobatics.Combat.Proc");
+                    "Agility.Combat.Proc");
         }
         // PORT: legacy also spawned ParticleEffectUtils.playDodgeEffect + scheduled MobDodgeMetaCleanup
         // to expire the tracker after a minute. Particles need a PlatformPlayer particle adapter; the
@@ -1117,7 +1117,7 @@ public final class EntityDamageListener {
 
     /** Whether {@code mob} has not yet hit the dodge-XP award cap. */
     private static boolean dodgeXpUncapped(MobEntity mob) {
-        if (!McMMOMod.getExperienceConfig().isAcrobaticsExploitingPrevented()) {
+        if (!McMMOMod.getExperienceConfig().isAgilityExploitingPrevented()) {
             return true; // exploit prevention off → uncapped.
         }
         final Integer count = MetadataStore.get(mob, DODGE_TRACKER_KEY, Integer.class);
@@ -1126,7 +1126,7 @@ public final class EntityDamageListener {
 
     /** Bump the per-mob dodge-XP counter after a successful, XP-paying dodge. */
     private static void incrementDodgeTracker(MobEntity mob) {
-        if (!McMMOMod.getExperienceConfig().isAcrobaticsExploitingPrevented()) {
+        if (!McMMOMod.getExperienceConfig().isAgilityExploitingPrevented()) {
             return;
         }
         final Integer count = MetadataStore.get(mob, DODGE_TRACKER_KEY, Integer.class);

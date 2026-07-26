@@ -1,8 +1,8 @@
-package com.gmail.nossr50.datatypes.skills.subskills.acrobatics;
+package com.gmail.nossr50.datatypes.skills.subskills.agility;
 
 /**
- * Immutable outcome of an Acrobatics fall/roll evaluation (see
- * {@link com.gmail.nossr50.skills.acrobatics.AcrobaticsManager#rollCheck}).
+ * Immutable outcome of an Agility fall/roll evaluation (see
+ * {@link com.gmail.nossr50.skills.agility.AgilityManager#rollCheck}).
  *
  * <p>Port note (K2): the legacy builder took a Bukkit {@code EntityDamageEvent} and tracked
  * {@code eventDamage}/{@code isFatal}; both were only read for the never-shipped stats UI, so the
@@ -40,12 +40,12 @@ public final class RollResult {
         return modifiedDamage;
     }
 
-    /** Whether the player is detected as farming Acrobatics XP (suppresses the XP award). */
+    /** Whether the player is detected as farming Agility XP (suppresses the XP award). */
     public boolean isExploiting() {
         return exploiting;
     }
 
-    /** The Acrobatics XP to award for this fall (0 when throttled or exploiting). */
+    /** The Agility XP to award for this fall (0 when throttled or exploiting). */
     public float getXpGain() {
         return xpGain;
     }

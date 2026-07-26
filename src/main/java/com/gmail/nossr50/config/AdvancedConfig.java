@@ -46,33 +46,33 @@ public class AdvancedConfig extends ConfigLoader {
             reason.add("Skills.General.Ability.EnchantBuff should be at least 1!");
         }
 
-        /* ACROBATICS */
-        if (getMaximumProbability(SubSkillType.ACROBATICS_DODGE) < 1) {
-            reason.add("Skills.Acrobatics.Dodge.ChanceMax should be at least 1!");
+        /* AGILITY */
+        if (getMaximumProbability(SubSkillType.AGILITY_DODGE) < 1) {
+            reason.add("Skills.Agility.Dodge.ChanceMax should be at least 1!");
         }
 
-        if (getMaxBonusLevel(SubSkillType.ACROBATICS_DODGE) < 1) {
-            reason.add("Skills.Acrobatics.Dodge.MaxBonusLevel should be at least 1!");
+        if (getMaxBonusLevel(SubSkillType.AGILITY_DODGE) < 1) {
+            reason.add("Skills.Agility.Dodge.MaxBonusLevel should be at least 1!");
         }
 
         if (getDodgeDamageModifier() <= 1) {
-            reason.add("Skills.Acrobatics.Dodge.DamageModifier should be greater than 1!");
+            reason.add("Skills.Agility.Dodge.DamageModifier should be greater than 1!");
         }
 
-        if (getMaximumProbability(SubSkillType.ACROBATICS_ROLL) < 1) {
-            reason.add("Skills.Acrobatics.Roll.ChanceMax should be at least 1!");
+        if (getMaximumProbability(SubSkillType.AGILITY_ROLL) < 1) {
+            reason.add("Skills.Agility.Roll.ChanceMax should be at least 1!");
         }
 
-        if (getMaxBonusLevel(SubSkillType.ACROBATICS_ROLL) < 1) {
-            reason.add("Skills.Acrobatics.Roll.MaxBonusLevel should be at least 1!");
+        if (getMaxBonusLevel(SubSkillType.AGILITY_ROLL) < 1) {
+            reason.add("Skills.Agility.Roll.MaxBonusLevel should be at least 1!");
         }
 
         if (getRollDamageThreshold() < 0) {
-            reason.add("Skills.Acrobatics.Roll.DamageThreshold should be at least 0!");
+            reason.add("Skills.Agility.Roll.DamageThreshold should be at least 0!");
         }
 
         if (getGracefulRollDamageThreshold() < 0) {
-            reason.add("Skills.Acrobatics.GracefulRoll.DamageThreshold should be at least 0!");
+            reason.add("Skills.Agility.GracefulRoll.DamageThreshold should be at least 0!");
         }
 
         if (getCatalysisMinSpeed() <= 0) {
@@ -545,17 +545,17 @@ public class AdvancedConfig extends ConfigLoader {
     // sole net.md_5.bungee.api.ChatColor users. Colour parsing, if ever needed, belongs on the
     // Phase 7 Formatting/Style pipeline, not bungee ChatColor.
 
-    /* ACROBATICS */
+    /* AGILITY */
     public double getDodgeDamageModifier() {
-        return config.getDouble("Skills.Acrobatics.Dodge.DamageModifier", 2.0D);
+        return config.getDouble("Skills.Agility.Dodge.DamageModifier", 2.0D);
     }
 
     public double getRollDamageThreshold() {
-        return config.getDouble("Skills.Acrobatics.Roll.DamageThreshold", 7.0D);
+        return config.getDouble("Skills.Agility.Roll.DamageThreshold", 7.0D);
     }
 
     public double getGracefulRollDamageThreshold() {
-        return config.getDouble("Skills.Acrobatics.GracefulRoll.DamageThreshold", 14.0D);
+        return config.getDouble("Skills.Agility.GracefulRoll.DamageThreshold", 14.0D);
     }
 
     /* ALCHEMY */

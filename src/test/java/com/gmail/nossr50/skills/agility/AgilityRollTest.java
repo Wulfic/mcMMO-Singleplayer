@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.acrobatics;
+package com.gmail.nossr50.skills.agility;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
-import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.RollResult;
+import com.gmail.nossr50.datatypes.skills.subskills.agility.RollResult;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import org.junit.jupiter.api.AfterEach;
@@ -20,17 +20,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Covers the deterministic half of the Acrobatics Roll port (K2) — the parts that do not roll the
- * skill RNG (that lives in {@link AcrobaticsManager#processFallDamage} and is verified in-game). The
- * RNG outcome is injected into {@link AcrobaticsManager#rollCheck} so the damage-reduction, XP, fatal,
+ * Covers the deterministic half of the Agility Roll port (K2) — the parts that do not roll the
+ * skill RNG (that lives in {@link AgilityManager#processFallDamage} and is verified in-game). The
+ * RNG outcome is injected into {@link AgilityManager#rollCheck} so the damage-reduction, XP, fatal,
  * and exploit branches are all provable off a mocked {@link PlatformPlayer}.
  */
-class AcrobaticsRollTest {
+class AgilityRollTest {
 
     private ExperienceConfig experienceConfig;
     private AdvancedConfig advancedConfig;
     private PlatformPlayer player;
-    private AcrobaticsManager manager;
+    private AgilityManager manager;
 
     @BeforeEach
     void setUp() {
@@ -39,7 +39,7 @@ class AcrobaticsRollTest {
         player = mock(PlatformPlayer.class);
 
         // Default: exploit prevention off (so canGainRollXP never throttles) and no exploiting state.
-        lenient().when(experienceConfig.isAcrobaticsExploitingPrevented()).thenReturn(false);
+        lenient().when(experienceConfig.isAgilityExploitingPrevented()).thenReturn(false);
         lenient().when(experienceConfig.getRollXPModifier()).thenReturn(80);
         lenient().when(experienceConfig.getFallXPModifier()).thenReturn(120);
         lenient().when(experienceConfig.getFeatherFallXPModifier()).thenReturn(2.0);
@@ -55,7 +55,7 @@ class AcrobaticsRollTest {
 
         final McMMOPlayer mmoPlayer = mock(McMMOPlayer.class);
         when(mmoPlayer.getPlayer()).thenReturn(player);
-        manager = new AcrobaticsManager(mmoPlayer);
+        manager = new AgilityManager(mmoPlayer);
     }
 
     @AfterEach
@@ -113,7 +113,7 @@ class AcrobaticsRollTest {
 
     @Test
     void exploitingPlayerRollsButEarnsNoXp() {
-        when(experienceConfig.isAcrobaticsExploitingPrevented()).thenReturn(true);
+        when(experienceConfig.isAgilityExploitingPrevented()).thenReturn(true);
         when(player.hasEnderPearlInEitherHand()).thenReturn(true); // classic fall-XP farm
         when(player.getHealth()).thenReturn(20.0F);
 

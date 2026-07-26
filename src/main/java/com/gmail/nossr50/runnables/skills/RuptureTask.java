@@ -28,7 +28,7 @@ import org.jetbrains.annotations.NotNull;
  * no other listeners in singleplayer, so the tick damage is applied directly), {@code
  * MobHealthbarUtils} (a multiplayer feature, cut in Phase 1.5), and {@code
  * ParticleEffectUtils.playBleedEffect} (deferred with the rest of the particle surface — no
- * adapter yet, same as Acrobatics' dodge effect).
+ * adapter yet, same as Agility' dodge effect).
  *
  * <p>Legacy's {@code ruptureSource} field goes with them: it fed only the dropped event, the debug
  * messages, and an {@code equals}/{@code hashCode} pair used for nothing (the marker, not equality,

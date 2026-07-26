@@ -8,9 +8,9 @@ import java.util.Locale;
 public enum SubSkillType {
     /* !! Warning -- Do not let subskills share a name with any existing PrimarySkillType as it will clash with the static import !! */
 
-    /* ACROBATICS */
-    ACROBATICS_DODGE(1),
-    ACROBATICS_ROLL,
+    /* AGILITY */
+    AGILITY_DODGE(1),
+    AGILITY_ROLL,
 
     /* ALCHEMY */
     ALCHEMY_CATALYSIS(1),

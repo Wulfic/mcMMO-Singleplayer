@@ -5,12 +5,12 @@
       "id": "minecraft:feather"
     },
     "title": {
-      "text": "Acrobatics: New Ability Rank",
+      "text": "Agility: New Ability Rank",
       "color": "aqua",
       "bold": true
     },
     "description": {
-      "text": "You unlocked a new Acrobatics ability rank!",
+      "text": "You unlocked a new Agility ability rank!",
       "color": "yellow"
     },
     "frame": "task",

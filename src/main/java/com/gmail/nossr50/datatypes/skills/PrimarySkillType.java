@@ -13,7 +13,7 @@ package com.gmail.nossr50.datatypes.skills;
  * datatype vocabulary compile without dragging in the config/skill-tools graph.
  */
 public enum PrimarySkillType {
-    ACROBATICS,
+    AGILITY,
     ALCHEMY,
     ARCHERY,
     AXES,

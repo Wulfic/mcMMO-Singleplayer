@@ -52,7 +52,7 @@ class SkillUnlockNotificationTaskTest {
     @Test
     void runSendsUnlockMessageWhenNotificationsEnabled() {
         when(mmoPlayer.useChatNotifications()).thenReturn(true);
-        SubSkillType subSkillType = SubSkillType.ACROBATICS_DODGE;
+        SubSkillType subSkillType = SubSkillType.AGILITY_DODGE;
         Text expected = LocaleLoader.getText("JSON.SkillUnlockMessage",
                 subSkillType.getLocaleName(), RankUtils.getRank(mmoPlayer, subSkillType));
 
@@ -65,7 +65,7 @@ class SkillUnlockNotificationTaskTest {
     void runIsNoOpWhenNotificationsDisabled() {
         when(mmoPlayer.useChatNotifications()).thenReturn(false);
 
-        new SkillUnlockNotificationTask(mmoPlayer, SubSkillType.ACROBATICS_DODGE, 1).run();
+        new SkillUnlockNotificationTask(mmoPlayer, SubSkillType.AGILITY_DODGE, 1).run();
 
         verifyNoInteractions(platformPlayer);
     }

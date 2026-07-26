@@ -279,7 +279,7 @@ public class ProbabilityUtil {
     }
 
     /**
-     * The Acrobatics Graceful Roll probability: double the odds of a normal Roll (verbatim legacy
+     * The Agility Graceful Roll probability: double the odds of a normal Roll (verbatim legacy
      * {@code Roll#getGracefulProbability}). Lives here rather than in the skill manager because
      * {@link Probability#ofValue(double)} is package-private to {@code util.random}.
      *
@@ -288,7 +288,7 @@ public class ProbabilityUtil {
      */
     public static @NotNull Probability getGracefulRollProbability(@Nullable McMMOPlayer mmoPlayer) {
         double gracefulOdds =
-                getSubSkillProbability(SubSkillType.ACROBATICS_ROLL, mmoPlayer).getValue() * 2;
+                getSubSkillProbability(SubSkillType.AGILITY_ROLL, mmoPlayer).getValue() * 2;
         return Probability.ofValue(gracefulOdds);
     }
 

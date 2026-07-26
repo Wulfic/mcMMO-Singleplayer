@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Bounded most-recently-used history of block positions, used by Acrobatics' anti-exploit check so a
+ * Bounded most-recently-used history of block positions, used by Agility' anti-exploit check so a
  * player can't farm Roll XP by repeatedly falling onto the same block.
  *
  * <p>Port note (Phase 12 / K2): the legacy version keyed on Bukkit {@code Location} and used a Guava

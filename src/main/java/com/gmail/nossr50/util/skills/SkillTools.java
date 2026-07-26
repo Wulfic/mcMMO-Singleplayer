@@ -102,7 +102,7 @@ public class SkillTools {
                 PrimarySkillType.WOODCUTTING
         );
         this.MISC_SKILLS = ImmutableList.of(
-                PrimarySkillType.ACROBATICS,
+                PrimarySkillType.AGILITY,
                 PrimarySkillType.ALCHEMY,
                 PrimarySkillType.REPAIR,
                 PrimarySkillType.SALVAGE,

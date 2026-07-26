@@ -7,33 +7,33 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * {@code /mcstats acrobatics} — port of legacy {@code AcrobaticsCommand}. Shows Dodge and Roll
+ * {@code /mcstats agility} — port of legacy {@code AgilityCommand}. Shows Dodge and Roll
  * chances. (Legacy gated Roll on the dropped {@code AbstractSubSkill}/{@code InteractionManager}
  * registry; singleplayer shows it directly when unlocked.)
  */
-public final class AcrobaticsStatsRenderer extends SkillStatsRenderer {
+public final class AgilityStatsRenderer extends SkillStatsRenderer {
 
     private boolean canDodge;
     private boolean canRoll;
     private String dodgeChance;
     private String rollChance;
 
-    public AcrobaticsStatsRenderer() {
-        super(PrimarySkillType.ACROBATICS);
+    public AgilityStatsRenderer() {
+        super(PrimarySkillType.AGILITY);
     }
 
     @Override
     protected void dataCalculations(float skillValue) {
-        canDodge = hasUnlocked(SubSkillType.ACROBATICS_DODGE);
-        canRoll = hasUnlocked(SubSkillType.ACROBATICS_ROLL);
+        canDodge = hasUnlocked(SubSkillType.AGILITY_DODGE);
+        canRoll = hasUnlocked(SubSkillType.AGILITY_ROLL);
 
         if (canDodge) {
             dodgeChance = ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
-                    SubSkillType.ACROBATICS_DODGE)[0];
+                    SubSkillType.AGILITY_DODGE)[0];
         }
         if (canRoll) {
             rollChance = ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
-                    SubSkillType.ACROBATICS_ROLL)[0];
+                    SubSkillType.AGILITY_ROLL)[0];
         }
     }
 
@@ -42,10 +42,10 @@ public final class AcrobaticsStatsRenderer extends SkillStatsRenderer {
         final List<String> messages = new ArrayList<>();
 
         if (canDodge) {
-            messages.add(getStatMessage(SubSkillType.ACROBATICS_DODGE, dodgeChance));
+            messages.add(getStatMessage(SubSkillType.AGILITY_DODGE, dodgeChance));
         }
         if (canRoll) {
-            messages.add(getStatMessage(SubSkillType.ACROBATICS_ROLL, rollChance));
+            messages.add(getStatMessage(SubSkillType.AGILITY_ROLL, rollChance));
         }
 
         return messages;

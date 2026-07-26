@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 /**
- * Covers the bounded MRU fall-location history that backs Acrobatics' anti-farm check.
+ * Covers the bounded MRU fall-location history that backs Agility' anti-farm check.
  */
 class BlockLocationHistoryTest {
 

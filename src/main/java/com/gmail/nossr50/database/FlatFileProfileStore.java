@@ -6,6 +6,7 @@ import com.gmail.nossr50.datatypes.player.UniqueDataType;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.util.LogUtils;
+import com.gmail.nossr50.util.skills.SkillRenames;
 import com.gmail.nossr50.util.skills.SkillTools;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -39,7 +40,8 @@ import org.slf4j.LoggerFactory;
  * <p>Levels/xp/cooldowns/unique-data are written per enum constant; on load, any constant absent
  * from the file (e.g. a skill added since the file was written) falls back to its default
  * (starting level for skills, 0 otherwise), so old saves stay forward-compatible — the same
- * back-fill contract the configs use.
+ * back-fill contract the configs use. A skill that has been <em>renamed</em> since the file was
+ * written is additionally read back from its old key — see {@link #savedKeyFor}.
  */
 public final class FlatFileProfileStore implements ProfileStore {
 
@@ -88,9 +90,12 @@ public final class FlatFileProfileStore implements ProfileStore {
 
         final Map<PrimarySkillType, Integer> levels = new EnumMap<>(PrimarySkillType.class);
         final Map<PrimarySkillType, Float> xp = new EnumMap<>(PrimarySkillType.class);
+        boolean migrated = false;
         for (PrimarySkillType skill : SkillTools.NON_CHILD_SKILLS) {
-            levels.put(skill, yc.getInt("skills." + skill.name(), startingLevel));
-            xp.put(skill, (float) yc.getDouble("experience." + skill.name(), 0.0));
+            final String key = savedKeyFor(yc, skill, playerName);
+            migrated |= !key.equals(skill.name());
+            levels.put(skill, yc.getInt("skills." + key, startingLevel));
+            xp.put(skill, (float) yc.getDouble("experience." + key, 0.0));
         }
 
         final Map<SuperAbilityType, Integer> cooldowns = new EnumMap<>(SuperAbilityType.class);
@@ -106,8 +111,49 @@ public final class FlatFileProfileStore implements ProfileStore {
         final int tipsShown = yc.getInt("scoreboardTipsShown", 0);
         final Long lastLogin = yc.contains("lastLogin") ? yc.getLong("lastLogin") : null;
 
-        return new PlayerProfile(playerName, uuid, levels, xp, cooldowns, tipsShown, uniqueData,
-                lastLogin);
+        final PlayerProfile profile = new PlayerProfile(playerName, uuid, levels, xp, cooldowns,
+                tipsShown, uniqueData, lastLogin);
+        if (migrated) {
+            // Force the rewrite. PlayerProfile#save is a no-op on a clean profile, so without this
+            // the legacy key survives until the player happens to earn XP — leaving the file in the
+            // both-keys state indefinitely for anyone who logs in and does nothing. Marking it dirty
+            // makes the migration settle on the very next save instead of "eventually".
+            profile.markProfileDirty();
+        }
+        return profile;
+    }
+
+    /**
+     * Resolve which on-disk key holds this skill's saved level/XP, transparently falling back to the
+     * name the skill was persisted under before it was renamed.
+     *
+     * <p>A skill's {@link PrimarySkillType#name()} <em>is</em> its save key, so renaming a constant
+     * orphans every profile written before the rename: {@code skills.AGILITY} is absent,
+     * {@link com.gmail.nossr50.config.YamlConfiguration#getInt(String, int)} hands back the default,
+     * and the player silently restarts the skill at the starting level with nothing logged. The
+     * legacy key is therefore read <b>only when the current key is absent</b> — a profile carrying
+     * both (one written by a mixed-version setup) prefers the current one, which is the authoritative
+     * copy — and the write path always emits the current name, so the orphaned key disappears of its
+     * own accord on the next save.
+     *
+     * @param yc         the loaded profile document
+     * @param skill      the skill being read
+     * @param playerName the owner, for the migration log line
+     * @return the key suffix to read {@code skills.}/{@code experience.} under
+     */
+    private @NotNull String savedKeyFor(@NotNull YamlConfiguration yc,
+            @NotNull PrimarySkillType skill, @NotNull String playerName) {
+        final String current = skill.name();
+        if (yc.contains("skills." + current)) {
+            return current;
+        }
+        final String legacy = SkillRenames.legacyEnumName(skill);
+        if (legacy != null && yc.contains("skills." + legacy)) {
+            LOGGER.info("Migrating {}'s saved {} data from the legacy key '{}'.",
+                    playerName, current, legacy);
+            return legacy;
+        }
+        return current;
     }
 
     private @NotNull PlayerProfile newProfile(@NotNull UUID uuid, @NotNull String playerName,

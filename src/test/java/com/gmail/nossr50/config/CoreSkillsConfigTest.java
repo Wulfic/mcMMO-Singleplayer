@@ -23,8 +23,8 @@ class CoreSkillsConfigTest {
     @Test
     void primarySkillEnabledReadsExplicitTrue(@TempDir Path dataFolder) {
         final CoreSkillsConfig config = new CoreSkillsConfig(dataFolder);
-        // coreskills.yml sets Acrobatics.Enabled: true explicitly.
-        assertTrue(config.isPrimarySkillEnabled(PrimarySkillType.ACROBATICS));
+        // coreskills.yml sets Agility.Enabled: true explicitly.
+        assertTrue(config.isPrimarySkillEnabled(PrimarySkillType.AGILITY));
     }
 
     @Test

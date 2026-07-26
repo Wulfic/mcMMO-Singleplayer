@@ -73,7 +73,7 @@ public abstract class SkillStatsRenderer {
             case MACES -> new MacesStatsRenderer();
             case SPEARS -> new SpearsStatsRenderer();
             case TAMING -> new TamingStatsRenderer();
-            case ACROBATICS -> new AcrobaticsStatsRenderer();
+            case AGILITY -> new AgilityStatsRenderer();
             case ALCHEMY -> new AlchemyStatsRenderer();
             case REPAIR -> new RepairStatsRenderer();
             case SALVAGE -> new SalvageStatsRenderer();

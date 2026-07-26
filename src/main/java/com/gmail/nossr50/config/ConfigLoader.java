@@ -1,9 +1,11 @@
 package com.gmail.nossr50.config;
 
+import com.gmail.nossr50.util.skills.SkillRenames;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +38,7 @@ public abstract class ConfigLoader {
         this.defaultConfig = loadDefaults();
         this.config = initConfig();
         copyMissingDefaults();
+        warnOnRenamedSections();
     }
 
     /** The bundled default config shipped inside the jar at the classpath root. */
@@ -90,6 +93,49 @@ public abstract class ConfigLoader {
                 LOGGER.error("Failed to save merged defaults into config: {}", fileName, e);
             }
         }
+    }
+
+    /**
+     * Warn about tuning stranded under a section name that has since been renamed.
+     *
+     * <p>{@link #copyMissingDefaults()} back-fills only <em>absent</em> keys, so after a skill is
+     * renamed a user's existing config file ends up carrying both spellings: the freshly written
+     * defaults under the new name (which is what the code reads) and their own hand-tuned values
+     * still sitting under the old one, silently ignored. That is a genuinely nasty failure — the
+     * file looks edited, the game ignores it, and nothing says why.
+     *
+     * <p>Warn rather than rewrite, deliberately. This file belongs to the user; a migrator that
+     * moves values between sections has to guess which of two conflicting values wins and can
+     * corrupt hand-authored comments and layout on a file mcMMO did not author. A log line naming
+     * the exact old and new paths costs nothing and cannot destroy anything.
+     */
+    private void warnOnRenamedSections() {
+        for (Map.Entry<String, String> rename : SkillRenames.legacyConfigSections().entrySet()) {
+            final String legacy = rename.getKey();
+            for (String key : config.getKeys(true)) {
+                if (!isUnderSection(key, legacy)) {
+                    continue;
+                }
+                LOGGER.warn("{} still contains a '{}' section, which was renamed to '{}'. Any "
+                                + "values you set under '{}' are being ignored — move them to '{}'.",
+                        fileName, legacy, rename.getValue(), legacy, rename.getValue());
+                break; // One warning per file per rename; the whole section moves together.
+            }
+        }
+    }
+
+    /**
+     * Whether {@code key} is the dotted path of, or nested inside, a section literally named
+     * {@code section}. Matches on whole path segments so a key such as {@code Skills.Agility.Dodge}
+     * is never mistaken for one under a section whose name it merely contains.
+     */
+    private static boolean isUnderSection(@NotNull String key, @NotNull String section) {
+        for (String segment : key.split("\\.")) {
+            if (segment.equals(section)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The on-disk location of this config. */

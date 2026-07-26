@@ -14,7 +14,7 @@ import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
-import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
+import com.gmail.nossr50.skills.agility.AgilityManager;
 import com.gmail.nossr50.skills.alchemy.AlchemyManager;
 import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
@@ -100,7 +100,7 @@ class SkillStatsRendererTest {
         when(mmoPlayer.getWoodcuttingManager()).thenReturn(new WoodcuttingManager(mmoPlayer));
         when(mmoPlayer.getHerbalismManager()).thenReturn(new HerbalismManager(mmoPlayer));
         when(mmoPlayer.getArcheryManager()).thenReturn(new ArcheryManager(mmoPlayer));
-        when(mmoPlayer.getAcrobaticsManager()).thenReturn(new AcrobaticsManager(mmoPlayer));
+        when(mmoPlayer.getAgilityManager()).thenReturn(new AgilityManager(mmoPlayer));
         when(mmoPlayer.getTamingManager()).thenReturn(new TamingManager(mmoPlayer));
         when(mmoPlayer.getFishingManager()).thenReturn(new FishingManager(mmoPlayer));
         when(mmoPlayer.getAlchemyManager()).thenReturn(new AlchemyManager(mmoPlayer));
@@ -197,7 +197,7 @@ class SkillStatsRendererTest {
 
     @Test
     void miscRenderersEmitAStatsSectionAtMaxLevel() {
-        for (PrimarySkillType s : List.of(PrimarySkillType.ACROBATICS, PrimarySkillType.REPAIR,
+        for (PrimarySkillType s : List.of(PrimarySkillType.AGILITY, PrimarySkillType.REPAIR,
                 PrimarySkillType.SALVAGE, PrimarySkillType.SMELTING)) {
             when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
             assertTrue(anyLineContains(render(SkillStatsRenderer.forSkill(s)), "Stats"),

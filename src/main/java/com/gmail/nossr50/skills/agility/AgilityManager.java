@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.acrobatics;
+package com.gmail.nossr50.skills.agility;
 
 import com.gmail.nossr50.datatypes.BlockLocationHistory;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
@@ -6,8 +6,8 @@ import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
-import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.DodgeResult;
-import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.RollResult;
+import com.gmail.nossr50.datatypes.skills.subskills.agility.DodgeResult;
+import com.gmail.nossr50.datatypes.skills.subskills.agility.RollResult;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.SkillManager;
@@ -20,7 +20,7 @@ import com.gmail.nossr50.util.skills.SkillUtils;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Acrobatics skill manager. Both the <b>Roll / Graceful Roll</b> fall-damage path (K2) and the
+ * Agility skill manager. Both the <b>Roll / Graceful Roll</b> fall-damage path (K2) and the
  * <b>Dodge</b> combat path (K1) are live, driven by the {@code modifyAppliedDamage} damage mixin via
  * {@link com.gmail.nossr50.fabric.listeners.EntityDamageListener}. The Dodge XP anti-farm cap
  * (per-mob dodge tracker) and the lightning-dodge exclusion live in the listener (the MC-typed layer,
@@ -28,17 +28,17 @@ import org.jetbrains.annotations.Nullable;
  * damage-reduction + XP math stays deterministic and unit-testable.
  *
  * <p>Port note: the legacy Roll logic lived in the {@code AbstractSubSkill}-based
- * {@code datatypes.skills.subskills.acrobatics.Roll}, tightly coupled to Bukkit's
+ * {@code datatypes.skills.subskills.agility.Roll}, tightly coupled to Bukkit's
  * {@code EntityDamageEvent}. It is folded into this manager MC-free: the RNG orchestration
  * ({@link #processFallDamage}) is verified in-game, while the deterministic pieces
  * ({@link #rollCheck}, {@link #calculateRollXP}, the exploit gate, and the fall-location throttle)
  * are unit-testable. Sound/notification feedback is emitted by the listener (the MC-typed layer), not
  * here, so this class imports no Minecraft types.
  */
-public class AcrobaticsManager extends SkillManager {
+public class AgilityManager extends SkillManager {
 
-    public AcrobaticsManager(McMMOPlayer mmoPlayer) {
-        super(mmoPlayer, PrimarySkillType.ACROBATICS);
+    public AgilityManager(McMMOPlayer mmoPlayer) {
+        super(mmoPlayer, PrimarySkillType.AGILITY);
         this.fallLocationMap = new BlockLocationHistory(50);
     }
 
@@ -48,7 +48,7 @@ public class AcrobaticsManager extends SkillManager {
     private final BlockLocationHistory fallLocationMap;
 
     /**
-     * Processes an incoming fall-damage hit: rolls for Roll/Graceful Roll, awards Acrobatics XP, and
+     * Processes an incoming fall-damage hit: rolls for Roll/Graceful Roll, awards Agility XP, and
      * records the landing block to throttle repeat-farming. Called from the damage listener with the
      * (post-armor/protection) fall damage.
      *
@@ -63,9 +63,9 @@ public class AcrobaticsManager extends SkillManager {
             final boolean isGraceful = getPlayer().isSneaking();
             final Probability probability = isGraceful
                     ? ProbabilityUtil.getGracefulRollProbability(mmoPlayer)
-                    : ProbabilityUtil.getSubSkillProbability(SubSkillType.ACROBATICS_ROLL, mmoPlayer);
+                    : ProbabilityUtil.getSubSkillProbability(SubSkillType.AGILITY_ROLL, mmoPlayer);
             final boolean rngSuccess = ProbabilityUtil.isStaticSkillRNGSuccessful(
-                    PrimarySkillType.ACROBATICS, mmoPlayer, probability);
+                    PrimarySkillType.AGILITY, mmoPlayer, probability);
 
             final RollResult result = rollCheck(baseDamage, isGraceful, rngSuccess);
             if (result == null) {
@@ -96,8 +96,8 @@ public class AcrobaticsManager extends SkillManager {
      */
     public @Nullable RollResult rollCheck(double baseDamage, boolean isGraceful, boolean rngSuccess) {
         final double threshold = McMMOMod.getAdvancedConfig().getRollDamageThreshold() * 2;
-        final double modifiedDamage = Acrobatics.calculateModifiedRollDamage(baseDamage, threshold);
-        final boolean isExploiting = isPlayerExploitingAcrobatics();
+        final double modifiedDamage = Agility.calculateModifiedRollDamage(baseDamage, threshold);
+        final boolean isExploiting = isPlayerExploitingAgility();
 
         // They rolled: the reduced hit is survivable and the roll proc'd.
         if (!isFatal(modifiedDamage) && rngSuccess) {
@@ -127,7 +127,7 @@ public class AcrobaticsManager extends SkillManager {
      * @return {@code true} if Roll XP may be awarded this call
      */
     public boolean canGainRollXP() {
-        if (!McMMOMod.getExperienceConfig().isAcrobaticsExploitingPrevented()) {
+        if (!McMMOMod.getExperienceConfig().isAgilityExploitingPrevented()) {
             return true;
         }
 
@@ -147,8 +147,8 @@ public class AcrobaticsManager extends SkillManager {
      * always granted; the rank gate is the real check.
      */
     public boolean canRoll() {
-        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.ACROBATICS_ROLL)
-                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.ACROBATICS_ROLL);
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_ROLL)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_ROLL);
     }
 
     /**
@@ -161,13 +161,13 @@ public class AcrobaticsManager extends SkillManager {
         if (getPlayer().isBlocking()) {
             return false;
         }
-        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.ACROBATICS_DODGE)
-                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.ACROBATICS_DODGE);
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_DODGE)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_DODGE);
     }
 
     /**
      * Processes an incoming combat hit against this player: rolls Dodge, and on success awards
-     * Acrobatics XP (when the attacker is eligible) and hands back the reduced damage. Called from the
+     * Agility XP (when the attacker is eligible) and hands back the reduced damage. Called from the
      * damage listener with the (post-armor/protection) combat damage.
      *
      * <p>Dodge XP is additionally suppressed for {@link Misc#PLAYER_RESPAWN_COOLDOWN_SECONDS} after
@@ -190,7 +190,7 @@ public class AcrobaticsManager extends SkillManager {
             return null;
         }
         final boolean rngSuccess = ProbabilityUtil.isSkillRNGSuccessful(
-                SubSkillType.ACROBATICS_DODGE, mmoPlayer);
+                SubSkillType.AGILITY_DODGE, mmoPlayer);
         final DodgeResult result = dodgeCheck(baseDamage, rngSuccess,
                 attackerXpEligible && isRespawnGracePeriodOver());
         if (result != null && result.getXpGain() > 0) {
@@ -226,7 +226,7 @@ public class AcrobaticsManager extends SkillManager {
      */
     public @Nullable DodgeResult dodgeCheck(double baseDamage, boolean rngSuccess,
             boolean attackerXpEligible) {
-        final double modifiedDamage = Acrobatics.calculateModifiedDodgeDamage(baseDamage,
+        final double modifiedDamage = Agility.calculateModifiedDodgeDamage(baseDamage,
                 McMMOMod.getAdvancedConfig().getDodgeDamageModifier());
 
         if (isFatal(modifiedDamage) || !rngSuccess) {
@@ -262,12 +262,12 @@ public class AcrobaticsManager extends SkillManager {
     }
 
     /**
-     * Detects players farming Acrobatics XP: prevention must be enabled, and the player is exploiting
+     * Detects players farming Agility XP: prevention must be enabled, and the player is exploiting
      * if they hold an Ender Pearl, are riding an entity, or are landing on a block they already fell
      * onto recently.
      */
-    private boolean isPlayerExploitingAcrobatics() {
-        if (!McMMOMod.getExperienceConfig().isAcrobaticsExploitingPrevented()) {
+    private boolean isPlayerExploitingAgility() {
+        if (!McMMOMod.getExperienceConfig().isAgilityExploitingPrevented()) {
             return false;
         }
 

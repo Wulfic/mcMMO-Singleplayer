@@ -1,0 +1,79 @@
+package com.gmail.nossr50.util.skills;
+
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+/**
+ * The single registry of skills that have been <em>renamed</em> since a save file or config file
+ * could have been written, and what they used to be called.
+ *
+ * <p>This exists because {@link PrimarySkillType#name()} is not just an identifier — it is
+ * <b>the on-disk save key</b> ({@code skills.<NAME>} / {@code experience.<NAME>} in
+ * {@link com.gmail.nossr50.database.FlatFileProfileStore}) and the <b>section name</b> in every
+ * shipped YAML config. Renaming a constant therefore silently orphans player data: the profile
+ * loader falls back to the starting level and the player's progress "vanishes" with no error at
+ * all. Both consumers read this table so a rename costs one entry here instead of a bug report.
+ *
+ * <p>Two separate mappings, because the two surfaces spell skills differently:
+ * <ul>
+ *   <li>{@link #legacyEnumName(PrimarySkillType)} — {@code SCREAMING_CASE}, the save-file key.
+ *       Consumed by the profile store's read path (write always uses the current name, so the
+ *       orphan disappears on the next save).</li>
+ *   <li>{@link #legacyConfigSections()} — {@code Capitalized}, the YAML section name. Consumed by
+ *       {@link com.gmail.nossr50.config.ConfigLoader}, which only <em>warns</em>: the user's config
+ *       file is theirs, and a rewriter that silently moves their tuning around is a worse failure
+ *       mode than a log line telling them to move it.</li>
+ * </ul>
+ *
+ * <p>MC-free and dependency-free by design, so both the profile store and the config tier can read
+ * it without pulling in the other.
+ */
+public final class SkillRenames {
+
+    private SkillRenames() {
+    }
+
+    /**
+     * Current skill → the {@code name()} it was persisted under before the rename. Only skills that
+     * have actually been renamed appear here.
+     */
+    private static final Map<PrimarySkillType, String> LEGACY_ENUM_NAMES =
+            new EnumMap<>(PrimarySkillType.class);
+
+    /**
+     * Legacy YAML section name → the section name it is spelled with today. Insertion-ordered so
+     * the warnings come out in a stable order.
+     */
+    private static final Map<String, String> LEGACY_CONFIG_SECTIONS = new LinkedHashMap<>();
+
+    static {
+        // Pass 2 / D5 (2026-07-25): ACROBATICS was renamed AGILITY when it absorbed the Land, Water
+        // and Air movement domains. Every profile written before that carries `skills.ACROBATICS`.
+        LEGACY_ENUM_NAMES.put(PrimarySkillType.AGILITY, "ACROBATICS");
+        LEGACY_CONFIG_SECTIONS.put("Acrobatics", "Agility");
+    }
+
+    /**
+     * The save-file key this skill used to be written under.
+     *
+     * @param skill the skill to look up
+     * @return the legacy {@code name()}, or {@code null} when this skill has never been renamed
+     *         (the overwhelmingly common case)
+     */
+    public static @Nullable String legacyEnumName(@NotNull PrimarySkillType skill) {
+        return LEGACY_ENUM_NAMES.get(skill);
+    }
+
+    /**
+     * Legacy YAML section names mapped to their current spelling, for the config-orphan warning.
+     *
+     * @return an unmodifiable view; never {@code null}
+     */
+    public static @NotNull Map<String, String> legacyConfigSections() {
+        return Map.copyOf(LEGACY_CONFIG_SECTIONS);
+    }
+}

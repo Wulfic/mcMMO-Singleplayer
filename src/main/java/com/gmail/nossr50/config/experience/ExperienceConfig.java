@@ -129,8 +129,8 @@ public class ExperienceConfig extends ConfigLoader {
         return config.getInt("Fishing_ExploitFix_Options.OverFishLimit", 10);
     }
 
-    public boolean isAcrobaticsExploitingPrevented() {
-        return config.getBoolean("ExploitFix.Acrobatics", true);
+    public boolean isAgilityExploitingPrevented() {
+        return config.getBoolean("ExploitFix.Agility", true);
     }
 
     public boolean isTreeFellerXPReduced() {
@@ -334,21 +334,21 @@ public class ExperienceConfig extends ConfigLoader {
         return config.getInt("Experience_Bars.Hide_Delay_Seconds", 10);
     }
 
-    /* Acrobatics */
+    /* Agility */
     public int getDodgeXPModifier() {
-        return config.getInt("Experience_Values.Acrobatics.Dodge", 120);
+        return config.getInt("Experience_Values.Agility.Dodge", 120);
     }
 
     public int getRollXPModifier() {
-        return config.getInt("Experience_Values.Acrobatics.Roll", 80);
+        return config.getInt("Experience_Values.Agility.Roll", 80);
     }
 
     public int getFallXPModifier() {
-        return config.getInt("Experience_Values.Acrobatics.Fall", 120);
+        return config.getInt("Experience_Values.Agility.Fall", 120);
     }
 
     public double getFeatherFallXPModifier() {
-        return config.getDouble("Experience_Values.Acrobatics.FeatherFall_Multiplier", 2.0);
+        return config.getDouble("Experience_Values.Agility.FeatherFall_Multiplier", 2.0);
     }
 
     /* Archery */
@@ -448,15 +448,15 @@ public class ExperienceConfig extends ConfigLoader {
             reason.add("Experience_Values.Combat.Multiplier.Animals should be at least 0!");
         }
 
-        /* Acrobatics */
+        /* Agility */
         if (getDodgeXPModifier() < 0) {
-            reason.add("Experience_Values.Acrobatics.Dodge should be at least 0!");
+            reason.add("Experience_Values.Agility.Dodge should be at least 0!");
         }
         if (getRollXPModifier() < 0) {
-            reason.add("Experience_Values.Acrobatics.Roll should be at least 0!");
+            reason.add("Experience_Values.Agility.Roll should be at least 0!");
         }
         if (getFallXPModifier() < 0) {
-            reason.add("Experience_Values.Acrobatics.Fall should be at least 0!");
+            reason.add("Experience_Values.Agility.Fall should be at least 0!");
         }
 
         /* Fishing */

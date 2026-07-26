@@ -19,7 +19,7 @@ public final class Misc {
 
     /** Seconds after a respawn during which XP-farm-prone payouts are withheld. Paired with
      *  {@link com.gmail.nossr50.datatypes.player.McMMOPlayer#getRespawnATS()} — in singleplayer the
-     *  only live consumer is the Acrobatics Dodge XP gate (legacy's other one is the PvP combat-XP
+     *  only live consumer is the Agility Dodge XP gate (legacy's other one is the PvP combat-XP
      *  branch, unreachable here). */
     public static final int PLAYER_RESPAWN_COOLDOWN_SECONDS = 5;
 

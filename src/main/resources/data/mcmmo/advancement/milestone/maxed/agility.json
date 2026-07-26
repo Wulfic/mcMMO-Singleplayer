@@ -5,12 +5,12 @@
       "id": "minecraft:feather"
     },
     "title": {
-      "text": "Mastered Acrobatics",
+      "text": "Mastered Agility",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Acrobatics!",
+      "text": "You reached the level cap in Agility!",
       "color": "yellow"
     },
     "frame": "challenge",

@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.acrobatics;
+package com.gmail.nossr50.skills.agility;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -16,7 +16,7 @@ import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
-import com.gmail.nossr50.datatypes.skills.subskills.acrobatics.DodgeResult;
+import com.gmail.nossr50.datatypes.skills.subskills.agility.DodgeResult;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.Misc;
@@ -27,19 +27,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Covers the deterministic half of the Acrobatics Dodge port (K1) — {@link
- * AcrobaticsManager#dodgeCheck}, with the RNG outcome and the attacker's XP-eligibility injected so the
+ * Covers the deterministic half of the Agility Dodge port (K1) — {@link
+ * AgilityManager#dodgeCheck}, with the RNG outcome and the attacker's XP-eligibility injected so the
  * damage-reduction, XP, fatal, and floor branches are all provable off a mocked {@link PlatformPlayer}.
- * The RNG roll and the per-mob anti-farm cap live one layer up ({@link AcrobaticsManager#processDodge}
+ * The RNG roll and the per-mob anti-farm cap live one layer up ({@link AgilityManager#processDodge}
  * and the listener) and are verified in-game.
  */
-class AcrobaticsDodgeTest {
+class AgilityDodgeTest {
 
     private ExperienceConfig experienceConfig;
     private AdvancedConfig advancedConfig;
     private PlatformPlayer player;
     private McMMOPlayer mmoPlayer;
-    private AcrobaticsManager manager;
+    private AgilityManager manager;
 
     @BeforeEach
     void setUp(@TempDir Path dataFolder) {
@@ -52,9 +52,9 @@ class AcrobaticsDodgeTest {
         lenient().when(player.getHealth()).thenReturn(20.0F);
         // Force the Dodge skill RNG to a certainty so processDodge is deterministic: a maxBonusLevel
         // of 0 short-circuits ProbabilityUtil to the ceiling, and the ceiling is 100%.
-        lenient().when(advancedConfig.getMaximumProbability(SubSkillType.ACROBATICS_DODGE))
+        lenient().when(advancedConfig.getMaximumProbability(SubSkillType.AGILITY_DODGE))
                 .thenReturn(100.0);
-        lenient().when(advancedConfig.getMaxBonusLevel(SubSkillType.ACROBATICS_DODGE))
+        lenient().when(advancedConfig.getMaxBonusLevel(SubSkillType.AGILITY_DODGE))
                 .thenReturn(0);
 
         McMMOMod.setExperienceConfig(experienceConfig);
@@ -65,8 +65,8 @@ class AcrobaticsDodgeTest {
 
         mmoPlayer = mock(McMMOPlayer.class);
         when(mmoPlayer.getPlayer()).thenReturn(player);
-        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.ACROBATICS)).thenReturn(1000);
-        manager = new AcrobaticsManager(mmoPlayer);
+        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY)).thenReturn(1000);
+        manager = new AgilityManager(mmoPlayer);
     }
 
     /** Seconds-granularity "now", the unit {@code McMMOPlayer#actualizeRespawnATS} stores. */
@@ -141,7 +141,7 @@ class AcrobaticsDodgeTest {
     }
 
     /**
-     * The wiring case: the gate above is worthless unless {@link AcrobaticsManager#processDodge}
+     * The wiring case: the gate above is worthless unless {@link AgilityManager#processDodge}
      * actually consults it. Runs the real entry point with the skill RNG pinned to certainty, so
      * dropping the {@code && isRespawnGracePeriodOver()} term turns this red.
      */
