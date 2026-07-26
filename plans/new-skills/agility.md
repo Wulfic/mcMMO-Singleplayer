@@ -1,99 +1,397 @@
-# Agility (Sprinting) — Plan
+# Agility — Plan (the merged movement skill)
 
-**Read [00-OVERVIEW.md](00-OVERVIEW.md) first.** This file lists only Agility-specific work; the
-boilerplate registration checklist and the shared foundation (F1 `PlayerMovementTracker`,
-F2 `SkillAttributeService`) live there. Agility is a **standalone primary skill** (D1) and **depends on
-F1 and F2**.
+**Read [00-OVERVIEW.md](00-OVERVIEW.md) first.** This file supersedes the former `agility.md`
+(Sprinting), `swimming.md` and `flying.md` — those three are **deleted**; their content is folded in
+here. See D5 in the overview for the merge ruling.
 
-Wiki source: `raw_site_text.md` §"Sprinting or 'Agility'".
+Agility is **not a new skill.** It is the **existing, shipped, Pass-1 `ACROBATICS` skill renamed**, then
+grown three new movement domains. That distinction drives the whole plan: Stage 0 is a rename with a
+save-file migration, not a greenfield feature.
+
+Wiki sources: `raw_site_text.md` §"Sprinting or 'Agility'", §"Swimming", §"Swimming, alternate idea",
+§"Flying".
+
+---
 
 ## Concept
 
-The movement counterpart to Acrobatics: Acrobatics is about *falling and dodging*, Agility is about
-*sprinting*. You level it by sprinting real distance. It pays off in cheaper sprinting, more speed, and
-a nasty sprint-charge. It is a `MISC_SKILLS` skill.
+**One skill for how you move.** Four domains, one level bar, one XP pool:
 
-**XP source:** horizontal distance sprinted, sampled by F1 (`AgilityManager.onSprintTick`). Only counts
-when `isSprinting()` **and** actually moving **and** not in a vehicle. Sprinting on the spot into a wall
-pays nothing.
+| Domain | Trigger | Status |
+|---|---|---|
+| **Fall** | fall damage, being hit | Acrobatics — **already built, playtested** (Roll, Graceful Roll, Dodge) |
+| **Land** | sprinting | new |
+| **Water** | swimming | new |
+| **Air** | elytra gliding | new |
 
-## Sub-skills
+Why this is the right shape and not just a naming exercise:
 
-Ranks/levels below are authored in **RetroMode** numbers (see overview checklist item 12). "Cap at
-1000" everywhere is the RetroMode max level.
+- The three planned skills were **mechanically the same skill three times** — sample distance per tick,
+  award XP per block, apply a speed modifier, gate on a rank. Three managers, three XP curves, three
+  anti-AFK guards, three attribute-modifier lifecycles = three chances to leak a permanent speed buff.
+- It **shrinks F1** (`PlayerMovementTracker`) from a four-way dispatcher to a single
+  `AgilityManager.onMovementTick(medium, distance)` call with one accumulator and one guard set. The
+  anti-AFK work is done once and protects all four sources.
+- Acrobatics is currently a **two-sub-skill skill with no super ability** — one of the thinnest in the
+  port. This gives it a full roster and a reason to level past Dodge.
+- `/mcstats` goes from four sparse movement screens to one dense, sectioned one.
 
-| Sub-skill | Type | Mechanic | Scaling (wiki → proposed) | Unlock | Risk |
-|---|---|---|---|---|---|
-| **Athlete** | passive | Sprinting costs less hunger | Sprint exhaustion scales from vanilla down toward walk-cost at 1000. Proposed: `exhaustion *= (1 - level/1000 * MaxReduction)`, `MaxReduction` config (wiki wants full walk-cost, i.e. ~1.0; cap it lower, e.g. 0.75, so sprinting is never free). | 1 | Low |
-| **Dash** | passive | Move-speed bonus while sprinting | +1%/40 levels, cap **+25%** at 1000. Managed `GENERIC_MOVEMENT_SPEED` modifier via F2, applied only while sprinting. | 1 | Med (attribute lifecycle) |
-| **Smash** | passive | Sprint-attacks crit / extra knockback | +1%/40 levels chance, cap **+25%** at 1000. Rolls in the combat path only when the attacker is sprinting. | some (e.g. 25) | Low |
-| **Dart** | **active** | Right-click while sprinting → forward burst that damages + knocks back mobs in the path; stun at high level | Cooldowned active ability. Damage/knockback scale with level; "stun" = brief Slowness on hit at high rank. | e.g. 250 | Med (raycast + active infra) |
-| ~~**Multi-jump**~~ | — | double-jump @250, triple @350 | **CUT (D2).** No server-side jump hook; fighting vanilla movement = desync/rubber-band. Do not attempt in v1. | — | **Unshippable** |
+**Cost, stated honestly:** ten sub-skills on one level ladder is the **largest skill in the mod**, and
+four XP sources feeding one bar is a real balance problem (D-AG6). Both are managed below; neither is
+free.
+
+---
+
+## ⚠️ Stage 0 — the rename (do this ALONE, first, and play it)
+
+`ACROBATICS` → `AGILITY` touches the enum name that **is the save-file key**. Do this as its own
+landed, tested, playtested change with **zero new mechanics**. If Stage 0 and Stage 2 land together and
+a profile comes back with a zeroed skill, you will not know which change did it.
+
+### Java
+
+| File | Change |
+|---|---|
+| `datatypes/skills/PrimarySkillType.java` | `ACROBATICS` → `AGILITY` (stays first alphabetically) |
+| `datatypes/skills/SubSkillType.java` | `ACROBATICS_DODGE(1)` → `AGILITY_DODGE(1)`, `ACROBATICS_ROLL` → `AGILITY_ROLL`, comment block `/* ACROBATICS */` → `/* AGILITY */` |
+| `skills/acrobatics/` | → `skills/agility/`; `AcrobaticsManager` → `AgilityManager`, `Acrobatics` → `Agility` (the static math helper) |
+| `datatypes/skills/subskills/acrobatics/` | → `subskills/agility/` (`DodgeResult`, `RollResult`) |
+| `datatypes/player/McMMOPlayer.java` | `case ACROBATICS -> new AcrobaticsManager(this)` (line ~170); `getAcrobaticsManager()` → `getAgilityManager()` (line ~204); the manager↔skill javadoc at line ~201 |
+| `util/skills/SkillTools.java` | `MISC_SKILLS` entry (line ~105) |
+| `commands/skills/AcrobaticsStatsRenderer.java` | → `AgilityStatsRenderer`; `SkillStatsRenderer.java:76` switch case |
+| `config/AdvancedConfig.java` | `Skills.Acrobatics.*` keys (lines ~50-75, ~548-558) + the validation `reason.add(...)` strings |
+| `config/experience/ExperienceConfig.java` | `ExploitFix.Acrobatics` (line 133), `Experience_Values.Acrobatics.*` (lines ~339-351, ~451-459); `isAcrobaticsExploitingPrevented()` → `isAgilityExploitingPrevented()` |
+| `config/GeneralConfig.java` | `Skills.Acrobatics.Prevent_Dodge_Lightning`, `Skills.Acrobatics.XP_After_Teleport_Cooldown` (lines 411-417) |
+| `fabric/client/modmenu/McMMOSettings.java` | the two skill-name arrays (lines 36, 43) |
+| Callers/javadoc | `EntityDamageListener`, `LivingEntityDamageMixin`, `RuptureTask`, `ProbabilityUtil`, `Misc`, `PlatformPlayer`, `BlockLocationHistory` |
+
+### Resources
+
+- `experience.yml` — `ExploitFix.Acrobatics` (27), `Experience_Bars.Acrobatics` (60), the
+  `Skill_Modifiers` entry (182), the `Diminished_Returns` entry (214), `Experience_Values.Acrobatics`
+  (245).
+- `advanced.yml` — `Skills.Acrobatics.{Dodge,Roll}` (110+).
+- `skillranks.yml` — `Acrobatics.Dodge` (105).
+- `config.yml` — lines 226, 247, 369.
+- `coreskills.yml` — `Acrobatics:` (5).
+- `locale_en_US.properties` — `JSON.Acrobatics`, `JSON.Acrobatics.Roll.*`, `Overhaul.Name.Acrobatics`,
+  `XPBar.Acrobatics`, the `Acrobatics.*` block (17 keys, 141-159), `Commands.XPGain.Acrobatics`
+  (→ retitle "Falling" to "Movement"), `Guides.Acrobatics.*` (974-977, rewrite for the new roster in a
+  later stage — rekey now, rewrite content when the domains land).
+- `data/mcmmo/advancement/milestone/{level,rank,maxed}/acrobatics.json` → `agility.json` ×3, and the
+  `title`/`description` text inside each. `Milestones.key()` is `skill.name().toLowerCase(ROOT)`
+  (`Milestones.java:131-132`), so the **file name must match the new enum name exactly** or every
+  milestone plaque silently stops firing.
+
+### The three migrations — none of these are optional
+
+1. **Save files (the dangerous one).** `FlatFileProfileStore` persists by `skill.name()`
+   (`FlatFileProfileStore.java:92-93,148-149`) with a default fallback. After the rename, an existing
+   profile's `skills.ACROBATICS: 47` is simply **not read** and the player silently starts Agility at
+   the starting level. Fix: in the load path, when `skills.AGILITY` is **absent** and `skills.ACROBATICS`
+   is **present**, read the legacy key (same for `experience.`). Write only the new key — the next save
+   drops the orphan naturally. **Add a load-an-old-profile regression test** with a checked-in fixture
+   YAML that has the legacy keys; assert level *and* XP survive. The dev worlds under `run/saves/` are
+   the live test bed — they already contain `ACROBATICS` entries.
+2. **On-disk configs.** `copyMissingDefaults` back-fills only **absent** keys (see `[[xp-boss-bar]]`) —
+   so a world's existing `config/mcmmo/*.yml` gains the new `Agility` blocks while the old `Acrobatics`
+   blocks stay as dead orphans, and **any value the player tuned under the old key is silently
+   ignored.** Recommended: don't write a config-rewriter; emit a one-line `LogUtils` warning at load
+   when a legacy `Acrobatics` key is still present, telling the player to move their tuning. Cheap,
+   honest, no rewrite risk on a file we don't own.
+3. **Granted advancements.** `mcmmo:milestone/*/acrobatics` ids cease to exist; vanilla drops unknown
+   entries from the player advancement file with a log line. Harmless — the player re-earns the rank
+   plaque once. Document it, don't fix it.
+
+### Stage 0 done-criteria
+
+Full suite green · `runServer` boot clean (gate the piped `stop` on `Done (`, never a sleep —
+`[[placed-block-persistence]]`) · migration regression test green · ModMenu key-validation test green
+(it will catch every config key you missed — that is exactly what it's for, `[[modmenu-integration]]`)
+· **a real client run** on an existing `run/saves` world confirming the old Acrobatics level and XP are
+intact under the new name, Roll/Dodge still fire, and the XP bar reads `Agility Lv.X`.
+
+---
+
+## Sub-skill roster (10)
+
+Ranks are authored in **RetroMode** numbers (overview checklist item 12); Standard is the ÷10 view.
+
+| # | Sub-skill | Domain | Type | Mechanic | Unlock | Status |
+|---|---|---|---|---|---|---|
+| 1 | **Roll** (+ Graceful Roll) | Fall | passive | Negate fall damage; sneak doubles odds + threshold | 1 | **shipped** |
+| 2 | **Dodge** | Fall | passive | Halve incoming combat damage | 1 | **shipped** |
+| 3 | **Fleet Footed** | all 3 | passive | Move faster in whatever medium you're travelling through — 3 ranks, one per medium | 1 / 200 / 400 | new |
+| 4 | **Athlete** | Land | passive | Sprinting costs less hunger | 50 | new |
+| 5 | **Smash** | Land | passive | Sprint-attacks crit / extra knockback | 150 | new |
+| 6 | **Lead Lungs** | Water | passive | Hold breath far longer underwater | 250 | new |
+| 7 | **Second Wind** | all 3 | **super** | One cooldowned active, dispatched on your movement state — 3 ranks, one per medium body | 250 / 500 / 750 | new |
+| 8 | **Glide** | Air | passive | Descend slower while gliding | 350 | new |
+| 9 | **Lake Raider** | Water | passive | Underwater block-break treasure | 500 | new (**cuttable**) |
+| 10 | **Solar Wings** | Air | passive | Elytra slowly repairs in daylight | 750 | new |
+
+Something unlocks roughly every 50–250 levels — the ladder is the point of merging.
+
+### Sub-skill 3 — Fleet Footed (replaces Dash + Swim Training + Wind Walker)
+
+Three separate "you move faster in medium X" passives under one skill would mean three rank ladders,
+three config blocks, three locale blocks and **three attribute-modifier identities to leak**. One
+sub-skill, three ranks (land @1, water @200, air @400), one config block with a **per-medium cap**.
+
+**Wrinkle, stated up front:** the implementation is not uniform across the three.
+
+- **Land** — a managed `movement_speed` modifier via F2, applied only while `isSprinting()`.
+- **Water** — *verify first* that `movement_speed` actually moves swim speed in 1.21.11 (D-AG4). If it
+  doesn't, the water body is a Dolphin's-Grace-style effect or a velocity nudge instead.
+- **Air** — elytra flight is **velocity-driven, not attribute-driven**. The air body is a per-tick
+  look-vector velocity nudge, not a modifier.
+
+So: one sub-skill, one rank ladder, one config block, **two application mechanisms**. That is a fair
+trade against three of everything, but write it down in the class javadoc so the next reader isn't
+surprised.
+
+### Sub-skill 7 — Second Wind (replaces Dart + Aquaman + Limitless)
+
+Every other skill in the mod has **at most one** super ability. Three actives on one skill means three
+enums, three cooldown slots, three locale blocks, three `/mcability` lines — for what is, from the
+player's seat, "the Agility button." One `SuperAbilityType.SECOND_WIND`, dispatched on movement state:
+
+| State on activation | Body | Effect |
+|---|---|---|
+| sprinting on land | **Dart** | forward lunge; raycast N blocks, damage + strong knockback to `LivingEntity`s hit; brief Slowness at high rank ("stun") |
+| in water | **Aquaman** | Strength + Regeneration + Night Vision for a scaling duration, **while in water** |
+| gliding | **Limitless** | upward + forward burst, sustained speed for a scaling duration |
+| anything else | — | refuse with a "you need to be moving" notification and **do not consume the cooldown** |
+
+**Trigger:** right-click while holding a **Feather** (config-settable item id, **not consumed**). It
+matches the milestone advancement icon, it's cheap, and it's one trigger instead of the wiki's Raw
+Cod / Eye of Ender split. Cooldown/duration ride the existing super-ability infra
+(`[[phase-11-2-superability-cooldown]]`).
+
+**v1 may ship the Dart body only** and add the water/air bodies in Stage 3/4 with **zero enum, config
+or locale churn** — that's the main structural payoff of one dispatching ability over three.
+
+### Cut — do not build, do not add dead enums
+
+| Cut | Why |
+|---|---|
+| ~~Multi-jump~~ | No clean server-side jump hook; fighting vanilla movement = desync/rubber-band. (D2, ruled) |
+| ~~Winged Drill / Demon Wings~~ | Noclip mining. Not server-authoritative, grief/dupe vector. Its own multi-week project if ever. (D2, ruled) |
+| ~~Bombing Jet~~ | Auto-lit TNT while flying. Griefy; if ever built, config-off, not v1. (D2, ruled) |
+| ~~Dash / Swim Training / Wind Walker~~ | Folded into **Fleet Footed**. |
+| ~~Dart / Aquaman / Limitless~~ (as separate abilities) | Folded into **Second Wind** as its three bodies. |
+| ~~Water Sprint / Diving / Underwater Survival~~ | Wiki "alternate idea" duplicates of Fleet Footed + Lead Lungs. Do not ship eight overlapping water knobs. |
+
+---
 
 ## MC-free core (`AgilityManager extends SkillManager`)
 
-Model on `AcrobaticsManager` (`skills/acrobatics/AcrobaticsManager.java`). Zero Minecraft imports.
+Grown from the existing `AcrobaticsManager` — keep every current method (`processFallDamage`,
+`rollCheck`, `canGainRollXP`, `canRoll`, `canDodge`, `processDodge`, `dodgeCheck`, `calculateRollXP`,
+the exploit throttle) and add:
 
-- `float onSprintTick(double distance)` — accumulate distance, return XP to award for whole blocks
-  crossed (the accumulator/anti-AFK lives in F1; the *per-block XP value* + config read live here).
-  Award via `applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF)`.
-- `double getDashSpeedBonus()` — `min(0.25, (level/40) * 0.01)` (config-driven max + increment).
-- `boolean rollSmash()` — `ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.AGILITY_SMASH, mmoPlayer)`;
-  gate on `RankUtils.hasUnlockedSubskill` + `Permissions.isSubSkillEnabled` (the standard pair).
-- `double getAthleteExhaustionMultiplier()` — `1 - min(MaxReduction, level/1000 * MaxReduction)`.
-- `boolean canDart()` / `DartResult computeDart(...)` — deterministic damage/knockback/stun given level;
-  keep the RNG (if any) injected so it's testable.
+```
+float  onMovementTick(Medium medium, double distance)  // LAND | WATER | AIR — per-block XP, one entry point
+double getFleetFootedBonus(Medium medium)              // clamped, per-medium cap; 0 if that rank is locked
+double getAthleteExhaustionMultiplier()                // 1 - min(maxReduction, level * perLevel); never 0
+boolean rollSmash()                                    // ProbabilityUtil, standard rank+permission gate
+int    getLeadLungsAirTopUp()                          // air ticks restored/preserved per tick submerged
+boolean rollLakeRaiderTreasure()                       // pinned-RNG testable
+double getGlideDescentReduction()                      // clamped downward-velocity factor
+boolean canSolarWings()                                // rank gate; repair rate is config
+SecondWindResult computeSecondWind(Medium medium)      // damage/knockback/duration/effect levels by level+medium
+```
+
+`Medium` is a small MC-free enum in the manager's package. **Zero Minecraft imports**, same as today —
+that property is what makes all of the above unit-testable, and it is the single rule this class has
+never broken. Don't break it for a `Vec3d`.
+
+---
 
 ## MC-typed trigger layer
 
-1. **XP + Dash speed** — F1 dispatches `onSprintTick`. In the same tick, F2 applies/removes the Dash
-   speed modifier based on `isSprinting()` and `getDashSpeedBonus()`. **Remove the modifier the tick
-   sprinting stops** — do not leave a sprint-speed buff on a standing player.
-2. **Athlete (hunger)** — intercept sprint exhaustion. Vanilla adds sprint exhaustion in
-   `HungerManager#addExhaustion` (verify the exact call site with `scripts/javap-mc.sh`). Mixin
-   `@ModifyArg`/`@ModifyVariable` on the exhaustion added while the player `isSprinting()`, scaled by
-   `getAthleteExhaustionMultiplier()`. **Gate on isSprinting so you don't discount all exhaustion.**
-3. **Smash** — in `EntityDamageListener` (the existing combat path), when the attacker is a player who
-   `isSprinting()` and `rollSmash()` succeeds: force a crit (bonus damage) and/or bump knockback. Fold
-   into the existing melee bonus flow; don't add a second damage mixin.
-4. **Dart** — active ability. Right-click-item detection while sprinting (a `UseItemCallback` /
-   interaction listener). On activation: raycast forward N blocks, hit `LivingEntity`s in the path,
-   apply damage + a strong forward knockback velocity to them (and a lunge velocity to the player), and
-   at high rank a short Slowness `StatusEffect` for the "stun." Runs on the super-ability cooldown infra
-   (`McMMOPlayer` cooldown methods, `[[phase-11-2-superability-cooldown]]`). Add a `SuperAbilityType`
-   entry (overview checklist item 3) or, if it's a pure instant with its own cooldown, a lighter
-   cooldown — decide during design, but reuse existing cooldown storage, don't invent a new one.
+1. **All movement XP + Fleet Footed** — F1 classifies the medium (sprinting / in-water / gliding),
+   rejects vehicles, teleports and Δ≈0, and calls `onMovementTick(medium, distance)` once. In the same
+   tick, F2 applies or removes the **single** `mcmmo:agility_fleet_footed` speed modifier from
+   `getFleetFootedBonus(medium)` — **removed the tick the medium ends.** The air body writes velocity
+   instead (see above) and must touch velocity **only while `isGliding()`**, or you will make a walking
+   player float.
+2. **Athlete** — mixin the sprint exhaustion in `HungerManager#addExhaustion`
+   (`@ModifyArg`/`@ModifyVariable`), scaled by `getAthleteExhaustionMultiplier()`, **gated on
+   `isSprinting()`** so you don't discount every source of exhaustion. Verify the call site with
+   `scripts/javap-mc.sh` (`[[javap-mc-script]]`); cap slice-anchored injectors with `allow=N`
+   (`[[mixin-slice-allow-guard]]`).
+3. **Smash** — fold into the **existing** melee path in `EntityDamageListener`: attacker is a player,
+   `isSprinting()`, `rollSmash()` → bonus damage + knockback. Do not add a second damage mixin; the
+   damage seam is already inside `damage()` (see `[[combat-xp-model-decision]]`).
+4. **Roll / Dodge** — unchanged; already live through `modifyAppliedDamage`.
+5. **Lead Lungs** — F1 tops up air while submerged, respecting the vanilla max-air cap and stacking
+   sanely with Respiration (D-AG4). Prefer the per-tick top-up over mixing the air-decrement — simpler,
+   and it degrades gracefully. Verify the air API with `javap-mc.sh`.
+6. **Lake Raider** — in `BlockBreakListener`, when the player is submerged and the roll succeeds, drop
+   treasure through the existing `ItemSpecBuilder`/`TreasureConfig` machinery
+   (`[[phase-3-woodcutting-excavation-drops]]`). Do not reinvent an item-spawn path.
+7. **Glide** — in F1's gliding branch, scale the negative-Y velocity component by
+   `getGlideDescentReduction()`. Velocity nudge, not a `travel`/gravity mixin (D-AG3 fallback).
+8. **Solar Wings** — in F1's sweep: worn elytra is damaged, rank unlocked, `world.isDay()` and
+   `world.isSkyVisible(pos)` → heal a config durability amount, doubled on the ground. Rate-limit hard;
+   this must be a trickle or elytra durability stops being a resource.
+9. **Second Wind** — a use-item listener in `fabric/listeners/` registered in `McMMOMod.onInitialize`;
+   dispatch on the F1-classified medium; refuse (no cooldown burn) when stationary.
+
+---
 
 ## Registration specifics
 
-- `PrimarySkillType.AGILITY`; `MISC_SKILLS`.
-- `SubSkillType`: `AGILITY_ATHLETE`, `AGILITY_DASH`, `AGILITY_SMASH`, `AGILITY_DART`. Ranks per table.
-- `SuperAbilityType.DART` (+ `subSkillTypeDefinition = AGILITY_DART`) if built as a super ability.
-- `experience.yml`: `Agility` XP modifier + XP-bar color + a `Sprinting`/AFK exploit toggle (reuse the
-  F1 anti-AFK gate; a config flag lets it be tuned/disabled).
-- `advanced.yml`: Dash max %/increment, Smash max chance, Athlete max reduction, Dart damage/range/stun.
-- Locale block `Agility.*`.
+- `PrimarySkillType.AGILITY` (rename); `MISC_SKILLS` (already there).
+- `SubSkillType`: rename `AGILITY_DODGE(1)`, `AGILITY_ROLL`; add `AGILITY_FLEET_FOOTED(3)`,
+  `AGILITY_ATHLETE`, `AGILITY_SMASH`, `AGILITY_LEAD_LUNGS`, `AGILITY_SECOND_WIND(3)`, `AGILITY_GLIDE`,
+  `AGILITY_LAKE_RAIDER`, `AGILITY_SOLAR_WINGS`. None collide with a `PrimarySkillType` name (the
+  warning at the top of that file).
+- `SuperAbilityType.SECOND_WIND` — the 6-arg locale constructor, plus
+  `SECOND_WIND.subSkillTypeDefinition = SubSkillType.AGILITY_SECOND_WIND` in the static block
+  (`SuperAbilityType.java:115-118`). It then flows through `buildSuperAbilityMaps()` automatically —
+  **verify**, and note Agility is the mod's first non-tool-gated super ability, so check
+  `buildPrimarySkillToolMap()` doesn't assume one.
+- `experience.yml` — rekey `Agility`; add `Experience_Values.Agility.{Sprint,Swim,Glide}` per-block
+  values alongside the existing `{Dodge,Roll,Fall,FeatherFall_Multiplier}`; keep the single
+  `Diminished_Returns` and `Skill_Modifiers` entries (now covering all four sources — see D-AG6);
+  extend `ExploitFix.Agility` to cover the movement AFK gate.
+- `skillranks.yml` — the 8 new sub-skills' unlock ladders (table above), Standard + RetroMode.
+- `advanced.yml` — `Skills.Agility.{FleetFooted,Athlete,Smash,LeadLungs,SecondWind,Glide,LakeRaider,SolarWings}`
+  plus the existing `{Dodge,Roll}`.
+- `config.yml` — `Agility.Enabled`; the Second Wind trigger item id.
+- Locale — the `Agility.*` block: `SkillName`, per-sub-skill `.Name`/`.Description`/`.Stat`, and
+  `Agility.Skills.SecondWind.{On,Off,Other.On,Refresh,Other.Off}`. Mirror an existing block's key shape
+  exactly; the parser is strict. **Never hand a hand-built string to `TextUtils.toText` — normalise `&`
+  codes through `LocaleLoader.addColors` first** (`[[mcstats-per-skill-command]]`, first playtest bug).
+- ModMenu — register every new key with the key-validation test.
 
-## Balance / XP tuning (nothing here is final)
+### `/mcstats agility` will be the longest screen in the mod
 
-- **Distance XP is the whole ballgame.** Too high and a player laps a track to max it; too low and it
-  never moves. Start conservative (e.g. small XP per block sprinted) and tune against a §G number.
-- Dash +25% move speed stacks *on top of* the vanilla sprint multiplier — it will feel fast. Verify it
-  doesn't blow past server movement checks (rubber-banding) at max rank.
-- Athlete must never make sprinting *free* — cap `MaxReduction < 1.0`.
+Ten sub-skills in one flat list is unreadable. Render `AgilityStatsRenderer` in **four labelled
+sections** — Falling / Land / Water / Air — with Fleet Footed and Second Wind showing one line per
+unlocked medium rank. Grep an existing renderer for the section idiom before inventing one
+(`[[mcstats-per-skill-command]]`).
+
+---
+
+## Design decisions (need a ruling — recommended answer assumed by this plan)
+
+- **D-AG1 — rename migration.** *Recommended: alias-read the legacy save key + warn on orphan config
+  keys.* The alternative (accept the reset) throws away every playtest profile in `run/saves` and any
+  real world. Cost of the alias is ~10 lines and one fixture test.
+- **D-AG2 — one Second Wind or three actives?** *Recommended: one, context-dispatched.* Three separate
+  actives are three cooldowns and three config/locale blocks for one player-facing button. Overrule if
+  you specifically want three distinct named abilities on the ability list.
+- **D-AG3 — Fleet Footed unified or three speed passives?** *Recommended: unified (3 ranks).* Overrule
+  if per-medium unlock flavour matters more than one modifier identity — but understand the cost is
+  three leak-able modifiers, which is the #1 failure mode of this whole class of feature.
+- **D-AG4 — vanilla overlap + API verification.** Balance calls, not bugs. **Verify** whether
+  `movement_speed` actually affects swim speed in 1.21.11 (`javap-mc.sh`) before designing the water
+  body. Then decide the stacking rules: Fleet Footed vs **Depth Strider** / **Dolphin's Grace**, Lead
+  Lungs vs **Respiration**, air Fleet Footed + Glide vs **firework rockets**. Recommended: stack
+  additively but **cap**, so a Depth Strider III + max Agility player is fast, not silly, and Lead Lungs
+  + Respiration III approaches but doesn't trivially exceed infinite air.
+- **D-AG5 — does Stealth join too?** *Recommended: no.* Sneaking is also distance-sampled and also
+  wants a speed passive, so it is the obvious fifth domain — but Stealth's payoff (mob aggro, backstab)
+  is a *not-being-seen* fantasy, not a locomotion one, and folding it in would push Agility to 14
+  sub-skills. **Either way, resolve the overlap:** Stealth's **Padfoot** (sneak speed) and Agility's
+  **Fleet Footed** are the same mechanic on the same attribute. If Stealth stays standalone, Padfoot
+  must use its **own modifier identity** and the two must be mutually exclusive states (you cannot
+  sprint and sneak at once — verify that assumption holds for sneak-swimming). See
+  [stealth.md](stealth.md) D-S2.
+- **D-AG6 — the XP budget (the real balance problem).** Four sources feed one bar, and distance XP is
+  *continuous* while fall/dodge XP is *episodic*. Tuned wrong, walking to a mine maxes your Dodge
+  chance. **Method, not guesses:** instrument a §G session, measure blocks sprinted / swum / glided and
+  falls + dodges per hour of normal play, then set the per-block values to hit a stated split — start
+  from **~40% land / 20% water / 15% air / 25% fall+dodge**. Placeholder starting values, explicitly
+  **not final**: Sprint `1.0`/block, Swim `2.0`/block (slower travel, fewer blocks), Glide `0.25`/block
+  (elytra eats ground absurdly fast). The existing `Diminished_Returns` cap (was `Acrobatics: 20000`)
+  now throttles all four sources together — that is a useful built-in safety net, keep it.
+
+---
+
+## Balance / XP tuning
+
+- **Glide XP is the firehose risk.** An elytra covers 1000 blocks in under a minute; per-block XP must
+  be an order of magnitude below sprinting or Agility maxes in one glide.
+- **Anti-AFK is now single-point critical** — and single-point *fixable*. A bubble elevator, a
+  soul-sand column, flowing water and a firework-boost circuit all move the player without input. F1's
+  guards (no vehicle, reject teleport-scale deltas, require real Δ) cover all four sources at once.
+  Add a §G row that actively tries to cheese each one.
+- **Athlete must never make sprinting free** — cap `MaxReduction < 1.0`.
+- **Fleet Footed on land stacks on top of the vanilla sprint multiplier** — verify max rank doesn't trip
+  movement checks and rubber-band.
+- **Glide near max reduction can make landing weird** — confirm you can still descend and terrain-follow.
+- **Solar Wings must be a slow trickle** or elytra durability stops mattering.
+
+---
+
+## Build stages — one lands *fully* before the next starts
+
+Each stage = code + config + locale + unit tests + green suite + clean boot + its §G rows played. No
+half-wired domains sitting in the tree; that was the entire lesson of Pass 1's "boot-verified, never
+played" debt.
+
+| Stage | Content | Depends on |
+|---|---|---|
+| **0** | **The rename + save migration. No new mechanics.** | Pass-1 §G playtest done |
+| **1** | **F1 `PlayerMovementTracker` + F2 `SkillAttributeService`** (overview), tested, no skill behaviour yet | 0 |
+| **2** | **Land**: sprint XP + Fleet Footed(land) + Athlete + Smash | 1 |
+| **3** | **Water**: swim XP + Fleet Footed(water) + Lead Lungs [+ Lake Raider] | 2 |
+| **4** | **Air**: glide XP + Fleet Footed(air) + Glide + Solar Wings | 2 |
+| **5** | **Second Wind**: Dart body, then the water + air bodies | 2–4 |
+
+Stage 1 is materially smaller than the old plan: one dispatch target, one accumulator, one modifier
+identity.
+
+---
 
 ## Testing
 
-- **Unit (MC-free):** `getDashSpeedBonus` at levels 0/40/1000 (0 / 1% / 25% clamp); `rollSmash` with
-  pinned RNG (0 → always, 100 → never); `getAthleteExhaustionMultiplier` clamps; Dart damage/stun table.
-- **F2 idempotency:** applying Dash twice doesn't stack; stopping sprint removes it; logout clears it.
-- **§G rows (add to play-test):** sprint 200 blocks → Agility XP delta; at rank, sprint feels faster and
-  the speed drops the instant you stop; sprinting depletes hunger visibly slower at high Athlete; a
-  sprint-attack occasionally crits/knocks back (Smash); Dart lunges you forward and flings a mob.
-- **Regression:** old profile loads with Agility defaulted (overview item 19).
+**Unit (MC-free, `AgilityManager`)** — everything the current `AcrobaticsManagerTest` covers stays
+green under the new names, plus: `getFleetFootedBonus` per medium at levels 0/mid/cap (0 → … → clamp,
+and **0 when that medium's rank is locked**); `getAthleteExhaustionMultiplier` clamps and never returns
+0; `rollSmash` and `rollLakeRaiderTreasure` with pinned RNG (0 → always, 100 → never);
+`getLeadLungsAirTopUp` scaling + cap; `getGlideDescentReduction` clamp; `canSolarWings` gate;
+`computeSecondWind` per medium; `onMovementTick` per-block XP for each medium.
 
-## Cuts / deferrals
+**Migration (Stage 0, non-negotiable)** — fixture profile with `skills.ACROBATICS` / `experience.ACROBATICS`
+loads with the level *and* XP intact under `AGILITY`; a profile with **both** keys prefers the new one;
+a profile with **neither** defaults cleanly (overview item 19).
 
-- **Multi-jump — CUT** (D2). If ever revisited it needs a client-side mod or a movement mixin fighting
-  anti-cheat; out of scope.
-- Dart "stun" is a short Slowness, not a true stun (no vanilla stun state) — document as a deviation.
+**F1** — zero-delta pays nothing in every medium; vehicle (boat/horse/minecart) pays nothing; a
+teleport-scale delta is rejected and resets `lastPos`; a bubble-elevator ride pays nothing.
+
+**F2** — the Fleet Footed modifier is idempotent under re-application; removed the tick the medium ends;
+cleared on logout **and** on the entity-recreation paths (respawn / End-exit both build a new
+`ServerPlayerEntity` — `[[respawn-stale-handle]]`).
+
+**§G rows** (add to a Pass-2 `PLAYTEST_G2.md`):
+- Stage 0: existing world keeps its Acrobatics level/XP as Agility; Roll and Dodge still fire; XP bar
+  reads `Agility Lv.X`; `/mcstats agility` renders; milestone plaque still pops.
+- Sprint 200 blocks → XP delta; sprinting into a wall pays nothing; hunger drains visibly slower at
+  Athlete rank; a sprint-attack occasionally crits/flings (Smash); speed drops the instant you stop.
+- Swim 200 blocks → XP delta; a bubble elevator farms nothing; breath lasts much longer (Lead Lungs);
+  swimming is faster and the bonus drops the instant you leave water; underwater block-breaks
+  occasionally drop treasure (Lake Raider).
+- Glide 1000 blocks → XP delta; walking/falling without an elytra pays nothing; glides last longer and
+  are faster without floating on landing; a damaged elytra slowly repairs in daylight (Solar Wings);
+  firework + Fleet Footed(air) isn't game-breaking (D-AG4).
+- Second Wind: lunges while sprinting, buffs in water, boosts while gliding, **refuses without burning
+  the cooldown** when standing still; shows the On/Off/Refresh messages.
+
+---
+
+## Cuts / deferrals (summary)
+
+- Multi-jump, Winged Drill / Demon Wings, Bombing Jet — **cut** (D2, already ruled). No dead enums.
+- Dash / Swim Training / Wind Walker — folded into **Fleet Footed**.
+- Dart / Aquaman / Limitless — folded into **Second Wind**'s three bodies; the water and air bodies may
+  slip to Stage 3/4 with no config churn.
+- Water Sprint / Diving / Underwater Survival — dropped as duplicates.
+- **Lake Raider is the cut candidate if the roster is too big** — it's an Excavation-flavoured mechanic
+  wearing a movement skill's coat, and it's the only sub-skill here that doesn't change how you move.
+- If velocity-nudge Glide feels bad in play-test, the fallback is a `travel`/gravity mixin — scope it as
+  a follow-up, don't let it block Stages 2–3.

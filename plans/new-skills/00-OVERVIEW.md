@@ -12,20 +12,25 @@ boot-verified — see `PLAYTEST_G.md`. **Do not start Pass 2 code until §G play
 run.** Building six brand-new skills on top of a port that has never been played once is how you ship
 six new skills' worth of bugs on top of an unverified base.
 
-## The six skills
+## The four skills
 
-| Plan | Skill | Parent(s) per wiki | XP trigger | Headline risk |
-|---|---|---|---|---|
-| [agility.md](agility.md) | **Agility** (Sprinting) | standalone | distance sprinted | Multi-jump is unshippable; Dart needs a raycast active |
-| [husbandry.md](husbandry.md) | **Husbandry** (+ Shearing) | Herbalism + Taming | breeding + shearing | No Fabric breed/shear event — needs mixins; child-vs-standalone fork |
-| [stealth.md](stealth.md) | **Stealth** (Sneaking) | standalone | distance sneaked | "Thief" mob-blindness is hard + overlaps vanilla; anti-AFK critical |
-| [unarmored.md](unarmored.md) | **Unarmored** | standalone | damage taken w/ no armor | Managed armor attribute + equip/unequip reactivity |
-| [flying.md](flying.md) | **Flying** (Elytra) | Cartography + Acrobatics | distance elytra-flown | Winged Drill (noclip mining) must be cut from v1 |
-| [swimming.md](swimming.md) | **Swimming** | Fishing + Acrobatics | distance swum | Overlaps Depth Strider / Dolphin's Grace; child-vs-standalone fork |
+| Plan | Skill | XP trigger | Headline risk |
+|---|---|---|---|
+| [agility.md](agility.md) | **Agility** — the merged movement skill (**renamed Acrobatics** + Sprinting + Swimming + Flying) | falling/dodging + distance sprinted, swum, glided | It's a **rename of a shipped skill**: save-file key migration. Then 10 sub-skills and 4 XP sources on one bar |
+| [husbandry.md](husbandry.md) | **Husbandry** (+ Shearing) | breeding + shearing | No Fabric breed/shear event — needs mixins |
+| [stealth.md](stealth.md) | **Stealth** (Sneaking) | distance sneaked | "Thief" mob-blindness is hard + overlaps vanilla; anti-AFK critical |
+| [unarmored.md](unarmored.md) | **Unarmored** | damage taken w/ no armor | Managed armor attribute + equip/unequip reactivity |
 
-Read this file first, then the per-skill file. This file owns everything the six share: the two pieces
+> **Was six, now four.** `swimming.md` and `flying.md` are **deleted**; the old sprint-only `agility.md`
+> is **rewritten**. All three are folded into the single merged [agility.md](agility.md) — see **D5**.
+
+Read this file first, then the per-skill file. This file owns everything they share: the two pieces
 of **net-new foundation**, the **"add a PrimarySkillType" checklist**, and the **cross-cutting design
 decisions** that need a human ruling before anyone writes a manager.
+
+Note that after D5, only **Husbandry**, **Stealth** and **Unarmored** are new `PrimarySkillType`s — the
+checklist below applies to them in full, and to Agility only for the *rename* half (new sub-skills,
+new configs, new locale keys; no new enum constant).
 
 ---
 
@@ -35,11 +40,44 @@ These are the forks that change the *shape* of multiple plans. Resolve them once
 ruling in memory (`[[conversion-overview]]` style). Each per-skill file assumes the **recommended**
 answer unless told otherwise.
 
-### D1 — Child skill vs standalone skill (Husbandry, Swimming, Flying)
+### D5 — Merge the movement skills into one, and rename Acrobatics → Agility (2026-07-25)
+
+> ✅ **USER DIRECTION, 2026-07-25:** Sprinting, Swimming and Flying are **not** three new skills. They
+> are folded into the existing **Acrobatics** skill, which is **renamed `AGILITY`**. One primary skill
+> covers all four movement domains: falling, land, water, air. Plans redrawn accordingly.
+
+What this changes, concretely:
+
+- **`swimming.md` and `flying.md` are deleted**; the sprint-only `agility.md` is rewritten as the merged
+  plan. Nothing was lost — the vanilla-overlap analysis (old D-SW2), the velocity-nudge-vs-mixin call
+  (old D-F1), and every cut ability carried into the new file.
+- **Pass 2 drops from six new skills to three new skills + one rename.** Three fewer `PrimarySkillType`
+  registrations, three fewer XP curves, three fewer locale/config blocks, three fewer `/mcstats` screens.
+- **F1 gets simpler** (see below): one dispatch target, one distance accumulator, one anti-AFK guard set
+  instead of four.
+- **F2 gets safer:** one speed-modifier identity (`mcmmo:agility_fleet_footed`) instead of four
+  independently leak-able ones. Leftover modifiers are the #1 failure mode of this class of feature —
+  merging removes three of the four ways to hit it.
+- **New risk, which did not exist before:** `PrimarySkillType.ACROBATICS` is the **save-file key**
+  (`FlatFileProfileStore.java:92-93`) and the **milestone advancement file name**
+  (`Milestones.java:131-132`). Renaming it silently zeroes every existing profile's skill unless a
+  legacy-key read alias lands with it. This is why the rename ships **alone** as Stage 0, with its own
+  regression test and its own playtest, before a single new mechanic.
+- **New cost:** Agility becomes the largest skill in the mod (10 sub-skills, 4 XP sources, one level
+  bar). Sub-skill folding (Fleet Footed, Second Wind) and an explicit XP budget handle it — see D-AG3
+  and D-AG6 in [agility.md](agility.md).
+- **Open:** whether **Stealth** joins as a fifth domain. Recommended **no** — see D-AG5. Either way the
+  Padfoot ↔ Fleet Footed speed overlap must be resolved.
+
+### D1 — Child skill vs standalone skill (Husbandry, ~~Swimming, Flying~~)
 
 > ✅ **DECIDED 2026-07-24 (user ruling): STANDALONE skills.** Husbandry, Swimming and Flying are full
 > primary skills with their own XP. Do **not** add them to `SkillTools.isChildSkill`. Locked; do not
 > re-open.
+>
+> ⚠️ **Superseded in part by D5 (2026-07-25):** Swimming and Flying no longer exist as skills at all —
+> they are domains inside **Agility**. The ruling still stands for **Husbandry**, and the reasoning below
+> is still why Agility's movement domains feed one real XP pool rather than a derived child level.
 
 The wiki calls Husbandry (Herbalism+Taming), Swimming (Fishing+Acrobatics) and Flying
 (Cartography+Acrobatics) **child skills**. In this codebase a child skill:
@@ -79,15 +117,19 @@ Default stance: **cut from v1, config-gated `false`, revisit later.** Per-skill 
 - **Stealth → Thief** (mobs literally cannot see you): partially doable (reduce mob follow-range while
   sneaking behind cover) but expensive per-tick and overlaps vanilla sneak mechanics. **Ship a reduced
   version or defer.**
-- **Stealth → Smoke Bomb**, **Agility → Dart**, **Flying → Limitless**, **Swimming → Aquaman**: these
-  are fine as cooldowned active abilities. **Keep**, build on the existing super-ability infra.
+- **Stealth → Smoke Bomb**, **Agility → Dart / Limitless / Aquaman**: fine as cooldowned actives.
+  **Keep**, on the existing super-ability infra. Post-D5 the last three are one ability with three
+  bodies (`SECOND_WIND`) rather than three abilities — see D-AG2 in [agility.md](agility.md).
 
 ### D3 — Overlap with vanilla and with each other
 
 Call these out to the user; they are balance questions, not bugs:
-- Sprint combat bonus (Agility → Smash) vs sneak combat bonus (Stealth → Assassin) vs Acrobatics.
-- Swimming speed vs vanilla **Depth Strider** / **Dolphin's Grace**; Lead Lungs vs **Respiration**.
-- Flying speed/glide vs the elytra's own physics and **firework rockets**.
+- Sprint combat bonus (Agility → Smash) vs sneak combat bonus (Stealth → Assassin). Mutually exclusive
+  states, so it's fine — but say so deliberately.
+- **Agility → Fleet Footed (sneak-adjacent) vs Stealth → Padfoot**: post-D5 these are the same mechanic
+  on the same attribute. They need separate modifier identities and a stated exclusivity rule (D-AG5).
+- Swim speed vs vanilla **Depth Strider** / **Dolphin's Grace**; Lead Lungs vs **Respiration**;
+  glide speed vs elytra physics and **firework rockets** — all now one skill's problem (D-AG4).
 - Unarmored "free armor" vs actually wearing armor — the wiki's "stacks and doubles" clause is
   incoherent; see [unarmored.md](unarmored.md) D-U1.
 
@@ -102,7 +144,7 @@ per-block XP value. Every plan has a "Balance / XP tuning" section; none of the 
 
 ## 🧱 Net-new shared foundation (build these FIRST)
 
-Four of the six skills (Agility, Stealth, Swimming, Flying) are **continuous-state / passive-tick**
+**Agility** (all three of its new domains) and **Stealth** are **continuous-state / passive-tick**
 skills. Nothing in the Pass-1 port samples player movement per tick — every ported skill hooks a
 discrete event (block break, entity damage, item use). These two components do not exist yet and are a
 hard prerequisite. **Build and unit-test them before any movement skill.**
@@ -118,8 +160,13 @@ A single `ServerTickEvents.END_SERVER_TICK` sweep (register it next to the sched
   `isSubmergedInWater()` / `isTouchingWater()`, `isGliding()` (elytra), `isOnGround`,
   `hasVehicle()`.
 
-Then dispatch the horizontal distance + state to the relevant manager (`AgilityManager.onSprintTick`,
-`StealthManager.onSneakTick`, `SwimmingManager.onSwimTick`, `FlyingManager.onFlyTick`).
+Then classify the **medium** (LAND while sprinting / WATER while swimming / AIR while gliding) and
+dispatch the horizontal distance to **one** call — `AgilityManager.onMovementTick(medium, distance)` —
+plus `StealthManager.onSneakTick(distance)` for the sneak case.
+
+> **Post-D5:** this used to be a four-way dispatch to four managers with four accumulators. It is now
+> two targets and, for Agility, **one** accumulator and **one** guard set covering all three media. If
+> you find yourself writing per-medium duplicate anti-AFK code, you have missed the point of the merge.
 
 **Anti-exploit / anti-AFK (this is load-bearing, not optional):**
 - **Ignore vehicle movement** (`hasVehicle()`) — no leveling by boat/horse/minecart.
@@ -142,13 +189,15 @@ Alchemy Catalysis per-tick-config-read trap, see `[[alchemy-catalysis]]`, applie
 
 ### F2 — `SkillAttributeService` (managed attribute modifiers)
 
-Unarmored (armor), Agility (Dash speed), Stealth (Padfoot speed) and Swimming (swim speed) all apply
+Unarmored (armor), Agility (Fleet Footed speed, land + water) and Stealth (Padfoot speed) all apply
 `EntityAttributeModifier`s. A leftover modifier is a **permanent buff / stacking bug** — the #1 way this
-class of feature breaks. Build one helper that:
+class of feature breaks. Post-D5 there are **three** modifier identities to get right, not six. Build
+one helper that:
 
 - **Applies/removes idempotently**, keyed by a stable `Identifier` per skill+effect
-  (`mcmmo:agility_dash_speed`, `mcmmo:unarmored_leather_skin`, …). Re-applying updates in place; it never
-  stacks.
+  (`mcmmo:agility_fleet_footed`, `mcmmo:stealth_padfoot`, `mcmmo:unarmored_leather_skin`). Re-applying
+  updates in place; it never stacks. Agility's air body is **velocity**, not an attribute — it does not
+  go through this service.
 - **Clears ALL mcMMO modifiers on logout / disconnect** (`ServerPlayConnectionEvents.DISCONNECT`) and
   on the entity-recreation paths that already bit us — respawn and End-exit both route through
   `PlayerManager#respawnPlayer` and build a **new** `ServerPlayerEntity` (see
@@ -249,16 +298,20 @@ before anything references the manager.
 ## Suggested build order
 
 1. **§G play-test of Pass 1** (blocker — do not skip).
-2. **F1 `PlayerMovementTracker` + F2 `SkillAttributeService`** with unit tests. No skill yet — just the
-   foundation, proven idempotent and AFK-proof.
-3. **Unarmored** first among the new skills — it's event-driven (damage taken) for XP and only needs F2
-   (not F1), so it validates the attribute service without the tick-sampler risk.
-4. **Agility**, then **Stealth**, then **Swimming** — all lean on F1; do them in ascending mechanical
-   risk.
-5. **Husbandry** — independent of F1/F2 (event-driven), but needs new breed/shear mixins; can be built
-   in parallel by a second dev.
-6. **Flying** last — the elytra-physics work is the fiddliest and the most cut-down from the wiki.
+2. **Agility Stage 0 — the `ACROBATICS` → `AGILITY` rename, alone, with the save-file migration.**
+   Zero new mechanics. It is pure risk with zero new feature value, so it must not be entangled with
+   anything: if a profile comes back zeroed you need to know it was the rename. Ships with its own
+   old-profile regression test and its own client playtest. See [agility.md](agility.md) Stage 0.
+3. **F1 `PlayerMovementTracker` + F2 `SkillAttributeService`** with unit tests. No skill behaviour yet —
+   just the foundation, proven idempotent and AFK-proof.
+4. **Unarmored** — event-driven (damage taken) for XP and needs only F2, so it validates the attribute
+   service without the tick-sampler risk. (Can also run before step 3 if you want F2 exercised first.)
+5. **Agility Stages 2–5** — Land, then Water, then Air, then Second Wind. Each domain lands fully
+   before the next.
+6. **Stealth** — leans on F1 and F2; do it after Agility's Land domain has proven both in a live world.
+7. **Husbandry** — independent of F1/F2 (event-driven), but needs new breed/shear mixins; can be built
+   in parallel by a second dev at any point.
 
-One skill lands **fully** (code + config + locale + unit tests + green boot + §G rows) before the next
-starts. No half-wired skills sitting in the tree — that was the whole lesson of Pass 1's "boot-verified,
-never played" debt.
+One skill (or, for Agility, one **stage**) lands **fully** — code + config + locale + unit tests + green
+boot + §G rows *played* — before the next starts. No half-wired skills sitting in the tree; that was the
+whole lesson of Pass 1's "boot-verified, never played" debt.

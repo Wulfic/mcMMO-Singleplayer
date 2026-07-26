@@ -32,9 +32,15 @@ important part of the skill — see F1 in the overview.
   target acquisition within a shrinking radius. If even that's messy in play-test, **defer Thief** and
   ship Padfoot+Assassin+Smoke Bomb — those three are the fun ones. Flag.
 - **D-S2 — overlap with vanilla & other skills:** vanilla already reduces your name-tag render distance
-  while sneaking and darkens you. Assassin's sneak-damage overlaps Agility→Smash (sprint-damage) and
-  Acrobatics conceptually — they are mutually exclusive states (you can't sprint and sneak at once), so
-  it's fine, but call it out to the user as intended.
+  while sneaking and darkens you. Assassin's sneak-damage overlaps Agility→Smash (sprint-damage) — they
+  are mutually exclusive states (you can't sprint and sneak at once), so it's fine, but call it out to
+  the user as intended.
+  **⚠️ Post-D5, the sharper overlap is Padfoot ↔ Agility's Fleet Footed:** same mechanic, same
+  `movement_speed` attribute, on two different skills. They must use **separate modifier identities**
+  (`mcmmo:stealth_padfoot` vs `mcmmo:agility_fleet_footed`) and must never both be live — verify the
+  "can't sprint and sneak at once" assumption actually holds for **sneak-swimming**, which is a real
+  state. See [agility.md](agility.md) D-AG5, which also carries the open question of whether Stealth
+  should just become Agility's fifth domain (recommended: **no**).
 - **D-S3 — Assassin "before taking damage" window:** interpret as "no damage taken in the last N ticks."
   Track last-damaged-tick per player (a small field; the combat listener already sees incoming damage).
 
