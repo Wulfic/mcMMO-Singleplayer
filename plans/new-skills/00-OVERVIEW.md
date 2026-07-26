@@ -66,8 +66,15 @@ What this changes, concretely:
 - **New cost:** Agility becomes the largest skill in the mod (10 sub-skills, 4 XP sources, one level
   bar). Sub-skill folding (Fleet Footed, Second Wind) and an explicit XP budget handle it — see D-AG3
   and D-AG6 in [agility.md](agility.md).
-- **Open:** whether **Stealth** joins as a fifth domain. Recommended **no** — see D-AG5. Either way the
-  Padfoot ↔ Fleet Footed speed overlap must be resolved.
+- ✅ **Stealth does NOT join** (user ruling, 2026-07-25). It stays its own skill — its payoff is
+  *not-being-seen*, not locomotion. The Padfoot ↔ Fleet Footed speed overlap still has to be resolved
+  (separate modifier identities, never both live, **verify sneak-swimming**) — see D-AG5.
+- ✅ **XP is speed-normalised** (user ruling, 2026-07-25). Agility pays **XP per second of qualifying
+  travel**, with each tick's distance **clamped at that medium's reference speed** — so a fast medium
+  cannot outpay a slow one, and no speed buff (rockets, Depth Strider, Speed II, or **Fleet Footed
+  itself**) becomes an XP multiplier. The budget is deliberately wide: ~89–170 h of continuous travel
+  to max, per medium. Full formula, measured reference speeds and the derived numbers are in
+  [agility.md](agility.md) §"XP: the speed-normalised budget".
 
 ### D1 — Child skill vs standalone skill (Husbandry, ~~Swimming, Flying~~)
 
@@ -135,10 +142,17 @@ Call these out to the user; they are balance questions, not bugs:
 
 ### D4 — XP curve & balance pass
 
-All six use the **global** mcMMO level curve (`FormulaManager`) with a **per-skill XP modifier** in
-`experience.yml`. The wiki caps everything at level 1000 (RetroMode numbers). Do a deliberate balance
-pass per skill — distance-based XP especially will either trickle or firehose depending on the
-per-block XP value. Every plan has a "Balance / XP tuning" section; none of the numbers there are final.
+All of them use the **global** mcMMO level curve (`FormulaManager`) with a **per-skill XP modifier** in
+`experience.yml`. The shipped curve is LINEAR, `base 1020` / `multiplier 20`
+(`experience.yml:145-147`), so total XP to RetroMode level *N* is **`10N² + 1010N`** — **11,010,000 to
+max at level 1000**. Use that number; do not eyeball XP values.
+
+Distance-based XP will either trickle or firehose depending on the per-block value, so **Agility does
+not use a per-block value at all** — it pays per *second* of travel with a per-medium speed clamp
+(D5, and [agility.md](agility.md) §"XP: the speed-normalised budget"). **Stealth should use the same
+mechanism** for sneak distance rather than inventing a second model; sneaking has a well-defined
+reference speed (1.295 b/s) and the same "every speed buff is an XP multiplier" trap via Padfoot.
+Every plan has a balance section; the numbers in them are starting points pending §G measurement.
 
 ---
 
@@ -174,8 +188,12 @@ plus `StealthManager.onSneakTick(distance)` for the sneak case.
   teleport and skip (also resets `lastPos`).
 - **Require real movement** — sneaking-in-place or sprinting-into-a-wall (Δ≈0) pays nothing. The wiki
   literally jokes "Sticky keys op" for Sneaking; do not let a rubber band on the W key farm a skill.
-- **Distance is accumulated, XP is granted per whole block** crossed (so we don't award fractional XP
-  every tick and thrash the XP pipeline / dirty flag). Keep a per-player `distanceAccumulator`.
+- **Distance is accumulated, XP is granted in whole chunks** (so we don't award fractional XP every
+  tick and thrash the XP pipeline / dirty flag). Keep a per-player `distanceAccumulator`.
+- **F1 reports the raw Δ and the medium — it does NOT convert to XP.** The speed clamp that turns
+  distance into credited *seconds* is MC-free math and lives in `AgilityManager.creditedSeconds(...)`
+  where it can be unit-tested. F1 owns only the platform-y guards above. Getting this split wrong is
+  how the clamp ends up untestable inside a tick handler.
 - Mirror the Acrobatics exploit throttle idea (`BlockLocationHistory`, `AcrobaticsManager.java:48`) if a
   specific loop-farm shows up in play-testing.
 

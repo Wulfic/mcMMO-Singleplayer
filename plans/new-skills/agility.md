@@ -191,7 +191,8 @@ Grown from the existing `AcrobaticsManager` — keep every current method (`proc
 the exploit throttle) and add:
 
 ```
-float  onMovementTick(Medium medium, double distance)  // LAND | WATER | AIR — per-block XP, one entry point
+float  onMovementTick(Medium medium, double distance)  // LAND | WATER | AIR — one entry point
+double creditedSeconds(Medium medium, double distance) // the speed clamp, split out to be provable
 double getFleetFootedBonus(Medium medium)              // clamped, per-medium cap; 0 if that rank is locked
 double getAthleteExhaustionMultiplier()                // 1 - min(maxReduction, level * perLevel); never 0
 boolean rollSmash()                                    // ProbabilityUtil, standard rank+permission gate
@@ -293,36 +294,174 @@ unlocked medium rank. Grep an existing renderer for the section idiom before inv
   Lungs vs **Respiration**, air Fleet Footed + Glide vs **firework rockets**. Recommended: stack
   additively but **cap**, so a Depth Strider III + max Agility player is fast, not silly, and Lead Lungs
   + Respiration III approaches but doesn't trivially exceed infinite air.
-- **D-AG5 — does Stealth join too?** *Recommended: no.* Sneaking is also distance-sampled and also
-  wants a speed passive, so it is the obvious fifth domain — but Stealth's payoff (mob aggro, backstab)
-  is a *not-being-seen* fantasy, not a locomotion one, and folding it in would push Agility to 14
-  sub-skills. **Either way, resolve the overlap:** Stealth's **Padfoot** (sneak speed) and Agility's
-  **Fleet Footed** are the same mechanic on the same attribute. If Stealth stays standalone, Padfoot
-  must use its **own modifier identity** and the two must be mutually exclusive states (you cannot
-  sprint and sneak at once — verify that assumption holds for sneak-swimming). See
-  [stealth.md](stealth.md) D-S2.
-- **D-AG6 — the XP budget (the real balance problem).** Four sources feed one bar, and distance XP is
-  *continuous* while fall/dodge XP is *episodic*. Tuned wrong, walking to a mine maxes your Dodge
-  chance. **Method, not guesses:** instrument a §G session, measure blocks sprinted / swum / glided and
-  falls + dodges per hour of normal play, then set the per-block values to hit a stated split — start
-  from **~40% land / 20% water / 15% air / 25% fall+dodge**. Placeholder starting values, explicitly
-  **not final**: Sprint `1.0`/block, Swim `2.0`/block (slower travel, fewer blocks), Glide `0.25`/block
-  (elytra eats ground absurdly fast). The existing `Diminished_Returns` cap (was `Acrobatics: 20000`)
-  now throttles all four sources together — that is a useful built-in safety net, keep it.
+- **D-AG5 — does Stealth join too?** ✅ **RULED 2026-07-25 (user): NO. Stealth stays its own skill.**
+  Sneaking is distance-sampled too, but its payoff (mob aggro, backstab) is a *not-being-seen* fantasy,
+  not a locomotion one, and folding it in would push Agility to 14 sub-skills. Locked; do not re-open.
+  **The overlap still has to be resolved:** Stealth's **Padfoot** (sneak speed) and Agility's **Fleet
+  Footed** are the same mechanic on the same attribute. Padfoot uses its **own** modifier identity
+  (`mcmmo:stealth_padfoot`), the two are never both live, and **sneak-swimming must be verified** — it
+  is a real state, and it is the one case where "you can't sneak and travel a medium at once" might not
+  hold. See [stealth.md](stealth.md) D-S2.
+- **D-AG6 — the XP budget.** ✅ **RULED 2026-07-25 (user): budget widened substantially, and every
+  medium's payout is normalised against its own average top speed so nothing levels ridiculously fast.**
+  This is a big enough piece of design to get its own section — see **"XP: the speed-normalised
+  budget"** below. It is now the load-bearing balance decision of the whole skill.
 
 ---
 
-## Balance / XP tuning
+## XP: the speed-normalised budget (D-AG6)
 
-- **Glide XP is the firehose risk.** An elytra covers 1000 blocks in under a minute; per-block XP must
-  be an order of magnitude below sprinting or Agility maxes in one glide.
-- **Anti-AFK is now single-point critical** — and single-point *fixable*. A bubble elevator, a
-  soul-sand column, flowing water and a firework-boost circuit all move the player without input. F1's
-  guards (no vehicle, reject teleport-scale deltas, require real Δ) cover all four sources at once.
-  Add a §G row that actively tries to cheese each one.
+### The trap this exists to avoid
+
+Paying a flat *XP-per-block* is wrong, and wrong in a way that compounds:
+
+1. **Fast media firehose.** An elytra covers ground ~5× faster than sprinting and ~10× faster than
+   swimming. At any shared per-block rate, gliding levels the skill an order of magnitude faster than
+   swimming for strictly less effort.
+2. **Every speed buff becomes an XP multiplier.** Depth Strider, Dolphin's Grace, Speed potions, ice
+   boats, firework rockets — all of them raise blocks-per-second, so all of them raise XP-per-second.
+3. **The skill accelerates its own levelling.** This is the killer: **Fleet Footed makes you faster,
+   which earns you more XP per second, which levels Fleet Footed.** A positive feedback loop inside a
+   single skill. That alone is enough to make levelling "ridiculously fast," and no amount of tuning
+   the per-block constant fixes a feedback loop.
+
+### The rule
+
+> **Distance is the sensor. Time is the currency.**
+> Agility pays **XP per second of qualifying travel**, and a tick's distance is **clamped at the
+> medium's reference speed** before it is credited.
+
+```
+refDist        = referenceSpeed(medium) / 20              // blocks the reference speed covers in a tick
+creditedSecs   = min(distance, refDist) / referenceSpeed(medium)
+xp             = baselineXpPerSecond * mediumMultiplier(medium) * creditedSecs
+```
+
+- Travelling **at or above** the reference speed → the full rate, never more. All three problems above
+  die at once: rockets, Depth Strider, Speed II and Fleet Footed itself stop being XP multipliers.
+- Travelling **slower** → pro-rata. Wading, a slow glide and a gentle jog still pay, proportionally.
+- **Standing still → zero**, which F1's Δ≈0 guard already enforces.
+- **Per-block XP is a derived quantity.** Nobody hand-tunes it; it falls out of the reference speed.
+
+**The clamp is MC-free math and belongs in `AgilityManager`, not F1.** F1 owns only the platform-y
+guards (vehicle, teleport-scale delta, Δ≈0). The clamp is the part most likely to be got wrong, so it
+must be the part that is unit-testable.
+
+### Reference speeds — ⚠️ MEASURE THESE, DO NOT SHIP THEM ON MY WORD
+
+Every one of these is a **config value**, not a constant, precisely so tuning is a YAML edit and the
+§G playtest can correct them. Starting values:
+
+| Medium | Qualifying state | Reference speed | Confidence |
+|---|---|---|---|
+| **Land** | `isSprinting()` + moving | **5.61** b/s (walk 4.317 × 1.3) | High — well-known vanilla value |
+| **Water** | `isTouchingWater()` + moving | **3.16** b/s (swim pose, no enchants) | **Low — measure it** |
+| **Air** | `isGliding()` | **30.0** b/s (unboosted cruise) | **Low — measure it**; rocket-boosted and dive speeds are far higher, which is exactly what the clamp is for |
+
+**Sprint-jumping** is ~27% faster than flat sprinting and is what players actually do. Under the clamp
+it pays *the same as sprinting* — deliberate. Do not "fix" this.
+
+### Baseline and the resulting budget
+
+Total XP to reach RetroMode level *N* on the shipped LINEAR curve (`base 1020`, `multiplier 20`,
+`experience.yml:145-147`) is `sum(1020 + 20L)` = **`10N² + 1010N`**, so **max level 1000 = 11,010,000
+XP**. Everything below derives from that number.
+
+**`Baseline_Xp_Per_Second: 30.0`**, with per-medium multipliers **Land 1.0 / Water 1.15 / Air 0.6**
+(water is slow and tedious, air is near-effortless and covers the world):
+
+| Medium | XP/s | ⇒ derived XP/block | Hours of *nothing but this* to max |
+|---|---|---|---|
+| Land | 30.0 | 5.35 | **~102 h** |
+| Water | 34.5 | 10.92 | **~89 h** |
+| Air | 18.0 | 0.60 | **~170 h** |
+
+Note the derived per-block figures: air pays **~9× less per block** than land — 5.3× of that from the
+speed normalisation and 1.67× from the multiplier. That ratio is *computed*, not guessed, and it stays
+correct automatically if you retune a reference speed.
+
+**Guardrail — the actual definition of "not ridiculously fast":** no single source may take a player
+from 0 to max in under **80 hours** of doing only that thing. All three clear it.
+
+The ladder still opens quickly, because the linear curve is cheap early (level 1 costs 1,020 XP; level
+1000 costs 21,020). Continuous-land-travel times to each unlock:
+
+| Unlock | Level | Cumulative XP | ≈ Time |
+|---|---|---|---|
+| Fleet Footed (land) | 1 | 1,020 | ~30 s |
+| Athlete | 50 | 75,500 | ~42 min |
+| Smash | 150 | 376,500 | ~3.5 h |
+| Fleet Footed (water) | 200 | 602,000 | ~5.6 h |
+| Lead Lungs · **Second Wind** | 250 | 877,500 | ~8.1 h |
+| Glide | 350 | 1,578,500 | ~14.6 h |
+| Fleet Footed (air) | 400 | 2,004,000 | ~18.6 h |
+| Lake Raider · SW water body | 500 | 3,005,000 | ~27.8 h |
+| Solar Wings · SW air body | 750 | 6,382,500 | ~59 h |
+| Max | 1000 | 11,010,000 | ~102 h |
+
+Real play is faster than the right-hand column — you are never travelling 100% of the time, but fall
+and dodge XP stack on top.
+
+### ⚠️ The merge changed what the *existing* Acrobatics XP values buy
+
+`experience.yml:245+` currently ships `Dodge: 800`, `Roll: 600`, `Fall: 600` — **not** the 120/80/120
+in `ExperienceConfig`'s Java defaults; the YAML wins. These are **multipliers on damage**, not flat
+awards: `xp = damage × modifier` (damage clamped to 20 for falls), doubled again by
+`FeatherFall_Multiplier: 2.0`. So a 20-damage graceful roll in Feather Falling boots is **24,000 XP** —
+the equivalent of ~13 minutes of sprinting, from one jump.
+
+Those numbers were balanced when Acrobatics had **two** sub-skills and one skill's worth of payoff.
+They now buy ten sub-skills across four domains. `AgilityManager.canGainRollXP()`'s lengthening
+cooldown is the only thing throttling repeat falls. **Re-measure the episodic side against the 11.01M
+budget in §G and expect to cut these values**, or the fastest route to max Agility will be a
+water-bucket tower, not moving at all.
+
+### The `Diminished_Returns` governor
+
+`Enabled: false` in the shipped YAML, threshold `20000` per 10 min (= 33 XP/s) — coincidentally right
+on top of the 30 XP/s baseline, so switching it on would throttle Agility almost immediately. If it is
+ever enabled, **Agility's threshold must be raised** (it aggregates four sources where every other
+skill has one), otherwise Agility alone gets punished. The clamp is the real governor; diminishing
+returns is a backstop, not the plan.
+
+### Config shape
+
+```yaml
+Experience_Values:
+    Agility:
+        Dodge: 800            # existing — re-measure (see above)
+        Roll: 600             # existing — re-measure
+        Fall: 600             # existing — re-measure
+        FeatherFall_Multiplier: 2.0
+        Movement:
+            Baseline_Xp_Per_Second: 30.0
+            Reference_Speed:        # blocks/second — MEASURED, not guessed
+                Land:  5.61
+                Water: 3.16
+                Air:   30.0
+            Medium_Multiplier:
+                Land:  1.0
+                Water: 1.15
+                Air:   0.6
+```
+
+Cache these reads — this is per-tick code, and the Alchemy Catalysis per-tick-config-read trap
+(`[[alchemy-catalysis]]`) applies verbatim.
+
+---
+
+## Balance / other tuning
+
+- **One medium per tick, priority AIR > WATER > LAND.** A player can be sprinting *and* in water, or
+  gliding *into* water. Pick exactly one and never double-pay; state the priority in the manager
+  javadoc and unit-test the overlap cases.
+- **Anti-AFK is now single-point critical** — and single-point *fixable*. A bubble elevator, a soul-sand
+  column, flowing water and a firework circuit all move the player without input. F1's guards (no
+  vehicle, reject teleport-scale deltas, require real Δ) cover all four sources at once, and the speed
+  clamp caps the damage even if one leaks. Add a §G row that actively tries to cheese each.
 - **Athlete must never make sprinting free** — cap `MaxReduction < 1.0`.
 - **Fleet Footed on land stacks on top of the vanilla sprint multiplier** — verify max rank doesn't trip
-  movement checks and rubber-band.
+  movement checks and rubber-band. (It no longer feeds its own XP — see the clamp.)
 - **Glide near max reduction can make landing weird** — confirm you can still descend and terrain-follow.
 - **Solar Wings must be a slow trickle** or elytra durability stops mattering.
 
@@ -355,7 +494,20 @@ green under the new names, plus: `getFleetFootedBonus` per medium at levels 0/mi
 and **0 when that medium's rank is locked**); `getAthleteExhaustionMultiplier` clamps and never returns
 0; `rollSmash` and `rollLakeRaiderTreasure` with pinned RNG (0 → always, 100 → never);
 `getLeadLungsAirTopUp` scaling + cap; `getGlideDescentReduction` clamp; `canSolarWings` gate;
-`computeSecondWind` per medium; `onMovementTick` per-block XP for each medium.
+`computeSecondWind` per medium.
+
+**Unit — the XP clamp (D-AG6), the highest-value tests in the skill):**
+- `creditedSeconds` at **exactly** the reference speed → `1/20` s; at **half** → `1/40` s; at **10×**
+  (a rocket boost, Dolphin's Grace, an ice-boat-scale delta) → still `1/20` s, **never more**;
+  at 0 → 0.
+- The anti-feedback-loop property, asserted directly: **the same tick-distance pays the same XP at
+  level 1 and at level 1000.** Fleet Footed must not be able to raise its own XP rate. If this test
+  ever goes red, the loop is back.
+- `onMovementTick` XP/second matches `Baseline_Xp_Per_Second × Medium_Multiplier` for each medium, and
+  the derived XP-per-block matches the table above (5.35 land / 10.92 water / 0.60 air at defaults).
+- Medium priority: a tick that is simultaneously gliding + in water + sprinting pays **once**, as AIR.
+- Budget regression: `10N² + 1010N` at N=1000 is 11,010,000, and land-only time-to-max stays ≥ 80 h at
+  the shipped defaults — a cheap arithmetic test that fails loudly if someone "just bumps" the baseline.
 
 **Migration (Stage 0, non-negotiable)** — fixture profile with `skills.ACROBATICS` / `experience.ACROBATICS`
 loads with the level *and* XP intact under `AGILITY`; a profile with **both** keys prefers the new one;
@@ -371,14 +523,26 @@ cleared on logout **and** on the entity-recreation paths (respawn / End-exit bot
 **§G rows** (add to a Pass-2 `PLAYTEST_G2.md`):
 - Stage 0: existing world keeps its Acrobatics level/XP as Agility; Roll and Dodge still fire; XP bar
   reads `Agility Lv.X`; `/mcstats agility` renders; milestone plaque still pops.
-- Sprint 200 blocks → XP delta; sprinting into a wall pays nothing; hunger drains visibly slower at
-  Athlete rank; a sprint-attack occasionally crits/flings (Smash); speed drops the instant you stop.
-- Swim 200 blocks → XP delta; a bubble elevator farms nothing; breath lasts much longer (Lead Lungs);
-  swimming is faster and the bonus drops the instant you leave water; underwater block-breaks
-  occasionally drop treasure (Lake Raider).
-- Glide 1000 blocks → XP delta; walking/falling without an elytra pays nothing; glides last longer and
-  are faster without floating on landing; a damaged elytra slowly repairs in daylight (Solar Wings);
-  firework + Fleet Footed(air) isn't game-breaking (D-AG4).
+- **Measure the three reference speeds** (D-AG6) — sprint, swim and unboosted glide over a
+  known distance, timed — and write the real numbers into `experience.yml`. Everything else in the XP
+  budget is downstream of these three.
+- **Clamp verification, in-world:** a timed minute of sprinting and a timed minute of *rocket-boosted*
+  gliding both pay their medium's stated XP/second; Depth Strider III / Dolphin's Grace / Speed II do
+  **not** increase XP per second. Then the loop check: level up Fleet Footed and confirm XP/second is
+  unchanged.
+- Sprint 200 blocks → XP delta matches ~5.35/block; sprinting into a wall pays nothing; sprint-jumping
+  pays the same as sprinting; hunger drains visibly slower at Athlete rank; a sprint-attack
+  occasionally crits/flings (Smash); speed drops the instant you stop.
+- Swim 200 blocks → XP delta matches ~10.9/block; a bubble elevator farms nothing; breath lasts much
+  longer (Lead Lungs); swimming is faster and the bonus drops the instant you leave water; underwater
+  block-breaks occasionally drop treasure (Lake Raider). **Check sneak-swimming** — confirm Padfoot and
+  Fleet Footed don't both apply (D-AG5).
+- Glide 1000 blocks → XP delta matches ~0.60/block; walking/falling without an elytra pays nothing;
+  glides last longer and are faster without floating on landing; a damaged elytra slowly repairs in
+  daylight (Solar Wings); firework + Fleet Footed(air) isn't game-breaking (D-AG4).
+- **Episodic re-measure:** roll off a 20-block drop in Feather Falling boots and record the XP against
+  the 11.01M budget; farm falls for 10 minutes and confirm `canGainRollXP()`'s lengthening cooldown
+  makes it a worse rate than simply travelling. If it doesn't, cut `Roll`/`Fall`.
 - Second Wind: lunges while sprinting, buffs in water, boosts while gliding, **refuses without burning
   the cooldown** when standing still; shows the On/Off/Refresh messages.
 

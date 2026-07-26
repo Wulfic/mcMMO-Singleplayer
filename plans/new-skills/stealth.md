@@ -3,6 +3,10 @@
 **Read [00-OVERVIEW.md](00-OVERVIEW.md) first.** Stealth is a **standalone primary skill** (D1) and
 **depends on F1** (the tick sampler) and **F2** (attribute service). It is `MISC_SKILLS`.
 
+> ✅ **RULED 2026-07-25 (user): Stealth stays its own skill** — it does *not* fold into Agility with
+> the other movement domains (D5 / D-AG5). Its payoff is *not-being-seen*, not locomotion. Locked.
+> **But it inherits Agility's XP mechanism** — see "Balance / XP tuning" below.
+
 Wiki source: `raw_site_text.md` §"Sneaking".
 
 ## Concept
@@ -88,9 +92,20 @@ important part of the skill — see F1 in the overview.
 
 ## Balance / XP tuning
 
+- **Use Agility's speed-normalised XP model — do not invent a second one.** Stealth pays **XP per
+  second of qualifying sneak-travel**, with each tick's distance **clamped at the sneak reference
+  speed** (vanilla ≈ **1.295 b/s** — measure it). Same three reasons as
+  [agility.md](agility.md) §"XP: the speed-normalised budget", and the third one bites here too:
+  **Padfoot raises sneak speed, so without the clamp Padfoot levels itself.** Config shape mirrors
+  Agility's (`Baseline_Xp_Per_Second`, `Reference_Speed.Sneak`, a medium multiplier).
+- **Budget it against the same curve.** RetroMode max = **11,010,000 XP** (`10N² + 1010N`). Sneaking is
+  slow, tedious and something players do in short bursts, so its XP/second should sit **above**
+  Agility's land rate — but pick the number from a target time-to-max (≥ 80 h of continuous sneaking,
+  same guardrail), not by feel.
 - **Anti-AFK is the whole risk.** Distance-while-sneaking is trivially farmable with a stuck key + a
   water current or a walking-into-a-boat trick — F1's "reject vehicle + require real ground delta" gate
-  must be tight. Add a §G row specifically trying to cheese it.
+  must be tight. Add a §G row specifically trying to cheese it. The speed clamp caps the blast radius
+  if one leaks, but it does not replace the gate.
 - Assassin damage on top of a sneak-crit could be huge — cap it and test against an armored mob.
 - Smoke Bomb invisibility: remember armor/held-items stay visible in vanilla invisibility — document.
 
