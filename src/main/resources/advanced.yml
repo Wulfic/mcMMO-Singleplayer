@@ -127,6 +127,80 @@ Skills:
                 Standard: 100
                 RetroMode: 1000
             DamageThreshold: 7.0
+
+        FleetFooted:
+            # Move faster in whichever medium you are travelling through. One sub-skill, three ranks:
+            # rank 1 unlocks Land, rank 2 Water, rank 3 Air. The bonus scales linearly with your
+            # Agility level up to MaxBonusLevel, then stops.
+            #
+            # Land is a percentage bonus on movement speed, on top of the vanilla sprint multiplier.
+            # Water is NOT a movement-speed bonus: swim speed in 1.21.11 ignores movement speed unless
+            #   water movement efficiency is above zero, so this raises that attribute directly. It is
+            #   the same one Depth Strider uses and vanilla hard-caps it at 1.0, so a Depth Strider III
+            #   player is already at the cap and gains nothing here - that is intended, not a bug.
+            # Air is a per-tick forward velocity nudge while gliding; elytra flight is velocity-driven
+            #   and has no attribute behind it.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            Land_MaxBonus: 0.20
+            Water_MaxBonus: 0.50
+            Air_MaxBonus: 0.15
+
+        Athlete:
+            # Sprinting costs less hunger. Capped below 1.0 so sprinting is never free.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            MaxExhaustionReduction: 0.5
+
+        Smash:
+            # Chance for a sprint-attack to deal bonus damage and extra knockback.
+            ChanceMax: 25.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            BonusDamage: 2.0
+            KnockbackStrength: 0.8
+
+        LeadLungs:
+            # Extra air ticks restored per tick while submerged. Vanilla drains 1 per tick, so a value
+            # of 1.0 would make breath infinite - the cap is deliberately below that.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            MaxAirTopUpPerTick: 0.75
+
+        SecondWind:
+            # Agility's super ability. One ability, three bodies, dispatched on how you are moving:
+            # sprinting = a forward lunge, in water = a buff, gliding = a speed burst.
+            # Rank 1 unlocks the land body, rank 2 water, rank 3 air.
+            DartRange: 6.0
+            DartDamage: 6.0
+            DartKnockback: 1.5
+            AquamanAmplifier: 1
+            LimitlessBoost: 1.2
+
+        Glide:
+            # Descend more slowly while gliding. Capped well below 1.0 so you can still land.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            MaxDescentReduction: 0.5
+
+        LakeRaider:
+            # Chance for an underwater block break to turn up treasure.
+            ChanceMax: 15.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+
+        SolarWings:
+            # A worn, damaged elytra slowly repairs in daylight. Deliberately a trickle: make this
+            # generous and elytra durability stops being a resource at all.
+            RepairPerInterval: 1
+            IntervalTicks: 100
+            GroundedMultiplier: 2
     #
     #  Settings for Alchemy
     ###

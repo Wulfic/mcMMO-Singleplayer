@@ -417,6 +417,16 @@ public class GeneralConfig extends ConfigLoader {
         return config.getInt("Skills.Agility.XP_After_Teleport_Cooldown", 5);
     }
 
+    /**
+     * The item that triggers Agility's Second Wind super ability on right-click (never consumed).
+     * Named Bukkit-style or as a namespaced id; resolved through
+     * {@link com.gmail.nossr50.platform.Materials}, so an unknown name simply never triggers rather
+     * than crashing.
+     */
+    public String getSecondWindItem() {
+        return config.getString("Skills.Agility.Second_Wind_Item", "FEATHER");
+    }
+
     /* Alchemy */
     public boolean getEnabledForHoppers() {
         return config.getBoolean("Skills.Alchemy.Enabled_for_Hoppers", true);

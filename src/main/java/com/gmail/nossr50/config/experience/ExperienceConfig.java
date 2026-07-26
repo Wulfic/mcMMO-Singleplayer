@@ -6,6 +6,7 @@ import com.gmail.nossr50.datatypes.experience.FormulaType;
 import com.gmail.nossr50.datatypes.skills.MaterialType;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
+import com.gmail.nossr50.skills.agility.Medium;
 import com.gmail.nossr50.util.text.StringUtils;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -349,6 +350,53 @@ public class ExperienceConfig extends ConfigLoader {
 
     public double getFeatherFallXPModifier() {
         return config.getDouble("Experience_Values.Agility.FeatherFall_Multiplier", 2.0);
+    }
+
+    /**
+     * Agility movement XP paid per second of qualifying travel, before the per-medium multiplier
+     * (Pass 2 / D-AG6). Deliberately per <em>second</em> rather than per block — see
+     * {@link com.gmail.nossr50.skills.agility.MovementXpSettings} for why that distinction is the
+     * whole balance model.
+     */
+    public double getMovementBaselineXpPerSecond() {
+        return config.getDouble("Experience_Values.Agility.Movement.Baseline_Xp_Per_Second", 30.0);
+    }
+
+    /**
+     * Blocks per second at which a medium pays its full rate; travel faster than this is clamped and
+     * pays no more. Defaults are the plan's starting values — Land is the well-known vanilla sprint
+     * speed, Water and Air are estimates pending in-game measurement.
+     *
+     * @param medium the medium being travelled
+     * @return the reference speed in blocks/second
+     */
+    public double getMovementReferenceSpeed(Medium medium) {
+        final double fallback = switch (medium) {
+            case LAND -> 5.61;
+            case WATER -> 3.16;
+            case AIR -> 30.0;
+        };
+        return config.getDouble(
+                "Experience_Values.Agility.Movement.Reference_Speed." + medium.configName(),
+                fallback);
+    }
+
+    /**
+     * The per-medium payout weighting applied on top of
+     * {@link #getMovementBaselineXpPerSecond()}.
+     *
+     * @param medium the medium being travelled
+     * @return the multiplier, where {@code 1.0} is the baseline rate
+     */
+    public double getMovementMediumMultiplier(Medium medium) {
+        final double fallback = switch (medium) {
+            case LAND -> 1.0;
+            case WATER -> 1.15;
+            case AIR -> 0.6;
+        };
+        return config.getDouble(
+                "Experience_Values.Agility.Movement.Medium_Multiplier." + medium.configName(),
+                fallback);
     }
 
     /* Archery */

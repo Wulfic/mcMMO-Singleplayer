@@ -342,6 +342,7 @@ Abilities:
         Blast_Mining: 60
         Giga_Drill_Breaker: 240
         Green_Terra: 240
+        Second_Wind: 240
         Serrated_Strikes: 240
         Skull_Splitter: 240
         Super_Breaker: 240
@@ -351,6 +352,7 @@ Abilities:
         Blast_Mining: 0
         Giga_Drill_Breaker: 0
         Green_Terra: 0
+        Second_Wind: 0
         Serrated_Strikes: 0
         Skull_Splitter: 0
         Super_Breaker: 0
@@ -373,6 +375,8 @@ Skills:
         # Prevent earning Agility XP a few seconds after teleporting
         XP_After_Teleport_Cooldown: 5
         Level_Cap: 0
+        # Item that triggers the Second Wind super ability on right-click. Never consumed.
+        Second_Wind_Item: FEATHER
     Alchemy:
         # Allow Hoppers to transfer ingredients and brew Rank 1 Alchemy potions
         Enabled_for_Hoppers: true

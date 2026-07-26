@@ -96,6 +96,21 @@ public enum SuperAbilityType {
             "Placeholder"),
 
     /**
+     * Agility's active (Pass 2). The mod's first super ability that is not gated on holding a tool:
+     * it is triggered by a held item and dispatched on the player's <em>movement state</em>, with a
+     * different body per medium (land lunge / water buff / air boost). One ability rather than three
+     * keeps it to one cooldown slot, one config block and one locale block — from the player's seat
+     * it is simply "the Agility button".
+     */
+    SECOND_WIND(
+            "Agility.Skills.SecondWind.On",
+            "Agility.Skills.SecondWind.Off",
+            "Agility.Skills.SecondWind.Other.On",
+            "Agility.Skills.SecondWind.Refresh",
+            "Agility.Skills.SecondWind.Other.Off",
+            "Agility.SubSkill.SecondWind.Name"),
+
+    /**
      * Has cooldown - but has to share a skill with Super Breaker, so needs special treatment
      */
     BLAST_MINING(
@@ -120,6 +135,7 @@ public enum SuperAbilityType {
         SKULL_SPLITTER.subSkillTypeDefinition = SubSkillType.AXES_SKULL_SPLITTER;
         TREE_FELLER.subSkillTypeDefinition = SubSkillType.WOODCUTTING_TREE_FELLER;
         SERRATED_STRIKES.subSkillTypeDefinition = SubSkillType.SWORDS_SERRATED_STRIKES;
+        SECOND_WIND.subSkillTypeDefinition = SubSkillType.AGILITY_SECOND_WIND;
         BLAST_MINING.subSkillTypeDefinition = SubSkillType.MINING_BLAST_MINING;
     }
 

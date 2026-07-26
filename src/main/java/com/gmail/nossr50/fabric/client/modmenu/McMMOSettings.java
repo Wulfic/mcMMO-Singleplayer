@@ -47,8 +47,8 @@ public final class McMMOSettings {
 
     /** Super-abilities with an {@code Abilities.Cooldowns.<name>} key. */
     private static final String[] COOLDOWN_ABILITIES = {
-        "Berserk", "Blast_Mining", "Giga_Drill_Breaker", "Green_Terra", "Serrated_Strikes",
-        "Skull_Splitter", "Super_Breaker", "Tree_Feller"
+        "Berserk", "Blast_Mining", "Giga_Drill_Breaker", "Green_Terra", "Second_Wind",
+        "Serrated_Strikes", "Skull_Splitter", "Super_Breaker", "Tree_Feller"
     };
 
     private static final List<ConfigSetting> ALL = buildCatalogue();
@@ -129,6 +129,16 @@ public final class McMMOSettings {
         list.add(ConfigSetting.bool(CAT_XP, EXPERIENCE_YML, "Experience_Formula.Cumulative_Curve",
                 false, "Cumulative XP Curve",
                 "Level cost scales with total power level instead of per-skill level."));
+
+        // Agility movement XP. The baseline is the one knob a player actually wants; the reference
+        // speeds and per-medium weights are balance internals that only make sense as a set, so they
+        // stay YAML-only rather than being three sliders that quietly break each other's ratios.
+        list.add(ConfigSetting.decimal(CAT_XP, EXPERIENCE_YML,
+                "Experience_Values.Agility.Movement.Baseline_Xp_Per_Second", 30.0, 0.0, 1000.0,
+                "Agility: Movement XP per Second",
+                "XP per second of sprinting, swimming or gliding. Each medium's payout is "
+                        + "normalised against its own top speed, so a faster medium does not level "
+                        + "faster — raise this to level Agility faster overall."));
 
         // ---- Per-skill XP multipliers (experience.yml) -----------------------------------------
         for (String skill : XP_MULTIPLIER_SKILLS) {

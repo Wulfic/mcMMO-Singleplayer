@@ -4,6 +4,68 @@
 (Sprinting), `swimming.md` and `flying.md` — those three are **deleted**; their content is folded in
 here. See D5 in the overview for the merge ruling.
 
+---
+
+## ✅ BUILD STATUS — Stages 0–5 are CODE-COMPLETE (2026-07-25)
+
+All six stages are implemented, unit-tested, suite-green (850) and boot-verified (clean `runServer`
+boot + verified shutdown, 0 exceptions, 0 mixin failures). **Nothing here has been played yet** —
+the §G rows at the bottom of this file are the outstanding work, and the three reference speeds in
+particular are still estimates.
+
+Two things the plan assumed turned out to be **wrong**, both settled by bytecode rather than by
+guessing. Read these before touching the water or air bodies:
+
+### ⚠️ D-AG4 ANSWERED: `movement_speed` does NOT move a swimmer
+
+`LivingEntity#travelInWater` computes swim speed as a flat `0.02`, and movement speed only
+contributes *in proportion to* `WATER_MOVEMENT_EFFICIENCY`:
+
+```
+g = 0.02F;
+waterEff = getAttributeValue(WATER_MOVEMENT_EFFICIENCY);   // 0 without Depth Strider
+if (!isOnGround()) waterEff *= 0.5F;
+if (waterEff > 0) { f += (0.546F - f) * waterEff;  g += (getMovementSpeed() - g) * waterEff; }
+```
+
+So with no Depth Strider the efficiency is **0** and a movement-speed modifier moves a swimming
+player **not at all**. Fleet Footed's water body therefore targets `WATER_MOVEMENT_EFFICIENCY`
+directly. Consequence worth knowing: that attribute is a `ClampedEntityAttribute` with **max 1.0**,
+and Depth Strider III already reaches it — so a DS III player gains nothing from Fleet Footed water.
+That is vanilla's cap doing the "cap it so it isn't silly" job for free, not a bug.
+
+### ⚠️ The air body could NOT be a tick-sweep velocity write
+
+The plan called for nudging velocity from F1 each tick. That does not work for a player's *own*
+client: `EntityTrackerEntry` publishes velocity via `TrackerPacketSender#sendToListeners`, and for a
+player entity the listeners are the **other** nearby players — the moving player never receives their
+own velocity update. Server-side writes would be silently overwritten by the client's flight
+simulation.
+
+Resolved by splitting the two cases:
+- **Continuous** air bonuses (Fleet Footed air, Glide) use `LivingEntityGlideMixin`, a
+  `@ModifyExpressionValue` on `calcGlidingVelocity`'s return inside `travelGliding`. Both logical
+  sides run it and compute the same factor, so there is nothing to sync and nothing to rubber-band.
+- **One-shot** impulses (Second Wind's Dart and Limitless) set velocity and send an explicit
+  `EntityVelocityUpdateS2CPacket` — what Bukkit's `Player#setVelocity` does. Correct for an impulse,
+  wrong per-tick.
+
+### Where each piece landed
+
+| Piece | Home |
+|---|---|
+| XP clamp + budget | `skills/agility/MovementXpSettings` (MC-free, the highest-value tests) |
+| Per-medium enum | `skills/agility/Medium` (priority AIR > WATER > LAND) |
+| All 10 sub-skills' math | `AgilityManager` (still zero Minecraft imports) |
+| F1 sampler | `fabric/listeners/PlayerMovementTracker` |
+| F2 attribute service | `platform/SkillAttributeService` (temporary modifiers — can never reach the save file) |
+| Athlete | `HungerManagerExhaustionMixin` → `AthleteListener` (gated on `isSprinting()`) |
+| Smash | `EntityDamageListener#applySprintSmash` (existing melee seam, no new mixin) |
+| Fleet Footed air + Glide | `LivingEntityGlideMixin` → `GlideListener` |
+| Lake Raider | `BlockBreakListener#awardLakeRaiderTreasure` (reuses the Excavation tables) |
+| Second Wind | `fabric/listeners/SecondWindListener` (does NOT use `checkAbilityActivation` — no tool) |
+| Rename migration | `util/skills/SkillRenames` + `FlatFileProfileStore` + `ConfigLoader` warning |
+
 Agility is **not a new skill.** It is the **existing, shipped, Pass-1 `ACROBATICS` skill renamed**, then
 grown three new movement domains. That distinction drives the whole plan: Stage 0 is a rename with a
 save-file migration, not a greenfield feature.

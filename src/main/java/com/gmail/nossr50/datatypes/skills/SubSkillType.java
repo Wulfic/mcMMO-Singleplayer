@@ -9,8 +9,19 @@ public enum SubSkillType {
     /* !! Warning -- Do not let subskills share a name with any existing PrimarySkillType as it will clash with the static import !! */
 
     /* AGILITY */
+    // Fall domain (shipped since the Bukkit port).
     AGILITY_DODGE(1),
     AGILITY_ROLL,
+    // Land / Water / Air domains (Pass 2). Fleet Footed and Second Wind each carry one rank per
+    // medium — land, then water, then air — rather than being three sub-skills apiece.
+    AGILITY_FLEET_FOOTED(3),
+    AGILITY_ATHLETE(1),
+    AGILITY_SMASH(1),
+    AGILITY_LEAD_LUNGS(1),
+    AGILITY_SECOND_WIND(3),
+    AGILITY_GLIDE(1),
+    AGILITY_LAKE_RAIDER(1),
+    AGILITY_SOLAR_WINGS(1),
 
     /* ALCHEMY */
     ALCHEMY_CATALYSIS(1),

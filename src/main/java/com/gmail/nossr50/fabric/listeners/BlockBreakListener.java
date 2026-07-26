@@ -7,6 +7,7 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
+import com.gmail.nossr50.datatypes.treasure.ExcavationTreasure;
 import com.gmail.nossr50.datatypes.treasure.HylianTreasure;
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.fabric.McMMOMod;
@@ -15,6 +16,7 @@ import com.gmail.nossr50.platform.ItemSpecBuilder;
 import com.gmail.nossr50.platform.Materials;
 import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.skills.BlockBreakXp;
+import com.gmail.nossr50.skills.agility.AgilityManager;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
 import com.gmail.nossr50.skills.herbalism.MultiBlockPlantTraversal;
@@ -274,6 +276,9 @@ public final class BlockBreakListener {
             awardHerbalismBonusDrops(mmoPlayer, serverWorld, pos, state, blockEntity, serverPlayer,
                     blockId);
             awardExcavationTreasures(mmoPlayer, serverWorld, pos, blockId);
+            // Pass 2: Agility Lake Raider. Independent of the Excavation roll above — a break can
+            // legitimately turn up both, since they are two different skills paying out.
+            awardLakeRaiderTreasure(mmoPlayer, serverWorld, pos, serverPlayer, blockId);
             // Giga Drill Breaker re-processes the block twice more (3× drops/XP) and wears the
             // shovel. It stays inside the creative gate with the base treasure roll: creative breaks
             // spawn no vanilla loot, so bonus treasure copies there would be a duplication bug.
@@ -778,5 +783,53 @@ public final class BlockBreakListener {
             mmoPlayer.beginXpGain(PrimarySkillType.EXCAVATION, rewards.treasureXp(),
                     XPGainReason.PVE, XPGainSource.SELF);
         }
+    }
+
+    /**
+     * Agility <b>Lake Raider</b>: breaking a block while submerged can turn up treasure.
+     *
+     * <p>Reuses the Excavation treasure tables and the same {@link ItemSpecBuilder} spawn path as
+     * {@link #awardExcavationTreasures} — see
+     * {@link AgilityManager#rollLakeRaiderTreasure(java.util.List, boolean, java.util.function.DoublePredicate)}
+     * for why sharing the loot table is the right call rather than shipping a duplicate of it.
+     *
+     * <p>Two differences from the Excavation path, both deliberate. The treasures' Excavation
+     * <em>level</em> requirement is ignored, because this is being paid for Agility levels; and no
+     * XP is awarded with the drop, because the sub-skill is a loot perk and paying Excavation XP for
+     * an Agility proc would let a player level one skill by having ranked another.
+     */
+    private static void awardLakeRaiderTreasure(McMMOPlayer mmoPlayer, ServerWorld world,
+            BlockPos pos, ServerPlayerEntity breaker, String blockId) {
+        if (!breaker.isSubmergedInWater()) {
+            return;
+        }
+        final AgilityManager agility = mmoPlayer.getAgilityManager();
+        if (agility == null || !agility.canLakeRaider()) {
+            return;
+        }
+
+        // Read the table through the Excavation manager: Excavation.getTreasures is package-private
+        // to its own skill package, and going through the manager keeps the single public accessor.
+        final ExcavationManager excavation = mmoPlayer.getExcavationManager();
+        if (excavation == null) {
+            return;
+        }
+        final List<ExcavationTreasure> candidates = excavation.getTreasures(blockId);
+        if (candidates.isEmpty()) {
+            return; // Not a block anything is buried in.
+        }
+        final Optional<ExcavationTreasure> won = agility.rollLakeRaiderTreasure(candidates,
+                agility.rollLakeRaiderTreasure(),
+                chance -> ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.AGILITY,
+                        mmoPlayer, chance));
+        if (won.isEmpty()) {
+            return;
+        }
+
+        ItemSpecBuilder.build(won.get().getDrop()).ifPresent(stack -> {
+            Block.dropStack(world, pos, stack);
+            NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                    "Agility.SubSkill.LakeRaider.Proc");
+        });
     }
 }

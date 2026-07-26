@@ -204,8 +204,16 @@ public class SkillTools {
             final PrimarySkillType parent = getSuperAbilityParent(superAbilityType);
             tempAbilityParentRelationshipMap.put(superAbilityType, parent);
 
-            // This map is used only for abilities that have a tool readying phase,
-            // so Blast Mining is ignored.
+            // Every skill's headline ability, used by /mcstats to name and time it.
+            //
+            // Blast Mining is excluded because Mining's headline ability is Super Breaker; Second
+            // Wind is NOT excluded — it is Agility's only ability and must show on the stats screen.
+            // Note that Agility is the mod's first super ability with no tool behind it, so it has no
+            // entry in primarySkillToolMap and getPrimarySkillToolType(AGILITY) is null. That is safe
+            // only because the tool-readying path (McMMOPlayer#processAbilityActivation /
+            // #checkAbilityActivation, both of which dereference that tool) is driven exclusively by
+            // SuperAbilityListener with the six hard-coded tool skills. Second Wind is triggered by a
+            // held item instead and must never be routed through those two methods.
             if (superAbilityType != SuperAbilityType.BLAST_MINING) {
                 tempMainActivatedAbilityChildMap.put(parent, superAbilityType);
             }
@@ -261,6 +269,7 @@ public class SkillTools {
             case EXPLOSIVE_SHOT -> PrimarySkillType.ARCHERY;
             case MACES_SUPER_ABILITY -> PrimarySkillType.MACES;
             case SPEARS_SUPER_ABILITY -> PrimarySkillType.SPEARS;
+            case SECOND_WIND -> PrimarySkillType.AGILITY;
         };
     }
 

@@ -3,6 +3,7 @@ package com.gmail.nossr50.config;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.skills.agility.Medium;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -556,6 +557,105 @@ public class AdvancedConfig extends ConfigLoader {
 
     public double getGracefulRollDamageThreshold() {
         return config.getDouble("Skills.Agility.GracefulRoll.DamageThreshold", 14.0D);
+    }
+
+    // --- Agility movement domains (Pass 2) ---------------------------------------------------
+    //
+    // Each of these reads a RetroMode/Standard-scaled MaxBonusLevel the same way the shipped skills
+    // do, so a level authored against the 1-1000 ladder still behaves on the 1-100 one.
+
+    public int getFleetFootedMaxBonusLevel() {
+        return maxBonusLevel("Skills.Agility.FleetFooted.MaxBonusLevel");
+    }
+
+    /**
+     * The Fleet Footed bonus at max rank for one medium. Units differ per medium and that is
+     * deliberate — see {@link com.gmail.nossr50.platform.SkillAttributeService.Managed}: land is a
+     * movement-speed <em>fraction</em>, water is a flat addition to water movement efficiency
+     * (vanilla-capped at 1.0), and air is a per-tick velocity nudge factor.
+     */
+    public double getFleetFootedMaxBonus(Medium medium) {
+        final double fallback = switch (medium) {
+            case LAND -> 0.20D;
+            case WATER -> 0.50D;
+            case AIR -> 0.15D;
+        };
+        return config.getDouble("Skills.Agility.FleetFooted." + medium.configName() + "_MaxBonus",
+                fallback);
+    }
+
+    public int getAthleteMaxBonusLevel() {
+        return maxBonusLevel("Skills.Agility.Athlete.MaxBonusLevel");
+    }
+
+    public double getAthleteMaxExhaustionReduction() {
+        return config.getDouble("Skills.Agility.Athlete.MaxExhaustionReduction", 0.5D);
+    }
+
+    public double getSmashBonusDamage() {
+        return config.getDouble("Skills.Agility.Smash.BonusDamage", 2.0D);
+    }
+
+    public double getSmashKnockbackStrength() {
+        return config.getDouble("Skills.Agility.Smash.KnockbackStrength", 0.8D);
+    }
+
+    public int getLeadLungsMaxBonusLevel() {
+        return maxBonusLevel("Skills.Agility.LeadLungs.MaxBonusLevel");
+    }
+
+    public double getLeadLungsMaxAirTopUpPerTick() {
+        return config.getDouble("Skills.Agility.LeadLungs.MaxAirTopUpPerTick", 0.75D);
+    }
+
+    public double getSecondWindDartRange() {
+        return config.getDouble("Skills.Agility.SecondWind.DartRange", 6.0D);
+    }
+
+    public double getSecondWindDartDamage() {
+        return config.getDouble("Skills.Agility.SecondWind.DartDamage", 6.0D);
+    }
+
+    public double getSecondWindDartKnockback() {
+        return config.getDouble("Skills.Agility.SecondWind.DartKnockback", 1.5D);
+    }
+
+    public int getSecondWindAquamanAmplifier() {
+        return config.getInt("Skills.Agility.SecondWind.AquamanAmplifier", 1);
+    }
+
+    public double getSecondWindLimitlessBoost() {
+        return config.getDouble("Skills.Agility.SecondWind.LimitlessBoost", 1.2D);
+    }
+
+    public int getGlideMaxBonusLevel() {
+        return maxBonusLevel("Skills.Agility.Glide.MaxBonusLevel");
+    }
+
+    public double getGlideMaxDescentReduction() {
+        return config.getDouble("Skills.Agility.Glide.MaxDescentReduction", 0.5D);
+    }
+
+    public int getSolarWingsRepairPerInterval() {
+        return config.getInt("Skills.Agility.SolarWings.RepairPerInterval", 1);
+    }
+
+    public int getSolarWingsIntervalTicks() {
+        return config.getInt("Skills.Agility.SolarWings.IntervalTicks", 100);
+    }
+
+    public int getSolarWingsGroundedMultiplier() {
+        return config.getInt("Skills.Agility.SolarWings.GroundedMultiplier", 2);
+    }
+
+    /**
+     * Reads a {@code MaxBonusLevel} node's RetroMode/Standard child, matching how every shipped
+     * sub-skill scales its bonus ladder.
+     */
+    private int maxBonusLevel(String path) {
+        return McMMOMod.isRetroModeEnabled()
+                ? config.getInt(path + ".RetroMode", 1000)
+                : config.getInt(path + ".Standard", 100);
     }
 
     /* ALCHEMY */

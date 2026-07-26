@@ -1,5 +1,6 @@
 package com.gmail.nossr50.skills.agility;
 
+import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.datatypes.BlockLocationHistory;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
@@ -8,6 +9,7 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.subskills.agility.DodgeResult;
 import com.gmail.nossr50.datatypes.skills.subskills.agility.RollResult;
+import com.gmail.nossr50.datatypes.treasure.ExcavationTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.SkillManager;
@@ -17,6 +19,10 @@ import com.gmail.nossr50.util.random.Probability;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.DoublePredicate;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -46,6 +52,37 @@ public class AgilityManager extends SkillManager {
     private final long rollXPInterval = (1000 * 3);
     private long rollXPIntervalLengthen = (1000 * 10);
     private final BlockLocationHistory fallLocationMap;
+
+    // --- Movement domains (Pass 2) -------------------------------------------------------------
+
+    /**
+     * Snapshot of the movement-XP tuning, built on the first movement tick rather than in the
+     * constructor.
+     *
+     * <p>Lazy for two reasons that pull the same way: managers are constructed before any config is
+     * guaranteed wired (and unit tests build them with no config at all), and this is read 20×/s so
+     * it must not be a live YAML walk — the Alchemy Catalysis per-tick-config-read trap. A manager
+     * lives exactly as long as one player session, which is exactly as long as one loaded config, so
+     * caching for the manager's lifetime is correct rather than merely convenient.
+     */
+    private MovementXpSettings movementXpSettings;
+
+    /**
+     * Fractional movement XP not yet handed to the XP pipeline.
+     *
+     * <p>A tick of travel is worth well under one XP, and pushing a fraction through
+     * {@code beginXpGain} every tick would churn the level-up check, the diminished-returns ledger
+     * and the profile dirty flag 20×/s for nothing. Whole XP is flushed; the remainder rides along
+     * to the next tick so nothing is lost to truncation.
+     */
+    private double movementXpAccumulator;
+
+    /**
+     * Fractional Lead Lungs air, for the same reason: air is an integer counter, so a sub-1 top-up
+     * per tick has to accumulate or it would floor to zero forever and the sub-skill would do
+     * nothing at all.
+     */
+    private double leadLungsAirAccumulator;
 
     /**
      * Processes an incoming fall-damage hit: rolls for Roll/Graceful Roll, awards Agility XP, and
@@ -288,5 +325,369 @@ public class AgilityManager extends SkillManager {
 
     private boolean isFatal(double damage) {
         return getPlayer().getHealth() - damage <= 0;
+    }
+
+    // ==========================================================================================
+    //  Movement domains — Land, Water, Air (Pass 2)
+    // ==========================================================================================
+
+    /** The movement-XP tuning for this session, snapshotted on first use. */
+    public @NotNull MovementXpSettings movementXpSettings() {
+        MovementXpSettings local = movementXpSettings;
+        if (local == null) {
+            local = MovementXpSettings.fromConfig();
+            movementXpSettings = local;
+        }
+        return local;
+    }
+
+    /** Test seam: install an explicit tuning snapshot instead of reading the live config. */
+    public void setMovementXpSettings(@NotNull MovementXpSettings settings) {
+        this.movementXpSettings = settings;
+    }
+
+    /**
+     * Credit one tick of travel through {@code medium}.
+     *
+     * <p>The single entry point for all three new domains — the whole point of merging Sprinting,
+     * Swimming and Flying into one skill is that there is one accumulator and one guard set here
+     * instead of three. The caller (F1) has already established that this tick's movement is
+     * legitimate (not in a vehicle, not a teleport, actually moved); this method owns the clamp and
+     * the payout.
+     *
+     * @param medium   the medium travelled, already resolved by the caller
+     * @param distance horizontal distance moved this tick, in blocks
+     * @return the whole XP awarded this tick — usually {@code 0}, since a tick is worth a fraction
+     *         of one XP and the remainder is accumulated
+     */
+    public float onMovementTick(@NotNull Medium medium, double distance) {
+        movementXpAccumulator += movementXpSettings().xpFor(medium, distance);
+        if (movementXpAccumulator < 1.0) {
+            return 0F;
+        }
+        final float whole = (float) Math.floor(movementXpAccumulator);
+        movementXpAccumulator -= whole;
+        applyXpGain(whole, XPGainReason.PVE, XPGainSource.SELF);
+        return whole;
+    }
+
+    /**
+     * Seconds of travel credited for a tick's distance — the speed clamp. Delegates to
+     * {@link MovementXpSettings#creditedSeconds}; exposed here because it is the single most
+     * important thing in the skill to be able to assert on.
+     */
+    public double creditedSeconds(@NotNull Medium medium, double distance) {
+        return movementXpSettings().creditedSeconds(medium, distance);
+    }
+
+    // --- Sub-skill 3: Fleet Footed ------------------------------------------------------------
+
+    /**
+     * Whether this medium's Fleet Footed rank is unlocked (land at rank 1, water 2, air 3).
+     */
+    public boolean canFleetFoot(@NotNull Medium medium) {
+        return RankUtils.hasReachedRank(medium.fleetFootedRank(), mmoPlayer,
+                SubSkillType.AGILITY_FLEET_FOOTED)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_FLEET_FOOTED);
+    }
+
+    /**
+     * The speed bonus to apply while travelling through {@code medium}, or {@code 0} when that
+     * medium's rank is not yet unlocked.
+     *
+     * <p>The units differ per medium and that asymmetry is deliberate rather than sloppy — see
+     * {@link com.gmail.nossr50.platform.SkillAttributeService.Managed}. Land is a movement-speed
+     * fraction, water is a flat addition to water movement efficiency (because movement speed does
+     * not move a swimmer), and air is a velocity nudge factor (because elytra flight has no
+     * attribute at all). One sub-skill, one rank ladder, one config block — two application
+     * mechanisms.
+     *
+     * @param medium the medium being travelled
+     * @return the bonus, scaled linearly with level to the configured cap
+     */
+    public double getFleetFootedBonus(@NotNull Medium medium) {
+        if (!canFleetFoot(medium)) {
+            return 0.0;
+        }
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        if (advanced == null) {
+            return 0.0;
+        }
+        return scaleToLevel(advanced.getFleetFootedMaxBonus(medium),
+                advanced.getFleetFootedMaxBonusLevel());
+    }
+
+    // --- Sub-skill 4: Athlete -----------------------------------------------------------------
+
+    public boolean canAthlete() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_ATHLETE)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_ATHLETE);
+    }
+
+    /**
+     * The factor to scale sprint exhaustion by — below 1 means sprinting costs less hunger.
+     *
+     * <p>Never returns 0, and cannot be configured to: a multiplier of zero would make sprinting
+     * literally free, which removes food from the game for anyone who levels this skill. The
+     * configured reduction is clamped into {@code [0, 0.95]} before it is subtracted, so the worst
+     * case is "sprinting costs 5% of normal", not "costs nothing".
+     *
+     * @return a multiplier in {@code (0, 1]}
+     */
+    public double getAthleteExhaustionMultiplier() {
+        if (!canAthlete()) {
+            return 1.0;
+        }
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        if (advanced == null) {
+            return 1.0;
+        }
+        final double cap = Math.min(0.95, Math.max(0.0, advanced.getAthleteMaxExhaustionReduction()));
+        return 1.0 - scaleToLevel(cap, advanced.getAthleteMaxBonusLevel());
+    }
+
+    // --- Sub-skill 5: Smash -------------------------------------------------------------------
+
+    public boolean canSmash() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_SMASH)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_SMASH);
+    }
+
+    /** Rolls Smash for a sprint-attack. The caller has already checked the player is sprinting. */
+    public boolean rollSmash() {
+        return canSmash()
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.AGILITY_SMASH, mmoPlayer);
+    }
+
+    /** Bonus damage a successful Smash adds to a sprint-attack. */
+    public double getSmashBonusDamage() {
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        return advanced == null ? 0.0 : advanced.getSmashBonusDamage();
+    }
+
+    /** Extra knockback a successful Smash applies. */
+    public double getSmashKnockback() {
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        return advanced == null ? 0.0 : advanced.getSmashKnockbackStrength();
+    }
+
+    // --- Sub-skill 6: Lead Lungs --------------------------------------------------------------
+
+    public boolean canLeadLungs() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_LEAD_LUNGS)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_LEAD_LUNGS);
+    }
+
+    /**
+     * Air ticks restored per submerged tick, before accumulation.
+     *
+     * <p>Vanilla drains exactly one air per tick, so a value of 1.0 would be literally infinite
+     * breath. The configured cap is clamped below that on purpose: Lead Lungs should approach
+     * Respiration III territory without trivially exceeding it.
+     *
+     * @return the per-tick top-up, in the {@code [0, 0.95]} range
+     */
+    public double getLeadLungsAirTopUpPerTick() {
+        if (!canLeadLungs()) {
+            return 0.0;
+        }
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        if (advanced == null) {
+            return 0.0;
+        }
+        final double cap = Math.min(0.95,
+                Math.max(0.0, advanced.getLeadLungsMaxAirTopUpPerTick()));
+        return scaleToLevel(cap, advanced.getLeadLungsMaxBonusLevel());
+    }
+
+    /**
+     * Accumulate this tick's Lead Lungs top-up and hand back whole air ticks to restore.
+     *
+     * <p>Air is an integer counter, so the fractional per-tick value has to be banked — flooring it
+     * every tick would return 0 forever and the sub-skill would silently do nothing.
+     *
+     * @return whole air ticks to add this tick, usually {@code 0} or {@code 1}
+     */
+    public int consumeLeadLungsAirTopUp() {
+        final double perTick = getLeadLungsAirTopUpPerTick();
+        if (perTick <= 0) {
+            leadLungsAirAccumulator = 0;
+            return 0;
+        }
+        leadLungsAirAccumulator += perTick;
+        if (leadLungsAirAccumulator < 1.0) {
+            return 0;
+        }
+        final int whole = (int) Math.floor(leadLungsAirAccumulator);
+        leadLungsAirAccumulator -= whole;
+        return whole;
+    }
+
+    // --- Sub-skill 7: Second Wind --------------------------------------------------------------
+
+    /**
+     * Whether the Second Wind body for {@code medium} is unlocked. The three bodies share the
+     * ability's three ranks in medium order, so a level-250 player has the land lunge only.
+     */
+    public boolean canSecondWind(@NotNull Medium medium) {
+        return RankUtils.hasReachedRank(medium.fleetFootedRank(), mmoPlayer,
+                SubSkillType.AGILITY_SECOND_WIND)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_SECOND_WIND);
+    }
+
+    /**
+     * Resolve the Second Wind effect for the medium the player is moving through, or {@code null}
+     * when that body is not unlocked.
+     *
+     * <p>Returning {@code null} rather than a zeroed result is load-bearing: the caller must be able
+     * to refuse the activation <em>without burning the cooldown</em>, and an all-zeros result is
+     * indistinguishable from a legitimately weak one.
+     *
+     * @param medium the medium the player is currently moving through
+     * @param durationTicks the ability duration the super-ability infra computed for this player
+     * @return the resolved effect, or {@code null} if this body is locked
+     */
+    public @Nullable SecondWindResult computeSecondWind(@NotNull Medium medium, int durationTicks) {
+        if (!canSecondWind(medium)) {
+            return null;
+        }
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        if (advanced == null) {
+            return null;
+        }
+        return switch (medium) {
+            // Dart: an instantaneous lunge, so no duration — the magnitude is the launch velocity.
+            case LAND -> new SecondWindResult(medium, 0, advanced.getSecondWindDartKnockback(),
+                    advanced.getSecondWindDartRange(), advanced.getSecondWindDartDamage(),
+                    advanced.getSecondWindDartKnockback());
+            // Aquaman: a timed buff; the magnitude is the status-effect amplifier.
+            case WATER -> new SecondWindResult(medium, durationTicks,
+                    advanced.getSecondWindAquamanAmplifier(), 0, 0, 0);
+            // Limitless: a timed boost; the magnitude multiplies forward velocity.
+            case AIR -> new SecondWindResult(medium, durationTicks,
+                    advanced.getSecondWindLimitlessBoost(), 0, 0, 0);
+        };
+    }
+
+    // --- Sub-skill 8: Glide -------------------------------------------------------------------
+
+    public boolean canGlide() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_GLIDE)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_GLIDE);
+    }
+
+    /**
+     * The fraction by which to reduce downward velocity while gliding.
+     *
+     * <p>Clamped strictly below 1 so a maxed player still descends — a reduction of 1.0 would pin
+     * them at a fixed altitude and make landing impossible.
+     *
+     * @return a reduction in {@code [0, 0.9]}
+     */
+    public double getGlideDescentReduction() {
+        if (!canGlide()) {
+            return 0.0;
+        }
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        if (advanced == null) {
+            return 0.0;
+        }
+        final double cap = Math.min(0.9, Math.max(0.0, advanced.getGlideMaxDescentReduction()));
+        return scaleToLevel(cap, advanced.getGlideMaxBonusLevel());
+    }
+
+    // --- Sub-skill 9: Lake Raider -------------------------------------------------------------
+
+    public boolean canLakeRaider() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_LAKE_RAIDER)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_LAKE_RAIDER);
+    }
+
+    /** Rolls Lake Raider for an underwater block break. */
+    public boolean rollLakeRaiderTreasure() {
+        return canLakeRaider()
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.AGILITY_LAKE_RAIDER, mmoPlayer);
+    }
+
+    /**
+     * The MC-free treasure-selection core of Lake Raider, shaped exactly like
+     * {@link com.gmail.nossr50.skills.herbalism.HerbalismManager#rollHylianLuck}: both random draws
+     * are supplied by the caller, so the whole selection is unit-testable with pinned RNG.
+     *
+     * <p>It reuses the <em>Excavation</em> treasure tables rather than shipping a parallel one.
+     * That is a deliberate reuse, not laziness: the blocks a player breaks underwater are sand,
+     * gravel, clay and dirt — precisely the blocks those tables already describe — and a second table
+     * of the same loot keyed by the same blocks would be a maintenance trap where the two drift
+     * apart. The difference is the gate, not the loot: Lake Raider ignores the treasures'
+     * Excavation-level requirement, because it is an Agility perk being paid for Agility levels.
+     *
+     * @param candidates  the broken block's excavation treasures, in config order
+     * @param mainRollWon whether the {@code AGILITY_LAKE_RAIDER} sub-skill roll succeeded
+     * @param staticRoll  given a treasure's {@code Drop_Chance} (0–100), whether its static roll wins
+     * @return the treasure to drop, or empty if none was won
+     */
+    public @NotNull Optional<ExcavationTreasure> rollLakeRaiderTreasure(
+            @NotNull List<ExcavationTreasure> candidates, boolean mainRollWon,
+            @NotNull DoublePredicate staticRoll) {
+        if (!mainRollWon || candidates.isEmpty()) {
+            return Optional.empty();
+        }
+        for (ExcavationTreasure treasure : candidates) {
+            if (staticRoll.test(treasure.getDropChance())) {
+                return Optional.of(treasure);
+            }
+        }
+        return Optional.empty();
+    }
+
+    // --- Sub-skill 10: Solar Wings ------------------------------------------------------------
+
+    public boolean canSolarWings() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_SOLAR_WINGS)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_SOLAR_WINGS);
+    }
+
+    /**
+     * Durability restored per Solar Wings interval, doubled (by config) when the player is standing
+     * on the ground rather than flying.
+     *
+     * @param grounded whether the player is on the ground
+     * @return the durability points to repair this interval
+     */
+    public int getSolarWingsRepairAmount(boolean grounded) {
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        if (advanced == null || !canSolarWings()) {
+            return 0;
+        }
+        final int base = Math.max(0, advanced.getSolarWingsRepairPerInterval());
+        return grounded ? base * Math.max(1, advanced.getSolarWingsGroundedMultiplier()) : base;
+    }
+
+    /** How often Solar Wings ticks, in server ticks. Floored at 1 so it can never divide by zero. */
+    public int getSolarWingsIntervalTicks() {
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        return advanced == null ? 100 : Math.max(1, advanced.getSolarWingsIntervalTicks());
+    }
+
+    // --- shared -------------------------------------------------------------------------------
+
+    /**
+     * Scale a maximum bonus linearly with the player's Agility level, capping at
+     * {@code maxBonusLevel} — the same ladder every shipped sub-skill's chance curve uses, expressed
+     * once here because eight new sub-skills would otherwise each repeat it.
+     *
+     * @param maxBonus      the value reached at {@code maxBonusLevel} and beyond
+     * @param maxBonusLevel the level at which scaling stops
+     * @return the scaled value, never above {@code maxBonus}
+     */
+    private double scaleToLevel(double maxBonus, int maxBonusLevel) {
+        if (maxBonus <= 0) {
+            return 0.0;
+        }
+        if (maxBonusLevel <= 0) {
+            return maxBonus; // Degenerate config: treat everyone as maxed rather than dividing by 0.
+        }
+        final double progress = Math.min(1.0, (double) getSkillLevel() / maxBonusLevel);
+        return maxBonus * progress;
     }
 }

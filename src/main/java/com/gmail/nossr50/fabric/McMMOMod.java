@@ -18,8 +18,10 @@ import com.gmail.nossr50.event.SimpleEventBus;
 import com.gmail.nossr50.fabric.listeners.AlchemyListener;
 import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
 import com.gmail.nossr50.fabric.listeners.EntityDamageListener;
+import com.gmail.nossr50.fabric.listeners.PlayerMovementTracker;
 import com.gmail.nossr50.fabric.listeners.ProjectileListener;
 import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
+import com.gmail.nossr50.fabric.listeners.SecondWindListener;
 import com.gmail.nossr50.fabric.listeners.SmeltingListener;
 import com.gmail.nossr50.fabric.listeners.SuperAbilityListener;
 import com.gmail.nossr50.platform.MetadataStore;
@@ -209,6 +211,13 @@ public class McMMOMod implements ModInitializer {
         // §C: Archery Arrow Retrieval — the death half (hand the arrows back). Its launch half is
         // driven by ProjectileSpawnMixin, vanilla having no projectile-launch event.
         ProjectileListener.register();
+        // Pass 2 / F1: the per-tick movement sampler behind Agility's Land/Water/Air domains. The
+        // first continuous-state hook in the mod — every Pass-1 skill rides a discrete event, so
+        // there was nothing sampling player movement before this.
+        PlayerMovementTracker.register();
+        // Pass 2: Agility's Second Wind super ability — right-click the trigger item to fire the
+        // body matching how the player is currently moving.
+        SecondWindListener.register();
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
         // drive the legacy listeners, routing each to the ported skill managers. Preferred
@@ -280,6 +289,10 @@ public class McMMOMod implements ModInitializer {
             // to the recipe set the stopping server loaded.
             SmeltingListener.clearOwners();
             AlchemyListener.clearOwners();
+            // F1: drop the per-player movement baselines. Keeping them would make the first tick of
+            // the next world session measure the distance between two different worlds' positions —
+            // which the teleport guard would reject, but only by accident.
+            PlayerMovementTracker.clear();
             // Drop transient per-entity markers (Rupture bleeds, dodge-XP counters, tracked TNT).
             // Bukkit dropped plugin metadata on disable; our side-table has no such lifecycle, and
             // entity UUIDs persist to disk — so without this a marker outlives the session that

@@ -249,6 +249,44 @@ Experience_Values:
 
         # FeatherFall_Multiplier: Multiply Agility XP by this value when wearing boots with the Feather Fall enchant
         FeatherFall_Multiplier: 2.0
+
+        # Movement XP (Land / Water / Air domains).
+        #
+        # Agility pays XP per SECOND of qualifying travel, not per block, and each tick's distance is
+        # clamped at that medium's reference speed before it counts. This is deliberate and it is the
+        # load-bearing balance decision of the skill:
+        #
+        #   * Without it a fast medium out-earns a slow one for less effort (an elytra covers ground
+        #     ~5x faster than sprinting and ~10x faster than swimming).
+        #   * Without it every speed buff is also an XP multiplier - Depth Strider, Dolphin's Grace,
+        #     Speed potions, ice boats, firework rockets.
+        #   * Without it the skill accelerates its own levelling, because Fleet Footed makes you
+        #     faster, which earns more XP per second, which levels Fleet Footed. No amount of tuning
+        #     an XP-per-block number fixes a feedback loop.
+        #
+        # Travel at or above the reference speed pays the full rate and never more; travel slower
+        # pays pro-rata; standing still pays nothing. XP-per-block is a DERIVED quantity - nobody
+        # tunes it, it falls out of the reference speed.
+        Movement:
+            # XP per second of travel, before the per-medium multiplier.
+            Baseline_Xp_Per_Second: 30.0
+
+            # Blocks per second each medium pays full rate at. Travel faster than this is clamped.
+            # Land is the well-known vanilla sprint speed (walk 4.317 x 1.3). Water and Air are
+            # starting estimates and should be MEASURED in-game and corrected here.
+            Reference_Speed:
+                Land: 5.61
+                Water: 3.16
+                Air: 30.0
+
+            # Per-medium payout multiplier. Water is slow and tedious, air is near-effortless and
+            # covers the whole world, so they are weighted up and down respectively.
+            # At the defaults this yields ~5.35 XP/block on land, ~10.92 in water, ~0.60 in air, and
+            # roughly 102h / 89h / 170h of continuous travel to max a RetroMode level-1000 skill.
+            Medium_Multiplier:
+                Land: 1.0
+                Water: 1.15
+                Air: 0.6
     Alchemy:
         Potion_Brewing:
             # Alchemy potion stages are based on the number of ingredients added

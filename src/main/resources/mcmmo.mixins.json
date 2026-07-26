@@ -15,7 +15,9 @@
     "FishingWaitTimeMixin",
     "FoodComponentMixin",
     "FurnaceOutputSlotMixin",
+    "HungerManagerExhaustionMixin",
     "LivingEntityDamageMixin",
+    "LivingEntityGlideMixin",
     "ProjectileSpawnMixin",
     "TameableEntityTameMixin",
     "TntExplodeMixin"

@@ -301,6 +301,10 @@ public final class EntityDamageListener {
         // Impale). Mutually exclusive with the two branches above — a hit's direct source is exactly
         // one entity type — so at most one of the three fires.
         result = applyProjectileAttackBonus(entity, source, result);
+        // Pass 2: Agility Smash. Rides the same melee seam rather than adding a second damage mixin,
+        // but deliberately outside the weapon-classified arm above — Smash is about the *sprint*, so
+        // it applies whatever is in the player's hand, including nothing.
+        result = applySprintSmash(entity, source, result);
 
         // K1 defender / K2 branch: the entity *taking* damage is a player — fall damage feeds
         // Agility Roll, an incoming entity hit feeds Agility Dodge.
@@ -822,6 +826,55 @@ public final class EntityDamageListener {
         // landed. No multiplier on the melee path (legacy's 3-arg processCombatXP overload).
         CombatUtils.processCombatXP(mmoPlayer, target, skillOf(weapon), boostedDamage);
         return boostedDamage;
+    }
+
+    /**
+     * Agility <b>Smash</b>: a sprinting player's melee hit can land extra damage and heavy knockback.
+     *
+     * <p>Shares the melee seam with {@link #applyAttackerWeaponBonus} but is gated differently on
+     * purpose. The weapon arm bails out for {@code MeleeWeapon.OTHER}, because a pickaxe has no
+     * Swords bonus; Smash has nothing to do with what is being held — the sub-skill is "you hit hard
+     * because you were running" — so it fires with a torch, a block, or an empty hand.
+     *
+     * <p>Runs <em>after</em> the weapon arm, which means the weapon skill's per-hit combat XP is paid
+     * on the pre-Smash damage. That is the intended attribution: the extra damage came from Agility,
+     * so it should not inflate the Swords XP for the same swing.
+     *
+     * <p>Deliberately no interaction with vanilla's own sprint-attack knockback — this stacks on top,
+     * which is exactly what the sub-skill is for.
+     */
+    private static float applySprintSmash(LivingEntity target, DamageSource source, float amount) {
+        if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)) {
+            return amount;
+        }
+        // Direct melee only, same test as the weapon arm: a projectile's direct source is the
+        // projectile, and Thorns is not a swing.
+        if (source.getSource() != attacker || source.isOf(DamageTypes.THORNS)) {
+            return amount;
+        }
+        if (!attacker.isSprinting() || target instanceof ArmorStandEntity) {
+            return amount;
+        }
+
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(attacker.getUuid());
+        if (mmoPlayer == null) {
+            return amount;
+        }
+        final AgilityManager agility = mmoPlayer.getAgilityManager();
+        if (agility == null || !agility.rollSmash()) {
+            return amount;
+        }
+
+        final double knockback = agility.getSmashKnockback();
+        if (knockback > 0) {
+            // Away from the attacker: takeKnockback's x/z are the vector *from* the source, and it
+            // negates them internally, so pass the attacker-to-target direction as-is.
+            target.takeKnockback(knockback,
+                    attacker.getX() - target.getX(), attacker.getZ() - target.getZ());
+        }
+        NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                "Agility.SubSkill.Smash.Proc");
+        return amount + (float) agility.getSmashBonusDamage();
     }
 
     /**
