@@ -453,10 +453,18 @@ public class PlayerProfile {
 
         ImmutableList<PrimarySkillType> parents = McMMOMod.getSkillTools()
                 .getChildSkillParents(primarySkillType);
+        // The per-parent cap is a refinement, not a requirement, and GeneralConfig is null between
+        // world sessions and in unit tests that only exercise the profile. Reading a level must never
+        // throw: since Agility became a child skill this runs behind every one of its rank gates, so
+        // an NPE here would take out ten sub-skills rather than mis-clamp one number.
+        final var generalConfig = McMMOMod.getGeneralConfig();
         int sum = 0;
 
         for (PrimarySkillType parent : parents) {
-            sum += Math.min(getSkillLevel(parent), McMMOMod.getSkillTools().getLevelCap(parent));
+            final int level = getSkillLevel(parent);
+            sum += generalConfig == null
+                    ? level
+                    : Math.min(level, McMMOMod.getSkillTools().getLevelCap(parent));
         }
 
         return sum / parents.size();

@@ -21,20 +21,23 @@ ROOT="$REPO_ROOT/src/main/resources/data/mcmmo/advancement/milestone"
 
 # Thematic vanilla icon per skill (lowercase enum name -> minecraft item id).
 declare -A ICON=(
-    [acrobatics]=feather
+    [agility]=feather
     [alchemy]=brewing_stand
     [archery]=bow
     [axes]=diamond_axe
     [crossbows]=crossbow
     [excavation]=diamond_shovel
     [fishing]=fishing_rod
+    [flying]=elytra
     [herbalism]=wheat
     [maces]=mace
     [mining]=diamond_pickaxe
+    [parkour]=leather_boots
     [repair]=anvil
     [salvage]=grindstone
     [smelting]=blast_furnace
     [spears]=pointed_dripstone
+    [swimming]=heart_of_the_sea
     [swords]=diamond_sword
     [taming]=bone
     [tridents]=trident

@@ -1,5 +1,6 @@
 package com.gmail.nossr50.skills.agility;
 
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 
 /**
@@ -14,24 +15,39 @@ import com.gmail.nossr50.datatypes.skills.SubSkillType;
  * <p>MC-free on purpose: the platform layer decides <em>which</em> medium a tick is, and everything
  * downstream of that decision — XP, speed bonuses, ability bodies — is plain arithmetic keyed on
  * this enum and therefore unit-testable.
+ *
+ * <p>Each medium also names the {@link PrimarySkillType} its travel XP is <em>paid into</em>. Agility
+ * itself earns nothing: it is a child skill whose level is the mean of these three, so the enum is
+ * the one place that maps "what the player is doing" to "which bar goes up." Keeping that mapping
+ * here rather than in the tick handler is what stops the two answers drifting apart.
  */
 public enum Medium {
 
-    /** Sprinting on land. Fleet Footed's first rank. */
-    LAND(1, "Land"),
+    /** Sprinting on land. Pays Parkour; Fleet Footed's first rank. */
+    LAND(1, "Land", PrimarySkillType.PARKOUR),
 
-    /** Moving while in water. Fleet Footed's second rank. */
-    WATER(2, "Water"),
+    /** Moving while in water. Pays Swimming; Fleet Footed's second rank. */
+    WATER(2, "Water", PrimarySkillType.SWIMMING),
 
-    /** Gliding on an elytra. Fleet Footed's third rank. */
-    AIR(3, "Air");
+    /** Gliding on an elytra. Pays Flying; Fleet Footed's third rank. */
+    AIR(3, "Air", PrimarySkillType.FLYING);
 
     private final int fleetFootedRank;
     private final String configName;
+    private final PrimarySkillType primarySkill;
 
-    Medium(int fleetFootedRank, String configName) {
+    Medium(int fleetFootedRank, String configName, PrimarySkillType primarySkill) {
         this.fleetFootedRank = fleetFootedRank;
         this.configName = configName;
+        this.primarySkill = primarySkill;
+    }
+
+    /**
+     * The skill this medium's travel XP is paid into — never {@code AGILITY}, which earns no XP of
+     * its own.
+     */
+    public PrimarySkillType primarySkill() {
+        return primarySkill;
     }
 
     /**

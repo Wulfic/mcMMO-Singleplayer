@@ -33,16 +33,16 @@ public final class McMMOSettings {
 
     /** Skills that have an {@code Experience_Formula.Skill_Multiplier.<name>} key. */
     private static final String[] XP_MULTIPLIER_SKILLS = {
-        "Agility", "Alchemy", "Archery", "Axes", "Crossbows", "Excavation", "Fishing",
-        "Herbalism", "Maces", "Mining", "Repair", "Spears", "Swords", "Taming", "Tridents",
-        "Unarmed", "Woodcutting"
+        "Agility", "Alchemy", "Archery", "Axes", "Crossbows", "Excavation", "Fishing", "Flying",
+        "Herbalism", "Maces", "Mining", "Parkour", "Repair", "Spears", "Swimming", "Swords",
+        "Taming", "Tridents", "Unarmed", "Woodcutting"
     };
 
     /** Skills that have a {@code Skills.<name>.Level_Cap} key. */
     private static final String[] LEVEL_CAP_SKILLS = {
-        "Agility", "Alchemy", "Archery", "Axes", "Crossbows", "Excavation", "Fishing",
-        "Herbalism", "Maces", "Mining", "Repair", "Salvage", "Smelting", "Spears", "Swords",
-        "Taming", "Tridents", "Unarmed", "Woodcutting"
+        "Agility", "Alchemy", "Archery", "Axes", "Crossbows", "Excavation", "Fishing", "Flying",
+        "Herbalism", "Maces", "Mining", "Parkour", "Repair", "Salvage", "Smelting", "Spears",
+        "Swimming", "Swords", "Taming", "Tridents", "Unarmed", "Woodcutting"
     };
 
     /** Super-abilities with an {@code Abilities.Cooldowns.<name>} key. */

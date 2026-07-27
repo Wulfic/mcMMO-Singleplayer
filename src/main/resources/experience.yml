@@ -85,9 +85,23 @@ Experience_Bars:
         Enable: true
         Color: PURPLE
         BarStyle: SEGMENTED_6
+    # The three movement domains. Agility itself has a bar too, but it is a child skill and never
+    # earns XP directly, so in practice these three are the ones you will watch move.
+    Flying:
+        Enable: true
+        Color: WHITE
+        BarStyle: SEGMENTED_6
     Herbalism:
         Enable: true
         Color: GREEN
+        BarStyle: SEGMENTED_6
+    Parkour:
+        Enable: true
+        Color: PINK
+        BarStyle: SEGMENTED_6
+    Swimming:
+        Enable: true
+        Color: BLUE
         BarStyle: SEGMENTED_6
     Mining:
         Enable: true
@@ -180,6 +194,9 @@ Experience_Formula:
         Swords: 1.0
         Taming: 1.0
         Agility: 1.0
+        Parkour: 1.0
+        Swimming: 1.0
+        Flying: 1.0
         Excavation: 1.0
         Herbalism: 1.0
         Unarmed: 1.0
@@ -212,6 +229,12 @@ Diminished_Returns:
         Swords: 20000
         Taming: 20000
         Agility: 20000
+        # 20000 per 10 minutes is 33 XP/s. The movement skills pay 15-17 XP/s flat out, so this
+        # throttle sits close enough to matter if Diminished_Returns is ever switched on -- raise
+        # these three before enabling it, or travel gets punished for being continuous.
+        Parkour: 20000
+        Swimming: 20000
+        Flying: 20000
         Excavation: 20000
         Herbalism: 20000
         Unarmed: 20000

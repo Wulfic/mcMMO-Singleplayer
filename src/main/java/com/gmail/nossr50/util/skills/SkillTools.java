@@ -28,6 +28,7 @@ public class SkillTools {
     public final @NotNull ImmutableSet<String> EXACT_SUBSKILL_NAMES;
     public final @NotNull ImmutableList<PrimarySkillType> CHILD_SKILLS;
     public static final @NotNull ImmutableList<PrimarySkillType> NON_CHILD_SKILLS;
+    public static final @NotNull ImmutableList<PrimarySkillType> AGILITY_PARENTS;
     public static final @NotNull ImmutableList<PrimarySkillType> SALVAGE_PARENTS;
     public static final @NotNull ImmutableList<PrimarySkillType> SMELTING_PARENTS;
     public final @NotNull ImmutableList<PrimarySkillType> COMBAT_SKILLS;
@@ -51,6 +52,15 @@ public class SkillTools {
         }
         NON_CHILD_SKILLS = ImmutableList.copyOf(tempNonChildSkills);
 
+        // Agility is the movement skill's *derived* level: it owns all ten sub-skills but earns no XP
+        // of its own. Its level is the mean of the three domains a player actually travels through, so
+        // reaching Agility 1000 means reaching 1000 in all three (1000 Flying alone is Agility 333).
+        // That is deliberate — the perks are an all-rounder's reward, not a specialist's.
+        AGILITY_PARENTS = ImmutableList.of(
+                PrimarySkillType.PARKOUR,
+                PrimarySkillType.SWIMMING,
+                PrimarySkillType.FLYING
+        );
         SALVAGE_PARENTS = ImmutableList.of(
                 PrimarySkillType.REPAIR,
                 PrimarySkillType.FISHING
@@ -104,9 +114,12 @@ public class SkillTools {
         this.MISC_SKILLS = ImmutableList.of(
                 PrimarySkillType.AGILITY,
                 PrimarySkillType.ALCHEMY,
+                PrimarySkillType.FLYING,
+                PrimarySkillType.PARKOUR,
                 PrimarySkillType.REPAIR,
                 PrimarySkillType.SALVAGE,
-                PrimarySkillType.SMELTING
+                PrimarySkillType.SMELTING,
+                PrimarySkillType.SWIMMING
         );
 
         /*
@@ -401,7 +414,7 @@ public class SkillTools {
 
     public static boolean isChildSkill(PrimarySkillType primarySkillType) {
         return switch (primarySkillType) {
-            case SALVAGE, SMELTING -> true;
+            case AGILITY, SALVAGE, SMELTING -> true;
             default -> false;
         };
     }
@@ -468,6 +481,7 @@ public class SkillTools {
     public @NotNull ImmutableList<PrimarySkillType> getChildSkillParents(
             PrimarySkillType childSkill) throws IllegalArgumentException {
         return switch (childSkill) {
+            case AGILITY -> AGILITY_PARENTS;
             case SALVAGE -> SALVAGE_PARENTS;
             case SMELTING -> SMELTING_PARENTS;
             default -> throw new IllegalArgumentException(

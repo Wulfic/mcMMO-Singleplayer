@@ -52,8 +52,17 @@ public final class SkillRenames {
 
     static {
         // Pass 2 / D5 (2026-07-25): ACROBATICS was renamed AGILITY when it absorbed the Land, Water
-        // and Air movement domains. Every profile written before that carries `skills.ACROBATICS`.
-        LEGACY_ENUM_NAMES.put(PrimarySkillType.AGILITY, "ACROBATICS");
+        // and Air movement domains, and a `skills.AGILITY` read-alias for `skills.ACROBATICS` lived
+        // here.
+        //
+        // That alias was REMOVED on 2026-07-27 (ruled by the user), when Agility became a *child*
+        // skill of Parkour/Swimming/Flying. A child skill has no save key at all — the profile store
+        // only reads and writes NON_CHILD_SKILLS, and a child's level is recomputed from its parents
+        // on every load — so there is nothing left for the alias to migrate to, and pre-existing
+        // Agility progress is deliberately allowed to zero out.
+        //
+        // LEGACY_ENUM_NAMES is intentionally left EMPTY rather than deleted. It is the mechanism, not
+        // the data: the next rename costs one line here instead of a silent profile reset.
         LEGACY_CONFIG_SECTIONS.put("Acrobatics", "Agility");
     }
 

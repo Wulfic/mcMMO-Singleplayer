@@ -226,6 +226,9 @@ Hardcore:
             Agility: false
             Alchemy: false
             Archery: false
+            Parkour: false
+            Swimming: false
+            Flying: false
             Axes: false
             Excavation: false
             Fishing: false
@@ -247,6 +250,9 @@ Hardcore:
             Agility: false
             Alchemy: false
             Archery: false
+            Parkour: false
+            Swimming: false
+            Flying: false
             Axes: false
             Excavation: false
             Fishing: false
@@ -374,9 +380,20 @@ Skills:
         Prevent_Dodge_Lightning: false
         # Prevent earning Agility XP a few seconds after teleporting
         XP_After_Teleport_Cooldown: 5
+        # Agility is a CHILD skill: it owns all ten movement sub-skills but earns no XP itself. Its
+        # level is the mean of Parkour, Swimming and Flying, so Agility 1000 needs 1000 in all three
+        # (1000 Flying on its own is Agility 333). Capping it here caps what the sub-skills can reach.
         Level_Cap: 0
         # Item that triggers the Second Wind super ability on right-click. Never consumed.
         Second_Wind_Item: FEATHER
+    # The three movement domains that feed Agility. They carry no sub-skills of their own -- the
+    # perks all live on Agility -- so these sections only tune the XP ladder itself.
+    Parkour:
+        Level_Cap: 0
+    Swimming:
+        Level_Cap: 0
+    Flying:
+        Level_Cap: 0
     Alchemy:
         # Allow Hoppers to transfer ingredients and brew Rank 1 Alchemy potions
         Enabled_for_Hoppers: true

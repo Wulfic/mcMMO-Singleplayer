@@ -75,16 +75,58 @@ Wiki sources: `raw_site_text.md` §"Sprinting or 'Agility'", §"Swimming", §"Sw
 
 ---
 
+## ⚠️ 2026-07-27 RESTRUCTURE (user ruling) — Agility is now a CHILD skill
+
+**Agility no longer earns XP.** It keeps all ten sub-skills, but its *level* — which is what every
+rank gate reads — is derived as the mean of three new primary skills:
+
+| New primary skill | Earns XP from | Feeds |
+|---|---|---|
+| **Parkour** | sprinting on land, **plus all Fall-domain XP** (Roll / Graceful Roll / Dodge) | Agility |
+| **Swimming** | swimming | Agility |
+| **Flying** | elytra gliding | Agility |
+
+```
+Agility level = (Parkour + Swimming + Flying) / 3
+```
+
+So 1000 Flying with 0 Parkour and 0 Swimming is **Agility 333**, and reaching Agility 1000 means
+reaching 1000 in all three. This is the *existing* child-skill model (Salvage, Smelting) —
+`PlayerProfile.getChildSkillLevel` was already `sum(parents) / parents.size()`, so no new formula was
+invented, only new wiring.
+
+**Consequences, stated plainly:**
+
+- **A specialist cannot unlock their own domain's perks.** A pure flier caps at Agility 333, which
+  locks Glide (350), Fleet Footed air (400) and Solar Wings (750) — three of the ten sub-skills —
+  behind levelling the other two domains. **This is the intent**: the perks are an all-rounder's
+  reward. Ruled, not an oversight.
+- **Fall XP goes to Parkour alone** (`AgilityManager.EPISODIC_XP_SKILL`), not split three ways.
+  Landing well is a land-movement thing, and splitting it would mean falling off a cliff trains your
+  swimming. A player who only flies therefore gets nothing from Roll or Dodge either.
+- **Existing Agility progress zeroes out.** A child skill has no save key — the profile store only
+  reads and writes `NON_CHILD_SKILLS` — so `skills.AGILITY` is ignored on load and never rewritten.
+  The `ACROBATICS` read-alias in `SkillRenames` was retired with it (the mechanism stays, the entry
+  goes). Ruled: no migration.
+- **Max power level rises by 2000** — Agility drops out of the power-level sum (children don't count)
+  and three new skills enter it.
+- **Child skills now fire milestone plaques.** They never did: a child levels without reaching the XP
+  path, so `checkXp` only ever snapshotted the skill that literally levelled. Agility's ten sub-skill
+  rank plaques would have gone permanently silent. `snapshotMilestones` now tracks the levelled skill
+  *plus every child derived from it* — which quietly fixes Salvage and Smelting too.
+
+---
+
 ## Concept
 
-**One skill for how you move.** Four domains, one level bar, one XP pool:
+**One skill for how you move.** Four domains, one derived level, three XP pools:
 
-| Domain | Trigger | Status |
-|---|---|---|
-| **Fall** | fall damage, being hit | Acrobatics — **already built, playtested** (Roll, Graceful Roll, Dodge) |
-| **Land** | sprinting | new |
-| **Water** | swimming | new |
-| **Air** | elytra gliding | new |
+| Domain | Trigger | XP goes to | Status |
+|---|---|---|---|
+| **Fall** | fall damage, being hit | **Parkour** | Acrobatics — **already built, playtested** (Roll, Graceful Roll, Dodge) |
+| **Land** | sprinting (**not** walking, **not** crouched) | **Parkour** | new |
+| **Water** | swimming (**not** crouched) | **Swimming** | new |
+| **Air** | elytra gliding | **Flying** | new |
 
 Why this is the right shape and not just a naming exercise:
 

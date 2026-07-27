@@ -124,10 +124,12 @@ class AgilityMovementTest {
     @Test
     void aSingleTickAccumulatesRatherThanPayingFractionalXp() {
         final AgilityManager manager = managerAtLevel(1);
-        // One tick at the land reference speed is worth 30/20 = 1.5 XP, so the first tick pays 1 and
-        // banks 0.5 — it must never hand a fraction to the XP pipeline.
+        // One tick at the land reference speed is worth 30/20 = 1.5 XP under this fixture's pinned
+        // baseline, so the first tick pays 1 and banks 0.5 — it must never hand a fraction to the XP
+        // pipeline. Land pays Parkour, never Agility: Agility is a child skill, and a gain addressed
+        // to it would be split three ways and quietly train swimming and flying too.
         assertEquals(1F, manager.onMovementTick(Medium.LAND, perTick(Medium.LAND)), EPSILON);
-        verify(mmoPlayer).beginXpGain(PrimarySkillType.AGILITY, 1F, XPGainReason.PVE,
+        verify(mmoPlayer).beginXpGain(PrimarySkillType.PARKOUR, 1F, XPGainReason.PVE,
                 XPGainSource.SELF);
     }
 
@@ -406,11 +408,63 @@ class AgilityMovementTest {
         assertNull(fresh.computeSecondWind(Medium.LAND, 100));
     }
 
+    // --- XP routing: each medium pays its own skill, never Agility -------------------------------
+
     @Test
-    void movementXpFlushesThroughTheAgilitySkillNotAnother() {
+    void everyMediumPaysItsOwnSkillAndNeverAgility() {
+        for (Medium medium : Medium.values()) {
+            final McMMOPlayer owner = mock(McMMOPlayer.class);
+            lenient().when(owner.getPlayer()).thenReturn(player);
+            lenient().when(owner.getSkillLevel(PrimarySkillType.AGILITY)).thenReturn(1);
+            final AgilityManager manager = new AgilityManager(owner);
+            manager.setMovementXpSettings(defaultSettings());
+
+            // Enough ticks that even the stingiest medium clears one whole XP and flushes.
+            for (int tick = 0; tick < 100; tick++) {
+                manager.onMovementTick(medium, perTick(medium));
+            }
+
+            verify(owner, org.mockito.Mockito.atLeastOnce()).beginXpGain(
+                    org.mockito.ArgumentMatchers.eq(medium.primarySkill()), anyFloat(), any(), any());
+            verify(owner, never()).beginXpGain(
+                    org.mockito.ArgumentMatchers.eq(PrimarySkillType.AGILITY), anyFloat(), any(),
+                    any());
+        }
+    }
+
+    @Test
+    void eachMediumBanksItsOwnRemainder() {
+        // The accumulator is per-medium because each one now pays a different skill. With a single
+        // shared remainder, part of a second's swimming would be flushed into Parkour the moment the
+        // player climbed out and sprinted — small, but wrong every time the medium changes.
         final AgilityManager manager = managerAtLevel(1);
-        manager.onMovementTick(Medium.WATER, perTick(Medium.WATER));
-        verify(mmoPlayer, times(1)).beginXpGain(org.mockito.ArgumentMatchers.eq(
-                PrimarySkillType.AGILITY), anyFloat(), any(), any());
+
+        // Two-fifths of a tick in each: land banks 0.6 XP, water banks 0.69. Neither reaches a whole
+        // XP on its own, so both must pay nothing — but 0.6 + 0.69 = 1.29 does, so a shared ledger
+        // would make the second call pay 1. That is the whole discriminator; a full tick in each
+        // would pay the same either way and prove nothing.
+        assertEquals(0F, manager.onMovementTick(Medium.LAND, perTick(Medium.LAND) * 0.4), EPSILON);
+        assertEquals(0F, manager.onMovementTick(Medium.WATER, perTick(Medium.WATER) * 0.4), EPSILON);
+        verify(mmoPlayer, never()).beginXpGain(any(), anyFloat(), any(), any());
+    }
+
+    @Test
+    void fallAndDodgeXpGoToParkourRatherThanBeingSplitAcrossAllThreeDomains() {
+        // Landing well is a land-movement skill. Agility cannot hold the XP (a child skill earns
+        // nothing) and splitting it three ways would mean falling off a cliff trains your swimming.
+        assertEquals(PrimarySkillType.PARKOUR, AgilityManager.EPISODIC_XP_SKILL);
+
+        // The shipped fall multipliers, plus enough health to survive — without either the mocked
+        // player takes a fatal fall, mcMMO bows out, and the test would pass by awarding nothing.
+        lenient().when(experienceConfig.getFallXPModifier()).thenReturn(600);
+        lenient().when(experienceConfig.getRollXPModifier()).thenReturn(600);
+        lenient().when(player.getHealth()).thenReturn(20F);
+        final AgilityManager manager = managerAtLevel(1);
+        manager.processFallDamage(10.0);
+
+        verify(mmoPlayer, org.mockito.Mockito.atLeastOnce()).beginXpGain(
+                org.mockito.ArgumentMatchers.eq(PrimarySkillType.PARKOUR), anyFloat(), any(), any());
+        verify(mmoPlayer, never()).beginXpGain(
+                org.mockito.ArgumentMatchers.eq(PrimarySkillType.AGILITY), anyFloat(), any(), any());
     }
 }

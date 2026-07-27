@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.gmail.nossr50.config.YamlConfiguration;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
@@ -82,74 +83,87 @@ class FlatFileProfileStoreTest {
         assertEquals(2, profile.getSkillLevel(PrimarySkillType.SWORDS));
     }
 
-    // --- Renamed-skill migration (ACROBATICS → AGILITY, Pass 2 / D5) --------------------------
+    // --- Renamed-skill migration --------------------------------------------------------------
     //
-    // A skill's name() IS its save key, so the rename would otherwise silently reset every profile
-    // written before it: the new key is absent, the default wins, and nothing is logged. These
-    // three cases pin the whole contract — legacy key honoured, current key preferred, neither
-    // present defaults cleanly.
+    // A skill's name() IS its save key, so a rename silently resets every profile written before it:
+    // the new key is absent, the default wins, and nothing is logged. SkillRenames + savedKeyFor are
+    // the fix, and these pin the whole contract — legacy key honoured, current key preferred when a
+    // mixed-version file carries both, never-renamed skills unaffected.
+    //
+    // They drive savedKeyFor with an EXPLICIT legacy name rather than a real PrimarySkillType. The
+    // only rename the mod has ever had (ACROBATICS -> AGILITY) was retired on 2026-07-27 when Agility
+    // became a child skill, since a child has no save key to migrate to — so SkillRenames is now
+    // empty, and a test routed through a live skill would pass by doing nothing and keep passing if
+    // savedKeyFor were deleted outright.
 
-    @Test
-    void readsRenamedSkillFromItsLegacySaveKey(@TempDir Path dir) throws Exception {
-        final UUID uuid = UUID.randomUUID();
-        // A profile written before ACROBATICS was renamed AGILITY. Level AND xp must both survive.
-        Files.writeString(dir.resolve(uuid + ".yml"),
-                "uuid: " + uuid + "\nname: Veteran\n"
-                        + "skills:\n  ACROBATICS: 47\n"
-                        + "experience:\n  ACROBATICS: 812.5\n");
-
-        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
-        final PlayerProfile profile = store.loadProfile(uuid, "Veteran", STARTING_LEVEL);
-
-        assertEquals(47, profile.getSkillLevel(PrimarySkillType.AGILITY));
-        assertEquals(812.5F, profile.getSkillXpLevelRaw(PrimarySkillType.AGILITY));
+    private static YamlConfiguration profileDoc(String body) throws Exception {
+        final Path file = Files.createTempFile("profile", ".yml");
+        Files.writeString(file, body);
+        return YamlConfiguration.loadConfiguration(file);
     }
 
     @Test
-    void prefersCurrentSaveKeyOverLegacyWhenBothPresent(@TempDir Path dir) throws Exception {
-        final UUID uuid = UUID.randomUUID();
+    void readsRenamedSkillFromItsLegacySaveKey() throws Exception {
+        final YamlConfiguration yc = profileDoc("skills:\n  OLDNAME: 47\n");
+
+        assertEquals("OLDNAME",
+                FlatFileProfileStore.savedKeyFor(yc, "NEWNAME", "OLDNAME", "Veteran"));
+    }
+
+    @Test
+    void prefersCurrentSaveKeyOverLegacyWhenBothPresent() throws Exception {
         // A file touched by both a pre- and post-rename build. The current key is authoritative.
+        final YamlConfiguration yc = profileDoc("skills:\n  OLDNAME: 47\n  NEWNAME: 63\n");
+
+        assertEquals("NEWNAME",
+                FlatFileProfileStore.savedKeyFor(yc, "NEWNAME", "OLDNAME", "Mixed"));
+    }
+
+    @Test
+    void defaultsToTheCurrentKeyWhenNeitherIsPresent() throws Exception {
+        final YamlConfiguration yc = profileDoc("skills:\n  MINING: 9\n");
+
+        assertEquals("NEWNAME",
+                FlatFileProfileStore.savedKeyFor(yc, "NEWNAME", "OLDNAME", "Fresh"));
+    }
+
+    @Test
+    void aSkillThatWasNeverRenamedAlwaysUsesItsCurrentKey() throws Exception {
+        final YamlConfiguration yc = profileDoc("skills:\n  MINING: 9\n");
+
+        assertEquals("MINING", FlatFileProfileStore.savedKeyFor(yc, "MINING", null, "Fresh"));
+        assertEquals("SWORDS", FlatFileProfileStore.savedKeyFor(yc, "SWORDS", null, "Fresh"));
+    }
+
+    @Test
+    void agilityProgressIsNotMigratedBecauseAChildSkillHasNoSaveKey(@TempDir Path dir)
+            throws Exception {
+        // The 2026-07-27 ruling, pinned so it cannot be undone by accident. Agility's level is
+        // recomputed from Parkour/Swimming/Flying on every load, so a stored AGILITY key is ignored
+        // on read and never written back.
+        final UUID uuid = UUID.randomUUID();
         Files.writeString(dir.resolve(uuid + ".yml"),
-                "uuid: " + uuid + "\nname: Mixed\n"
-                        + "skills:\n  ACROBATICS: 47\n  AGILITY: 63\n"
+                "uuid: " + uuid + "\nname: Veteran\n"
+                        + "skills:\n  ACROBATICS: 47\n  AGILITY: 63\n  PARKOUR: 30\n"
                         + "experience:\n  ACROBATICS: 812.5\n  AGILITY: 100.0\n");
 
         final FlatFileProfileStore store = new FlatFileProfileStore(dir);
-        final PlayerProfile profile = store.loadProfile(uuid, "Mixed", STARTING_LEVEL);
-
-        assertEquals(63, profile.getSkillLevel(PrimarySkillType.AGILITY));
-        assertEquals(100.0F, profile.getSkillXpLevelRaw(PrimarySkillType.AGILITY));
-    }
-
-    @Test
-    void defaultsCleanlyWhenNeitherSaveKeyPresent(@TempDir Path dir) throws Exception {
-        final UUID uuid = UUID.randomUUID();
-        Files.writeString(dir.resolve(uuid + ".yml"),
-                "uuid: " + uuid + "\nname: Fresh\nskills:\n  MINING: 9\n");
-
-        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
-        final PlayerProfile profile = store.loadProfile(uuid, "Fresh", 2);
-
-        assertEquals(2, profile.getSkillLevel(PrimarySkillType.AGILITY));
-        assertEquals(0F, profile.getSkillXpLevelRaw(PrimarySkillType.AGILITY));
-    }
-
-    @Test
-    void writesRenamedSkillUnderItsCurrentKeyOnly(@TempDir Path dir) throws Exception {
-        final UUID uuid = UUID.randomUUID();
-        Files.writeString(dir.resolve(uuid + ".yml"),
-                "uuid: " + uuid + "\nname: Veteran\n"
-                        + "skills:\n  ACROBATICS: 47\n"
-                        + "experience:\n  ACROBATICS: 812.5\n");
-
-        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
         McMMOMod.setProfileStore(store);
-        store.loadProfile(uuid, "Veteran", STARTING_LEVEL).save(true);
+        final PlayerProfile profile = store.loadProfile(uuid, "Veteran", STARTING_LEVEL);
 
-        // The orphaned legacy key is dropped by the rewrite — the migration is one-way and settles.
+        // (30 + starting + starting) / 3 — derived from the parents, not read from the file.
+        assertEquals((30 + STARTING_LEVEL + STARTING_LEVEL) / 3,
+                profile.getSkillLevel(PrimarySkillType.AGILITY));
+
+        // Dirty the profile so save() actually rewrites — nothing marks it dirty on load any more,
+        // which is itself the point: there is no migration left to perform.
+        profile.addLevels(PrimarySkillType.MINING, 1);
+        profile.save(true);
+
         final String written = Files.readString(dir.resolve(uuid + ".yml"));
-        assertTrue(written.contains("AGILITY: 47"), written);
+        assertFalse(written.contains("AGILITY"), written);
         assertFalse(written.contains("ACROBATICS"), written);
+        assertTrue(written.contains("PARKOUR: 30"), written);
     }
 
     @Test

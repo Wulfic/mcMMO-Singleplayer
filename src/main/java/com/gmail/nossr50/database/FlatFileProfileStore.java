@@ -16,6 +16,8 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -143,11 +145,31 @@ public final class FlatFileProfileStore implements ProfileStore {
      */
     private @NotNull String savedKeyFor(@NotNull YamlConfiguration yc,
             @NotNull PrimarySkillType skill, @NotNull String playerName) {
-        final String current = skill.name();
+        return savedKeyFor(yc, skill.name(), SkillRenames.legacyEnumName(skill), playerName);
+    }
+
+    /**
+     * The name-only core of {@link #savedKeyFor(YamlConfiguration, PrimarySkillType, String)}.
+     *
+     * <p>Split out so the migration contract can be tested against an <em>explicit</em> legacy name
+     * rather than against whichever skill happens to be renamed today. {@link SkillRenames} is
+     * currently empty — Agility's alias was retired when it became a child skill — so a test routed
+     * through a real {@code PrimarySkillType} would now pass by doing nothing at all, and would keep
+     * passing if this method were deleted outright.
+     *
+     * @param yc         the loaded profile document
+     * @param current    the skill's present-day save key
+     * @param legacy     the key it was persisted under before a rename, or {@code null} if never
+     *                   renamed
+     * @param playerName the owner, for the migration log line
+     * @return the key suffix to read {@code skills.}/{@code experience.} under
+     */
+    @VisibleForTesting
+    static @NotNull String savedKeyFor(@NotNull YamlConfiguration yc, @NotNull String current,
+            @Nullable String legacy, @NotNull String playerName) {
         if (yc.contains("skills." + current)) {
             return current;
         }
-        final String legacy = SkillRenames.legacyEnumName(skill);
         if (legacy != null && yc.contains("skills." + legacy)) {
             LOGGER.info("Migrating {}'s saved {} data from the legacy key '{}'.",
                     playerName, current, legacy);

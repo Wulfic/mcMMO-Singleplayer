@@ -40,8 +40,25 @@ import org.jetbrains.annotations.Nullable;
  * ({@link #rollCheck}, {@link #calculateRollXP}, the exploit gate, and the fall-location throttle)
  * are unit-testable. Sound/notification feedback is emitted by the listener (the MC-typed layer), not
  * here, so this class imports no Minecraft types.
+ *
+ * <p><b>Agility earns no XP of its own.</b> It is a child skill: it owns all ten sub-skills and its
+ * level — which is what every rank gate reads — is the mean of {@code PARKOUR}, {@code SWIMMING} and
+ * {@code FLYING}. So every award in this class names its destination explicitly rather than going
+ * through {@link SkillManager#applyXpGain}, which would target {@code AGILITY} and be split evenly
+ * across all three parents by {@code McMMOPlayer#beginXpGain}. Travel pays the medium's own skill
+ * ({@link Medium#primarySkill()}); falling and dodging pay {@link #EPISODIC_XP_SKILL}.
  */
 public class AgilityManager extends SkillManager {
+
+    /**
+     * Where the Fall domain's XP goes — Roll, Graceful Roll and Dodge.
+     *
+     * <p>Agility cannot hold it (a child skill earns nothing) and splitting it three ways would mean
+     * falling off a cliff trains your swimming. Landing well is a land-movement skill, so it pays
+     * Parkour. Consequence worth knowing: a player who only ever flies gets nothing from Roll or
+     * Dodge, and since Agility is the mean of three, their perks stall at level 333.
+     */
+    public static final PrimarySkillType EPISODIC_XP_SKILL = PrimarySkillType.PARKOUR;
 
     public AgilityManager(McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.AGILITY);
@@ -68,14 +85,19 @@ public class AgilityManager extends SkillManager {
     private MovementXpSettings movementXpSettings;
 
     /**
-     * Fractional movement XP not yet handed to the XP pipeline.
+     * Fractional movement XP not yet handed to the XP pipeline, <b>per medium</b>.
      *
      * <p>A tick of travel is worth well under one XP, and pushing a fraction through
      * {@code beginXpGain} every tick would churn the level-up check, the diminished-returns ledger
      * and the profile dirty flag 20×/s for nothing. Whole XP is flushed; the remainder rides along
      * to the next tick so nothing is lost to truncation.
+     *
+     * <p>It is keyed by medium because each one now pays a <em>different</em> skill. A single shared
+     * remainder would let a fraction of a second's swimming be flushed into Parkour the moment the
+     * player climbed out of the water and sprinted — small, but wrong every time the medium changes,
+     * which is constantly.
      */
-    private double movementXpAccumulator;
+    private final double[] movementXpAccumulators = new double[Medium.values().length];
 
     /**
      * Fractional Lead Lungs air, for the same reason: air is an integer counter, so a sub-1 top-up
@@ -109,7 +131,7 @@ public class AgilityManager extends SkillManager {
                 return null; // fatal fall — mcMMO must not interfere
             }
             if (!result.isExploiting() && result.getXpGain() > 0) {
-                applyXpGain(result.getXpGain(), XPGainReason.PVE, XPGainSource.SELF);
+                applyEpisodicXpGain(result.getXpGain());
             }
             // The player survived, so remember this landing block for the exploit throttle.
             addFallLocation();
@@ -118,8 +140,22 @@ public class AgilityManager extends SkillManager {
 
         // Fall XP is granted even without the Roll subskill unlocked (singleplayer always permits the
         // skill). No damage reduction and no feedback in this branch.
-        applyXpGain(calculateRollXP(baseDamage, false), XPGainReason.PVE, XPGainSource.SELF);
+        applyEpisodicXpGain(calculateRollXP(baseDamage, false));
         return null;
+    }
+
+    /**
+     * Pay Fall-domain XP (Roll / Graceful Roll / Dodge) into {@link #EPISODIC_XP_SKILL}.
+     *
+     * <p>Deliberately <em>not</em> {@link SkillManager#applyXpGain}: that targets this manager's own
+     * skill, and Agility is a child skill, so the gain would be quietly split three ways and train
+     * swimming and flying off a fall.
+     */
+    private void applyEpisodicXpGain(float xp) {
+        if (xp <= 0) {
+            return;
+        }
+        mmoPlayer.beginXpGain(EPISODIC_XP_SKILL, xp, XPGainReason.PVE, XPGainSource.SELF);
     }
 
     /**
@@ -231,7 +267,7 @@ public class AgilityManager extends SkillManager {
         final DodgeResult result = dodgeCheck(baseDamage, rngSuccess,
                 attackerXpEligible && isRespawnGracePeriodOver());
         if (result != null && result.getXpGain() > 0) {
-            applyXpGain(result.getXpGain(), XPGainReason.PVE, XPGainSource.SELF);
+            applyEpisodicXpGain(result.getXpGain());
         }
         return result;
     }
@@ -355,19 +391,23 @@ public class AgilityManager extends SkillManager {
      * legitimate (not in a vehicle, not a teleport, actually moved); this method owns the clamp and
      * the payout.
      *
+     * <p>The XP is paid into {@link Medium#primarySkill()} — Parkour, Swimming or Flying — never
+     * into Agility, whose level is derived from those three.
+     *
      * @param medium   the medium travelled, already resolved by the caller
      * @param distance horizontal distance moved this tick, in blocks
      * @return the whole XP awarded this tick — usually {@code 0}, since a tick is worth a fraction
      *         of one XP and the remainder is accumulated
      */
     public float onMovementTick(@NotNull Medium medium, double distance) {
-        movementXpAccumulator += movementXpSettings().xpFor(medium, distance);
-        if (movementXpAccumulator < 1.0) {
+        final int slot = medium.ordinal();
+        movementXpAccumulators[slot] += movementXpSettings().xpFor(medium, distance);
+        if (movementXpAccumulators[slot] < 1.0) {
             return 0F;
         }
-        final float whole = (float) Math.floor(movementXpAccumulator);
-        movementXpAccumulator -= whole;
-        applyXpGain(whole, XPGainReason.PVE, XPGainSource.SELF);
+        final float whole = (float) Math.floor(movementXpAccumulators[slot]);
+        movementXpAccumulators[slot] -= whole;
+        mmoPlayer.beginXpGain(medium.primarySkill(), whole, XPGainReason.PVE, XPGainSource.SELF);
         return whole;
     }
 

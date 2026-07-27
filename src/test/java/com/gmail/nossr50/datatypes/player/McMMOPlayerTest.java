@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
@@ -106,6 +107,31 @@ class McMMOPlayerTest {
         assertTrue(mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.MINING)
                         < mmoPlayer.getXpToLevel(PrimarySkillType.MINING),
                 "leftover XP after the level-up is below the next level's cost");
+    }
+
+    @Test
+    void levellingAParentAlsoFiresItsChildSkillsMilestonePlaques() {
+        // A child skill's level climbs without ever reaching the XP path — beginXpGain splits a child
+        // gain to its parents and returns — so a milestone hook that only tracks the skill that
+        // literally levelled makes the child's plaques silently stop firing forever. That is what
+        // would have happened to Agility's ten sub-skill plaques when it became a child of
+        // Parkour/Swimming/Flying, and the failure mode is silence, not an error.
+        //
+        // Agility = (Parkour + Swimming + Flying) / 3, so Parkour 299 -> 300 takes Agility 99 -> 100
+        // and crosses the 100-level plaque interval for BOTH skills at once.
+        profile.addLevels(PrimarySkillType.PARKOUR, 299);
+        assertEquals(99, mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY));
+
+        final int levelCost = mmoPlayer.getXpToLevel(PrimarySkillType.PARKOUR);
+        final double modifier = experienceConfig.getFormulaSkillModifier(PrimarySkillType.PARKOUR)
+                * experienceConfig.getExperienceGainsGlobalMultiplier();
+        mmoPlayer.beginXpGain(PrimarySkillType.PARKOUR, (float) (levelCost / modifier) + 1f,
+                XPGainReason.PVE, XPGainSource.SELF);
+
+        assertEquals(300, mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR));
+        assertEquals(100, mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY));
+        verify(player).grantMilestoneAdvancement("level/parkour", true);
+        verify(player).grantMilestoneAdvancement("level/agility", true);
     }
 
     @Test

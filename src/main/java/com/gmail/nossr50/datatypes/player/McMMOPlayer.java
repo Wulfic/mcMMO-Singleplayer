@@ -443,11 +443,13 @@ public class McMMOPlayer {
         // exercises the XP pipeline) we still fire level/power/maxed plaques but skip the rank compare,
         // rather than making a plain level-up newly depend on RankConfig being present.
         final boolean rankMilestones = milestonesEnabled && McMMOMod.getRankConfig() != null;
-        final int oldSkillLevel = milestonesEnabled ? profile.getSkillLevel(primarySkillType) : 0;
         final int oldPowerLevel = milestonesEnabled ? getPowerLevel() : 0;
-        final List<SubSkillType> milestoneSubSkills =
-                rankMilestones ? rankedSubSkillsOf(primarySkillType) : List.of();
-        final int[] oldRanks = rankMilestones ? currentRanks(milestoneSubSkills) : null;
+        // Levelling a parent also raises every child skill derived from it, so their plaques are
+        // snapshotted here too. Without this, Agility's ten sub-skills would never fire a rank plaque
+        // again the moment Agility became a child of Parkour/Swimming/Flying — and the failure mode is
+        // silence, not an error.
+        final List<MilestoneSnapshot> milestoneSnapshots =
+                milestonesEnabled ? snapshotMilestones(primarySkillType, rankMilestones) : List.of();
 
         int levelsGained = 0;
 
@@ -478,8 +480,7 @@ public class McMMOPlayer {
                     profile.getSkillLevel(primarySkillType));
 
             if (milestonesEnabled) {
-                awardMilestoneAdvancements(primarySkillType, oldSkillLevel, oldPowerLevel,
-                        milestoneSubSkills, oldRanks);
+                awardMilestoneAdvancements(milestoneSnapshots, oldPowerLevel);
             }
         }
 
@@ -488,31 +489,75 @@ public class McMMOPlayer {
     }
 
     /**
-     * Grants any milestone advancements (optional <em>Advancement Plaques</em> support) earned by the
-     * level-up that just completed for {@code skill}. Computes the round-level / skill-maxed /
-     * power-tier / rank-unlock awards from the pre-loop snapshot via the Minecraft-free
-     * {@link Milestones} core and hands each to the {@link PlatformPlayer} advancement seam. Only
-     * called with the feature enabled (see {@code checkXp}).
+     * One skill's pre-level-up milestone state.
      *
-     * @param skill the skill that leveled
-     * @param oldSkillLevel the skill's level before the level-up loop
-     * @param oldPowerLevel the player's total power level before the level-up loop
-     * @param subSkills the ranked sub-skills of {@code skill}, snapshotted for the rank compare
-     * @param oldRanks each of {@code subSkills}' rank before the level-up loop, in list order
+     * @param skill the skill being tracked
+     * @param oldLevel its level before the level-up loop
+     * @param subSkills its ranked sub-skills, snapshotted for the rank compare (empty when rank
+     *                  milestones are unavailable)
+     * @param oldRanks each of {@code subSkills}' rank before the loop, in list order
      */
-    private void awardMilestoneAdvancements(PrimarySkillType skill, int oldSkillLevel,
-            int oldPowerLevel, List<SubSkillType> subSkills, int[] oldRanks) {
-        final int newSkillLevel = profile.getSkillLevel(skill);
-        // GeneralConfig (not SkillTools) is the cap authority SkillTools#getLevelCap delegates to, and
-        // it is guaranteed wired on the XP path (modifyXpGain already reads it) — so this keeps the
-        // milestone hook from depending on SkillTools being wired.
-        final int levelCap = McMMOMod.getGeneralConfig().getLevelCap(skill);
-        final int interval = McMMOMod.getGeneralConfig().getMilestoneLevelInterval();
+    private record MilestoneSnapshot(PrimarySkillType skill, int oldLevel,
+            List<SubSkillType> subSkills, int[] oldRanks) {
+    }
 
-        final List<Milestones.MilestoneAward> awards = new ArrayList<>(
-                Milestones.skillLevelAwards(skill, oldSkillLevel, newSkillLevel, levelCap, interval));
+    /**
+     * Snapshot the milestone state of {@code skill} <em>and of every child skill derived from it</em>.
+     *
+     * <p>A child skill's level is a function of its parents' levels, so it climbs without ever
+     * reaching the XP path itself — {@code applyXpGain} splits a child gain to the parents and
+     * returns. Tracking only the skill that literally levelled would therefore mean a child's plaques
+     * simply never fire, which is how Agility's ten sub-skill rank plaques would have gone silent when
+     * Agility became a child of Parkour/Swimming/Flying. Salvage and Smelting get the same fix for
+     * free; they had been quietly missing it all along.
+     */
+    private List<MilestoneSnapshot> snapshotMilestones(PrimarySkillType skill, boolean rankMilestones) {
+        final List<PrimarySkillType> tracked = new ArrayList<>();
+        tracked.add(skill);
+        for (PrimarySkillType candidate : PrimarySkillType.values()) {
+            if (SkillTools.isChildSkill(candidate)
+                    && McMMOMod.getSkillTools().getChildSkillParents(candidate).contains(skill)) {
+                tracked.add(candidate);
+            }
+        }
+
+        final List<MilestoneSnapshot> snapshots = new ArrayList<>(tracked.size());
+        for (PrimarySkillType tracking : tracked) {
+            final List<SubSkillType> subSkills =
+                    rankMilestones ? rankedSubSkillsOf(tracking) : List.<SubSkillType>of();
+            snapshots.add(new MilestoneSnapshot(tracking, profile.getSkillLevel(tracking),
+                    subSkills, currentRanks(subSkills)));
+        }
+        return snapshots;
+    }
+
+    /**
+     * Grants any milestone advancements (optional <em>Advancement Plaques</em> support) earned by the
+     * level-up that just completed. Computes the round-level / skill-maxed / power-tier / rank-unlock
+     * awards from the pre-loop snapshots via the Minecraft-free {@link Milestones} core and hands each
+     * to the {@link PlatformPlayer} advancement seam. Only called with the feature enabled (see
+     * {@code checkXp}).
+     *
+     * @param snapshots the skill that levelled plus any child skills derived from it
+     * @param oldPowerLevel the player's total power level before the level-up loop
+     */
+    private void awardMilestoneAdvancements(List<MilestoneSnapshot> snapshots, int oldPowerLevel) {
+        final int interval = McMMOMod.getGeneralConfig().getMilestoneLevelInterval();
+        final List<Milestones.MilestoneAward> awards = new ArrayList<>();
+
+        for (MilestoneSnapshot snapshot : snapshots) {
+            final PrimarySkillType skill = snapshot.skill();
+            // GeneralConfig (not SkillTools) is the cap authority SkillTools#getLevelCap delegates to,
+            // and it is guaranteed wired on the XP path (modifyXpGain already reads it) — so this keeps
+            // the milestone hook from depending on SkillTools being wired.
+            final int levelCap = McMMOMod.getGeneralConfig().getLevelCap(skill);
+            awards.addAll(Milestones.skillLevelAwards(skill, snapshot.oldLevel(),
+                    profile.getSkillLevel(skill), levelCap, interval));
+            awards.addAll(Milestones.rankAwards(skill,
+                    unlockedNewRank(snapshot.subSkills(), snapshot.oldRanks())));
+        }
+        // Power level is the player's, not a skill's — awarded once however many skills moved.
         awards.addAll(Milestones.powerAwards(oldPowerLevel, getPowerLevel()));
-        awards.addAll(Milestones.rankAwards(skill, unlockedNewRank(subSkills, oldRanks)));
 
         for (Milestones.MilestoneAward award : awards) {
             player.grantMilestoneAdvancement(award.path(), award.repeatable());

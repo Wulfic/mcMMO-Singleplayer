@@ -77,14 +77,22 @@ class SkillToolsTest {
     void childSkillClassification() {
         assertTrue(SkillTools.isChildSkill(PrimarySkillType.SALVAGE));
         assertTrue(SkillTools.isChildSkill(PrimarySkillType.SMELTING));
+        // Agility owns all ten movement sub-skills but earns no XP: its level is the mean of the
+        // three domains below, which are ordinary XP-bearing skills.
+        assertTrue(SkillTools.isChildSkill(PrimarySkillType.AGILITY));
+        assertFalse(SkillTools.isChildSkill(PrimarySkillType.PARKOUR));
+        assertFalse(SkillTools.isChildSkill(PrimarySkillType.SWIMMING));
+        assertFalse(SkillTools.isChildSkill(PrimarySkillType.FLYING));
         assertFalse(SkillTools.isChildSkill(PrimarySkillType.MINING));
-        // 19 skills, 2 of them children.
-        assertEquals(2, skillTools.getChildSkills().size());
-        assertEquals(17, SkillTools.NON_CHILD_SKILLS.size());
+        // 22 skills, 3 of them children.
+        assertEquals(3, skillTools.getChildSkills().size());
+        assertEquals(19, SkillTools.NON_CHILD_SKILLS.size());
     }
 
     @Test
     void childSkillParents() {
+        assertEquals(SkillTools.AGILITY_PARENTS,
+                skillTools.getChildSkillParents(PrimarySkillType.AGILITY));
         assertEquals(SkillTools.SALVAGE_PARENTS,
                 skillTools.getChildSkillParents(PrimarySkillType.SALVAGE));
         assertEquals(SkillTools.SMELTING_PARENTS,
