@@ -48,6 +48,22 @@ public final class MovementXpSettings {
     /** Server ticks per second — the rate at which movement is sampled. */
     public static final double TICKS_PER_SECOND = 20.0;
 
+    /**
+     * XP per second of travel before the per-medium multiplier, when {@code experience.yml} does not
+     * say otherwise.
+     *
+     * <p>Halved from the original 30.0 on 2026-07-27. Movement is the most passive source in the mod
+     * — it pays for playing the game normally — so it should not out-earn a skill that has to be
+     * worked at. Note that <b>walking is not a medium at all</b> and neither is crouched movement:
+     * the only ways to earn this are sprinting, swimming and gliding.
+     *
+     * <p>This constant, {@link #defaultReferenceSpeed} and {@link #defaultMediumMultiplier} are the
+     * single source of the movement-XP defaults; {@code ExperienceConfig} reads them rather than
+     * keeping a second copy, because a config fallback that disagrees with the class it feeds is a
+     * silent balance bug in exactly the tests that don't wire a config.
+     */
+    public static final double DEFAULT_BASELINE_XP_PER_SECOND = 15.0;
+
     private final double baselineXpPerSecond;
     private final Map<Medium, Double> referenceSpeeds;
     private final Map<Medium, Double> mediumMultipliers;
@@ -78,7 +94,9 @@ public final class MovementXpSettings {
                     : config.getMovementMediumMultiplier(medium));
         }
         return new MovementXpSettings(
-                config == null ? 30.0 : config.getMovementBaselineXpPerSecond(),
+                config == null
+                        ? DEFAULT_BASELINE_XP_PER_SECOND
+                        : config.getMovementBaselineXpPerSecond(),
                 speeds, multipliers);
     }
 
@@ -90,7 +108,11 @@ public final class MovementXpSettings {
                 new EnumMap<>(referenceSpeeds), new EnumMap<>(mediumMultipliers));
     }
 
-    private static double defaultReferenceSpeed(@NotNull Medium medium) {
+    /**
+     * Blocks per second a medium pays its full rate at, absent config. Land is the well-known
+     * vanilla sprint speed; Water and Air are still estimates pending in-game measurement.
+     */
+    public static double defaultReferenceSpeed(@NotNull Medium medium) {
         return switch (medium) {
             case LAND -> 5.61;
             case WATER -> 3.16;
@@ -98,7 +120,8 @@ public final class MovementXpSettings {
         };
     }
 
-    private static double defaultMediumMultiplier(@NotNull Medium medium) {
+    /** The per-medium weighting on {@link #DEFAULT_BASELINE_XP_PER_SECOND}, absent config. */
+    public static double defaultMediumMultiplier(@NotNull Medium medium) {
         return switch (medium) {
             case LAND -> 1.0;
             case WATER -> 1.15;

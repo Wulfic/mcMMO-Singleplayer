@@ -19,7 +19,14 @@ class MovementXpSettingsTest {
 
     private static final double EPSILON = 1.0E-9;
 
-    /** The shipped defaults, stated explicitly so a config change cannot silently move these tests. */
+    /**
+     * The shipped defaults, restated as literals rather than read from {@link MovementXpSettings}.
+     *
+     * <p>That duplication is deliberate. If these read the class constants, every derived assertion
+     * below would silently follow a retune and prove nothing. Written out, moving a default fails
+     * {@link #shippedDefaultsMatchTheConstantsUnderTest()} and forces whoever moved it to come here
+     * and re-derive what it now buys — which is the entire job of the budget tests.
+     */
     private static MovementXpSettings shipped() {
         final Map<Medium, Double> speeds = new EnumMap<>(Medium.class);
         speeds.put(Medium.LAND, 5.61);
@@ -29,7 +36,22 @@ class MovementXpSettingsTest {
         multipliers.put(Medium.LAND, 1.0);
         multipliers.put(Medium.WATER, 1.15);
         multipliers.put(Medium.AIR, 0.6);
-        return MovementXpSettings.of(30.0, speeds, multipliers);
+        return MovementXpSettings.of(15.0, speeds, multipliers);
+    }
+
+    @Test
+    void shippedDefaultsMatchTheConstantsUnderTest() {
+        // The tripwire for the duplication above: this is the only test that is *allowed* to pass by
+        // being updated in lockstep with a default. The rest must be re-derived by hand.
+        final MovementXpSettings settings = shipped();
+        assertEquals(MovementXpSettings.DEFAULT_BASELINE_XP_PER_SECOND,
+                settings.baselineXpPerSecond(), EPSILON);
+        for (Medium medium : Medium.values()) {
+            assertEquals(MovementXpSettings.defaultReferenceSpeed(medium),
+                    settings.referenceSpeed(medium), EPSILON, "reference speed, " + medium);
+            assertEquals(MovementXpSettings.defaultMediumMultiplier(medium),
+                    settings.mediumMultiplier(medium), EPSILON, "medium multiplier, " + medium);
+        }
     }
 
     /** Blocks covered in one tick at exactly the medium's reference speed. */
@@ -88,7 +110,7 @@ class MovementXpSettingsTest {
         speeds.put(Medium.LAND, 0.0);
         final Map<Medium, Double> multipliers = new EnumMap<>(Medium.class);
         multipliers.put(Medium.LAND, 1.0);
-        final MovementXpSettings broken = MovementXpSettings.of(30.0, speeds, multipliers);
+        final MovementXpSettings broken = MovementXpSettings.of(15.0, speeds, multipliers);
 
         assertEquals(0.0, broken.creditedSeconds(Medium.LAND, 5.0), EPSILON);
         assertEquals(0.0, broken.xpFor(Medium.LAND, 5.0), EPSILON);
@@ -135,9 +157,9 @@ class MovementXpSettingsTest {
             final double xpPerBlock =
                     settings.xpFor(medium, perTick(medium)) / perTick(medium);
             final double expected = switch (medium) {
-                case LAND -> 5.35;
-                case WATER -> 10.92;
-                case AIR -> 0.60;
+                case LAND -> 2.67;
+                case WATER -> 5.46;
+                case AIR -> 0.30;
             };
             assertEquals(expected, xpPerBlock, 0.01, "derived XP per block, " + medium);
         }

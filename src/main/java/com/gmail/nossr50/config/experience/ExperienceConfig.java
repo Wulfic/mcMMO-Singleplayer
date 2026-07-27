@@ -7,6 +7,7 @@ import com.gmail.nossr50.datatypes.skills.MaterialType;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
 import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.agility.MovementXpSettings;
 import com.gmail.nossr50.util.text.StringUtils;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -359,7 +360,8 @@ public class ExperienceConfig extends ConfigLoader {
      * whole balance model.
      */
     public double getMovementBaselineXpPerSecond() {
-        return config.getDouble("Experience_Values.Agility.Movement.Baseline_Xp_Per_Second", 30.0);
+        return config.getDouble("Experience_Values.Agility.Movement.Baseline_Xp_Per_Second",
+                MovementXpSettings.DEFAULT_BASELINE_XP_PER_SECOND);
     }
 
     /**
@@ -371,14 +373,9 @@ public class ExperienceConfig extends ConfigLoader {
      * @return the reference speed in blocks/second
      */
     public double getMovementReferenceSpeed(Medium medium) {
-        final double fallback = switch (medium) {
-            case LAND -> 5.61;
-            case WATER -> 3.16;
-            case AIR -> 30.0;
-        };
         return config.getDouble(
                 "Experience_Values.Agility.Movement.Reference_Speed." + medium.configName(),
-                fallback);
+                MovementXpSettings.defaultReferenceSpeed(medium));
     }
 
     /**
@@ -389,14 +386,9 @@ public class ExperienceConfig extends ConfigLoader {
      * @return the multiplier, where {@code 1.0} is the baseline rate
      */
     public double getMovementMediumMultiplier(Medium medium) {
-        final double fallback = switch (medium) {
-            case LAND -> 1.0;
-            case WATER -> 1.15;
-            case AIR -> 0.6;
-        };
         return config.getDouble(
                 "Experience_Values.Agility.Movement.Medium_Multiplier." + medium.configName(),
-                fallback);
+                MovementXpSettings.defaultMediumMultiplier(medium));
     }
 
     /* Archery */

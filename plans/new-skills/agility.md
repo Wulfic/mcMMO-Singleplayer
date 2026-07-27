@@ -429,18 +429,38 @@ Total XP to reach RetroMode level *N* on the shipped LINEAR curve (`base 1020`, 
 `experience.yml:145-147`) is `sum(1020 + 20L)` = **`10N² + 1010N`**, so **max level 1000 = 11,010,000
 XP**. Everything below derives from that number.
 
-**`Baseline_Xp_Per_Second: 30.0`**, with per-medium multipliers **Land 1.0 / Water 1.15 / Air 0.6**
-(water is slow and tedious, air is near-effortless and covers the world):
+**`Baseline_Xp_Per_Second: 15.0`** (halved 2026-07-27 — see below), with per-medium multipliers
+**Land 1.0 / Water 1.15 / Air 0.6** (water is slow and tedious, air is near-effortless and covers the
+world):
 
 | Medium | XP/s | ⇒ derived XP/block | Hours of *nothing but this* to max |
 |---|---|---|---|
-| Land | 30.0 | 5.35 | **~102 h** |
-| Water | 34.5 | 10.92 | **~89 h** |
-| Air | 18.0 | 0.60 | **~170 h** |
+| Land | 15.0 | 2.67 | **~204 h** |
+| Water | 17.25 | 5.46 | **~178 h** |
+| Air | 9.0 | 0.30 | **~340 h** |
 
 Note the derived per-block figures: air pays **~9× less per block** than land — 5.3× of that from the
 speed normalisation and 1.67× from the multiplier. That ratio is *computed*, not guessed, and it stays
 correct automatically if you retune a reference speed.
+
+### ⚠️ 2026-07-27 retune (user ruling) — halved, and two states pay nothing
+
+The baseline went **30.0 → 15.0**, doubling every time-to-max above. Rationale: movement is the most
+*passive* source in the mod — it pays for playing the game normally, with no tool, no resource and no
+decision — so it must not out-earn a skill you have to actively work at.
+
+Two movement states were also ruled out entirely, and they are **not** media at any rate:
+
+- **Walking pays nothing.** Only `isSprinting()` counts on land. It was already this way; it is now
+  written down as intentional rather than incidental, because "add a walk medium at a tenth" was
+  considered and **rejected** — simply existing in the world must never level a skill.
+- **Crouched movement pays nothing, in every medium.** This one was a real leak: sneaking excluded
+  itself on land for free (you cannot sneak and sprint), but holding shift to sink is still
+  `isTouchingWater()`, so **crouch-swimming used to earn Agility XP**. Sneaking is the Stealth skill's
+  sensor and one movement state must not feed two skills — the same double-pay problem the
+  AIR > WATER > LAND priority exists to solve, one level up. Fixed in `classifyMedium`, so it also
+  drops Fleet Footed and refuses Second Wind while crouched, which pre-settles the Padfoot overlap in
+  D-AG5 in exactly one place.
 
 **Guardrail — the actual definition of "not ridiculously fast":** no single source may take a player
 from 0 to max in under **80 hours** of doing only that thing. All three clear it.
@@ -450,16 +470,16 @@ The ladder still opens quickly, because the linear curve is cheap early (level 1
 
 | Unlock | Level | Cumulative XP | ≈ Time |
 |---|---|---|---|
-| Fleet Footed (land) | 1 | 1,020 | ~30 s |
-| Athlete | 50 | 75,500 | ~42 min |
-| Smash | 150 | 376,500 | ~3.5 h |
-| Fleet Footed (water) | 200 | 602,000 | ~5.6 h |
-| Lead Lungs · **Second Wind** | 250 | 877,500 | ~8.1 h |
-| Glide | 350 | 1,578,500 | ~14.6 h |
-| Fleet Footed (air) | 400 | 2,004,000 | ~18.6 h |
-| Lake Raider · SW water body | 500 | 3,005,000 | ~27.8 h |
-| Solar Wings · SW air body | 750 | 6,382,500 | ~59 h |
-| Max | 1000 | 11,010,000 | ~102 h |
+| Fleet Footed (land) | 1 | 1,020 | ~1 min |
+| Athlete | 50 | 75,500 | ~1.4 h |
+| Smash | 150 | 376,500 | ~7 h |
+| Fleet Footed (water) | 200 | 602,000 | ~11 h |
+| Lead Lungs · **Second Wind** | 250 | 877,500 | ~16 h |
+| Glide | 350 | 1,578,500 | ~29 h |
+| Fleet Footed (air) | 400 | 2,004,000 | ~37 h |
+| Lake Raider · SW water body | 500 | 3,005,000 | ~56 h |
+| Solar Wings · SW air body | 750 | 6,382,500 | ~118 h |
+| Max | 1000 | 11,010,000 | ~204 h |
 
 Real play is faster than the right-hand column — you are never travelling 100% of the time, but fall
 and dodge XP stack on top.
@@ -496,7 +516,7 @@ Experience_Values:
         Fall: 600             # existing — re-measure
         FeatherFall_Multiplier: 2.0
         Movement:
-            Baseline_Xp_Per_Second: 30.0
+            Baseline_Xp_Per_Second: 15.0
             Reference_Speed:        # blocks/second — MEASURED, not guessed
                 Land:  5.61
                 Water: 3.16
@@ -566,8 +586,9 @@ and **0 when that medium's rank is locked**); `getAthleteExhaustionMultiplier` c
   level 1 and at level 1000.** Fleet Footed must not be able to raise its own XP rate. If this test
   ever goes red, the loop is back.
 - `onMovementTick` XP/second matches `Baseline_Xp_Per_Second × Medium_Multiplier` for each medium, and
-  the derived XP-per-block matches the table above (5.35 land / 10.92 water / 0.60 air at defaults).
+  the derived XP-per-block matches the table above (2.67 land / 5.46 water / 0.30 air at defaults).
 - Medium priority: a tick that is simultaneously gliding + in water + sprinting pays **once**, as AIR.
+- Walking pays nothing; **crouching pays nothing in every medium** (`PlayerMovementTrackerTest`).
 - Budget regression: `10N² + 1010N` at N=1000 is 11,010,000, and land-only time-to-max stays ≥ 80 h at
   the shipped defaults — a cheap arithmetic test that fails loudly if someone "just bumps" the baseline.
 

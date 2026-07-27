@@ -36,9 +36,12 @@ import org.jetbrains.annotations.Nullable;
  *
  * <p><b>Anti-AFK / anti-exploit is load-bearing here, not a nicety.</b> A bubble elevator, a
  * soul-sand column, flowing water, a minecart loop and a firework circuit all move a player who is
- * not at the keyboard. Three guards cover all of them:
+ * not at the keyboard. Four guards cover all of them:
  * <ul>
  *   <li><b>No vehicles.</b> Boats, horses and minecarts move the player; the player is not moving.</li>
+ *   <li><b>No walking and no crouching.</b> Only sprinting, swimming and gliding are media at all —
+ *       see {@link #classifyMedium}. Crouching belongs to Stealth, and walking pays nothing so that
+ *       merely existing in the world never levels the skill.</li>
  *   <li><b>No teleport-scale deltas.</b> Anything past {@link #TELEPORT_DELTA} in a single tick is a
  *       teleport, a portal or a dimension change, not travel — skipped, and the baseline is reset so
  *       the <em>next</em> tick doesn't bill the whole jump either.</li>
@@ -168,9 +171,24 @@ public final class PlayerMovementTracker {
      * <p>Public because Second Wind dispatches its body on the same classification: "which Agility
      * domain is this player in right now" must have exactly one answer, and two implementations of
      * that question would eventually disagree.
+     *
+     * <p><b>Walking is deliberately not a medium.</b> Only sprinting, swimming and gliding pay —
+     * ordinary walking pays nothing at all, so simply existing in the world never levels the skill.
+     *
+     * <p><b>Crouched movement pays nothing either, in every medium.</b> Sneaking already excluded
+     * itself on land (you cannot sneak and sprint at once), but it did <em>not</em> in water: holding
+     * shift to sink is still {@code isTouchingWater()}, so crouch-swimming used to earn Agility XP.
+     * Sneaking is the Stealth skill's sensor, and one movement state must not feed two skills' XP —
+     * that is the same double-pay problem the AIR &gt; WATER &gt; LAND priority exists to prevent,
+     * one level up.
+     *
+     * <p>Because Second Wind and Fleet Footed read this same classification, crouching also drops the
+     * speed buff and refuses the super ability (without burning its cooldown). Both are wanted:
+     * Padfoot and Fleet Footed are the same mechanic on the same attribute and must never be live at
+     * once (D-AG5), and this settles that overlap in one place rather than in each consumer.
      */
     public static @Nullable Medium classifyMedium(@NotNull ServerPlayerEntity player) {
-        if (player.hasVehicle()) {
+        if (player.hasVehicle() || player.isSneaking()) {
             return null;
         }
         if (player.isGliding()) {

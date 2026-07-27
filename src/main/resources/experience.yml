@@ -269,7 +269,12 @@ Experience_Values:
         # tunes it, it falls out of the reference speed.
         Movement:
             # XP per second of travel, before the per-medium multiplier.
-            Baseline_Xp_Per_Second: 30.0
+            #
+            # Halved from the original 30.0 (2026-07-27). Movement is the most passive XP source in
+            # the mod - you earn it for playing the game normally - so it should not out-earn a skill
+            # you have to actively work at. Walking earns nothing at all, and neither does moving
+            # while crouched (that is the Stealth skill's territory).
+            Baseline_Xp_Per_Second: 15.0
 
             # Blocks per second each medium pays full rate at. Travel faster than this is clamped.
             # Land is the well-known vanilla sprint speed (walk 4.317 x 1.3). Water and Air are
@@ -281,8 +286,8 @@ Experience_Values:
 
             # Per-medium payout multiplier. Water is slow and tedious, air is near-effortless and
             # covers the whole world, so they are weighted up and down respectively.
-            # At the defaults this yields ~5.35 XP/block on land, ~10.92 in water, ~0.60 in air, and
-            # roughly 102h / 89h / 170h of continuous travel to max a RetroMode level-1000 skill.
+            # At the defaults this yields ~2.67 XP/block on land, ~5.46 in water, ~0.30 in air, and
+            # roughly 204h / 178h / 340h of continuous travel to max a RetroMode level-1000 skill.
             Medium_Multiplier:
                 Land: 1.0
                 Water: 1.15
