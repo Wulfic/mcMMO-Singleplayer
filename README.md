@@ -64,13 +64,17 @@ every non‑child skill.
 
 ## Skills
 
+**First New Skill!** -- **Agility!** replaces and folds in Acrobatics, Flying(Elytra), swimming, and running
+
+**4 Additional New Skills planned** and on the way in future releases! **Husbandry, Stealth, Unarmored, and Cooking!** 
+
 **17 primary skills** plus **2 child skills** whose level is derived from their parents.
 
 | Category | Skills |
 |---|---|
 | **Gathering** | Mining, Woodcutting, Herbalism, Excavation, Fishing |
 | **Combat** | Swords, Axes, Unarmed, Archery, Crossbows, Tridents, Maces, Spears |
-| **Misc** | Acrobatics, Taming, Repair, Alchemy |
+| **Misc** | Agility, Taming, Repair, Alchemy |
 | **Child skills** | **Salvage** (avg. of Repair + Fishing), **Smelting** (avg. of Mining + Repair) |
 
 **RetroMode is on by default** — levels scale 1–1000 rather than 1–100, and every level requirement
