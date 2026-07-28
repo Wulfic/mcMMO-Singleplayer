@@ -37,6 +37,8 @@ declare -A ICON=(
     [salvage]=grindstone
     [smelting]=blast_furnace
     [spears]=pointed_dripstone
+    # A sculk sensor is the game's own "something moved" detector, and sneaking is how you beat it.
+    [stealth]=sculk_sensor
     [swimming]=heart_of_the_sea
     [swords]=diamond_sword
     [taming]=bone

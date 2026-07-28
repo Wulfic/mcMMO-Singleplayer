@@ -712,25 +712,6 @@ public class AgilityManager extends SkillManager {
         return advanced == null ? 100 : Math.max(1, advanced.getSolarWingsIntervalTicks());
     }
 
-    // --- shared -------------------------------------------------------------------------------
-
-    /**
-     * Scale a maximum bonus linearly with the player's Agility level, capping at
-     * {@code maxBonusLevel} — the same ladder every shipped sub-skill's chance curve uses, expressed
-     * once here because eight new sub-skills would otherwise each repeat it.
-     *
-     * @param maxBonus      the value reached at {@code maxBonusLevel} and beyond
-     * @param maxBonusLevel the level at which scaling stops
-     * @return the scaled value, never above {@code maxBonus}
-     */
-    private double scaleToLevel(double maxBonus, int maxBonusLevel) {
-        if (maxBonus <= 0) {
-            return 0.0;
-        }
-        if (maxBonusLevel <= 0) {
-            return maxBonus; // Degenerate config: treat everyone as maxed rather than dividing by 0.
-        }
-        final double progress = Math.min(1.0, (double) getSkillLevel() / maxBonusLevel);
-        return maxBonus * progress;
-    }
+    // Note: the level-scaling ladder these sub-skills share (`scaleToLevel`) lives on
+    // {@link SkillManager}, since Stealth's passives are shaped identically.
 }

@@ -99,6 +99,15 @@ public enum SubSkillType {
     SPEARS_MOMENTUM(10),
     SPEARS_SPEAR_MASTERY(8),
 
+    /* Stealth */
+    // Pass 2. Thief (mobs notice you less while sneaking) is deliberately absent rather than
+    // present-and-disabled: it needs a mixin on mob target selection, and a dead enum constant with
+    // no ranks, no config and no behaviour reads as a half-wired sub-skill to everything that
+    // iterates this enum — /mcstats included.
+    STEALTH_PADFOOT(1),
+    STEALTH_ASSASSIN(1),
+    STEALTH_SMOKE_BOMB(1),
+
     /* Swords */
     SWORDS_COUNTER_ATTACK(1),
     SWORDS_RUPTURE(4),

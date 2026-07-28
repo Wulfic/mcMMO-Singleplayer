@@ -1,5 +1,7 @@
 package com.gmail.nossr50.fabric.client.modmenu;
 
+import com.gmail.nossr50.skills.agility.MovementXpSettings;
+import com.gmail.nossr50.skills.stealth.StealthXpSettings;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -34,21 +36,21 @@ public final class McMMOSettings {
     /** Skills that have an {@code Experience_Formula.Skill_Multiplier.<name>} key. */
     private static final String[] XP_MULTIPLIER_SKILLS = {
         "Agility", "Alchemy", "Archery", "Axes", "Crossbows", "Excavation", "Fishing", "Flying",
-        "Herbalism", "Maces", "Mining", "Parkour", "Repair", "Spears", "Swimming", "Swords",
-        "Taming", "Tridents", "Unarmed", "Woodcutting"
+        "Herbalism", "Maces", "Mining", "Parkour", "Repair", "Spears", "Stealth", "Swimming",
+        "Swords", "Taming", "Tridents", "Unarmed", "Woodcutting"
     };
 
     /** Skills that have a {@code Skills.<name>.Level_Cap} key. */
     private static final String[] LEVEL_CAP_SKILLS = {
         "Agility", "Alchemy", "Archery", "Axes", "Crossbows", "Excavation", "Fishing", "Flying",
         "Herbalism", "Maces", "Mining", "Parkour", "Repair", "Salvage", "Smelting", "Spears",
-        "Swimming", "Swords", "Taming", "Tridents", "Unarmed", "Woodcutting"
+        "Stealth", "Swimming", "Swords", "Taming", "Tridents", "Unarmed", "Woodcutting"
     };
 
     /** Super-abilities with an {@code Abilities.Cooldowns.<name>} key. */
     private static final String[] COOLDOWN_ABILITIES = {
         "Berserk", "Blast_Mining", "Giga_Drill_Breaker", "Green_Terra", "Second_Wind",
-        "Serrated_Strikes", "Skull_Splitter", "Super_Breaker", "Tree_Feller"
+        "Serrated_Strikes", "Skull_Splitter", "Smoke_Bomb", "Super_Breaker", "Tree_Feller"
     };
 
     private static final List<ConfigSetting> ALL = buildCatalogue();
@@ -133,12 +135,27 @@ public final class McMMOSettings {
         // Agility movement XP. The baseline is the one knob a player actually wants; the reference
         // speeds and per-medium weights are balance internals that only make sense as a set, so they
         // stay YAML-only rather than being three sliders that quietly break each other's ratios.
+        // The default here MUST match experience.yml's shipped value. It was left at 30.0 when the
+        // YAML was halved to 15.0, so the editor was offering to "reset to default" a value that had
+        // not been the default for some time — the same class of silent balance bug as a config
+        // fallback that disagrees with the class it feeds.
         list.add(ConfigSetting.decimal(CAT_XP, EXPERIENCE_YML,
-                "Experience_Values.Agility.Movement.Baseline_Xp_Per_Second", 30.0, 0.0, 1000.0,
+                "Experience_Values.Agility.Movement.Baseline_Xp_Per_Second",
+                MovementXpSettings.DEFAULT_BASELINE_XP_PER_SECOND, 0.0, 1000.0,
                 "Agility: Movement XP per Second",
                 "XP per second of sprinting, swimming or gliding. Each medium's payout is "
                         + "normalised against its own top speed, so a faster medium does not level "
                         + "faster — raise this to level Agility faster overall."));
+
+        // Stealth sneak XP, same shape and same reasoning: the baseline is the knob a player wants,
+        // while the reference speed is a balance internal that only means anything alongside it.
+        list.add(ConfigSetting.decimal(CAT_XP, EXPERIENCE_YML,
+                "Experience_Values.Stealth.Sneak.Baseline_Xp_Per_Second",
+                StealthXpSettings.DEFAULT_BASELINE_XP_PER_SECOND, 0.0, 1000.0,
+                "Stealth: Sneak XP per Second",
+                "XP per second spent sneaking on the ground. Payout is normalised against sneaking "
+                        + "speed, so Padfoot makes you cover ground faster without levelling you "
+                        + "faster."));
 
         // ---- Per-skill XP multipliers (experience.yml) -----------------------------------------
         for (String skill : XP_MULTIPLIER_SKILLS) {

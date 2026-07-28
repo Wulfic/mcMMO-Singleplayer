@@ -84,9 +84,12 @@ class SkillToolsTest {
         assertFalse(SkillTools.isChildSkill(PrimarySkillType.SWIMMING));
         assertFalse(SkillTools.isChildSkill(PrimarySkillType.FLYING));
         assertFalse(SkillTools.isChildSkill(PrimarySkillType.MINING));
-        // 22 skills, 3 of them children.
+        // Stealth is a standalone primary, not a fourth Agility movement domain: its payoff is
+        // not-being-seen rather than locomotion, and it earns its own XP from sneak distance.
+        assertFalse(SkillTools.isChildSkill(PrimarySkillType.STEALTH));
+        // 23 skills, 3 of them children.
         assertEquals(3, skillTools.getChildSkills().size());
-        assertEquals(19, SkillTools.NON_CHILD_SKILLS.size());
+        assertEquals(20, SkillTools.NON_CHILD_SKILLS.size());
     }
 
     @Test

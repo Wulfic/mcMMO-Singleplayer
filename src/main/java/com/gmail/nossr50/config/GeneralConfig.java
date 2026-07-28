@@ -427,6 +427,17 @@ public class GeneralConfig extends ConfigLoader {
         return config.getString("Skills.Agility.Second_Wind_Item", "FEATHER");
     }
 
+    /**
+     * The item that triggers Stealth's Smoke Bomb super ability on right-click (never consumed).
+     *
+     * <p>Must differ from {@link #getSecondWindItem()}: both actives listen on the same use-item
+     * event, so a shared item would activate whichever gate passes and print the other's refusal
+     * message alongside it.
+     */
+    public String getSmokeBombItem() {
+        return config.getString("Skills.Stealth.Smoke_Bomb_Item", "GUNPOWDER");
+    }
+
     /* Alchemy */
     public boolean getEnabledForHoppers() {
         return config.getBoolean("Skills.Alchemy.Enabled_for_Hoppers", true);

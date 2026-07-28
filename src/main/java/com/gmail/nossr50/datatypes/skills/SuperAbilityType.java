@@ -111,6 +111,19 @@ public enum SuperAbilityType {
             "Agility.SubSkill.SecondWind.Name"),
 
     /**
+     * Stealth's active (Pass 2). Like {@link #SECOND_WIND} it is not gated on holding a tool — it is
+     * triggered by a configured held item — so it does <b>not</b> go through
+     * {@code McMMOPlayer#checkAbilityActivation}, which dereferences the skill's {@code ToolType}.
+     */
+    SMOKE_BOMB(
+            "Stealth.Skills.SmokeBomb.On",
+            "Stealth.Skills.SmokeBomb.Off",
+            "Stealth.Skills.SmokeBomb.Other.On",
+            "Stealth.Skills.SmokeBomb.Refresh",
+            "Stealth.Skills.SmokeBomb.Other.Off",
+            "Stealth.SubSkill.SmokeBomb.Name"),
+
+    /**
      * Has cooldown - but has to share a skill with Super Breaker, so needs special treatment
      */
     BLAST_MINING(
@@ -136,6 +149,7 @@ public enum SuperAbilityType {
         TREE_FELLER.subSkillTypeDefinition = SubSkillType.WOODCUTTING_TREE_FELLER;
         SERRATED_STRIKES.subSkillTypeDefinition = SubSkillType.SWORDS_SERRATED_STRIKES;
         SECOND_WIND.subSkillTypeDefinition = SubSkillType.AGILITY_SECOND_WIND;
+        SMOKE_BOMB.subSkillTypeDefinition = SubSkillType.STEALTH_SMOKE_BOMB;
         BLAST_MINING.subSkillTypeDefinition = SubSkillType.MINING_BLAST_MINING;
     }
 

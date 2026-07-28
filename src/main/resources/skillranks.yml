@@ -778,6 +778,25 @@ Fishing:
             Rank_6: 750
             Rank_7: 850
             Rank_8: 1000
+Stealth:
+    # Padfoot is the skill's identity and unlocks immediately -- the whole point of Stealth is that
+    # sneaking stops being painfully slow, and gating that behind levels means the early skill is
+    # levelled by doing the one thing it exists to make less tedious.
+    Padfoot:
+        Standard:
+            Rank_1: 1
+        RetroMode:
+            Rank_1: 1
+    Assassin:
+        Standard:
+            Rank_1: 15
+        RetroMode:
+            Rank_1: 150
+    SmokeBomb:
+        Standard:
+            Rank_1: 25
+        RetroMode:
+            Rank_1: 250
 Swords:
     SwordsLimitBreak:
         Standard:

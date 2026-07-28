@@ -544,6 +544,54 @@ Skills:
             Rank_8: 5
 
     #
+    #  Settings for Stealth
+    ###
+    Stealth:
+        Padfoot:
+            # Sneak faster. This is a flat addition to the vanilla `sneaking_speed` attribute, which
+            # defaults to 0.3 (i.e. sneaking is 30% of walking speed) and which VANILLA ITSELF clamps
+            # to a maximum of 1.0.
+            #
+            # That clamp is the real ceiling, which is why there is no cap of our own: no value you
+            # put here can make sneaking faster than walking. The shipped 0.7 lands a maxed player
+            # exactly at walking speed.
+            #
+            # Note it also applies while CRAWLING (vanilla applies the same attribute when you are in
+            # a sneaking pose or crawling), so squeezing through a 1-block gap is faster too.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            MaxSneakSpeedBonus: 0.7
+
+        Assassin:
+            # Backstab: hit harder while sneaking, if you have not been hit recently.
+            #
+            # MaxDamageBonus is a FRACTION, not a multiplier -- 1.0 means "double damage at max
+            # level". It is multiplicative, so it compounds with your weapon skill's own on-hit bonus
+            # and with a vanilla crit. That is the point of the sub-skill, but it is also the most
+            # likely thing here to be over-tuned; test it against an armoured mob before trusting it.
+            #
+            # NoDamageWindowTicks: how long you must go without taking damage for a hit to count as a
+            # backstab. 100 ticks = 5 seconds -- long enough that you cannot trade blows and keep
+            # stabbing, short enough to break contact and re-enter stealth inside one fight.
+            #
+            # Cannot stack with Agility's Smash: that one requires sprinting and this one requires
+            # sneaking, and you cannot do both at once.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            MaxDamageBonus: 1.0
+            NoDamageWindowTicks: 100
+
+        SmokeBomb:
+            # Stealth's super ability: vanish. Applies vanilla Invisibility with no firework and no
+            # particle burst.
+            #
+            # Remember that vanilla Invisibility does NOT hide armour or held items -- a fully
+            # armoured player using this is still very visible. That is vanilla behaviour, not a bug.
+            DurationTicks: 100
+
+    #
     #  Settings for Swords
     ###
     Swords:

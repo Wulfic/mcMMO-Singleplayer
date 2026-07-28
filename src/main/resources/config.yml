@@ -235,6 +235,7 @@ Hardcore:
             Herbalism: false
             Mining: false
             Repair: false
+            Stealth: false
             Swords: false
             Taming: false
             Unarmed: false
@@ -259,6 +260,7 @@ Hardcore:
             Herbalism: false
             Mining: false
             Repair: false
+            Stealth: false
             Swords: false
             Taming: false
             Unarmed: false
@@ -351,6 +353,7 @@ Abilities:
         Second_Wind: 240
         Serrated_Strikes: 240
         Skull_Splitter: 240
+        Smoke_Bomb: 240
         Super_Breaker: 240
         Tree_Feller: 240
     Max_Seconds:
@@ -361,6 +364,7 @@ Abilities:
         Second_Wind: 0
         Serrated_Strikes: 0
         Skull_Splitter: 0
+        Smoke_Bomb: 0
         Super_Breaker: 0
         Tree_Feller: 0
     Limits:
@@ -444,6 +448,12 @@ Skills:
         Confirm_Required: true
     Smelting:
         Level_Cap: 0
+    Stealth:
+        Level_Cap: 0
+        # Item that triggers the Smoke Bomb super ability on right-click. Never consumed.
+        # Must differ from Agility's Second_Wind_Item: both actives listen on the same use-item
+        # event, so sharing an item would fire one and print the other's refusal message.
+        Smoke_Bomb_Item: GUNPOWDER
     Swords:
         Enabled_For_PVP: true
         Enabled_For_PVE: true

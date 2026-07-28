@@ -648,6 +648,59 @@ public class AdvancedConfig extends ConfigLoader {
         return config.getInt("Skills.Agility.SolarWings.GroundedMultiplier", 2);
     }
 
+    // --- Stealth (Pass 2) ----------------------------------------------------------------------
+
+    public int getPadfootMaxBonusLevel() {
+        return maxBonusLevel("Skills.Stealth.Padfoot.MaxBonusLevel");
+    }
+
+    /**
+     * How much Padfoot adds to the vanilla {@code sneaking_speed} attribute at max level.
+     *
+     * <p>That attribute is a {@code ClampedEntityAttribute(default 0.3, min 0.0, max 1.0)} where
+     * {@code 1.0} means "sneak at full walking speed" (bytecode-verified in {@code EntityAttributes};
+     * the client consumes it in {@code ClientPlayerEntity} whenever
+     * {@code isInSneakingPose() || isCrawling()}). So the shipped default of {@code 0.7} lands a
+     * maxed player exactly at walking speed, and — because vanilla's own clamp is the ceiling — no
+     * value configured here can ever make sneaking <em>faster</em> than walking. Vanilla does the
+     * "cap it so it isn't silly" job for free, the same way {@code WATER_MOVEMENT_EFFICIENCY} does
+     * for Agility's Fleet Footed water body.
+     */
+    public double getPadfootMaxSneakSpeedBonus() {
+        return config.getDouble("Skills.Stealth.Padfoot.MaxSneakSpeedBonus", 0.7D);
+    }
+
+    public int getAssassinMaxBonusLevel() {
+        return maxBonusLevel("Skills.Stealth.Assassin.MaxBonusLevel");
+    }
+
+    /**
+     * The fractional damage bonus a backstab lands at max level — {@code 1.0} being "double damage".
+     *
+     * <p>Multiplicative, so it compounds with the weapon skill's own on-hit bonus and with a vanilla
+     * crit. That is the assassin fantasy and it is meant to be felt, but it is also the single most
+     * likely thing in this skill to be over-tuned; it is flagged for §G against an armoured mob.
+     */
+    public double getAssassinMaxDamageBonus() {
+        return config.getDouble("Skills.Stealth.Assassin.MaxDamageBonus", 1.0D);
+    }
+
+    /**
+     * How long a player must go without taking damage before a backstab counts (D-S3, the wiki's
+     * "before taking damage for a duration").
+     *
+     * <p>Long enough that you cannot trade blows and keep stabbing, short enough to break contact
+     * and re-enter stealth inside one fight.
+     */
+    public int getAssassinNoDamageWindowTicks() {
+        return config.getInt("Skills.Stealth.Assassin.NoDamageWindowTicks", 100);
+    }
+
+    /** How long Smoke Bomb's invisibility lasts, in ticks, at the ability's base duration. */
+    public int getSmokeBombDurationTicks() {
+        return config.getInt("Skills.Stealth.SmokeBomb.DurationTicks", 100);
+    }
+
     /**
      * Reads a {@code MaxBonusLevel} node's RetroMode/Standard child, matching how every shipped
      * sub-skill scales its bonus ladder.

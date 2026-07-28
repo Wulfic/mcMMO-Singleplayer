@@ -119,6 +119,7 @@ public class SkillTools {
                 PrimarySkillType.REPAIR,
                 PrimarySkillType.SALVAGE,
                 PrimarySkillType.SMELTING,
+                PrimarySkillType.STEALTH,
                 PrimarySkillType.SWIMMING
         );
 
@@ -283,6 +284,7 @@ public class SkillTools {
             case MACES_SUPER_ABILITY -> PrimarySkillType.MACES;
             case SPEARS_SUPER_ABILITY -> PrimarySkillType.SPEARS;
             case SECOND_WIND -> PrimarySkillType.AGILITY;
+            case SMOKE_BOMB -> PrimarySkillType.STEALTH;
         };
     }
 

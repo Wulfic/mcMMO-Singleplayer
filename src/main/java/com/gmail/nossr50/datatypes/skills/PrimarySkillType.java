@@ -35,6 +35,7 @@ public enum PrimarySkillType {
     SALVAGE,
     SMELTING,
     SPEARS,
+    STEALTH,
     SWIMMING,
     SWORDS,
     TAMING,

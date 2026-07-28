@@ -56,6 +56,29 @@ public abstract class SkillManager {
         mmoPlayer.beginXpGain(skill, xp, xpGainReason, xpGainSource);
     }
 
+    /**
+     * Scale a maximum bonus linearly with the player's level in this skill, capping at
+     * {@code maxBonusLevel} — the ladder every level-scaled passive uses.
+     *
+     * <p>Lives on the base class because Agility and Stealth between them have a dozen sub-skills
+     * shaped exactly like this, and a second copy of the ladder is a second place for the
+     * degenerate-config guards below to be got wrong.
+     *
+     * @param maxBonus      the value reached at {@code maxBonusLevel} and beyond
+     * @param maxBonusLevel the level at which scaling stops
+     * @return the scaled value, never above {@code maxBonus}
+     */
+    protected double scaleToLevel(double maxBonus, int maxBonusLevel) {
+        if (maxBonus <= 0) {
+            return 0.0;
+        }
+        if (maxBonusLevel <= 0) {
+            return maxBonus; // Degenerate config: treat everyone as maxed rather than dividing by 0.
+        }
+        final double progress = Math.min(1.0, (double) getSkillLevel() / maxBonusLevel);
+        return maxBonus * progress;
+    }
+
     // PORT Phase 10.3: getXPGainReason(LivingEntity target, Entity damager) — dropped. The legacy
     // signature took raw Bukkit entities and returned PVP when both target and damager are players,
     // PVE otherwise. It needs a platform/ entity adapter for the (non-living) damager, which lands

@@ -37,6 +37,18 @@ ExploitFix:
     PreventPluginNPCInteraction: true
     # This will limit XP gained from unnaturally tall plants, like those created by Bone Meal
     LimitTallPlantFarming: true
+    Stealth:
+        # Require a live movement keypress for sneak XP, not merely a change in position.
+        #
+        # Sneak-distance is the most farmable XP source in the mod -- the wiki that suggested this
+        # skill literally jokes "Sticky keys op". A taped-down shift key in a water current, on a
+        # moving boat, or on a piston loop all change your position without you being at the
+        # keyboard. This gate reads the player's actual input state server-side, so being CARRIED
+        # earns nothing while walking under your own power earns normally.
+        #
+        # Leave this on. It exists as an escape hatch because if a client ever stops sending input
+        # packets, the gate would silently reduce Stealth XP to zero rather than merely mis-tune it.
+        Require_Movement_Input: true
 Fishing_ExploitFix_Options:
     MoveRange: 3
     OverFishLimit: 10
@@ -127,6 +139,10 @@ Experience_Bars:
         Enable: true
         Color: PURPLE
         BarStyle: SEGMENTED_6
+    Stealth:
+        Enable: true
+        Color: PINK
+        BarStyle: SEGMENTED_6
     Swords:
         Enable: true
         Color: BLUE
@@ -197,6 +213,7 @@ Experience_Formula:
         Parkour: 1.0
         Swimming: 1.0
         Flying: 1.0
+        Stealth: 1.0
         Excavation: 1.0
         Herbalism: 1.0
         Unarmed: 1.0
@@ -235,6 +252,9 @@ Diminished_Returns:
         Parkour: 20000
         Swimming: 20000
         Flying: 20000
+        # Stealth pays 25 XP/s flat out -- the highest continuous rate in the mod -- so this throttle
+        # bites sooner for it than for anything else if Diminished_Returns is ever switched on.
+        Stealth: 20000
         Excavation: 20000
         Herbalism: 20000
         Unarmed: 20000
@@ -654,6 +674,37 @@ Experience_Values:
         Redstone_Ore: 15
         Nether_Gold_Ore: 35
         Cobbled_Deepslate: 5
+    Stealth:
+        # Sneak XP.
+        #
+        # Stealth uses the SAME speed-normalised model as Agility's movement domains (see the long
+        # comment under Experience_Values.Agility.Movement): XP is paid per SECOND of qualifying
+        # sneak-travel, with each tick's distance clamped at the reference speed below.
+        #
+        # The clamp matters even more here than it does for Agility. Padfoot raises the vanilla
+        # sneaking_speed attribute from 0.3 toward 1.0, so a maxed player sneaks more than THREE
+        # TIMES faster than an unranked one (Fleet Footed, by comparison, is worth 20%). Paying per
+        # block would make Padfoot a 3.3x multiplier on its own XP rate. Under the clamp a maxed
+        # Padfoot player earns the same XP per second and simply covers more ground doing it.
+        #
+        # Only sneaking ON THE GROUND pays. Crouch-swimming pays nothing -- it is faster than the
+        # sneak reference speed, so it would always sit at the clamp, which would make "hold shift
+        # in a water current" the optimal way to level the skill.
+        Sneak:
+            # XP per second of qualifying sneak-travel.
+            #
+            # 25 XP/s maxes a RetroMode level-1000 skill in ~122 hours of continuous sneaking, versus
+            # ~204h for Agility on land. Deliberately the faster of the two: sneaking is slow,
+            # tedious, and something players do in short bursts rather than to get anywhere.
+            Baseline_Xp_Per_Second: 25.0
+
+            # Blocks per second sneaking pays full rate at. Sneaking faster than this -- with
+            # Padfoot, or a Speed potion -- is clamped and pays no more.
+            #
+            # Derived as vanilla walk speed (4.317) x the sneaking_speed attribute default (0.3).
+            # The 0.3 is exact; the walk speed should be MEASURED in-game and corrected here.
+            # Yields ~19.3 XP per block at the default baseline -- a DERIVED number, do not tune it.
+            Reference_Speed: 1.295
     Taming:
         Animal_Taming:
             Camel: 1300

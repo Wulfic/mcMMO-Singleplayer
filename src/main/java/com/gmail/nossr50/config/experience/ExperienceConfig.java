@@ -8,6 +8,7 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
 import com.gmail.nossr50.skills.agility.Medium;
 import com.gmail.nossr50.skills.agility.MovementXpSettings;
+import com.gmail.nossr50.skills.stealth.StealthXpSettings;
 import com.gmail.nossr50.util.text.StringUtils;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -389,6 +390,41 @@ public class ExperienceConfig extends ConfigLoader {
         return config.getDouble(
                 "Experience_Values.Agility.Movement.Medium_Multiplier." + medium.configName(),
                 MovementXpSettings.defaultMediumMultiplier(medium));
+    }
+
+    /* Stealth */
+
+    /**
+     * Stealth XP paid per second of qualifying sneak-travel (Pass 2). Same speed-normalised model as
+     * Agility's movement domains — see {@link com.gmail.nossr50.skills.SpeedNormalisedXp} — because
+     * Padfoot raises sneak speed more than threefold and would otherwise multiply its own XP rate.
+     */
+    public double getSneakBaselineXpPerSecond() {
+        return config.getDouble("Experience_Values.Stealth.Sneak.Baseline_Xp_Per_Second",
+                StealthXpSettings.DEFAULT_BASELINE_XP_PER_SECOND);
+    }
+
+    /**
+     * Blocks per second at which sneak-travel pays its full rate; sneaking faster than this (with
+     * Padfoot, or Speed potions) is clamped and pays no more.
+     */
+    public double getSneakReferenceSpeed() {
+        return config.getDouble("Experience_Values.Stealth.Sneak.Reference_Speed",
+                StealthXpSettings.DEFAULT_SNEAK_REFERENCE_SPEED);
+    }
+
+    /**
+     * Whether Stealth's anti-AFK gate requires a live movement keypress, not merely a change in
+     * position.
+     *
+     * <p>On by default and it should stay on: sneak-distance is the most farmable XP source in the
+     * mod ("sticky keys op", as the wiki puts it). The flag exists because the gate reads
+     * {@code ServerPlayerEntity#getPlayerInput()}, and if a client ever stops sending input packets
+     * outside vehicles that would silently reduce Stealth's XP to zero rather than merely
+     * mis-tuning it. It is an escape hatch for a diagnosable failure, not a balance knob.
+     */
+    public boolean isSneakInputRequired() {
+        return config.getBoolean("ExploitFix.Stealth.Require_Movement_Input", true);
     }
 
     /* Archery */
