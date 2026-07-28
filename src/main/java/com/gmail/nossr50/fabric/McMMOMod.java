@@ -22,6 +22,7 @@ import com.gmail.nossr50.fabric.listeners.PlayerMovementTracker;
 import com.gmail.nossr50.fabric.listeners.ProjectileListener;
 import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
 import com.gmail.nossr50.fabric.listeners.SecondWindListener;
+import com.gmail.nossr50.fabric.listeners.SmokeBombListener;
 import com.gmail.nossr50.fabric.listeners.SmeltingListener;
 import com.gmail.nossr50.fabric.listeners.SuperAbilityListener;
 import com.gmail.nossr50.platform.MetadataStore;
@@ -218,6 +219,10 @@ public class McMMOMod implements ModInitializer {
         // Pass 2: Agility's Second Wind super ability — right-click the trigger item to fire the
         // body matching how the player is currently moving.
         SecondWindListener.register();
+        // Pass 2: Stealth's Smoke Bomb super ability, on the same use-item seam. Its trigger item
+        // MUST differ from Second Wind's (gunpowder vs feather, both configurable) — sharing one
+        // would activate whichever registered first and print the other's refusal message.
+        SmokeBombListener.register();
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
         // drive the legacy listeners, routing each to the ported skill managers. Preferred
