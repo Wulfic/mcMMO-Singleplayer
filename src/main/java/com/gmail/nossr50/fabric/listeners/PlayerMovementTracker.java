@@ -3,10 +3,12 @@ package com.gmail.nossr50.fabric.listeners;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.platform.SkillAttributeService;
 import com.gmail.nossr50.skills.agility.AgilityManager;
 import com.gmail.nossr50.skills.agility.Medium;
 import com.gmail.nossr50.skills.stealth.StealthManager;
+import com.gmail.nossr50.skills.unarmored.UnarmoredManager;
 import com.gmail.nossr50.util.player.UserManager;
 import java.util.HashMap;
 import java.util.Map;
@@ -37,7 +39,13 @@ import org.jetbrains.annotations.Nullable;
  * {@link AgilityManager#onMovementTick} — or, when they are crouched, to
  * {@link StealthManager#onSneakTick}.
  *
- * <p><b>The two skills partition the same tick rather than sharing it.</b>
+ * <p><b>It has also become the mod's general per-tick per-player sweep</b>, which is a wider job than
+ * the name says. Unarmored's Iron Skin rides it (see {@link #applyIronSkin}) purely because it needs
+ * a modifier re-derived from live equipment state every tick and this is the only place that runs;
+ * it samples no movement at all. Anything else that must be re-derived rather than remembered
+ * belongs here too — a second tick sweep would be worse than a slightly misnamed one.
+ *
+ * <p><b>The two movement skills partition the same tick rather than sharing it.</b>
  * {@link #classifyMedium} returns {@code null} for every sneaking player in every medium, so a tick
  * of travel feeds exactly one of them and no movement state can ever pay twice. That also means the
  * Stealth dispatch must sit <em>above</em> the guard which acts on that {@code null} — see the
@@ -195,6 +203,13 @@ public final class PlayerMovementTracker {
         if (mmoPlayer == null) {
             return; // Data not loaded yet (mid-join) — nothing to credit and nothing to buff.
         }
+
+        // ⚠️ UNARMORED SITS ABOVE THE AGILITY GUARD BELOW, AND MUST STAY THERE — the same ordering
+        // trap the Stealth dispatch further down carries. Iron Skin has nothing to do with Agility;
+        // hanging it below a return that fires when the *Agility* manager is missing would make a
+        // player's armour depend on an unrelated skill loading, and the failure would be silent.
+        applyIronSkin(player, mmoPlayer);
+
         final AgilityManager agility = mmoPlayer.getAgilityManager();
         if (agility == null) {
             return;
@@ -235,6 +250,34 @@ public final class PlayerMovementTracker {
             return;
         }
         agility.onMovementTick(medium, distance);
+    }
+
+    /**
+     * Keep Unarmored's Iron Skin armour matched to what the player is (not) wearing right now.
+     *
+     * <p><b>Why a per-tick re-derivation and not an equipment-change hook</b> (D-U3): the skin has to
+     * appear and vanish on armour being equipped or removed, on a level-up across a tier breakpoint,
+     * on respawn — which builds a <em>new</em> {@code ServerPlayerEntity} and silently discards every
+     * modifier on the old one — and on logout. That is four separate lifecycles to get right, and
+     * each one of them fails as a permanent free-armour bug rather than as a missing buff. Stating
+     * the value the current tick's state implies, every tick, has exactly one of those bugs to get
+     * wrong instead of four, and it self-heals on the tick after anything unexpected.
+     *
+     * <p>Cheap enough to mean it: {@code set} is a no-op when the value is unchanged, which is every
+     * tick but the ones where something actually happened.
+     *
+     * <p>This is the one part of Unarmored that rides F1 at all — the skill is event-driven for XP
+     * and needs no movement sampling. It is here because this is the mod's only per-tick per-player
+     * sweep, not because it has anything to do with movement.
+     */
+    private static void applyIronSkin(@NotNull ServerPlayerEntity player,
+            @NotNull McMMOPlayer mmoPlayer) {
+        final UnarmoredManager unarmored = mmoPlayer.getUnarmoredManager();
+        if (unarmored == null) {
+            return;
+        }
+        SkillAttributeService.set(player, SkillAttributeService.Managed.UNARMORED_IRON_SKIN,
+                unarmored.getSkinArmorPoints(PlatformLivingEntity.isUnarmored(player)));
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -9,14 +10,22 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.platform.SkillAttributeService;
 import com.gmail.nossr50.skills.agility.AgilityManager;
 import com.gmail.nossr50.skills.agility.Medium;
 import com.gmail.nossr50.skills.stealth.StealthManager;
+import com.gmail.nossr50.skills.unarmored.UnarmoredManager;
 import com.gmail.nossr50.util.player.UserManager;
 import java.util.UUID;
+import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.entity.attribute.EntityAttributeInstance;
+import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.PlayerInput;
@@ -297,5 +306,142 @@ class PlayerMovementTrackerTest {
 
         UserManager.track(mmoPlayer);
         return mmoPlayer;
+    }
+
+    // --- Unarmored: Iron Skin's managed armour modifier ------------------------------------------
+
+    /**
+     * A player whose {@code ARMOR} attribute is real rather than mocked.
+     *
+     * <p>{@link SkillAttributeService} is only worth testing against the genuine
+     * {@link EntityAttributeInstance} — the whole contract it offers (re-applying replaces in place,
+     * an amount of zero removes rather than zeroes) lives in vanilla's modifier map, and a mock of
+     * that map would just be a restatement of the assertions.
+     */
+    private static ServerPlayerEntity unarmoredPlayerWithArmourAttribute(UUID uuid) {
+        final ServerPlayerEntity handle = player();
+        lenient().when(handle.getUuid()).thenReturn(uuid);
+        lenient().when(handle.getEntityPos()).thenReturn(new Vec3d(0, 64, 0));
+        for (EquipmentSlot slot : EquipmentSlot.VALUES) {
+            lenient().when(handle.getEquippedStack(slot)).thenReturn(ItemStack.EMPTY);
+        }
+        lenient().when(handle.getAttributeInstance(EntityAttributes.ARMOR))
+                .thenReturn(new EntityAttributeInstance(EntityAttributes.ARMOR, instance -> { }));
+        return handle;
+    }
+
+    /** As {@link #trackedPlayer} but carrying an Unarmored manager instead of a Stealth one. */
+    private static McMMOPlayer trackedUnarmoredPlayer(UUID uuid, UnarmoredManager unarmored) {
+        final PlatformPlayer platformPlayer = mock(PlatformPlayer.class);
+        lenient().when(platformPlayer.getUniqueId()).thenReturn(uuid);
+
+        final McMMOPlayer mmoPlayer = mock(McMMOPlayer.class);
+        lenient().when(mmoPlayer.getPlayer()).thenReturn(platformPlayer);
+        lenient().when(mmoPlayer.getUnarmoredManager()).thenReturn(unarmored);
+        lenient().when(mmoPlayer.getAgilityManager()).thenReturn(mock(AgilityManager.class));
+
+        UserManager.track(mmoPlayer);
+        return mmoPlayer;
+    }
+
+    @Test
+    void ironSkinIsAppliedToABarePlayerOnTheRealSweep() {
+        final UUID uuid = UUID.randomUUID();
+        final ServerPlayerEntity player = unarmoredPlayerWithArmourAttribute(uuid);
+        final UnarmoredManager unarmored = mock(UnarmoredManager.class);
+        when(unarmored.getSkinArmorPoints(true)).thenReturn(15.0);
+
+        final McMMOPlayer mmoPlayer = trackedUnarmoredPlayer(uuid, unarmored);
+        try {
+            PlayerMovementTracker.tickPlayer(player);
+
+            assertEquals(15.0, SkillAttributeService.appliedValue(player,
+                    SkillAttributeService.Managed.UNARMORED_IRON_SKIN), 1.0E-6);
+        } finally {
+            UserManager.cleanupPlayer(mmoPlayer);
+            PlayerMovementTracker.clear();
+        }
+    }
+
+    @Test
+    void equippingOnePieceStripsTheSkinOnTheNextTick() {
+        // D-U3, and the bug this whole per-tick re-derivation exists to make impossible: a modifier
+        // that outlives its condition is permanent, stacking free armour. The manager is asked
+        // `false` here, and answers 0 — so what is really pinned is that the tracker re-reads live
+        // equipment state rather than remembering last tick's answer.
+        final UUID uuid = UUID.randomUUID();
+        final ServerPlayerEntity player = unarmoredPlayerWithArmourAttribute(uuid);
+        final UnarmoredManager unarmored = mock(UnarmoredManager.class);
+        when(unarmored.getSkinArmorPoints(true)).thenReturn(20.0);
+        when(unarmored.getSkinArmorPoints(false)).thenReturn(0.0);
+
+        final McMMOPlayer mmoPlayer = trackedUnarmoredPlayer(uuid, unarmored);
+        try {
+            PlayerMovementTracker.tickPlayer(player);
+            assertTrue(SkillAttributeService.isApplied(player,
+                    SkillAttributeService.Managed.UNARMORED_IRON_SKIN));
+
+            when(player.getEquippedStack(EquipmentSlot.HEAD))
+                    .thenReturn(new ItemStack(Items.LEATHER_HELMET));
+            PlayerMovementTracker.tickPlayer(player);
+
+            // Removed outright, not left attached at zero — the two are indistinguishable to a
+            // player but not to whoever debugs this next.
+            assertFalse(SkillAttributeService.isApplied(player,
+                    SkillAttributeService.Managed.UNARMORED_IRON_SKIN));
+        } finally {
+            UserManager.cleanupPlayer(mmoPlayer);
+            PlayerMovementTracker.clear();
+        }
+    }
+
+    @Test
+    void crossingATierUpdatesTheModifierRatherThanStackingASecond() {
+        final UUID uuid = UUID.randomUUID();
+        final ServerPlayerEntity player = unarmoredPlayerWithArmourAttribute(uuid);
+        final UnarmoredManager unarmored = mock(UnarmoredManager.class);
+        when(unarmored.getSkinArmorPoints(true)).thenReturn(7.0, 7.0, 11.0);
+
+        final McMMOPlayer mmoPlayer = trackedUnarmoredPlayer(uuid, unarmored);
+        try {
+            PlayerMovementTracker.tickPlayer(player);
+            PlayerMovementTracker.tickPlayer(player); // idempotent re-apply, the 20-per-second case
+            PlayerMovementTracker.tickPlayer(player); // level-up across the gold breakpoint
+
+            assertEquals(11.0, SkillAttributeService.appliedValue(player,
+                    SkillAttributeService.Managed.UNARMORED_IRON_SKIN), 1.0E-6);
+            assertEquals(1, player.getAttributeInstance(EntityAttributes.ARMOR).getModifiers().size(),
+                    "a per-tick caller must never accumulate modifiers");
+        } finally {
+            UserManager.cleanupPlayer(mmoPlayer);
+            PlayerMovementTracker.clear();
+        }
+    }
+
+    /**
+     * The ordering trap, Unarmored's copy of it.
+     *
+     * <p>{@code tickPlayer} returns early when the <em>Agility</em> manager is missing. Iron Skin has
+     * nothing to do with Agility, so a dispatch written below that guard would make a player's armour
+     * depend on an unrelated skill having loaded — silently, and only for players in that state.
+     */
+    @Test
+    void ironSkinSurvivesAMissingAgilityManager() {
+        final UUID uuid = UUID.randomUUID();
+        final ServerPlayerEntity player = unarmoredPlayerWithArmourAttribute(uuid);
+        final UnarmoredManager unarmored = mock(UnarmoredManager.class);
+        when(unarmored.getSkinArmorPoints(true)).thenReturn(20.0);
+
+        final McMMOPlayer mmoPlayer = trackedUnarmoredPlayer(uuid, unarmored);
+        when(mmoPlayer.getAgilityManager()).thenReturn(null);
+        try {
+            PlayerMovementTracker.tickPlayer(player);
+
+            assertEquals(20.0, SkillAttributeService.appliedValue(player,
+                    SkillAttributeService.Managed.UNARMORED_IRON_SKIN), 1.0E-6);
+        } finally {
+            UserManager.cleanupPlayer(mmoPlayer);
+            PlayerMovementTracker.clear();
+        }
     }
 }

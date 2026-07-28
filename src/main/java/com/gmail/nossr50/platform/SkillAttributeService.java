@@ -98,7 +98,43 @@ public final class SkillAttributeService {
          * multiplicative operation would make the same config number mean different speeds as vanilla
          * retunes its default.
          */
-        STEALTH_PADFOOT(EntityAttributes.SNEAKING_SPEED, "stealth_padfoot", Operation.ADD_VALUE);
+        STEALTH_PADFOOT(EntityAttributes.SNEAKING_SPEED, "stealth_padfoot", Operation.ADD_VALUE),
+
+        /**
+         * Unarmored → Iron Skin. The innate "skin" armour, live only while all four armour slots are
+         * empty.
+         *
+         * <p>{@code ARMOR} is the whole mechanic rather than a proxy for it — bytecode-verified,
+         * {@code LivingEntity#getArmor()} is literally {@code floor(getAttributeValue(ARMOR))} and
+         * {@code applyArmorToDamage} feeds that straight into {@code DamageUtil.getDamageLeft}. So
+         * the skin mitigates by exactly the same arithmetic a real armour set does, with no parallel
+         * reduction path to keep in step.
+         *
+         * <p>Three consequences worth stating, all of them free:
+         * <ul>
+         *   <li><b>It shows on the vanilla armour HUD.</b> The attribute is registered
+         *       {@code setTracked(true)}, so its value is synced to the client and the chestplate
+         *       icons fill in as the tiers unlock. That answers the plan's open cosmetic question —
+         *       no custom display is needed, and the player gets the feedback for nothing.</li>
+         *   <li><b>Vanilla's own clamp is the ceiling.</b> {@code ARMOR} is a
+         *       {@code ClampedEntityAttribute("armor", 0.0, 0.0, 30.0)}, so no configuration of the
+         *       tier table can push a player past what the game already permits. Same free-ceiling
+         *       property {@link #AGILITY_FLEET_FOOTED_WATER} and {@link #STEALTH_PADFOOT} get.</li>
+         *   <li><b>Damage that ignores armour still ignores this.</b> {@code applyArmorToDamage}
+         *       skips the whole computation for {@code BYPASSES_ARMOR} sources, so the void, starve
+         *       and magic damage are as lethal to a maxed skin as to a diamond set.</li>
+         * </ul>
+         *
+         * <p>Additive, and it has to be: a player's base {@code ARMOR} is {@code 0} and worn pieces
+         * contribute their own modifiers, so a multiplicative operation on an unarmored player would
+         * scale zero and the entire sub-skill would be an inert no-op that still applied cleanly.
+         *
+         * <p>No {@code ARMOR_TOUGHNESS} companion, deliberately (ruled). Toughness is what blunts
+         * <em>large</em> hits, so withholding it is precisely what keeps real armour worth wearing:
+         * diamond skin (20/0) still takes noticeably more from a heavy blow than a diamond set
+         * (20/8), which also keeps its enchantments.
+         */
+        UNARMORED_IRON_SKIN(EntityAttributes.ARMOR, "unarmored_iron_skin", Operation.ADD_VALUE);
 
         private final RegistryEntry<EntityAttribute> attribute;
         private final Identifier id;
