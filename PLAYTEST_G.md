@@ -280,6 +280,65 @@ Don't fix anything here. Just record numbers so the §F decisions stop being hyp
 
 ---
 
+## Session 8 — Stealth, Snow Walker and the XP bars (~30 min)
+
+All new in Pass 2 and **none of it has ever been played**. Everything below is unit-proven and
+boot-clean only. Grant levels with `/addlevels stealth 1000` etc.
+
+### 8a. Stealth XP — the anti-AFK gate is the whole skill
+
+| # | Action | Expect | What would make this a false pass |
+|---|---|---|---|
+| ST1 | Crouch-walk 200 blocks on dry land | Stealth XP climbs steadily | — |
+| ST2 | **⚠️ Check the log first.** Search `latest.log` for `Stealth: server-side movement input observed` | The line appears once, on your first crouched step | **If it never appears, ST1's XP is coming from somewhere it shouldn't, or the skill is earning zero.** The gate reads `getPlayerInput()`; if this client never sends input packets the whole skill silently pays nothing. This is the single most important check in the session |
+| ST3 | Crouch and stand still | **Zero** XP | — |
+| ST4 | Crouch in a boat / minecart being pulled along | **Zero** XP | — |
+| ST5 | Crouch-swim, and crouch in a water current | **Zero** XP | Crouch-swimming is ~2.3× the sneak reference speed — if it pays, it is the best XP source in the mod and the ruling that closed it has regressed |
+| ST6 | Tape shift down in a flowing-water channel and walk away | **Zero** XP | The exploit the skill is designed against ("sticky keys op") |
+| ST7 | Crouch-walk while sprinting is impossible — confirm Parkour earns **nothing** during ST1 | Parkour XP unchanged | One movement state must feed exactly one skill |
+
+### 8b. Stealth sub-skills
+
+| # | Action | Expect |
+|---|---|---|
+| ST8 | Crouch at Stealth 1 vs Stealth 1000 | Noticeably faster crouching at rank. **Should approach but never exceed walking speed** — vanilla clamps the attribute at 1.0 |
+| ST9 | Crouch through a 1-block gap (crawling) | Also faster. Known and intended side effect of using `sneaking_speed` |
+| ST10 | Stop crouching | Speed bonus gone **immediately**, not after a delay |
+| ST11 | Die while crouched, respawn, crouch again | Bonus still applies (the respawn rebuilds the player entity) |
+| ST12 | At Stealth 150+, hit a mob while crouched, having taken no damage for 5 s | `**BACKSTAB**` and visibly more damage |
+| ST13 | Take a hit, then immediately crouch-attack | **No** backstab for ~5 s |
+| ST14 | **⚠️ Tuning:** backstab an armoured mob, and separately land a crouched *critical* hit | Record the numbers. The multiplier applies to the whole melee total and compounds with crits — **the most likely thing in Pass 2 to be over-tuned** |
+| ST15 | Shoot a mob with a bow while crouched | **No** backstab — projectiles are excluded |
+| ST16 | At Stealth 250+, right-click **gunpowder** | Invisible, **no particles**, no firework, ability message + cooldown |
+| ST17 | While invisible, check your own armour and held item | Still visible — vanilla behaviour, documented, not a bug |
+| ST18 | Right-click gunpowder again during cooldown | "Too tired" message, no second activation |
+| ST19 | Right-click a **feather** (Second Wind's item) | Fires Second Wind, **not** Smoke Bomb, and prints no Stealth message |
+
+### 8c. Parkour → Snow Walker
+
+| # | Action | Expect |
+|---|---|---|
+| SW1 | At Parkour < 100, walk into powder snow | You sink in, as vanilla |
+| SW2 | `/addlevels parkour 100`, walk onto powder snow | **You walk on top.** No sinking, no rubber-banding, no freezing |
+| SW3 | Sprint and jump across a powder-snow field | Holds up under movement — this is the client/server agreement check |
+| SW4 | Max Swimming and Flying but leave Parkour at 0 | Still sink. The gate is Parkour, **not** Agility's average |
+| SW5 | `/mcstats parkour` | Snow Walker is listed with its rank |
+
+### 8d. XP bars
+
+| # | Action | Expect |
+|---|---|---|
+| XB1 | Sprint around | **Both** the Parkour bar and the **Agility** bar appear |
+| XB2 | Watch the Agility bar over a few levels | It **fills gradually** — if it sits permanently full, the child-skill progress averaging has regressed |
+| XB3 | Swim, then glide | Swimming/Flying bars appear, Agility bar stays and keeps updating |
+| XB4 | Train 4+ skills in quick succession (mine while sprinting, then hit a mob) | **At most 3 bars on screen.** The one you trained longest ago disappears |
+| XB5 | Keep training the oldest of the three while adding a fourth | The skill you are actively training is **not** the one evicted |
+| XB6 | Stop everything for ~10 s | All bars fade |
+| XB7 | Repair or smelt something | **No** Salvage/Smelting bar — still suppressed by design |
+| XB8 | Set `Experience_Bars.Max_Visible: 0` in `experience.yml`, reload | No limit; all bars stack |
+
+---
+
 ## Reporting
 
 For each item, one line: `ID | PASS/FAIL/PARTIAL | what you actually saw`. Anything FAIL or PARTIAL —
