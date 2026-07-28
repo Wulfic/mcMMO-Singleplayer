@@ -151,6 +151,13 @@ public enum SubSkillType {
     UNARMED_IRON_GRIP(1),
     UNARMED_UNARMED_LIMIT_BREAK(10),
 
+    /* Unarmored */
+    // Pass 2. Iron Skin's four ranks ARE the wiki's four armour tiers (leather / gold / iron /
+    // diamond), so the rank number indexes the tier table directly rather than a second set of
+    // breakpoint levels living in advanced.yml alongside skillranks.yml and drifting from it.
+    UNARMORED_IRON_SKIN(4),
+    UNARMORED_THORNY_SKIN(1),
+
     /* Woodcutting */
     WOODCUTTING_KNOCK_ON_WOOD(2),
     WOODCUTTING_HARVEST_LUMBER(1),

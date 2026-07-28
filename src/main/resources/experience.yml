@@ -49,6 +49,18 @@ ExploitFix:
         # Leave this on. It exists as an escape hatch because if a client ever stops sending input
         # packets, the gate would silently reduce Stealth XP to zero rather than merely mis-tune it.
         Require_Movement_Input: true
+    Unarmored:
+        # Only pay Unarmored XP for damage dealt by a LIVING attacker (a mob or a player).
+        #
+        # This is the skill's single most important exploit gate. "XP for taking damage" is
+        # otherwise farmed by standing in a cactus, a fire, a berry bush or a drowning pool with a
+        # stack of food -- no mobs, no risk, no attention, and it works while you make a sandwich.
+        # Requiring an attacker means the XP has to come from an actual fight, which is the thing
+        # the skill exists to reward.
+        #
+        # Turning this off makes fall, fire, cactus, lava, drowning and suffocation damage all pay.
+        # It is here so the behaviour is diagnosable during play-testing, not as a balance knob.
+        Require_Living_Attacker: true
 Fishing_ExploitFix_Options:
     MoveRange: 3
     OverFishLimit: 10
@@ -165,6 +177,10 @@ Experience_Bars:
         Enable: true
         Color: BLUE
         BarStyle: SEGMENTED_6
+    Unarmored:
+        Enable: true
+        Color: RED
+        BarStyle: SEGMENTED_6
     Woodcutting:
         Enable: true
         Color: GREEN
@@ -223,6 +239,7 @@ Experience_Formula:
         Excavation: 1.0
         Herbalism: 1.0
         Unarmed: 1.0
+        Unarmored: 1.0
         Woodcutting: 1.0
         Mining: 1.0
         Archery: 1.0
@@ -264,6 +281,10 @@ Diminished_Returns:
         Excavation: 20000
         Herbalism: 20000
         Unarmed: 20000
+        # Unarmored is episodic rather than continuous -- you cannot take damage faster than the
+        # vanilla invulnerability window allows, and you die at 20 HP -- so this threshold is far
+        # out of reach in practice. It is here for completeness, not because it binds.
+        Unarmored: 20000
         Woodcutting: 20000
         Mining: 20000
         Archery: 20000
@@ -735,6 +756,30 @@ Experience_Values:
             Frog: 900
             Nautilus: 1700
             Zombie_Nautilus: 1700
+    Unarmored:
+        # XP per point of damage TAKEN while every armour slot is empty. A point is half a heart, so
+        # a 3-damage zombie punch pays 300 XP at the default.
+        #
+        # Three things shape this number, and none of them is obvious:
+        #
+        #  1. It is measured against the PRE-ARMOUR damage, before Iron Skin absorbs its share.
+        #     Iron Skin is itself an armour bonus, so paying on what actually landed would make the
+        #     skill throttle its own progress -- at the diamond tier roughly two thirds of every hit
+        #     is soaked, so the longest stretch of the grind would crawl at a third rate. That reads
+        #     to a player as a bug, not as a design.
+        #
+        #  2. A single hit is capped at 20 damage (one full health bar) before this multiplier, so a
+        #     charged-creeper one-shot or a command-dealt 10,000 cannot pay a jackpot.
+        #
+        #  3. Taking damage is self-throttling in a way that mining or sneaking is not: vanilla
+        #     invulnerability frames limit how often you can be hit, and you die at 20 HP. You cannot
+        #     grind this one while making a sandwich.
+        #
+        # 100 XP/point needs 110,100 pre-armour damage for a RetroMode level-1000 skill. At a
+        # sustained "lose a full health bar every minute and heal it back" that is roughly 92 hours
+        # -- in the same band as Stealth's ~122h and Agility land's ~204h. MEASURE THIS IN §G; it is
+        # a starting point, not a derived number.
+        Damage_Taken: 100
     Combat:
         Multiplier:
             Animals: 1.0

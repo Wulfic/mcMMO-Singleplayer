@@ -87,9 +87,13 @@ class SkillToolsTest {
         // Stealth is a standalone primary, not a fourth Agility movement domain: its payoff is
         // not-being-seen rather than locomotion, and it earns its own XP from sneak distance.
         assertFalse(SkillTools.isChildSkill(PrimarySkillType.STEALTH));
-        // 23 skills, 3 of them children.
+        // Unarmored is standalone too — it earns its own XP from damage taken, and nothing derives
+        // its level from anything else.
+        assertFalse(SkillTools.isChildSkill(PrimarySkillType.UNARMORED));
+        // 24 skills, 3 of them children. Re-derived from the enum rather than hardcoded, so adding
+        // a skill without deciding whether it is a child cannot silently pass this.
         assertEquals(3, skillTools.getChildSkills().size());
-        assertEquals(20, SkillTools.NON_CHILD_SKILLS.size());
+        assertEquals(PrimarySkillType.values().length - 3, SkillTools.NON_CHILD_SKILLS.size());
     }
 
     @Test

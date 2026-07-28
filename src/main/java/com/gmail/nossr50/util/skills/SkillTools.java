@@ -125,7 +125,12 @@ public class SkillTools {
                 PrimarySkillType.SALVAGE,
                 PrimarySkillType.SMELTING,
                 PrimarySkillType.STEALTH,
-                PrimarySkillType.SWIMMING
+                PrimarySkillType.SWIMMING,
+                // Unarmored is defensive rather than offensive: it has no weapon, no attack bonus
+                // and no target. COMBAT_SKILLS is the list of things you hit people with, and
+                // membership of it drives the Enabled_For_PVE/PVP gates that Unarmored has no use
+                // for, so it sits with the other passives.
+                PrimarySkillType.UNARMORED
         );
 
         /*

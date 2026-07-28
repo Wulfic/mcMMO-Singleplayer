@@ -684,6 +684,45 @@ Skills:
             # ChanceMax: Maximum chance of triggering pummel
             Chance: 10.0
     #
+    #  Settings for Unarmored
+    ###
+    Unarmored:
+        IronSkin:
+            # Innate "skin" armour, granted ONLY while all four armour slots are empty.
+            #
+            # These are real vanilla armour points -- the same units a chestplate gives -- applied
+            # as an attribute modifier, so they show up on your armour bar and obey vanilla's own
+            # damage formula. The four tiers are the four RANKS of the Iron Skin sub-skill; the
+            # levels they unlock at live in skillranks.yml, so a breakpoint moves in one file only.
+            #
+            # Values match the real armour sets: leather 7, gold 11, iron 15, diamond 20.
+            #
+            # NOTE: no armour TOUGHNESS is granted at any tier, and that is deliberate. Toughness is
+            # what blunts LARGE hits, so withholding it is exactly what keeps real armour worth
+            # wearing -- a diamond skin (20 armour, 0 toughness) still takes noticeably more from a
+            # heavy blow than a diamond set (20 armour, 8 toughness), and real armour keeps its
+            # enchantments on top. Raising these values erodes that; adding toughness removes it.
+            Armor_Points:
+                Tier_1: 7.0
+                Tier_2: 11.0
+                Tier_3: 15.0
+                Tier_4: 20.0
+
+        ThornySkin:
+            # Reflect a sting back at whatever just punched you, while unarmored.
+            #
+            # KEEP THIS TINY. The shipped 1.0 is half a heart. A reflect costs the player nothing,
+            # needs no aim, and fires on every hit taken -- so any value large enough to feel
+            # powerful is large enough to kill mobs by standing still and being hit, which is the
+            # exact AFK-farm shape the rest of this skill is built to avoid.
+            #
+            # Melee only: fall damage, fire and arrows reflect nothing.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            MaxReflectDamage: 1.0
+
+    #
     #  Settings for Unarmed
     ###
     Unarmed:

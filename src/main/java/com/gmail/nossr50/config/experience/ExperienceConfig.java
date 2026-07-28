@@ -9,6 +9,7 @@ import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
 import com.gmail.nossr50.skills.agility.Medium;
 import com.gmail.nossr50.skills.agility.MovementXpSettings;
 import com.gmail.nossr50.skills.stealth.StealthXpSettings;
+import com.gmail.nossr50.skills.unarmored.UnarmoredManager;
 import com.gmail.nossr50.util.text.StringUtils;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -438,6 +439,32 @@ public class ExperienceConfig extends ConfigLoader {
      */
     public boolean isSneakInputRequired() {
         return config.getBoolean("ExploitFix.Stealth.Require_Movement_Input", true);
+    }
+
+    /* Unarmored */
+
+    /**
+     * Unarmored XP paid per point of damage taken while every armour slot is empty (Pass 2).
+     *
+     * <p>Per damage point, matching how Agility already pays Dodge/Roll/Fall, and measured against
+     * the <em>pre-armour</em> damage so Iron Skin does not throttle the very skill that grants it.
+     */
+    public int getUnarmoredXpPerDamage() {
+        return config.getInt("Experience_Values.Unarmored.Damage_Taken",
+                UnarmoredManager.DEFAULT_XP_PER_DAMAGE);
+    }
+
+    /**
+     * Whether Unarmored XP requires a living attacker rather than paying for any damage at all.
+     *
+     * <p>On by default, and this is the skill's single most important exploit gate: "XP for taking
+     * damage" is otherwise farmed by standing in a cactus, a fire or a berry bush with a stack of
+     * food, which needs no mobs, no risk and no attention. Requiring an attacker means the XP comes
+     * from fighting, which is the thing the skill is meant to reward. The flag exists so the
+     * behaviour is diagnosable in play-testing, not as a balance knob.
+     */
+    public boolean isUnarmoredLivingAttackerRequired() {
+        return config.getBoolean("ExploitFix.Unarmored.Require_Living_Attacker", true);
     }
 
     /* Archery */

@@ -34,6 +34,7 @@ import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
+import com.gmail.nossr50.skills.unarmored.UnarmoredManager;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.Misc;
@@ -187,6 +188,7 @@ public class McMMOPlayer {
             case TAMING -> new TamingManager(this);
             case TRIDENTS -> new TridentsManager(this);
             case UNARMED -> new UnarmedManager(this);
+            case UNARMORED -> new UnarmoredManager(this);
             case WOODCUTTING -> new WoodcuttingManager(this);
             default -> null;
         };
@@ -261,6 +263,10 @@ public class McMMOPlayer {
 
     public StealthManager getStealthManager() {
         return (StealthManager) skillManagers.get(PrimarySkillType.STEALTH);
+    }
+
+    public UnarmoredManager getUnarmoredManager() {
+        return (UnarmoredManager) skillManagers.get(PrimarySkillType.UNARMORED);
     }
 
     public SwordsManager getSwordsManager() {

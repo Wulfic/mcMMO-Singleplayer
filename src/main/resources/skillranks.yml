@@ -859,6 +859,26 @@ Swords:
             Rank_1: 5
         RetroMode:
             Rank_1: 50
+Unarmored:
+    # Iron Skin's four ranks ARE the four armour tiers -- leather, gold, iron, diamond -- and the
+    # armour points each is worth live in advanced.yml under Skills.Unarmored.IronSkin.Armor_Points.
+    # Moving a breakpoint here moves the tier; the two files never need to be kept in step.
+    IronSkin:
+        Standard:
+            Rank_1: 10
+            Rank_2: 20
+            Rank_3: 50
+            Rank_4: 100
+        RetroMode:
+            Rank_1: 100
+            Rank_2: 200
+            Rank_3: 500
+            Rank_4: 1000
+    ThornySkin:
+        Standard:
+            Rank_1: 35
+        RetroMode:
+            Rank_1: 350
 Unarmed:
     UnarmedLimitBreak:
         Standard:

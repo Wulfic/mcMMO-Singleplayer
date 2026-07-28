@@ -701,6 +701,37 @@ public class AdvancedConfig extends ConfigLoader {
         return config.getInt("Skills.Stealth.SmokeBomb.DurationTicks", 100);
     }
 
+    // --- Unarmored (Pass 2) --------------------------------------------------------------------
+
+    /**
+     * Armour points granted by Iron Skin at a given tier (1-4: leather, gold, iron, diamond).
+     *
+     * <p>Keyed by <em>tier</em> rather than by level because the tiers are the sub-skill's ranks, and
+     * the levels those ranks unlock at live in {@code skillranks.yml}. Splitting "how strong" from
+     * "when" this way means a breakpoint moves in one file, not two, and the two can never disagree.
+     *
+     * @param tier         the Iron Skin rank, 1-4
+     * @param defaultValue the shipped value for that tier, used when the key is absent
+     */
+    public double getIronSkinArmorPoints(int tier, double defaultValue) {
+        return config.getDouble("Skills.Unarmored.IronSkin.Armor_Points.Tier_" + tier, defaultValue);
+    }
+
+    public int getThornySkinMaxBonusLevel() {
+        return maxBonusLevel("Skills.Unarmored.ThornySkin.MaxBonusLevel");
+    }
+
+    /**
+     * The most damage Thorny Skin reflects back at a melee attacker, at max level.
+     *
+     * <p>Half a heart, and it needs to stay that order of magnitude. A reflect costs the player
+     * nothing, needs no aim and fires on every hit taken, so anything large enough to feel powerful
+     * is large enough to kill mobs by standing still and being punched.
+     */
+    public double getThornySkinMaxReflectDamage() {
+        return config.getDouble("Skills.Unarmored.ThornySkin.MaxReflectDamage", 1.0D);
+    }
+
     /**
      * Reads a {@code MaxBonusLevel} node's RetroMode/Standard child, matching how every shipped
      * sub-skill scales its bonus ladder.

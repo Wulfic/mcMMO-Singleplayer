@@ -17,11 +17,11 @@ import org.junit.jupiter.api.Test;
 class DatatypeEnumTest {
 
     @Test
-    void primarySkillTypeHasAllTwentyThreeSkills() {
-        // Guards against an accidental add/drop when the enum is touched later. 19 shipped skills,
-        // the three movement domains (Parkour / Swimming / Flying) that Agility derives from, and
-        // Stealth.
-        assertEquals(23, PrimarySkillType.values().length);
+    void primarySkillTypeHasAllTwentyFourSkills() {
+        // Guards against an accidental add/drop when the enum is touched later. Re-derived rather
+        // than bumped: 19 shipped skills, the three movement domains (Parkour / Swimming / Flying)
+        // that Agility derives from, Stealth, and Unarmored.
+        assertEquals(19 + 3 + 1 + 1, PrimarySkillType.values().length);
     }
 
     @Test

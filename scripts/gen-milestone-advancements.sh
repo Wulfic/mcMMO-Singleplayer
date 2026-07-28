@@ -44,6 +44,9 @@ declare -A ICON=(
     [taming]=bone
     [tridents]=trident
     [unarmed]=iron_ingot
+    # Not any armour piece: the skill is about NOT wearing one. A turtle helmet is the closest
+    # vanilla gets to "protection that is part of you".
+    [unarmored]=turtle_scute
     [woodcutting]=oak_log
 )
 
