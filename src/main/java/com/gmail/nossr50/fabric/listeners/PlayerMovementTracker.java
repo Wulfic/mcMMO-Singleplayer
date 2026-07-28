@@ -122,6 +122,10 @@ public final class PlayerMovementTracker {
     private static void onQuit(@NotNull ServerPlayerEntity player) {
         LAST_POSITIONS.remove(player.getUuid());
         SOLAR_WINGS_TICKS.remove(player.getUuid());
+        // Same reasoning for Stealth's Assassin window: this is the mod's one per-player disconnect
+        // hook, so the combat listener's side table is dropped from here rather than growing a
+        // second DISCONNECT registration that could be removed independently of this one.
+        EntityDamageListener.forgetPlayer(player.getUuid());
         // Belt-and-braces: the modifiers are temporary and never persisted, but leaving nothing
         // behind on a player who is no longer online makes the invariant trivially checkable.
         SkillAttributeService.clearAll(player);

@@ -18,6 +18,7 @@ import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
 import com.gmail.nossr50.skills.maces.MacesManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
+import com.gmail.nossr50.skills.stealth.StealthManager;
 import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
@@ -28,6 +29,8 @@ import com.gmail.nossr50.util.skills.CombatUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import com.gmail.nossr50.util.text.TextUtils;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.minecraft.entity.Entity;
@@ -49,7 +52,9 @@ import net.minecraft.entity.projectile.TridentEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.tag.DamageTypeTags;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import org.jetbrains.annotations.NotNull;
 import net.minecraft.sound.SoundCategory;
 
 /**
@@ -306,9 +311,18 @@ public final class EntityDamageListener {
         // it applies whatever is in the player's hand, including nothing.
         result = applySprintSmash(entity, source, result);
 
+        // Pass 2: Stealth Assassin. Sibling of Smash on the same seam and mutually exclusive with it
+        // by construction — a player cannot sprint and sneak at once — so at most one of the two
+        // fires for any swing. Runs after Smash so a backstab multiplies the whole melee total.
+        result = applyAssassin(entity, source, result);
+
         // K1 defender / K2 branch: the entity *taking* damage is a player — fall damage feeds
         // Agility Roll, an incoming entity hit feeds Agility Dodge.
         if (entity instanceof ServerPlayerEntity serverPlayer) {
+            // Stamp the Assassin recency window before anything can reduce or cancel the damage
+            // (D-S3). Deliberately every incoming source, not just combat: a player who just took
+            // fall damage or stepped in lava is not lurking in the shadows either.
+            recordDamageTaken(serverPlayer);
             if (source.isIn(DamageTypeTags.IS_FALL)) {
                 result = handleFallDamage(serverPlayer, result);
             } else if (canReduceOwnBlast(serverPlayer, source)) {
@@ -875,6 +889,102 @@ public final class EntityDamageListener {
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
                 "Agility.SubSkill.Smash.Proc");
         return amount + (float) agility.getSmashBonusDamage();
+    }
+
+    /**
+     * Server tick at which each player last took damage — Assassin's "before taking damage" window
+     * (D-S3).
+     *
+     * <p>A side table rather than an entity field because respawning and leaving the End both
+     * construct a <em>new</em> {@code ServerPlayerEntity}, and the window should survive neither of
+     * those as entity state nor be lost by them. Keyed by UUID, which does survive both.
+     */
+    private static final Map<UUID, Integer> LAST_DAMAGED_TICK = new HashMap<>();
+
+    /** Stamp the current server tick as this player's most recent damage. */
+    static void recordDamageTaken(@NotNull ServerPlayerEntity player) {
+        final MinecraftServer server = player.getEntityWorld().getServer();
+        if (server != null) {
+            LAST_DAMAGED_TICK.put(player.getUuid(), server.getTicks());
+        }
+    }
+
+    /**
+     * Ticks since this player last took damage, or {@link Long#MAX_VALUE} if they have not been hit
+     * this session.
+     *
+     * <p>{@code MinecraftServer#getTicks()} is the clock rather than {@code World#getTimeOfDay()},
+     * which {@code /time set} moves backwards — that would hand a player a permanent backstab, or
+     * withhold one for a whole in-game day, depending on which way they set it.
+     */
+    static long ticksSinceDamageTaken(@NotNull ServerPlayerEntity player) {
+        final Integer last = LAST_DAMAGED_TICK.get(player.getUuid());
+        if (last == null) {
+            return Long.MAX_VALUE;
+        }
+        final MinecraftServer server = player.getEntityWorld().getServer();
+        if (server == null) {
+            return Long.MAX_VALUE;
+        }
+        // Clamped at zero: getTicks() is an int and wraps after ~3.4 years of uptime. A negative
+        // window would silently disable the sub-skill rather than merely mistiming it once.
+        return Math.max(0L, (long) server.getTicks() - last);
+    }
+
+    /** Drop the Assassin damage-recency window for a player who has left. */
+    public static void forgetPlayer(@NotNull UUID uuid) {
+        LAST_DAMAGED_TICK.remove(uuid);
+    }
+
+    /** Drop every player's damage-recency window (server stop). */
+    public static void clear() {
+        LAST_DAMAGED_TICK.clear();
+    }
+
+    /**
+     * Stealth <b>Assassin</b>: a melee hit thrown while crouched, by someone who has not been hit
+     * recently, is a backstab and lands for a multiple of its normal damage.
+     *
+     * <p>Gated like {@link #applySprintSmash} and for the same reason — the sub-skill is "you struck
+     * from the shadows", not "you struck with a sword" — so it fires with whatever is in hand,
+     * including nothing.
+     *
+     * <p><b>Multiplicative, and applied to the running total</b>, so it scales the weapon skill's
+     * on-hit bonus and Smash along with the base swing. That is deliberate (a backstab multiplies
+     * the whole blow) and it is also the most likely thing in this skill to be over-tuned: it
+     * compounds with vanilla critical hits too. Flagged for play-testing against an armoured mob.
+     *
+     * <p>The recency half of the gate is what stops it being a free permanent damage buff for anyone
+     * willing to fight crouched: take a single hit and it is off for
+     * {@code NoDamageWindowTicks}. Per-hit combat XP is not re-paid here — the weapon arm already
+     * paid it on the pre-Assassin damage, and the extra came from Stealth, not from the weapon.
+     */
+    static float applyAssassin(LivingEntity target, DamageSource source, float amount) {
+        if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)) {
+            return amount;
+        }
+        // Direct melee only, same test as the weapon arm: a projectile's direct source is the
+        // projectile, and Thorns is not a swing.
+        if (source.getSource() != attacker || source.isOf(DamageTypes.THORNS)) {
+            return amount;
+        }
+        if (!attacker.isSneaking() || target instanceof ArmorStandEntity) {
+            return amount;
+        }
+
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(attacker.getUuid());
+        if (mmoPlayer == null) {
+            return amount;
+        }
+        final StealthManager stealth = mmoPlayer.getStealthManager();
+        if (stealth == null
+                || !stealth.assassinReady(true, ticksSinceDamageTaken(attacker))) {
+            return amount;
+        }
+
+        NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                "Stealth.SubSkill.Assassin.Proc");
+        return (float) (amount * stealth.getAssassinDamageMultiplier());
     }
 
     /**

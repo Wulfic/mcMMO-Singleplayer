@@ -293,6 +293,10 @@ public class McMMOMod implements ModInitializer {
             // the next world session measure the distance between two different worlds' positions —
             // which the teleport guard would reject, but only by accident.
             PlayerMovementTracker.clear();
+            // Pass 2: drop the Assassin damage-recency windows. Server ticks restart at zero with
+            // the next world session, so a surviving stamp would read as "damaged 0 ticks ago" and
+            // silently withhold the sub-skill until the player took a hit.
+            EntityDamageListener.clear();
             // Drop transient per-entity markers (Rupture bleeds, dodge-XP counters, tracked TNT).
             // Bukkit dropped plugin metadata on disable; our side-table has no such lifecycle, and
             // entity UUIDs persist to disk — so without this a marker outlives the session that
