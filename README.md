@@ -12,6 +12,9 @@ super abilities for vanilla Minecraft — no server, no database, no plugin plat
 | **Java** | 21+ |
 | **License** | GPL‑3.0‑only (inherited from upstream mcMMO) |
 
+📖 **[Full documentation is on the Wiki](../../wiki)** — per‑skill pages, every sub‑skill's numbers,
+the complete config reference and a troubleshooting guide. This README is the short version.
+
 ---
 
 ## Installation
@@ -64,18 +67,40 @@ every non‑child skill.
 
 ## Skills
 
-**First New Skill!** -- **Agility!** replaces and folds in Acrobatics, Flying(Elytra), swimming, and running
-
-**4 Additional New Skills planned** and on the way in future releases! **Husbandry, Stealth, Unarmored, and Cooking!** 
-
-**17 primary skills** plus **2 child skills** whose level is derived from their parents.
+**24 skills** — **21 primary** skills that earn XP directly, plus **3 child skills** whose level is
+the average of their parents and which earn no XP of their own.
 
 | Category | Skills |
 |---|---|
 | **Gathering** | Mining, Woodcutting, Herbalism, Excavation, Fishing |
-| **Combat** | Swords, Axes, Unarmed, Archery, Crossbows, Tridents, Maces, Spears |
-| **Misc** | Agility, Taming, Repair, Alchemy |
-| **Child skills** | **Salvage** (avg. of Repair + Fishing), **Smelting** (avg. of Mining + Repair) |
+| **Combat** | Swords, Axes, Unarmed, Archery, Crossbows, Tridents, Maces, Spears, Taming |
+| **Movement** | **Parkour**, **Swimming**, **Flying** |
+| **Misc** | **Stealth**, **Unarmored**, Repair, Alchemy |
+| **Child skills** | **Agility** (avg. of Parkour + Swimming + Flying), **Salvage** (avg. of Repair + Fishing), **Smelting** (avg. of Mining + Repair) |
+
+### New in this port
+
+Six skills that upstream mcMMO does not have. **Acrobatics was renamed to Agility** and restructured:
+it now owns ten movement sub-skills but earns no XP itself — instead it is the mean of three new
+primary skills, one per medium you travel through.
+
+| Skill | How you train it | What it gives you |
+|---|---|---|
+| **Parkour** | Sprinting and falling on land | Feeds Agility. Owns **Snow Walker** — cross powder snow without sinking. |
+| **Swimming** | Swimming | Feeds Agility. |
+| **Flying** | Elytra gliding | Feeds Agility. |
+| **Agility** *(child)* | — derived — | Dodge, Roll, Fleet Footed, Athlete, Smash, Lead Lungs, Glide, Lake Raider, Solar Wings, and the **Second Wind** super ability. |
+| **Stealth** | Sneaking under your own power | **Padfoot** (sneak nearly at walking speed), **Assassin** (backstab damage), **Smoke Bomb** super ability. |
+| **Unarmored** | Taking damage with **every armour slot empty** | **Iron Skin** (real armour points at four tiers — leather/gold/iron/diamond) and **Thorny Skin** (reflect a sting at melee attackers). |
+
+Movement and sneak XP are **speed-normalised**: you are paid per *second* of travel, with each tick's
+distance clamped at that medium's reference speed. Travelling faster than the reference pays no more,
+so speed buffs, elytra rockets and ice boats are not XP multipliers. Standing still pays nothing,
+walking pays nothing, and being *carried* pays nothing — Stealth reads your actual server-side
+movement input, so a taped-down shift key in a water current earns zero.
+
+> **Still planned:** Husbandry, Cooking and Hunter — designs are drafted in [`plans/new-skills/`](plans/new-skills/),
+> no code yet.
 
 **RetroMode is on by default** — levels scale 1–1000 rather than 1–100, and every level requirement
 in the configs is multiplied by 10. Turn it off in `config.yml` under `General.RetroMode.Enabled`.
@@ -104,6 +129,20 @@ Super abilities use the classic **two‑step gesture**:
 Combat abilities (Serrated Strikes, Skull Splitter, Berserk) also arm on a right‑click and then fire
 on your next hit.
 
+### Item‑triggered abilities
+
+The two Pass‑2 abilities are **not** readied with a tool — they fire immediately on right‑click while
+holding a configured item, which is **never consumed**:
+
+| Ability | Skill | Trigger item | Effect |
+|---|---|---|---|
+| **Second Wind** | Agility | `FEATHER` | One ability, three bodies, chosen by how you are moving — a forward **lunge** on land, a **water buff** while swimming, a **speed burst** while gliding. Rank 1 unlocks land, 2 water, 3 air. |
+| **Smoke Bomb** | Stealth | `GUNPOWDER` | Vanilla Invisibility for 5 s. Note that vanilla invisibility does **not** hide armour or held items. |
+
+Both items are configurable in `config.yml` (`Skills.Agility.Second_Wind_Item`,
+`Skills.Stealth.Smoke_Bomb_Item`) and **must differ from each other** — they listen on the same
+use‑item event, so sharing an item fires one and prints the other's refusal message.
+
 **Call of the Wild** (Taming) is a **sneak + left‑click a block** while holding the summon item.
 Sneak‑left‑clicking *air* is the one gesture that isn't wired — Fabric has no left‑click‑air
 callback.
@@ -113,8 +152,10 @@ callback.
 ## In‑game feedback
 
 - **XP boss bar** — a fading, per‑skill XP bar appears above the hotbar as you train. Configure or
-  disable it in `experience.yml` under `Experience_Bars` (`Enable`, `Hide_Delay_Seconds`, default
-  `10`).
+  disable it in `experience.yml` under `Experience_Bars` (`Enable`, `Hide_Delay_Seconds` default
+  `10`, `Max_Visible` default `3`). Bars stack downward over the hotbar, so the count is capped —
+  sprinting through a forest while mining can easily have five skills live at once, and the least
+  recently trained bar is hidden to make room.
 - **Milestone advancements** — hidden vanilla advancements are granted on round levels, rank
   unlocks, maxing a skill, and power‑level tiers. Optionally rendered as plaques — see
   [Optional mod integrations](#optional-mod-integrations).
@@ -237,6 +278,19 @@ on every push to `master` or an `mc/**` branch, keeping one "latest" release per
 
 The port is feature‑complete against upstream mcMMO's single‑player‑relevant surface and boots
 clean, but it is **young** — expect rough edges and please file issues.
+
+> ⚠️ **The six new skills are code‑complete but lightly play‑tested.** Parkour, Swimming, Flying,
+> the restructured Agility, Stealth and Unarmored all pass the unit suite and boot clean, but their
+> XP rates and reference speeds are **starting estimates, not measured numbers** — the tuning
+> comments in `experience.yml` say so explicitly. Balance feedback on these is especially welcome.
+> The in‑game verification plan lives in [`PLAYTEST_G.md`](PLAYTEST_G.md).
+
+> ⚠️ **Existing Acrobatics progress does not carry over.** Acrobatics was renamed Agility, and
+> Agility then became a *child* skill — child skills have no save key at all, their level is
+> recomputed from their parents on every load. There is nothing for old progress to migrate *to*, so
+> it is deliberately allowed to zero out; train Parkour, Swimming and Flying instead. If you had
+> tuned an `Acrobatics:` section in a config, mcMMO logs a warning telling you to rename it to
+> `Agility:` rather than silently rewriting your file.
 
 Deliberately **not** ported (and not coming back):
 

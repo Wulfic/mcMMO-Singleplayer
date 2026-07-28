@@ -1,0 +1,126 @@
+# Super Abilities
+
+Super abilities are the timed, on-demand bursts each skill builds toward. There are two ways to trigger one.
+
+---
+
+## The classic two-step gesture
+
+Most abilities use mcMMO's traditional **ready → activate** gesture:
+
+1. **Ready** — hold the skill's tool and **right-click** (on an activatable block, or in the air). You get the "you ready your tool" message and a short arming window.
+2. **Activate** — **left-click** a block the ability affects while the tool is readied.
+
+| Ability | Skill | Tool | Effect |
+|---|---|---|---|
+| **Super Breaker** | Mining | Pickaxe | Speed boost + triple-drop chance on ore. |
+| **Giga Drill Breaker** | Excavation | Shovel | 3× drop rate, 3× XP, speed boost. |
+| **Tree Feller** | Woodcutting | Axe | Fells a whole tree at once. |
+| **Green Terra** | Herbalism | Hoe | Triple drops, boosts Green Thumb. |
+| **Berserk** | Unarmed | Empty hand | +50 % damage, breaks weak materials. |
+| **Serrated Strikes** | Swords | Sword | AoE damage with a chance to apply Rupture. |
+| **Skull Splitter** | Axes | Axe | AoE damage. |
+
+The three **combat** abilities (Serrated Strikes, Skull Splitter, Berserk) also arm on a right-click, then fire on your **next hit** rather than on a block.
+
+### Blast Mining
+
+The odd one out. **Right-click TNT with the detonator** — flint & steel by default (`Skills.Mining.Detonator_Name`).
+
+Blast Mining shares Mining with Super Breaker, so it has its own cooldown (**60 s**, versus 240 s for everything else) and does not count as Mining's headline ability on the `/mcstats` screen.
+
+### Call of the Wild
+
+Taming's ability, and a different gesture again: **sneak + left-click a block** while holding the summon item.
+
+> Sneak-left-clicking **air** is the one gesture in the mod that isn't wired — Fabric has no left-click-air callback. Aim at a block.
+
+---
+
+## Item-triggered abilities
+
+The two Pass-2 abilities are **not gated on holding a tool**. They fire immediately on right-click while holding a configured item, which is **never consumed** — there's no readying step and no arming window.
+
+| Ability | Skill | Trigger item | Config key |
+|---|---|---|---|
+| **Second Wind** | [Agility](Movement-Skills#second-wind--the-super-ability) | `FEATHER` | `Skills.Agility.Second_Wind_Item` |
+| **Smoke Bomb** | [Stealth](Stealth#smoke-bomb--unlocks-at-250) | `GUNPOWDER` | `Skills.Stealth.Smoke_Bomb_Item` |
+
+> ⚠️ **The two items must differ from each other.** Both actives listen on the same use-item event, so sharing an item fires one and prints the other's refusal message.
+
+### Second Wind
+
+**One ability, three bodies, dispatched on how you're moving** — so from the player's seat it's simply "the Agility button", with one cooldown slot, one config block and one locale block.
+
+| Rank | Unlocks (RetroMode) | While… | You get |
+|---|---|---|---|
+| 1 | 250 | sprinting | a forward **lunge** — 6 blocks, 6 damage, 1.5 knockback |
+| 2 | 500 | in water | a **water buff** (amplifier 1) |
+| 3 | 750 | gliding | a **1.2× speed burst** |
+
+### Smoke Bomb
+
+Vanilla **Invisibility for 100 ticks (5 s)**, no firework, no particle burst. Unlocks at Stealth 250.
+
+Remember that vanilla invisibility does **not** hide armour or held items.
+
+---
+
+## Cooldowns and durations
+
+`config.yml` → `Abilities`:
+
+```yaml
+Abilities:
+    Enabled: true
+    Messages: true
+    Activation:
+        Only_Activate_When_Sneaking: false
+    Cooldowns:
+        Berserk: 240
+        Blast_Mining: 60
+        Giga_Drill_Breaker: 240
+        Green_Terra: 240
+        Second_Wind: 240
+        Serrated_Strikes: 240
+        Skull_Splitter: 240
+        Smoke_Bomb: 240
+        Super_Breaker: 240
+        Tree_Feller: 240
+    Max_Seconds:
+        # 0 = no cap; duration scales with skill level
+        Berserk: 0
+        # ... one per ability
+    Limits:
+        Tree_Feller_Threshold: 1000
+    Tools:
+        # Extra durability used while an ability is active. 0 to disable.
+        Durability_Loss: 1
+```
+
+| Knob | What it does |
+|---|---|
+| `Cooldowns.<Ability>` | Seconds before you can use it again. |
+| `Max_Seconds.<Ability>` | Caps how long it can run. **0 = uncapped**, duration scales with skill level. |
+| `Only_Activate_When_Sneaking` | Require sneaking to ready an ability. Handy if you keep firing Super Breaker while building. |
+| `Tree_Feller_Threshold` | Maximum logs a single Tree Feller will drop. |
+| `Tools.Durability_Loss` | Extra durability consumed while an ability is active. |
+
+**Unlock levels** live in `skillranks.yml`. With RetroMode on (the default) they're all ×10, so **rank 1 of most super abilities is skill level 50**, not 5.
+
+---
+
+## Turning them off
+
+- **`/mcability`** — toggles readying and activation for you, right now. The build-mode switch.
+- **`/mcrefresh`** — clears all your cooldowns and cancels any active ability.
+- **`Abilities.Enabled: false`** in `config.yml` — off globally.
+- **`coreskills.yml`** — disable an individual sub-skill, including a super ability, permanently.
+
+---
+
+## Not implemented
+
+Four `SuperAbilityType` constants are registered placeholders with no behaviour: **Super Shotgun** (Crossbows), and the Tridents, Maces and Spears abilities. **Explosive Shot** (Archery) is also not wired as a triggerable ability.
+
+**Spears' super ability is not coming** — it depends on a custom item and a `spear` damage type that don't exist in 1.21.11.
