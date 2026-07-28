@@ -137,6 +137,116 @@ class ExperienceBarManagerTest {
         assertFalse(bars.get(PrimarySkillType.MINING).visible, "bars stay hidden after hideAll");
     }
 
+    // --- the on-screen cap -----------------------------------------------------------------------
+
+    @Test
+    void aFourthBarEvictsTheLeastRecentlyTrainedOne() {
+        when(config.getMaxVisibleExperienceBars()).thenReturn(3);
+
+        manager.updateExperienceBar(PrimarySkillType.MINING);
+        manager.updateExperienceBar(PrimarySkillType.HERBALISM);
+        manager.updateExperienceBar(PrimarySkillType.SWORDS);
+        manager.updateExperienceBar(PrimarySkillType.ARCHERY);
+
+        assertFalse(bars.get(PrimarySkillType.MINING).visible,
+                "the oldest bar makes room for the newest");
+        assertTrue(bars.get(PrimarySkillType.HERBALISM).visible);
+        assertTrue(bars.get(PrimarySkillType.SWORDS).visible);
+        assertTrue(bars.get(PrimarySkillType.ARCHERY).visible,
+                "the skill just trained is exactly the one that must be on screen");
+    }
+
+    @Test
+    void refreshingASkillMakesItTheYoungestAgain() {
+        // The property a plain insertion-ordered queue would get wrong: keeping Mining trained must
+        // move it to the back of the eviction queue, so the next new bar evicts Herbalism instead.
+        when(config.getMaxVisibleExperienceBars()).thenReturn(3);
+
+        manager.updateExperienceBar(PrimarySkillType.MINING);
+        manager.updateExperienceBar(PrimarySkillType.HERBALISM);
+        manager.updateExperienceBar(PrimarySkillType.SWORDS);
+        manager.updateExperienceBar(PrimarySkillType.MINING);
+        manager.updateExperienceBar(PrimarySkillType.ARCHERY);
+
+        assertTrue(bars.get(PrimarySkillType.MINING).visible,
+                "a skill you are still training must not be evicted");
+        assertFalse(bars.get(PrimarySkillType.HERBALISM).visible,
+                "the genuinely least recent bar is the one that goes");
+    }
+
+    @Test
+    void aFadedBarDoesNotCountAgainstTheCap() {
+        // Otherwise the queue would fill with bars that are not on screen and start evicting live
+        // ones to make room for nothing.
+        when(config.getMaxVisibleExperienceBars()).thenReturn(3);
+
+        manager.updateExperienceBar(PrimarySkillType.MINING);
+        manager.updateExperienceBar(PrimarySkillType.HERBALISM);
+        pump(HIDE_DELAY_TICKS); // both fade
+
+        manager.updateExperienceBar(PrimarySkillType.SWORDS);
+        manager.updateExperienceBar(PrimarySkillType.ARCHERY);
+        manager.updateExperienceBar(PrimarySkillType.AXES);
+
+        assertTrue(bars.get(PrimarySkillType.SWORDS).visible,
+                "the faded bars freed their slots, so nothing live should have been evicted");
+        assertTrue(bars.get(PrimarySkillType.ARCHERY).visible);
+        assertTrue(bars.get(PrimarySkillType.AXES).visible);
+    }
+
+    @Test
+    void zeroMeansNoLimit() {
+        when(config.getMaxVisibleExperienceBars()).thenReturn(0);
+
+        manager.updateExperienceBar(PrimarySkillType.MINING);
+        manager.updateExperienceBar(PrimarySkillType.HERBALISM);
+        manager.updateExperienceBar(PrimarySkillType.SWORDS);
+        manager.updateExperienceBar(PrimarySkillType.ARCHERY);
+        manager.updateExperienceBar(PrimarySkillType.AXES);
+
+        assertTrue(bars.get(PrimarySkillType.MINING).visible,
+                "a cap of 0 is documented as unlimited, so nothing is evicted");
+    }
+
+    // --- child-skill bars ------------------------------------------------------------------------
+
+    @Test
+    void trainingAParentAlsoShowsTheAgilityBar() {
+        // Agility gains no XP of its own, so it would never show a bar at all if it waited for one.
+        // Running is training it, and the player should see that.
+        manager.updateExperienceBar(PrimarySkillType.PARKOUR);
+
+        final FakeBar agility = bars.get(PrimarySkillType.AGILITY);
+        assertTrue(agility != null && agility.visible,
+                "training Parkour must surface the Agility bar it feeds");
+    }
+
+    @Test
+    void everyAgilityParentSurfacesTheAgilityBar() {
+        for (PrimarySkillType parent : new PrimarySkillType[] {
+            PrimarySkillType.PARKOUR, PrimarySkillType.SWIMMING, PrimarySkillType.FLYING}) {
+            // hideAll rather than clearing the recorded bars: the manager keeps its bar objects for
+            // cheap re-show, so the factory runs once per skill and a cleared map would never be
+            // repopulated.
+            manager.hideAll();
+
+            manager.updateExperienceBar(parent);
+
+            final FakeBar agility = bars.get(PrimarySkillType.AGILITY);
+            assertTrue(agility != null && agility.visible, parent + " must surface Agility's bar");
+        }
+    }
+
+    @Test
+    void aParentGainDoesNotResurrectTheSuppressedChildBars() {
+        // Salvage and Smelting are hidden by default and the parent-propagation must not undo that.
+        manager.updateExperienceBar(PrimarySkillType.REPAIR); // parent of BOTH Salvage and Smelting
+
+        assertNull(bars.get(PrimarySkillType.SALVAGE), "Salvage stays suppressed");
+        assertNull(bars.get(PrimarySkillType.SMELTING), "Smelting stays suppressed");
+        assertTrue(bars.get(PrimarySkillType.REPAIR).visible, "but Repair's own bar still shows");
+    }
+
     private void pump(long ticks) {
         for (long i = 0; i < ticks; i++) {
             scheduler.tick();

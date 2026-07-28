@@ -35,6 +35,10 @@ public class SkillTools {
     public final @NotNull ImmutableList<PrimarySkillType> GATHERING_SKILLS;
     public final @NotNull ImmutableList<PrimarySkillType> MISC_SKILLS;
 
+    /** Parent skill -> the child skills it feeds. Inverted from {@link #getChildSkillParents}. */
+    private final @NotNull ImmutableMap<PrimarySkillType, ImmutableList<PrimarySkillType>>
+            childSkillsByParent;
+
     private final @NotNull ImmutableMap<SubSkillType, PrimarySkillType> subSkillParentRelationshipMap;
     private final @NotNull ImmutableMap<SuperAbilityType, PrimarySkillType> superAbilityParentRelationshipMap;
     private final @NotNull ImmutableMap<PrimarySkillType, Set<SubSkillType>> primarySkillChildrenMap;
@@ -99,6 +103,7 @@ public class SkillTools {
          * Build child skill list
          */
         this.CHILD_SKILLS = buildChildSkills();
+        this.childSkillsByParent = buildChildSkillsByParent(this.CHILD_SKILLS);
 
         /*
          * Build categorized skill lists
@@ -480,6 +485,34 @@ public class SkillTools {
         return MISC_SKILLS;
     }
 
+    /**
+     * Invert the child -> parents relationship into parent -> children.
+     *
+     * <p>Built from {@link #getChildSkillParents(PrimarySkillType)} rather than written out a second
+     * time, so adding a child skill (or re-parenting one, as Agility was in Pass 2) updates both
+     * directions from one edit.
+     */
+    private static @NotNull ImmutableMap<PrimarySkillType, ImmutableList<PrimarySkillType>>
+            buildChildSkillsByParent(@NotNull ImmutableList<PrimarySkillType> childSkills) {
+        final EnumMap<PrimarySkillType, List<PrimarySkillType>> byParent =
+                new EnumMap<>(PrimarySkillType.class);
+        for (PrimarySkillType child : childSkills) {
+            for (PrimarySkillType parent : switch (child) {
+                case AGILITY -> AGILITY_PARENTS;
+                case SALVAGE -> SALVAGE_PARENTS;
+                case SMELTING -> SMELTING_PARENTS;
+                default -> ImmutableList.<PrimarySkillType>of();
+            }) {
+                byParent.computeIfAbsent(parent, p -> new ArrayList<>()).add(child);
+            }
+        }
+
+        final EnumMap<PrimarySkillType, ImmutableList<PrimarySkillType>> frozen =
+                new EnumMap<>(PrimarySkillType.class);
+        byParent.forEach((parent, children) -> frozen.put(parent, ImmutableList.copyOf(children)));
+        return ImmutableMap.copyOf(frozen);
+    }
+
     public @NotNull ImmutableList<PrimarySkillType> getChildSkillParents(
             PrimarySkillType childSkill) throws IllegalArgumentException {
         return switch (childSkill) {
@@ -489,5 +522,23 @@ public class SkillTools {
             default -> throw new IllegalArgumentException(
                     "Skill " + childSkill + " is not a child skill");
         };
+    }
+
+    /**
+     * The child skills that {@code parent} feeds — the inverse of
+     * {@link #getChildSkillParents(PrimarySkillType)}.
+     *
+     * <p>Derived from that method rather than kept as a second hand-written table, so the two can
+     * never disagree about who a skill's parents are. Returns an empty list for the common case of a
+     * skill that parents nothing, and never throws: callers ask this of <em>every</em> skill that
+     * gains XP, so an exception for "not a parent" would be the normal path.
+     *
+     * <p>Used to refresh a child skill's XP bar when one of its parents gains: a child earns no XP
+     * of its own, so it would otherwise never show a bar at all.
+     */
+    public @NotNull ImmutableList<PrimarySkillType> getChildSkillsOf(
+            @NotNull PrimarySkillType parent) {
+        final ImmutableList<PrimarySkillType> children = childSkillsByParent.get(parent);
+        return children == null ? ImmutableList.of() : children;
     }
 }

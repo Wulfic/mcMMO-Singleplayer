@@ -9,6 +9,7 @@ import com.gmail.nossr50.platform.scheduler.TaskScheduler;
 import com.gmail.nossr50.util.Misc;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import org.jetbrains.annotations.NotNull;
@@ -46,6 +47,17 @@ public class ExperienceBarManager {
     /** Skills whose bar stays up (no hide task is armed). Reserved for a future toggle command. */
     private final Set<PrimarySkillType> alwaysVisible = EnumSet.noneOf(PrimarySkillType.class);
 
+    /**
+     * Currently-shown bars in least-recently-trained order — the eviction queue for the on-screen
+     * cap.
+     *
+     * <p>A {@link LinkedHashSet} rather than a list because a skill must appear exactly once no
+     * matter how many times it is refreshed: re-training a skill re-inserts it at the young end
+     * (remove, then add), so "least recently trained" stays exactly the iteration order and the
+     * oldest entry is always the head.
+     */
+    private final Set<PrimarySkillType> visibleBars = new LinkedHashSet<>();
+
     /** Production wiring: real boss-bar factory, the server-tick scheduler, and live config. */
     public ExperienceBarManager(@NotNull McMMOPlayer mmoPlayer) {
         this(mmoPlayer, ExperienceBarWrapper::new, McMMOMod.getScheduler(),
@@ -63,8 +75,15 @@ public class ExperienceBarManager {
         this.config = config;
         this.hideDelayTicks = hideDelayTicks;
 
-        // Child skills (Salvage, Smelting) derive their level from their parents and never gain XP
-        // directly, so their progress is always 1.0 — legacy hid their bars by default, so do we.
+        // Legacy hid Salvage's and Smelting's bars by default, and that is kept: both are niche,
+        // trained in short bursts alongside whatever produced the materials, and a bar for them
+        // would mostly be crowding out the skill the player is actually watching.
+        //
+        // Agility is deliberately NOT in this list even though it is also a child skill. It is the
+        // umbrella over Parkour, Swimming and Flying — the thing a player thinks of themselves as
+        // levelling while moving — so its bar is wanted, and it is only meaningful because
+        // McMMOPlayer#getProgressInCurrentSkillLevel now averages a child skill's parents instead of
+        // returning a flat 1.0. Suppress that averaging and this becomes a permanently full bar.
         disabledBars.add(PrimarySkillType.SALVAGE);
         disabledBars.add(PrimarySkillType.SMELTING);
     }
@@ -75,6 +94,18 @@ public class ExperienceBarManager {
      * skill.
      */
     public void updateExperienceBar(@NotNull PrimarySkillType skill) {
+        showBar(skill);
+        // A child skill earns no XP of its own — its level is the mean of its parents' — so it would
+        // never show a bar at all if it waited for a gain of its own. Training a parent IS training
+        // it, so a parent's gain refreshes the child's bar too. Salvage and Smelting are unaffected:
+        // their bars are suppressed below, and this is a no-op for them.
+        for (PrimarySkillType child : McMMOMod.getSkillTools().getChildSkillsOf(skill)) {
+            showBar(child);
+        }
+    }
+
+    /** Show/refresh one skill's bar, arm its fade, and enforce the on-screen cap. */
+    private void showBar(@NotNull PrimarySkillType skill) {
         if (disabledBars.contains(skill)
                 || !config.isExperienceBarsEnabled()
                 || !config.isExperienceBarEnabled(skill)) {
@@ -86,7 +117,41 @@ public class ExperienceBarManager {
         bar.setProgress(mmoPlayer.getProgressInCurrentSkillLevel(skill));
         bar.show();
 
+        // Re-insert at the young end so "least recently trained" stays the iteration order.
+        visibleBars.remove(skill);
+        visibleBars.add(skill);
+        enforceVisibleCap();
+
         rescheduleHide(skill);
+    }
+
+    /**
+     * Hide the least recently trained bars until at most {@code Max_Visible} remain.
+     *
+     * <p>Evicts the <em>oldest</em> rather than refusing the newest: the bar a player wants on screen
+     * is the skill they just used, so a cap that suppressed new bars would hide exactly the wrong
+     * one. Pinned bars are skipped — an explicitly pinned bar outranks a recency cap, and letting the
+     * cap evict one would make {@code alwaysVisible} a lie.
+     *
+     * <p>A loop rather than a single eviction because the cap can drop between calls (a config
+     * reload, or a future command), leaving more bars up than it now allows.
+     */
+    private void enforceVisibleCap() {
+        final int max = config.getMaxVisibleExperienceBars();
+        if (max <= 0) {
+            return; // Documented as "no limit".
+        }
+        final var iterator = visibleBars.iterator();
+        int over = visibleBars.size() - max;
+        while (over > 0 && iterator.hasNext()) {
+            final PrimarySkillType oldest = iterator.next();
+            if (alwaysVisible.contains(oldest)) {
+                continue;
+            }
+            hideExperienceBar(oldest);
+            iterator.remove();
+            over--;
+        }
     }
 
     /** Cancel any pending hide for {@code skill} and arm a fresh one (unless the bar is pinned). */
@@ -105,6 +170,9 @@ public class ExperienceBarManager {
         final ScheduledTask task = scheduler.runLater(() -> {
             hideExperienceBar(skill);
             hideTasks.remove(skill);
+            // Drop it from the eviction queue too — a faded bar is not on screen, so it must not
+            // count against the cap or be "evicted" again later.
+            visibleBars.remove(skill);
         }, hideDelayTicks);
         hideTasks.put(skill, task);
     }
@@ -126,5 +194,6 @@ public class ExperienceBarManager {
         for (ExperienceBar bar : experienceBars.values()) {
             bar.hide();
         }
+        visibleBars.clear();
     }
 }

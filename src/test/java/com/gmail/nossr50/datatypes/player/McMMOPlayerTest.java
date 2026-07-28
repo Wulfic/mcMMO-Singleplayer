@@ -324,4 +324,40 @@ class McMMOPlayerTest {
                         Misc.PLAYER_RESPAWN_COOLDOWN_SECONDS),
                 "and re-opens the grace window");
     }
+
+    // --- child-skill XP-bar progress --------------------------------------------------------------
+
+    @Test
+    void aChildSkillsProgressIsTheMeanOfItsParents() {
+        // Agility earns no XP of its own, so there is no "progress through the current level" to
+        // read off its profile — its bar has to average the three skills its level is averaged from.
+        // Legacy returned a flat 1.0 here, which was invisible while every child bar was hidden but
+        // means a permanently full bar now that Agility shows one.
+        final double parkour = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.PARKOUR);
+        final double swimming = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.SWIMMING);
+        final double flying = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.FLYING);
+
+        assertEquals((parkour + swimming + flying) / 3.0,
+                mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.AGILITY), 1.0E-9);
+    }
+
+    @Test
+    void trainingOneParentMovesTheChildBarByAThird() {
+        final double before = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.AGILITY);
+
+        mmoPlayer.beginXpGain(PrimarySkillType.PARKOUR, 10F, XPGainReason.PVE, XPGainSource.SELF);
+
+        final double after = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.AGILITY);
+        assertTrue(after > before, "the child bar must actually move when a parent gains XP");
+        // A third of the parent's own movement — one of three parents advanced.
+        assertEquals(mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.PARKOUR) / 3.0,
+                after, 1.0E-9);
+    }
+
+    @Test
+    void aChildSkillsProgressIsNotPinnedAtFull() {
+        // The specific regression: a flat 1.0 would make this assertion fail and the bar useless.
+        assertTrue(mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.AGILITY) < 1.0,
+                "a fresh player's Agility bar must not read as full");
+    }
 }

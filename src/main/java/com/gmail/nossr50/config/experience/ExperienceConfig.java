@@ -337,6 +337,19 @@ public class ExperienceConfig extends ConfigLoader {
         return config.getInt("Experience_Bars.Hide_Delay_Seconds", 10);
     }
 
+    /**
+     * How many XP bars may be on screen at once, or {@code 0} for no limit.
+     *
+     * <p>Boss bars stack downward from the top of the screen and nothing in vanilla bounds them, so
+     * without a cap a player doing several things at once — sprinting through a forest while mining,
+     * say — ends up reading the world through a stack of progress bars. When a new skill's bar
+     * appears and the cap is already met, the least recently trained one is hidden rather than the
+     * new one suppressed: the bar you want to see is the skill you just used.
+     */
+    public int getMaxVisibleExperienceBars() {
+        return config.getInt("Experience_Bars.Max_Visible", 3);
+    }
+
     /* Agility */
     public int getDodgeXPModifier() {
         return config.getInt("Experience_Values.Agility.Dodge", 120);

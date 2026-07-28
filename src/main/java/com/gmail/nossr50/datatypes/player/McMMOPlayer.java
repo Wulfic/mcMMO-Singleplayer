@@ -291,15 +291,44 @@ public class McMMOPlayer {
      * Experience
      */
 
+    /**
+     * How far through its current level a skill is, as a fraction — what the XP bar fills to.
+     *
+     * <p><b>A child skill has no XP of its own</b>, so there is no "current level" progress to read
+     * off its profile; its level is the mean of its parents'. Its progress is therefore the mean of
+     * <em>their</em> progress, which is the only reading that makes the bar move at the rate the
+     * skill's own level actually advances. Legacy returned a flat {@code 1.0} here, which was
+     * harmless while every child-skill bar was hidden — but Agility became a child skill in Pass 2
+     * and shows a bar, and a permanently full bar is worse than no bar at all.
+     */
     public double getProgressInCurrentSkillLevel(PrimarySkillType primarySkillType) {
         if (SkillTools.isChildSkill(primarySkillType)) {
-            return 1.0D;
+            return childSkillProgress(primarySkillType);
         }
 
         double currentXP = profile.getSkillXpLevel(primarySkillType);
         double maxXP = profile.getXpToLevel(primarySkillType);
 
         return (currentXP / maxXP);
+    }
+
+    /**
+     * Mean progress across a child skill's parents.
+     *
+     * <p>Falls back to a full bar when the skill somehow has no parents — the same answer legacy
+     * always gave, so a misconfigured family tree degrades to the old behaviour rather than dividing
+     * by zero inside the XP pipeline.
+     */
+    private double childSkillProgress(PrimarySkillType childSkill) {
+        final var parents = McMMOMod.getSkillTools().getChildSkillParents(childSkill);
+        if (parents == null || parents.isEmpty()) {
+            return 1.0D;
+        }
+        double total = 0.0D;
+        for (PrimarySkillType parent : parents) {
+            total += getProgressInCurrentSkillLevel(parent);
+        }
+        return total / parents.size();
     }
 
     /**
