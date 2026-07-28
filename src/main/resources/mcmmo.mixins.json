@@ -18,6 +18,7 @@
     "HungerManagerExhaustionMixin",
     "LivingEntityDamageMixin",
     "LivingEntityGlideMixin",
+    "PowderSnowBlockMixin",
     "ProjectileSpawnMixin",
     "TameableEntityTameMixin",
     "TntExplodeMixin"

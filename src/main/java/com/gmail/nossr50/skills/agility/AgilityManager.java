@@ -712,6 +712,30 @@ public class AgilityManager extends SkillManager {
         return advanced == null ? 100 : Math.max(1, advanced.getSolarWingsIntervalTicks());
     }
 
+    // --- Sub-skill 11: Snow Walker (a PARKOUR sub-skill, not an Agility one) ---------------------
+
+    /**
+     * Whether the player can cross powder snow without sinking into it.
+     *
+     * <p><b>Gated on Parkour, not on Agility</b>, and that is the whole point of it living under
+     * {@link SubSkillType#PARKOUR_SNOW_WALKER}: the parent-skill map keys off the enum name's
+     * prefix, so this reads the {@code PARKOUR} level directly rather than the mean of Parkour,
+     * Swimming and Flying that every other sub-skill here reads. Not falling through snow is a
+     * running-and-jumping perk; a strong swimmer should not be handed it by the average.
+     *
+     * <p>It lives on this manager anyway because every movement sub-skill does, and splitting one
+     * out into a {@code ParkourManager} would mean a second manager, a second lazy-construction
+     * site and a second place to look for movement behaviour — for one boolean.
+     *
+     * <p>Effect equivalence: vanilla already lets a player in leather boots walk on powder snow
+     * ({@code PowderSnowBlock#canWalkOnPowderSnow}). This grants exactly that, so it stacks with
+     * nothing and there is no way for it to be worth more than the boots already are.
+     */
+    public boolean canSnowWalk() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.PARKOUR_SNOW_WALKER)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.PARKOUR_SNOW_WALKER);
+    }
+
     // Note: the level-scaling ladder these sub-skills share (`scaleToLevel`) lives on
     // {@link SkillManager}, since Stealth's passives are shaped identically.
 }

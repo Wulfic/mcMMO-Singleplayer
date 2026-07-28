@@ -158,6 +158,16 @@ Agility:
             Rank_1: 75
         RetroMode:
             Rank_1: 750
+# Parkour is one of Agility's three parent skills and normally has no sub-skills of its own — its
+# XP is what Agility's level is averaged from. Snow Walker is the exception, and deliberately so:
+# it is gated on Parkour itself rather than on Agility, so it is earned by running and jumping
+# rather than by a swimmer and a flier dragging the average up.
+Parkour:
+    SnowWalker:
+        Standard:
+            Rank_1: 10
+        RetroMode:
+            Rank_1: 100
 Axes:
     AxesLimitBreak:
         Standard:

@@ -80,6 +80,17 @@ public enum SubSkillType {
     MINING_SUPER_BREAKER(1),
     MINING_MOTHER_LODE(1),
 
+    /*
+     * PARKOUR
+     *
+     * Parkour is one of Agility's three parent skills and normally has no sub-skills of its own —
+     * its XP is simply what Agility's level is averaged from. Snow Walker is the deliberate
+     * exception. Parenting it here rather than under AGILITY means it is gated on the Parkour level
+     * itself (the parent map keys off the enum name's prefix), so it is earned by running and
+     * jumping rather than by a swimmer and a flier dragging the three-skill average up.
+     */
+    PARKOUR_SNOW_WALKER(1),
+
     /* Repair */
     REPAIR_ARCANE_FORGING(8),
     REPAIR_REPAIR_MASTERY(1),

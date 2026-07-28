@@ -10,7 +10,9 @@ import com.gmail.nossr50.skills.stealth.StealthManager;
 import com.gmail.nossr50.util.player.UserManager;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -96,6 +98,36 @@ public final class PlayerMovementTracker {
     private static final Map<UUID, Integer> SOLAR_WINGS_TICKS = new HashMap<>();
 
     /**
+     * Players who currently qualify for Parkour's <b>Snow Walker</b>.
+     *
+     * <p>A published flag rather than a live gate check, because the consumer is
+     * {@code PowderSnowBlock#canWalkOnPowderSnow} — a collision-shape path that runs many times per
+     * tick for every entity near powder snow, <em>on both the client and the integrated server</em>.
+     * Two things make a direct check there wrong rather than merely slow:
+     * <ul>
+     *   <li>{@code RankUtils} caches resolved ranks in a plain {@link HashMap}, populated lazily.
+     *       Reaching it from the client thread as well as the server thread is a data race on a
+     *       non-thread-safe map — the kind that corrupts quietly and is never reproducible.</li>
+     *   <li>It would put a config-backed lookup in a hot geometry path, which is the per-tick
+     *       config-read trap that already bit Alchemy's Catalysis.</li>
+     * </ul>
+     * So the answer is derived once per server tick on the server thread and published through a
+     * concurrent set that the mixin can read from either side for the cost of a hash lookup. Keyed
+     * by UUID because in singleplayer the client's player entity is a different object with the same
+     * identity.
+     */
+    private static final Set<UUID> SNOW_WALKERS = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Whether this player may walk on powder snow (Parkour → Snow Walker).
+     *
+     * <p>Read by {@code PowderSnowBlockMixin} from both the client and the server thread.
+     */
+    public static boolean canWalkOnPowderSnow(@NotNull UUID uuid) {
+        return SNOW_WALKERS.contains(uuid);
+    }
+
+    /**
      * Whether real server-side movement input has ever been seen, so it is logged exactly once.
      *
      * <p>Deliberately <em>not</em> reset by {@link #clear()}: the question it answers ("does this
@@ -117,11 +149,13 @@ public final class PlayerMovementTracker {
     public static void clear() {
         LAST_POSITIONS.clear();
         SOLAR_WINGS_TICKS.clear();
+        SNOW_WALKERS.clear();
     }
 
     private static void onQuit(@NotNull ServerPlayerEntity player) {
         LAST_POSITIONS.remove(player.getUuid());
         SOLAR_WINGS_TICKS.remove(player.getUuid());
+        SNOW_WALKERS.remove(player.getUuid());
         // Same reasoning for Stealth's Assassin window: this is the mod's one per-player disconnect
         // hook, so the combat listener's side table is dropped from here rather than growing a
         // second DISCONNECT registration that could be removed independently of this one.
@@ -174,6 +208,7 @@ public final class PlayerMovementTracker {
         applyFleetFooted(player, agility, medium);
         applyLeadLungs(player, agility);
         applySolarWings(player, agility);
+        publishSnowWalker(player, agility);
 
         // Horizontal only, for every medium and for Stealth. The reference speeds are horizontal
         // figures, and it also means a player cannot bill a vertical elytra dive (or a fall) as
@@ -200,6 +235,22 @@ public final class PlayerMovementTracker {
             return;
         }
         agility.onMovementTick(medium, distance);
+    }
+
+    /**
+     * Publish whether this player may currently walk on powder snow (Parkour → Snow Walker).
+     *
+     * <p>Written only when the answer changes, so the steady state costs one hash lookup per tick
+     * rather than a write to a shared concurrent set 20 times a second.
+     */
+    private static void publishSnowWalker(@NotNull ServerPlayerEntity player,
+            @NotNull AgilityManager agility) {
+        final UUID uuid = player.getUuid();
+        if (agility.canSnowWalk()) {
+            SNOW_WALKERS.add(uuid);
+        } else {
+            SNOW_WALKERS.remove(uuid);
+        }
     }
 
     /** Horizontal distance between two positions, in blocks. */
