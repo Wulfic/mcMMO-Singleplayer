@@ -1,5 +1,43 @@
 # Unarmored — Plan
 
+> ## ✅ BUILT (2026-07-28) — code-complete, **never played**
+>
+> Everything below is the plan as written before the build; it is kept as the record of *why*, not as
+> a description of what exists. What actually shipped, and where it deviates:
+>
+> | Stage | What | Where |
+> |---|---|---|
+> | 1 | Skill registered, MC-free `UnarmoredManager`, all config/locale | `39cf0ad5f` |
+> | 2 | **XP** — pre-armour capture + the victim-branch award | `7ebc32625` |
+> | 2b | **Per-attacker XP cap** (below) — the D-U4 ruling | this pass |
+> | 3 | **Iron Skin** — managed `ARMOR` modifier, re-derived per tick | this pass |
+> | 4 | **Thorny Skin** — melee reflect | this pass |
+>
+> **Deviations and findings the plan did not anticipate:**
+> - **⚠️ mcMMO's damage seam is POST-armour.** `LivingEntity#applyDamage` runs
+>   `applyArmorToDamage` *then* `modifyAppliedDamage`, so Iron Skin would have throttled the very
+>   skill that grants it — the 500→1000 stretch (7.5M of 11.01M XP) would run at ⅓–½ rate. XP is
+>   therefore metered on a **second injector** on `applyArmorToDamage`, stashed and consumed at the
+>   **top** of `onModifyAppliedDamage` (Serrated Strikes, Counter Attack and Thorny Skin all deal
+>   nested damage from inside that method and each re-runs `applyArmorToDamage`).
+> - **✅ D-U3 resolved as recommended**, in `PlayerMovementTracker`'s sweep — but it sits **above**
+>   the Agility early-return, or a player's armour would depend on an unrelated skill loading.
+> - **✅ The "does the skin show on the vanilla armour HUD?" worry is dead.** `ARMOR` is registered
+>   `setTracked(true)` and `getArmor()` is literally `floor(getAttributeValue(ARMOR))`, so the armour
+>   bar fills in for free. **The cosmetic follow-up in "Cuts / deferrals" is cancelled, not deferred.**
+> - **⚠️ NEW RULING — D-U4, the per-attacker XP cap.** `Require_Living_Attacker` (below) does *not*
+>   close the farm that matters: a zombie **is** a living attacker, so one hitting you through a slab
+>   while saturation regen keeps up is a passive ~250 XP/s ⇒ level 1000 in ~12 h against the 92 h
+>   budget. Ruled 2026-07-28: cap at **20 awards per attacker**
+>   (`ExploitFix.Unarmored.Max_Awards_Per_Attacker`), the same `MetadataStore` mechanism Agility
+>   Dodge uses, four times the size so it never bites a real fight.
+> - **⚠️ The exploit gate needed a clause its name does not imply**: a player is a `LivingEntity`, so
+>   without `attacker != victim` your own Blast Mining charge pays full XP.
+> - **⚠️ "Unarmored" means an OCCUPIED SLOT**, not an `isArmor` item — a carved pumpkin or an elytra
+>   disables the skill. Otherwise the rule is "free armour as long as mcMMO doesn't recognise your hat".
+>
+> **Play-test rows: `PLAYTEST_G.md` session 9.** The balance figures below are still paper.
+
 **Read [00-OVERVIEW.md](00-OVERVIEW.md) first.** Unarmored is a **standalone primary skill** (D1). It is
 **event-driven for XP** (damage taken) and **depends on F2** (the attribute service) but **not on F1** —
 which is why the overview recommends building it **first** among the new skills: it validates the

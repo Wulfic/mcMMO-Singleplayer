@@ -337,6 +337,66 @@ boot-clean only. Grant levels with `/addlevels stealth 1000` etc.
 | XB7 | Repair or smelt something | **No** Salvage/Smelting bar — still suppressed by design |
 | XB8 | Set `Experience_Bars.Max_Visible: 0` in `experience.yml`, reload | No limit; all bars stack |
 
+## Session 9 — Unarmored (~30 min)
+
+New in Pass 2, **never played**. Unit-proven and boot-clean only. `/addlevels unarmored 1000` grants
+it; the four Iron Skin tiers unlock at **100 / 200 / 500 / 1000** (RetroMode), Thorny Skin at **350**.
+
+**Fight everything in this session with all four armour slots empty**, including the head — a carved
+pumpkin or a mob head counts as armour and turns the whole skill off. That is deliberate.
+
+### 9a. XP — and the exploit gates, which are the interesting part
+
+| # | Action | Expect | What would make this a false pass |
+|---|---|---|---|
+| UA1 | Punch-fight a few zombies bare-handed and take hits | Unarmored XP climbs per hit taken | — |
+| UA2 | Equip **only a helmet**, take hits | **Zero** XP. Repeat for chest / legs / boots | A gate written as an `\|\|` chain can lose one arm and still pass a test that only ever equips a helmet |
+| UA3 | Wear a **carved pumpkin** and nothing else, take hits | **Zero** XP | Stricter than mcMMO's own "is it armour?" test, on purpose — otherwise the rule is "free armour as long as mcMMO doesn't recognise your hat" |
+| UA4 | Stand in a **cactus / fire / berry bush** and take damage | **Zero** XP | The most obvious cheese: no mobs, no risk, no attention |
+| UA5 | Take **fall** damage | **Zero** XP (Agility Roll still fires normally) | — |
+| UA6 | Blow yourself up with your own **TNT**, and separately with a **Blast Mining** charge | **Zero** XP | A player is a living entity — without the "not yourself" clause, Blast Mining is a repeatable, automatable XP button |
+| UA7 | **⚠️ THE BALANCE ROW.** Let *one* zombie hit you ~30 times (slab trap + golden carrots) and watch the XP | It pays for the first **20** hits, then **that mob stops paying entirely** | **This is the whole reason the skill's 92 h budget means anything.** Without the cap this exact setup is a passive ~250 XP/s ⇒ level 1000 in ~12 h. If XP keeps climbing past hit 20, the per-attacker cap has regressed |
+| UA8 | Kill that spent zombie, let a fresh one hit you | Pays again — the counter is per mob, not per player | If a fresh mob pays nothing, the cap is keyed on the wrong entity and real fights are being throttled |
+| UA9 | **⚠️ Tuning:** record XP/hour from a normal (non-farm) session of fighting bare-handed | Compare against the 92 h-to-1000 budget | The budget is a paper figure. **Measure it** |
+
+### 9b. Iron Skin — the four tiers
+
+| # | Action | Expect |
+|---|---|---|
+| UA10 | At Unarmored < 100, look at the **armour bar** on the HUD | Empty, as vanilla |
+| UA11 | `/addlevels unarmored 100`, look again | **The armour bar fills to leather-set level (~7 points).** The attribute is client-synced, so this is free feedback — if the bar stays empty, the modifier is not reaching the client |
+| UA12 | Cross 200 / 500 / 1000 | Bar steps up to ~11 / ~15 / ~20 points. **Steps, not a smooth climb** |
+| UA13 | At 1000, take a hit from a mob and compare with the same mob at Unarmored 0 | Visibly less damage |
+| UA14 | **Equip a chestplate** | Skin armour **vanishes the same tick**; the bar shows only the chestplate's own points |
+| UA15 | Take the chestplate back off | Skin returns immediately |
+| UA16 | Toggle armour on and off ~20 times, then check the bar unarmored | Still exactly the tier value — **not** a larger number. Stacked modifiers are the failure mode this whole design exists to prevent |
+| UA17 | **Die and respawn**, then check the bar | Skin still applied. A respawn builds a *new* player entity and silently drops every modifier; the per-tick re-derivation should heal it within a tick |
+| UA18 | Go to the End, jump in the portal, come back | Same — the End exit uses the same entity-rebuilding path as death |
+| UA19 | Quit to title, reload the world, check the bar | Skin applied, and **exactly** the tier value |
+| UA20 | Compare a diamond-tier skin against a real diamond set against a heavy hit (creeper / charged creeper) | **The real set takes noticeably less.** Skin grants armour but no *toughness*, which is what blunts big hits — this is the deliberate reason real armour stays worth wearing |
+| UA21 | Take damage that ignores armour (void, starvation) | Skin does nothing. Vanilla behaviour, not a bug |
+
+### 9c. Thorny Skin
+
+| # | Action | Expect |
+|---|---|---|
+| UA22 | At Unarmored < 350, let a zombie punch you | Attacker takes **nothing** back |
+| UA23 | `/addlevels unarmored 350`+, let a zombie punch you | Attacker takes **chip damage** (~half a heart at max). No message, no particles — by design |
+| UA24 | Let a **skeleton shoot you** from range | **No** reflect. Melee only — the gate is the direct damager, so an arrow is out of reach |
+| UA25 | Take **fall / fire / cactus** damage | No reflect, and nothing in the log |
+| UA26 | Equip one armour piece, get punched | No reflect |
+| UA27 | **⚠️ Tuning:** stand in a mob farm at max Unarmored and do nothing | Mobs should **not** die to reflect alone in any reasonable time. If they do, the cap is too high — a reflect costs nothing, needs no aim and fires on every hit |
+| UA28 | Watch the log during all of 9c | **No exceptions.** Thorny deals damage from inside the damage pipeline; a re-entrancy bug would surface as a stack overflow here |
+
+### 9d. Cross-checks
+
+| # | Action | Expect |
+|---|---|---|
+| UA29 | `/mcstats unarmored` | Both sub-skills listed with ranks and the current tier |
+| UA30 | Fight bare-handed | **Unarmed** XP and **Unarmored** XP both move — they are different skills with one letter between them, and a prefix bug would send ranks and config to the wrong one |
+| UA31 | Take hits bare-handed while *sneaking* | Unarmored still pays (it is not a movement skill) |
+| UA32 | Watch the XP bar while taking hits | An Unarmored bar appears, coloured **red** |
+
 ---
 
 ## Reporting
