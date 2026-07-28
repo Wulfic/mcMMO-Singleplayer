@@ -148,6 +148,22 @@ class MovementXpSettingsTest {
     }
 
     @Test
+    void xpBelowTheReferenceSpeedIsProRata() {
+        // Pins the arguments this class hands to SpeedNormalisedXp, which every other xpFor
+        // assertion in this file is structurally incapable of doing: they all sit at exactly the
+        // reference speed (or a pure scaling of it), and there a transposed distance/referenceSpeed
+        // pair is algebraically a no-op. Mutation-proven — swapping that pair in
+        // MovementXpSettings#xpFor left every other test here green.
+        final MovementXpSettings settings = shipped();
+        for (Medium medium : Medium.values()) {
+            final double expected = settings.baselineXpPerSecond() * settings.mediumMultiplier(medium)
+                    / (MovementXpSettings.TICKS_PER_SECOND * 2);
+            assertEquals(expected, settings.xpFor(medium, perTick(medium) / 2), EPSILON,
+                    "half the reference speed, " + medium);
+        }
+    }
+
+    @Test
     void derivedXpPerBlockMatchesThePlannedBudget() {
         // Per-block XP is a *derived* quantity — nobody tunes it, it falls out of the reference
         // speed. These are the numbers the budget was signed off against; if a default moves, this

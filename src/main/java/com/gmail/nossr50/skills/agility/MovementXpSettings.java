@@ -2,41 +2,23 @@ package com.gmail.nossr50.skills.agility;
 
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.skills.SpeedNormalisedXp;
 import java.util.EnumMap;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * An immutable snapshot of the Agility movement-XP tuning, and the arithmetic that turns a tick of
- * travel into XP.
+ * An immutable snapshot of the Agility movement-XP tuning — the <em>per-medium</em> half of the
+ * speed-normalised travel-XP model.
  *
- * <p><b>Distance is the sensor; time is the currency.</b> Agility pays per <em>second</em> of
- * qualifying travel, and each tick's distance is clamped at the medium's reference speed before it
- * is credited:
+ * <p>The arithmetic itself lives in {@link SpeedNormalisedXp}, which owns the clamp and the reasons
+ * for it; this class owns only Agility's tuning of it: one reference speed and one multiplier per
+ * {@link Medium}, on a shared baseline. Stealth's Padfoot has the same self-levelling feedback loop
+ * Fleet Footed does and applies the same clamp against a single sneak reference speed, so the
+ * formula had to stop being a private detail of this class.
  *
- * <pre>
- *   refDist      = referenceSpeed / 20                  // blocks the reference speed covers in a tick
- *   creditedSecs = min(distance, refDist) / referenceSpeed
- *   xp           = baselineXpPerSecond * mediumMultiplier * creditedSecs
- * </pre>
- *
- * <p>Paying a flat XP-per-block instead would be wrong in three compounding ways, and the third is
- * the one that is easy to miss:
- * <ol>
- *   <li><b>Fast media firehose.</b> An elytra covers ground roughly 5× faster than sprinting and
- *       10× faster than swimming, so any shared per-block rate makes gliding level the skill an
- *       order of magnitude faster than swimming for strictly less effort.</li>
- *   <li><b>Every speed buff becomes an XP multiplier.</b> Depth Strider, Dolphin's Grace, Speed
- *       potions, ice boats and firework rockets all raise blocks-per-second.</li>
- *   <li><b>The skill accelerates its own levelling.</b> Fleet Footed makes you faster, which earns
- *       more XP per second, which levels Fleet Footed — a positive feedback loop inside a single
- *       skill. No value of a per-block constant fixes a feedback loop; only the clamp does.</li>
- * </ol>
- *
- * <p>Travelling at or above the reference speed pays the full rate and never more, which kills all
- * three at once. Travelling slower pays pro-rata, so a wade or a gentle jog still counts. Standing
- * still pays nothing. Sprint-jumping — about 27% faster than flat sprinting, and what players
- * actually do — pays exactly the same as sprinting; that is intended, not a rounding error.
+ * <p>Sprint-jumping — about 27% faster than flat sprinting, and what players actually do — pays
+ * exactly the same as sprinting; that is the clamp working, not a rounding error.
  *
  * <p>This type is a snapshot rather than a set of live config reads because it is consulted 20×/s
  * per player. Re-reading the YAML tree every tick is the trap the Alchemy Catalysis brew hook fell
@@ -45,8 +27,14 @@ import org.jetbrains.annotations.NotNull;
  */
 public final class MovementXpSettings {
 
-    /** Server ticks per second — the rate at which movement is sampled. */
-    public static final double TICKS_PER_SECOND = 20.0;
+    /**
+     * Server ticks per second — the rate at which movement is sampled.
+     *
+     * <p>Kept as an alias of {@link SpeedNormalisedXp#TICKS_PER_SECOND} rather than a second
+     * constant: a tick rate that disagreed between the two would mis-scale every derived budget
+     * number silently.
+     */
+    public static final double TICKS_PER_SECOND = SpeedNormalisedXp.TICKS_PER_SECOND;
 
     /**
      * XP per second of travel before the per-medium multiplier, when {@code experience.yml} does not
@@ -143,12 +131,7 @@ public final class MovementXpSettings {
 
     /**
      * How many seconds of travel this tick's distance is worth, clamped at the medium's reference
-     * speed.
-     *
-     * <p>The clamp is the whole balance model, so it lives here as pure arithmetic rather than
-     * inside the tick handler — it is the part most likely to be got wrong and therefore the part
-     * that most needs to be provable. Note it is independent of the player's level by construction:
-     * if a level term ever appears in this method, the Fleet-Footed feedback loop is back.
+     * speed. See {@link SpeedNormalisedXp#creditedSeconds} for why the clamp exists.
      *
      * @param medium   the medium travelled this tick
      * @param distance horizontal distance moved this tick, in blocks
@@ -156,12 +139,7 @@ public final class MovementXpSettings {
      *         and {@code 0} for a non-positive distance or a nonsensical reference speed
      */
     public double creditedSeconds(@NotNull Medium medium, double distance) {
-        final double reference = referenceSpeed(medium);
-        if (distance <= 0 || reference <= 0) {
-            return 0.0;
-        }
-        final double perTickDistance = reference / TICKS_PER_SECOND;
-        return Math.min(distance, perTickDistance) / reference;
+        return SpeedNormalisedXp.creditedSeconds(distance, referenceSpeed(medium));
     }
 
     /**
@@ -172,6 +150,7 @@ public final class MovementXpSettings {
      * @return the XP earned, possibly fractional (the caller accumulates it)
      */
     public double xpFor(@NotNull Medium medium, double distance) {
-        return baselineXpPerSecond * mediumMultiplier(medium) * creditedSeconds(medium, distance);
+        return SpeedNormalisedXp.xpFor(baselineXpPerSecond, mediumMultiplier(medium), distance,
+                referenceSpeed(medium));
     }
 }
