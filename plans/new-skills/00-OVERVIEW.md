@@ -17,7 +17,7 @@ six new skills' worth of bugs on top of an unverified base.
 | Plan | Skill | XP trigger | Headline risk |
 |---|---|---|---|
 | [agility.md](agility.md) | **Agility** — the merged movement skill (**renamed Acrobatics** + Sprinting + Swimming + Flying) | falling/dodging + distance sprinted, swum, glided | It's a **rename of a shipped skill**: save-file key migration. Then 10 sub-skills and 4 XP sources on one bar |
-| [husbandry.md](husbandry.md) | **Husbandry** (+ Shearing) | breeding + shearing | No Fabric breed/shear event — needs mixins |
+| [husbandry.md](husbandry.md) | **Husbandry** (+ Shearing) | the livestock lifecycle — breed, raise, feed, shear, hive, milk/brush | Fabric exposes a callback for none of them — six new mixins. `onGrowUp` fires on both age transitions **and** on chunk load; hooking `Shearable#sheared` would ship an AFK dispenser wool farm |
 | [stealth.md](stealth.md) | **Stealth** (Sneaking) | distance sneaked | "Thief" mob-blindness is hard + overlaps vanilla; anti-AFK critical |
 | [unarmored.md](unarmored.md) | **Unarmored** | damage taken w/ no armor | Managed armor attribute + equip/unequip reactivity |
 | [hunter.md](hunter.md) | **Hunter** (Mob Mastery) | mob kills | Per-mob kill counters are a **net-new persistence shape**; mob farms trivially cap a permanent +6 damage buff unless spawn-origin gating is ported |
@@ -332,8 +332,10 @@ before anything references the manager.
 5. **Agility Stages 2–5** — Land, then Water, then Air, then Second Wind. Each domain lands fully
    before the next.
 6. **Stealth** — leans on F1 and F2; do it after Agility's Land domain has proven both in a live world.
-7. **Husbandry** — independent of F1/F2 (event-driven), but needs new breed/shear mixins; can be built
-   in parallel by a second dev at any point.
+7. **Husbandry** — independent of F1/F2 (event-driven), but needs six new mixins; can be built in
+   parallel by a second dev at any point. It has its own internal stage order (0–6) in
+   [husbandry.md](husbandry.md), and its breed half (stages 1–2) and harvest half (stages 3–4) are
+   independent of each other, so either can ship first.
 
 One skill (or, for Agility, one **stage**) lands **fully** — code + config + locale + unit tests + green
 boot + §G rows *played* — before the next starts. No half-wired skills sitting in the tree; that was the
