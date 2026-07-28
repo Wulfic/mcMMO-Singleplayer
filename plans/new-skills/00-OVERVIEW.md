@@ -12,7 +12,7 @@ boot-verified — see `PLAYTEST_G.md`. **Do not start Pass 2 code until §G play
 run.** Building six brand-new skills on top of a port that has never been played once is how you ship
 six new skills' worth of bugs on top of an unverified base.
 
-## The four skills
+## The five skills
 
 | Plan | Skill | XP trigger | Headline risk |
 |---|---|---|---|
@@ -20,17 +20,22 @@ six new skills' worth of bugs on top of an unverified base.
 | [husbandry.md](husbandry.md) | **Husbandry** (+ Shearing) | breeding + shearing | No Fabric breed/shear event — needs mixins |
 | [stealth.md](stealth.md) | **Stealth** (Sneaking) | distance sneaked | "Thief" mob-blindness is hard + overlaps vanilla; anti-AFK critical |
 | [unarmored.md](unarmored.md) | **Unarmored** | damage taken w/ no armor | Managed armor attribute + equip/unequip reactivity |
+| [hunter.md](hunter.md) | **Hunter** (Mob Mastery) | mob kills | Per-mob kill counters are a **net-new persistence shape**; mob farms trivially cap a permanent +6 damage buff unless spawn-origin gating is ported |
 
-> **Was six, now four.** `swimming.md` and `flying.md` are **deleted**; the old sprint-only `agility.md`
-> is **rewritten**. All three are folded into the single merged [agility.md](agility.md) — see **D5**.
+> **The movement plans went six → four.** `swimming.md` and `flying.md` are **deleted**; the old
+> sprint-only `agility.md` is **rewritten**. All three are folded into the single merged
+> [agility.md](agility.md) — see **D5**. [hunter.md](hunter.md) was added later (2026-07-28) and is
+> unrelated to that merge.
 
 Read this file first, then the per-skill file. This file owns everything they share: the two pieces
 of **net-new foundation**, the **"add a PrimarySkillType" checklist**, and the **cross-cutting design
 decisions** that need a human ruling before anyone writes a manager.
 
-Note that after D5, only **Husbandry**, **Stealth** and **Unarmored** are new `PrimarySkillType`s — the
-checklist below applies to them in full, and to Agility only for the *rename* half (new sub-skills,
-new configs, new locale keys; no new enum constant).
+Note that after D5, **Husbandry**, **Stealth**, **Unarmored** and **Hunter** are the new
+`PrimarySkillType`s — the checklist below applies to them in full, and to Agility only for the
+*rename* half (new sub-skills, new configs, new locale keys; no new enum constant). **Hunter
+additionally needs a persistence shape the checklist does not cover** (an open-ended, string-keyed
+per-mob counter map) — see [hunter.md](hunter.md) D-HU2.
 
 ---
 
