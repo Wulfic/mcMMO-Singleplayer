@@ -470,6 +470,29 @@ public class ExperienceConfig extends ConfigLoader {
         return config.getBoolean("ExploitFix.Unarmored.Require_Living_Attacker", true);
     }
 
+    /** Default number of Unarmored XP awards a single attacker can pay out before it is spent. */
+    public static final int DEFAULT_UNARMORED_MAX_AWARDS_PER_ATTACKER = 20;
+
+    /**
+     * How many times one attacker may pay Unarmored XP before it stops counting; {@code 0} or less
+     * disables the cap.
+     *
+     * <p>{@link #isUnarmoredLivingAttackerRequired()} closes the environmental farms (cactus, fire,
+     * a berry bush) but not the one that actually matters: a single zombie hitting a player through
+     * a slab, with saturation regen healing the damage back as fast as it lands, is a passive
+     * ~250 XP/s and reaches RetroMode 1000 in about twelve hours against a design budget of
+     * ninety-two. A zombie is a living attacker, so only a per-attacker cap reaches it.
+     *
+     * <p>The default is deliberately four times Agility Dodge's, which is the same mechanism against
+     * the same exploit: the cap must sit far above any fight a player could genuinely have — being
+     * hit twenty times by one mob while wearing nothing is already a fight going badly — so that it
+     * only ever bites the loop that repeats forever.
+     */
+    public int getUnarmoredMaxAwardsPerAttacker() {
+        return config.getInt("ExploitFix.Unarmored.Max_Awards_Per_Attacker",
+                DEFAULT_UNARMORED_MAX_AWARDS_PER_ATTACKER);
+    }
+
     /* Archery */
     public double getArcheryDistanceMultiplier() {
         return config.getDouble("Experience_Values.Archery.Distance_Multiplier", 0.025);

@@ -72,7 +72,8 @@ import net.minecraft.sound.SoundCategory;
  * on-hit <em>effect</em> sub-skills: <b>Swords Rupture</b> (bleed DoT — see {@link #maybeProcessRupture})
  * and the two combat super abilities, <b>Serrated Strikes</b> and <b>Skull Splitter</b> (AoE — see
  * {@link #maybeProcessSerratedStrikes} / {@link #maybeProcessSkullSplitter}), and — on the defender
- * side again — <b>Swords Counter Attack</b> (see {@link #maybeProcessCounterAttack}) — and, after a
+ * side again — <b>Swords Counter Attack</b> (see {@link #maybeProcessCounterAttack}) and
+ * <b>Unarmored Thorny Skin</b> (see {@link #maybeProcessThornySkin}) — and, after a
  * mace hit the target survives, <b>Maces Cripple</b> (Slowness — see {@link #maybeProcessCripple}). The Axes
  * target-inspecting sub-skills (<b>Armor Impact</b> / <b>Greater Impact</b> / <b>Critical
  * Strikes</b>) ride the attacker branch inside {@link MeleeDamageBonus}, since they feed the same
@@ -342,6 +343,11 @@ public final class EntityDamageListener {
             // it is paid on the pre-armor reading rather than on `result`, so neither Iron Skin nor
             // a successful Dodge can shrink the XP for the blow that earned it.
             maybeAwardUnarmoredXp(serverPlayer, source, preArmorDamage);
+            // ...and its payoff half. Outside the dispatch below for the same reason, and it must
+            // stay outside: a Dodge that halves the hit does not make the attacker any less punched,
+            // and gating the sting on losing the dodge roll would make the sub-skill fire on a
+            // condition the player cannot see.
+            maybeProcessThornySkin(serverPlayer, source);
             if (source.isIn(DamageTypeTags.IS_FALL)) {
                 result = handleFallDamage(serverPlayer, result);
             } else if (canReduceOwnBlast(serverPlayer, source)) {
@@ -441,6 +447,9 @@ public final class EntityDamageListener {
         if (!PlatformLivingEntity.isUnarmored(serverPlayer)) {
             return;
         }
+        if (!unarmoredXpUncapped(source.getAttacker())) {
+            return; // this attacker has already paid out its share (see the cap below).
+        }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
         if (mmoPlayer == null) {
             return; // data not loaded (e.g. mid-join).
@@ -449,7 +458,110 @@ public final class EntityDamageListener {
         if (unarmored == null) {
             return;
         }
-        unarmored.onDamageTaken(preArmorDamage);
+        if (unarmored.onDamageTaken(preArmorDamage) > 0) {
+            incrementUnarmoredTracker(source.getAttacker());
+        }
+    }
+
+    /** Transient per-attacker counter of how many Unarmored XP awards it has paid out. */
+    private static final String UNARMORED_TRACKER_KEY = "mcmmo:unarmored_tracker";
+
+    /**
+     * Whether {@code attacker} has any Unarmored XP awards left in it.
+     *
+     * <p><b>This is the gate that decides whether the skill's balance means anything</b>, and
+     * {@code Require_Living_Attacker} does not do it: a zombie <em>is</em> a living attacker, so one
+     * of them hitting a player through a slab — while a stack of golden carrots regenerates the
+     * damage as fast as it lands — is a fully passive ~250 XP/s, which reaches RetroMode 1000 in
+     * roughly twelve hours against a design budget of ninety-two. The XP has to come out of a fight
+     * the player is actually having.
+     *
+     * <p>Capping <em>per attacker</em> rather than per second is what preserves the legitimate case.
+     * A long, genuinely dangerous fight is a handful of hits from each of several mobs and never
+     * comes near the cap; the farm is thousands of hits from the <em>same</em> mob, and it dies at
+     * the first hit past the limit. What is left of the exploit — cycling fresh mobs onto yourself
+     * fast enough to matter — is a thing a player has to stand there and survive, which is the
+     * activity the skill exists to reward.
+     *
+     * <p>Same shape and the same {@link MetadataStore} mechanism as Agility Dodge's cap, which is
+     * legacy's own answer to this exact problem, but keyed on the {@link LivingEntity} attacker
+     * rather than on {@code MobEntity}: Dodge only ever paid against mobs, whereas Unarmored pays
+     * for any living attacker and would otherwise leave the non-mob ones uncapped.
+     *
+     * <p>The counter outlives the mob — nothing clears {@link MetadataStore} per entity, only
+     * {@code clearAll} at server stop — so the store grows by one small entry per distinct attacker
+     * for the length of a session. That is the same (deliberate, documented) trade Dodge makes: it
+     * is a few dozen bytes per mob, and expiring the counter would make the cap <em>weaker</em>
+     * rather than stronger. Legacy scheduled a one-minute cleanup task; not porting it leaves a
+     * strictly tighter gate, which is the direction to err in for an anti-farm measure.
+     *
+     * @param attacker the damage source's attacker; {@code null} when the living-attacker gate is
+     *                 switched off, in which case there is nothing to key a counter on and the cap
+     *                 cannot apply
+     */
+    private static boolean unarmoredXpUncapped(Entity attacker) {
+        final int max = McMMOMod.getExperienceConfig().getUnarmoredMaxAwardsPerAttacker();
+        if (max <= 0 || attacker == null) {
+            return true; // cap disabled, or no attacker identity to count against.
+        }
+        final Integer count = MetadataStore.get(attacker, UNARMORED_TRACKER_KEY, Integer.class);
+        return count == null || count < max;
+    }
+
+    /** Bump the per-attacker Unarmored XP counter after an award that actually paid. */
+    private static void incrementUnarmoredTracker(Entity attacker) {
+        if (attacker == null
+                || McMMOMod.getExperienceConfig().getUnarmoredMaxAwardsPerAttacker() <= 0) {
+            return;
+        }
+        final Integer count = MetadataStore.get(attacker, UNARMORED_TRACKER_KEY, Integer.class);
+        MetadataStore.set(attacker, UNARMORED_TRACKER_KEY, count == null ? 1 : count + 1);
+    }
+
+    // --- Unarmored: Thorny Skin ------------------------------------------------------------------
+
+    /**
+     * Unarmored Thorny Skin: something that punched a bare-skinned player gets a little of it back.
+     *
+     * <p><b>Melee only, and the gate that achieves that is the same one Counter Attack uses</b> —
+     * requiring the <em>direct</em> damager ({@code getSource()}, not {@code getAttacker()}) to be a
+     * living entity. A skeleton's arrow, a ghast's fireball and a Blast Mining charge all arrive with
+     * a non-living direct source, so they are excluded by construction rather than by an
+     * ever-lengthening list of damage types to skip. Fall, fire, cactus and drowning have no direct
+     * damager at all and fall out of the same test.
+     *
+     * <p><b>No proc roll and no notification, both deliberate.</b> The reflect is capped at half a
+     * heart, so it does not need a chance gate to stay fair — and a sub-skill that fires on every hit
+     * would spam the action bar into uselessness if it announced itself. The player sees it as the
+     * attacker taking chip damage, which is what it is. (Counter Attack messages because it is a
+     * <em>roll</em>: telling the player their gamble paid off is the whole point.)
+     *
+     * <p>No {@code canCombatSkillsTrigger} check, unlike Counter Attack: Unarmored is a
+     * {@code MISC_SKILLS} defensive skill and deliberately not in {@code COMBAT_SKILLS}, so the
+     * {@code Enabled_For_PVE} / {@code Enabled_For_PVP} switches do not address it. Consulting them
+     * anyway would make an unrelated config toggle silently disable a defensive passive.
+     *
+     * <p>Recursion is closed upstream rather than here: {@link CombatUtils#safeDealDamage} refuses to
+     * run inside an mcMMO-dealt hit, and {@link #onModifyAppliedDamage} turns such hits away before
+     * this branch is reached. Two unarmored players could otherwise sting each other forever.
+     */
+    private static void maybeProcessThornySkin(ServerPlayerEntity serverPlayer, DamageSource source) {
+        // The *direct* damager: a projectile's shooter is not standing close enough to be stung.
+        if (!(source.getSource() instanceof LivingEntity assailant) || assailant == serverPlayer) {
+            return;
+        }
+        if (!PlatformLivingEntity.isUnarmored(serverPlayer)) {
+            return;
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        if (mmoPlayer == null) {
+            return;
+        }
+        final UnarmoredManager unarmored = mmoPlayer.getUnarmoredManager();
+        if (unarmored == null || !unarmored.thornsReady(true)) {
+            return;
+        }
+        CombatUtils.safeDealDamage(assailant, unarmored.getThornsDamage(true), serverPlayer);
     }
 
     /**

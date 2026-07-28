@@ -66,6 +66,24 @@ ExploitFix:
         # Turning this off makes fall, fire, cactus, lava, drowning and suffocation damage all pay.
         # It is here so the behaviour is diagnosable during play-testing, not as a balance knob.
         Require_Living_Attacker: true
+
+        # How many times ONE attacker can pay you Unarmored XP before it stops counting.
+        # Set to 0 to disable the cap entirely.
+        #
+        # Require_Living_Attacker above closes the environmental farms but not the one that actually
+        # matters, because a zombie IS a living attacker. One zombie hitting you through a slab,
+        # while a stack of golden carrots regenerates the damage as fast as it lands, is a fully
+        # passive ~250 XP/s -- that is level 1000 in about twelve hours, against a skill budgeted at
+        # ninety-two. Only a per-attacker cap reaches it.
+        #
+        # Capping per attacker rather than per second is what keeps real fights intact. A hard fight
+        # is a few hits from each of several mobs and never comes close to twenty; the farm is
+        # thousands of hits from the SAME mob, and it stops paying at the twenty-first. Being hit
+        # twenty times by one mob while wearing nothing is already a fight going badly.
+        #
+        # (Same mechanism as the Agility dodge cap, four times the size. The counter is transient --
+        # it lives as long as the mob does and is not saved.)
+        Max_Awards_Per_Attacker: 20
 Fishing_ExploitFix_Options:
     MoveRange: 3
     OverFishLimit: 10
