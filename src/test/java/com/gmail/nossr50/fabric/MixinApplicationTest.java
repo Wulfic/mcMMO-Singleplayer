@@ -9,6 +9,7 @@ import java.util.Arrays;
 import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.block.entity.BrewingStandBlockEntity;
 import net.minecraft.component.type.FoodComponent;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.item.BlockItem;
@@ -180,6 +181,23 @@ class MixinApplicationTest {
         assertTrue(methods.stream().anyMatch(name -> name.contains("boostVanillaXp")),
                 "the dropExperience orb-size modifier did not apply — Understanding the Art would "
                         + "silently leave furnace XP at vanilla amounts in-game");
+    }
+
+    @Test
+    void livingEntityDamageMixinApplies() {
+        // LivingEntity is loaded long before this test runs, so class-loading proves nothing here.
+        // What matters is the pre-armour injector: it is the *second* injection on this mixin, added
+        // for Unarmored, and it is the one whose absence is invisible. Losing it does not crash and
+        // does not stop Unarmored earning — onModifyAppliedDamage falls back to the post-armour
+        // amount — so the skill would simply level at a third rate at the diamond tier, which is
+        // exactly the symptom the injector exists to prevent and is indistinguishable from a tuning
+        // problem in play-testing.
+        final boolean hasPreArmorHook = Arrays.stream(LivingEntity.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().contains("capturePreArmorDamage"));
+        assertTrue(hasPreArmorHook,
+                "LivingEntityDamageMixin's applyArmorToDamage injector did not apply to "
+                        + "LivingEntity — Unarmored XP would silently be metered on post-armour "
+                        + "damage, so Iron Skin would throttle the skill that grants it");
     }
 
     @Test

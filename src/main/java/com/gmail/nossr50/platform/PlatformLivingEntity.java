@@ -154,6 +154,38 @@ public final class PlatformLivingEntity {
         return pieces;
     }
 
+    /**
+     * Whether all four humanoid armor slots are empty — the single gate the whole Unarmored skill
+     * hangs off (its XP, its Iron Skin armor points and its Thorny Skin reflect).
+     *
+     * <p><b>Deliberately stricter than {@link #getArmorPieces()}, which sits directly above it.</b>
+     * That method filters by {@link ItemUtils#isArmor} because its callers (Axes' Armor Impact) need
+     * pieces they can actually damage. This one counts an <em>occupied slot</em>, armor or not, so a
+     * carved pumpkin, an elytra or a mob head all disable the skill. Two reasons, and the first is
+     * the important one:
+     * <ul>
+     *   <li>Anything else is an exploit surface. "Free diamond-grade armor as long as mcMMO does not
+     *       recognise what you are wearing" is a rule that rewards finding the one head-slot item
+     *       outside the material store, and every future item added to the game is another lottery
+     *       ticket. "Wearing nothing" has no such edge.</li>
+     *   <li>It is the rule a player can state without reading the source: the four slots are empty,
+     *       or the skill is off.</li>
+     * </ul>
+     *
+     * <p>Static because the three call sites hold a raw entity — the damage seam is handed the victim
+     * by vanilla and the attribute sweep iterates live players — and wrapping one per hit, per tick,
+     * to ask a question with no state behind it would be allocation for its own sake.
+     */
+    public static boolean isUnarmored(@NotNull LivingEntity entity) {
+        for (EquipmentSlot slot : EquipmentSlot.VALUES) {
+            if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR
+                    && !entity.getEquippedStack(slot).isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // --- Velocity -----------------------------------------------------------
 
     /**

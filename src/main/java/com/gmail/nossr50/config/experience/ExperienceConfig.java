@@ -462,6 +462,9 @@ public class ExperienceConfig extends ConfigLoader {
      * food, which needs no mobs, no risk and no attention. Requiring an attacker means the XP comes
      * from fighting, which is the thing the skill is meant to reward. The flag exists so the
      * behaviour is diagnosable in play-testing, not as a balance knob.
+     *
+     * <p>The attacker must also not be the victim themselves — see
+     * {@code EntityDamageListener#isUnarmoredXpSource} for why that clause carries its own weight.
      */
     public boolean isUnarmoredLivingAttackerRequired() {
         return config.getBoolean("ExploitFix.Unarmored.Require_Living_Attacker", true);

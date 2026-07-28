@@ -22,6 +22,7 @@ import com.gmail.nossr50.skills.stealth.StealthManager;
 import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
+import com.gmail.nossr50.skills.unarmored.UnarmoredManager;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
@@ -95,6 +96,13 @@ import net.minecraft.sound.SoundCategory;
  * #onAllowDamage}) — because they cancel the hit outright, so they ride Fabric's cancel-only
  * {@code ServerLivingEntityEvents.ALLOW_DAMAGE} veto — hence this class has a {@link #register()}
  * as well as a mixin entry point.
+ *
+ * <p>And one branch needs a reading the {@code modifyAppliedDamage} seam cannot give it at all:
+ * <b>Unarmored</b>'s XP is paid on the damage as it was <em>before</em> armor mitigation (see
+ * {@link #maybeAwardUnarmoredXp}), because the skill's own Iron Skin bonus is armor and would
+ * otherwise throttle the XP that grants it. That value is captured a few bytecodes upstream by a
+ * second injector on {@code applyArmorToDamage} and joined to this one through
+ * {@link #recordPreArmorDamage} — so the same mixin class has two entry points into this listener.
  */
 public final class EntityDamageListener {
 
@@ -280,6 +288,12 @@ public final class EntityDamageListener {
      * @return the damage mcMMO wants applied instead (equal to {@code amount} when it does not act)
      */
     public static float onModifyAppliedDamage(LivingEntity entity, DamageSource source, float amount) {
+        // Read (and clear) the pre-armor figure first, before anything below can deal nested damage
+        // and overwrite the stash — a Serrated Strikes AoE, a Counter Attack and Thorny Skin all
+        // re-enter the damage pipeline from inside this method, and each of those runs its own
+        // applyArmorToDamage. Taking the reading here is what makes the join single-frame.
+        final float preArmorDamage = consumePreArmorDamage(entity, source, amount);
+
         if (amount <= 0) {
             return amount;
         }
@@ -323,6 +337,11 @@ public final class EntityDamageListener {
             // (D-S3). Deliberately every incoming source, not just combat: a player who just took
             // fall damage or stepped in lava is not lurking in the shadows either.
             recordDamageTaken(serverPlayer);
+            // Pass 2: Unarmored XP. Sits outside the fall / blast / dodge dispatch below because it
+            // is not one of those cases — it pays for *being hit while bare*, whatever hit you — and
+            // it is paid on the pre-armor reading rather than on `result`, so neither Iron Skin nor
+            // a successful Dodge can shrink the XP for the blow that earned it.
+            maybeAwardUnarmoredXp(serverPlayer, source, preArmorDamage);
             if (source.isIn(DamageTypeTags.IS_FALL)) {
                 result = handleFallDamage(serverPlayer, result);
             } else if (canReduceOwnBlast(serverPlayer, source)) {
@@ -346,6 +365,113 @@ public final class EntityDamageListener {
             result = handleWolfDamage(wolf, source, result);
         }
         return result;
+    }
+
+    // --- Unarmored: the pre-armor damage reading -------------------------------------------------
+
+    /**
+     * One entity's incoming damage as it was <em>before</em> vanilla's armor mitigation, together
+     * with the identities it was captured against.
+     *
+     * <p>Both identities are held so the consumer can refuse a reading that is not demonstrably the
+     * one it is looking at. Cheap insurance against the only thing that could break the join — some
+     * other mod, or a future vanilla refactor, calling {@code applyArmorToDamage} somewhere that is
+     * not immediately followed by {@code modifyAppliedDamage} on the same hit.
+     */
+    private record PreArmorDamage(LivingEntity entity, DamageSource source, float amount) {
+    }
+
+    /**
+     * The most recent pre-armor reading on this thread, set by {@code LivingEntityDamageMixin} and
+     * consumed a few bytecodes later by {@link #onModifyAppliedDamage}.
+     *
+     * <p>Thread-local rather than a field or a map because the whole lifetime of the value is one
+     * pair of adjacent calls inside a single {@code applyDamage} frame — the same
+     * {@code CombatUtils.IN_MCMMO_DAMAGE} / {@code SmeltingListener.VANILLA_XP_MULTIPLIER} shape
+     * this port uses everywhere it has to join two injectors.
+     */
+    private static final ThreadLocal<PreArmorDamage> PRE_ARMOR_DAMAGE = new ThreadLocal<>();
+
+    /**
+     * Stash the damage {@code entity} is about to have its armor applied to. Called from the
+     * {@code applyArmorToDamage} HEAD injector; see that method for why the seam exists at all.
+     */
+    public static void recordPreArmorDamage(LivingEntity entity, DamageSource source, float amount) {
+        PRE_ARMOR_DAMAGE.set(new PreArmorDamage(entity, source, amount));
+    }
+
+    /**
+     * Take the pre-armor reading for this hit, clearing it so it can never be read twice or leak
+     * into an unrelated one.
+     *
+     * @param fallback what to report when no matching reading was captured
+     * @return the pre-armor damage, or {@code fallback} if the stash is missing or belongs to some
+     *         other entity or damage source
+     */
+    private static float consumePreArmorDamage(LivingEntity entity, DamageSource source,
+            float fallback) {
+        final PreArmorDamage stashed = PRE_ARMOR_DAMAGE.get();
+        PRE_ARMOR_DAMAGE.remove();
+        if (stashed == null || stashed.entity() != entity || stashed.source() != source) {
+            // Degrading to the post-armor amount pays *less* XP rather than none, so a broken join
+            // shows up as a skill that levels slowly — not one that silently never levels, which is
+            // indistinguishable from the feature not being wired at all.
+            return fallback;
+        }
+        return stashed.amount();
+    }
+
+    // --- Unarmored: XP ---------------------------------------------------------------------------
+
+    /**
+     * Unarmored XP: a player hit while every armor slot is empty is paid for the blow.
+     *
+     * <p>Three gates, in cost order — the cheap arithmetic first, the config read next, the profile
+     * lookup last, because this runs on every hit any player takes.
+     *
+     * <p>Paid on {@code preArmorDamage} for the reason spelled out on
+     * {@code UnarmoredManager#getUnarmoredXp}: Iron Skin is itself armor, so metering the XP after
+     * armor would have the skill throttle its own progress exactly when the grind is longest.
+     */
+    static void maybeAwardUnarmoredXp(ServerPlayerEntity serverPlayer, DamageSource source,
+            float preArmorDamage) {
+        if (preArmorDamage <= 0 || !isUnarmoredXpSource(serverPlayer, source)) {
+            return;
+        }
+        if (!PlatformLivingEntity.isUnarmored(serverPlayer)) {
+            return;
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        if (mmoPlayer == null) {
+            return; // data not loaded (e.g. mid-join).
+        }
+        final UnarmoredManager unarmored = mmoPlayer.getUnarmoredManager();
+        if (unarmored == null) {
+            return;
+        }
+        unarmored.onDamageTaken(preArmorDamage);
+    }
+
+    /**
+     * Whether this hit is the kind Unarmored is willing to pay for — the skill's one real exploit
+     * gate ({@code ExploitFix.Unarmored.Require_Living_Attacker}, on by default).
+     *
+     * <p>"XP for taking damage" is otherwise the most passive farm in the mod: stand in a cactus, a
+     * fire or a berry bush with a stack of food and level up while doing something else. Requiring a
+     * living attacker means the XP has to come out of an actual fight, which is the thing the skill
+     * exists to reward.
+     *
+     * <p><b>The attacker must also not be the victim.</b> That clause is not decoration: a player is
+     * a {@link LivingEntity}, so without it their own primed TNT — and, worse, their own Blast Mining
+     * charge, which is a repeatable mining loop that Demolitions Expertise exists to make survivable
+     * — would read as a living attacker and pay full XP for blowing yourself up on purpose.
+     */
+    private static boolean isUnarmoredXpSource(ServerPlayerEntity victim, DamageSource source) {
+        if (!McMMOMod.getExperienceConfig().isUnarmoredLivingAttackerRequired()) {
+            return true; // gate off: every damage cause pays (play-testing / diagnosis only).
+        }
+        final Entity attacker = source.getAttacker();
+        return attacker instanceof LivingEntity && attacker != victim;
     }
 
     /**
@@ -939,6 +1065,11 @@ public final class EntityDamageListener {
     /** Drop every player's damage-recency window (server stop). */
     public static void clear() {
         LAST_DAMAGED_TICK.clear();
+        // Belt-and-braces, not a fix for a known leak: the pre-armor stash is cleared on every read,
+        // so the only way one survives is a hit whose applyArmorToDamage ran and whose
+        // modifyAppliedDamage did not. That would strand a single entity + damage source reference
+        // on the server thread, which in singleplayer outlives the world the player just left.
+        PRE_ARMOR_DAMAGE.remove();
     }
 
     /**

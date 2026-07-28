@@ -58,6 +58,11 @@ ExploitFix:
         # Requiring an attacker means the XP has to come from an actual fight, which is the thing
         # the skill exists to reward.
         #
+        # The attacker also has to be someone OTHER than you. A player is a living entity, so
+        # without that clause your own primed TNT -- and your own Blast Mining charge, which is a
+        # repeatable mining loop that Demolitions Expertise exists to make survivable -- would count
+        # as an attacker and pay full XP for blowing yourself up on purpose.
+        #
         # Turning this off makes fall, fire, cactus, lava, drowning and suffocation damage all pay.
         # It is here so the behaviour is diagnosable during play-testing, not as a balance knob.
         Require_Living_Attacker: true
