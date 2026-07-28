@@ -1,13 +1,17 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.SkillAttributeService;
 import com.gmail.nossr50.skills.agility.AgilityManager;
 import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.stealth.StealthManager;
 import com.gmail.nossr50.util.player.UserManager;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.entity.EquipmentSlot;
@@ -15,18 +19,27 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.PlayerInput;
 import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The per-tick movement sampler behind Agility's Land, Water and Air domains (F1).
+ * The per-tick movement sampler behind Agility's Land, Water and Air domains and Stealth's sneak
+ * travel (F1).
  *
  * <p>Everything ported in Pass 1 hangs off a discrete event — a block broken, an entity damaged, an
  * item used. Movement is not an event; it is a continuous state, and nothing in the codebase sampled
  * it before this. One {@code END_SERVER_TICK} sweep measures how far each online player moved,
  * decides which medium they moved through, and hands that to
- * {@link AgilityManager#onMovementTick}.
+ * {@link AgilityManager#onMovementTick} — or, when they are crouched, to
+ * {@link StealthManager#onSneakTick}.
+ *
+ * <p><b>The two skills partition the same tick rather than sharing it.</b>
+ * {@link #classifyMedium} returns {@code null} for every sneaking player in every medium, so a tick
+ * of travel feeds exactly one of them and no movement state can ever pay twice. That also means the
+ * Stealth dispatch must sit <em>above</em> the guard which acts on that {@code null} — see the
+ * comment at the call site, which is the single most breakable thing in this class.
  *
  * <p><b>This class deliberately does not compute XP.</b> It owns only the platform-y guards below;
  * the speed clamp that turns distance into credited seconds is MC-free arithmetic in
@@ -83,6 +96,15 @@ public final class PlayerMovementTracker {
     private static final Map<UUID, Integer> SOLAR_WINGS_TICKS = new HashMap<>();
 
     /**
+     * Whether real server-side movement input has ever been seen, so it is logged exactly once.
+     *
+     * <p>Deliberately <em>not</em> reset by {@link #clear()}: the question it answers ("does this
+     * client actually send input packets?") is a property of the build, not of a world session, and
+     * re-logging it on every world load would train people to ignore the line.
+     */
+    private static final AtomicBoolean MOVEMENT_INPUT_OBSERVED = new AtomicBoolean();
+
+    /**
      * Register the sweep and its teardown. Called once at mod load from
      * {@link com.gmail.nossr50.fabric.McMMOMod#onInitialize}.
      */
@@ -112,13 +134,21 @@ public final class PlayerMovementTracker {
             } catch (Exception e) {
                 // One bad tick must never take the server tick loop down with it, and a movement
                 // skill failing silently forever is worse than a log line.
-                com.gmail.nossr50.fabric.McMMOMod.LOGGER.error(
-                        "Agility movement tick failed for {}", player.getName().getString(), e);
+                McMMOMod.LOGGER.error(
+                        "Movement tick failed for {}", player.getName().getString(), e);
             }
         }
     }
 
-    private static void tickPlayer(@NotNull ServerPlayerEntity player) {
+    /**
+     * One player's movement sweep.
+     *
+     * <p>Package-private rather than private so a test can drive the <em>whole</em> body. That
+     * matters more here than usual: the ordering of the Stealth dispatch against the guard below is
+     * the actual defect risk, and a test of the sneak-travel predicate on its own would pass with the
+     * dispatch deleted entirely.
+     */
+    static void tickPlayer(@NotNull ServerPlayerEntity player) {
         final UUID uuid = player.getUuid();
         final Vec3d current = player.getEntityPos();
         final Vec3d previous = LAST_POSITIONS.put(uuid, current);
@@ -141,23 +171,128 @@ public final class PlayerMovementTracker {
         applyLeadLungs(player, agility);
         applySolarWings(player, agility);
 
+        // Horizontal only, for every medium and for Stealth. The reference speeds are horizontal
+        // figures, and it also means a player cannot bill a vertical elytra dive (or a fall) as
+        // travel. Measured once here and shared, so the two skills can never disagree about how far
+        // the player moved this tick.
+        final double distance = previous == null ? 0.0 : horizontalDistance(previous, current);
+        final boolean travelled =
+                previous != null && distance >= MIN_DELTA && distance <= TELEPORT_DELTA;
+
+        // ⚠️ STEALTH SITS ABOVE THE AGILITY RETURN BELOW, AND MUST STAY THERE. classifyMedium
+        // returns null for every sneaking player in every medium (that is how crouched travel is
+        // kept from paying Agility), so the guard below is taken on exactly the ticks Stealth cares
+        // about. Moved underneath it, Padfoot and sneak XP become dead code that still compiles,
+        // boots clean and passes every unit test.
+        tickStealth(player, mmoPlayer, distance, travelled);
+
         if (medium == null || previous == null || player.hasVehicle()) {
             // No qualifying medium, no baseline to measure against, or being carried by something
             // else. In the vehicle case the baseline was still refreshed above, so stepping out of a
             // boat does not bill the whole ride.
             return;
         }
-
-        // Horizontal only, for every medium. The reference speeds are horizontal figures, and it also
-        // means a player cannot bill a vertical elytra dive (or a fall) as travel.
-        final double dx = current.x - previous.x;
-        final double dz = current.z - previous.z;
-        final double distance = Math.sqrt(dx * dx + dz * dz);
-
-        if (distance < MIN_DELTA || distance > TELEPORT_DELTA) {
+        if (!travelled) {
             return;
         }
         agility.onMovementTick(medium, distance);
+    }
+
+    /** Horizontal distance between two positions, in blocks. */
+    private static double horizontalDistance(@NotNull Vec3d previous, @NotNull Vec3d current) {
+        final double dx = current.x - previous.x;
+        final double dz = current.z - previous.z;
+        return Math.sqrt(dx * dx + dz * dz);
+    }
+
+    /**
+     * Stealth's half of the sweep: keep Padfoot's speed buff matched to live state, and credit a tick
+     * of qualifying sneak-travel.
+     *
+     * <p>Padfoot is set every tick including to {@code 0}, for the same reason Fleet Footed is — the
+     * buff must die the instant the condition does, and a respawn silently discards it, so re-deriving
+     * beats remembering. It is gated on {@link ServerPlayerEntity#isSneaking()} anyway even though
+     * vanilla only reads {@code sneaking_speed} while crouched: relying on that would mean a modifier
+     * sitting on a walking player forever, which is indistinguishable from a leak the first time
+     * somebody debugs this.
+     */
+    private static void tickStealth(@NotNull ServerPlayerEntity player,
+            @NotNull McMMOPlayer mmoPlayer, double distance, boolean travelled) {
+        final StealthManager stealth = mmoPlayer.getStealthManager();
+        if (stealth == null) {
+            return;
+        }
+
+        final boolean sneaking = player.isSneaking();
+        SkillAttributeService.set(player, SkillAttributeService.Managed.STEALTH_PADFOOT,
+                sneaking ? stealth.getPadfootSpeedBonus() : 0.0);
+
+        if (travelled && sneaking && qualifiesAsSneakTravel(player)) {
+            stealth.onSneakTick(distance);
+        }
+    }
+
+    /**
+     * Whether this tick of crouched movement is the player actually sneaking somewhere.
+     *
+     * <p>The wiki jokes that Sneaking is "sticky keys op", which is precisely the design brief: this
+     * gate is the skill, and everything else about Stealth is downstream of it. Four conditions, each
+     * closing a different farm:
+     * <ul>
+     *   <li><b>Ground only</b> (ruled 2026-07-27). Crouch-swimming moves at roughly 3 b/s against a
+     *       1.295 b/s reference, so it would sit permanently at the speed clamp and make "hold shift
+     *       in a water current" the single best way to level the skill. Excluding water <em>and</em>
+     *       requiring ground closes it twice over; the same exclusion is why Agility stopped paying
+     *       for crouched travel, and Stealth must not reopen the leak Agility closed.</li>
+     *   <li><b>No gliding</b> — implied by requiring ground, but a crouched elytra descent is exactly
+     *       the sort of thing that gets rediscovered later, so it is stated rather than inferred.</li>
+     *   <li><b>No vehicles.</b> A boat, horse or minecart moves the player; the player is not
+     *       moving.</li>
+     *   <li><b>A real movement key must be held.</b> This is the one a position delta cannot give
+     *       you: it separates "walking forward" from "being carried" by flowing water, a piston loop
+     *       or a bubble column, none of which need a hand on the keyboard.</li>
+     * </ul>
+     */
+    static boolean qualifiesAsSneakTravel(@NotNull ServerPlayerEntity player) {
+        if (player.hasVehicle() || player.isGliding() || player.isTouchingWater()
+                || !player.isOnGround()) {
+            return false;
+        }
+        return !requiresMovementInput() || isPressingMovementKey(player);
+    }
+
+    /** Whether the anti-AFK input gate is armed (the {@code ExploitFix} escape hatch). */
+    private static boolean requiresMovementInput() {
+        final ExperienceConfig config = McMMOMod.getExperienceConfig();
+        return config == null || config.isSneakInputRequired();
+    }
+
+    /**
+     * Whether the player is holding a directional movement key <em>right now</em>.
+     *
+     * <p>{@code ServerPlayerEntity#getPlayerInput()} is a live server-side view of real key state:
+     * {@code ServerPlayNetworkHandler} writes it straight from the client's input packet
+     * (bytecode-verified), and {@code PlayerInput} is a record of
+     * {@code forward/backward/left/right/jump/sneak/sprint}. Jump and sneak are deliberately not
+     * consulted — a stuck shift key is the exploit, not the qualification.
+     *
+     * <p>⚠️ <b>The known risk, and it is a silent one.</b> If a client turns out not to send input
+     * packets outside a vehicle, this returns all-{@code false} forever and Stealth earns exactly
+     * zero, which reads as a wiring bug rather than a tuning one. Hence
+     * {@code ExploitFix.Stealth.Require_Movement_Input} as an escape hatch, and hence the one-shot
+     * INFO line below: a §G session can confirm the gate is live from the log alone, instead of
+     * inferring it from XP that may be zero for some other reason.
+     */
+    private static boolean isPressingMovementKey(@NotNull ServerPlayerEntity player) {
+        final PlayerInput input = player.getPlayerInput();
+        final boolean pressing =
+                input.forward() || input.backward() || input.left() || input.right();
+        if (pressing && MOVEMENT_INPUT_OBSERVED.compareAndSet(false, true)) {
+            McMMOMod.LOGGER.info(
+                    "Stealth: server-side movement input observed for {} — the anti-AFK sneak gate "
+                            + "is live.", player.getName().getString());
+        }
+        return pressing;
     }
 
     /**

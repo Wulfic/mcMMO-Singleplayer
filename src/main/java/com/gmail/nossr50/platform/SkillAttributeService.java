@@ -74,7 +74,31 @@ public final class SkillAttributeService {
          * stops a max-Agility Depth Strider III player from becoming silly.
          */
         AGILITY_FLEET_FOOTED_WATER(EntityAttributes.WATER_MOVEMENT_EFFICIENCY,
-                "agility_fleet_footed_water", Operation.ADD_VALUE);
+                "agility_fleet_footed_water", Operation.ADD_VALUE),
+
+        /**
+         * Stealth → Padfoot. Targets {@code SNEAKING_SPEED} rather than {@code MOVEMENT_SPEED}, and
+         * that choice does three jobs at once — bytecode-verified from {@code EntityAttributes},
+         * where it is a {@code ClampedEntityAttribute("sneaking_speed", 0.3, 0.0, 1.0)} consumed by
+         * {@code ClientPlayerEntity} behind {@code shouldSlowDown() = isInSneakingPose() ||
+         * isCrawling()}:
+         * <ul>
+         *   <li><b>It only applies while crouched or crawling, by construction.</b> No add/remove
+         *       dance is needed to keep the buff off a walking player — vanilla simply stops reading
+         *       the attribute. (It also speeds up crawling through a 1-block gap. Intended.)</li>
+         *   <li><b>Vanilla's own maximum of 1.0 is the ceiling</b>, which is full walking speed, so
+         *       no configuration of {@code MaxSneakSpeedBonus} can make sneaking outrun walking.
+         *       Same free-ceiling property {@link #AGILITY_FLEET_FOOTED_WATER} gets from
+         *       {@code WATER_MOVEMENT_EFFICIENCY}.</li>
+         *   <li><b>It shares no attribute with Fleet Footed</b>, so D-AG5's "two skills fighting over
+         *       one attribute" concern is structurally impossible here rather than carefully
+         *       avoided.</li>
+         * </ul>
+         * Additive because the vanilla default (0.3) is the thing being raised toward 1.0; a
+         * multiplicative operation would make the same config number mean different speeds as vanilla
+         * retunes its default.
+         */
+        STEALTH_PADFOOT(EntityAttributes.SNEAKING_SPEED, "stealth_padfoot", Operation.ADD_VALUE);
 
         private final RegistryEntry<EntityAttribute> attribute;
         private final Identifier id;
