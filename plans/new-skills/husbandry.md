@@ -125,11 +125,20 @@ raising, harvesting, and the super.
   ⚠️ **A changed shipped default never reaches an existing on-disk `advanced.yml`** —
   `copyMissingDefaults` back-fills only *absent* keys, so a config generated before this ruling keeps
   8/50 forever. The dev `run/config/mcmmo/advanced.yml` was patched by hand.
-- **D-H3 — what counts as "shearing".** Enumerate the set explicitly; do not hand-wave "shears = XP"
-  or you pay for shearing a pumpkin stem 400×. **Entity shear:** sheep (wool), mooshroom (mushrooms,
-  destructive), snow golem (pumpkin), bogged (mushrooms). **Block shear:** leaves/vines/beehive-adjacent
-  blocks pay **nothing** — that is Woodcutting/Herbalism's territory and it is spammable. This is a
-  change from the v1 draft, which routed shears-on-leaves into Husbandry.
+- ✅ **D-H3 — what counts as "shearing".** Enumerate the set explicitly; do not hand-wave "shears =
+  XP" or you pay for shearing a pumpkin stem 400×. **Entity shear:** sheep (wool), mooshroom
+  (mushrooms, destructive), snow golem (pumpkin), bogged (mushrooms). **Block shear:**
+  leaves/vines/beehive-adjacent blocks pay **nothing** — that is Woodcutting/Herbalism's territory
+  and it is spammable. This is a change from the v1 draft, which routed shears-on-leaves into
+  Husbandry.
+  ⚠️ **The rule earned its keep on the first contact with bytecode: `CopperGolemEntity` is a fifth
+  shearable and pays nothing.** Shearing one removes the poppy from its hand, is repeatable forever
+  on the same golem, and is not a livestock harvest by any reading. It is excluded structurally
+  rather than by name — see the seam notes — but it is the exact case this decision exists to catch.
+  🔴 **§G tuning row: the snow golem is the loose end.** Shearing one returns the carved pumpkin
+  that built it, so a snow farm plus a pumpkin farm makes a ~4-action loop worth 300 XP — comparable
+  to breeding, not obviously worse, but it is the shear the rate should be judged on rather than the
+  sheep. Measure before tuning; do not pre-emptively special-case a species.
 - **D-H4 — anti-exploit, generally.** Respect the existing `experience.yml → ExploitFix` philosophy.
   Every harvest verb requires a **real player** (see the seam notes — this is not automatic).
   Additionally: a baby bred by Twins must not itself pay Twins XP in a self-sustaining loop, and the
@@ -140,14 +149,31 @@ raising, harvesting, and the super.
   5 min), which is the same `MetadataStore` mechanism Unarmored's per-attacker cap and Agility's Dodge
   cap already use — see [[unarmored-skill-build]]. Config key
   `ExploitFix.Husbandry.Milk_Cooldown_Seconds`.
-- ✅ **D-H6 — the bred-by marker is in-memory; the loss is accepted** (user ruling, 2026-07-29).
-  Verb 2 pays the player who bred the
-  animal, 20 minutes later. That needs a **`bred by <uuid>` marker on the child**, written in the breed
-  mixin. `MetadataStore` is in-memory, so a server restart loses it. **Accepting the loss**
-  (worst case: animals bred before a restart pay nothing when they mature — invisible, never wrong in
-  the other direction) rather than adding a persistence shape. If it turns out to matter, the
-  `PlacedBlockStore` pattern ([[placed-block-persistence]]) is the template — **but note its lesson:
-  never size an allocation from a number read off disk.**
+- ✅ **D-H6 — the bred-by marker is PERSISTED, on the animal's own NBT** (user ruling, 2026-07-29,
+  **reversing the earlier ruling the same day**). Verb 2 pays the player who bred the animal, 20
+  minutes later, which needs a **`bred by <uuid>` marker on the child** written at breed time. The
+  first ruling put it in `MetadataStore` and accepted the loss on restart; the user reversed that on
+  the grounds that twenty minutes of vanilla growth is long enough that "did you quit in between?"
+  becomes a real and completely invisible condition on the payout.
+  ✅ **Built as a Fabric persistent data attachment** (`McMMOAttachments.BRED_BY`,
+  `AttachmentRegistry.createPersistent` + `Uuids.INT_STREAM_CODEC`), **not** as a side-car save file
+  in the `PlacedBlockStore` shape. The attachment lives in the entity's own NBT
+  (`Entity#load` / `Entity#saveWithoutId`), so it survives chunk unload and world reload **and is
+  deleted with the animal** — which is the argument that settled it: nothing ever tells the mod that
+  a calf was killed at five minutes old, so a flat file of animal→breeder rows could only ever grow,
+  and would have needed a size cap or an expiry rule that is pure invented balance.
+  ⚠️ **Registration must happen at `onInitialize`, before any world loads.** A persistent attachment
+  is resolved by identifier as the entity is read; an unregistered id is dropped with a
+  `Skipping invalid attachments` warning and never comes back, so registering lazily on first use
+  would discard exactly the markers this decision exists to keep. Play-test row **HU16b** watches
+  the log for that warning.
+  ⚠️ **Deliberately not `copyOnDeath()`.** Fabric transfers attachments on cross-world teleportation
+  regardless of the flag (so a calf led through a nether portal keeps its marker); what the flag
+  would add is *entity conversion*, and a bred piglet that becomes a zombified piglin should stop
+  paying its breeder for raising it.
+  ⚠️ **`fabric-data-attachment-api-v1` is tagged `module-lifecycle: experimental`** in fabric-api
+  0.141.4. It is a hard dependency already (`fabric-api: *`), but a future API break is a
+  known-and-accepted risk rather than a surprise.
 - ✅ **D-H7 — Herdsman's Call is a real `SuperAbilityType`** (user ruling, 2026-07-28). The v1 draft
   skipped a super and left Husbandry the odd skill out. It flows through `buildSuperAbilityMaps()`
   automatically via `subSkillTypeDefinition` — see the overview checklist item 3/8.
@@ -231,25 +257,46 @@ the interaction's target — is what separates a feed from grass, and it is muta
 > `postMine` and `useOnBlock`. And `ItemStack#useOnEntity` dispatches to
 > `EquippableComponent.equipOnInteract` then `Item#useOnEntity`, neither of which shears anything.
 
-✅ **The player shear lives entirely inside `SheepEntity#interactMob(PlayerEntity, Hand)`.** Verified
-call sequence:
+> ⚠️⚠️ **AND THE REPLACEMENT WAS WRONG TOO — the per-species list was stale the day it was written.
+> Verified 2026-07-29; this is the FIFTH seam this skill has had to move.** 1.21.11 has **five**
+> `Shearable` implementors, not four: jar-grep turns up `SheepEntity`, `MooshroomEntity`,
+> `SnowGolemEntity`, `BoggedEntity` **and `CopperGolemEntity`**. All five override `interactMob`
+> separately and share no callee on the interaction path.
 
-```
-getStackInHand → ItemStack.isOf(SHEARS) → server-world check → isShearable()
-  → sheared(ServerWorld, SoundCategory, ItemStack)
-  → emitGameEvent(...)
-  → ItemStack.damage(1, player, hand.getEquipmentSlot())
-```
+✅ **BUILT on `LivingEntity#forEachShearedItem(ServerWorld, RegistryKey<LootTable>, ItemStack,
+BiConsumer<ServerWorld, ItemStack>)`** — the shear *loot* funnel, one level below the interaction.
+Jar-verified as referenced by exactly the four livestock shearables, once each, and by nothing else.
+One `@ModifyVariable` on the `BiConsumer` parameter carries both the XP and Bountiful Harvest's
+bonus drop, for every species at once. That choice settles three things the species list could not:
 
-- Hook `interactMob` on each implementor: `SheepEntity`, `MooshroomEntity`, `SnowGolemEntity`,
-  `BoggedEntity`. The player is a parameter — no resolution needed.
-- **Bountiful Harvest's durability save is an `@ModifyArg` on that `ItemStack.damage` call** inside
-  `interactMob`. Clean, local, no cancel needed.
+- **A future shearable is covered automatically**, because a new one will roll a shear loot table.
+- 🔑 **The copper golem is excluded for free, and it badly needs to be.** It is the one shearable
+  that rolls no loot table — `CopperGolemEntity#sheared` just takes the poppy out of its hand and
+  drops it — so it never reaches the funnel. And `isShearable()` for a copper golem is only "is
+  holding a flower from `SHEARABLE_FROM_COPPER_GOLEM`", so you can hand it another poppy and shear
+  it again indefinitely: **under the per-species hook this plan named, shearing a copper golem would
+  have shipped as a click-for-300-XP loop.** The exclusion falls out of the seam rather than out of
+  a blacklist, which is what the skill's own "the line is the verb, never the species" rule asks for.
+- **Block shearing pays nothing structurally** (D-H3): shears on leaves or a pumpkin stem go through
+  `useOnBlock` and touch no entity loot table.
 
-> ⚠️⚠️ **DO NOT HOOK `Shearable#sheared`.** Dispensers call `sheared` too — that is the classic AFK
-> wool farm, and hooking the interface would ship it as an XP source on day one. This is the single
-> most important line in this file. The same rule holds for the hive and brush verbs below: **hook the
-> player interaction path, never the shared effect method.**
+> ⚠️⚠️ **THE DISPENSER REACHES THIS FUNNEL TOO** — `ShearsDispenserBehavior` calls
+> `Shearable#sheared` like anything else, so choosing the loot funnel does **not** dodge the AFK wool
+> farm; it only moves where the gate has to live. ✅ **The gate is the stage-2 player-interaction
+> stash**: a shear pays only while a player is mid-interaction *with this very entity*, and a
+> dispenser opens no interaction. Same mechanism as the feed verb, and mutation-proven from both
+> sides (drop the identity check → the two-animals test reddens; drop the null check → both dispenser
+> tests redden).
+
+✅ **Bountiful Harvest's durability save DOES stay per-species** — an `@ModifyArg` on the
+`ItemStack.damage` call in each of the four `interactMob`s, because vanilla wears the shears after
+`sheared` returns and no shared method holds that call. **That is safe here in a way it was not for
+the XP, and the difference is the failure mode:** an injector that cannot find its target fails at
+*load* (`defaultRequire = 1`), so a drifted species is a loud boot error, whereas a missing XP hook
+would just have paid nothing forever. All four use exactly one `damage` call in `interactMob`, so no
+`ordinal` is needed. ⚠️ The copper golem uses a **different overload** — `damage(int, LivingEntity,
+Hand)` rather than `(int, LivingEntity, EquipmentSlot)` — so it could not have shared the injector
+even if it were wanted.
 
 ### 4. Hive harvest — honey bottle / honeycomb
 
@@ -338,7 +385,7 @@ the next starts.
 | **0** | Skill registered, MC-free `HusbandryManager`, all config/locale/`/mcstats`, old-profile regression test. **No mechanics.** | The registration surface is boring and wide; land it alone so a failure is unambiguous |
 | **1** | **Breed XP** + `Twins` + `Multi-Breed` (the breed mixin) | The one verb with no farm risk. Proves `getLovingPlayer()` resolution and the once-per-pair rule |
 | **2** | **Raise XP** + the D-H6 bred-by marker + `Accelerated Growth` | Depends on stage 1's marker. **The `onGrowUp` double-fire trap lives here** — budget for it |
-| **3** | **Shear** + `Bountiful Harvest` (drops + durability save) | The first harvest verb; establishes the shared reward path and the real-player gate |
+| **3** ✅ | **Shear** + `Bountiful Harvest` (drops + durability save) | The first harvest verb; establishes the shared reward path and the real-player gate. **Done 2026-07-29** — and both halves of that sentence landed: `husbandryOfInteractionWith` *is* the real-player gate stage 4 reuses for hive, milk and brush |
 | **4** | **Hive / milk / brush** on that same reward path, + `Beekeeper` + D-H5's cooldown | Cheap once stage 3 exists — three verbs, one path |
 | **5** | `Selective Breeding`, `Brood`, `Hidden Bounty` | The flavour tier; none of it blocks anything |
 | **6** | **`Herdsman's Call`** (super ability) | Last, because it multiplies every verb above it and is meaningless until they all work |
@@ -369,7 +416,8 @@ the next starts.
 - **Shears-on-leaves as a Husbandry XP source** — cut this pass (D-H3); it belongs to
   Woodcutting/Herbalism and it is spammable.
 - **Naming/equipping livestock** (D-H8) — v1.1.
-- **Persisting the bred-by marker across restarts** (D-H6) — deferred; accept the loss.
+- ~~**Persisting the bred-by marker across restarts** (D-H6) — deferred; accept the loss.~~
+  **Un-deferred and built, 2026-07-29** — see D-H6 above.
 - If the breed mixin proves flaky (loving-player resolution, twin placement inside blocks), **stage 3
   onward is fully independent of stages 1–2** — ship the harvest half first. That is a real fallback
   now, which it was not when the skill had only two verbs.

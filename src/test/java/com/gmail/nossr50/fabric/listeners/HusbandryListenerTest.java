@@ -13,7 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
-import com.gmail.nossr50.platform.MetadataStore;
+import com.gmail.nossr50.fabric.McMMOAttachments;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.util.McTestRegistries;
@@ -23,12 +23,18 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.CowEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.passive.PigEntity;
+import net.minecraft.entity.passive.SheepEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.Box;
@@ -57,6 +63,21 @@ class HusbandryListenerTest {
 
     /** A one-block hitbox at the origin — the sweep expands this by the Multi-Breed radius. */
     private static final Box UNIT_BOX = new Box(0, 0, 0, 1, 1, 1);
+
+    /**
+     * Stands in for whatever a shear loot table produced.
+     *
+     * <p>⚠️ Built per test, never as a {@code static final}. A static initializer runs when JUnit
+     * loads the class, which can be <em>before</em> any {@code @BeforeAll} in the run — including
+     * this class's own — so building an {@code ItemStack} there hits {@code Items} with the
+     * registries still empty. That failure does not stay local: it leaves Minecraft's
+     * {@code Bootstrap} half-initialized, and every later {@code bootstrap()} in the same JVM fork
+     * then throws {@code ExceptionInInitializerError}, reddening test classes that have nothing to
+     * do with this one.
+     */
+    private static ItemStack wool() {
+        return new ItemStack(Items.WHITE_WOOL);
+    }
 
     private UUID uuid;
     private McMMOPlayer mmoPlayer;
@@ -97,10 +118,9 @@ class HusbandryListenerTest {
             UserManager.cleanupPlayer(mmoPlayer);
         }
         worldAnimals.clear();
-        // The bred-by markers live in a static side table, and the interaction stash in a
-        // ThreadLocal on a thread JUnit reuses: without both of these, one test's leftovers decide
-        // the next one's outcome.
-        MetadataStore.clearAll();
+        // The interaction stash is a ThreadLocal on a thread JUnit reuses, so without this one
+        // test's leftovers decide the next one's outcome. (The bred-by markers need no cleanup:
+        // since HU16 they live on the animal itself, and each test builds its own animals.)
         HusbandryListener.endPlayerInteraction();
     }
 
@@ -145,20 +165,36 @@ class HusbandryListenerTest {
         lenient().when(husbandry.getMultiBreedRadius()).thenReturn(radius);
     }
 
-    /**
-     * A calf with a real UUID and breeding age.
-     *
-     * <p>⚠️ The UUID is not optional decoration: {@code MetadataStore} keys on {@code getUuid()} and
-     * its backing {@code ConcurrentHashMap} rejects a null key, so an unstubbed mock throws from
-     * inside the marker code rather than quietly storing nothing.
-     */
+    /** A calf with a breeding age and a working attachment slot for the bred-by marker. */
     private PassiveEntity calf(int breedingAge) {
         final CowEntity baby = mock(CowEntity.class);
         Mockito.doReturn(EntityType.COW).when(baby).getType();
-        lenient().when(baby.getUuid()).thenReturn(UUID.randomUUID());
         lenient().when(baby.getBreedingAge()).thenReturn(breedingAge);
         lenient().when(baby.getEntityWorld()).thenReturn(world);
+        stubAttachments(baby);
         return baby;
+    }
+
+    /**
+     * Give a mock a working one-slot attachment table, so the bred-by marker round-trips through it
+     * the way it does on a real entity.
+     *
+     * <p>⚠️ Not optional decoration. Mockito answers every unstubbed method with {@code null}, so
+     * without this a mock would swallow {@code setAttached} and then hand back nothing — every raise
+     * assertion below would go green for the wrong reason, and the pays-once and marker-gate tests
+     * would be indistinguishable from each other. One slot is enough: the listener attaches exactly
+     * one type.
+     *
+     * <p>Bare {@code any()} rather than {@code any(Class)} throughout, because
+     * {@code removeAttached} is the write of a {@code null} value and a typed matcher does not match
+     * {@code null} in Mockito 5.
+     */
+    private static void stubAttachments(Entity entity) {
+        final AtomicReference<Object> slot = new AtomicReference<>();
+        lenient().doAnswer(invocation -> slot.getAndSet(invocation.getArgument(1)))
+                .when(entity).setAttached(any(), any());
+        lenient().doAnswer(invocation -> slot.get()).when(entity).getAttached(any());
+        lenient().doAnswer(invocation -> slot.getAndSet(null)).when(entity).removeAttached(any());
     }
 
     /** Breed a calf and hand back the marked child, with acceleration stubbed out as a no-op. */
@@ -176,9 +212,6 @@ class HusbandryListenerTest {
     void aBreedingChargesTheSpeciesThatWasBred() {
         // The config key is derived from the parent's registry path, so a wrong-entity slip would
         // price every breeding as whatever animal happened to be passed first.
-        // calf() rather than a bare PassiveEntity mock: since stage 2 the child is handed to
-        // MetadataStore, which keys on getUuid() into a ConcurrentHashMap that rejects a null key —
-        // so an unstubbed mock throws from inside the marker code.
         HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), calf(-24000));
         verify(husbandry).onBreed("Cow");
     }
@@ -222,6 +255,35 @@ class HusbandryListenerTest {
 
         // -1 -> 0 is exactly how vanilla's tickMovement walks a baby into adulthood.
         HusbandryListener.onBreedingAgeChange(child, -1, 0);
+        verify(husbandry).onRaise("Cow");
+    }
+
+    @Test
+    void theBredByMarkerIsWrittenOntoTheAnimalItselfNotIntoASessionSideTable() {
+        // ⚠️ HU16, reversed 2026-07-29. The marker used to be a MetadataStore entry, which is a
+        // JVM-lifetime side table: a calf bred before quitting to title paid nobody when it matured,
+        // twenty minutes of vanilla growth being long enough that "and did you stay logged in?" was
+        // a real, invisible condition on the payout. Asserting the attachment write specifically —
+        // rather than just that the raise verb pays — is what pins the marker to a home that gets
+        // written into the world save.
+        final PassiveEntity child = calf(-24000);
+        lenient().when(husbandry.applyGrowthAcceleration(anyInt()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
+
+        verify(child).setAttached(McMMOAttachments.BRED_BY, uuid);
+    }
+
+    @Test
+    void aCalfBredInAnEarlierSessionStillPaysWhenItMatures() {
+        // The other half of HU16, from the read side: nothing bred this animal during this session.
+        // Its marker arrived with the entity off disk, which is exactly what a reloaded world hands
+        // the listener. Before HU16 was reversed this calf was indistinguishable from a wild one.
+        final PassiveEntity reloadedCalf = calf(-1);
+        reloadedCalf.setAttached(McMMOAttachments.BRED_BY, uuid);
+
+        HusbandryListener.onBreedingAgeChange(reloadedCalf, -1, 0);
         verify(husbandry).onRaise("Cow");
     }
 
@@ -386,6 +448,148 @@ class HusbandryListenerTest {
             HusbandryListener.endPlayerInteraction();
         }
         verify(husbandry, never()).onFeedBaby(any());
+    }
+
+    // --- Shear and Bountiful Harvest ------------------------------------------------------------
+
+    /** Collects everything vanilla's own drop handler was asked to deliver. */
+    private static final class Dropper implements BiConsumer<ServerWorld, ItemStack> {
+        private final List<ItemStack> delivered = new ArrayList<>();
+
+        @Override
+        public void accept(ServerWorld world, ItemStack stack) {
+            delivered.add(stack);
+        }
+    }
+
+    private PassiveEntity shearableSheep() {
+        final SheepEntity sheep = mock(SheepEntity.class);
+        Mockito.doReturn(EntityType.SHEEP).when(sheep).getType();
+        lenient().when(sheep.getEntityWorld()).thenReturn(world);
+        stubAttachments(sheep);
+        return sheep;
+    }
+
+    @Test
+    void shearingAnAnimalYouAreInteractingWithPaysTheShearVerb() {
+        final PassiveEntity sheep = shearableSheep();
+        final Dropper dropper = new Dropper();
+
+        HusbandryListener.beginPlayerInteraction(breeder(), sheep);
+        try {
+            HusbandryListener.onShearedItems(sheep, dropper).accept(world, wool());
+        } finally {
+            HusbandryListener.endPlayerInteraction();
+        }
+
+        verify(husbandry).onShear();
+        assertEquals(1, dropper.delivered.size(), "a failed bonus roll must drop exactly once");
+    }
+
+    @Test
+    void aDispenserShearingASheepPaysNothingAndDropsNothingExtra() {
+        // ⚠️⚠️ THE row this whole seam was chosen for. ShearsDispenserBehavior calls the same
+        // Shearable#sheared that a player does, and reaches the same loot funnel this listener hooks
+        // — that IS the classic AFK wool farm, and it is the single most important thing shearing
+        // must never pay for. Nothing distinguishes the two calls except that a dispenser opens no
+        // player interaction, so this test is the gate.
+        final PassiveEntity sheep = shearableSheep();
+        final Dropper dropper = new Dropper();
+
+        // No beginPlayerInteraction: this is exactly the state a dispenser fires in.
+        HusbandryListener.onShearedItems(sheep, dropper).accept(world, wool());
+
+        verify(husbandry, never()).onShear();
+        verify(husbandry, never()).rollBonusHarvestDrop();
+        assertEquals(1, dropper.delivered.size(),
+                "vanilla's drops must pass through a dispenser shear completely untouched");
+    }
+
+    @Test
+    void shearingOneAnimalDoesNotPayForAnotherShearedAtTheSameMoment() {
+        // The identity half of the gate. Without it a dispenser firing anywhere in the world during
+        // a player's right-click would bill to that player.
+        final PassiveEntity held = shearableSheep();
+        final PassiveEntity elsewhere = shearableSheep();
+        final Dropper dropper = new Dropper();
+
+        HusbandryListener.beginPlayerInteraction(breeder(), held);
+        try {
+            HusbandryListener.onShearedItems(elsewhere, dropper).accept(world, wool());
+        } finally {
+            HusbandryListener.endPlayerInteraction();
+        }
+
+        verify(husbandry, never()).onShear();
+    }
+
+    @Test
+    void bountifulHarvestDeliversVanillasOwnDropASecondTime() {
+        // The bonus is vanilla's handler called again rather than an item spawned by us, so a
+        // sheep's colour and a mooshroom's variant carry into it for free. Asserting on the
+        // delivered stacks -- not just that the roll happened -- is what pins that.
+        final PassiveEntity sheep = shearableSheep();
+        final Dropper dropper = new Dropper();
+        when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
+
+        HusbandryListener.beginPlayerInteraction(breeder(), sheep);
+        try {
+            HusbandryListener.onShearedItems(sheep, dropper).accept(world, wool());
+        } finally {
+            HusbandryListener.endPlayerInteraction();
+        }
+
+        assertEquals(2, dropper.delivered.size(), "a successful roll must double the yield");
+        assertEquals(Items.WHITE_WOOL, dropper.delivered.get(1).getItem(),
+                "the bonus must be a copy of what vanilla actually dropped");
+    }
+
+    @Test
+    void theBonusDropIsRolledOncePerShearNotOncePerItem() {
+        // A shear that yields three wool must resolve the sub-skill once and then double all three,
+        // rather than rolling per item and producing a partial, noisy result.
+        final PassiveEntity sheep = shearableSheep();
+        final Dropper dropper = new Dropper();
+        when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
+
+        HusbandryListener.beginPlayerInteraction(breeder(), sheep);
+        try {
+            final BiConsumer<ServerWorld, ItemStack> wrapped =
+                    HusbandryListener.onShearedItems(sheep, dropper);
+            wrapped.accept(world, wool());
+            wrapped.accept(world, wool());
+            wrapped.accept(world, wool());
+        } finally {
+            HusbandryListener.endPlayerInteraction();
+        }
+
+        verify(husbandry, times(1)).rollBonusHarvestDrop();
+        assertEquals(6, dropper.delivered.size());
+    }
+
+    @Test
+    void bountifulHarvestSparesTheShearsOnASuccessfulRoll() {
+        final PassiveEntity sheep = shearableSheep();
+        when(husbandry.rollToolDurabilitySave()).thenReturn(true);
+
+        HusbandryListener.beginPlayerInteraction(breeder(), sheep);
+        try {
+            assertEquals(0, HusbandryListener.onShearToolDamaged(sheep, 1),
+                    "a saved shear must cost the tool nothing");
+        } finally {
+            HusbandryListener.endPlayerInteraction();
+        }
+    }
+
+    @Test
+    void aDispenserNeverSavesDurability() {
+        // The same gate on the other half. A dispenser's shears are not a player's tool and must
+        // wear exactly as vanilla intends -- otherwise an automated farm quietly runs forever.
+        final PassiveEntity sheep = shearableSheep();
+        lenient().when(husbandry.rollToolDurabilitySave()).thenReturn(true);
+
+        assertEquals(1, HusbandryListener.onShearToolDamaged(sheep, 1));
+        verify(husbandry, never()).rollToolDurabilitySave();
     }
 
     // --- Multi-Breed --------------------------------------------------------------------------

@@ -175,6 +175,12 @@ public class McMMOMod implements ModInitializer {
     public void onInitialize() {
         LOGGER.info("mcMMO (Fabric) initializing.");
 
+        // FIRST, and before any server can start: persistent data attachments are resolved by
+        // identifier as an entity is read from disk, and an unregistered identifier is dropped with
+        // a warning rather than kept. Registering these late — lazily on first use, say — would
+        // silently discard mcMMO state written into last session's world. See McMMOAttachments.
+        McMMOAttachments.register();
+
         // Register lifecycle hooks once at mod load. The handlers run every time the
         // (integrated) server starts/stops, which in singleplayer is per world session.
         ServerLifecycleEvents.SERVER_STARTING.register(this::onServerStarting);

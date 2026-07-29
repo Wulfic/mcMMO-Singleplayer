@@ -288,6 +288,19 @@ public class AdvancedConfig extends ConfigLoader {
                     "Skills.Husbandry.AcceleratedGrowth.MaxGrowthAcceleration should be at least 0!");
         }
 
+        if (getMaximumProbability(SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST) < 1) {
+            reason.add("Skills.Husbandry.BountifulHarvest.ChanceMax should be at least 1!");
+        }
+
+        if (getMaxBonusLevel(SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST) < 1) {
+            reason.add("Skills.Husbandry.BountifulHarvest.MaxBonusLevel should be at least 1!");
+        }
+
+        if (getBountifulHarvestDurabilitySaveChance() < 0) {
+            reason.add("Skills.Husbandry.BountifulHarvest.DurabilitySaveChanceMax should be at "
+                    + "least 0!");
+        }
+
         /* MINING */
         if (getMaximumProbability(SubSkillType.MINING_DOUBLE_DROPS) < 1) {
             reason.add("Skills.Mining.DoubleDrops.ChanceMax should be at least 1!");
@@ -781,6 +794,19 @@ public class AdvancedConfig extends ConfigLoader {
     public double getMaxGrowthAcceleration() {
         return config.getDouble("Skills.Husbandry.AcceleratedGrowth.MaxGrowthAcceleration",
                 HusbandryManager.DEFAULT_MAX_GROWTH_ACCELERATION);
+    }
+
+    /**
+     * Bountiful Harvest's chance at max level to save the tool a harvest would have worn, in percent.
+     *
+     * <p>Read separately from the sub-skill's own {@code ChanceMax} — which drives the bonus-drop
+     * roll through {@code ProbabilityUtil} — because Bountiful Harvest is one sub-skill with two
+     * independent effects, in the same shape Accelerated Growth already uses for its
+     * shorten-the-childhood half and its double-feed half.
+     */
+    public double getBountifulHarvestDurabilitySaveChance() {
+        return config.getDouble("Skills.Husbandry.BountifulHarvest.DurabilitySaveChanceMax",
+                HusbandryManager.DEFAULT_HARVEST_DURABILITY_SAVE_CHANCE);
     }
 
     // --- Unarmored (Pass 2) --------------------------------------------------------------------

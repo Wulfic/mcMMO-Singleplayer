@@ -2,17 +2,20 @@ package com.gmail.nossr50.fabric.listeners;
 
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
-import com.gmail.nossr50.platform.MetadataStore;
+import com.gmail.nossr50.fabric.McMMOAttachments;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -75,24 +78,6 @@ public final class HusbandryListener {
      * the server thread, so it covers the whole re-entrant region exactly.
      */
     private static final ThreadLocal<Boolean> SPREADING_LOVE = ThreadLocal.withInitial(() -> false);
-
-    /**
-     * {@code MetadataStore} key holding the {@link UUID} of the player who bred an animal — D-H6's
-     * "bred by" marker.
-     *
-     * <p>The raise verb pays roughly twenty minutes after the act it rewards, so the child has to
-     * carry its breeder with it. The store is in-memory by design (ruled 2026-07-29): an animal bred
-     * before a server restart pays nothing when it matures. That fails in the safe direction — never
-     * the wrong player, never twice — and a singleplayer session almost always outlives a growth
-     * timer that only ticks while the chunk is loaded anyway.
-     *
-     * <p>The marker is <b>removed as it is consumed</b>, which is also what makes "pays once per
-     * animal" true rather than merely likely. What is left behind is the marker on an animal that
-     * never grows up (killed, or in a chunk that stays unloaded until the server stops) — a few
-     * dozen bytes each until {@code MetadataStore.clearAll()} at shutdown, the same bargain
-     * {@code Archery}'s arrow counters already make.
-     */
-    private static final String BRED_BY_KEY = "mcmmo_husbandry_bred_by";
 
     /**
      * The player-entity interaction currently in flight, or {@code null} outside one.
@@ -167,13 +152,19 @@ public final class HusbandryListener {
      * <p>Called for the twin as well as for vanilla's child. A twin that carried no marker would be
      * the only baby in the game its breeder could not be paid for, which reads as a bug rather than
      * as balance.
+     *
+     * <p>The marker is a <b>persistent data attachment</b> ({@link McMMOAttachments#BRED_BY}), so it
+     * is written into the calf's own NBT and survives the world being closed and reopened — D-H6,
+     * reversed on 2026-07-29. It used to be a {@code MetadataStore} entry, which meant a calf bred
+     * before a restart quietly paid nothing when it matured; twenty minutes of vanilla growth is
+     * long enough that "did you quit in between?" was a real and invisible condition on the payout.
      */
     private static void claimOffspring(HusbandryManager husbandry, ServerPlayerEntity breeder,
             PassiveEntity child) {
         if (child == null) {
             return; // Egg-laying breeder: the clutch is not an entity we can mark.
         }
-        MetadataStore.set(child, BRED_BY_KEY, breeder.getUuid());
+        child.setAttached(McMMOAttachments.BRED_BY, breeder.getUuid());
 
         final int acceleratedAge = husbandry.applyGrowthAcceleration(child.getBreedingAge());
         if (acceleratedAge != child.getBreedingAge()) {
@@ -368,7 +359,9 @@ public final class HusbandryListener {
      * {@code readCustomData} routes through {@code setBreedingAge}, every single time a baby animal
      * loads from disk. Without it, flying away and back would pay the raise verb again.
      * <b>The marker gate</b> is what makes it <em>this player's</em> livestock rather than every wild
-     * baby in the world coming of age.
+     * baby in the world coming of age. Since the marker became a persistent attachment it also
+     * survives the world being closed and reopened, so the twenty-minute wait no longer has a hidden
+     * "and do not quit" clause attached to it — see {@link McMMOAttachments#BRED_BY}.
      *
      * @param animal      the animal whose age is changing
      * @param previousAge the age it currently has — negative while it is a baby
@@ -378,13 +371,12 @@ public final class HusbandryListener {
         if (animal == null || previousAge >= 0 || newAge < 0) {
             return; // Not the baby -> adult crossing.
         }
-        final UUID breederId = MetadataStore.get(animal, BRED_BY_KEY, UUID.class);
+        // Read and consumed in one call, so this animal can never pay a second time even if
+        // something later drives it back across the boundary.
+        final UUID breederId = animal.removeAttached(McMMOAttachments.BRED_BY);
         if (breederId == null) {
             return; // Nobody bred this one; it grew up on its own.
         }
-        // Consumed as it is read, so this animal can never pay a second time even if something
-        // later drives it back across the boundary.
-        MetadataStore.remove(animal, BRED_BY_KEY);
 
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(breederId);
         if (mmoPlayer == null) {
@@ -394,6 +386,117 @@ public final class HusbandryListener {
         if (husbandry != null) {
             husbandry.onRaise(configStringOf(animal));
         }
+    }
+
+    // --- Stage 3: shear and Bountiful Harvest ---------------------------------------------------
+
+    /**
+     * An entity is about to hand out its shear loot: pay the shear verb, and let
+     * {@code Bountiful Harvest} double what it drops.
+     *
+     * <p>Called from {@code LivingEntityShearDropsMixin}.
+     *
+     * <h2>⚠️ Why {@code forEachShearedItem} and not the four {@code interactMob}s the plan named</h2>
+     * The plan said to hook {@code interactMob} on each of {@code SheepEntity},
+     * {@code MooshroomEntity}, {@code SnowGolemEntity} and {@code BoggedEntity}. That list was
+     * already <b>stale</b>: 1.21.11 has a <b>fifth</b> shearable, {@code CopperGolemEntity}, and
+     * enumerating species by hand is the mistake this skill has now made four times over.
+     *
+     * <p>{@code LivingEntity#forEachShearedItem} is the shared loot funnel underneath all of it, and
+     * choosing it settles three separate questions at once:
+     * <ul>
+     *   <li><b>One injection covers every species</b>, including any shearable a future version
+     *       adds, because a new one will roll a shear loot table like the rest.</li>
+     *   <li><b>The copper golem is excluded for free.</b> It is the one shearable that reaches no
+     *       loot table — shearing it simply takes the poppy out of its hand and drops that — so it
+     *       never arrives here. That matters: {@code isShearable()} for a copper golem is just "is
+     *       holding a flower", and you can hand it another one and shear again forever, which under
+     *       the plan's per-species hook would have been a click-for-300-XP loop. The exclusion falls
+     *       out of the seam rather than out of a species blacklist, which is exactly what this
+     *       skill's "the line is the verb, never the species" rule asks for.</li>
+     *   <li><b>Block shearing stays out</b> structurally: shearing leaves or a pumpkin stem goes
+     *       through {@code useOnBlock} and never touches an entity loot table (D-H3).</li>
+     * </ul>
+     *
+     * <h2>⚠️ The dispenser gate is the interaction stash, and it is the whole point</h2>
+     * {@code ShearsDispenserBehavior} calls {@code Shearable#sheared} too, and reaches this same
+     * funnel — that <em>is</em> the classic AFK wool farm, and it is the single most important thing
+     * this method must not pay for. The gate is the stash stage 2 built for the feed verb: a shear
+     * counts only when a player is mid-interaction <em>with this very entity</em>. A dispenser
+     * opens no stash, so it earns nothing without a species check, a block check, or anything else
+     * that could drift out of date.
+     *
+     * @param sheared the entity handing out loot
+     * @param dropper vanilla's own per-item handler — each species drops, converts or equips in its
+     *                own way, so the bonus is delivered by calling this again rather than by
+     *                spawning an item ourselves
+     * @return {@code dropper} unchanged, or a wrapper that delivers everything twice
+     */
+    public static BiConsumer<ServerWorld, ItemStack> onShearedItems(LivingEntity sheared,
+            BiConsumer<ServerWorld, ItemStack> dropper) {
+        if (sheared == null || dropper == null) {
+            return dropper;
+        }
+        final HusbandryManager husbandry = husbandryOfInteractionWith(sheared);
+        if (husbandry == null) {
+            return dropper; // A dispenser, or a player whose data is not loaded.
+        }
+
+        husbandry.onShear();
+
+        // Rolled ONCE per shear rather than per item: a loot table that yields three wool would
+        // otherwise resolve the sub-skill three times and turn a clean "this shear paid double" into
+        // a noisy partial one.
+        if (!husbandry.rollBonusHarvestDrop()) {
+            return dropper;
+        }
+        return (world, stack) -> {
+            dropper.accept(world, stack);
+            dropper.accept(world, stack.copy());
+        };
+    }
+
+    /**
+     * A shearing tool is about to take {@code damageAmount} durability: let {@code Bountiful
+     * Harvest} spare it.
+     *
+     * <p>Called from {@code ShearableInteractMixin}. This one cannot ride the loot funnel above —
+     * vanilla damages the shears back in {@code interactMob}, after {@code sheared} has returned —
+     * so it is the one part of stage 3 that does name the species. That is tolerable here in a way
+     * it was not for the XP: an injector that fails to find its target is a <em>load-time
+     * failure</em>, so a missing or renamed species is loud, whereas the XP hook going quiet would
+     * have been silent.
+     *
+     * @param sheared      the animal being sheared
+     * @param damageAmount the durability vanilla was about to take
+     * @return {@code damageAmount}, or {@code 0} on a successful save
+     */
+    public static int onShearToolDamaged(LivingEntity sheared, int damageAmount) {
+        if (sheared == null || damageAmount <= 0) {
+            return damageAmount;
+        }
+        final HusbandryManager husbandry = husbandryOfInteractionWith(sheared);
+        if (husbandry == null) {
+            return damageAmount;
+        }
+        return husbandry.rollToolDurabilitySave() ? 0 : damageAmount;
+    }
+
+    /**
+     * The Husbandry manager of the player currently interacting with {@code target}, or {@code null}
+     * if nobody is.
+     *
+     * <p>The shared real-player gate for every harvest verb (D-H4). The identity check is what makes
+     * it a gate rather than a hint: without it, any harvest anywhere during a right-click — a
+     * dispenser firing in the same tick, on the other side of the world — would bill to whoever
+     * happened to have a hand out.
+     */
+    private static HusbandryManager husbandryOfInteractionWith(Entity target) {
+        final Interaction interaction = PLAYER_INTERACTION.get();
+        if (interaction == null || interaction.target() != target) {
+            return null;
+        }
+        return husbandryOf(interaction.player());
     }
 
     /** The Husbandry manager for a server player, or {@code null} if their data is not loaded. */

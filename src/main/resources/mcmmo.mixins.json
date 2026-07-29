@@ -20,10 +20,12 @@
     "HungerManagerExhaustionMixin",
     "LivingEntityDamageMixin",
     "LivingEntityGlideMixin",
+    "LivingEntityShearDropsMixin",
     "PassiveEntityGrowthMixin",
     "PlayerEntityInteractMixin",
     "PowderSnowBlockMixin",
     "ProjectileSpawnMixin",
+    "ShearableInteractMixin",
     "TameableEntityTameMixin",
     "TntExplodeMixin"
   ],

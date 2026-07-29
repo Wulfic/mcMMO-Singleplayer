@@ -437,6 +437,33 @@ Skills:
             MaxBonusLevel:
                 Standard: 100
                 RetroMode: 1000
+
+        BountifulHarvest:
+            # The harvest family's shared reward. Currently drives shearing; hive, milk and brush
+            # join it in stage 4, through the same two rolls rather than copies of them.
+            #
+            # ChanceMax is the chance that a harvest yields a SECOND helping of whatever it just
+            # dropped -- the animal's own loot roll run twice, so a sheep's colour and a mooshroom's
+            # variant carry into the bonus for free instead of being re-derived from a table here.
+            # Rolled once per harvest, not once per item, so a shear either doubles or it does not.
+            #
+            # ###################################################################################
+            # This does NOT apply to anything a dispenser shears.
+            # ###################################################################################
+            # Every harvest verb in this skill requires a real player mid-interaction with the
+            # animal. That is what keeps an AFK dispenser-and-hopper wool farm worth zero, and it is
+            # enforced in code, not here -- there is no toggle for it on purpose.
+            ChanceMax: 50.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+
+            # Chance that a harvest costs the tool no durability at all.
+            #
+            # Deliberately lower than ChanceMax above. A bonus drop is a windfall a player notices; a
+            # durability save is only ever felt as "my shears last longer", so the same number buys
+            # far less here -- and at 100 it would quietly turn shears into an infinite tool.
+            DurabilitySaveChanceMax: 25.0
     #
     #  Settings for Mining
     ###

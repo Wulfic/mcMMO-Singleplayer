@@ -6,13 +6,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.gmail.nossr50.fabric.mixin.BrewingStandBrewTimeAccessor;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Arrays;
+import java.util.List;
 import net.minecraft.advancement.criterion.BredAnimalsCriterion;
 import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.block.entity.BrewingStandBlockEntity;
 import net.minecraft.component.type.FoodComponent;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.mob.BoggedEntity;
 import net.minecraft.entity.passive.AnimalEntity;
+import net.minecraft.entity.passive.MooshroomEntity;
 import net.minecraft.entity.passive.PassiveEntity;
+import net.minecraft.entity.passive.SheepEntity;
+import net.minecraft.entity.passive.SnowGolemEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.entity.projectile.ProjectileEntity;
@@ -313,5 +318,42 @@ class MixinApplicationTest {
         assertTrue(methods.stream().anyMatch(name -> name.contains("endInteraction")),
                 "PlayerEntityInteractMixin's RETURN injector did not apply — the interaction stash "
                         + "would outlive its interaction and pay for AI-driven growth");
+    }
+
+    @Test
+    void husbandryShearDropMixinApplies() {
+        assertDoesNotThrow(() -> Class.forName(LivingEntity.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+
+        // The shear verb and Bountiful Harvest's bonus drop, both on the shared loot funnel rather
+        // than on four per-species interactMob hooks. Worth stating why: 1.21.11 has a FIFTH
+        // Shearable (CopperGolemEntity) that the plan's species list never had, and hand-maintained
+        // lists are how the previous four seam misses in this skill happened. forEachShearedItem is
+        // also what excludes the copper golem for free — it is the one shearable that rolls no loot
+        // table, and it can be re-flowered and re-sheared indefinitely.
+        final boolean hasShearHook = Arrays.stream(LivingEntity.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().contains("onShearedItems"));
+        assertTrue(hasShearHook,
+                "LivingEntityShearDropsMixin did not apply to LivingEntity — shearing would pay "
+                        + "nothing for every species at once and Bountiful Harvest would be inert");
+    }
+
+    @Test
+    void bountifulHarvestDurabilitySaveAppliesToEveryShearableItNames() {
+        // ⚠️ THE point of this test. Unlike the XP hook above, the durability save cannot ride a
+        // shared funnel — vanilla damages the shears back inside each species' own interactMob —
+        // so ShearableInteractMixin names four classes explicitly. Asserting each one individually
+        // is what turns "the species list drifted" from a silent shortfall into a red test: a
+        // renamed or restructured interactMob on any single species would otherwise leave that
+        // animal's shear quietly wearing the tool while the other three did not.
+        for (Class<?> shearable : List.of(SheepEntity.class, MooshroomEntity.class,
+                SnowGolemEntity.class, BoggedEntity.class)) {
+            assertDoesNotThrow(() -> Class.forName(shearable.getName(), true,
+                    MixinApplicationTest.class.getClassLoader()));
+            final boolean hasSave = Arrays.stream(shearable.getDeclaredMethods())
+                    .anyMatch(method -> method.getName().contains("saveShearDurability"));
+            assertTrue(hasSave, "ShearableInteractMixin did not apply to " + shearable.getSimpleName()
+                    + " — Bountiful Harvest would save no durability when shearing it");
+        }
     }
 }

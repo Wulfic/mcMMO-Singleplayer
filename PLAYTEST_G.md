@@ -432,8 +432,9 @@ session. Start with `/addlevels husbandry 0` in a fresh pen of cows, wheat in ha
 |---|---|---|
 | HU13 | Breed two cows, **stay nearby**, wait for the calf to grow up | **A second 350** lands the moment it matures. This is the payout the whole bred-by marker exists for |
 | HU14 | Confirm HU13 fired **exactly once** | Not twice, not per tick |
-| HU15 | Breed a calf, then fly far enough to **unload the chunk**, come back, wait | Pays when it grows up. The marker survives a chunk round-trip because it is keyed on entity UUID |
-| HU16 | Breed a calf, **quit to title and reload the world**, then wait for it to mature | **Pays nothing.** ⚠️ Expected and ruled (2026-07-29) — the marker is in-memory. Fails in the safe direction; note it but do not file it |
+| HU15 | Breed a calf, then fly far enough to **unload the chunk**, come back, wait | Pays when it grows up. The marker rides the calf's own NBT into the region file and back |
+| HU16 | Breed a calf, **quit to title and reload the world**, then wait for it to mature | **Pays the full 350.** ⚠️ **The row this whole mechanism was rebuilt for** (D-H6 reversed 2026-07-29 — it used to read "pays nothing, expected"). The marker is a persistent data attachment now; if this pays zero, it regressed to the session-lifetime `MetadataStore` and every calf bred before a save is silently disinherited |
+| HU16b | Breed a calf, reload, and check the log during world load | **No `Skipping invalid attachments` warning.** That line means the `mcmmo:bred_by` identifier was not registered before the world was read, and every marker in the save was discarded on the spot |
 | HU17 | Find a **wild** baby animal and wait for it to grow up | **Nothing.** You did not breed it |
 | HU18 | Spawn-egg a baby, then `/data`-modify or otherwise turn an adult back into a baby | **Nothing**, in both directions |
 | HU19 | Breed a **twin** pair and let **both** babies mature | **Both** pay. A twin carries the same marker as its sibling |
@@ -452,11 +453,26 @@ session. Start with `/addlevels husbandry 0` in a fresh pen of cows, wheat in ha
 | HU27 | At 1000, breed 10 calves and check none is born an adult | ⚠️ **A newborn must never arrive already grown.** If one does, the raise verb is paying in the same tick as the breed verb and the whole skill is broken |
 | HU28 | At 1000, feed babies repeatedly and watch for the double-feed message | Fires roughly one feed in four |
 
+### 10f. Shear and Bountiful Harvest (stage 3)
+
+| # | Action | Expect |
+|---|---|---|
+| HU34 | Shear a woolly sheep | **300 XP**, and wool drops as normal |
+| HU35 | Shear a **mooshroom**, a **snow golem** and a **bogged** | 300 each. The mooshroom becomes a cow, the golem loses its pumpkin, the bogged drops mushrooms — all three go through the same loot funnel as the sheep |
+| HU36 | **⚠️⚠️ THE ROW THIS SEAM EXISTS FOR.** Put shears in a **dispenser** aimed at a sheep and let it fire repeatedly | **ZERO XP, and no bonus drops.** Wool still drops normally. A dispenser reaches the exact same code a player does; the only thing separating them is that it opens no player interaction. If this pays, the AFK wool farm is live |
+| HU37 | Shear a **copper golem** (hand it a poppy, shear, repeat) | **Nothing, ever.** ⚠️ It rolls no loot table, so it never reaches the seam. It is also infinitely repeatable — if this ever starts paying, it is a click-for-300 loop, not a balance question |
+| HU38 | Shear **leaves**, **vines** and a **pumpkin stem** | **Nothing.** Block shearing is Woodcutting/Herbalism's, and it is spammable (D-H3) |
+| HU39 | At Husbandry 1000, shear ~20 sheep and count double yields | Roughly **half** drop twice (ChanceMax 50). The bonus is the animal's own loot rolled again, so a black sheep's bonus is black wool |
+| HU40 | At 1000, watch a single shear that drops several wool | **All of them double, or none do.** The roll is once per shear, not per item |
+| HU41 | At 1000, shear repeatedly and watch the shears' durability | Roughly one shear in four costs nothing (DurabilitySaveChanceMax 25) |
+| HU42 | Let the **dispenser** from HU36 run at Husbandry 1000 | Its shears wear **normally** — no durability saving. An automated farm that never wears out is the same exploit by another route |
+| HU43 | **⚠️ Tuning:** build a snow golem, shear it, and count the pumpkin back | You get the carved pumpkin back, so a snow farm makes this a ~4-action 300 XP loop. **This is the shear to judge the rate on, not the sheep.** Note the timing; do not file it as a bug |
+
 ### 10e. Cross-checks
 
 | # | Action | Expect |
 |---|---|---|
-| HU29 | `/mcstats husbandry` | Three sub-skills listed — Multi-Breed, Twins, Accelerated Growth — with ranks and stats, no `!Husbandry.…!` literals |
+| HU29 | `/mcstats husbandry` | **Four** sub-skills listed — Multi-Breed, Twins, Accelerated Growth, Bountiful Harvest — with ranks, and no `!Husbandry.…!` literals. ⚠️ **No per-effect stat lines yet**: Husbandry has no `HusbandryStatsRenderer`, so it falls through to `GenericSkillStatsRenderer` and the `.Stat` locale keys go unread. Pre-existing since stage 1, not a stage-3 regression — note it, do not file it |
 | HU30 | Breed a **tamed wolf** | Pays **Husbandry**, not Taming. The boundary is the verb, never the species |
 | HU31 | Feed a wolf raw meat to **heal** it | Pays **Taming** (Fast Food Service), not Husbandry |
 | HU32 | Watch the XP bar while breeding | A Husbandry bar appears, coloured **yellow** |

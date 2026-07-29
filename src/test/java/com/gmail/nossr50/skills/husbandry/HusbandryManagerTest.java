@@ -160,7 +160,8 @@ class HusbandryManagerTest {
         // the enum, /mcstats included. This fails if a later stage's constant is added early.
         assertEquals(
                 java.util.Set.of(SubSkillType.HUSBANDRY_MULTI_BREED, SubSkillType.HUSBANDRY_TWINS,
-                        SubSkillType.HUSBANDRY_ACCELERATED_GROWTH),
+                        SubSkillType.HUSBANDRY_ACCELERATED_GROWTH,
+                        SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST),
                 new SkillTools().getSubSkills(PrimarySkillType.HUSBANDRY));
     }
 

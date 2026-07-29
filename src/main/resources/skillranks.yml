@@ -685,6 +685,14 @@ Husbandry:
             Rank_1: 15
         RetroMode:
             Rank_1: 150
+    # Unlocked at 1, like the breed-family pair and for the same reason: shearing is one of the
+    # skill's entry verbs, and gating its only sub-skill behind a level would mean the early skill is
+    # levelled by doing the one thing nothing rewards yet. Its strength scales from zero regardless.
+    BountifulHarvest:
+        Standard:
+            Rank_1: 1
+        RetroMode:
+            Rank_1: 1
 Herbalism:
     DoubleDrops:
         Standard:

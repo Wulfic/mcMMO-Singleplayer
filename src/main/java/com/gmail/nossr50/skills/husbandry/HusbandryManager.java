@@ -146,6 +146,17 @@ public class HusbandryManager extends SkillManager {
      */
     public static final double HARD_MAX_GROWTH_ACCELERATION = 0.90;
 
+    /**
+     * Bountiful Harvest's chance at max level to spare the tool a harvest would have worn, in
+     * percent.
+     *
+     * <p>Lower than the bonus-drop chance on purpose. A bonus drop is a windfall a player notices
+     * and enjoys; a durability save is felt only as "my shears last longer", so a large number here
+     * buys much less than the same number spent on drops — and at 100 it would quietly make shears
+     * an infinite tool, which is a different game.
+     */
+    public static final double DEFAULT_HARVEST_DURABILITY_SAVE_CHANCE = 25.0;
+
     public HusbandryManager(McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.HUSBANDRY);
     }
@@ -438,6 +449,96 @@ public class HusbandryManager extends SkillManager {
             return growthSeconds;
         }
         return rollDoubleFeed() ? growthSeconds * 2 : growthSeconds;
+    }
+
+    // --- Shear ------------------------------------------------------------------------------
+
+    /**
+     * Credit one animal sheared by hand.
+     *
+     * <p><b>Not gated on the breeding table</b>, unlike the feed verb — and the difference is not an
+     * oversight. Feeding routes through a method vanilla shares with animals this skill has nothing
+     * to do with, so it needs the table to say which of them count. Shearing has no such spread:
+     * the trigger layer sits on vanilla's shear-loot funnel, which only four entities in the game
+     * reach, and all four are livestock this skill means to pay for. A flat rate is also the honest
+     * pricing — the plan's own note that "a shear is a shear" — since shears cost the same whichever
+     * animal you point them at.
+     *
+     * @return the XP awarded, or {@code 0} if the verb is priced at nothing
+     */
+    public float onShear() {
+        final float xp = getShearXp();
+        if (xp <= 0) {
+            return 0F;
+        }
+        applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF);
+        return xp;
+    }
+
+    // --- Sub-skill: Bountiful Harvest -----------------------------------------------------------
+
+    public boolean canBountifulHarvest() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST)
+                && Permissions.isSubSkillEnabled(getPlayer(),
+                        SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST);
+    }
+
+    /**
+     * Whether this harvest should yield a second helping of what it just dropped.
+     *
+     * <p>The harvest family's headline effect, and the one shared reward path behind shearing now
+     * and hive, milk and brush in stage 4 — written once here rather than four times at the call
+     * sites. Chance scales with level up to {@code Skills.Husbandry.BountifulHarvest.ChanceMax}.
+     *
+     * <p>Doubling the <em>drop</em> rather than granting a fixed item is what keeps this honest
+     * across species: a sheep's roll already depends on its colour, a mooshroom's on its variant,
+     * and the bonus inherits all of that for free instead of re-deriving a table that would rot.
+     */
+    public boolean rollBonusHarvestDrop() {
+        return canBountifulHarvest()
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST,
+                        mmoPlayer);
+    }
+
+    /**
+     * Whether this harvest should cost the tool no durability at all.
+     *
+     * <p>Bountiful Harvest's second, quieter effect. Scaled by hand from
+     * {@link #getHarvestDurabilitySaveChance} rather than through the sub-skill's own probability
+     * because one sub-skill drives two independent rolls and {@code ProbabilityUtil} keys its
+     * chance off the {@code SubSkillType} — the same split Accelerated Growth already makes between
+     * its childhood-shortening half and its double-feed half.
+     */
+    public boolean rollToolDurabilitySave() {
+        final double chance = getHarvestDurabilitySaveChance();
+        return chance > 0
+                && ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.HUSBANDRY, mmoPlayer,
+                        chance);
+    }
+
+    /**
+     * This player's current chance to save a harvesting tool's durability, in percent.
+     *
+     * <p>Public because {@code /mcstats} renders it as the sub-skill's second stat line; the roll
+     * itself is {@link #rollToolDurabilitySave}.
+     *
+     * @return {@code 0}–100, or {@code 0} when Bountiful Harvest is locked
+     */
+    public double getHarvestDurabilitySaveChance() {
+        if (!canBountifulHarvest()) {
+            return 0.0;
+        }
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        final double max = advanced == null
+                ? DEFAULT_HARVEST_DURABILITY_SAVE_CHANCE
+                : advanced.getBountifulHarvestDurabilitySaveChance();
+        if (max <= 0) {
+            return 0.0;
+        }
+        final int maxBonusLevel = advanced == null
+                ? 0
+                : advanced.getMaxBonusLevel(SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST);
+        return Math.min(100.0, scaleToLevel(max, maxBonusLevel));
     }
 
     // --- The flat verbs ---------------------------------------------------------------------
