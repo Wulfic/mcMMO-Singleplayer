@@ -8,6 +8,7 @@ import com.gmail.nossr50.config.YamlConfiguration;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.util.skills.SkillTools;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -81,6 +82,26 @@ class FlatFileProfileStoreTest {
         assertEquals(9, profile.getSkillLevel(PrimarySkillType.MINING));
         // A skill absent from the file falls back to the supplied starting level.
         assertEquals(2, profile.getSkillLevel(PrimarySkillType.SWORDS));
+
+        // Asserted over the whole enum rather than one hand-picked skill, because this is the
+        // regression every NEW skill needs and naming them one at a time means the test only ever
+        // covers the skills someone remembered to add. Every save file on disk predates Husbandry,
+        // Stealth and Unarmored; a skill the loader failed to pre-populate would come back absent
+        // and blow up on first read rather than defaulting quietly.
+        for (PrimarySkillType skill : PrimarySkillType.values()) {
+            if (skill == PrimarySkillType.MINING) {
+                continue; // The one skill the hand-written file actually knows about.
+            }
+            if (SkillTools.isChildSkill(skill)) {
+                // A child skill has no save key at all -- its level is the mean of its parents, so
+                // it reads back as whatever they average to (Smelting is Mining+Repair, and this
+                // file's Mining 9 drags it to 5). Nothing was defaulted, so there is nothing here
+                // for this test to assert; SkillToolsTest#childSkillParents owns that contract.
+                continue;
+            }
+            assertEquals(2, profile.getSkillLevel(skill),
+                    () -> skill + " must default to the starting level, not go missing");
+        }
     }
 
     // --- Renamed-skill migration --------------------------------------------------------------

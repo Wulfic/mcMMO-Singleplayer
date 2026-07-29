@@ -28,6 +28,11 @@ public enum PrimarySkillType {
     FISHING,
     FLYING,
     HERBALISM,
+    // Pass 2. The livestock-lifecycle skill: breed, raise, feed, shear, harvest a hive, milk, brush.
+    // Its boundary against TAMING is the VERB, never the species -- Taming pays once, for making an
+    // animal yours; Husbandry pays repeatedly, for what you do with it afterwards. A species split
+    // is not available: Taming.Animal_Taming already claims every animal in the game.
+    HUSBANDRY,
     MACES,
     MINING,
     PARKOUR,

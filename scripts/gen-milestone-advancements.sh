@@ -30,6 +30,10 @@ declare -A ICON=(
     [fishing]=fishing_rod
     [flying]=elytra
     [herbalism]=wheat
+    # Not wheat (Herbalism has it) and not an egg -- egg laying is a passive timer this skill
+    # deliberately refuses to pay for. A lead is the tool for handling livestock generally, which is
+    # what the skill is, rather than any one of its six verbs.
+    [husbandry]=lead
     [maces]=mace
     [mining]=diamond_pickaxe
     [parkour]=leather_boots

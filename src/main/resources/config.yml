@@ -233,6 +233,7 @@ Hardcore:
             Excavation: false
             Fishing: false
             Herbalism: false
+            Husbandry: false
             Mining: false
             Repair: false
             Stealth: false
@@ -259,6 +260,7 @@ Hardcore:
             Excavation: false
             Fishing: false
             Herbalism: false
+            Husbandry: false
             Mining: false
             Repair: false
             Stealth: false
@@ -428,6 +430,8 @@ Skills:
     Herbalism:
         Level_Cap: 0
         Prevent_AFK_Leveling: true
+    Husbandry:
+        Level_Cap: 0
     Mining:
         Level_Cap: 0
         Detonator_Name: FLINT_AND_STEEL

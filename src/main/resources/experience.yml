@@ -148,6 +148,10 @@ Experience_Bars:
         Enable: true
         Color: GREEN
         BarStyle: SEGMENTED_6
+    Husbandry:
+        Enable: true
+        Color: YELLOW
+        BarStyle: SEGMENTED_6
     Parkour:
         Enable: true
         Color: PINK
@@ -261,6 +265,7 @@ Experience_Formula:
         Stealth: 1.0
         Excavation: 1.0
         Herbalism: 1.0
+        Husbandry: 1.0
         Unarmed: 1.0
         Unarmored: 1.0
         Woodcutting: 1.0
@@ -303,6 +308,10 @@ Diminished_Returns:
         Stealth: 20000
         Excavation: 20000
         Herbalism: 20000
+        # Husbandry is gated by vanilla's own clocks -- a five-minute love cooldown per animal,
+        # twenty real minutes for a baby to mature, grass regrowth before a sheep is worth shearing
+        # again -- so this threshold is nowhere near reach in practice.
+        Husbandry: 20000
         Unarmed: 20000
         # Unarmored is episodic rather than continuous -- you cannot take damage faster than the
         # vanilla invulnerability window allows, and you die at 20 HP -- so this threshold is far
@@ -584,6 +593,80 @@ Experience_Values:
         Lily_Of_The_Valley: 150
         Wither_Rose: 500
         Torchflower: 90
+    Husbandry:
+        # The livestock lifecycle. Six XP verbs: breed, raise, feed a baby, shear, harvest a hive,
+        # and milk or brush.
+        #
+        # WHERE THE LINE AGAINST TAMING IS: the VERB, never the species. A species split is not
+        # available -- Animal_Taming below already claims every animal in the game, down to bees and
+        # goats you cannot actually tame. Taming pays ONCE, for making an animal yours. Husbandry
+        # pays REPEATEDLY, for what you do with it afterwards. So breeding a tamed wolf pays
+        # Husbandry at the full rate, while feeding a wolf to heal it stays Taming -- healing in
+        # combat is the discriminator.
+
+        # XP for breeding a pair. Paid once per breeding, not once per parent.
+        #
+        # Per-species rather than flat because a breeding item's cost spans two orders of magnitude:
+        # chicken seeds are free, a horse eats golden carrots, and a sniffer needs a torchflower seed
+        # dug out of suspicious sand. One flat rate would make the cheapest animal in the game the
+        # only one worth breeding.
+        #
+        # AN UNLISTED SPECIES PAYS NOTHING, deliberately, and this table is the only place that is
+        # decided -- same contract Animal_Taming has. A mob added by a future version or another mod
+        # cannot silently start paying a number nobody chose.
+        Animal_Breeding:
+            # Free or near-free breeding items, and the animals every world has.
+            Chicken: 300
+            Cow: 350
+            Sheep: 350
+            Pig: 350
+            Goat: 400
+            Rabbit: 450
+            # Meat and fish -- cheap, but you have to kill something for it.
+            Wolf: 500
+            Cat: 500
+            Ocelot: 500
+            Mooshroom: 500
+            Bee: 600
+            # Awkward to source, or the animal is awkward to find.
+            Turtle: 700
+            Frog: 700
+            Armadillo: 700
+            Fox: 800
+            Llama: 800
+            Trader_Llama: 800
+            # Nether, or a bucket of tropical fish per parent.
+            Hoglin: 900
+            Strider: 900
+            Axolotl: 900
+            Panda: 1000
+            Camel: 1100
+            # Golden carrots and golden apples, and the animal has to be tamed first.
+            Horse: 1200
+            Donkey: 1200
+            Mule: 1200
+            # Archaeology-gated: a torchflower seed comes out of suspicious sand.
+            Sniffer: 1500
+
+        # What raising an animal to adulthood pays, as a multiple of what breeding it paid.
+        #
+        # The two halves are equal on purpose. Raising is the one part of this skill that cannot be
+        # rushed -- twenty real minutes of vanilla time per animal, shortened only by spending food
+        # on the feed verb below -- so making it worth as much as the clickable half is what stops
+        # Husbandry collapsing into "spam the breeding item".
+        Raise_Multiplier: 1.0
+
+        # Feeding a baby animal to speed its growth along. Small on purpose: it is the one verb a
+        # player can repeat as fast as they can click, limited only by how much food they hold.
+        Feed_Baby: 50
+
+        # The harvest verbs. Each one is rate-limited by vanilla itself -- a just-sheared sheep is
+        # worthless until it eats, a hive needs five levels of bee-pollination time, and an armadillo
+        # has its own scute cooldown.
+        Shear: 300
+        Hive_Harvest: 500
+        Milk: 200
+        Brush: 300
     Mining:
         Sculk: 4
         Sculk_Vein: 3

@@ -113,6 +113,9 @@ public class SkillTools {
                 PrimarySkillType.EXCAVATION,
                 PrimarySkillType.FISHING,
                 PrimarySkillType.HERBALISM,
+                // Four of Husbandry's six XP verbs are gathering -- shear, brush, hive, milk -- and
+                // the other two (breed, raise) produce the livestock the other four harvest.
+                PrimarySkillType.HUSBANDRY,
                 PrimarySkillType.MINING,
                 PrimarySkillType.WOODCUTTING
         );

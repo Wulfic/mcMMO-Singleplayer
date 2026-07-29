@@ -8,6 +8,7 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
 import com.gmail.nossr50.skills.agility.Medium;
 import com.gmail.nossr50.skills.agility.MovementXpSettings;
+import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.skills.stealth.StealthXpSettings;
 import com.gmail.nossr50.skills.unarmored.UnarmoredManager;
 import com.gmail.nossr50.util.text.StringUtils;
@@ -491,6 +492,66 @@ public class ExperienceConfig extends ConfigLoader {
     public int getUnarmoredMaxAwardsPerAttacker() {
         return config.getInt("ExploitFix.Unarmored.Max_Awards_Per_Attacker",
                 DEFAULT_UNARMORED_MAX_AWARDS_PER_ATTACKER);
+    }
+
+    /* Husbandry */
+
+    /**
+     * XP for breeding a pair of the given species, keyed by config-entity string (see
+     * {@code ConfigStringUtils}) — e.g. {@code Experience_Values.Husbandry.Animal_Breeding.Cow}.
+     *
+     * <p>Per-species rather than flat because a breeding item's cost spans two orders of magnitude:
+     * chicken seeds are free, a horse eats golden carrots, a sniffer needs a torchflower seed dug out
+     * of suspicious sand. One flat rate would make the cheapest animal in the game the only one worth
+     * breeding.
+     *
+     * <p><b>An unlisted species resolves to 0 and pays nothing</b>, which is the same contract
+     * {@link #getTamingXP} has and is deliberate: the table <em>is</em> the definition of what this
+     * skill rewards, so a mob added by a future version or another mod cannot silently start paying a
+     * number nobody chose.
+     */
+    public int getHusbandryBreedXp(String entityConfigString) {
+        return config.getInt("Experience_Values.Husbandry.Animal_Breeding." + entityConfigString);
+    }
+
+    /**
+     * What raising an animal to adulthood pays, as a multiple of what breeding it paid.
+     *
+     * <p>Shipped at {@code 1.0}. The two halves are equal on purpose: raising is the one part of
+     * Husbandry that cannot be rushed — twenty real minutes of vanilla time per animal, shortened
+     * only by spending food on the feed verb — so making it worth as much as the clickable half is
+     * what stops the skill collapsing into "spam the breeding item".
+     */
+    public double getHusbandryRaiseMultiplier() {
+        return config.getDouble("Experience_Values.Husbandry.Raise_Multiplier",
+                HusbandryManager.DEFAULT_RAISE_MULTIPLIER);
+    }
+
+    /** XP for feeding a baby animal to accelerate its growth. */
+    public int getHusbandryFeedBabyXp() {
+        return config.getInt("Experience_Values.Husbandry.Feed_Baby",
+                HusbandryManager.DEFAULT_FEED_BABY_XP);
+    }
+
+    /** XP for shearing a sheep, mooshroom, snow golem or bogged. */
+    public int getHusbandryShearXp() {
+        return config.getInt("Experience_Values.Husbandry.Shear", HusbandryManager.DEFAULT_SHEAR_XP);
+    }
+
+    /** XP for harvesting honey or honeycomb from a hive or bee nest. */
+    public int getHusbandryHiveXp() {
+        return config.getInt("Experience_Values.Husbandry.Hive_Harvest",
+                HusbandryManager.DEFAULT_HIVE_XP);
+    }
+
+    /** XP for milking a cow or bucketing mooshroom stew. */
+    public int getHusbandryMilkXp() {
+        return config.getInt("Experience_Values.Husbandry.Milk", HusbandryManager.DEFAULT_MILK_XP);
+    }
+
+    /** XP for brushing an armadillo's scute off. */
+    public int getHusbandryBrushXp() {
+        return config.getInt("Experience_Values.Husbandry.Brush", HusbandryManager.DEFAULT_BRUSH_XP);
     }
 
     /* Archery */

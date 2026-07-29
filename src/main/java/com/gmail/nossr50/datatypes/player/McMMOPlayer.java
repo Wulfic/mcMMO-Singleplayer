@@ -23,6 +23,7 @@ import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.fishing.FishingManager;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
+import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
 import com.gmail.nossr50.skills.repair.RepairManager;
 import com.gmail.nossr50.skills.salvage.SalvageManager;
@@ -177,6 +178,7 @@ public class McMMOPlayer {
             case EXCAVATION -> new ExcavationManager(this);
             case FISHING -> new FishingManager(this);
             case HERBALISM -> new HerbalismManager(this);
+            case HUSBANDRY -> new HusbandryManager(this);
             case MACES -> new MacesManager(this);
             case MINING -> new MiningManager(this);
             case REPAIR -> new RepairManager(this);
@@ -235,6 +237,10 @@ public class McMMOPlayer {
 
     public HerbalismManager getHerbalismManager() {
         return (HerbalismManager) skillManagers.get(PrimarySkillType.HERBALISM);
+    }
+
+    public HusbandryManager getHusbandryManager() {
+        return (HusbandryManager) skillManagers.get(PrimarySkillType.HUSBANDRY);
     }
 
     public MacesManager getMacesManager() {
