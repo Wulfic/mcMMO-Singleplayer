@@ -22,16 +22,19 @@ import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.fishing.FishingManager;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
+import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.skills.maces.MacesManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
 import com.gmail.nossr50.skills.repair.RepairManager;
 import com.gmail.nossr50.skills.salvage.SalvageManager;
 import com.gmail.nossr50.skills.smelting.SmeltingManager;
 import com.gmail.nossr50.skills.spears.SpearsManager;
+import com.gmail.nossr50.skills.stealth.StealthManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
+import com.gmail.nossr50.skills.unarmored.UnarmoredManager;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
@@ -104,6 +107,11 @@ class SkillStatsRendererTest {
         when(mmoPlayer.getTamingManager()).thenReturn(new TamingManager(mmoPlayer));
         when(mmoPlayer.getFishingManager()).thenReturn(new FishingManager(mmoPlayer));
         when(mmoPlayer.getAlchemyManager()).thenReturn(new AlchemyManager(mmoPlayer));
+        // Pass 2. Without these the renderers below see a null manager and silently emit no stats,
+        // which would make every assertion in pass2RenderersEmitAStatsSectionAtMaxLevel vacuous.
+        when(mmoPlayer.getHusbandryManager()).thenReturn(new HusbandryManager(mmoPlayer));
+        when(mmoPlayer.getStealthManager()).thenReturn(new StealthManager(mmoPlayer));
+        when(mmoPlayer.getUnarmoredManager()).thenReturn(new UnarmoredManager(mmoPlayer));
         UserManager.track(mmoPlayer);
     }
 
@@ -202,6 +210,66 @@ class SkillStatsRendererTest {
             when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
             assertTrue(anyLineContains(render(SkillStatsRenderer.forSkill(s)), "Stats"),
                     s.name() + " shows effect stats at max level");
+        }
+    }
+
+    @Test
+    void pass2RenderersEmitAStatsSectionAtMaxLevel() {
+        // Regression: all four of these shipped without a dedicated renderer and fell through to
+        // GenericSkillStatsRenderer, so their .Stat locale keys were written but never read and the
+        // screens showed a header and a sub-skill list with no effect values at all.
+        for (PrimarySkillType s : List.of(PrimarySkillType.HUSBANDRY, PrimarySkillType.STEALTH,
+                PrimarySkillType.UNARMORED, PrimarySkillType.PARKOUR)) {
+            when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
+            assertTrue(anyLineContains(render(SkillStatsRenderer.forSkill(s)), "Stats"),
+                    s.name() + " shows effect stats at max level");
+        }
+    }
+
+    @Test
+    void husbandryRendersEverySubSkillStatLabel() {
+        // Pins that each of the six Husbandry stat lines is actually reached — a renderer that
+        // emitted only the first would still satisfy the "Stats" header assertion above. The labels
+        // are the locale .Stat / .Stat.Extra values, so this also proves those keys resolve rather
+        // than rendering as "!Husbandry.SubSkill...!".
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUSBANDRY)).thenReturn(1000);
+
+        final List<String> lines = render(new HusbandryStatsRenderer());
+
+        for (String label : List.of("Multi-Breed Reach", "Additional Animals Bred", "Twin Chance",
+                "Growth Acceleration", "Double Feed Chance", "Bonus Yield Chance",
+                "Tool Durability Save Chance")) {
+            assertTrue(anyLineContains(lines, label),
+                    "Husbandry stats missing the '" + label + "' line; lines=" + lines);
+        }
+        assertFalse(anyLineContains(lines, "!Husbandry"),
+                "a stat line resolved to a locale miss; lines=" + lines);
+    }
+
+    @Test
+    void husbandryAtZeroShowsNoEffectStats() {
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUSBANDRY)).thenReturn(0);
+
+        final List<String> lines = render(new HusbandryStatsRenderer());
+
+        assertTrue(anyLineContains(lines, "Locked"), "locked sub-skills are marked Locked");
+        assertFalse(anyLineContains(lines, "Twin Chance"),
+                "no effect stats before anything is unlocked; lines=" + lines);
+    }
+
+    @Test
+    void swimmingAndFlyingDeliberatelyFallBackToTheGenericRenderer() {
+        // NOT an oversight, and pinned so it is not "fixed" into an empty stats section later:
+        // Swimming and Flying own no sub-skills of their own. They are parents of the child skill
+        // Agility, and every movement effect is an AGILITY_* sub-skill gated on that averaged level,
+        // so it renders under /mcstats agility instead.
+        for (PrimarySkillType s : List.of(PrimarySkillType.SWIMMING, PrimarySkillType.FLYING)) {
+            assertTrue(SkillStatsRenderer.forSkill(s) instanceof GenericSkillStatsRenderer,
+                    s.name() + " has no sub-skills of its own, so the generic renderer is correct");
+
+            when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
+            final List<String> lines = render(SkillStatsRenderer.forSkill(s));
+            assertFalse(lines.isEmpty(), s.name() + " still renders a header");
         }
     }
 

@@ -277,15 +277,6 @@ public final class HusbandryListener {
         }
     }
 
-    /**
-     * Whether one nearby animal should be swept up by Multi-Breed.
-     *
-     * <p>Mirrors the conditions vanilla's own {@code AnimalEntity#interactMob} requires before it
-     * will accept a breeding item: an adult, off its post-breeding cooldown, not already courting.
-     * {@code getBreedingAge() == 0} covers both halves of that cooldown — it is negative while the
-     * animal is still a baby and positive for the five minutes after a breeding — and
-     * {@code canEat()} is vanilla's own name for "not already in love".
-     */
     // --- Stage 2: raise, feed and Accelerated Growth --------------------------------------------
 
     /**
@@ -328,13 +319,28 @@ public final class HusbandryListener {
         if (interaction == null || interaction.target() != animal) {
             return growthSeconds; // Not a player feed: grass, or a tadpole ageing itself.
         }
-        final HusbandryManager husbandry = husbandryOf(interaction.player());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(interaction.player().getUuid());
+        if (mmoPlayer == null) {
+            return growthSeconds;
+        }
+        final HusbandryManager husbandry = mmoPlayer.getHusbandryManager();
         if (husbandry == null) {
             return growthSeconds;
         }
 
         husbandry.onFeedBaby(configStringOf(animal));
-        return husbandry.applyFeedBonus(growthSeconds);
+
+        // Announced rather than silent, and the comparison is what makes it honest: applyFeedBonus
+        // owns the roll, so asking whether it actually doubled beats re-rolling here and reporting a
+        // different outcome from the one vanilla is about to act on. Without this the sub-skill's
+        // active half is invisible -- a baby simply grows a bit more, with nothing to attribute it
+        // to -- and Husbandry.SubSkill.AcceleratedGrowth.Proc ships as a string nothing ever sends.
+        final int boostedSeconds = husbandry.applyFeedBonus(growthSeconds);
+        if (boostedSeconds > growthSeconds) {
+            NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                    "Husbandry.SubSkill.AcceleratedGrowth.Proc");
+        }
+        return boostedSeconds;
     }
 
     /**
@@ -511,6 +517,15 @@ public final class HusbandryListener {
                 Registries.ENTITY_TYPE.getId(animal.getType()).getPath());
     }
 
+    /**
+     * Whether one nearby animal should be swept up by Multi-Breed.
+     *
+     * <p>Mirrors the conditions vanilla's own {@code AnimalEntity#interactMob} requires before it
+     * will accept a breeding item: an adult, off its post-breeding cooldown, not already courting.
+     * {@code getBreedingAge() == 0} covers both halves of that cooldown — it is negative while the
+     * animal is still a baby and positive for the five minutes after a breeding — and
+     * {@code canEat()} is vanilla's own name for "not already in love".
+     */
     private static boolean isMultiBreedCandidate(AnimalEntity fed, AnimalEntity candidate) {
         return candidate != fed
                 && candidate.isAlive()

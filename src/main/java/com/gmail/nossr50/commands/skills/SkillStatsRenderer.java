@@ -79,8 +79,16 @@ public abstract class SkillStatsRenderer {
             case SALVAGE -> new SalvageStatsRenderer();
             case SMELTING -> new SmeltingStatsRenderer();
             case FISHING -> new FishingStatsRenderer();
-            // Every current skill has a dedicated renderer; the fallback keeps a future
-            // PrimarySkillType (Pass 2 new skills) working with header + sub-skill list.
+            case HUSBANDRY -> new HusbandryStatsRenderer();
+            case STEALTH -> new StealthStatsRenderer();
+            case UNARMORED -> new UnarmoredStatsRenderer();
+            case PARKOUR -> new ParkourStatsRenderer();
+            // SWIMMING and FLYING fall through deliberately, not for want of a renderer: they own no
+            // sub-skills of their own at all. Both are parents of the child skill AGILITY, and every
+            // movement effect is an AGILITY_* sub-skill gated on that averaged level, so it renders
+            // under /mcstats agility. PARKOUR is the exception above only because SNOW_WALKER's enum
+            // name parents it onto Parkour directly. A dedicated renderer here would emit an empty
+            // stats section — the generic header + level line is the honest whole of these two.
             default -> new GenericSkillStatsRenderer(skill);
         };
     }

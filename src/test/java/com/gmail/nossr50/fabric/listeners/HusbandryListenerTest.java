@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -388,6 +389,39 @@ class HusbandryListenerTest {
             HusbandryListener.endPlayerInteraction();
         }
         verify(husbandry).onFeedBaby("Cow");
+    }
+
+    @Test
+    void aDoubledFeedIsAnnouncedAndAnOrdinaryOneIsNot() {
+        // Regression: Husbandry.SubSkill.AcceleratedGrowth.Proc shipped as a locale string nothing
+        // ever sent, so the sub-skill's active half was invisible -- the baby just grew a little
+        // more, with nothing to attribute it to. NotificationManager gates every send on
+        // useChatNotifications(), which makes that call the seam for "a message was attempted".
+        final PassiveEntity baby = calf(-24000);
+        when(husbandry.applyFeedBonus(120)).thenReturn(240);
+        when(mmoPlayer.useChatNotifications()).thenReturn(false);
+        final ServerPlayerEntity player = breeder();
+
+        HusbandryListener.beginPlayerInteraction(player, baby);
+        try {
+            HusbandryListener.onGrowthApplied(baby, 120);
+        } finally {
+            HusbandryListener.endPlayerInteraction();
+        }
+        verify(mmoPlayer).useChatNotifications();
+
+        // ...and a feed that did NOT double stays silent, which is the half that makes the
+        // announcement mean something.
+        clearInvocations(mmoPlayer);
+        when(husbandry.applyFeedBonus(120)).thenReturn(120);
+
+        HusbandryListener.beginPlayerInteraction(player, baby);
+        try {
+            HusbandryListener.onGrowthApplied(baby, 120);
+        } finally {
+            HusbandryListener.endPlayerInteraction();
+        }
+        verify(mmoPlayer, never()).useChatNotifications();
     }
 
     @Test
