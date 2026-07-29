@@ -662,6 +662,22 @@ Mining:
             Rank_6: 750
             Rank_7: 850
             Rank_8: 1000
+Husbandry:
+    # Both breed-family sub-skills unlock immediately. Breeding IS the skill's entry verb -- it is
+    # the first thing a player does and the only XP source Husbandry has until stage 2 -- so gating
+    # its two sub-skills behind levels would mean the early skill is levelled by doing the one thing
+    # neither of them affects yet. Their strength scales from zero regardless, via ChanceMax and
+    # MaxAdditionalAnimals in advanced.yml, so "unlocked at 1" does not mean "strong at 1".
+    MultiBreed:
+        Standard:
+            Rank_1: 1
+        RetroMode:
+            Rank_1: 1
+    Twins:
+        Standard:
+            Rank_1: 1
+        RetroMode:
+            Rank_1: 1
 Herbalism:
     DoubleDrops:
         Standard:

@@ -4,6 +4,7 @@ import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -251,6 +252,31 @@ public class AdvancedConfig extends ConfigLoader {
 
         if (getMaxBonusLevel(SubSkillType.HERBALISM_SHROOM_THUMB) < 1) {
             reason.add("Skills.Herbalism.ShroomThumb.MaxBonusLevel should be at least 1!");
+        }
+
+        /* HUSBANDRY */
+        if (getMaximumProbability(SubSkillType.HUSBANDRY_TWINS) < 1) {
+            reason.add("Skills.Husbandry.Twins.ChanceMax should be at least 1!");
+        }
+
+        if (getMaxBonusLevel(SubSkillType.HUSBANDRY_TWINS) < 1) {
+            reason.add("Skills.Husbandry.Twins.MaxBonusLevel should be at least 1!");
+        }
+
+        if (getMultiBreedMaxBonusLevel() < 1) {
+            reason.add("Skills.Husbandry.MultiBreed.MaxBonusLevel should be at least 1!");
+        }
+
+        if (getMultiBreedBaseRadius() < 0) {
+            reason.add("Skills.Husbandry.MultiBreed.BaseRadius should be at least 0!");
+        }
+
+        if (getMultiBreedMaxRadius() < getMultiBreedBaseRadius()) {
+            reason.add("Skills.Husbandry.MultiBreed.MaxRadius should be at least BaseRadius!");
+        }
+
+        if (getMultiBreedMaxAdditionalAnimals() < 0) {
+            reason.add("Skills.Husbandry.MultiBreed.MaxAdditionalAnimals should be at least 0!");
         }
 
         /* MINING */
@@ -699,6 +725,40 @@ public class AdvancedConfig extends ConfigLoader {
     /** How long Smoke Bomb's invisibility lasts, in ticks, at the ability's base duration. */
     public int getSmokeBombDurationTicks() {
         return config.getInt("Skills.Stealth.SmokeBomb.DurationTicks", 100);
+    }
+
+    // --- Husbandry (Pass 2) --------------------------------------------------------------------
+
+    public int getMultiBreedMaxBonusLevel() {
+        return maxBonusLevel("Skills.Husbandry.MultiBreed.MaxBonusLevel");
+    }
+
+    /** Multi-Breed's reach the moment it unlocks, in blocks. */
+    public double getMultiBreedBaseRadius() {
+        return config.getDouble("Skills.Husbandry.MultiBreed.BaseRadius",
+                HusbandryManager.DEFAULT_MULTI_BREED_BASE_RADIUS);
+    }
+
+    /**
+     * Multi-Breed's reach at max level, in blocks. Clamped in the manager to
+     * {@link HusbandryManager#HARD_MAX_MULTI_BREED_RADIUS} — this figure sizes an entity sweep run
+     * every time a player feeds an animal, so it is not allowed to be arbitrarily large.
+     */
+    public double getMultiBreedMaxRadius() {
+        return config.getDouble("Skills.Husbandry.MultiBreed.MaxRadius",
+                HusbandryManager.DEFAULT_MULTI_BREED_MAX_RADIUS);
+    }
+
+    /**
+     * How many extra animals one breeding item may set in love at max level.
+     *
+     * <p><b>This is Multi-Breed's anti-exploit gate, not a flavour knob</b> — see
+     * {@link HusbandryManager#DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS}. Husbandry pays per
+     * breeding, so this number is the ceiling on how much XP a single click can be worth.
+     */
+    public int getMultiBreedMaxAdditionalAnimals() {
+        return config.getInt("Skills.Husbandry.MultiBreed.MaxAdditionalAnimals",
+                HusbandryManager.DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS);
     }
 
     // --- Unarmored (Pass 2) --------------------------------------------------------------------

@@ -1,10 +1,17 @@
 package com.gmail.nossr50.skills.husbandry;
 
+import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.datatypes.experience.XPGainReason;
+import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.SkillManager;
+import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.random.ProbabilityUtil;
+import com.gmail.nossr50.util.skills.RankUtils;
 import java.util.function.ToIntFunction;
 
 /**
@@ -77,6 +84,39 @@ public class HusbandryManager extends SkillManager {
      */
     public static final double DEFAULT_RAISE_MULTIPLIER = 1.0;
 
+    /**
+     * The furthest Multi-Breed can ever reach, in blocks, whatever {@code advanced.yml} says.
+     *
+     * <p>The wiki's own number, and it is a hard clamp rather than just a default because the radius
+     * is the input to a per-activation entity sweep: a mistyped 400 would scan a box eight chunks
+     * across on every animal a player feeds.
+     */
+    public static final double HARD_MAX_MULTI_BREED_RADIUS = 40.0;
+
+    /** Multi-Breed's reach at the moment it unlocks, before any level scaling. */
+    public static final double DEFAULT_MULTI_BREED_BASE_RADIUS = 4.0;
+
+    /** Multi-Breed's reach at {@code MaxBonusLevel}. */
+    public static final double DEFAULT_MULTI_BREED_MAX_RADIUS = HARD_MAX_MULTI_BREED_RADIUS;
+
+    /**
+     * How many <em>extra</em> animals one breeding item can set in love at {@code MaxBonusLevel}.
+     *
+     * <p><b>This number, not the radius, is the anti-exploit gate — read this before raising it.</b>
+     * Husbandry pays per breeding, and Multi-Breed is the only thing in the skill that turns one
+     * player action into many breedings. Left uncapped at the 40-block radius, one wheat thrown into
+     * a hundred-cow pen would pay fifty breedings at once, repeatable as fast as a player can click,
+     * and the whole XP budget in {@code plans/new-skills/husbandry.md} (~51 h of active breeding to
+     * max) would collapse to under an hour.
+     *
+     * <p>Capping the <em>count</em> rather than the radius keeps what makes the sub-skill good — you
+     * reach across the pen instead of walking to each animal — while keeping the XP per click
+     * bounded. It is the same shape as Unarmored's per-attacker award cap and Agility's Dodge cap:
+     * the port's answer to a repeatable award has consistently been a hard ceiling on awards, not a
+     * softer rate.
+     */
+    public static final int DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS = 8;
+
     public HusbandryManager(McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.HUSBANDRY);
     }
@@ -112,6 +152,105 @@ public class HusbandryManager extends SkillManager {
             return 0F;
         }
         return atLeastZero(experience.getHusbandryBreedXp(entityConfigString));
+    }
+
+    /**
+     * Credit one successful breeding.
+     *
+     * <p>Called once per <b>breeding</b>, never once per parent. The trigger layer sits on the single
+     * point vanilla itself uses to record "this player bred these two animals", so the pair arrives
+     * here already collapsed into one event.
+     *
+     * @param entityConfigString the animal's config key, e.g. {@code "Cow"}
+     * @return the XP awarded, or {@code 0} for a species the table does not price
+     */
+    public float onBreed(String entityConfigString) {
+        final float xp = getBreedXp(entityConfigString);
+        if (xp <= 0) {
+            return 0F;
+        }
+        applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF);
+        return xp;
+    }
+
+    // --- Sub-skill: Twins ---------------------------------------------------------------------
+
+    public boolean canTwins() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HUSBANDRY_TWINS)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.HUSBANDRY_TWINS);
+    }
+
+    /**
+     * Whether this breeding should produce a second baby.
+     *
+     * <p>Chance scales with level up to {@code Skills.Husbandry.Twins.ChanceMax}, which ships at
+     * <b>50 %</b> rather than the wiki's 100 %. Doubling every breed at max level is a food and
+     * mob-population firehose on its own, and it multiplies with Multi-Breed rather than adding to
+     * it — the two together at 100 % would turn one item into a whole herd.
+     *
+     * @return {@code true} if a twin should be born
+     */
+    public boolean rollTwins() {
+        return canTwins()
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HUSBANDRY_TWINS, mmoPlayer);
+    }
+
+    // --- Sub-skill: Multi-Breed ---------------------------------------------------------------
+
+    public boolean canMultiBreed() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HUSBANDRY_MULTI_BREED)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.HUSBANDRY_MULTI_BREED);
+    }
+
+    /**
+     * How far one breeding item reaches, in blocks.
+     *
+     * <p>Grows from {@link #DEFAULT_MULTI_BREED_BASE_RADIUS} at unlock to the configured maximum at
+     * {@code MaxBonusLevel}, and is clamped to {@link #HARD_MAX_MULTI_BREED_RADIUS} whatever the
+     * config says — this value sizes an entity sweep that runs every time a player feeds an animal.
+     *
+     * @return the search radius, or {@code 0} when Multi-Breed is locked
+     */
+    public double getMultiBreedRadius() {
+        if (!canMultiBreed()) {
+            return 0.0;
+        }
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        if (advanced == null) {
+            return DEFAULT_MULTI_BREED_BASE_RADIUS;
+        }
+        final double base = Math.max(0.0, advanced.getMultiBreedBaseRadius());
+        final double max = Math.max(base, advanced.getMultiBreedMaxRadius());
+        final double scaled = base + scaleToLevel(max - base, advanced.getMultiBreedMaxBonusLevel());
+        return Math.min(HARD_MAX_MULTI_BREED_RADIUS, scaled);
+    }
+
+    /**
+     * How many <em>additional</em> animals one breeding item may set in love, beyond the one the
+     * player actually fed.
+     *
+     * <p>See {@link #DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS} for why this cap exists and why it
+     * is the count rather than the radius that carries it. Scales from one at unlock to the
+     * configured maximum at {@code MaxBonusLevel}.
+     *
+     * @return the cap, or {@code 0} when Multi-Breed is locked or configured off
+     */
+    public int getMultiBreedMaxAdditionalAnimals() {
+        if (!canMultiBreed()) {
+            return 0;
+        }
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        final int max = advanced == null
+                ? DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS
+                : advanced.getMultiBreedMaxAdditionalAnimals();
+        if (max <= 0) {
+            return 0; // Configured off: the sub-skill still "unlocks" but spreads to nobody.
+        }
+        final int maxBonusLevel = advanced == null
+                ? 0
+                : advanced.getMultiBreedMaxBonusLevel();
+        // Floor of one: an unlocked Multi-Breed that reaches nobody at all would read as broken.
+        return Math.max(1, (int) Math.floor(1 + scaleToLevel(max - 1, maxBonusLevel)));
     }
 
     // --- Raise ------------------------------------------------------------------------------

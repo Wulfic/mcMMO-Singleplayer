@@ -11,10 +11,12 @@ import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.GeneralConfig;
+import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.skills.SkillTools;
@@ -47,6 +49,7 @@ class HusbandryManagerTest {
     private static final int SNIFFER_BREED_XP = 1500;
 
     private McMMOPlayer mmoPlayer;
+    private PlayerProfile profile;
     private HusbandryManager manager;
 
     @BeforeEach
@@ -54,13 +57,17 @@ class HusbandryManagerTest {
         McMMOMod.setExperienceConfig(new ExperienceConfig(dataFolder));
         McMMOMod.setGeneralConfig(new GeneralConfig(dataFolder));
         McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
+        // Real rank plumbing: the stage-1 sub-skill gates run through RankUtils, and mocking it
+        // would prove the gate compiles rather than that skillranks.yml actually unlocks anything.
+        McMMOMod.setRankConfig(new RankConfig(dataFolder));
 
         final PlatformPlayer player = mock(PlatformPlayer.class);
         lenient().when(player.getName()).thenReturn("Farmer");
         lenient().when(player.getUniqueId()).thenReturn(UID);
         lenient().when(player.isCreative()).thenReturn(false);
 
-        mmoPlayer = new McMMOPlayer(player, new PlayerProfile("Farmer", UID, 0));
+        profile = new PlayerProfile("Farmer", UID, 0);
+        mmoPlayer = new McMMOPlayer(player, profile);
         manager = mmoPlayer.getHusbandryManager();
     }
 
@@ -69,12 +76,32 @@ class HusbandryManagerTest {
         McMMOMod.setExperienceConfig(null);
         McMMOMod.setGeneralConfig(null);
         McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setRankConfig(null);
     }
 
     /** Rebinds a mocked config for the cases the shipped file cannot express. */
     private HusbandryManager managerWithConfig(ExperienceConfig config) {
         McMMOMod.setExperienceConfig(config);
         return manager;
+    }
+
+    private void setHusbandryLevel(int level) {
+        profile.modifySkill(PrimarySkillType.HUSBANDRY, level);
+    }
+
+    /**
+     * An {@link AdvancedConfig} whose Twins RNG is a certainty in one direction.
+     *
+     * <p>A {@code maxBonusLevel} of 0 short-circuits {@code ProbabilityUtil} straight to the
+     * ceiling, so the ceiling alone decides the outcome — 100 always procs, 0 never does.
+     */
+    private AdvancedConfig advancedWithTwinsChance(double ceiling) {
+        final AdvancedConfig advanced = mock(AdvancedConfig.class);
+        lenient().when(advanced.getMaximumProbability(SubSkillType.HUSBANDRY_TWINS))
+                .thenReturn(ceiling);
+        lenient().when(advanced.getMaxBonusLevel(SubSkillType.HUSBANDRY_TWINS)).thenReturn(0);
+        McMMOMod.setAdvancedConfig(advanced);
+        return advanced;
     }
 
     // --- Registration ---------------------------------------------------------------------------
@@ -97,17 +124,30 @@ class HusbandryManagerTest {
     }
 
     @Test
-    void aSkillWithNoSubSkillsYetResolvesToAnEmptySetRatherThanNull() {
-        // Husbandry is the first skill in the mod to have ZERO sub-skills -- they arrive with their
-        // stages, so at stage 0 there are none. The only thing between that and an NPE is that
-        // buildPrimarySkillChildrenMap pre-seeds an empty set for every PrimarySkillType before
-        // filling it, and SkillStatsRenderer feeds the result straight into `new ArrayList<>(...)`.
-        // That pre-seed is invisible and easy to "simplify" away, so /mcstats husbandry crashing is
-        // pinned here rather than discovered by typing the command.
-        assertNotNull(new SkillTools().getSubSkills(PrimarySkillType.HUSBANDRY),
-                "a skill with no sub-skills must map to an empty set, not to null");
-        assertTrue(new SkillTools().getSubSkills(PrimarySkillType.HUSBANDRY).isEmpty(),
-                "stage 0 ships no Husbandry sub-skills; they land with their stages");
+    void everySkillResolvesToASubSkillSetRatherThanNull() {
+        // Husbandry was the first skill in the mod to have ZERO sub-skills (stage 0 shipped none),
+        // and the only thing between that and an NPE is that buildPrimarySkillChildrenMap pre-seeds
+        // an empty set for every PrimarySkillType before filling it, while SkillStatsRenderer feeds
+        // the result straight into `new ArrayList<>(...)`. That pre-seed looks like dead
+        // initialization and is exactly what a cleanup pass deletes.
+        //
+        // Anchored on the whole enum rather than on Husbandry, because Husbandry stopped being the
+        // empty one the moment stage 1 gave it two sub-skills -- a test pinned to whichever skill
+        // happens to be empty today stops testing anything the day that changes, silently.
+        final SkillTools skillTools = new SkillTools();
+        for (PrimarySkillType skill : PrimarySkillType.values()) {
+            assertNotNull(skillTools.getSubSkills(skill),
+                    () -> skill + " must map to a set, not to null");
+        }
+    }
+
+    @Test
+    void husbandryOwnsExactlyTheSubSkillsThisStageShips() {
+        // Stage 1 ships the two breed-family sub-skills and deliberately no others: a constant with
+        // no ranks, no config and no behaviour reads as half-wired to everything that iterates the
+        // enum, /mcstats included. This fails if a later stage's constant is added early.
+        assertEquals(java.util.Set.of(SubSkillType.HUSBANDRY_MULTI_BREED, SubSkillType.HUSBANDRY_TWINS),
+                new SkillTools().getSubSkills(PrimarySkillType.HUSBANDRY));
     }
 
     // --- Breed: the per-species table ------------------------------------------------------------
@@ -156,6 +196,156 @@ class HusbandryManagerTest {
         // construction rather than by omission.
         McMMOMod.setExperienceConfig(null);
         assertEquals(0F, manager.getBreedXp("Cow"));
+    }
+
+    // --- Breed: the award path --------------------------------------------------------------------
+
+    @Test
+    void breedingAwardsThePricedXpAndReportsIt() {
+        setHusbandryLevel(0);
+        assertEquals(COW_BREED_XP, manager.onBreed("Cow"));
+        assertTrue(profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY) > 0,
+                "onBreed must actually move the player's XP, not just compute a number");
+    }
+
+    @Test
+    void breedingAnUnpricedSpeciesAwardsNothingAtAll() {
+        setHusbandryLevel(0);
+        final float before = profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY);
+        assertEquals(0F, manager.onBreed("Not_A_Real_Animal"));
+        assertEquals(before, profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY),
+                "an unpriced species must not reach the XP pipeline at all");
+    }
+
+    // --- Sub-skill: Twins -------------------------------------------------------------------------
+
+    @Test
+    void twinsIsLockedAtLevelZeroAndUnlocksAtLevelOne() {
+        setHusbandryLevel(0);
+        assertFalse(manager.canTwins(), "rank 1 unlocks at level 1, so level 0 has nothing");
+        setHusbandryLevel(1);
+        assertTrue(manager.canTwins(), "breeding is the skill's entry verb; its sub-skills unlock at 1");
+    }
+
+    @Test
+    void twinsNeverProcsWhileLockedEvenAtACertainChance() {
+        // The gate and the roll are separate conditions, so pin them separately: with the RNG forced
+        // to a certainty, a proc here could only come from the rank gate having been dropped.
+        advancedWithTwinsChance(100.0);
+        setHusbandryLevel(0);
+        assertFalse(manager.rollTwins(), "a locked sub-skill must not proc at any chance");
+    }
+
+    @Test
+    void twinsProcsOnACertaintyAndNeverOnAZeroChance() {
+        setHusbandryLevel(1000);
+
+        advancedWithTwinsChance(100.0);
+        assertTrue(manager.rollTwins(), "a 100% ceiling must always proc");
+
+        advancedWithTwinsChance(0.0);
+        assertFalse(manager.rollTwins(), "a 0% ceiling must never proc");
+    }
+
+    @Test
+    void theShippedTwinsChanceIsCappedWellBelowCertainty() {
+        // The wiki says 100% at max level. That is deliberately not what ships: doubling every breed
+        // at max is a food and mob-population firehose on its own, and it MULTIPLIES with
+        // Multi-Breed rather than adding to it. Pinned so a "restore the wiki value" edit has to
+        // come through this test and read the reasoning.
+        final double ceiling = McMMOMod.getAdvancedConfig()
+                .getMaximumProbability(SubSkillType.HUSBANDRY_TWINS);
+        assertEquals(50.0, ceiling, "advanced.yml Skills.Husbandry.Twins.ChanceMax");
+    }
+
+    // --- Sub-skill: Multi-Breed -------------------------------------------------------------------
+
+    @Test
+    void multiBreedReachesNobodyWhileLocked() {
+        setHusbandryLevel(0);
+        assertFalse(manager.canMultiBreed());
+        assertEquals(0.0, manager.getMultiBreedRadius(), "a locked sub-skill must sweep nothing");
+        assertEquals(0, manager.getMultiBreedMaxAdditionalAnimals());
+    }
+
+    @Test
+    void multiBreedRadiusGrowsFromTheBaseToTheMaximumWithLevel() {
+        setHusbandryLevel(1);
+        final double atUnlock = manager.getMultiBreedRadius();
+        assertEquals(HusbandryManager.DEFAULT_MULTI_BREED_BASE_RADIUS, atUnlock, 0.05,
+                "at level 1 of 1000 the scaled part is negligible; the base is what a player gets");
+
+        setHusbandryLevel(1000);
+        assertEquals(HusbandryManager.DEFAULT_MULTI_BREED_MAX_RADIUS, manager.getMultiBreedRadius(),
+                1e-9, "RetroMode MaxBonusLevel is 1000, so 1000 is the top of the ladder");
+
+        // Asserted OFF both endpoints as well: a formula that ignored the level entirely would
+        // satisfy one of the two assertions above and read identically at the other.
+        setHusbandryLevel(500);
+        final double halfway = manager.getMultiBreedRadius();
+        assertTrue(halfway > atUnlock && halfway < HusbandryManager.DEFAULT_MULTI_BREED_MAX_RADIUS,
+                "half-levelled reach must sit strictly between the two ends, was " + halfway);
+    }
+
+    @Test
+    void multiBreedRadiusIsHardClampedWhateverTheConfigSays() {
+        // This number sizes an entity sweep that runs every time any player feeds any animal, so a
+        // mistyped MaxRadius must not turn one wheat into an eight-chunk scan.
+        final AdvancedConfig absurd = mock(AdvancedConfig.class);
+        lenient().when(absurd.getMultiBreedBaseRadius()).thenReturn(4.0);
+        lenient().when(absurd.getMultiBreedMaxRadius()).thenReturn(4000.0);
+        lenient().when(absurd.getMultiBreedMaxBonusLevel()).thenReturn(100);
+        McMMOMod.setAdvancedConfig(absurd);
+
+        setHusbandryLevel(1000);
+        assertEquals(HusbandryManager.HARD_MAX_MULTI_BREED_RADIUS, manager.getMultiBreedRadius(),
+                1e-9);
+    }
+
+    @Test
+    void multiBreedSpreadCapGrowsWithLevelAndTopsOutAtTheConfiguredMaximum() {
+        // THE anti-exploit gate. Husbandry pays per breeding and Multi-Breed is the only thing that
+        // turns one click into many breedings, so this ceiling is what bounds the XP a single
+        // breeding item can be worth.
+        setHusbandryLevel(1);
+        assertEquals(1, manager.getMultiBreedMaxAdditionalAnimals(),
+                "a fresh unlock reaches one extra animal, not eight");
+
+        setHusbandryLevel(1000);
+        assertEquals(HusbandryManager.DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS,
+                manager.getMultiBreedMaxAdditionalAnimals());
+
+        setHusbandryLevel(500);
+        final int halfway = manager.getMultiBreedMaxAdditionalAnimals();
+        assertTrue(halfway > 1
+                        && halfway < HusbandryManager.DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS,
+                "half-levelled spread must sit strictly between the ends, was " + halfway);
+    }
+
+    @Test
+    void aZeroSpreadCapDisablesTheSpreadWithoutDisablingTheSubSkill() {
+        final AdvancedConfig off = mock(AdvancedConfig.class);
+        lenient().when(off.getMultiBreedMaxAdditionalAnimals()).thenReturn(0);
+        lenient().when(off.getMultiBreedBaseRadius()).thenReturn(4.0);
+        lenient().when(off.getMultiBreedMaxRadius()).thenReturn(40.0);
+        lenient().when(off.getMultiBreedMaxBonusLevel()).thenReturn(1000);
+        McMMOMod.setAdvancedConfig(off);
+
+        setHusbandryLevel(1000);
+        assertTrue(manager.canMultiBreed(), "the sub-skill is still unlocked and still shown");
+        assertEquals(0, manager.getMultiBreedMaxAdditionalAnimals(),
+                "MaxAdditionalAnimals: 0 is the documented way to switch the spread off");
+    }
+
+    @Test
+    void theShippedMultiBreedDefaultsMatchTheBundledConfig() {
+        final AdvancedConfig shipped = McMMOMod.getAdvancedConfig();
+        assertEquals(HusbandryManager.DEFAULT_MULTI_BREED_BASE_RADIUS,
+                shipped.getMultiBreedBaseRadius());
+        assertEquals(HusbandryManager.DEFAULT_MULTI_BREED_MAX_RADIUS,
+                shipped.getMultiBreedMaxRadius());
+        assertEquals(HusbandryManager.DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS,
+                shipped.getMultiBreedMaxAdditionalAnimals());
     }
 
     // --- Raise ------------------------------------------------------------------------------------

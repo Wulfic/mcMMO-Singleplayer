@@ -6,8 +6,10 @@
   "mixins": [
     "AbstractFurnaceSmeltMixin",
     "AbstractHorseBondMixin",
+    "AnimalLovePlayerMixin",
     "BlockPlaceMixin",
     "BowShootMixin",
+    "BredAnimalsCriterionMixin",
     "BrewingStandBlockEntityMixin",
     "BrewingStandBrewTimeAccessor",
     "ExplosionDropsMixin",

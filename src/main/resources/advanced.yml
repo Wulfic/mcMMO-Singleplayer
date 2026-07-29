@@ -365,6 +365,53 @@ Skills:
                 Standard: 100
                 RetroMode: 1000
     #
+    #  Settings for Husbandry
+    ###
+    Husbandry:
+        Twins:
+            # Chance that one breeding produces TWO babies instead of one.
+            #
+            # ChanceMax ships at 50, not the wiki's 100, deliberately. Doubling every single breed at
+            # max level is a food and mob-population firehose on its own, and it MULTIPLIES with
+            # MultiBreed below rather than adding to it -- the two together at 100 would turn one
+            # wheat into a whole herd. Raise this only after playing a maxed Husbandry with a stocked
+            # pen and deciding it feels slow.
+            #
+            # Egg-laying breeders (frog, sniffer, turtle) never twin: vanilla hands them no baby to
+            # copy, it hands them an egg, and duplicating that would be a different mechanic.
+            ChanceMax: 50.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+
+        MultiBreed:
+            # Feed ONE animal its breeding item and nearby animals of the same species are set in
+            # love too, from that single item.
+            #
+            # ####################################################################################
+            # MaxAdditionalAnimals IS THE ANTI-EXPLOIT GATE. It is not a flavour knob.
+            # ####################################################################################
+            # Husbandry pays XP per BREEDING, and this is the only thing in the skill that turns one
+            # player action into many breedings. With the count uncapped at the 40-block radius, one
+            # wheat thrown into a hundred-cow pen would pay fifty breedings at once, repeatable as
+            # fast as you can click, and the skill's whole XP budget (~51 hours of active breeding to
+            # reach 1000) would collapse to well under an hour.
+            #
+            # Capping the COUNT rather than the RADIUS is what keeps the sub-skill worth having --
+            # you still reach right across the pen instead of walking to every animal -- while
+            # keeping the XP a single click can be worth bounded. Set to 0 to disable the spread
+            # entirely without removing the sub-skill.
+            MaxAdditionalAnimals: 8
+
+            # Reach in blocks, at unlock and at MaxBonusLevel. MaxRadius is HARD-CLAMPED to 40 in
+            # code whatever you put here: this number sizes an entity sweep that runs every time any
+            # player feeds any animal, so a mistyped 400 would scan a box eight chunks across.
+            BaseRadius: 4.0
+            MaxRadius: 40.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+    #
     #  Settings for Mining
     ###
     Mining:

@@ -6,10 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.gmail.nossr50.fabric.mixin.BrewingStandBrewTimeAccessor;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Arrays;
+import net.minecraft.advancement.criterion.BredAnimalsCriterion;
 import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.block.entity.BrewingStandBlockEntity;
 import net.minecraft.component.type.FoodComponent;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.item.BlockItem;
@@ -232,5 +234,37 @@ class MixinApplicationTest {
         assertTrue(methods.stream().anyMatch(name -> name.contains("endFurnaceExtract")),
                 "FurnaceOutputSlotMixin's RETURN injector did not apply — the multiplier would "
                         + "leak past the extraction that set it");
+    }
+
+    @Test
+    void husbandryBreedMixinApplies() {
+        // Nothing during boot loads BredAnimalsCriterion, so class-loading it here is what forces the
+        // mixin to apply. Both halves matter: the target is disambiguated by a full descriptor
+        // (BredAnimalsCriterion inherits a two-arg trigger from AbstractCriterion), so a drifted
+        // signature fails the injection here rather than leaving every breeding unpaid in-game.
+        assertDoesNotThrow(() -> Class.forName(BredAnimalsCriterion.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+
+        final boolean hasBredHook = Arrays.stream(BredAnimalsCriterion.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().contains("onAnimalsBred"));
+        assertTrue(hasBredHook,
+                "BredAnimalsCriterionMixin did not apply to BredAnimalsCriterion — Husbandry would "
+                        + "silently pay nothing for any breeding in-game, and Twins would never fire");
+    }
+
+    @Test
+    void husbandryMultiBreedMixinApplies() {
+        // AnimalEntity is loaded by EntityType's static init during McTestRegistries.bootstrap(), so
+        // class-loading proves nothing; the handler's presence on the transformed target does.
+        //
+        // Worth stating why the target is lovePlayer and not interactMob: AbstractHorseEntity,
+        // CamelEntity, LlamaEntity and PandaEntity all override interactMob and call lovePlayer
+        // themselves, so an interactMob hook would leave Multi-Breed dead on four species — horses
+        // among them — while passing every test that used a cow.
+        final boolean hasLoveHook = Arrays.stream(AnimalEntity.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().contains("onLovePlayer"));
+        assertTrue(hasLoveHook,
+                "AnimalLovePlayerMixin did not apply to AnimalEntity — Multi-Breed would silently "
+                        + "never spread love beyond the one animal a player fed");
     }
 }
