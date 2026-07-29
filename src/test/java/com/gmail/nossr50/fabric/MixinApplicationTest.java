@@ -12,6 +12,8 @@ import net.minecraft.block.entity.BrewingStandBlockEntity;
 import net.minecraft.component.type.FoodComponent;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.passive.AnimalEntity;
+import net.minecraft.entity.passive.PassiveEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.item.BlockItem;
@@ -266,5 +268,50 @@ class MixinApplicationTest {
         assertTrue(hasLoveHook,
                 "AnimalLovePlayerMixin did not apply to AnimalEntity — Multi-Breed would silently "
                         + "never spread love beyond the one animal a player fed");
+    }
+
+    @Test
+    void husbandryGrowthMixinApplies() {
+        assertDoesNotThrow(() -> Class.forName(PassiveEntity.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+
+        final var methods = Arrays.stream(PassiveEntity.class.getDeclaredMethods())
+                .map(java.lang.reflect.Method::getName)
+                .toList();
+
+        // The raise verb. Worth stating why the target is setBreedingAge and not onGrowUp, because
+        // the plan named onGrowUp and it looks like the obvious choice: HoglinEntity#onGrowUp and
+        // GoatEntity#onGrowUp do not call super, so an injection there would have paid exactly zero
+        // raise XP for goats and hoglins — both priced — while passing every test written with a cow.
+        assertTrue(methods.stream().anyMatch(name -> name.contains("onBreedingAgeChange")),
+                "PassiveEntityGrowthMixin's setBreedingAge injector did not apply — no animal would "
+                        + "ever pay the raise verb in-game");
+
+        // The feed verb plus Accelerated Growth's double-feed roll. A @ModifyVariable that stopped
+        // matching would leave feeding a baby worth nothing and the sub-skill's active half inert.
+        assertTrue(methods.stream().anyMatch(name -> name.contains("onGrowthApplied")),
+                "PassiveEntityGrowthMixin's growUp injector did not apply — feeding a baby would "
+                        + "pay nothing and Accelerated Growth would never double a feed");
+    }
+
+    @Test
+    void playerInteractMixinApplies() {
+        assertDoesNotThrow(() -> Class.forName(PlayerEntity.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+
+        final var methods = Arrays.stream(PlayerEntity.class.getDeclaredMethods())
+                .map(java.lang.reflect.Method::getName)
+                .toList();
+
+        // HEAD and RETURN are a pair and both are load-bearing. Losing HEAD makes every feed
+        // unattributable, so the verb pays nothing; losing RETURN leaves the stash set after the
+        // interaction, so the last animal right-clicked would earn feed XP for growth it had no part
+        // in — including a lamb eating grass, which is the AFK farm this seam exists to prevent.
+        assertTrue(methods.stream().anyMatch(name -> name.contains("beginInteraction")),
+                "PlayerEntityInteractMixin's HEAD injector did not apply — Husbandry's feed verb "
+                        + "would have no player to credit and would pay nothing");
+        assertTrue(methods.stream().anyMatch(name -> name.contains("endInteraction")),
+                "PlayerEntityInteractMixin's RETURN injector did not apply — the interaction stash "
+                        + "would outlive its interaction and pay for AI-driven growth");
     }
 }

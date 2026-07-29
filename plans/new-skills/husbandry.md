@@ -140,9 +140,10 @@ raising, harvesting, and the super.
   5 min), which is the same `MetadataStore` mechanism Unarmored's per-attacker cap and Agility's Dodge
   cap already use — see [[unarmored-skill-build]]. Config key
   `ExploitFix.Husbandry.Milk_Cooldown_Seconds`.
-- **D-H6 — how does the "raise" verb know who bred the baby?** Verb 2 pays the player who bred the
+- ✅ **D-H6 — the bred-by marker is in-memory; the loss is accepted** (user ruling, 2026-07-29).
+  Verb 2 pays the player who bred the
   animal, 20 minutes later. That needs a **`bred by <uuid>` marker on the child**, written in the breed
-  mixin. `MetadataStore` is in-memory, so a server restart loses it. **Recommend accepting the loss**
+  mixin. `MetadataStore` is in-memory, so a server restart loses it. **Accepting the loss**
   (worst case: animals bred before a restart pay nothing when they mature — invisible, never wrong in
   the other direction) rather than adding a persistence shape. If it turns out to matter, the
   `PlacedBlockStore` pattern ([[placed-block-persistence]]) is the template — **but note its lesson:
@@ -173,23 +174,55 @@ child**, so Twins and Selective Breeding do not have to re-derive it.
 - On `rollSelectiveBreeding()`, bias the child's attribute roll / variant.
 - Write the **D-H6 bred-by marker** onto the child here.
 
-### 2. Raise — "the baby grew up"
+### 2. Raise — "the baby grew up" ⚠️ **the v1 seam was wrong too — BUILT on `setBreedingAge`**
 
-✅ `PassiveEntity#onGrowUp()` — `protected void`, an ideal mixin target.
+> ⚠️⚠️ **`PassiveEntity#onGrowUp()` IS NOT A UNIVERSAL SEAM. Verified 2026-07-29, and this is the
+> fourth time this port has hit this exact shape.** `HoglinEntity#onGrowUp()` and
+> `GoatEntity#onGrowUp()` **do not call `super`** — their bytecode returns after adjusting attributes
+> and horns. (`HappyGhastEntity`, `TurtleEntity` and `VillagerEntity` do call it.) A mixin on
+> `onGrowUp` would therefore have paid **exactly zero** raise XP for **goats (400) and hoglins (900)**,
+> both priced in the shipped table, while passing every test written with a cow.
 
-> ⚠️ **BYTECODE TRAP, and it is a nasty one.** `onGrowUp()` is **not** a "became an adult" callback.
-> `PassiveEntity#setBreedingAge(int)` calls it on **both** transitions — the branch logic disassembles
-> to *"run the body when `(prev < 0 && age >= 0)` **or** `(prev >= 0 && age < 0)`"*. So it also fires
-> when an **adult becomes a baby** (spawn egg, `setBaby(true)`).
+✅ **Built on `PassiveEntity#setBreedingAge(int)` instead.** It is declared *only* on `PassiveEntity`,
+nothing overrides it, and it is the method that contains the `onGrowUp()` call — so every path to
+growing up arrives there. The listener receives `(animal, previousAge, newAge)` and decides.
+
+> ⚠️ **The original trap is real and still applies**, it just moves. `setBreedingAge(int)` runs its
+> transition branch when `(prev < 0 && age >= 0)` **or** `(prev >= 0 && age < 0)` — so it also fires
+> when an **adult becomes a baby** (spawn egg, `setBaby(true)`). And because `readCustomData` routes
+> through it, a baby loading from disk goes `prev = 0` → `age = -1200`, satisfying the second branch:
+> **it fires on every chunk load of every baby animal in the world.**
 >
-> ⚠️ **Worse: `readCustomData` routes through `setBreedingAge`.** A baby animal loading from disk goes
-> `prev = 0` (field default) → `age = -1200`, which satisfies the second branch — **`onGrowUp()` fires
-> on every chunk load of every baby animal in the world.**
->
-> **Two independent gates, both required:** (a) `!isBaby()` / `age >= 0`, and (b) the D-H6 bred-by
-> marker must be present. Either one alone closes the chunk-load case; both together also close the
-> spawn-egg case. **Mutation-test this** — deleting either gate must fail a test, per
-> [[mixin-slice-allow-guard]]'s lesson about guards that silently do nothing.
+> **Two independent gates, both required and both mutation-proven:** (a) the transition gate
+> `previousAge < 0 && newAge >= 0` — computed from the actual crossing rather than read off
+> `isBaby()`, whose backing `dataTracker` value is mutated mid-call — and (b) the D-H6 bred-by marker
+> must be present. Deleting (a) reddens the chunk-load and spawn-egg tests; deleting the marker's
+> *consumption* reddens the pays-once test.
+
+### 2b. Feed a baby — ⚠️ **no seam the plan named; it needs a two-part join**
+
+`growUp` is the only thing vanilla's six feeding paths share — `AnimalEntity#interactMob`,
+`DolphinEntity#interactMob`, `PandaEntity#interactMob`, and `receiveFood` on `AbstractHorseEntity`,
+`CamelEntity` and `LlamaEntity`. **Note those four overriders: the same ones that moved Multi-Breed
+off `interactMob` in stage 1.**
+
+But `growUp` is a **growth** funnel, not a feeding one, and it takes an `int` and nothing else:
+- ⚠️ `SheepEntity#onEatingGrass` calls it from an AI goal — hooking it unconditionally ships an AFK
+  income for a lamb standing in a field, the dispenser-farm shape arrived at from the other direction.
+- ⚠️ `TadpoleEntity` ages itself through it.
+- ⚠️ **The boolean parameter is NOT a player/AI discriminator**, though it looks like one: horse,
+  camel and llama feed through the one-arg `growUp(int)`, which passes `false` — the same value
+  `SheepEntity#onEatingGrass` uses.
+
+✅ **`PlayerEntity#interact(Entity, Hand)` stashes who-is-interacting-with-what (HEAD/RETURN pair, the
+`IN_MCMMO_DAMAGE` shape); `PassiveEntity#growUp(int, boolean)` consumes it** via `@ModifyVariable`
+(`argsOnly`, `ordinal = 0`) — which also gives Accelerated Growth its double-feed. `interact` is the
+server's real entry point (verified through `ServerPlayNetworkHandler$1#interact`'s bootstrap method)
+and `ServerPlayerEntity` does not override it. **The identity check — the growing animal must *be*
+the interaction's target — is what separates a feed from grass, and it is mutation-proven.**
+
+⚠️ **`growUp`'s parameter is positive seconds of growth**: vanilla calls
+`growUp(toGrowUpAge(-breedingAge), true)` — note the `ineg`. Breeding ages run negative.
 
 ### 3. Shear — ⚠️ the v1 seam does not exist
 

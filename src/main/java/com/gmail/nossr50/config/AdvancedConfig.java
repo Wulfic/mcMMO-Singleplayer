@@ -279,6 +279,15 @@ public class AdvancedConfig extends ConfigLoader {
             reason.add("Skills.Husbandry.MultiBreed.MaxAdditionalAnimals should be at least 0!");
         }
 
+        if (getMaxBonusLevel(SubSkillType.HUSBANDRY_ACCELERATED_GROWTH) < 1) {
+            reason.add("Skills.Husbandry.AcceleratedGrowth.MaxBonusLevel should be at least 1!");
+        }
+
+        if (getMaxGrowthAcceleration() < 0) {
+            reason.add(
+                    "Skills.Husbandry.AcceleratedGrowth.MaxGrowthAcceleration should be at least 0!");
+        }
+
         /* MINING */
         if (getMaximumProbability(SubSkillType.MINING_DOUBLE_DROPS) < 1) {
             reason.add("Skills.Mining.DoubleDrops.ChanceMax should be at least 1!");
@@ -759,6 +768,19 @@ public class AdvancedConfig extends ConfigLoader {
     public int getMultiBreedMaxAdditionalAnimals() {
         return config.getInt("Skills.Husbandry.MultiBreed.MaxAdditionalAnimals",
                 HusbandryManager.DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS);
+    }
+
+    /**
+     * What fraction of a newborn's childhood Accelerated Growth skips at max level.
+     *
+     * <p>Clamped in the manager to {@link HusbandryManager#HARD_MAX_GROWTH_ACCELERATION}. At 1.0 a
+     * newborn would cross the baby→adult boundary during the breeding call itself and the raise verb
+     * would pay in the same tick as the breed verb — see
+     * {@link HusbandryManager#applyGrowthAcceleration}.
+     */
+    public double getMaxGrowthAcceleration() {
+        return config.getDouble("Skills.Husbandry.AcceleratedGrowth.MaxGrowthAcceleration",
+                HusbandryManager.DEFAULT_MAX_GROWTH_ACCELERATION);
     }
 
     // --- Unarmored (Pass 2) --------------------------------------------------------------------

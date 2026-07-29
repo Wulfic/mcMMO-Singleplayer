@@ -122,6 +122,30 @@ public class HusbandryManager extends SkillManager {
      */
     public static final int DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS = 4;
 
+    /**
+     * How much of a newborn's childhood {@code Accelerated Growth} removes at {@code MaxBonusLevel},
+     * as a fraction.
+     *
+     * <p>Deliberately modest. The raise verb is the one part of this skill that cannot be rushed —
+     * twenty real minutes of vanilla time per animal — and that unrushability is the whole reason it
+     * pays as much as breeding does. An acceleration large enough to collapse the wait would turn
+     * the skill's slowest, safest income into its fastest.
+     */
+    public static final double DEFAULT_MAX_GROWTH_ACCELERATION = 0.30;
+
+    /**
+     * The most of a newborn's childhood that may ever be skipped, whatever {@code advanced.yml} says.
+     *
+     * <p><b>A hard clamp rather than a default, because the degenerate value is an exploit and not
+     * merely a silly one.</b> At an acceleration of 1.0 a newborn's breeding age would be shortened
+     * all the way to zero, which is not "grows up instantly" but "crosses the baby→adult boundary
+     * inside the breeding call" — the raise verb would pay out in the same tick as the breed verb,
+     * for every animal, forever. {@link #applyGrowthAcceleration} additionally floors the result at
+     * one tick of childhood so that the transition cannot happen there even if this clamp is
+     * someday raised.
+     */
+    public static final double HARD_MAX_GROWTH_ACCELERATION = 0.90;
+
     public HusbandryManager(McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.HUSBANDRY);
     }
@@ -285,6 +309,135 @@ public class HusbandryManager extends SkillManager {
             return DEFAULT_RAISE_MULTIPLIER;
         }
         return Math.max(0.0, experience.getHusbandryRaiseMultiplier());
+    }
+
+    /**
+     * Credit one animal <em>this player bred</em> reaching adulthood.
+     *
+     * <p>Paid <b>once per animal</b>. The trigger layer holds that guarantee, not this method: it
+     * fires only on the actual baby→adult breeding-age transition and drops the bred-by marker as it
+     * pays, so a second crossing has nobody to credit.
+     *
+     * @param entityConfigString the animal's config key, e.g. {@code "Cow"}
+     * @return the XP awarded, or {@code 0} for a species the table does not price
+     */
+    public float onRaise(String entityConfigString) {
+        final float xp = getRaiseXp(entityConfigString);
+        if (xp <= 0) {
+            return 0F;
+        }
+        applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF);
+        return xp;
+    }
+
+    /**
+     * Credit one baby fed to hurry it along.
+     *
+     * <p><b>Gated on the species being priced for breeding</b>, even though the payout itself is
+     * flat. Stage 0 settled that the breeding table <em>is</em> the definition of what this skill
+     * rewards, and the feed verb has to obey the same rule or it becomes the hole in it — vanilla
+     * lets you feed a few animals nothing else in the skill will ever pay for (a dolphin takes fish
+     * through this exact path), and a modded mob would start paying a flat rate nobody chose.
+     *
+     * @param entityConfigString the animal's config key, e.g. {@code "Cow"}
+     * @return the XP awarded, or {@code 0} for a species the breeding table does not price
+     */
+    public float onFeedBaby(String entityConfigString) {
+        if (getBreedXp(entityConfigString) <= 0) {
+            return 0F;
+        }
+        final float xp = getFeedBabyXp();
+        if (xp <= 0) {
+            return 0F;
+        }
+        applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF);
+        return xp;
+    }
+
+    // --- Sub-skill: Accelerated Growth ---------------------------------------------------------
+
+    public boolean canAcceleratedGrowth() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HUSBANDRY_ACCELERATED_GROWTH)
+                && Permissions.isSubSkillEnabled(getPlayer(),
+                        SubSkillType.HUSBANDRY_ACCELERATED_GROWTH);
+    }
+
+    /**
+     * What fraction of a newborn's childhood this player's stock skips, as {@code 0.0}–
+     * {@link #HARD_MAX_GROWTH_ACCELERATION}.
+     *
+     * @return the fraction, or {@code 0} when Accelerated Growth is locked
+     */
+    public double getGrowthAcceleration() {
+        if (!canAcceleratedGrowth()) {
+            return 0.0;
+        }
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        final double max = advanced == null
+                ? DEFAULT_MAX_GROWTH_ACCELERATION
+                : advanced.getMaxGrowthAcceleration();
+        if (max <= 0) {
+            return 0.0;
+        }
+        final int maxBonusLevel = advanced == null
+                ? 0
+                : advanced.getMaxBonusLevel(SubSkillType.HUSBANDRY_ACCELERATED_GROWTH);
+        return Math.min(HARD_MAX_GROWTH_ACCELERATION, scaleToLevel(max, maxBonusLevel));
+    }
+
+    /**
+     * Shorten a newborn's childhood by this player's Accelerated Growth.
+     *
+     * <p>Applied once, at birth, rather than by speeding the animal's ageing up every tick. The
+     * outcome a player sees is identical — the baby is an adult sooner — and it keeps the whole
+     * sub-skill off the tick path, where a per-baby lookup would run for every baby animal in every
+     * loaded chunk for twenty minutes at a time.
+     *
+     * <p><b>The result is always still a baby.</b> Breeding ages run negative and count up toward
+     * zero, so a large enough acceleration would land exactly on zero — which reads to the raise
+     * hook as the baby→adult transition and would pay the raise verb in the same tick as the breed
+     * verb. Flooring at {@code -1} makes that structurally impossible rather than merely unlikely.
+     *
+     * @param breedingAge the newborn's age as vanilla set it — negative, e.g. {@code -24000}
+     * @return the shortened age, never zero or positive, and never older than it started
+     */
+    public int applyGrowthAcceleration(int breedingAge) {
+        if (breedingAge >= 0) {
+            return breedingAge; // Not a baby; nothing to shorten.
+        }
+        final double acceleration = getGrowthAcceleration();
+        if (acceleration <= 0) {
+            return breedingAge;
+        }
+        final int shortened = (int) Math.round(breedingAge * (1.0 - acceleration));
+        return Math.min(-1, shortened);
+    }
+
+    /**
+     * Whether this feed should count twice.
+     *
+     * <p>Accelerated Growth's active half: the passive half shortens the childhood of animals you
+     * bred, this one rewards actually standing there feeding them. Chance scales with level up to
+     * {@code Skills.Husbandry.AcceleratedGrowth.ChanceMax}.
+     */
+    public boolean rollDoubleFeed() {
+        return canAcceleratedGrowth()
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HUSBANDRY_ACCELERATED_GROWTH,
+                        mmoPlayer);
+    }
+
+    /**
+     * How much growth one feed actually grants, after Accelerated Growth's double-feed roll.
+     *
+     * @param growthSeconds the seconds of growth vanilla was about to grant — always positive at the
+     *                      feed sites (vanilla negates the remaining childhood before converting it)
+     * @return {@code growthSeconds}, or twice that on a successful roll
+     */
+    public int applyFeedBonus(int growthSeconds) {
+        if (growthSeconds <= 0) {
+            return growthSeconds;
+        }
+        return rollDoubleFeed() ? growthSeconds * 2 : growthSeconds;
     }
 
     // --- The flat verbs ---------------------------------------------------------------------

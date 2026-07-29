@@ -104,6 +104,18 @@ class HusbandryManagerTest {
         return advanced;
     }
 
+    /** The same certainty trick for Accelerated Growth's double-feed roll. */
+    private AdvancedConfig advancedWithDoubleFeedChance(double ceiling) {
+        final AdvancedConfig advanced = mock(AdvancedConfig.class);
+        lenient().when(
+                        advanced.getMaximumProbability(SubSkillType.HUSBANDRY_ACCELERATED_GROWTH))
+                .thenReturn(ceiling);
+        lenient().when(advanced.getMaxBonusLevel(SubSkillType.HUSBANDRY_ACCELERATED_GROWTH))
+                .thenReturn(0);
+        McMMOMod.setAdvancedConfig(advanced);
+        return advanced;
+    }
+
     // --- Registration ---------------------------------------------------------------------------
 
     @Test
@@ -143,10 +155,12 @@ class HusbandryManagerTest {
 
     @Test
     void husbandryOwnsExactlyTheSubSkillsThisStageShips() {
-        // Stage 1 ships the two breed-family sub-skills and deliberately no others: a constant with
-        // no ranks, no config and no behaviour reads as half-wired to everything that iterates the
-        // enum, /mcstats included. This fails if a later stage's constant is added early.
-        assertEquals(java.util.Set.of(SubSkillType.HUSBANDRY_MULTI_BREED, SubSkillType.HUSBANDRY_TWINS),
+        // Sub-skill constants land with the stage that implements them and no earlier: a constant
+        // with no ranks, no config and no behaviour reads as half-wired to everything that iterates
+        // the enum, /mcstats included. This fails if a later stage's constant is added early.
+        assertEquals(
+                java.util.Set.of(SubSkillType.HUSBANDRY_MULTI_BREED, SubSkillType.HUSBANDRY_TWINS,
+                        SubSkillType.HUSBANDRY_ACCELERATED_GROWTH),
                 new SkillTools().getSubSkills(PrimarySkillType.HUSBANDRY));
     }
 
@@ -388,6 +402,162 @@ class HusbandryManagerTest {
         final HusbandryManager brokenManager = managerWithConfig(broken);
         assertEquals(0.0, brokenManager.getRaiseMultiplier());
         assertEquals(0F, brokenManager.getRaiseXp("Cow"));
+    }
+
+    @Test
+    void raisingCreditsTheBreedRateAndAnUnpricedSpeciesCreditsNothing() {
+        setHusbandryLevel(500);
+        final float before = profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY);
+
+        assertEquals(COW_BREED_XP, manager.onRaise("Cow"));
+        assertTrue(profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY) > before,
+                "onRaise must actually bank the XP, not just compute it");
+
+        final float afterCow = profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY);
+        assertEquals(0F, manager.onRaise("Not_A_Real_Animal"));
+        assertEquals(afterCow, profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY),
+                "an unpriced species must bank nothing at all");
+    }
+
+    // --- Feed -------------------------------------------------------------------------------------
+
+    @Test
+    void feedingPaysTheFlatRateForAPricedSpecies() {
+        setHusbandryLevel(500);
+        final float before = profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY);
+
+        assertEquals(HusbandryManager.DEFAULT_FEED_BABY_XP, manager.onFeedBaby("Cow"));
+        assertTrue(profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY) > before);
+    }
+
+    @Test
+    void feedingAnUnpricedSpeciesPaysNothingEvenThoughTheRateIsFlat() {
+        // The rate is flat, so nothing in the payout itself knows about species -- the gate is a
+        // deliberate extra read of the BREEDING table. It matters because vanilla routes animals
+        // through the feed path that this skill never rewards otherwise (a dolphin takes fish
+        // through it), and because the table is what stops a modded mob paying a number nobody set.
+        setHusbandryLevel(500);
+        final float before = profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY);
+
+        assertEquals(0F, manager.onFeedBaby("Dolphin"));
+        assertEquals(before, profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY));
+    }
+
+    // --- Sub-skill: Accelerated Growth ------------------------------------------------------------
+
+    @Test
+    void acceleratedGrowthDoesNothingWhileLocked() {
+        setHusbandryLevel(0);
+        assertFalse(manager.canAcceleratedGrowth());
+        assertEquals(0.0, manager.getGrowthAcceleration());
+        assertEquals(-24000, manager.applyGrowthAcceleration(-24000),
+                "a locked sub-skill must leave the newborn exactly as vanilla made it");
+        assertFalse(manager.rollDoubleFeed());
+    }
+
+    @Test
+    void growthAccelerationGrowsWithLevelAndTopsOutAtTheShippedMaximum() {
+        setHusbandryLevel(150);
+        final double atUnlock = manager.getGrowthAcceleration();
+        assertTrue(atUnlock > 0 && atUnlock < HusbandryManager.DEFAULT_MAX_GROWTH_ACCELERATION,
+                "a fresh unlock is worth something but not the maximum, was " + atUnlock);
+
+        setHusbandryLevel(1000);
+        assertEquals(HusbandryManager.DEFAULT_MAX_GROWTH_ACCELERATION,
+                manager.getGrowthAcceleration(), 1e-9);
+
+        // Asserted off both ends: a formula that ignored the level would read identically at one.
+        setHusbandryLevel(500);
+        final double halfway = manager.getGrowthAcceleration();
+        assertTrue(halfway > atUnlock
+                        && halfway < HusbandryManager.DEFAULT_MAX_GROWTH_ACCELERATION,
+                "half-levelled acceleration must sit strictly between the ends, was " + halfway);
+    }
+
+    @Test
+    void growthAccelerationIsHardClampedWhateverTheConfigSays() {
+        final AdvancedConfig absurd = mock(AdvancedConfig.class);
+        lenient().when(absurd.getMaxGrowthAcceleration()).thenReturn(5.0);
+        lenient().when(absurd.getMaxBonusLevel(SubSkillType.HUSBANDRY_ACCELERATED_GROWTH))
+                .thenReturn(100);
+        McMMOMod.setAdvancedConfig(absurd);
+
+        setHusbandryLevel(1000);
+        assertEquals(HusbandryManager.HARD_MAX_GROWTH_ACCELERATION,
+                manager.getGrowthAcceleration(), 1e-9);
+    }
+
+    @Test
+    void anAcceleratedNewbornIsAlwaysStillABaby() {
+        // THE test in this file. Breeding ages run negative and count up toward zero, so an
+        // acceleration of 1.0 does not mean "grows up instantly" -- it means the newborn's age lands
+        // exactly on zero, which the raise hook reads as the baby->adult crossing. The raise verb
+        // would then pay in the same tick as the breed verb, for every animal, forever. Driven with
+        // a config well past the hard clamp so BOTH guards have to hold.
+        final AdvancedConfig absurd = mock(AdvancedConfig.class);
+        lenient().when(absurd.getMaxGrowthAcceleration()).thenReturn(1000.0);
+        lenient().when(absurd.getMaxBonusLevel(SubSkillType.HUSBANDRY_ACCELERATED_GROWTH))
+                .thenReturn(1);
+        McMMOMod.setAdvancedConfig(absurd);
+
+        setHusbandryLevel(1000);
+        for (int age : new int[] {-24000, -1200, -10, -2, -1}) {
+            final int accelerated = manager.applyGrowthAcceleration(age);
+            assertTrue(accelerated < 0,
+                    "a newborn at age " + age + " must still be a baby, was " + accelerated);
+            assertTrue(accelerated >= age,
+                    "acceleration must shorten childhood, never lengthen it, was " + accelerated);
+        }
+    }
+
+    @Test
+    void acceleratedGrowthLeavesAdultsAlone() {
+        setHusbandryLevel(1000);
+        // A positive breeding age is an adult's post-breeding cooldown. Shortening it here would
+        // quietly hand Accelerated Growth a second, undesigned job: faster re-breeding.
+        assertEquals(6000, manager.applyGrowthAcceleration(6000));
+        assertEquals(0, manager.applyGrowthAcceleration(0));
+    }
+
+    @Test
+    void doubleFeedNeverProcsWhileLockedEvenAtACertainChance() {
+        advancedWithDoubleFeedChance(100.0);
+        setHusbandryLevel(0);
+        assertFalse(manager.rollDoubleFeed(), "a locked sub-skill must not proc at any chance");
+        assertEquals(120, manager.applyFeedBonus(120));
+    }
+
+    @Test
+    void applyFeedBonusDoublesExactlyOnASuccessfulRoll() {
+        setHusbandryLevel(1000);
+
+        advancedWithDoubleFeedChance(100.0);
+        assertTrue(manager.rollDoubleFeed());
+        assertEquals(240, manager.applyFeedBonus(120), "a certain roll doubles the growth");
+
+        advancedWithDoubleFeedChance(0.0);
+        assertFalse(manager.rollDoubleFeed());
+        assertEquals(120, manager.applyFeedBonus(120), "a failed roll leaves vanilla's value alone");
+    }
+
+    @Test
+    void applyFeedBonusLeavesNonPositiveGrowthAlone() {
+        // Doubling zero is zero, but doubling a negative would make the animal younger -- and the
+        // one-argument growUp callers are free to pass whatever they like.
+        advancedWithDoubleFeedChance(100.0);
+        setHusbandryLevel(1000);
+        assertEquals(0, manager.applyFeedBonus(0));
+        assertEquals(-30, manager.applyFeedBonus(-30));
+    }
+
+    @Test
+    void theShippedAcceleratedGrowthDefaultsMatchTheBundledConfig() {
+        final AdvancedConfig shipped = McMMOMod.getAdvancedConfig();
+        assertEquals(HusbandryManager.DEFAULT_MAX_GROWTH_ACCELERATION,
+                shipped.getMaxGrowthAcceleration());
+        assertEquals(25.0,
+                shipped.getMaximumProbability(SubSkillType.HUSBANDRY_ACCELERATED_GROWTH),
+                "advanced.yml Skills.Husbandry.AcceleratedGrowth.ChanceMax");
     }
 
     // --- The flat verbs ---------------------------------------------------------------------------

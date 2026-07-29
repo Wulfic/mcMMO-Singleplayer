@@ -75,6 +75,7 @@ public enum SubSkillType {
     // /mcstats included. Same precedent as Stealth's Thief and Unarmored's Thorny Skin below.
     HUSBANDRY_MULTI_BREED(1),
     HUSBANDRY_TWINS(1),
+    HUSBANDRY_ACCELERATED_GROWTH(1),
 
     /* Maces */
     MACES_MACES_LIMIT_BREAK(10),

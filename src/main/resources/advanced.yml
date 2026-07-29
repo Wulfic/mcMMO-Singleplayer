@@ -415,6 +415,28 @@ Skills:
             MaxBonusLevel:
                 Standard: 100
                 RetroMode: 1000
+
+        AcceleratedGrowth:
+            # Babies you bred grow up faster, and a chance that feeding one counts twice.
+            #
+            # MaxGrowthAcceleration is the fraction of a newborn's childhood skipped at max level.
+            # It is applied ONCE, the moment the animal is born, rather than by speeding its ageing
+            # up every tick -- the player sees the same thing and the sub-skill never touches a tick
+            # path. Only animals you bred yourself are affected; a baby you found in the wild has
+            # nobody to credit.
+            #
+            # Keep this modest. Raising is the one income in this skill that cannot be rushed --
+            # twenty real minutes per animal -- and that is exactly why it pays as much as breeding
+            # does. It is HARD-CLAMPED to 0.90 in code: at 1.0 a newborn's age would be shortened
+            # all the way to adulthood inside the breeding call itself, and the raise verb would pay
+            # out in the same tick as the breed verb, for every animal, forever.
+            MaxGrowthAcceleration: 0.30
+
+            # Chance that one feed counts as two.
+            ChanceMax: 25.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
     #
     #  Settings for Mining
     ###

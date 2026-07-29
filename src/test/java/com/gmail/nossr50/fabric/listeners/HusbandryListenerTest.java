@@ -3,6 +3,7 @@ package com.gmail.nossr50.fabric.listeners;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.util.McTestRegistries;
@@ -26,6 +28,7 @@ import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.CowEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.passive.PigEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.Box;
@@ -94,6 +97,11 @@ class HusbandryListenerTest {
             UserManager.cleanupPlayer(mmoPlayer);
         }
         worldAnimals.clear();
+        // The bred-by markers live in a static side table, and the interaction stash in a
+        // ThreadLocal on a thread JUnit reuses: without both of these, one test's leftovers decide
+        // the next one's outcome.
+        MetadataStore.clearAll();
+        HusbandryListener.endPlayerInteraction();
     }
 
     private ServerPlayerEntity breeder() {
@@ -137,13 +145,41 @@ class HusbandryListenerTest {
         lenient().when(husbandry.getMultiBreedRadius()).thenReturn(radius);
     }
 
+    /**
+     * A calf with a real UUID and breeding age.
+     *
+     * <p>⚠️ The UUID is not optional decoration: {@code MetadataStore} keys on {@code getUuid()} and
+     * its backing {@code ConcurrentHashMap} rejects a null key, so an unstubbed mock throws from
+     * inside the marker code rather than quietly storing nothing.
+     */
+    private PassiveEntity calf(int breedingAge) {
+        final CowEntity baby = mock(CowEntity.class);
+        Mockito.doReturn(EntityType.COW).when(baby).getType();
+        lenient().when(baby.getUuid()).thenReturn(UUID.randomUUID());
+        lenient().when(baby.getBreedingAge()).thenReturn(breedingAge);
+        lenient().when(baby.getEntityWorld()).thenReturn(world);
+        return baby;
+    }
+
+    /** Breed a calf and hand back the marked child, with acceleration stubbed out as a no-op. */
+    private PassiveEntity bredCalf() {
+        final PassiveEntity child = calf(-24000);
+        lenient().when(husbandry.applyGrowthAcceleration(anyInt()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
+        return child;
+    }
+
     // --- Breeding XP --------------------------------------------------------------------------
 
     @Test
     void aBreedingChargesTheSpeciesThatWasBred() {
         // The config key is derived from the parent's registry path, so a wrong-entity slip would
         // price every breeding as whatever animal happened to be passed first.
-        HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), mock(PassiveEntity.class));
+        // calf() rather than a bare PassiveEntity mock: since stage 2 the child is handed to
+        // MetadataStore, which keys on getUuid() into a ConcurrentHashMap that rejects a null key —
+        // so an unstubbed mock throws from inside the marker code.
+        HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), calf(-24000));
         verify(husbandry).onBreed("Cow");
     }
 
@@ -171,12 +207,185 @@ class HusbandryListenerTest {
     @Test
     void twinsIsRolledOnlyOncePerBreedingAndOnlyWhenThereIsABabyToCopy() {
         when(husbandry.rollTwins()).thenReturn(false);
-        HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(),
-                mock(PassiveEntity.class));
+        HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), calf(-24000));
 
         verify(husbandry, times(1)).rollTwins();
         // A failed roll must not spawn anything. The pair is bred once, not once per parent.
         verify(world, never()).spawnEntityAndPassengers(any());
+    }
+
+    // --- Raise: the bred-by marker and the grow-up crossing ------------------------------------
+
+    @Test
+    void anAnimalYouBredPaysTheRaiseVerbWhenItGrowsUp() {
+        final PassiveEntity child = bredCalf();
+
+        // -1 -> 0 is exactly how vanilla's tickMovement walks a baby into adulthood.
+        HusbandryListener.onBreedingAgeChange(child, -1, 0);
+        verify(husbandry).onRaise("Cow");
+    }
+
+    @Test
+    void anAnimalNobodyBredPaysNothingWhenItGrowsUp() {
+        // The marker gate. Without it every wild baby in every loaded chunk coming of age would pay
+        // somebody -- and there is no somebody to pay.
+        final PassiveEntity wildCalf = calf(-1);
+
+        HusbandryListener.onBreedingAgeChange(wildCalf, -1, 0);
+        verify(husbandry, never()).onRaise(any());
+    }
+
+    @Test
+    void aBabyLoadingFromDiskPaysNothingHoweverOftenItIsReloaded() {
+        // The transition gate, and the reason it is not merely tidiness: readCustomData routes
+        // through setBreedingAge, so a baby loading from a chunk goes from the field default of 0 to
+        // its real negative age. Without the gate, flying away and back would re-pay the raise verb
+        // on every single chunk load, for every baby you had ever bred.
+        final PassiveEntity child = bredCalf();
+
+        for (int i = 0; i < 5; i++) {
+            HusbandryListener.onBreedingAgeChange(child, 0, -1200);
+        }
+        verify(husbandry, never()).onRaise(any());
+    }
+
+    @Test
+    void anAdultTurnedBackIntoABabyPaysNothing() {
+        // The same gate's other half: setBreedingAge runs its transition branch when an adult
+        // becomes a baby too (a spawn egg, or setBaby(true)).
+        final PassiveEntity child = bredCalf();
+
+        HusbandryListener.onBreedingAgeChange(child, 0, -24000);
+        verify(husbandry, never()).onRaise(any());
+    }
+
+    @Test
+    void theRaiseVerbPaysAtMostOncePerAnimal() {
+        // The marker is consumed as it is read, so a second crossing has nobody left to credit.
+        // Without that, anything that drove the animal back across the boundary would pay again.
+        final PassiveEntity child = bredCalf();
+
+        HusbandryListener.onBreedingAgeChange(child, -1, 0);
+        HusbandryListener.onBreedingAgeChange(child, -1, 0);
+        verify(husbandry, times(1)).onRaise("Cow");
+    }
+
+    @Test
+    void aTwinIsMarkedTooSoItAlsoPaysWhenItGrowsUp() {
+        // A twin that carried no marker would be the only baby in the game whose breeder could never
+        // be paid for raising it -- which reads as a bug rather than as balance.
+        final PassiveEntity child = calf(-24000);
+        final PassiveEntity twin = calf(-24000);
+        final AnimalEntity parent = eligibleCow();
+        lenient().when(husbandry.applyGrowthAcceleration(anyInt()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(husbandry.rollTwins()).thenReturn(true);
+        Mockito.doReturn(twin).when(parent).createChild(any(), any());
+
+        HusbandryListener.onAnimalsBred(breeder(), parent, eligibleCow(), child);
+
+        HusbandryListener.onBreedingAgeChange(twin, -1, 0);
+        verify(husbandry).onRaise("Cow");
+    }
+
+    // --- Accelerated Growth: the birth half ----------------------------------------------------
+
+    @Test
+    void acceleratedGrowthShortensTheNewbornsChildhoodAtBirth() {
+        final PassiveEntity child = calf(-24000);
+        when(husbandry.applyGrowthAcceleration(-24000)).thenReturn(-16800);
+
+        HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
+        verify(child).setBreedingAge(-16800);
+    }
+
+    @Test
+    void anUnchangedAgeIsNotWrittenBack() {
+        // setBreedingAge is not a plain setter -- it is the method the raise hook watches. Writing
+        // an unchanged value would fire a pointless transition check on every birth.
+        final PassiveEntity child = calf(-24000);
+        when(husbandry.applyGrowthAcceleration(-24000)).thenReturn(-24000);
+
+        HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
+        verify(child, never()).setBreedingAge(anyInt());
+    }
+
+    // --- Feed: the interaction stash -----------------------------------------------------------
+
+    @Test
+    void feedingABabyYouAreInteractingWithPaysTheFeedVerb() {
+        final PassiveEntity baby = calf(-24000);
+        when(husbandry.applyFeedBonus(120)).thenReturn(240);
+        final ServerPlayerEntity player = breeder();
+
+        HusbandryListener.beginPlayerInteraction(player, baby);
+        try {
+            assertEquals(240, HusbandryListener.onGrowthApplied(baby, 120),
+                    "Accelerated Growth's doubled value must reach vanilla");
+        } finally {
+            HusbandryListener.endPlayerInteraction();
+        }
+        verify(husbandry).onFeedBaby("Cow");
+    }
+
+    @Test
+    void growthWithNoPlayerInteractionInFlightPaysNothing() {
+        // ⚠️ THE test on this seam. growUp is a growth funnel, not a feeding one: SheepEntity's
+        // onEatingGrass calls it from an AI goal, and a tadpole ages itself through it. Paying for
+        // those would make a lamb standing in a field an AFK income -- exactly the dispenser-farm
+        // shape this skill's plan spends a page warning about, arrived at from the other direction.
+        final PassiveEntity lamb = calf(-24000);
+
+        assertEquals(60, HusbandryListener.onGrowthApplied(lamb, 60),
+                "vanilla's growth must pass through completely untouched");
+        verify(husbandry, never()).onFeedBaby(any());
+        verify(husbandry, never()).applyFeedBonus(anyInt());
+    }
+
+    @Test
+    void feedingOneAnimalDoesNotPayForAnotherGrowingAtTheSameMoment() {
+        // The stash records WHICH entity is being interacted with, not merely that someone is
+        // interacting. Without the identity check, any growth anywhere during a right-click would
+        // bill as a feed of whatever the player happened to be holding a hand out to.
+        final PassiveEntity fed = calf(-24000);
+        final PassiveEntity other = calf(-24000);
+
+        HusbandryListener.beginPlayerInteraction(breeder(), fed);
+        try {
+            assertEquals(60, HusbandryListener.onGrowthApplied(other, 60));
+        } finally {
+            HusbandryListener.endPlayerInteraction();
+        }
+        verify(husbandry, never()).onFeedBaby(any());
+    }
+
+    @Test
+    void theStashDoesNotOutliveTheInteractionThatSetIt() {
+        // The mixin's RETURN injector is what clears this. If it ever stopped matching, the last
+        // animal a player right-clicked would keep earning feed XP for every growth in the world.
+        final PassiveEntity baby = calf(-24000);
+
+        HusbandryListener.beginPlayerInteraction(breeder(), baby);
+        HusbandryListener.endPlayerInteraction();
+
+        assertEquals(60, HusbandryListener.onGrowthApplied(baby, 60));
+        verify(husbandry, never()).onFeedBaby(any());
+    }
+
+    @Test
+    void growthDrivenByANonPlayerHolderOfTheStashPaysNothing() {
+        // beginPlayerInteraction is reached from PlayerEntity#interact, which is shared with the
+        // client player. Only a real ServerPlayerEntity may open a stash.
+        final PassiveEntity baby = calf(-24000);
+        final PlayerEntity clientSide = mock(PlayerEntity.class);
+
+        HusbandryListener.beginPlayerInteraction(clientSide, baby);
+        try {
+            assertEquals(60, HusbandryListener.onGrowthApplied(baby, 60));
+        } finally {
+            HusbandryListener.endPlayerInteraction();
+        }
+        verify(husbandry, never()).onFeedBaby(any());
     }
 
     // --- Multi-Breed --------------------------------------------------------------------------

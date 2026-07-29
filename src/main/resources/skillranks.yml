@@ -678,6 +678,13 @@ Husbandry:
             Rank_1: 1
         RetroMode:
             Rank_1: 1
+    # Unlike the two above, this one IS gated: it shortens the wait on the raise verb, so handing it
+    # over at level 1 would speed up the income a new player has not yet earned the right to speed up.
+    AcceleratedGrowth:
+        Standard:
+            Rank_1: 15
+        RetroMode:
+            Rank_1: 150
 Herbalism:
     DoubleDrops:
         Standard:

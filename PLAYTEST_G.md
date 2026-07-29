@@ -399,6 +399,71 @@ pumpkin or a mob head counts as armour and turns the whole skill off. That is de
 
 ---
 
+## Session 10 — Husbandry: breed, raise and feed (~40 min)
+
+Covers stages 0–2. The harvest verbs (shear, hive, milk, brush) are stages 3–4 and get their own
+session. Start with `/addlevels husbandry 0` in a fresh pen of cows, wheat in hand.
+
+### 10a. Breed XP — the per-species table
+
+| # | Action | Expect |
+|---|---|---|
+| HU1 | Breed two cows | Husbandry XP moves by **350**. Paid **once for the pair**, not once per parent — if you see 700, the once-per-breeding rule broke |
+| HU2 | Breed two chickens, then two horses | **300** and **1200**. The spread is the point: the table is priced by what the breeding item costs |
+| HU3 | Breed two **foxes**, and two **turtles** | **800** and **700**. ⚠️ **The single most important row in 10a.** Fox and turtle re-implement breeding inline and never call the method the plan originally named — if either pays zero, the seam regressed to `AnimalEntity#breed` |
+| HU4 | Breed two **goats**, and two **hoglins** | **400** and **900** |
+| HU5 | Breed frogs or sniffers (egg-layers) | Breeding still pays. No twin — vanilla hands out an egg, not a baby |
+| HU6 | Let two animals breed **on their own** (villager-style AI, or a command) | **Nothing.** The seam only fires when vanilla resolved a real player as the breeder |
+
+### 10b. Multi-Breed and Twins — the retuned numbers
+
+| # | Action | Expect |
+|---|---|---|
+| HU7 | At Husbandry 1, feed one cow in a pen of ten | One or two go into love mode, not all ten |
+| HU8 | `/addlevels husbandry 1000`, feed one cow in a pen of **twenty** | **At most five breed — the one you fed plus four.** ⚠️ **This is the anti-exploit cap (retuned 8 → 4 on 2026-07-29) and the whole XP budget rests on it.** If the whole pen pairs off, the count cap is not being applied |
+| HU9 | Do HU8 with **horses** | Same spread. Horses override `interactMob`, so a regression to that seam leaves them at one |
+| HU10 | Watch the log through HU8 | **No StackOverflowError.** The spread calls the very method it hooks; the re-entrancy guard is all that stands between one wheat and an unbounded cascade |
+| HU11 | At 1000, breed ~40 pairs and count double births | Roughly **one in four** (ChanceMax 25, retuned from 50). A twin is a surprise, not the norm |
+| HU12 | **⚠️ Tuning:** time how long ~20 breeding cycles take, and extrapolate | The design budget is ~51 h of active breeding to 1000. If HU8 + HU11 together make it feel like hours, the caps are still too generous |
+
+### 10c. Raise XP — the 20-minute verb
+
+| # | Action | Expect |
+|---|---|---|
+| HU13 | Breed two cows, **stay nearby**, wait for the calf to grow up | **A second 350** lands the moment it matures. This is the payout the whole bred-by marker exists for |
+| HU14 | Confirm HU13 fired **exactly once** | Not twice, not per tick |
+| HU15 | Breed a calf, then fly far enough to **unload the chunk**, come back, wait | Pays when it grows up. The marker survives a chunk round-trip because it is keyed on entity UUID |
+| HU16 | Breed a calf, **quit to title and reload the world**, then wait for it to mature | **Pays nothing.** ⚠️ Expected and ruled (2026-07-29) — the marker is in-memory. Fails in the safe direction; note it but do not file it |
+| HU17 | Find a **wild** baby animal and wait for it to grow up | **Nothing.** You did not breed it |
+| HU18 | Spawn-egg a baby, then `/data`-modify or otherwise turn an adult back into a baby | **Nothing**, in both directions |
+| HU19 | Breed a **twin** pair and let **both** babies mature | **Both** pay. A twin carries the same marker as its sibling |
+| HU20 | Breed a goat and a hoglin, let both mature | **Both pay.** ⚠️ **The row this seam was rebuilt for** — `HoglinEntity#onGrowUp` and `GoatEntity#onGrowUp` never call `super`, so the originally-planned hook would have paid these two exactly zero |
+
+### 10d. Feed and Accelerated Growth
+
+| # | Action | Expect |
+|---|---|---|
+| HU21 | Feed a baby cow wheat | **50 XP**, and the calf visibly jumps toward adulthood |
+| HU22 | Feed a **baby horse**, **camel** and **llama** | 50 each. ⚠️ These three feed through `receiveFood`, not `interactMob` — a seam regression leaves them paying nothing |
+| HU23 | Let a **sheep eat grass** next to you and watch the XP bar | **Nothing.** ⚠️ **The AFK-farm row.** Sheep eating grass calls the same growth method a feed does; only the interaction stash separates them |
+| HU24 | Feed a **dolphin** a fish | **Nothing** — not in the breeding table, so not in this skill |
+| HU25 | At Husbandry < 150, breed a cow and time the calf | Full ~20 minutes |
+| HU26 | At 1000, breed a cow and time the calf | Noticeably shorter (~30 % off) — but **still minutes, not instant** |
+| HU27 | At 1000, breed 10 calves and check none is born an adult | ⚠️ **A newborn must never arrive already grown.** If one does, the raise verb is paying in the same tick as the breed verb and the whole skill is broken |
+| HU28 | At 1000, feed babies repeatedly and watch for the double-feed message | Fires roughly one feed in four |
+
+### 10e. Cross-checks
+
+| # | Action | Expect |
+|---|---|---|
+| HU29 | `/mcstats husbandry` | Three sub-skills listed — Multi-Breed, Twins, Accelerated Growth — with ranks and stats, no `!Husbandry.…!` literals |
+| HU30 | Breed a **tamed wolf** | Pays **Husbandry**, not Taming. The boundary is the verb, never the species |
+| HU31 | Feed a wolf raw meat to **heal** it | Pays **Taming** (Fast Food Service), not Husbandry |
+| HU32 | Watch the XP bar while breeding | A Husbandry bar appears, coloured **yellow** |
+| HU33 | Watch the log through the whole session | No exceptions, no mixin warnings |
+
+---
+
 ## Reporting
 
 For each item, one line: `ID | PASS/FAIL/PARTIAL | what you actually saw`. Anything FAIL or PARTIAL —
