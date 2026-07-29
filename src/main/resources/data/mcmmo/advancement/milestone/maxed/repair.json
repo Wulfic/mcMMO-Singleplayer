@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/repair",
   "display": {
     "icon": {
       "id": "minecraft:anvil"
     },
     "title": {
-      "text": "Mastered Repair",
+      "text": "Peerless Blacksmith",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Repair!",
+      "text": "Reached the level cap in Repair. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

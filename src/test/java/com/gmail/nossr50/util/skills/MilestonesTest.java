@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.util.skills.Milestones.MilestoneAward;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -37,7 +38,7 @@ class MilestonesTest {
         final List<MilestoneAward> awards =
                 Milestones.skillLevelAwards(PrimarySkillType.MINING, 90, 110, UNLIMITED, 100);
         assertEquals(1, awards.size());
-        assertTrue(has(awards, "level/mining", true));
+        assertTrue(has(awards, "level/mining/apprentice", true));
     }
 
     @Test
@@ -54,7 +55,8 @@ class MilestonesTest {
         final List<MilestoneAward> awards =
                 Milestones.skillLevelAwards(PrimarySkillType.MINING, 50, 350, UNLIMITED, 100);
         assertEquals(1, awards.size(), "one plaque for the whole burst, not one per bracket");
-        assertTrue(has(awards, "level/mining", true));
+        assertTrue(has(awards, "level/mining/adept", true),
+                "the tier is the standing the player ends on (350), not the one they left");
     }
 
     @Test
@@ -86,7 +88,7 @@ class MilestonesTest {
         final List<MilestoneAward> awards =
                 Milestones.skillLevelAwards(PrimarySkillType.MINING, 850, 1000, 1000, 100);
         assertEquals(2, awards.size());
-        assertTrue(has(awards, "level/mining", true));
+        assertTrue(has(awards, "level/mining/grandmaster", true));
         assertTrue(has(awards, "maxed/mining", false));
     }
 
@@ -135,19 +137,95 @@ class MilestonesTest {
         assertTrue(Milestones.powerAwards(600, 600).isEmpty());
     }
 
-    // --- Rank --------------------------------------------------------------
+    // --- Tiers -------------------------------------------------------------
 
     @Test
-    void rankAwardOnlyWhenANewRankUnlocked() {
-        assertTrue(Milestones.rankAwards(PrimarySkillType.AXES, false).isEmpty());
+    void eachTierThresholdSelectsItsOwnTier() {
+        assertEquals("apprentice", Milestones.tierKey(100));
+        assertEquals("adept", Milestones.tierKey(250));
+        assertEquals("expert", Milestones.tierKey(500));
+        assertEquals("master", Milestones.tierKey(750));
+        assertEquals("grandmaster", Milestones.tierKey(1000));
+    }
 
-        final List<MilestoneAward> awards = Milestones.rankAwards(PrimarySkillType.AXES, true);
-        assertEquals(1, awards.size());
-        assertTrue(has(awards, "rank/axes", true));
+    @Test
+    void aLevelInsideATierKeepsThatTier() {
+        assertEquals("apprentice", Milestones.tierKey(249));
+        assertEquals("adept", Milestones.tierKey(499));
+        assertEquals("grandmaster", Milestones.tierKey(9999), "the top tier has no ceiling");
+    }
+
+    @Test
+    void theFirstTierIsAFloorNotAGate() {
+        // A configured Level_Interval below 100 can fire a plaque before the apprentice threshold.
+        // Such a level must still have a name, or the runtime would grant an id with no resource.
+        assertEquals("apprentice", Milestones.tierKey(25));
+        assertEquals("apprentice", Milestones.tierKey(1));
+        assertEquals("apprentice", Milestones.tierKey(0));
+    }
+
+    @Test
+    void tierLaddersStayInLockStep() {
+        assertEquals(Milestones.TIER_KEYS.length, Milestones.TIER_THRESHOLDS.length,
+                "TIER_KEYS and TIER_THRESHOLDS are parallel arrays");
+        for (int i = 1; i < Milestones.TIER_THRESHOLDS.length; i++) {
+            assertTrue(Milestones.TIER_THRESHOLDS[i] > Milestones.TIER_THRESHOLDS[i - 1],
+                    "thresholds must ascend, or tierKey would never reach tier " + i);
+        }
+    }
+
+    // --- Rank --------------------------------------------------------------
+
+    private static Milestones.RankChange change(SubSkillType subSkill, int oldRank, int newRank) {
+        return new Milestones.RankChange(subSkill, oldRank, newRank);
+    }
+
+    @Test
+    void aFirstRankIsAnUnlockAndALaterRankIsAnImprovement() {
+        assertTrue(has(Milestones.rankAwards(
+                        List.of(change(SubSkillType.MINING_SUPER_BREAKER, 0, 1))),
+                "rank/mining_super_breaker/unlocked", true));
+
+        assertTrue(has(Milestones.rankAwards(
+                        List.of(change(SubSkillType.ARCHERY_SKILL_SHOT, 6, 7))),
+                "rank/archery_skill_shot/improved", true));
+    }
+
+    @Test
+    void aSubSkillThatDidNotClimbFiresNothing() {
+        assertTrue(Milestones.rankAwards(
+                List.of(change(SubSkillType.MINING_SUPER_BREAKER, 1, 1))).isEmpty());
+        assertTrue(Milestones.rankAwards(
+                        List.of(change(SubSkillType.MINING_SUPER_BREAKER, 2, 1))).isEmpty(),
+                "a rank loss is not a milestone");
+        assertTrue(Milestones.rankAwards(List.of()).isEmpty());
+    }
+
+    @Test
+    void everySubSkillThatClimbedGetsItsOwnPlaque() {
+        // One level-up can rank several abilities at once; each is named, because a single
+        // "something in Mining ranked up" plaque is exactly the vague text this ladder replaced.
+        final List<MilestoneAward> awards = Milestones.rankAwards(List.of(
+                change(SubSkillType.MINING_SUPER_BREAKER, 0, 1),
+                change(SubSkillType.MINING_DOUBLE_DROPS, 0, 1),
+                change(SubSkillType.MINING_BLAST_MINING, 3, 4)));
+
+        assertEquals(3, awards.size());
+        assertTrue(has(awards, "rank/mining_super_breaker/unlocked", true));
+        assertTrue(has(awards, "rank/mining_double_drops/unlocked", true));
+        assertTrue(has(awards, "rank/mining_blast_mining/improved", true));
     }
 
     @Test
     void skillKeyIsLowercase() {
         assertEquals("woodcutting", Milestones.key(PrimarySkillType.WOODCUTTING));
+    }
+
+    @Test
+    void subSkillKeyKeepsItsParentPrefixSoSharedNamesStayDistinct() {
+        // "Double Drops" exists in both skills; without the prefix they would collide on one id and
+        // a Herbalism unlock would pop the Mining plaque.
+        assertEquals("mining_double_drops", Milestones.key(SubSkillType.MINING_DOUBLE_DROPS));
+        assertEquals("herbalism_double_drops", Milestones.key(SubSkillType.HERBALISM_DOUBLE_DROPS));
     }
 }

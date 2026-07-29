@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/flying",
   "display": {
     "icon": {
       "id": "minecraft:elytra"
     },
     "title": {
-      "text": "Mastered Flying",
+      "text": "Peerless Aviator",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Flying!",
+      "text": "Reached the level cap in Flying. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

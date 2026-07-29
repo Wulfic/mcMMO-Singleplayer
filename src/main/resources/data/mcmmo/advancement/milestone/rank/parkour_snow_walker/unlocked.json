@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/parkour",
+  "display": {
+    "icon": {
+      "id": "minecraft:leather_boots"
+    },
+    "title": {
+      "text": "Snow Walker Unlocked",
+      "color": "aqua",
+      "bold": true
+    },
+    "description": {
+      "text": "You can now use Snow Walker.",
+      "color": "yellow"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/unarmed",
   "display": {
     "icon": {
       "id": "minecraft:iron_ingot"
     },
     "title": {
-      "text": "Mastered Unarmed",
+      "text": "Peerless Brawler",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Unarmed!",
+      "text": "Reached the level cap in Unarmed. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

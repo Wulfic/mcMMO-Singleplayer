@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/flying",
+  "display": {
+    "icon": {
+      "id": "minecraft:elytra"
+    },
+    "title": {
+      "text": "Grandmaster Aviator",
+      "color": "light_purple",
+      "bold": true
+    },
+    "description": {
+      "text": "Reached Flying level 1000 or higher.",
+      "color": "yellow"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

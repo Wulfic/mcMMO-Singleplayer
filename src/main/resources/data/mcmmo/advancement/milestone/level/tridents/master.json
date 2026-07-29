@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/tridents",
+  "display": {
+    "icon": {
+      "id": "minecraft:trident"
+    },
+    "title": {
+      "text": "Master Harpooner",
+      "color": "gold",
+      "bold": true
+    },
+    "description": {
+      "text": "Reached Tridents level 750 or higher.",
+      "color": "yellow"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

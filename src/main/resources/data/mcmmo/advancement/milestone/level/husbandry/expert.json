@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/husbandry",
+  "display": {
+    "icon": {
+      "id": "minecraft:lead"
+    },
+    "title": {
+      "text": "Expert Rancher",
+      "color": "aqua",
+      "bold": true
+    },
+    "description": {
+      "text": "Reached Husbandry level 500 or higher.",
+      "color": "yellow"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

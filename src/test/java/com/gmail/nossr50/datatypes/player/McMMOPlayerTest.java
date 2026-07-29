@@ -130,8 +130,11 @@ class McMMOPlayerTest {
 
         assertEquals(300, mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR));
         assertEquals(100, mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY));
-        verify(player).grantMilestoneAdvancement("level/parkour", true);
-        verify(player).grantMilestoneAdvancement("level/agility", true);
+        // Each plaque is titled for the standing that skill actually reached, so the parent and the
+        // child land on different tiers off the same XP gain (Parkour 300 = Adept, Agility 100 =
+        // Apprentice) rather than sharing one vague "milestone" id.
+        verify(player).grantMilestoneAdvancement("level/parkour/adept", true);
+        verify(player).grantMilestoneAdvancement("level/agility/apprentice", true);
     }
 
     @Test

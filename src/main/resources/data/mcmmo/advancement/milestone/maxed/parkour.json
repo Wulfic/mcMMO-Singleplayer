@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/parkour",
   "display": {
     "icon": {
       "id": "minecraft:leather_boots"
     },
     "title": {
-      "text": "Mastered Parkour",
+      "text": "Peerless Freerunner",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Parkour!",
+      "text": "Reached the level cap in Parkour. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

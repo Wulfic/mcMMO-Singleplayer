@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/excavation",
   "display": {
     "icon": {
       "id": "minecraft:diamond_shovel"
     },
     "title": {
-      "text": "Mastered Excavation",
+      "text": "Peerless Excavator",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Excavation!",
+      "text": "Reached the level cap in Excavation. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

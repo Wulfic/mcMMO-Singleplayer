@@ -5,12 +5,12 @@
       "id": "minecraft:emerald"
     },
     "title": {
-      "text": "Power Level 3500",
+      "text": "Renowned (Power 3,500)",
       "color": "gold",
       "bold": true
     },
     "description": {
-      "text": "Your total mcMMO power level reached 3500!",
+      "text": "Your combined level across every skill reached 3,500.",
       "color": "yellow"
     },
     "frame": "challenge",

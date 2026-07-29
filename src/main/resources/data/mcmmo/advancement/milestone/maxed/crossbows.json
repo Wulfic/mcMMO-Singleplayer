@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/crossbows",
   "display": {
     "icon": {
       "id": "minecraft:crossbow"
     },
     "title": {
-      "text": "Mastered Crossbows",
+      "text": "Peerless Sharpshooter",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Crossbows!",
+      "text": "Reached the level cap in Crossbows. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

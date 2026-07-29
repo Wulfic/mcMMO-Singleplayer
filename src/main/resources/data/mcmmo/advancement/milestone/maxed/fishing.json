@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/fishing",
   "display": {
     "icon": {
       "id": "minecraft:fishing_rod"
     },
     "title": {
-      "text": "Mastered Fishing",
+      "text": "Peerless Angler",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Fishing!",
+      "text": "Reached the level cap in Fishing. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

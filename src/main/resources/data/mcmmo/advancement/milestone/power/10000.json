@@ -5,12 +5,12 @@
       "id": "minecraft:nether_star"
     },
     "title": {
-      "text": "Power Level 10000",
+      "text": "Mythic (Power 10,000)",
       "color": "gold",
       "bold": true
     },
     "description": {
-      "text": "Your total mcMMO power level reached 10000!",
+      "text": "Your combined level across every skill reached 10,000.",
       "color": "yellow"
     },
     "frame": "challenge",

@@ -5,12 +5,12 @@
       "id": "minecraft:diamond"
     },
     "title": {
-      "text": "Power Level 2000",
+      "text": "Formidable (Power 2,000)",
       "color": "gold",
       "bold": true
     },
     "description": {
-      "text": "Your total mcMMO power level reached 2000!",
+      "text": "Your combined level across every skill reached 2,000.",
       "color": "yellow"
     },
     "frame": "challenge",

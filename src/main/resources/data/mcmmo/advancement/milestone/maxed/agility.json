@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/agility",
   "display": {
     "icon": {
       "id": "minecraft:feather"
     },
     "title": {
-      "text": "Mastered Agility",
+      "text": "Peerless Acrobat",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Agility!",
+      "text": "Reached the level cap in Agility. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

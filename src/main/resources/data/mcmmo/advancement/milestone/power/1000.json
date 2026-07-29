@@ -5,12 +5,12 @@
       "id": "minecraft:gold_ingot"
     },
     "title": {
-      "text": "Power Level 1000",
+      "text": "Proven (Power 1,000)",
       "color": "gold",
       "bold": true
     },
     "description": {
-      "text": "Your total mcMMO power level reached 1000!",
+      "text": "Your combined level across every skill reached 1,000.",
       "color": "yellow"
     },
     "frame": "challenge",

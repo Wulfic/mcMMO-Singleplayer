@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/husbandry",
   "display": {
     "icon": {
       "id": "minecraft:lead"
     },
     "title": {
-      "text": "Mastered Husbandry",
+      "text": "Peerless Rancher",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Husbandry!",
+      "text": "Reached the level cap in Husbandry. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/smelting",
+  "display": {
+    "icon": {
+      "id": "minecraft:blast_furnace"
+    },
+    "title": {
+      "text": "Apprentice Smelter",
+      "color": "white",
+      "bold": true
+    },
+    "description": {
+      "text": "Your first milestone in Smelting.",
+      "color": "yellow"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

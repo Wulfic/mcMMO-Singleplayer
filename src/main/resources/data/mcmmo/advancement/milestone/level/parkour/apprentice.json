@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/parkour",
+  "display": {
+    "icon": {
+      "id": "minecraft:leather_boots"
+    },
+    "title": {
+      "text": "Apprentice Freerunner",
+      "color": "white",
+      "bold": true
+    },
+    "description": {
+      "text": "Your first milestone in Parkour.",
+      "color": "yellow"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

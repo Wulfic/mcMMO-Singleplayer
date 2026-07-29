@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/herbalism",
+  "display": {
+    "icon": {
+      "id": "minecraft:wheat"
+    },
+    "title": {
+      "text": "Adept Herbalist",
+      "color": "green",
+      "bold": true
+    },
+    "description": {
+      "text": "Reached Herbalism level 250 or higher.",
+      "color": "yellow"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

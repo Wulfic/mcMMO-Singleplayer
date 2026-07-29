@@ -5,12 +5,12 @@
       "id": "minecraft:netherite_ingot"
     },
     "title": {
-      "text": "Power Level 5000",
+      "text": "Legendary (Power 5,000)",
       "color": "gold",
       "bold": true
     },
     "description": {
-      "text": "Your total mcMMO power level reached 5000!",
+      "text": "Your combined level across every skill reached 5,000.",
       "color": "yellow"
     },
     "frame": "challenge",

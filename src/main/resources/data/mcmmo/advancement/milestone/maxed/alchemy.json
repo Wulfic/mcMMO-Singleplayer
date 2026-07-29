@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/alchemy",
   "display": {
     "icon": {
       "id": "minecraft:brewing_stand"
     },
     "title": {
-      "text": "Mastered Alchemy",
+      "text": "Peerless Alchemist",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Alchemy!",
+      "text": "Reached the level cap in Alchemy. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

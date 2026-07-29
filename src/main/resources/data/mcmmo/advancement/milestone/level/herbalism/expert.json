@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/herbalism",
+  "display": {
+    "icon": {
+      "id": "minecraft:wheat"
+    },
+    "title": {
+      "text": "Expert Herbalist",
+      "color": "aqua",
+      "bold": true
+    },
+    "description": {
+      "text": "Reached Herbalism level 500 or higher.",
+      "color": "yellow"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

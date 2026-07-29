@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/tridents",
   "display": {
     "icon": {
       "id": "minecraft:trident"
     },
     "title": {
-      "text": "Mastered Tridents",
+      "text": "Peerless Harpooner",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Tridents!",
+      "text": "Reached the level cap in Tridents. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

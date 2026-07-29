@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/crossbows",
+  "display": {
+    "icon": {
+      "id": "minecraft:crossbow"
+    },
+    "title": {
+      "text": "Expert Sharpshooter",
+      "color": "aqua",
+      "bold": true
+    },
+    "description": {
+      "text": "Reached Crossbows level 500 or higher.",
+      "color": "yellow"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

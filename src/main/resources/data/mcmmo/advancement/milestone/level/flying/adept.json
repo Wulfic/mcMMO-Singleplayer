@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/flying",
+  "display": {
+    "icon": {
+      "id": "minecraft:elytra"
+    },
+    "title": {
+      "text": "Adept Aviator",
+      "color": "green",
+      "bold": true
+    },
+    "description": {
+      "text": "Reached Flying level 250 or higher.",
+      "color": "yellow"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

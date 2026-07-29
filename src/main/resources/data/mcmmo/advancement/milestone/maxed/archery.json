@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/archery",
   "display": {
     "icon": {
       "id": "minecraft:bow"
     },
     "title": {
-      "text": "Mastered Archery",
+      "text": "Peerless Archer",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Archery!",
+      "text": "Reached the level cap in Archery. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

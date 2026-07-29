@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/tridents",
+  "display": {
+    "icon": {
+      "id": "minecraft:trident"
+    },
+    "title": {
+      "text": "Adept Harpooner",
+      "color": "green",
+      "bold": true
+    },
+    "description": {
+      "text": "Reached Tridents level 250 or higher.",
+      "color": "yellow"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

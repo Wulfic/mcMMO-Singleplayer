@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/taming",
   "display": {
     "icon": {
       "id": "minecraft:bone"
     },
     "title": {
-      "text": "Mastered Taming",
+      "text": "Peerless Beast Tamer",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Taming!",
+      "text": "Reached the level cap in Taming. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

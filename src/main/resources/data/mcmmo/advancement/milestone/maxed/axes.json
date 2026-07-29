@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/axes",
   "display": {
     "icon": {
       "id": "minecraft:diamond_axe"
     },
     "title": {
-      "text": "Mastered Axes",
+      "text": "Peerless Reaver",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Axes!",
+      "text": "Reached the level cap in Axes. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

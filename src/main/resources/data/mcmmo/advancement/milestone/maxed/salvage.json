@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/salvage",
   "display": {
     "icon": {
       "id": "minecraft:grindstone"
     },
     "title": {
-      "text": "Mastered Salvage",
+      "text": "Peerless Salvager",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Salvage!",
+      "text": "Reached the level cap in Salvage. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

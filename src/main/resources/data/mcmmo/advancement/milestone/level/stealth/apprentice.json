@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/stealth",
+  "display": {
+    "icon": {
+      "id": "minecraft:sculk_sensor"
+    },
+    "title": {
+      "text": "Apprentice Prowler",
+      "color": "white",
+      "bold": true
+    },
+    "description": {
+      "text": "Your first milestone in Stealth.",
+      "color": "yellow"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

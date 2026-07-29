@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/swords",
+  "display": {
+    "icon": {
+      "id": "minecraft:diamond_sword"
+    },
+    "title": {
+      "text": "Grandmaster Duelist",
+      "color": "light_purple",
+      "bold": true
+    },
+    "description": {
+      "text": "Reached Swords level 1000 or higher.",
+      "color": "yellow"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

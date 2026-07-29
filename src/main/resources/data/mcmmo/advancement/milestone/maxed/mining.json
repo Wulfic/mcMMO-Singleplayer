@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/mining",
   "display": {
     "icon": {
       "id": "minecraft:diamond_pickaxe"
     },
     "title": {
-      "text": "Mastered Mining",
+      "text": "Peerless Miner",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Mining!",
+      "text": "Reached the level cap in Mining. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

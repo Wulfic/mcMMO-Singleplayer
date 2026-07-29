@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/flying",
+  "display": {
+    "icon": {
+      "id": "minecraft:elytra"
+    },
+    "title": {
+      "text": "Expert Aviator",
+      "color": "aqua",
+      "bold": true
+    },
+    "description": {
+      "text": "Reached Flying level 500 or higher.",
+      "color": "yellow"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

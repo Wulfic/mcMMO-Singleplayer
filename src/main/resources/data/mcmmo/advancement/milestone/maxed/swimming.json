@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/swimming",
   "display": {
     "icon": {
       "id": "minecraft:heart_of_the_sea"
     },
     "title": {
-      "text": "Mastered Swimming",
+      "text": "Peerless Swimmer",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Swimming!",
+      "text": "Reached the level cap in Swimming. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/stealth",
   "display": {
     "icon": {
       "id": "minecraft:sculk_sensor"
     },
     "title": {
-      "text": "Mastered Stealth",
+      "text": "Peerless Prowler",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Stealth!",
+      "text": "Reached the level cap in Stealth. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

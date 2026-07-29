@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/maces",
   "display": {
     "icon": {
       "id": "minecraft:mace"
     },
     "title": {
-      "text": "Mastered Maces",
+      "text": "Peerless Crusher",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Maces!",
+      "text": "Reached the level cap in Maces. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

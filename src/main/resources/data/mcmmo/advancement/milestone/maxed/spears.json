@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/spears",
   "display": {
     "icon": {
       "id": "minecraft:pointed_dripstone"
     },
     "title": {
-      "text": "Mastered Spears",
+      "text": "Peerless Lancer",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Spears!",
+      "text": "Reached the level cap in Spears. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

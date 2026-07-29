@@ -5,12 +5,12 @@
       "id": "minecraft:iron_ingot"
     },
     "title": {
-      "text": "Power Level 500",
+      "text": "Rising (Power 500)",
       "color": "gold",
       "bold": true
     },
     "description": {
-      "text": "Your total mcMMO power level reached 500!",
+      "text": "Your combined level across every skill reached 500.",
       "color": "yellow"
     },
     "frame": "challenge",

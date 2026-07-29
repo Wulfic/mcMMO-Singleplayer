@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/unarmored",
   "display": {
     "icon": {
       "id": "minecraft:turtle_scute"
     },
     "title": {
-      "text": "Mastered Unarmored",
+      "text": "Peerless Ascetic",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Unarmored!",
+      "text": "Reached the level cap in Unarmored. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

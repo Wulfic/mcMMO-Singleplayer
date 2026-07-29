@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/swords",
   "display": {
     "icon": {
       "id": "minecraft:diamond_sword"
     },
     "title": {
-      "text": "Mastered Swords",
+      "text": "Peerless Duelist",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Swords!",
+      "text": "Reached the level cap in Swords. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

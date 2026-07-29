@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/spears",
+  "display": {
+    "icon": {
+      "id": "minecraft:pointed_dripstone"
+    },
+    "title": {
+      "text": "Momentum Improved",
+      "color": "aqua",
+      "bold": true
+    },
+    "description": {
+      "text": "Momentum grew stronger (up to 10 ranks).",
+      "color": "yellow"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

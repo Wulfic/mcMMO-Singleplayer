@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/root",
+  "display": {
+    "icon": {
+      "id": "minecraft:leather_boots"
+    },
+    "title": {
+      "text": "Parkour",
+      "color": "white",
+      "bold": true
+    },
+    "description": {
+      "text": "Your milestones in Parkour.",
+      "color": "yellow"
+    },
+    "frame": "task",
+    "show_toast": false,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}

@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/root",
+  "parent": "mcmmo:milestone/skill/herbalism",
   "display": {
     "icon": {
       "id": "minecraft:wheat"
     },
     "title": {
-      "text": "Mastered Herbalism",
+      "text": "Peerless Herbalist",
       "color": "light_purple",
       "bold": true
     },
     "description": {
-      "text": "You reached the level cap in Herbalism!",
+      "text": "Reached the level cap in Herbalism. There is nothing left to learn.",
       "color": "yellow"
     },
     "frame": "challenge",

@@ -600,8 +600,8 @@ public class McMMOPlayer {
             final int levelCap = McMMOMod.getGeneralConfig().getLevelCap(skill);
             awards.addAll(Milestones.skillLevelAwards(skill, snapshot.oldLevel(),
                     profile.getSkillLevel(skill), levelCap, interval));
-            awards.addAll(Milestones.rankAwards(skill,
-                    unlockedNewRank(snapshot.subSkills(), snapshot.oldRanks())));
+            awards.addAll(Milestones.rankAwards(
+                    rankChanges(snapshot.subSkills(), snapshot.oldRanks())));
         }
         // Power level is the player's, not a skill's — awarded once however many skills moved.
         awards.addAll(Milestones.powerAwards(oldPowerLevel, getPowerLevel()));
@@ -631,14 +631,19 @@ public class McMMOPlayer {
         return ranks;
     }
 
-    /** Whether any of {@code subSkills} climbed to a higher rank than its {@code oldRanks} snapshot. */
-    private boolean unlockedNewRank(List<SubSkillType> subSkills, int[] oldRanks) {
+    /**
+     * The before/after rank of each of {@code subSkills}, paired against its {@code oldRanks}
+     * snapshot. Every tracked sub-skill is returned, climbed or not — {@link Milestones#rankAwards}
+     * owns the "did it actually go up?" decision so the rule lives in the MC-free core with the rest
+     * of them.
+     */
+    private List<Milestones.RankChange> rankChanges(List<SubSkillType> subSkills, int[] oldRanks) {
+        final List<Milestones.RankChange> changes = new ArrayList<>(subSkills.size());
         for (int i = 0; i < subSkills.size(); i++) {
-            if (RankUtils.getRank(this, subSkills.get(i)) > oldRanks[i]) {
-                return true;
-            }
+            changes.add(new Milestones.RankChange(subSkills.get(i), oldRanks[i],
+                    RankUtils.getRank(this, subSkills.get(i))));
         }
-        return false;
+        return changes;
     }
 
     /**

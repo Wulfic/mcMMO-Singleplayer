@@ -1,0 +1,31 @@
+{
+  "parent": "mcmmo:milestone/skill/mining",
+  "display": {
+    "icon": {
+      "id": "minecraft:diamond_pickaxe"
+    },
+    "title": {
+      "text": "Grandmaster Miner",
+      "color": "light_purple",
+      "bold": true
+    },
+    "description": {
+      "text": "Reached Mining level 1000 or higher.",
+      "color": "yellow"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "milestone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "milestone"
+    ]
+  ]
+}
