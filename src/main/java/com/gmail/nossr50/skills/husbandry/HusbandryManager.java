@@ -114,8 +114,13 @@ public class HusbandryManager extends SkillManager {
      * bounded. It is the same shape as Unarmored's per-attacker award cap and Agility's Dodge cap:
      * the port's answer to a repeatable award has consistently been a hard ceiling on awards, not a
      * softer rate.
+     *
+     * <p><b>Ruled at four, down from the eight stage 1 shipped</b> (2026-07-29). Four keeps
+     * Multi-Breed a convenience — you feed the pen from where you stand instead of chasing each
+     * animal — rather than making it the skill's primary income: at eight, one click was worth nine
+     * breedings and the sub-skill quietly became the only sensible way to level Husbandry at all.
      */
-    public static final int DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS = 8;
+    public static final int DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS = 4;
 
     public HusbandryManager(McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.HUSBANDRY);
@@ -184,9 +189,10 @@ public class HusbandryManager extends SkillManager {
      * Whether this breeding should produce a second baby.
      *
      * <p>Chance scales with level up to {@code Skills.Husbandry.Twins.ChanceMax}, which ships at
-     * <b>50 %</b> rather than the wiki's 100 %. Doubling every breed at max level is a food and
+     * <b>25 %</b> rather than the wiki's 100 %. Doubling every breed at max level is a food and
      * mob-population firehose on its own, and it multiplies with Multi-Breed rather than adding to
-     * it — the two together at 100 % would turn one item into a whole herd.
+     * it — the two together at 100 % would turn one item into a whole herd. A quarter keeps a twin
+     * birth a pleasant surprise at max rank instead of the expected outcome.
      *
      * @return {@code true} if a twin should be born
      */

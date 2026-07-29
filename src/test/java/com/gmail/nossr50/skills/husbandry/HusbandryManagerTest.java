@@ -255,7 +255,7 @@ class HusbandryManagerTest {
         // come through this test and read the reasoning.
         final double ceiling = McMMOMod.getAdvancedConfig()
                 .getMaximumProbability(SubSkillType.HUSBANDRY_TWINS);
-        assertEquals(50.0, ceiling, "advanced.yml Skills.Husbandry.Twins.ChanceMax");
+        assertEquals(25.0, ceiling, "advanced.yml Skills.Husbandry.Twins.ChanceMax");
     }
 
     // --- Sub-skill: Multi-Breed -------------------------------------------------------------------
@@ -309,7 +309,7 @@ class HusbandryManagerTest {
         // breeding item can be worth.
         setHusbandryLevel(1);
         assertEquals(1, manager.getMultiBreedMaxAdditionalAnimals(),
-                "a fresh unlock reaches one extra animal, not eight");
+                "a fresh unlock reaches one extra animal, not the configured maximum");
 
         setHusbandryLevel(1000);
         assertEquals(HusbandryManager.DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS,

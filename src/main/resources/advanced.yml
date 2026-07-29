@@ -371,15 +371,16 @@ Skills:
         Twins:
             # Chance that one breeding produces TWO babies instead of one.
             #
-            # ChanceMax ships at 50, not the wiki's 100, deliberately. Doubling every single breed at
+            # ChanceMax ships at 25, not the wiki's 100, deliberately. Doubling every single breed at
             # max level is a food and mob-population firehose on its own, and it MULTIPLIES with
             # MultiBreed below rather than adding to it -- the two together at 100 would turn one
-            # wheat into a whole herd. Raise this only after playing a maxed Husbandry with a stocked
-            # pen and deciding it feels slow.
+            # wheat into a whole herd. At 25 a twin birth stays a pleasant surprise at max rank
+            # rather than the expected outcome. Raise this only after playing a maxed Husbandry with
+            # a stocked pen and deciding it feels slow.
             #
             # Egg-laying breeders (frog, sniffer, turtle) never twin: vanilla hands them no baby to
             # copy, it hands them an egg, and duplicating that would be a different mechanic.
-            ChanceMax: 50.0
+            ChanceMax: 25.0
             MaxBonusLevel:
                 Standard: 100
                 RetroMode: 1000
@@ -401,7 +402,10 @@ Skills:
             # you still reach right across the pen instead of walking to every animal -- while
             # keeping the XP a single click can be worth bounded. Set to 0 to disable the spread
             # entirely without removing the sub-skill.
-            MaxAdditionalAnimals: 8
+            #
+            # Four, not eight: at eight one click was worth nine breedings, which made Multi-Breed
+            # the only sensible way to level the skill at all rather than a convenience on top of it.
+            MaxAdditionalAnimals: 4
 
             # Reach in blocks, at unlock and at MaxBonusLevel. MaxRadius is HARD-CLAMPED to 40 in
             # code whatever you put here: this number sizes an entity sweep that runs every time any

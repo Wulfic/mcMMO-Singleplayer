@@ -112,9 +112,19 @@ raising, harvesting, and the super.
 - ✅ **D-H1 — category: `GATHERING_SKILLS`.** Four of the six verbs are gathering (shear, brush, honey,
   milk). Affects only the `/mcstats` grouping and the `SkillTools` category list
   (`SkillTools.java:96-110`).
-- **D-H2 — Twins cap.** Wiki says 100 % at level 1000. Doubling *every* breed at max is a food and
-  mob-farm firehose, and it compounds with Multi-Breed. **Recommend capping at 50 %, config-driven**
-  (`advanced.yml`). Same reasoning applies to `Brood`'s multi-chick roll. Flag in §G.
+- ✅ **D-H2 — Twins cap: 25 %** (user ruling, 2026-07-29). Wiki says 100 % at level 1000. Doubling
+  *every* breed at max is a food and mob-farm firehose, and it compounds with Multi-Breed rather than
+  adding to it. Stage 1 shipped 50 %; the ruling took it to **25 %**, so a twin birth stays a pleasant
+  surprise at max rank instead of the expected outcome. Same reasoning applies to `Brood`'s
+  multi-chick roll (stage 5). Config-driven in `advanced.yml`. Still a §G tuning row.
+- ✅ **D-H2b — Multi-Breed spread cap: 4 extra animals** (user ruling, 2026-07-29). The plan
+  originally bounded Multi-Breed only by *radius*, which is not a bound at all: Husbandry pays per
+  breeding, so the cap on the *count* is what bounds the XP one click can be worth. Stage 1 shipped
+  8; the ruling took it to **4**. At eight, one click was worth nine breedings and Multi-Breed became
+  the only sensible way to level the skill rather than a convenience on top of it.
+  ⚠️ **A changed shipped default never reaches an existing on-disk `advanced.yml`** —
+  `copyMissingDefaults` back-fills only *absent* keys, so a config generated before this ruling keeps
+  8/50 forever. The dev `run/config/mcmmo/advanced.yml` was patched by hand.
 - **D-H3 — what counts as "shearing".** Enumerate the set explicitly; do not hand-wave "shears = XP"
   or you pay for shearing a pumpkin stem 400×. **Entity shear:** sheep (wool), mooshroom (mushrooms,
   destructive), snow golem (pumpkin), bogged (mushrooms). **Block shear:** leaves/vines/beehive-adjacent
