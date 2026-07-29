@@ -7,11 +7,15 @@ import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.datatypes.treasure.HusbandryTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.DoublePredicate;
 import java.util.function.ToIntFunction;
 
 /**
@@ -173,6 +177,37 @@ public class HusbandryManager extends SkillManager {
      * {@link #getHarvestCooldownSeconds()} for which verbs it covers and why the other two are exempt.
      */
     public static final int DEFAULT_HARVEST_COOLDOWN_SECONDS = 300;
+
+    /**
+     * How far toward the best possible value {@code Selective Breeding} nudges an offspring stat at
+     * {@code MaxBonusLevel}, as a fraction of the distance remaining.
+     *
+     * <p>Modest on purpose, because the effect compounds down the generations: every foal is bred from
+     * parents that were themselves biased, so a bias that felt fair for one breeding walks a line
+     * toward the ceiling much faster than it looks. A quarter of the remaining gap per generation
+     * still reaches near-perfect stock in a handful of generations, which is the fantasy — it just
+     * takes the handful.
+     */
+    public static final double DEFAULT_MAX_STAT_BIAS = 0.25;
+
+    /**
+     * The most of the remaining gap a single roll may ever be nudged, whatever {@code advanced.yml}
+     * says.
+     *
+     * <p>A hard clamp rather than a default because {@code 1.0} would not be "very good horses", it
+     * would be <b>every</b> horse at exactly the species maximum, permanently, from the first
+     * breeding — which deletes horse breeding as an activity rather than rewarding it.
+     */
+    public static final double HARD_MAX_STAT_BIAS = 0.50;
+
+    /**
+     * {@code Brood}'s chance at max level that a hatching egg yields a full clutch instead of one
+     * chick, in percent.
+     *
+     * <p>Vanilla's own rare case is 1-in-32 <em>of a hatch</em>. This is the same escalation
+     * {@code Twins} got ruled down to: pleasant surprise at max rank, not the expected outcome.
+     */
+    public static final double DEFAULT_MULTI_CHICK_CHANCE = 20.0;
 
     public HusbandryManager(McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.HUSBANDRY);
@@ -666,6 +701,194 @@ public class HusbandryManager extends SkillManager {
     public boolean rollBonusHoney() {
         return canBeekeeper()
                 && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HUSBANDRY_BEEKEEPER, mmoPlayer);
+    }
+
+    // --- Stage 5: Selective Breeding -------------------------------------------------------------
+
+    public boolean canSelectiveBreeding() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HUSBANDRY_SELECTIVE_BREEDING)
+                && Permissions.isSubSkillEnabled(getPlayer(),
+                        SubSkillType.HUSBANDRY_SELECTIVE_BREEDING);
+    }
+
+    /**
+     * How far toward the best possible value this player's offspring are nudged, as {@code 0.0}–
+     * {@link #HARD_MAX_STAT_BIAS}.
+     *
+     * @return the bias fraction, or {@code 0} when Selective Breeding is locked
+     */
+    public double getStatBias() {
+        if (!canSelectiveBreeding()) {
+            return 0.0;
+        }
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        final double max = advanced == null
+                ? DEFAULT_MAX_STAT_BIAS
+                : advanced.getMaxSelectiveBreedingBias();
+        if (max <= 0) {
+            return 0.0;
+        }
+        final int maxBonusLevel = advanced == null
+                ? 0
+                : advanced.getMaxBonusLevel(SubSkillType.HUSBANDRY_SELECTIVE_BREEDING);
+        return Math.min(HARD_MAX_STAT_BIAS, scaleToLevel(max, maxBonusLevel));
+    }
+
+    /**
+     * Nudge one rolled offspring stat toward the best value the species allows.
+     *
+     * <p>Applied to the <em>outcome</em> of vanilla's own inheritance roll rather than to the dice
+     * that produced it, which is what keeps the sub-skill honest across every attribute it touches:
+     * vanilla rolls a bell curve around the midpoint of the two parents, widened by their spread, and
+     * this shifts that result a fraction of the remaining distance to the ceiling. So good parents
+     * still matter — the bias moves you along the range, it does not replace the range — and the
+     * result can never exceed what the species permits.
+     *
+     * <p><b>It can only ever improve a foal, never worsen one</b>, and at bias {@code 0} it is exactly
+     * the identity. That matters because the same code path runs for every horse bred in the world,
+     * including by players who have not unlocked the sub-skill.
+     *
+     * @param rolled vanilla's rolled value
+     * @param min    the lowest value the attribute may take
+     * @param max    the highest value the attribute may take
+     * @return the biased value, clamped into {@code [min, max]}
+     */
+    public double applyStatBias(double rolled, double min, double max) {
+        if (max <= min) {
+            return rolled; // Degenerate range; nothing to bias toward.
+        }
+        final double bias = getStatBias();
+        if (bias <= 0) {
+            return rolled;
+        }
+        final double clamped = Math.min(max, Math.max(min, rolled));
+        return clamped + bias * (max - clamped);
+    }
+
+    // --- Stage 5: Brood --------------------------------------------------------------------------
+
+    public boolean canBrood() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HUSBANDRY_BROOD)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.HUSBANDRY_BROOD);
+    }
+
+    /**
+     * Whether a thrown egg that vanilla was about to waste should hatch anyway.
+     *
+     * <p>Layered on top of vanilla's 1-in-8 rather than replacing it, so the shipped
+     * {@code ChanceMax} reads as "how often Brood rescues an egg that would have broken" and the
+     * effective hatch rate is {@code 12.5% + chance × 87.5%}. Replacing the roll outright would have
+     * made a configured 10 % a <em>downgrade</em> on vanilla, which is the kind of knob nobody
+     * notices is backwards.
+     *
+     * <p><b>Deliberately pays no XP and marks no chick.</b> Chickens lay eggs on a passive timer —
+     * {@code ChickenEntity.eggLayTime} is ticked in {@code tickMovement} — so a hopper under a coop
+     * is fully AFK income, which is exactly why stage 0 priced no egg verb. Brood is a yield
+     * sub-skill only. The chick is also not given a bred-by marker, so raising it pays nobody: it was
+     * hatched, not bred, and a marker here would have quietly turned an AFK egg farm into a raise-XP
+     * farm twenty minutes later.
+     */
+    public boolean rollEggHatch() {
+        return canBrood()
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HUSBANDRY_BROOD, mmoPlayer);
+    }
+
+    /**
+     * Whether a hatching egg should yield vanilla's rare four chicks rather than one.
+     *
+     * <p>The second of this sub-skill's two rolls, so it is scaled by hand off
+     * {@link #getMultiChickChance} rather than through the sub-skill's own probability —
+     * {@code ProbabilityUtil} keys its chance off the {@link SubSkillType}, so only one effect per
+     * sub-skill can live there. Same split Accelerated Growth and Bountiful Harvest already make.
+     */
+    public boolean rollMultipleChicks() {
+        final double chance = getMultiChickChance();
+        return chance > 0
+                && ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.HUSBANDRY, mmoPlayer,
+                        chance);
+    }
+
+    /**
+     * This player's current chance that a hatch yields a full clutch, in percent.
+     *
+     * @return {@code 0}–100, or {@code 0} when Brood is locked
+     */
+    public double getMultiChickChance() {
+        if (!canBrood()) {
+            return 0.0;
+        }
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        final double max = advanced == null
+                ? DEFAULT_MULTI_CHICK_CHANCE
+                : advanced.getBroodMultiChickChance();
+        if (max <= 0) {
+            return 0.0;
+        }
+        final int maxBonusLevel = advanced == null
+                ? 0
+                : advanced.getMaxBonusLevel(SubSkillType.HUSBANDRY_BROOD);
+        return Math.min(100.0, scaleToLevel(max, maxBonusLevel));
+    }
+
+    // --- Stage 5: Hidden Bounty -----------------------------------------------------------------
+
+    public boolean canHiddenBounty() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HUSBANDRY_HIDDEN_BOUNTY)
+                && Permissions.isSubSkillEnabled(getPlayer(),
+                        SubSkillType.HUSBANDRY_HIDDEN_BOUNTY);
+    }
+
+    /** Whether this harvest gets to look at the treasure table at all. */
+    public boolean rollHiddenBounty() {
+        return canHiddenBounty()
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HUSBANDRY_HIDDEN_BOUNTY,
+                        mmoPlayer);
+    }
+
+    /**
+     * Pick the treasure a harvest turned up, if any.
+     *
+     * <p>MC-free and fully injectable, the same shape as {@code HerbalismManager#rollHylianLuck} and
+     * {@code FishingManager#rollFishingTreasure}: both random draws arrive from the caller, so the
+     * whole selection is unit-testable and the listener owns only the item spawn.
+     *
+     * <p>Walks the candidates in config order and returns the first whose level requirement this
+     * player has reached <em>and</em> whose own {@code Drop_Chance} rolls. Config order is therefore
+     * load-bearing — a common treasure listed first makes every rarer one unreachable — which is
+     * stated in {@code treasures.yml} beside the table.
+     *
+     * @param candidates  the treasures for the harvested verb, in config order
+     * @param mainRollWon whether {@link #rollHiddenBounty()} succeeded; a failure returns empty
+     *                    without touching the table
+     * @param staticRoll  evaluates one treasure's percentage {@code Drop_Chance}
+     * @return the winning treasure, or empty
+     */
+    public Optional<HusbandryTreasure> selectHiddenBounty(List<HusbandryTreasure> candidates,
+            boolean mainRollWon, DoublePredicate staticRoll) {
+        if (!mainRollWon || candidates == null || candidates.isEmpty()) {
+            return Optional.empty();
+        }
+        final int level = getSkillLevel();
+        for (HusbandryTreasure treasure : candidates) {
+            if (treasure.getDropLevel() <= level && staticRoll.test(treasure.getDropChance())) {
+                return Optional.of(treasure);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Credit the small XP bonus a {@code Hidden Bounty} find carries, on top of the verb's own payout.
+     *
+     * <p>Deliberately small and per-treasure. The find <em>is</em> the reward; a treasure that also paid
+     * a verb's worth of XP would make Hidden Bounty the reason to harvest rather than a bonus for
+     * having done so.
+     *
+     * @param xp the treasure's configured XP
+     * @return the XP awarded, or {@code 0} for a treasure priced at nothing
+     */
+    public float onHiddenBountyFound(int xp) {
+        return award(atLeastZero(xp));
     }
 
     // --- The flat verbs ---------------------------------------------------------------------

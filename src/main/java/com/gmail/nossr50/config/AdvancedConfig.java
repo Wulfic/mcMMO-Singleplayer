@@ -309,6 +309,34 @@ public class AdvancedConfig extends ConfigLoader {
             reason.add("Skills.Husbandry.Beekeeper.MaxBonusLevel should be at least 1!");
         }
 
+        if (getMaxBonusLevel(SubSkillType.HUSBANDRY_SELECTIVE_BREEDING) < 1) {
+            reason.add("Skills.Husbandry.SelectiveBreeding.MaxBonusLevel should be at least 1!");
+        }
+
+        if (getMaxSelectiveBreedingBias() < 0) {
+            reason.add("Skills.Husbandry.SelectiveBreeding.MaxStatBias should be at least 0!");
+        }
+
+        if (getMaximumProbability(SubSkillType.HUSBANDRY_BROOD) < 1) {
+            reason.add("Skills.Husbandry.Brood.ChanceMax should be at least 1!");
+        }
+
+        if (getMaxBonusLevel(SubSkillType.HUSBANDRY_BROOD) < 1) {
+            reason.add("Skills.Husbandry.Brood.MaxBonusLevel should be at least 1!");
+        }
+
+        if (getBroodMultiChickChance() < 0) {
+            reason.add("Skills.Husbandry.Brood.MultiChickChanceMax should be at least 0!");
+        }
+
+        if (getMaximumProbability(SubSkillType.HUSBANDRY_HIDDEN_BOUNTY) < 1) {
+            reason.add("Skills.Husbandry.HiddenBounty.ChanceMax should be at least 1!");
+        }
+
+        if (getMaxBonusLevel(SubSkillType.HUSBANDRY_HIDDEN_BOUNTY) < 1) {
+            reason.add("Skills.Husbandry.HiddenBounty.MaxBonusLevel should be at least 1!");
+        }
+
         /* MINING */
         if (getMaximumProbability(SubSkillType.MINING_DOUBLE_DROPS) < 1) {
             reason.add("Skills.Mining.DoubleDrops.ChanceMax should be at least 1!");
@@ -815,6 +843,29 @@ public class AdvancedConfig extends ConfigLoader {
     public double getBountifulHarvestDurabilitySaveChance() {
         return config.getDouble("Skills.Husbandry.BountifulHarvest.DurabilitySaveChanceMax",
                 HusbandryManager.DEFAULT_HARVEST_DURABILITY_SAVE_CHANCE);
+    }
+
+    /**
+     * How far toward the best possible value {@code Selective Breeding} nudges an offspring stat at
+     * {@code MaxBonusLevel}, as a fraction of the gap remaining.
+     *
+     * <p>Clamped in the manager to {@link HusbandryManager#HARD_MAX_STAT_BIAS}: at {@code 1.0} every
+     * foal would land on the species maximum from the first breeding, which removes horse breeding as
+     * an activity rather than rewarding it. The effect also compounds down the generations, so it
+     * reaches further than the number suggests.
+     */
+    public double getMaxSelectiveBreedingBias() {
+        return config.getDouble("Skills.Husbandry.SelectiveBreeding.MaxStatBias",
+                HusbandryManager.DEFAULT_MAX_STAT_BIAS);
+    }
+
+    /**
+     * {@code Brood}'s chance at {@code MaxBonusLevel} that a hatching egg yields a full clutch of four
+     * chicks rather than one, in percent.
+     */
+    public double getBroodMultiChickChance() {
+        return config.getDouble("Skills.Husbandry.Brood.MultiChickChanceMax",
+                HusbandryManager.DEFAULT_MULTI_CHICK_CHANCE);
     }
 
     // --- Unarmored (Pass 2) --------------------------------------------------------------------

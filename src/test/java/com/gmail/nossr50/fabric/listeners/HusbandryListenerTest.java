@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.clearInvocations;
@@ -38,6 +39,7 @@ import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.passive.PigEntity;
 import net.minecraft.entity.passive.SheepEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.projectile.thrown.EggEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -1099,5 +1101,157 @@ class HusbandryListenerTest {
 
         assertEquals(16, HusbandryListener.onBrushToolDamaged(armadillo, 16));
         verify(husbandry, never()).rollToolDurabilitySave();
+    }
+
+    // --- Stage 5: Selective Breeding -------------------------------------------------------------
+
+    private AnimalEntity horseLovedBy(ServerPlayerEntity player) {
+        final AnimalEntity horse = cow(true, 0, true);
+        lenient().when(horse.getLovingPlayer()).thenReturn(player);
+        return horse;
+    }
+
+    @Test
+    void selectiveBreedingBiasesAFoalStatForTheBreeder() {
+        // The bias itself is the manager's arithmetic; what this pins is the STASH -- vanilla's
+        // inheritance roll is a static method with no player in it, so without the join there is
+        // nobody to ask and every foal gets the plain dice.
+        lenient().when(husbandry.applyStatBias(20.0, 10.0, 30.0)).thenReturn(22.5);
+
+        HusbandryListener.beginSelectiveBreeding(horseLovedBy(breeder()), null);
+        try {
+            assertEquals(22.5, HusbandryListener.applySelectiveBreedingBias(20.0, 10.0, 30.0));
+        } finally {
+            HusbandryListener.endSelectiveBreeding();
+        }
+        verify(husbandry).applyStatBias(20.0, 10.0, 30.0);
+    }
+
+    @Test
+    void aBreedingWithNoLovingPlayerLeavesTheRollAlone() {
+        // ⚠️ The common case by a wide margin: this static method runs for EVERY horse bred anywhere,
+        // including AI-driven breeding with no player involved. It must be the exact identity there.
+        HusbandryListener.beginSelectiveBreeding(cow(true, 0, true), null);
+        try {
+            assertEquals(17.3, HusbandryListener.applySelectiveBreedingBias(17.3, 10.0, 30.0));
+        } finally {
+            HusbandryListener.endSelectiveBreeding();
+        }
+        verify(husbandry, never()).applyStatBias(anyDouble(), anyDouble(), anyDouble());
+    }
+
+    @Test
+    void theBiasStashDoesNotOutliveTheBreedingThatOpenedIt() {
+        lenient().when(husbandry.applyStatBias(anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(99.0);
+
+        HusbandryListener.beginSelectiveBreeding(horseLovedBy(breeder()), null);
+        HusbandryListener.endSelectiveBreeding();
+
+        assertEquals(20.0, HusbandryListener.applySelectiveBreedingBias(20.0, 10.0, 30.0),
+                "a leaked stash would bias every horse bred anywhere for the rest of the session");
+    }
+
+    @Test
+    void eitherParentCanCarryTheLovingPlayer() {
+        // Vanilla sets the loving player on whichever animal the player actually fed, so checking only
+        // one parent would silently halve the sub-skill.
+        lenient().when(husbandry.applyStatBias(anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(22.5);
+
+        HusbandryListener.beginSelectiveBreeding(cow(true, 0, true), horseLovedBy(breeder()));
+        try {
+            assertEquals(22.5, HusbandryListener.applySelectiveBreedingBias(20.0, 10.0, 30.0));
+        } finally {
+            HusbandryListener.endSelectiveBreeding();
+        }
+    }
+
+    // --- Stage 5: Brood -------------------------------------------------------------------------
+
+    private Entity eggThrownBy(ServerPlayerEntity thrower) {
+        final EggEntity egg = mock(EggEntity.class);
+        lenient().when(egg.getOwner()).thenReturn(thrower);
+        return egg;
+    }
+
+    @Test
+    void broodRescuesAnEggVanillaWasAboutToWaste() {
+        when(husbandry.rollEggHatch()).thenReturn(true);
+        assertEquals(0, HusbandryListener.onEggHatchRoll(eggThrownBy(breeder()), 5),
+                "a successful Brood roll must force vanilla's own hatch branch");
+    }
+
+    @Test
+    void broodDoesNotReRollAnEggVanillaWasAlreadyHatching() {
+        // Layering, not replacing: Brood can only ever improve the odds. If this consulted the
+        // sub-skill on an already-winning roll, a configured chance could turn a hatch into a miss.
+        lenient().when(husbandry.rollEggHatch()).thenReturn(false);
+        assertEquals(0, HusbandryListener.onEggHatchRoll(eggThrownBy(breeder()), 0));
+        verify(husbandry, never()).rollEggHatch();
+    }
+
+    @Test
+    void aFailedBroodRollLeavesVanillasResultUntouched() {
+        when(husbandry.rollEggHatch()).thenReturn(false);
+        assertEquals(5, HusbandryListener.onEggHatchRoll(eggThrownBy(breeder()), 5));
+    }
+
+    @Test
+    void broodTurnsAHatchIntoAFullClutch() {
+        when(husbandry.rollMultipleChicks()).thenReturn(true);
+        assertEquals(0, HusbandryListener.onFullClutchRoll(eggThrownBy(breeder()), 17));
+    }
+
+    @Test
+    void aDispensedEggEarnsNoBroodAtAll() {
+        // ⚠️ Eggs are dispensable in vanilla. A dispensed egg has no player owner, so both halves of
+        // the sub-skill must decline rather than bill whoever happens to be tracked -- otherwise an
+        // egg-farm-plus-dispenser loop would quietly run Brood forever.
+        lenient().when(husbandry.rollEggHatch()).thenReturn(true);
+        lenient().when(husbandry.rollMultipleChicks()).thenReturn(true);
+
+        assertEquals(5, HusbandryListener.onEggHatchRoll(eggThrownBy(null), 5));
+        assertEquals(17, HusbandryListener.onFullClutchRoll(eggThrownBy(null), 17));
+        verify(husbandry, never()).rollEggHatch();
+        verify(husbandry, never()).rollMultipleChicks();
+    }
+
+    @Test
+    void hatchingAnEggPaysNoXpAndMarksNoChick() {
+        // ⚠️⚠️ Both halves are load-bearing and both are about the same exploit. ChickenEntity's
+        // eggLayTime is a passive timer ticked in tickMovement, so a hopper under a coop is fully AFK
+        // income. Brood is a YIELD sub-skill: it must never award XP, and the chick it hatches must
+        // never carry a bred-by marker -- one would turn that same AFK farm into a raise-XP farm
+        // twenty minutes later, when the chicks came of age.
+        when(husbandry.rollEggHatch()).thenReturn(true);
+        when(husbandry.rollMultipleChicks()).thenReturn(true);
+        final Entity egg = eggThrownBy(breeder());
+
+        HusbandryListener.onEggHatchRoll(egg, 5);
+        HusbandryListener.onFullClutchRoll(egg, 17);
+
+        verify(husbandry, never()).onBreed(any());
+        verify(husbandry, never()).onRaise(any());
+        verify(husbandry, never()).onFeedBaby(any());
+        verify(egg, never()).setAttached(any(), any());
+    }
+
+    // --- Stage 5: Hidden Bounty -----------------------------------------------------------------
+
+    @Test
+    void aHarvestWithNoTreasureConfigBoundIsSafeAndSilent() {
+        // McMMOMod's TreasureConfig is unbound in this fixture, which is also the real state during
+        // early boot. Every harvest verb calls into Hidden Bounty, so a missing config must be a
+        // no-op rather than an NPE that takes the whole verb down with it.
+        allowHarvestCooldown();
+        worldTime(0L);
+
+        HusbandryListener.onMilked(harvestable(CowEntity.class), breeder());
+        HusbandryListener.onHoneyBottled(breeder());
+
+        verify(husbandry).onMilk();
+        verify(husbandry).onHiveHarvest();
+        verify(husbandry, never()).rollHiddenBounty();
     }
 }

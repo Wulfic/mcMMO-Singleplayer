@@ -39,6 +39,9 @@ public final class HusbandryStatsRenderer extends SkillStatsRenderer {
     private boolean canAcceleratedGrowth;
     private boolean canBountifulHarvest;
     private boolean canBeekeeper;
+    private boolean canSelectiveBreeding;
+    private boolean canBrood;
+    private boolean canHiddenBounty;
 
     public HusbandryStatsRenderer() {
         super(PrimarySkillType.HUSBANDRY);
@@ -53,6 +56,9 @@ public final class HusbandryStatsRenderer extends SkillStatsRenderer {
         canAcceleratedGrowth = hasUnlocked(SubSkillType.HUSBANDRY_ACCELERATED_GROWTH);
         canBountifulHarvest = hasUnlocked(SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST);
         canBeekeeper = hasUnlocked(SubSkillType.HUSBANDRY_BEEKEEPER);
+        canSelectiveBreeding = hasUnlocked(SubSkillType.HUSBANDRY_SELECTIVE_BREEDING);
+        canBrood = hasUnlocked(SubSkillType.HUSBANDRY_BROOD);
+        canHiddenBounty = hasUnlocked(SubSkillType.HUSBANDRY_HIDDEN_BOUNTY);
     }
 
     @Override
@@ -73,6 +79,11 @@ public final class HusbandryStatsRenderer extends SkillStatsRenderer {
             messages.add(getStatMessage(SubSkillType.HUSBANDRY_TWINS,
                     ProbabilityUtil.getRNGDisplayValues(mmoPlayer, SubSkillType.HUSBANDRY_TWINS)[0]));
         }
+        if (canSelectiveBreeding) {
+            // A fraction of the gap to the species maximum, so it formats directly as a percentage.
+            messages.add(getStatMessage(SubSkillType.HUSBANDRY_SELECTIVE_BREEDING,
+                    percent.format(husbandry.getStatBias())));
+        }
 
         // --- Raising ---------------------------------------------------------------------------
         if (canAcceleratedGrowth) {
@@ -82,6 +93,14 @@ public final class HusbandryStatsRenderer extends SkillStatsRenderer {
             messages.add(getStatMessage(true, false, SubSkillType.HUSBANDRY_ACCELERATED_GROWTH,
                     ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
                             SubSkillType.HUSBANDRY_ACCELERATED_GROWTH)[0]));
+        }
+
+        if (canBrood) {
+            messages.add(getStatMessage(SubSkillType.HUSBANDRY_BROOD,
+                    ProbabilityUtil.getRNGDisplayValues(mmoPlayer, SubSkillType.HUSBANDRY_BROOD)[0]));
+            // Reported in percent (0-100) by the manager, unlike the two fractions above.
+            messages.add(getStatMessage(true, false, SubSkillType.HUSBANDRY_BROOD,
+                    percent.format(husbandry.getMultiChickChance() / 100.0D)));
         }
 
         // --- Harvesting ------------------------------------------------------------------------
@@ -102,6 +121,15 @@ public final class HusbandryStatsRenderer extends SkillStatsRenderer {
             messages.add(getStatMessage(SubSkillType.HUSBANDRY_BEEKEEPER,
                     ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
                             SubSkillType.HUSBANDRY_BEEKEEPER)[0]));
+        }
+        if (canHiddenBounty) {
+            // Only the first of Hidden Bounty's two gates is a player-facing number. The second is
+            // each treasure's own Drop_Chance in treasures.yml, which varies per item, so there is no
+            // single figure to show -- and showing this one alone is honest, since it is the gate that
+            // decides whether the table is consulted at all.
+            messages.add(getStatMessage(SubSkillType.HUSBANDRY_HIDDEN_BOUNTY,
+                    ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
+                            SubSkillType.HUSBANDRY_HIDDEN_BOUNTY)[0]));
         }
 
         return messages;

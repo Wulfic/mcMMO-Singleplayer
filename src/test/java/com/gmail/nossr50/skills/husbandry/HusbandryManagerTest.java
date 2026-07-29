@@ -17,6 +17,8 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.datatypes.treasure.HusbandryTreasure;
+import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.skills.SkillTools;
@@ -162,7 +164,10 @@ class HusbandryManagerTest {
                 java.util.Set.of(SubSkillType.HUSBANDRY_MULTI_BREED, SubSkillType.HUSBANDRY_TWINS,
                         SubSkillType.HUSBANDRY_ACCELERATED_GROWTH,
                         SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST,
-                        SubSkillType.HUSBANDRY_BEEKEEPER),
+                        SubSkillType.HUSBANDRY_BEEKEEPER,
+                        SubSkillType.HUSBANDRY_SELECTIVE_BREEDING,
+                        SubSkillType.HUSBANDRY_BROOD,
+                        SubSkillType.HUSBANDRY_HIDDEN_BOUNTY),
                 new SkillTools().getSubSkills(PrimarySkillType.HUSBANDRY));
     }
 
@@ -738,5 +743,161 @@ class HusbandryManagerTest {
         lenient().when(advanced.getMaxBonusLevel(SubSkillType.HUSBANDRY_BEEKEEPER)).thenReturn(0);
         McMMOMod.setAdvancedConfig(advanced);
         return advanced;
+    }
+
+    // --- Stage 5: Selective Breeding ---------------------------------------------------------------
+
+    @Test
+    void selectiveBreedingIsLockedUntilItsRankAndThenBiasesUpward() {
+        setHusbandryLevel(0);
+        assertFalse(manager.canSelectiveBreeding());
+        assertEquals(0.0, manager.getStatBias());
+
+        setHusbandryLevel(1000);
+        assertTrue(manager.canSelectiveBreeding());
+        assertEquals(HusbandryManager.DEFAULT_MAX_STAT_BIAS, manager.getStatBias(),
+                "at max level the bias must reach the shipped ceiling");
+    }
+
+    @Test
+    void theBiasMovesARolledStatPartwayTowardTheSpeciesMaximum() {
+        setHusbandryLevel(1000); // bias 0.25
+        // Rolled 20 in a [10, 30] range: a quarter of the remaining 10 is 2.5.
+        assertEquals(22.5, manager.applyStatBias(20.0, 10.0, 30.0), 1.0E-9);
+    }
+
+    @Test
+    void theBiasCanNeverWorsenAFoalAndNeverExceedsTheSpeciesMaximum() {
+        // Both properties matter because this same code path runs for EVERY horse bred in the world,
+        // including by players who have not unlocked the sub-skill.
+        setHusbandryLevel(1000);
+        assertEquals(30.0, manager.applyStatBias(30.0, 10.0, 30.0), 1.0E-9,
+                "a stat already at the maximum must stay there, not overshoot");
+        assertTrue(manager.applyStatBias(10.0, 10.0, 30.0) > 10.0,
+                "the worst possible roll must still be improved");
+
+        setHusbandryLevel(0);
+        assertEquals(17.3, manager.applyStatBias(17.3, 10.0, 30.0), 1.0E-9,
+                "with the sub-skill locked the bias must be exactly the identity");
+    }
+
+    @Test
+    void aDegenerateAttributeRangeIsLeftAlone() {
+        setHusbandryLevel(1000);
+        assertEquals(5.0, manager.applyStatBias(5.0, 5.0, 5.0), 1.0E-9);
+    }
+
+    @Test
+    void theStatBiasIsHardClampedEvenIfTheConfigAsksForMore() {
+        // ⚠️ Not tidiness. At 1.0 every foal would land exactly on the species maximum from the first
+        // breeding, which deletes horse breeding as an activity instead of rewarding it. And because
+        // the effect compounds down the generations, a too-large value reaches further than it reads.
+        setHusbandryLevel(1000);
+        final AdvancedConfig greedy = mock(AdvancedConfig.class);
+        lenient().when(greedy.getMaxSelectiveBreedingBias()).thenReturn(5.0);
+        lenient().when(greedy.getMaxBonusLevel(SubSkillType.HUSBANDRY_SELECTIVE_BREEDING))
+                .thenReturn(0);
+        McMMOMod.setAdvancedConfig(greedy);
+
+        assertEquals(HusbandryManager.HARD_MAX_STAT_BIAS, manager.getStatBias());
+        assertTrue(manager.applyStatBias(20.0, 10.0, 30.0) <= 30.0);
+    }
+
+    // --- Stage 5: Brood ----------------------------------------------------------------------------
+
+    @Test
+    void broodIsLockedUntilItsRank() {
+        setHusbandryLevel(0);
+        assertFalse(manager.canBrood());
+        assertFalse(manager.rollEggHatch());
+        assertFalse(manager.rollMultipleChicks());
+        assertEquals(0.0, manager.getMultiChickChance());
+    }
+
+    @Test
+    void theHatchRollAndTheClutchRollAreIndependent() {
+        // Two effects on one sub-skill, so only one can key off the SubSkillType in ProbabilityUtil.
+        // The other is scaled by hand -- the split Accelerated Growth and Bountiful Harvest also make.
+        setHusbandryLevel(1000);
+
+        final AdvancedConfig advanced = mock(AdvancedConfig.class);
+        lenient().when(advanced.getMaximumProbability(SubSkillType.HUSBANDRY_BROOD)).thenReturn(100.0);
+        lenient().when(advanced.getMaxBonusLevel(SubSkillType.HUSBANDRY_BROOD)).thenReturn(0);
+        lenient().when(advanced.getBroodMultiChickChance()).thenReturn(0.0);
+        McMMOMod.setAdvancedConfig(advanced);
+
+        assertTrue(manager.rollEggHatch(), "a 100 hatch ceiling must always proc");
+        assertFalse(manager.rollMultipleChicks(),
+                "a 0 clutch chance must never proc, whatever the hatch ceiling says");
+    }
+
+    @Test
+    void theShippedBroodDefaultsMatchTheJavaConstants() {
+        final AdvancedConfig shipped = McMMOMod.getAdvancedConfig();
+        assertEquals(HusbandryManager.DEFAULT_MULTI_CHICK_CHANCE,
+                shipped.getBroodMultiChickChance());
+        assertEquals(HusbandryManager.DEFAULT_MAX_STAT_BIAS,
+                shipped.getMaxSelectiveBreedingBias());
+    }
+
+    // --- Stage 5: Hidden Bounty --------------------------------------------------------------------
+
+    @Test
+    void hiddenBountyIsLockedUntilItsRank() {
+        setHusbandryLevel(0);
+        assertFalse(manager.canHiddenBounty());
+        assertFalse(manager.rollHiddenBounty());
+    }
+
+    @Test
+    void aFailedMainRollNeverLooksAtTheTreasureTable() {
+        // The two gates are ordered on purpose: the sub-skill roll is the cheap one, and a failure must
+        // short-circuit before any per-treasure chance is evaluated.
+        final java.util.List<HusbandryTreasure> table = java.util.List.of(
+                treasure("string", 100.0, 0));
+        assertTrue(manager.selectHiddenBounty(table, false, chance -> true).isEmpty());
+    }
+
+    @Test
+    void theFirstAffordableTreasureThatRollsWins() {
+        setHusbandryLevel(1000);
+        final HusbandryTreasure rare = treasure("name_tag", 4.0, 500);
+        final HusbandryTreasure common = treasure("string", 15.0, 0);
+
+        // Only the common one's chance rolls, so the rare one is skipped even though it comes first.
+        assertSame(common, manager.selectHiddenBounty(java.util.List.of(rare, common), true,
+                chance -> chance >= 15.0).orElseThrow());
+        // Both roll: file order decides, which is why treasures.yml warns to put the rarest first.
+        assertSame(rare, manager.selectHiddenBounty(java.util.List.of(rare, common), true,
+                chance -> true).orElseThrow());
+    }
+
+    @Test
+    void aTreasureAboveThePlayersLevelIsSkippedEntirely() {
+        setHusbandryLevel(100);
+        final HusbandryTreasure tooGood = treasure("name_tag", 100.0, 500);
+        final HusbandryTreasure reachable = treasure("string", 100.0, 0);
+
+        assertSame(reachable, manager.selectHiddenBounty(java.util.List.of(tooGood, reachable), true,
+                chance -> true).orElseThrow());
+    }
+
+    @Test
+    void anEmptyOrNullTableIsSafe() {
+        assertTrue(manager.selectHiddenBounty(java.util.List.of(), true, chance -> true).isEmpty());
+        assertTrue(manager.selectHiddenBounty(null, true, chance -> true).isEmpty());
+    }
+
+    @Test
+    void aHiddenBountyFindPaysItsOwnSmallXpAndZeroIsNotAnAward() {
+        setHusbandryLevel(1);
+        assertEquals(50F, manager.onHiddenBountyFound(50));
+        assertEquals(0F, manager.onHiddenBountyFound(0));
+        assertEquals(0F, manager.onHiddenBountyFound(-10), "a mistyped negative must not pay");
+    }
+
+    private static HusbandryTreasure treasure(String material, double dropChance, int dropLevel) {
+        return new HusbandryTreasure(new ItemSpec(material, 1, null, java.util.List.of()), 10,
+                dropChance, dropLevel);
     }
 }

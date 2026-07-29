@@ -1,15 +1,22 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import com.gmail.nossr50.config.treasure.TreasureConfig;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.treasure.HusbandryTreasure;
 import com.gmail.nossr50.fabric.McMMOAttachments;
+import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.ItemSpecBuilder;
 import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import net.minecraft.block.BeehiveBlock;
@@ -19,6 +26,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
@@ -449,12 +457,14 @@ public final class HusbandryListener {
         if (sheared == null || dropper == null) {
             return dropper;
         }
+        final Interaction interaction = PLAYER_INTERACTION.get();
         final HusbandryManager husbandry = husbandryOfInteractionWith(sheared);
         if (husbandry == null) {
             return dropper; // A dispenser, or a player whose data is not loaded.
         }
 
         husbandry.onShear();
+        rollHiddenBounty(husbandry, interaction.player(), HIDDEN_BOUNTY_SHEAR);
 
         // Rolled ONCE per shear rather than per item: a loot table that yields three wool would
         // otherwise resolve the sub-skill three times and turn a clean "this shear paid double" into
@@ -507,6 +517,16 @@ public final class HusbandryListener {
      */
     private static final String HARVEST_COOLDOWN_KEY = "mcMMO_husbandryHarvestTick";
 
+    /*
+     * The treasures.yml Drops_From verb groups Hidden Bounty is keyed on. Named constants rather than
+     * inline literals because they must match the shipped YAML exactly and a typo would be a sub-skill
+     * that silently never finds anything -- HusbandryTreasureConfigTest pins them against the file.
+     */
+    static final String HIDDEN_BOUNTY_SHEAR = "Shear";
+    static final String HIDDEN_BOUNTY_HIVE = "Hive";
+    static final String HIDDEN_BOUNTY_MILK = "Milk";
+    static final String HIDDEN_BOUNTY_BRUSH = "Brush";
+
     /**
      * A hive gave up its honeycomb to a player's shears: pay the hive verb, and let
      * {@code Bountiful Harvest} and {@code Beekeeper} add to the haul.
@@ -554,6 +574,7 @@ public final class HusbandryListener {
             BeehiveBlock.dropHoneycomb(serverWorld, usedItem, state, world.getBlockEntity(pos),
                     serverPlayer, pos);
         }
+        rollHiddenBounty(husbandry, serverPlayer, HIDDEN_BOUNTY_HIVE);
     }
 
     /**
@@ -581,6 +602,7 @@ public final class HusbandryListener {
         for (int helping = bonusHiveHelpings(husbandry); helping > 0; helping--) {
             giveOrDrop(serverPlayer, new ItemStack(Items.HONEY_BOTTLE));
         }
+        rollHiddenBounty(husbandry, serverPlayer, HIDDEN_BOUNTY_HIVE);
     }
 
     /**
@@ -664,6 +686,7 @@ public final class HusbandryListener {
             return;
         }
         husbandry.onMilk();
+        rollHiddenBounty(husbandry, serverPlayer, HIDDEN_BOUNTY_MILK);
     }
 
     /**
@@ -700,7 +723,7 @@ public final class HusbandryListener {
         if (husbandry == null) {
             return dropper;
         }
-        return new BrushPayout(husbandry, armadillo, dropper);
+        return new BrushPayout(husbandry, player, armadillo, dropper);
     }
 
     /**
@@ -714,14 +737,16 @@ public final class HusbandryListener {
     private static final class BrushPayout implements BiConsumer<ServerWorld, ItemStack> {
 
         private final HusbandryManager husbandry;
+        private final ServerPlayerEntity brusher;
         private final Entity armadillo;
         private final BiConsumer<ServerWorld, ItemStack> dropper;
         private boolean settled;
         private boolean doubled;
 
-        private BrushPayout(HusbandryManager husbandry, Entity armadillo,
+        private BrushPayout(HusbandryManager husbandry, ServerPlayerEntity brusher, Entity armadillo,
                 BiConsumer<ServerWorld, ItemStack> dropper) {
             this.husbandry = husbandry;
+            this.brusher = brusher;
             this.armadillo = armadillo;
             this.dropper = dropper;
         }
@@ -736,6 +761,7 @@ public final class HusbandryListener {
                 if (harvestCooldownElapsed(husbandry, armadillo)) {
                     husbandry.onBrush();
                     doubled = husbandry.rollBonusHarvestDrop();
+                    rollHiddenBounty(husbandry, brusher, HIDDEN_BOUNTY_BRUSH);
                 }
             }
             dropper.accept(world, stack);
@@ -766,6 +792,172 @@ public final class HusbandryListener {
             return damageAmount;
         }
         return husbandry.rollToolDurabilitySave() ? 0 : damageAmount;
+    }
+
+    // --- Stage 5: Selective Breeding, Brood and Hidden Bounty -----------------------------------
+
+    /**
+     * The Selective Breeding bias in force for the breeding currently being resolved, or {@code null}
+     * outside one.
+     *
+     * <p><b>This exists because vanilla's inheritance roll is static and holds no player.</b>
+     * {@code AbstractHorseEntity.calculateAttributeBaseValue} is where the foal's health, speed and
+     * jump strength are actually decided, and it takes five numbers and a {@code Random} — there is
+     * nobody in it to ask. So the bias is computed once, at the one point on the path that <em>is</em>
+     * an instance method on a parent, and read back inside the static call.
+     *
+     * <p>Same {@link ThreadLocal} HEAD/RETURN shape as the feed verb's interaction stash, and for the
+     * same reason: the whole window is one synchronous call on the server thread.
+     *
+     * <p>It holds the breeder's <b>manager</b> rather than a pre-computed bias so that the biasing
+     * arithmetic lives in exactly one place — {@link HusbandryManager#applyStatBias} — where it is
+     * MC-free and unit-tested. Two copies of a balance formula is how the two halves drift apart, and
+     * re-reading the config three times per breeding (once per inherited attribute) costs nothing.
+     */
+    private static final ThreadLocal<HusbandryManager> SELECTIVE_BREEDING = new ThreadLocal<>();
+
+    /**
+     * A horse-family pair is about to roll their foal's stats: work out whose Selective Breeding
+     * applies.
+     *
+     * <p>Called from {@code HorseChildAttributesMixin}. Either parent will do — vanilla sets the loving
+     * player on whichever animal was fed, and it only reaches breeding when at least one has one.
+     * Resolving the bias here rather than in the static call is the whole point of the stash.
+     */
+    public static void beginSelectiveBreeding(AnimalEntity parent, AnimalEntity mate) {
+        final HusbandryManager husbandry = husbandryOfBreeder(parent, mate);
+        if (husbandry == null) {
+            return; // AI-driven or command-driven breeding: nobody's sub-skill applies.
+        }
+        SELECTIVE_BREEDING.set(husbandry);
+    }
+
+    /** The breeding has finished rolling its stats. Called from the mixin's RETURN injector. */
+    public static void endSelectiveBreeding() {
+        SELECTIVE_BREEDING.remove();
+    }
+
+    /**
+     * Apply the stashed bias to one rolled offspring stat.
+     *
+     * <p>Called from {@code HorseChildAttributesMixin}. Returns {@code rolled} untouched when no
+     * breeding is in flight, which is the common case by a wide margin: this same static method runs
+     * for every horse bred anywhere in the world, including with no player involved.
+     */
+    public static double applySelectiveBreedingBias(double rolled, double min, double max) {
+        final HusbandryManager husbandry = SELECTIVE_BREEDING.get();
+        return husbandry == null ? rolled : husbandry.applyStatBias(rolled, min, max);
+    }
+
+    /** The Husbandry manager of whichever parent vanilla credits with the breeding, or {@code null}. */
+    private static HusbandryManager husbandryOfBreeder(AnimalEntity parent, AnimalEntity mate) {
+        for (AnimalEntity candidate : new AnimalEntity[] {parent, mate}) {
+            if (candidate == null) {
+                continue;
+            }
+            final ServerPlayerEntity breeder = candidate.getLovingPlayer();
+            if (breeder != null) {
+                final HusbandryManager husbandry = husbandryOf(breeder);
+                if (husbandry != null) {
+                    return husbandry;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * {@code Brood}: rescue a thrown egg vanilla was about to waste.
+     *
+     * <p>Called from {@code EggHatchMixin}. Returning {@code 0} makes vanilla take its own hatch
+     * branch, so Brood's chance <em>adds to</em> the vanilla 1-in-8 rather than replacing it.
+     *
+     * @param egg  the thrown egg, whose owner is the thrower
+     * @param roll vanilla's own {@code nextInt(8)}; {@code 0} already means "hatch"
+     * @return {@code roll}, or {@code 0} to force a hatch
+     */
+    public static int onEggHatchRoll(Entity egg, int roll) {
+        if (roll == 0) {
+            return roll; // Vanilla is already hatching it; nothing to add.
+        }
+        final HusbandryManager husbandry = husbandryOfThrower(egg);
+        return husbandry != null && husbandry.rollEggHatch() ? 0 : roll;
+    }
+
+    /**
+     * {@code Brood}: turn a hatch into vanilla's rare full clutch.
+     *
+     * @param egg  the thrown egg
+     * @param roll vanilla's own {@code nextInt(32)}; {@code 0} already means "four chicks"
+     * @return {@code roll}, or {@code 0} to force a full clutch
+     */
+    public static int onFullClutchRoll(Entity egg, int roll) {
+        if (roll == 0) {
+            return roll;
+        }
+        final HusbandryManager husbandry = husbandryOfThrower(egg);
+        return husbandry != null && husbandry.rollMultipleChicks() ? 0 : roll;
+    }
+
+    /**
+     * The Husbandry manager of whoever threw a projectile, or {@code null}.
+     *
+     * <p>The owner check is also the dispenser gate: eggs are dispensable in vanilla, and a dispensed
+     * egg has no player owner.
+     */
+    private static HusbandryManager husbandryOfThrower(Entity projectile) {
+        if (!(projectile instanceof ProjectileEntity thrown)) {
+            return null;
+        }
+        return thrown.getOwner() instanceof ServerPlayerEntity thrower ? husbandryOf(thrower) : null;
+    }
+
+    /**
+     * {@code Hidden Bounty}: roll for a rare find on a harvest, and hand it over.
+     *
+     * <p>One body shared by all four harvest verbs — the plan's instruction not to write four copies of
+     * the drop logic. The verb arrives as the {@code treasures.yml} {@code Drops_From} group name, which
+     * is what lets the table be keyed on the <em>act</em> rather than on the species: keying on the
+     * animal would need a row per mob and would rot the first time a version added one.
+     *
+     * <p>The selection itself is MC-free and lives in the manager, taking both random draws as
+     * arguments; this method owns only the config read and the item spawn. Same split as Hylian Luck's
+     * and Fishing's treasure rolls.
+     *
+     * @param husbandry the harvester's manager
+     * @param player    the harvester, who the find is given to
+     * @param verb      {@code "Shear"}, {@code "Hive"}, {@code "Milk"} or {@code "Brush"}
+     */
+    private static void rollHiddenBounty(HusbandryManager husbandry, ServerPlayerEntity player,
+            String verb) {
+        final TreasureConfig treasures = McMMOMod.getTreasureConfig();
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
+        if (treasures == null || mmoPlayer == null) {
+            return; // Not loaded (early boot, or a unit test with no config bound).
+        }
+        final List<HusbandryTreasure> candidates = treasures.getHusbandryTreasures(verb);
+        if (candidates.isEmpty()) {
+            return;
+        }
+        final Optional<HusbandryTreasure> won = husbandry.selectHiddenBounty(candidates,
+                husbandry.rollHiddenBounty(),
+                chance -> ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.HUSBANDRY,
+                        mmoPlayer, chance));
+        if (won.isEmpty()) {
+            return;
+        }
+
+        final HusbandryTreasure treasure = won.get();
+        final Optional<ItemStack> built = ItemSpecBuilder.build(treasure.getDrop());
+        if (built.isEmpty()) {
+            // The treasure names a material with no vanilla item (already logged by Materials).
+            // Deliberately silent beyond that: announcing a find nobody received would be worse.
+            return;
+        }
+        giveOrDrop(player, built.get());
+        husbandry.onHiddenBountyFound(treasure.getXp());
+        NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                "Husbandry.SubSkill.HiddenBounty.Proc");
     }
 
     /**

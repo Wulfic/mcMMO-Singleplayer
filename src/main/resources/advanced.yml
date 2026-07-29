@@ -484,6 +484,67 @@ Skills:
             MaxBonusLevel:
                 Standard: 100
                 RetroMode: 1000
+
+        SelectiveBreeding:
+            # Offspring inherit better stats than the dice alone would have given them.
+            #
+            # MaxStatBias is the fraction of the gap between the rolled value and the best the SPECIES
+            # allows that a foal is nudged. It is applied to the OUTCOME of vanilla's own inheritance
+            # roll, not to the dice, so good parents still matter: vanilla rolls a bell curve around
+            # the midpoint of the two parents widened by their spread, and this shifts the result
+            # partway to the ceiling. It can only ever improve a foal, never worsen one.
+            #
+            # ###################################################################################
+            # Keep this modest -- it COMPOUNDS down the generations.
+            # ###################################################################################
+            # Every foal is bred from parents that were themselves biased, so a number that looks fair
+            # for one breeding walks toward the species maximum far faster than it reads. At 0.25 you
+            # still reach near-perfect stock in a handful of generations, which is the fantasy; it just
+            # takes the handful. HARD-CLAMPED to 0.50 in code, because 1.0 would not be "very good
+            # horses", it would be every horse at exactly the maximum from the first breeding, which
+            # deletes horse breeding as an activity instead of rewarding it.
+            #
+            # Only the horse family has inheritable stats in vanilla (health, speed, jump strength), so
+            # this is where the sub-skill bites. The rare-variant half of the wiki's description is
+            # NOT implemented -- see the note in plans/completed/husbandry.md.
+            MaxStatBias: 0.25
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+
+        Brood:
+            # Thrown eggs hatch more often, and sometimes hatch a whole clutch.
+            #
+            # ChanceMax LAYERS ON TOP of vanilla's 1-in-8 rather than replacing it: it is the chance
+            # that Brood rescues an egg vanilla was about to waste, so the effective hatch rate is
+            # 12.5% + ChanceMax x 87.5%. Written that way round on purpose -- if it replaced the roll,
+            # a configured 10 would be a DOWNGRADE on vanilla, which is the kind of knob nobody
+            # notices is backwards.
+            ChanceMax: 35.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+
+            # Chance that a hatch yields vanilla's rare four chicks instead of one. Vanilla's own rare
+            # case is 1-in-32 of a hatch; this is the same restraint Twins was ruled down to.
+            MultiChickChanceMax: 20.0
+
+            # NOTE: laying and collecting eggs pays NO XP and never will. ChickenEntity.eggLayTime is a
+            # passive timer ticked in tickMovement, so a hopper under a coop is fully AFK income. Brood
+            # is a yield sub-skill only, and a hatched chick carries no bred-by marker either -- one
+            # would have turned that same AFK egg farm into a raise-XP farm twenty minutes later.
+
+        HiddenBounty:
+            # A rare find on any harvest, on top of whatever the animal already gave you.
+            #
+            # ChanceMax is only the FIRST of two gates. On a success, the Husbandry section of
+            # treasures.yml is walked in file order and each candidate rolls its own Drop_Chance, so
+            # the real rate for any one item is the product of the two. The table -- and the warning
+            # that file order decides reachability -- lives in treasures.yml.
+            ChanceMax: 20.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
     #
     #  Settings for Mining
     ###

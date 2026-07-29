@@ -304,3 +304,72 @@ Hylian_Luck:
             Standard_Mode: 0
             Retro_Mode: 0
         Drops_From: [Pots]
+
+#
+#  Settings for Husbandry's Hidden Bounty
+#
+#  A rare find turned up by a harvest, on top of whatever the animal already gave you. Keyed by the
+#  harvest VERB the find can appear on -- Shear, Hive, Milk, Brush -- and NOT by species. That is the
+#  skill's own boundary rule: Taming pays once for making an animal yours, Husbandry pays repeatedly
+#  for what you do with it, so the reward hangs off the act rather than the animal. A species table
+#  would need a row per mob and would rot the first time a version added one.
+#
+#  Drop_Chance is the per-treasure roll, taken only AFTER the Hidden Bounty sub-skill roll succeeds,
+#  so the effective rate is the product of the two. The walk stops at the first treasure whose
+#  Level_Requirement is met and whose Drop_Chance rolls, in file order -- so put the rarest first or
+#  it will never be reached.
+#
+#  XP here is HUSBANDRY XP awarded on top of the verb's own payout. Kept small: the find is the
+#  reward, and a treasure that also paid a verb's worth of XP would make Hidden Bounty the reason to
+#  harvest rather than a bonus for doing it.
+###
+Husbandry:
+    # The rarest thing in the table, and deliberately reachable from every verb: a keeper who works
+    # their herd long enough should eventually turn up something that has nothing to do with livestock.
+    NAME_TAG:
+        Amount: 1
+        XP: 50
+        Drop_Chance: 4.0
+        Level_Requirement:
+            Standard_Mode: 50
+            Retro_Mode: 500
+        Drops_From: [Shear, Hive, Milk, Brush]
+    # Bee-flavoured, and the reason Hive gets its own line: honeycomb is the verb's ordinary yield, so
+    # its treasure has to be something else.
+    HONEY_BLOCK:
+        Amount: 1
+        XP: 30
+        Drop_Chance: 8.0
+        Level_Requirement:
+            Standard_Mode: 20
+            Retro_Mode: 200
+        Drops_From: [Hive]
+    # Wool-adjacent but not wool: a shear that turns up string reads as "you got more off it than the
+    # coat", which is the whole idea.
+    STRING:
+        Amount: 2
+        XP: 10
+        Drop_Chance: 15.0
+        Level_Requirement:
+            Standard_Mode: 0
+            Retro_Mode: 0
+        Drops_From: [Shear]
+    # Armadillo scutes are the brush's ordinary yield, so the brush's treasure is the thing you would
+    # otherwise have to go looking for.
+    ARMADILLO_SCUTE:
+        Amount: 2
+        XP: 15
+        Drop_Chance: 12.0
+        Level_Requirement:
+            Standard_Mode: 0
+            Retro_Mode: 0
+        Drops_From: [Brush]
+    # Milking's find. A bucket is what the verb costs you, so getting one back is the natural bonus.
+    LEATHER:
+        Amount: 1
+        XP: 10
+        Drop_Chance: 12.0
+        Level_Requirement:
+            Standard_Mode: 0
+            Retro_Mode: 0
+        Drops_From: [Milk]

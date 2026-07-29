@@ -2,6 +2,7 @@ package com.gmail.nossr50.config.treasure;
 
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.datatypes.treasure.ExcavationTreasure;
+import com.gmail.nossr50.datatypes.treasure.HusbandryTreasure;
 import com.gmail.nossr50.datatypes.treasure.HylianTreasure;
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.fabric.McMMOMod;
@@ -56,6 +57,10 @@ public class TreasureConfig extends ConfigLoader {
     // Keyed by the raw Drops_From group name (Bushes/Flowers/Pots), not by individual block — see the
     // class javadoc and BlockUtils.getHylianTreasureGroup.
     public HashMap<String, List<HylianTreasure>> hylianMap = new HashMap<>();
+    // Keyed by the Husbandry harvest VERB the treasure can turn up on (Shear/Hive/Milk/Brush), which
+    // is the same "group name" shape hylianMap uses. Keying on the verb rather than the species is the
+    // skill's own boundary rule: a species table would need a row per animal and would rot.
+    public HashMap<String, List<HusbandryTreasure>> husbandryMap = new HashMap<>();
 
     public TreasureConfig(Path dataFolder) {
         super(FILENAME, dataFolder);
@@ -66,6 +71,18 @@ public class TreasureConfig extends ConfigLoader {
     protected void loadKeys() {
         loadTreasures("Excavation");
         loadTreasures("Hylian_Luck");
+        loadTreasures("Husbandry");
+    }
+
+    /**
+     * The {@code Hidden Bounty} treasures a given Husbandry harvest verb can turn up, in config order.
+     *
+     * @param verb the {@code Drops_From} verb group — {@code "Shear"}, {@code "Hive"}, {@code "Milk"}
+     *             or {@code "Brush"}
+     * @return the verb's treasures (never {@code null})
+     */
+    public @NotNull List<HusbandryTreasure> getHusbandryTreasures(@NotNull String verb) {
+        return husbandryMap.getOrDefault(verb, List.of());
     }
 
     /**
@@ -89,6 +106,7 @@ public class TreasureConfig extends ConfigLoader {
         }
 
         final boolean isExcavation = type.equals("Excavation");
+        final boolean isHusbandry = type.equals("Husbandry");
 
         for (String treasureName : treasureSection.getKeys(false)) {
             // Legacy allowed a "MATERIAL|data" form; the trailing block-data short is meaningless in
@@ -142,6 +160,16 @@ public class TreasureConfig extends ConfigLoader {
                         type + "." + treasureName + ".Drops_From")) {
                     excavationMap.computeIfAbsent(blockType, k -> new ArrayList<>()).add(treasure);
                 }
+            } else if (isHusbandry) {
+                // Hidden Bounty: indexed by harvest VERB (Shear/Hive/Milk/Brush), the same
+                // group-name shape Hylian Luck uses. A treasure may list several verbs, so one
+                // config entry can be reachable from more than one map key.
+                final HusbandryTreasure treasure = new HusbandryTreasure(item, xp, dropChance,
+                        dropLevel);
+                for (String verb : config.getStringList(
+                        type + "." + treasureName + ".Drops_From")) {
+                    husbandryMap.computeIfAbsent(verb, k -> new ArrayList<>()).add(treasure);
+                }
             } else {
                 // Hylian Luck: index by the raw Drops_From group name (Bushes/Flowers/Pots). The
                 // group→block expansion legacy did at load time happens live at break time instead
@@ -158,6 +186,12 @@ public class TreasureConfig extends ConfigLoader {
 
         if (isExcavation) {
             LogUtils.debug("Loaded " + excavationMap.size() + " excavation treasure source blocks.");
+        } else if (isHusbandry) {
+            // At INFO, unlike its two siblings: a mis-indented Husbandry section would otherwise ship
+            // a sub-skill that silently finds nothing, and a headless boot is the cheapest place to
+            // catch that. Same trick the Smelting recipe index uses.
+            LOGGER.info("Loaded Hidden Bounty treasures for {} harvest verb(s) from {}",
+                    husbandryMap.size(), FILENAME);
         } else {
             LogUtils.debug("Loaded " + hylianMap.size() + " Hylian Luck treasure source groups.");
         }

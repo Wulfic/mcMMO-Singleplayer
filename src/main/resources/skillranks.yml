@@ -702,6 +702,24 @@ Husbandry:
             Rank_1: 10
         RetroMode:
             Rank_1: 100
+    # The flavour tier, gated furthest out of anything in the skill. None of these three change what a
+    # player can do -- they change how well it goes -- so they are the reward for having kept livestock
+    # for a long time rather than tools handed over to make the early skill workable.
+    Brood:
+        Standard:
+            Rank_1: 20
+        RetroMode:
+            Rank_1: 200
+    SelectiveBreeding:
+        Standard:
+            Rank_1: 25
+        RetroMode:
+            Rank_1: 250
+    HiddenBounty:
+        Standard:
+            Rank_1: 30
+        RetroMode:
+            Rank_1: 300
 Herbalism:
     DoubleDrops:
         Standard:
