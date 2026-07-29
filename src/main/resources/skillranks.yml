@@ -693,6 +693,15 @@ Husbandry:
             Rank_1: 1
         RetroMode:
             Rank_1: 1
+    # Gated, and further out than AcceleratedGrowth. Beekeeper removes a real logistical constraint --
+    # never needing a campfire under a hive again -- and that constraint is most of what makes early
+    # beekeeping interesting. Handing it over cheaply would delete the puzzle before a player has met
+    # it.
+    Beekeeper:
+        Standard:
+            Rank_1: 10
+        RetroMode:
+            Rank_1: 100
 Herbalism:
     DoubleDrops:
         Standard:

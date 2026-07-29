@@ -68,15 +68,16 @@ public enum SubSkillType {
     HERBALISM_SHROOM_THUMB,
 
     /* Husbandry */
-    // Pass 2, stages 1-3. Only the sub-skills whose stage has actually landed appear here. The four
-    // still planned (Selective Breeding, Brood, Hidden Bounty, Beekeeper, Herdsman's Call) arrive
-    // with the stages that implement them — a constant with no ranks, no config and no behaviour
-    // reads as a half-wired sub-skill to everything that iterates this enum, /mcstats included.
+    // Pass 2, stages 1-4. Only the sub-skills whose stage has actually landed appear here. The four
+    // still planned (Selective Breeding, Brood, Hidden Bounty, Herdsman's Call) arrive with the
+    // stages that implement them — a constant with no ranks, no config and no behaviour reads as a
+    // half-wired sub-skill to everything that iterates this enum, /mcstats included.
     // Same precedent as Stealth's Thief and Unarmored's Thorny Skin below.
     HUSBANDRY_MULTI_BREED(1),
     HUSBANDRY_TWINS(1),
     HUSBANDRY_ACCELERATED_GROWTH(1),
     HUSBANDRY_BOUNTIFUL_HARVEST(1),
+    HUSBANDRY_BEEKEEPER(1),
 
     /* Maces */
     MACES_MACES_LIMIT_BREAK(10),

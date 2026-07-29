@@ -157,6 +157,23 @@ public class HusbandryManager extends SkillManager {
      */
     public static final double DEFAULT_HARVEST_DURABILITY_SAVE_CHANCE = 25.0;
 
+    /**
+     * Beekeeper's chance at max level to yield an extra helping from a hive, in percent.
+     *
+     * <p>Modest, because it stacks on top of {@code Bountiful Harvest} rather than replacing it and
+     * because a full hive already hands over three honeycombs at once.
+     */
+    public static final double DEFAULT_BONUS_HONEY_CHANCE = 30.0;
+
+    /**
+     * How long one animal must wait before it can pay a harvest award again, in seconds.
+     *
+     * <p>Five minutes, matching the length of vanilla's own post-breeding love cooldown so the two
+     * clocks a player has to hold in their head are the same clock. See
+     * {@link #getHarvestCooldownSeconds()} for which verbs it covers and why the other two are exempt.
+     */
+    public static final int DEFAULT_HARVEST_COOLDOWN_SECONDS = 300;
+
     public HusbandryManager(McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.HUSBANDRY);
     }
@@ -467,12 +484,7 @@ public class HusbandryManager extends SkillManager {
      * @return the XP awarded, or {@code 0} if the verb is priced at nothing
      */
     public float onShear() {
-        final float xp = getShearXp();
-        if (xp <= 0) {
-            return 0F;
-        }
-        applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF);
-        return xp;
+        return award(getShearXp());
     }
 
     // --- Sub-skill: Bountiful Harvest -----------------------------------------------------------
@@ -539,6 +551,121 @@ public class HusbandryManager extends SkillManager {
                 ? 0
                 : advanced.getMaxBonusLevel(SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST);
         return Math.min(100.0, scaleToLevel(max, maxBonusLevel));
+    }
+
+    // --- Stage 4: the other three harvest verbs -------------------------------------------------
+
+    /**
+     * Credit one hive or bee nest harvested by hand.
+     *
+     * <p>Flat, and ungated by the breeding table for the same reason {@link #onShear} is: the trigger
+     * layer sits on the block's player-interaction path, which no species can reach by accident.
+     *
+     * @return the XP awarded, or {@code 0} if the verb is priced at nothing
+     */
+    public float onHiveHarvest() {
+        return award(getHiveXp());
+    }
+
+    /**
+     * Credit one cow milked, or one mooshroom's stew bowled.
+     *
+     * <p>Both are the same verb and share one payout deliberately: a mooshroom is a cow you can also
+     * get soup out of, and pricing the soup differently would make the variant, rather than the act
+     * of keeping the animal, the thing the skill rewards.
+     *
+     * <p><b>Bucket-mobs pay nothing</b> (user ruling, 2026-07-29), reversing the plan's original
+     * row. Scooping a fish or an axolotl into a bucket is a <em>capture</em> — the one-time conversion
+     * of a wild animal into your property — which is Taming's side of this skill's own verb boundary,
+     * not a repeating harvest. It is also the one place the boundary rule and the exploit analysis
+     * agreed: an axolotl can be poured out of its bucket and scooped straight back up, so the verb
+     * would have been a two-click loop worth 200 XP forever, off one animal and one bucket.
+     *
+     * @return the XP awarded, or {@code 0} if the verb is priced at nothing
+     */
+    public float onMilk() {
+        return award(getMilkXp());
+    }
+
+    /**
+     * Credit one armadillo brushed.
+     *
+     * @return the XP awarded, or {@code 0} if the verb is priced at nothing
+     */
+    public float onBrush() {
+        return award(getBrushXp());
+    }
+
+    /** Pay a flat verb, or nothing if it is priced at zero. */
+    private float award(float xp) {
+        if (xp <= 0) {
+            return 0F;
+        }
+        applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF);
+        return xp;
+    }
+
+    /**
+     * How long one animal must wait before it can pay a harvest award again, in seconds.
+     *
+     * <p><b>D-H5, widened.</b> The plan called this the <em>milk</em> cooldown, because milking is
+     * free and infinitely repeatable on the same cow and would otherwise be the fastest XP in the mod.
+     * Bytecode found the brush in exactly the same position and the plan had it filed as safe:
+     * {@code brush/armadillo.json} drops a scute with <b>no conditions at all</b>, and
+     * {@code ArmadilloEntity#brushScute} neither reads nor resets {@code nextScuteShedCooldown} — that
+     * timer governs only the passive shed in {@code mobTick}. So "vanilla's own scute cooldown", the
+     * reason the plan rated brushing low-risk, <b>does not exist on the brush path</b>.
+     *
+     * <p>Which is why this is a <em>harvest</em> cooldown rather than a milk one, and why it covers
+     * exactly two of the four harvest verbs. Shearing and hive harvesting are already rate-limited by
+     * vanilla and get no cooldown: a just-sheared sheep is worthless until it has eaten its way back
+     * to a full coat, and a drained hive needs five levels of bee-pollination time. Milking and
+     * brushing are limited by nothing whatsoever, so they are limited here.
+     *
+     * @return the cooldown in seconds; {@code 0} or less disables it
+     */
+    public int getHarvestCooldownSeconds() {
+        final ExperienceConfig experience = experience();
+        if (experience == null) {
+            return DEFAULT_HARVEST_COOLDOWN_SECONDS;
+        }
+        return experience.getHusbandryHarvestCooldownSeconds();
+    }
+
+    // --- Sub-skill: Beekeeper -------------------------------------------------------------------
+
+    public boolean canBeekeeper() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HUSBANDRY_BEEKEEPER)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.HUSBANDRY_BEEKEEPER);
+    }
+
+    /**
+     * Whether this player's hive harvests leave the bees calm.
+     *
+     * <p>Binary rather than a roll: the value of the effect is being able to stop carrying a campfire
+     * and stop planning around one, and a nine-in-ten version of that is worse than not having it —
+     * you would still have to build the campfire, for the tenth harvest.
+     *
+     * <p>Expressed as "you always count as standing over a lit campfire" rather than as a bee-anger
+     * suppression, because that is precisely the branch vanilla itself already has, and reusing it
+     * covers <b>both</b> ways a harvest angers bees at once: the nearby-bee retargeting and the
+     * hive's own emergency release. See {@code BeehiveHarvestMixin}.
+     */
+    public boolean countsAsShelteredHiveHarvest() {
+        return canBeekeeper();
+    }
+
+    /**
+     * Whether this hive harvest should give up an extra helping of comb or honey.
+     *
+     * <p>Beekeeper's second, smaller half. It stacks with {@code Bountiful Harvest} rather than
+     * replacing it, and that is intentional: Bountiful Harvest is the harvest family's shared
+     * across-the-board bonus, while this one is the reward for specialising in bees, so a maxed
+     * beekeeper harvesting a full hive should visibly out-yield a maxed generalist.
+     */
+    public boolean rollBonusHoney() {
+        return canBeekeeper()
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HUSBANDRY_BEEKEEPER, mmoPlayer);
     }
 
     // --- The flat verbs ---------------------------------------------------------------------

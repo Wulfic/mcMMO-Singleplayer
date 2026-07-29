@@ -84,6 +84,28 @@ ExploitFix:
         # (Same mechanism as the Agility dodge cap, four times the size. The counter is transient --
         # it lives as long as the mob does and is not saved.)
         Max_Awards_Per_Attacker: 20
+    Husbandry:
+        # How long ONE animal must wait before it can pay a harvest award again, in seconds.
+        # Set to 0 to disable the gate entirely.
+        #
+        # This covers MILKING and BRUSHING, and only those two, because they are the only harvest
+        # verbs vanilla rate-limits by nothing whatsoever:
+        #
+        #   * Right-clicking a cow with a bucket is free and infinitely repeatable on the SAME cow.
+        #     Unmitigated it would be the fastest XP in the whole mod.
+        #   * Brushing an armadillo is the same. This one is worth spelling out because it LOOKS
+        #     rate-limited and is not: brush/armadillo.json drops a scute with no conditions at all,
+        #     and brushScute never reads or resets the armadillo's scute-shed timer -- that timer only
+        #     governs the passive shed. There is no vanilla brush cooldown to lean on.
+        #
+        # Shearing and hive harvesting are deliberately EXEMPT. Vanilla already limits them, in
+        # fiction and for free: a just-sheared sheep is worthless until it has eaten its way back to
+        # a full coat, and a drained hive needs five levels of bee-pollination time. Adding a
+        # stopwatch on top of a mechanic that already has one only makes the skill feel arbitrary.
+        #
+        # Five minutes matches vanilla's own post-breeding love cooldown, so the two clocks a player
+        # has to keep in their head are the same clock.
+        Harvest_Cooldown_Seconds: 300
 Fishing_ExploitFix_Options:
     MoveRange: 3
     OverFishLimit: 10

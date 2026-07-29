@@ -1,7 +1,9 @@
 package com.gmail.nossr50.fabric.listeners;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -15,6 +17,7 @@ import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.fabric.McMMOAttachments;
+import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.util.McTestRegistries;
@@ -29,6 +32,7 @@ import java.util.function.BiConsumer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.passive.AnimalEntity;
+import net.minecraft.entity.passive.ArmadilloEntity;
 import net.minecraft.entity.passive.CowEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.passive.PigEntity;
@@ -123,6 +127,9 @@ class HusbandryListenerTest {
         // test's leftovers decide the next one's outcome. (The bred-by markers need no cleanup:
         // since HU16 they live on the animal itself, and each test builds its own animals.)
         HusbandryListener.endPlayerInteraction();
+        // Stage 4's harvest cooldown is a process-wide static side-table. Each test mints fresh
+        // animal UUIDs so collisions are not the risk -- unbounded growth across the run is.
+        MetadataStore.clearAll();
     }
 
     private ServerPlayerEntity breeder() {
@@ -767,5 +774,330 @@ class HusbandryListenerTest {
         HusbandryListener.onLovePlayer(fed, null);
         verify(world, never()).getEntitiesByClass(any(Class.class), any(Box.class), any());
         verify(husbandry, never()).getMultiBreedRadius();
+    }
+
+    // --- Stage 4: hive, milk, brush, Beekeeper and the harvest cooldown --------------------------
+
+    private static final int COOLDOWN_SECONDS = 300;
+    private static final long COOLDOWN_TICKS = COOLDOWN_SECONDS * 20L;
+
+    /** A distinct animal with a UUID, which the cooldown's side-table keys on. */
+    private Entity harvestable(Class<? extends Entity> type) {
+        final Entity animal = mock(type);
+        // ⚠️ MetadataStore keys on getUuid() and its backing ConcurrentHashMap rejects a null key, so
+        // an unstubbed mock does not merely misbehave here -- it throws from inside the cooldown.
+        lenient().when(animal.getUuid()).thenReturn(UUID.randomUUID());
+        lenient().when(animal.getEntityWorld()).thenReturn(world);
+        return animal;
+    }
+
+    /** Move the world's clock, which is the clock the harvest cooldown is measured against. */
+    private void worldTime(long ticks) {
+        lenient().when(world.getTime()).thenReturn(ticks);
+    }
+
+    private void allowHarvestCooldown() {
+        lenient().when(husbandry.getHarvestCooldownSeconds()).thenReturn(COOLDOWN_SECONDS);
+    }
+
+    // --- Hive -----------------------------------------------------------------------------------
+
+    @Test
+    void harvestingHoneycombPaysTheHiveVerb() {
+        HusbandryListener.onHoneycombHarvested(breeder(), wool(), null, world, null);
+        verify(husbandry).onHiveHarvest();
+    }
+
+    @Test
+    void harvestingAHoneyBottlePaysTheHiveVerb() {
+        HusbandryListener.onHoneyBottled(breeder());
+        verify(husbandry).onHiveHarvest();
+    }
+
+    @Test
+    void aHiveHarvestByAnUntrackedPlayerPaysNothing() {
+        final ServerPlayerEntity stranger = mock(ServerPlayerEntity.class);
+        lenient().when(stranger.getUuid()).thenReturn(UUID.randomUUID());
+
+        HusbandryListener.onHoneyBottled(stranger);
+        verify(husbandry, never()).onHiveHarvest();
+    }
+
+    @Test
+    void theHiveVerbHasNoCooldownBecauseVanillaAlreadyLimitsIt() {
+        // Deliberate asymmetry with milk and brush, and worth pinning so nobody "fixes" it into
+        // consistency: a drained hive needs five levels of bee-pollination time before it can be
+        // harvested again, so mcMMO adding a second stopwatch on top would only feel arbitrary.
+        allowHarvestCooldown();
+        worldTime(0L);
+
+        HusbandryListener.onHoneyBottled(breeder());
+        HusbandryListener.onHoneyBottled(breeder());
+
+        verify(husbandry, times(2)).onHiveHarvest();
+        verify(husbandry, never()).getHarvestCooldownSeconds();
+    }
+
+    @Test
+    void beekeeperAndBountifulHarvestStackRatherThanReRollingTheSameCoin() {
+        // The point of Beekeeper's yield half is that a maxed beekeeper out-yields a maxed
+        // generalist at a hive, which it cannot do if the two sub-skills share one roll.
+        when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
+        when(husbandry.rollBonusHoney()).thenReturn(true);
+        assertEquals(2, HusbandryListener.bonusHiveHelpings(husbandry));
+
+        clearInvocations(husbandry);
+        when(husbandry.rollBonusHoney()).thenReturn(false);
+        assertEquals(1, HusbandryListener.bonusHiveHelpings(husbandry));
+
+        clearInvocations(husbandry);
+        when(husbandry.rollBonusHarvestDrop()).thenReturn(false);
+        assertEquals(0, HusbandryListener.bonusHiveHelpings(husbandry));
+    }
+
+    @Test
+    void beekeeperReportsTheBeesCalmAndOtherwiseLeavesVanillaAlone() {
+        // ⚠️ The mechanic is "you always count as standing over a lit campfire" -- vanilla's OWN
+        // shelter branch -- because that closes BOTH ways a harvest angers bees at once. Suppressing
+        // angerNearbyBees alone, which the plan proposed, would have left takeHoney's EMERGENCY
+        // release firing: the bees inside the hive would still have come out for you.
+        when(husbandry.countsAsShelteredHiveHarvest()).thenReturn(true);
+        assertTrue(HusbandryListener.hiveHarvestLeavesBeesCalm(breeder()));
+
+        when(husbandry.countsAsShelteredHiveHarvest()).thenReturn(false);
+        assertFalse(HusbandryListener.hiveHarvestLeavesBeesCalm(breeder()));
+    }
+
+    @Test
+    void aDispenserHarvestingAHiveNeverCalmsBeesOrSavesDurability() {
+        // A dispenser cannot reach onUseWithItem at all, so these two are belt-and-braces -- but
+        // vanilla DOES ship two dispenser behaviours that harvest hives (ShearsDispenserBehavior and
+        // DispenserBehavior$3), so a non-player holder must resolve to nothing rather than to whoever
+        // happens to be tracked.
+        lenient().when(husbandry.countsAsShelteredHiveHarvest()).thenReturn(true);
+        lenient().when(husbandry.rollToolDurabilitySave()).thenReturn(true);
+
+        assertFalse(HusbandryListener.hiveHarvestLeavesBeesCalm(null));
+        assertEquals(1, HusbandryListener.onHiveToolDamaged(null, 1));
+        verify(husbandry, never()).rollToolDurabilitySave();
+    }
+
+    @Test
+    void bountifulHarvestSparesTheShearsOnAHive() {
+        when(husbandry.rollToolDurabilitySave()).thenReturn(true);
+        assertEquals(0, HusbandryListener.onHiveToolDamaged(breeder(), 1));
+    }
+
+    // --- Milk -----------------------------------------------------------------------------------
+
+    @Test
+    void milkingACowPaysTheMilkVerb() {
+        allowHarvestCooldown();
+        worldTime(0L);
+
+        HusbandryListener.onMilked(harvestable(CowEntity.class), breeder());
+        verify(husbandry).onMilk();
+    }
+
+    @Test
+    void milkingTheSameCowInsideTheCooldownPaysOnlyOnce() {
+        // ⚠️⚠️ D-H5, and the reason this verb needed a gate invented for it: vanilla puts NO cooldown
+        // on milking, so the same cow can be milked as fast as a player can click, forever, for free.
+        // Without this it would be the fastest XP source in the mod by a wide margin.
+        allowHarvestCooldown();
+        final Entity cow = harvestable(CowEntity.class);
+
+        worldTime(0L);
+        HusbandryListener.onMilked(cow, breeder());
+        worldTime(COOLDOWN_TICKS - 1);
+        HusbandryListener.onMilked(cow, breeder());
+
+        verify(husbandry, times(1)).onMilk();
+    }
+
+    @Test
+    void milkingTheSameCowAfterTheCooldownPaysAgain() {
+        allowHarvestCooldown();
+        final Entity cow = harvestable(CowEntity.class);
+
+        worldTime(0L);
+        HusbandryListener.onMilked(cow, breeder());
+        worldTime(COOLDOWN_TICKS);
+        HusbandryListener.onMilked(cow, breeder());
+
+        verify(husbandry, times(2)).onMilk();
+    }
+
+    @Test
+    void theCooldownIsPerAnimalAndNotPerPlayer() {
+        // A herd is the intended way to earn this verb. Capping the player rather than the animal
+        // would punish keeping livestock, which is the thing the skill exists to reward.
+        allowHarvestCooldown();
+        worldTime(0L);
+
+        HusbandryListener.onMilked(harvestable(CowEntity.class), breeder());
+        HusbandryListener.onMilked(harvestable(CowEntity.class), breeder());
+
+        verify(husbandry, times(2)).onMilk();
+    }
+
+    @Test
+    void aZeroCooldownDisablesTheGateEntirely() {
+        // The escape hatch, so the behaviour is diagnosable during play-testing.
+        lenient().when(husbandry.getHarvestCooldownSeconds()).thenReturn(0);
+        final Entity cow = harvestable(CowEntity.class);
+        worldTime(0L);
+
+        HusbandryListener.onMilked(cow, breeder());
+        HusbandryListener.onMilked(cow, breeder());
+
+        verify(husbandry, times(2)).onMilk();
+    }
+
+    @Test
+    void aClockThatMovedBackwardsCountsAsElapsedRatherThanLockingTheAnimalOut() {
+        // /time set, or an animal carried into a dimension keeping its own count. Treating a negative
+        // elapsed as "not yet" would lock that animal out of paying anything ever again, silently --
+        // the worst of the two available failure modes.
+        allowHarvestCooldown();
+        final Entity cow = harvestable(CowEntity.class);
+
+        worldTime(1_000_000L);
+        HusbandryListener.onMilked(cow, breeder());
+        worldTime(5L);
+        HusbandryListener.onMilked(cow, breeder());
+
+        verify(husbandry, times(2)).onMilk();
+    }
+
+    @Test
+    void milkingByANonServerPlayerPaysNothing() {
+        allowHarvestCooldown();
+        worldTime(0L);
+
+        HusbandryListener.onMilked(harvestable(CowEntity.class), mock(PlayerEntity.class));
+        verify(husbandry, never()).onMilk();
+    }
+
+    // --- Brush ----------------------------------------------------------------------------------
+
+    @Test
+    void brushingAnArmadilloPaysTheBrushVerbWhenAScuteIsActuallyDelivered() {
+        allowHarvestCooldown();
+        worldTime(0L);
+        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        final Dropper dropper = new Dropper();
+
+        HusbandryListener.onBrushedItems(armadillo, breeder(), dropper).accept(world, wool());
+
+        verify(husbandry).onBrush();
+        assertEquals(1, dropper.delivered.size());
+    }
+
+    @Test
+    void aBrushThatDeliversNothingPaysNothing() {
+        // ⚠️ The reason this verb pays on the DROP where shearing pays on the attempt. Shearing is
+        // gated upstream by isShearable(); brushing is gated by nothing at all -- brushScute returns
+        // true for any adult armadillo and brush/armadillo.json carries no conditions -- so an
+        // item actually changing hands is the only available proof a harvest happened.
+        allowHarvestCooldown();
+        worldTime(0L);
+        final Entity armadillo = harvestable(ArmadilloEntity.class);
+
+        // Wrapped, then never invoked: exactly what an empty loot roll looks like.
+        HusbandryListener.onBrushedItems(armadillo, breeder(), new Dropper());
+
+        verify(husbandry, never()).onBrush();
+        verify(husbandry, never()).getHarvestCooldownSeconds();
+    }
+
+    @Test
+    void aDispenserBrushingAnArmadilloPaysNothingAndDropsNothingExtra() {
+        // ⚠️ Vanilla really does ship this (DispenserBehavior$5) and the plan did not mention it.
+        // It passes null for the brusher, so the exclusion is a property of the signature.
+        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        final Dropper dropper = new Dropper();
+
+        HusbandryListener.onBrushedItems(armadillo, null, dropper).accept(world, wool());
+
+        verify(husbandry, never()).onBrush();
+        verify(husbandry, never()).rollBonusHarvestDrop();
+        assertEquals(1, dropper.delivered.size(),
+                "vanilla's own drop must pass through an automated brush untouched");
+    }
+
+    @Test
+    void aBrushInsideTheCooldownStillDropsTheScuteButPaysNothing() {
+        // The cooldown gates the REWARD, never the drop. A mod that withheld vanilla's own loot to
+        // enforce its own balance would be breaking the game rather than tuning itself.
+        allowHarvestCooldown();
+        worldTime(0L);
+        final Entity armadillo = harvestable(ArmadilloEntity.class);
+
+        HusbandryListener.onBrushedItems(armadillo, breeder(), new Dropper()).accept(world, wool());
+        final Dropper second = new Dropper();
+        HusbandryListener.onBrushedItems(armadillo, breeder(), second).accept(world, wool());
+
+        verify(husbandry, times(1)).onBrush();
+        assertEquals(1, second.delivered.size(), "the scute must still drop inside the cooldown");
+    }
+
+    @Test
+    void theBrushBonusIsRolledOncePerBrushNotOncePerItem() {
+        allowHarvestCooldown();
+        worldTime(0L);
+        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        final Dropper dropper = new Dropper();
+        when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
+
+        final BiConsumer<ServerWorld, ItemStack> wrapped =
+                HusbandryListener.onBrushedItems(armadillo, breeder(), dropper);
+        wrapped.accept(world, wool());
+        wrapped.accept(world, wool());
+
+        verify(husbandry, times(1)).rollBonusHarvestDrop();
+        verify(husbandry, times(1)).onBrush();
+        assertEquals(4, dropper.delivered.size());
+    }
+
+    @Test
+    void aBrushInsideTheCooldownRollsNoBonusEither() {
+        // The bonus rides the award, not the drop: a brush that pays nothing must not also hand out
+        // a free extra scute, or the cooldown would only be throttling half of the reward.
+        allowHarvestCooldown();
+        worldTime(0L);
+        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        lenient().when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
+
+        HusbandryListener.onBrushedItems(armadillo, breeder(), new Dropper()).accept(world, wool());
+        clearInvocations(husbandry);
+        final Dropper second = new Dropper();
+        HusbandryListener.onBrushedItems(armadillo, breeder(), second).accept(world, wool());
+
+        verify(husbandry, never()).rollBonusHarvestDrop();
+        assertEquals(1, second.delivered.size());
+    }
+
+    @Test
+    void bountifulHarvestSparesTheBrushOnASuccessfulRoll() {
+        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        when(husbandry.rollToolDurabilitySave()).thenReturn(true);
+
+        HusbandryListener.beginPlayerInteraction(breeder(), armadillo);
+        try {
+            assertEquals(0, HusbandryListener.onBrushToolDamaged(armadillo, 16),
+                    "a saved brush must cost the tool nothing -- worth a quarter of it per use");
+        } finally {
+            HusbandryListener.endPlayerInteraction();
+        }
+    }
+
+    @Test
+    void aDispenserNeverSavesBrushDurability() {
+        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        lenient().when(husbandry.rollToolDurabilitySave()).thenReturn(true);
+
+        assertEquals(16, HusbandryListener.onBrushToolDamaged(armadillo, 16));
+        verify(husbandry, never()).rollToolDurabilitySave();
     }
 }

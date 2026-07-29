@@ -439,8 +439,8 @@ Skills:
                 RetroMode: 1000
 
         BountifulHarvest:
-            # The harvest family's shared reward. Currently drives shearing; hive, milk and brush
-            # join it in stage 4, through the same two rolls rather than copies of them.
+            # The harvest family's shared reward, driving all four harvest verbs -- shear, hive,
+            # milk and brush -- through these same two rolls rather than copies of them.
             #
             # ChanceMax is the chance that a harvest yields a SECOND helping of whatever it just
             # dropped -- the animal's own loot roll run twice, so a sheep's colour and a mooshroom's
@@ -464,6 +464,26 @@ Skills:
             # durability save is only ever felt as "my shears last longer", so the same number buys
             # far less here -- and at 100 it would quietly turn shears into an infinite tool.
             DurabilitySaveChanceMax: 25.0
+
+        Beekeeper:
+            # Harvest a hive and the bees do not mind.
+            #
+            # The headline half of this sub-skill has NO knob here, on purpose: it is binary at the
+            # unlock level in skillranks.yml. The point of it is being able to stop carrying a
+            # campfire and stop planning your apiary around one, and a 90%-of-the-time version of
+            # that is worse than not having it -- you would still have to build the campfire, for the
+            # tenth harvest. Under the hood it is expressed as "you always count as standing over a
+            # lit campfire", which is vanilla's own branch, so it suppresses both the nearby-bee
+            # retargeting AND the hive's emergency release in one stroke.
+            #
+            # ChanceMax below is the second, smaller half: an extra helping of comb or honey. It
+            # STACKS with BountifulHarvest above rather than replacing it, so a maxed beekeeper
+            # visibly out-yields a maxed generalist on a hive. Kept modest because a full hive
+            # already hands over three honeycombs at once.
+            ChanceMax: 30.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
     #
     #  Settings for Mining
     ###

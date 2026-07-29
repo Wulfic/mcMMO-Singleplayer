@@ -3,22 +3,28 @@ package com.gmail.nossr50.fabric.listeners;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.fabric.McMMOAttachments;
+import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
+import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.BiConsumer;
+import net.minecraft.block.BeehiveBlock;
+import net.minecraft.block.BlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.world.World;
 
@@ -486,6 +492,317 @@ public final class HusbandryListener {
             return damageAmount;
         }
         return husbandry.rollToolDurabilitySave() ? 0 : damageAmount;
+    }
+
+    // --- Stage 4: hive, milk, brush, Beekeeper and the D-H5 harvest cooldown ---------------------
+
+    /**
+     * The world tick at which one animal last paid a Husbandry harvest award.
+     *
+     * <p>Transient on purpose, and that is the whole reason it is a {@link MetadataStore} entry rather
+     * than the persistent attachment the bred-by marker became: this is a five-minute window, so
+     * losing it when the world closes costs a player one early payout and nothing else. The bred-by
+     * marker had to persist because <em>twenty minutes of growth</em> would otherwise hinge invisibly
+     * on whether you quit in between; five minutes of cooldown does not have that problem.
+     */
+    private static final String HARVEST_COOLDOWN_KEY = "mcMMO_husbandryHarvestTick";
+
+    /**
+     * A hive gave up its honeycomb to a player's shears: pay the hive verb, and let
+     * {@code Bountiful Harvest} and {@code Beekeeper} add to the haul.
+     *
+     * <p>Called from {@code BeehiveHarvestMixin}.
+     *
+     * <h2>⚠️ Why the trigger is here and not on {@code takeHoney}, which the plan named</h2>
+     * The plan said {@code takeHoney} has "a player overload and a 3-arg automated one" and to gate on
+     * the player overload. <b>Bytecode says that is not what the two overloads are.</b> The 3-arg form
+     * is simply the "set the honey level back to zero" primitive; the 5-arg form calls it and
+     * <em>then</em> angers the hive. And {@code onUseWithItem} — the player path, the only path a
+     * human ever takes — calls the <b>3-arg</b> form directly whenever a lit campfire is in range.
+     * Gating on the "player overload" would therefore have paid <b>zero</b> for every hive harvested
+     * over a campfire, which is how essentially every bee farm in the game is built, while paying
+     * normally for the careless harvests that get you stung. Silent, and backwards.
+     *
+     * <p>{@code onUseWithItem} is also what closes the automation, structurally and without a check of
+     * our own: jar-grep finds {@code ShearsDispenserBehavior} calling {@code dropHoneycomb} and
+     * {@code DispenserBehavior$3} calling {@code takeHoney}, so <b>both</b> halves of this verb can be
+     * fully automated in vanilla — but neither dispenser goes anywhere near {@code onUseWithItem}.
+     * Hooking the block's use path is the gate.
+     *
+     * @param player  the harvester
+     * @param usedItem the shears in their hand, already worn by this harvest
+     * @param state   the hive's state, still reading a full honey level at this point
+     * @param world   the hive's world
+     * @param pos     the hive
+     */
+    public static void onHoneycombHarvested(PlayerEntity player, ItemStack usedItem, BlockState state,
+            World world, BlockPos pos) {
+        if (!(player instanceof ServerPlayerEntity serverPlayer)
+                || !(world instanceof ServerWorld serverWorld)) {
+            return;
+        }
+        final HusbandryManager husbandry = husbandryOf(serverPlayer);
+        if (husbandry == null) {
+            return;
+        }
+        husbandry.onHiveHarvest();
+
+        // Delivered as extra rolls of vanilla's own harvest loot table rather than as honeycombs we
+        // fabricate, exactly as the shear bonus re-runs the species' own drop handler: the yield stays
+        // whatever the game says a hive yields, including any future change to it.
+        for (int helping = bonusHiveHelpings(husbandry); helping > 0; helping--) {
+            BeehiveBlock.dropHoneycomb(serverWorld, usedItem, state, world.getBlockEntity(pos),
+                    serverPlayer, pos);
+        }
+    }
+
+    /**
+     * A hive gave up a bottle of honey to a player: pay the hive verb, and let
+     * {@code Bountiful Harvest} and {@code Beekeeper} add to the haul.
+     *
+     * <p>The bottle half of the same verb, hooked separately from
+     * {@link #onHoneycombHarvested} because the two halves of {@code onUseWithItem} produce their
+     * yields by completely different means — the shears roll a loot table, the bottle hands over one
+     * hard-coded {@code HONEY_BOTTLE} — and because splitting them is what makes each hook
+     * unambiguous about which harvest it is looking at.
+     *
+     * @param player the harvester
+     */
+    public static void onHoneyBottled(PlayerEntity player) {
+        if (!(player instanceof ServerPlayerEntity serverPlayer)) {
+            return;
+        }
+        final HusbandryManager husbandry = husbandryOf(serverPlayer);
+        if (husbandry == null) {
+            return;
+        }
+        husbandry.onHiveHarvest();
+
+        for (int helping = bonusHiveHelpings(husbandry); helping > 0; helping--) {
+            giveOrDrop(serverPlayer, new ItemStack(Items.HONEY_BOTTLE));
+        }
+    }
+
+    /**
+     * How many <em>extra</em> helpings this hive harvest yields, 0–2.
+     *
+     * <p>The two rolls stack rather than being an either/or, which is the deliberate difference
+     * between the harvest family's general bonus and the bee specialist's: a maxed beekeeper should
+     * visibly out-yield a maxed generalist at a hive, and cannot if their sub-skill only re-rolls the
+     * same coin.
+     *
+     * <p>Package-private so the stacking can be asserted directly. The delivery it feeds cannot be
+     * unit-tested — an extra {@code dropHoneycomb} roll needs a real {@code ServerWorld} and a real
+     * loot table — so the arithmetic is pinned here and the delivery is a §G row.
+     */
+    static int bonusHiveHelpings(HusbandryManager husbandry) {
+        return (husbandry.rollBonusHarvestDrop() ? 1 : 0) + (husbandry.rollBonusHoney() ? 1 : 0);
+    }
+
+    /**
+     * Whether this player's hive harvests leave the bees alone — {@code Beekeeper}.
+     *
+     * <p>Called from {@code BeehiveHarvestMixin}, which feeds the answer into vanilla's own
+     * "is there a lit campfire under this hive" test. That is the entire mechanic: vanilla already has
+     * exactly one branch for "this harvest was sheltered", and taking it covers <b>both</b> ways a
+     * harvest can anger bees — {@code angerNearbyBees}, which sets nearby bees on the player, and
+     * {@code takeHoney(..., BeeState.EMERGENCY)}, which drives the hive's own occupants out angry.
+     * Suppressing the first alone, which is what the plan proposed, would have left the second firing.
+     */
+    public static boolean hiveHarvestLeavesBeesCalm(PlayerEntity player) {
+        if (!(player instanceof ServerPlayerEntity serverPlayer)) {
+            return false;
+        }
+        final HusbandryManager husbandry = husbandryOf(serverPlayer);
+        return husbandry != null && husbandry.countsAsShelteredHiveHarvest();
+    }
+
+    /**
+     * A hive is about to wear the shears that robbed it: let {@code Bountiful Harvest} spare them.
+     *
+     * <p>Called from {@code BeehiveHarvestMixin}. The gate is the tool's own holder, which vanilla
+     * hands to the {@code damage} call — no interaction stash needed, because a dispenser harvesting a
+     * hive never reaches {@code onUseWithItem} at all.
+     *
+     * @param holder       whoever is holding the shears
+     * @param damageAmount the durability vanilla was about to take
+     * @return {@code damageAmount}, or {@code 0} on a successful save
+     */
+    public static int onHiveToolDamaged(LivingEntity holder, int damageAmount) {
+        if (damageAmount <= 0 || !(holder instanceof ServerPlayerEntity player)) {
+            return damageAmount;
+        }
+        final HusbandryManager husbandry = husbandryOf(player);
+        if (husbandry == null) {
+            return damageAmount;
+        }
+        return husbandry.rollToolDurabilitySave() ? 0 : damageAmount;
+    }
+
+    /**
+     * A player milked a cow, or bowled a mooshroom's stew: pay the milk verb.
+     *
+     * <p>Called from {@code CowMilkMixin} and {@code MooshroomStewMixin}. Both routes are the same
+     * verb and share this one body and one cooldown, so a mooshroom cannot be milked and stewed for
+     * two awards in the same breath.
+     *
+     * <p><b>Vanilla rate-limits this verb by nothing at all</b> — right-clicking the same cow with a
+     * bucket is free and repeatable as fast as a player can click — so it is the D-H5 cooldown, not
+     * any game mechanic, that bounds it. Unlike the shear and hive verbs there is no interaction stash
+     * to check: {@code interactMob} takes the {@code PlayerEntity} directly and no dispenser reaches
+     * it, so the real-player gate is the signature.
+     *
+     * @param animal the cow or mooshroom
+     * @param player the milker
+     */
+    public static void onMilked(Entity animal, PlayerEntity player) {
+        if (animal == null || !(player instanceof ServerPlayerEntity serverPlayer)) {
+            return;
+        }
+        final HusbandryManager husbandry = husbandryOf(serverPlayer);
+        if (husbandry == null || !harvestCooldownElapsed(husbandry, animal)) {
+            return;
+        }
+        husbandry.onMilk();
+    }
+
+    /**
+     * An armadillo is about to hand over its scute: pay the brush verb, and let
+     * {@code Bountiful Harvest} double what it drops.
+     *
+     * <p>Called from {@code ArmadilloBrushMixin}. Rides {@code LivingEntity#forEachBrushedItem}, the
+     * exact sibling of the shear verb's {@code forEachShearedItem} funnel — and the better of the two,
+     * because this one <b>takes the brushing entity as a parameter</b>, so the real-player gate needs
+     * no interaction stash and no identity check. A dispenser brushing an armadillo
+     * ({@code DispenserBehavior$5}, which vanilla does have) passes {@code null} there, so it is
+     * excluded by the signature.
+     *
+     * <h2>⚠️ Why this one pays on the drop and the shear verb pays on the attempt</h2>
+     * Shearing is gated upstream by {@code isShearable()} — a sheep with no wool cannot be sheared at
+     * all — so by the time the shear funnel is reached, a harvest has definitely happened.
+     * <b>Brushing has no such gate.</b> {@code brushScute} returns {@code true} for any adult
+     * armadillo, {@code brush/armadillo.json} carries no conditions, and {@code nextScuteShedCooldown}
+     * — the timer the plan cited as vanilla's own limit — governs only the passive shed and is never
+     * read or reset on this path. So the XP hangs off an item actually being delivered, which is the
+     * one thing that cannot be true of a brush that achieved nothing.
+     *
+     * @param armadillo the animal being brushed
+     * @param brusher   whoever is brushing; {@code null} for a dispenser
+     * @param dropper   vanilla's own per-item handler
+     * @return {@code dropper} unchanged, or a wrapper that pays on first delivery
+     */
+    public static BiConsumer<ServerWorld, ItemStack> onBrushedItems(Entity armadillo, Entity brusher,
+            BiConsumer<ServerWorld, ItemStack> dropper) {
+        if (armadillo == null || dropper == null || !(brusher instanceof ServerPlayerEntity player)) {
+            return dropper; // A dispenser, or nobody at all.
+        }
+        final HusbandryManager husbandry = husbandryOf(player);
+        if (husbandry == null) {
+            return dropper;
+        }
+        return new BrushPayout(husbandry, armadillo, dropper);
+    }
+
+    /**
+     * Pays the brush verb the first time an item is actually handed over, then applies one
+     * {@code Bountiful Harvest} decision to every item of that brush.
+     *
+     * <p>A named class rather than a capturing lambda because it holds state across calls, and the
+     * state is the point: the cooldown must be consumed once per brush and the bonus decided once per
+     * brush, while the handler itself may be invoked several times.
+     */
+    private static final class BrushPayout implements BiConsumer<ServerWorld, ItemStack> {
+
+        private final HusbandryManager husbandry;
+        private final Entity armadillo;
+        private final BiConsumer<ServerWorld, ItemStack> dropper;
+        private boolean settled;
+        private boolean doubled;
+
+        private BrushPayout(HusbandryManager husbandry, Entity armadillo,
+                BiConsumer<ServerWorld, ItemStack> dropper) {
+            this.husbandry = husbandry;
+            this.armadillo = armadillo;
+            this.dropper = dropper;
+        }
+
+        @Override
+        public void accept(ServerWorld world, ItemStack stack) {
+            if (!settled) {
+                settled = true;
+                // The cooldown gates the reward, never the drop: a brush inside the window still
+                // yields its scute, it simply does not pay again. Refusing vanilla's own loot would
+                // be a mod quietly breaking the game to enforce its own balance.
+                if (harvestCooldownElapsed(husbandry, armadillo)) {
+                    husbandry.onBrush();
+                    doubled = husbandry.rollBonusHarvestDrop();
+                }
+            }
+            dropper.accept(world, stack);
+            if (doubled) {
+                dropper.accept(world, stack.copy());
+            }
+        }
+    }
+
+    /**
+     * A brush is about to take {@code damageAmount} durability: let {@code Bountiful Harvest} spare it.
+     *
+     * <p>Called from {@code ArmadilloBrushMixin}. The shear verb's durability save has an exact
+     * sibling here for the same reason it had to name species there — vanilla wears the tool back in
+     * {@code interactMob}, after the loot funnel has returned. It is worth 16 durability a brush,
+     * against a brush's total of 64, so this is a much larger effect than the shear save.
+     *
+     * @param armadillo    the animal being brushed
+     * @param damageAmount the durability vanilla was about to take
+     * @return {@code damageAmount}, or {@code 0} on a successful save
+     */
+    public static int onBrushToolDamaged(Entity armadillo, int damageAmount) {
+        if (armadillo == null || damageAmount <= 0) {
+            return damageAmount;
+        }
+        final HusbandryManager husbandry = husbandryOfInteractionWith(armadillo);
+        if (husbandry == null) {
+            return damageAmount;
+        }
+        return husbandry.rollToolDurabilitySave() ? 0 : damageAmount;
+    }
+
+    /**
+     * Whether {@code animal} is off its Husbandry harvest cooldown, consuming the window if it is.
+     *
+     * <p>Measured in <b>world ticks, not wall-clock milliseconds</b>, which is the right clock for a
+     * singleplayer game: a cooldown counted in real time would keep draining while the world is
+     * paused in the menu, so a player could stand at a cow, open the pause menu for five minutes and
+     * come back to a fresh payout. It also makes the arithmetic testable without a fake clock.
+     *
+     * <p>A negative elapsed time counts as elapsed. The world's clock can legitimately move backwards
+     * ({@code /time set}, or an animal led into a dimension keeping its own count), and the failure
+     * mode of ignoring that is the worst one available — the animal would be locked out of paying
+     * anything ever again, silently.
+     */
+    private static boolean harvestCooldownElapsed(HusbandryManager husbandry, Entity animal) {
+        final int seconds = husbandry.getHarvestCooldownSeconds();
+        if (seconds <= 0) {
+            return true; // Gate configured off.
+        }
+        final long now = animal.getEntityWorld().getTime();
+        final Long lastAward = MetadataStore.get(animal, HARVEST_COOLDOWN_KEY, Long.class);
+        if (lastAward != null) {
+            final long elapsed = now - lastAward;
+            if (elapsed >= 0 && elapsed < (long) seconds * Misc.TICK_CONVERSION_FACTOR) {
+                return false;
+            }
+        }
+        MetadataStore.set(animal, HARVEST_COOLDOWN_KEY, now);
+        return true;
+    }
+
+    /** Hand a bonus stack to the player, dropping it at their feet if they have no room. */
+    private static void giveOrDrop(ServerPlayerEntity player, ItemStack stack) {
+        if (!player.getInventory().insertStack(stack)) {
+            player.dropItem(stack, false);
+        }
     }
 
     /**

@@ -38,6 +38,7 @@ public final class HusbandryStatsRenderer extends SkillStatsRenderer {
     private boolean canTwins;
     private boolean canAcceleratedGrowth;
     private boolean canBountifulHarvest;
+    private boolean canBeekeeper;
 
     public HusbandryStatsRenderer() {
         super(PrimarySkillType.HUSBANDRY);
@@ -51,6 +52,7 @@ public final class HusbandryStatsRenderer extends SkillStatsRenderer {
         canTwins = hasUnlocked(SubSkillType.HUSBANDRY_TWINS);
         canAcceleratedGrowth = hasUnlocked(SubSkillType.HUSBANDRY_ACCELERATED_GROWTH);
         canBountifulHarvest = hasUnlocked(SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST);
+        canBeekeeper = hasUnlocked(SubSkillType.HUSBANDRY_BEEKEEPER);
     }
 
     @Override
@@ -90,6 +92,16 @@ public final class HusbandryStatsRenderer extends SkillStatsRenderer {
             // The manager reports this one in percent (0-100), unlike the growth fraction above.
             messages.add(getStatMessage(true, false, SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST,
                     percent.format(husbandry.getHarvestDurabilitySaveChance() / 100.0D)));
+        }
+        // Only Beekeeper's bonus-yield half gets a number. Its headline half — bees never anger — is
+        // binary at the unlock level, so there is no value to render: a percentage would imply a roll
+        // that never happens, and a hard-coded "yes" would be a line that can only ever say one thing.
+        // The sub-skill's own description carries it, which is the same call ParkourStatsRenderer
+        // makes for Snow Walker.
+        if (canBeekeeper) {
+            messages.add(getStatMessage(SubSkillType.HUSBANDRY_BEEKEEPER,
+                    ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
+                            SubSkillType.HUSBANDRY_BEEKEEPER)[0]));
         }
 
         return messages;

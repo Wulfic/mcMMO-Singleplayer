@@ -301,6 +301,14 @@ public class AdvancedConfig extends ConfigLoader {
                     + "least 0!");
         }
 
+        if (getMaximumProbability(SubSkillType.HUSBANDRY_BEEKEEPER) < 1) {
+            reason.add("Skills.Husbandry.Beekeeper.ChanceMax should be at least 1!");
+        }
+
+        if (getMaxBonusLevel(SubSkillType.HUSBANDRY_BEEKEEPER) < 1) {
+            reason.add("Skills.Husbandry.Beekeeper.MaxBonusLevel should be at least 1!");
+        }
+
         /* MINING */
         if (getMaximumProbability(SubSkillType.MINING_DOUBLE_DROPS) < 1) {
             reason.add("Skills.Mining.DoubleDrops.ChanceMax should be at least 1!");

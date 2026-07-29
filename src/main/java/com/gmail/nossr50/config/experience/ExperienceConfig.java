@@ -554,6 +554,27 @@ public class ExperienceConfig extends ConfigLoader {
         return config.getInt("Experience_Values.Husbandry.Brush", HusbandryManager.DEFAULT_BRUSH_XP);
     }
 
+    /**
+     * How long one animal must wait before it can pay a Husbandry harvest award again, in seconds;
+     * {@code 0} or less disables the gate.
+     *
+     * <p>Covers <b>milking and brushing</b>, the two harvest verbs vanilla rate-limits by nothing at
+     * all. Right-clicking a cow with a bucket is free and repeatable on the same cow as fast as a
+     * player can click; brushing is the same, and the plan had it filed as safe on the strength of a
+     * "vanilla scute cooldown" that bytecode says does not exist on that path —
+     * {@code brush/armadillo.json} carries no conditions and {@code brushScute} never touches the shed
+     * timer. Shearing and hive harvesting are deliberately exempt: grass regrowth and five levels of
+     * bee-pollination time already limit them, in-fiction and for free.
+     *
+     * <p>Same {@code MetadataStore} mechanism as Unarmored's per-attacker cap and Agility's Dodge cap.
+     * The counter is transient, which is right for a five-minute window — it lives as long as the
+     * animal does and is not saved.
+     */
+    public int getHusbandryHarvestCooldownSeconds() {
+        return config.getInt("ExploitFix.Husbandry.Harvest_Cooldown_Seconds",
+                HusbandryManager.DEFAULT_HARVEST_COOLDOWN_SECONDS);
+    }
+
     /* Archery */
     public double getArcheryDistanceMultiplier() {
         return config.getDouble("Experience_Values.Archery.Distance_Multiplier", 0.025);

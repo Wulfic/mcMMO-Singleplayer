@@ -161,7 +161,8 @@ class HusbandryManagerTest {
         assertEquals(
                 java.util.Set.of(SubSkillType.HUSBANDRY_MULTI_BREED, SubSkillType.HUSBANDRY_TWINS,
                         SubSkillType.HUSBANDRY_ACCELERATED_GROWTH,
-                        SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST),
+                        SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST,
+                        SubSkillType.HUSBANDRY_BEEKEEPER),
                 new SkillTools().getSubSkills(PrimarySkillType.HUSBANDRY));
     }
 
@@ -630,5 +631,112 @@ class HusbandryManagerTest {
         assertEquals(HusbandryManager.DEFAULT_BRUSH_XP, shipped.getHusbandryBrushXp());
         assertEquals(HusbandryManager.DEFAULT_RAISE_MULTIPLIER,
                 shipped.getHusbandryRaiseMultiplier());
+        assertEquals(HusbandryManager.DEFAULT_HARVEST_COOLDOWN_SECONDS,
+                shipped.getHusbandryHarvestCooldownSeconds());
+    }
+
+    // --- Stage 4: the harvest cooldown and Beekeeper ------------------------------------------------
+
+    @Test
+    void theHarvestCooldownIsTheShippedFiveMinutes() {
+        // The one number standing between "milk a cow" and the fastest XP in the mod. Vanilla puts no
+        // cooldown on either milking or brushing -- and the brush is the one that looks limited and
+        // is not, since brush/armadillo.json carries no conditions and brushScute never touches the
+        // scute-shed timer.
+        assertEquals(300, manager.getHarvestCooldownSeconds());
+    }
+
+    @Test
+    void aMissingConfigStillYieldsTheShippedCooldownRatherThanZero() {
+        // ⚠️ The failure mode this pins is silent and total: a 0 here does not "use a default", it
+        // DISABLES the gate, which is the difference between a bounded verb and an infinite one.
+        McMMOMod.setExperienceConfig(null);
+        assertEquals(HusbandryManager.DEFAULT_HARVEST_COOLDOWN_SECONDS,
+                manager.getHarvestCooldownSeconds());
+    }
+
+    @Test
+    void aConfiguredZeroCooldownIsHonouredAsAnEscapeHatch() {
+        final ExperienceConfig noCooldown = mock(ExperienceConfig.class);
+        when(noCooldown.getHusbandryHarvestCooldownSeconds()).thenReturn(0);
+        assertEquals(0, managerWithConfig(noCooldown).getHarvestCooldownSeconds(),
+                "0 must reach the listener intact so the gate can be turned off for diagnosis");
+    }
+
+    @Test
+    void beekeeperIsLockedUntilItsRankIsReached() {
+        setHusbandryLevel(0);
+        assertFalse(manager.canBeekeeper(), "Beekeeper must not be free at level 0");
+        assertFalse(manager.countsAsShelteredHiveHarvest());
+        assertFalse(manager.rollBonusHoney());
+
+        // skillranks.yml gates it at 100 RetroMode / 10 Standard -- past the breed-family pair and
+        // Bountiful Harvest, which are all free at 1, because Beekeeper deletes a logistical puzzle
+        // rather than scaling a number.
+        setHusbandryLevel(1000);
+        assertTrue(manager.canBeekeeper(), "Beekeeper must be unlocked by max level");
+        assertTrue(manager.countsAsShelteredHiveHarvest(),
+                "the anger suppression is binary on the unlock, with no roll of its own");
+    }
+
+    @Test
+    void theBonusHoneyRollIsAChanceAndTheAngerSuppressionIsNot() {
+        // The two halves of one sub-skill deliberately behave differently, and conflating them would
+        // be a real regression: a 30%-of-the-time campfire is worse than no campfire at all, because
+        // you would still have to build one for the other 70%.
+        setHusbandryLevel(1000);
+
+        advancedWithBonusHoneyChance(0.0);
+        assertFalse(manager.rollBonusHoney(), "a 0 ceiling must never proc");
+        assertTrue(manager.countsAsShelteredHiveHarvest(),
+                "the binary half must not follow the yield roll's ceiling");
+
+        advancedWithBonusHoneyChance(100.0);
+        assertTrue(manager.rollBonusHoney(), "a 100 ceiling must always proc");
+    }
+
+    @Test
+    void theShippedBonusHoneyCeilingMatchesTheJavaDefault() {
+        assertEquals(HusbandryManager.DEFAULT_BONUS_HONEY_CHANCE,
+                McMMOMod.getAdvancedConfig()
+                        .getMaximumProbability(SubSkillType.HUSBANDRY_BEEKEEPER));
+    }
+
+    @Test
+    void theThreeStageFourVerbsPayTheirShippedRates() {
+        assertEquals(500F, manager.getHiveXp());
+        assertEquals(200F, manager.getMilkXp());
+        assertEquals(300F, manager.getBrushXp());
+    }
+
+    @Test
+    void theHarvestVerbsAwardExactlyWhatTheyArePriced() {
+        setHusbandryLevel(1);
+        assertEquals(500F, manager.onHiveHarvest());
+        assertEquals(200F, manager.onMilk());
+        assertEquals(300F, manager.onBrush());
+    }
+
+    @Test
+    void aVerbPricedAtZeroAwardsNothingRatherThanFiringAnEmptyGain() {
+        final ExperienceConfig free = mock(ExperienceConfig.class);
+        when(free.getHusbandryHiveXp()).thenReturn(0);
+        when(free.getHusbandryMilkXp()).thenReturn(0);
+        when(free.getHusbandryBrushXp()).thenReturn(0);
+
+        final HusbandryManager freeManager = managerWithConfig(free);
+        assertEquals(0F, freeManager.onHiveHarvest());
+        assertEquals(0F, freeManager.onMilk());
+        assertEquals(0F, freeManager.onBrush());
+    }
+
+    /** The same pinned-RNG trick for Beekeeper's bonus-yield roll. */
+    private AdvancedConfig advancedWithBonusHoneyChance(double ceiling) {
+        final AdvancedConfig advanced = mock(AdvancedConfig.class);
+        lenient().when(advanced.getMaximumProbability(SubSkillType.HUSBANDRY_BEEKEEPER))
+                .thenReturn(ceiling);
+        lenient().when(advanced.getMaxBonusLevel(SubSkillType.HUSBANDRY_BEEKEEPER)).thenReturn(0);
+        McMMOMod.setAdvancedConfig(advanced);
+        return advanced;
     }
 }
