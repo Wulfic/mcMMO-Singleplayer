@@ -529,6 +529,22 @@ session. Start with `/addlevels husbandry 0` in a fresh pen of cows, wheat in ha
 | HU32 | Watch the XP bar while breeding | A Husbandry bar appears, coloured **yellow** |
 | HU33 | Watch the log through the whole session | No exceptions, no mixin warnings |
 
+### 10f. The wiring-audit fixes (2026-07-30)
+
+Three gaps the 2026-07-30 wiring audit found *after* the skill was already called code-complete. All
+three were **silent** — nothing crashed, nothing logged, and all 1148 unit tests passed over the top of
+them. Each is now pinned by a mutation-checked test, but these rows are the live proof.
+
+| # | Action | Expect |
+|---|---|---|
+| HU80 | **⚠️⚠️ THE ROW THE MILK VERB WAS REBUILT FOR.** Milk a **goat** with a bucket | **200 XP**, exactly like HU48's cow. Until this fix `CowMilkMixin` targeted `AbstractCowEntity` only, and a goat re-implements the bucket branch inline in its own `interactMob` — so **every goat ever milked paid ZERO**, while that same goat went on paying for breeding, raising and feeding |
+| HU81 | Milk the **same goat** 20× in a row | **One award**, then nothing for 5 minutes — the D-H5 cooldown reaches goats for free, because it lives inside `onMilked` rather than at the call site |
+| HU82 | At Husbandry 1000, milk ~20 different goats | Bonus milk buckets on roughly half, plus the occasional Hidden Bounty leather. Goats must reach **every** part of the verb, not just the XP |
+| HU83 | Breed two **nautiluses** (tame both, then feed them at full health) | **1200 XP**, the mount rate. ⚠️ Nautilus is new in 1.21.11 and breeds through `NautilusBrain`'s `BreedTask`, which does fire the criterion mcMMO hooks — so the seam *was* wired and the species price was the missing half |
+| HU84 | Raise that nautilus calf to adulthood | **1200 XP.** The raise verb is a multiple of the breed value, so a missing breed price silently killed **both** halves of the lifecycle |
+| HU85 | Breed two **happy ghasts** with snow blocks, then raise the ghastling | **1200 XP each.** Shipped back in 1.21.6 and simply missed when the roster was written — note that `experience.yml`'s combat table already knew this mob |
+| HU86 | Open the ModMenu config editor → Abilities | A **Herdsman's Call Cooldown (sec)** slider sits alongside the other ten supers, and moving it really does change the ability's cooldown in game |
+
 ---
 
 ## Reporting

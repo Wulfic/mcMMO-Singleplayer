@@ -65,6 +65,40 @@ class McMMOSettingsTest {
         }
     }
 
+    /**
+     * The converse of {@link #everyKeyExistsInBundledDefaultsWithMatchingType()}, and the gap that
+     * test could never close: it proves every <em>declared</em> key exists in the yml, so a shipped
+     * cooldown key that never reaches the catalogue is invisible to it. That is exactly how
+     * {@code Herdsmans_Call} shipped with a working ability, a working config key and no slider —
+     * found by an audit rather than by the suite.
+     *
+     * <p>Deliberately driven off the shipped {@code config.yml} rather than {@code SuperAbilityType},
+     * because the catalogue's contract is with the file: an ability with no cooldown key needs no
+     * widget, and a key with no ability is a different defect that
+     * {@code everyKeyExistsInBundledDefaults...} already covers from the other side.
+     */
+    @Test
+    void everyCooldownKeyInConfigIsOfferedInTheCatalogue() throws IOException {
+        final YamlConfiguration config = bundled(McMMOSettings.CONFIG_YML);
+        final YamlConfiguration cooldowns = config.getConfigurationSection("Abilities.Cooldowns");
+        assertNotNull(cooldowns, "config.yml has no Abilities.Cooldowns section at all");
+        final Set<String> shipped = cooldowns.getKeys(false);
+        assertFalse(shipped.isEmpty(),
+                "no Abilities.Cooldowns keys found in config.yml — the test is asserting nothing");
+
+        final Set<String> offered = new HashSet<>();
+        McMMOSettings.all().stream()
+                .map(ConfigSetting::path)
+                .filter(path -> path.startsWith("Abilities.Cooldowns."))
+                .forEach(path -> offered.add(path.substring("Abilities.Cooldowns.".length())));
+
+        for (String ability : shipped) {
+            assertTrue(offered.contains(ability),
+                    "config.yml ships Abilities.Cooldowns." + ability + " but the ModMenu catalogue "
+                            + "does not offer it — that super ability's cooldown has no slider");
+        }
+    }
+
     @Test
     void noDuplicateKeys() {
         final Set<String> seen = new HashSet<>();

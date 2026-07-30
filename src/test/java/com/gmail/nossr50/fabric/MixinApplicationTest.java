@@ -13,7 +13,9 @@ import net.minecraft.block.entity.BrewingStandBlockEntity;
 import net.minecraft.component.type.FoodComponent;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.BoggedEntity;
+import net.minecraft.entity.passive.AbstractCowEntity;
 import net.minecraft.entity.passive.AnimalEntity;
+import net.minecraft.entity.passive.GoatEntity;
 import net.minecraft.entity.passive.MooshroomEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.passive.SheepEntity;
@@ -354,6 +356,32 @@ class MixinApplicationTest {
                     .anyMatch(method -> method.getName().contains("saveShearDurability"));
             assertTrue(hasSave, "ShearableInteractMixin did not apply to " + shearable.getSimpleName()
                     + " — Bountiful Harvest would save no durability when shearing it");
+        }
+    }
+
+    @Test
+    void husbandryMilkMixinAppliesToEveryMilkableSpecies() {
+        // ⚠️ THERE IS NO MILKING FUNNEL, so CowMilkMixin names its targets explicitly and this test is
+        // the only thing standing between that list and a silent shortfall.
+        //
+        // GoatEntity is why it exists. It extends AnimalEntity directly rather than AbstractCowEntity
+        // and re-implements the entire bucket-for-milk-bucket branch inline in its own interactMob, so
+        // the original @Mixin(AbstractCowEntity.class) paid ZERO for every goat ever milked — while
+        // goats went on paying for breeding, raising and feeding, which is what made it invisible.
+        //
+        // 🔑 The roster was settled by binary-grepping the extracted 1.21.11 jar for MILK_BUCKET across
+        // all 1040 entity classes, NOT from a species list and NOT from method names: javap shows a
+        // method where it is DECLARED, which is not where it is reachable. That grep returns exactly
+        // three — AbstractCowEntity (carrying cow and mooshroom), GoatEntity, and WanderingTraderEntity
+        // (a trade offer, not a milking). Re-run it after a version bump; add any new hit here.
+        for (Class<?> milkable : List.of(AbstractCowEntity.class, GoatEntity.class)) {
+            assertDoesNotThrow(() -> Class.forName(milkable.getName(), true,
+                    MixinApplicationTest.class.getClassLoader()));
+            final boolean hasMilkHook = Arrays.stream(milkable.getDeclaredMethods())
+                    .anyMatch(method -> method.getName().contains("onMilked"));
+            assertTrue(hasMilkHook, "CowMilkMixin did not apply to " + milkable.getSimpleName()
+                    + " — milking one would pay no Husbandry XP, roll no Bountiful Harvest bonus and "
+                    + "no Hidden Bounty, and skip the D-H5 harvest cooldown entirely");
         }
     }
 }

@@ -662,11 +662,13 @@ public final class HusbandryListener {
     }
 
     /**
-     * A player milked a cow, or bowled a mooshroom's stew: pay the milk verb.
+     * A player milked a cow or a goat, or bowled a mooshroom's stew: pay the milk verb.
      *
-     * <p>Called from {@code CowMilkMixin} and {@code MooshroomStewMixin}. Both routes are the same
-     * verb and share this one body and one cooldown, so a mooshroom cannot be milked and stewed for
-     * two awards in the same breath.
+     * <p>Called from {@code CowMilkMixin} — which targets the cow family <b>and</b>
+     * {@code GoatEntity}, since a goat re-implements the bucket branch inline rather than inheriting
+     * it — and from {@code MooshroomStewMixin}. Every route is the same verb and shares this one body
+     * and one cooldown, so a mooshroom cannot be milked and stewed for two awards in the same breath,
+     * and a newly added target inherits the gate rather than needing it wired again.
      *
      * <p><b>Vanilla rate-limits this verb by nothing at all</b> — right-clicking the same cow with a
      * bucket is free and repeatable as fast as a player can click — so it is the D-H5 cooldown, not
@@ -674,7 +676,7 @@ public final class HusbandryListener {
      * to check: {@code interactMob} takes the {@code PlayerEntity} directly and no dispenser reaches
      * it, so the real-player gate is the signature.
      *
-     * @param animal the cow or mooshroom
+     * @param animal the cow, goat or mooshroom
      * @param player the milker
      */
     public static void onMilked(Entity animal, PlayerEntity player) {

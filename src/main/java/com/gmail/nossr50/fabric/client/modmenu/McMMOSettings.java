@@ -48,10 +48,19 @@ public final class McMMOSettings {
         "Woodcutting"
     };
 
-    /** Super-abilities with an {@code Abilities.Cooldowns.<name>} key. */
+    /**
+     * Super-abilities with an {@code Abilities.Cooldowns.<name>} key.
+     *
+     * <p>⚠️ <b>Must list every such key in {@code config.yml}</b>, which is what
+     * {@code McMMOSettingsTest#everyCooldownKeyInConfigIsOffered} pins. A new super ability whose
+     * cooldown key ships but never reaches this array simply has no slider — invisible, because the
+     * catalogue's other guard only proves that declared keys <em>exist</em>, never the converse.
+     * {@code Herdsmans_Call} was missed exactly that way when Husbandry landed.
+     */
     private static final String[] COOLDOWN_ABILITIES = {
-        "Berserk", "Blast_Mining", "Giga_Drill_Breaker", "Green_Terra", "Second_Wind",
-        "Serrated_Strikes", "Skull_Splitter", "Smoke_Bomb", "Super_Breaker", "Tree_Feller"
+        "Berserk", "Blast_Mining", "Giga_Drill_Breaker", "Green_Terra", "Herdsmans_Call",
+        "Second_Wind", "Serrated_Strikes", "Skull_Splitter", "Smoke_Bomb", "Super_Breaker",
+        "Tree_Feller"
     };
 
     private static final List<ConfigSetting> ALL = buildCatalogue();

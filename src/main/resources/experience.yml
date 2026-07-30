@@ -667,6 +667,17 @@ Experience_Values:
             Horse: 1200
             Donkey: 1200
             Mule: 1200
+            # The two mounts you build rather than find, priced with the horse family above: same
+            # mount tier, same order of effort. A nautilus has to be tamed underwater before it will
+            # breed at all; a happy ghast begins as a dried ghast block that has to be rehydrated
+            # into a ghastling and raised.
+            #
+            # Both were absent from this table until 2026-07-30, and because an unlisted species
+            # resolves to 0 (see ExperienceConfig#getHusbandryBreedXp) that silently cost the player
+            # BOTH halves of the lifecycle -- breeding paid nothing, and the raise verb is a multiple
+            # of the breed value, so raising the young paid nothing either.
+            Nautilus: 1200
+            Happy_Ghast: 1200
             # Archaeology-gated: a torchflower seed comes out of suspicious sand.
             Sniffer: 1500
 

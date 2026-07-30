@@ -49,6 +49,8 @@ class HusbandryManagerTest {
     private static final int CHICKEN_BREED_XP = 300;
     private static final int COW_BREED_XP = 350;
     private static final int HORSE_BREED_XP = 1200;
+    /** The mount tier the horse family sets, and what nautilus and happy ghast are priced at. */
+    private static final int MOUNT_BREED_XP = 1200;
     private static final int SNIFFER_BREED_XP = 1500;
 
     private McMMOPlayer mmoPlayer;
@@ -181,6 +183,22 @@ class HusbandryManagerTest {
         assertEquals(COW_BREED_XP, manager.getBreedXp("Cow"));
         assertEquals(HORSE_BREED_XP, manager.getBreedXp("Horse"));
         assertEquals(SNIFFER_BREED_XP, manager.getBreedXp("Sniffer"));
+    }
+
+    @Test
+    void theTwoBreedableMountsAddedSinceThePlanArePriced() {
+        // ⚠️ Both of these were absent from the table until 2026-07-30, and an unlisted species
+        // resolves to 0 — so breeding either paid nothing AND raising the young paid nothing, the raise
+        // verb being a multiple of the breed value. Neither is exotic: HappyGhastEntity shipped in
+        // 1.21.6 and was simply missed when the roster was written, and NautilusEntity is new in
+        // 1.21.11, breeding through NautilusBrain's BreedTask straight into the criterion mcMMO hooks.
+        //
+        // Asserted by name rather than folded into the spread test above, because the failure this
+        // guards is a MISSING KEY, which no inequality between other species can detect.
+        assertEquals(MOUNT_BREED_XP, manager.getBreedXp("Nautilus"),
+                "breeding a nautilus must pay the mount rate, not the unlisted-species zero");
+        assertEquals(MOUNT_BREED_XP, manager.getBreedXp("Happy_Ghast"),
+                "breeding a happy ghast must pay the mount rate, not the unlisted-species zero");
     }
 
     @Test
