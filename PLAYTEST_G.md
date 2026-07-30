@@ -399,7 +399,7 @@ pumpkin or a mob head counts as armour and turns the whole skill off. That is de
 
 ---
 
-## Session 10 — Husbandry: breed, raise and feed (~40 min)
+## Session 10 — Husbandry: the whole skill (~90 min)
 
 Covers stages 0–2. The harvest verbs (shear, hive, milk, brush) are stages 3–4 and get their own
 session. Start with `/addlevels husbandry 0` in a fresh pen of cows, wheat in hand.
@@ -468,11 +468,62 @@ session. Start with `/addlevels husbandry 0` in a fresh pen of cows, wheat in ha
 | HU42 | Let the **dispenser** from HU36 run at Husbandry 1000 | Its shears wear **normally** — no durability saving. An automated farm that never wears out is the same exploit by another route |
 | HU43 | **⚠️ Tuning:** build a snow golem, shear it, and count the pumpkin back | You get the carved pumpkin back, so a snow farm makes this a ~4-action 300 XP loop. **This is the shear to judge the rate on, not the sheep.** Note the timing; do not file it as a bug |
 
+### 10g. Hive, milk and brush + Beekeeper (stage 4)
+
+| # | Action | Expect |
+|---|---|---|
+| HU44 | Harvest a full hive with **shears** | **500 XP** and 3 honeycomb |
+| HU45 | Harvest a full hive with a **glass bottle** | **500 XP** and a honey bottle. Both halves of the verb pay the same |
+| HU46 | **⚠️⚠️ THE ROW THE HIVE SEAM WAS REBUILT FOR.** Put a **lit campfire under a hive**, then harvest it | **500 XP, and the bees stay calm.** The plan's gate would have paid **ZERO** here — the campfire branch calls the "automated" `takeHoney` overload, so gating on the player overload would have paid nothing for every bee farm anyone actually builds, and full XP only for the careless harvests that get you stung |
+| HU47 | Put **shears in a dispenser** aimed at a hive, and a **glass bottle in another**, and let both fire | **ZERO XP from both.** ⚠️ Vanilla really does ship both behaviours (`ShearsDispenserBehavior` and `DispenserBehavior$3`) — this is the hive's AFK farm |
+| HU48 | Milk a cow | **200 XP** |
+| HU49 | Bowl a **mooshroom** for stew, then bucket the same mooshroom for milk | **One award total** — same verb, same per-animal cooldown. Not two |
+| HU50 | **⚠️ D-H5.** Milk the **same cow 20× in a row** | **One award**, then nothing for 5 minutes. Vanilla puts no cooldown on this at all; without mcMMO's, it is the fastest XP in the mod |
+| HU51 | Milk **10 different cows** in a row | **10 awards.** The cooldown is per animal, not per player — keeping a herd is the intended way to earn this |
+| HU52 | Milk a cow, quit to title, reopen, milk it again | Pays again. ⚠️ **Expected, not a bug**: the cooldown is transient by design — 5 minutes is short enough that losing it costs one early payout, unlike the bred-by marker's 20 |
+| HU53 | Brush an armadillo | **300 XP** and a scute |
+| HU54 | **⚠️ The row the plan got wrong.** Brush the **same armadillo** repeatedly | Scute drops **every time** (vanilla has no brush cooldown — `brush/armadillo.json` has no conditions and `brushScute` never touches the shed timer), but XP pays **once per 5 min**. The drop must not be withheld; only the reward |
+| HU55 | Put a **brush in a dispenser** aimed at an armadillo | **ZERO XP.** ⚠️ Vanilla ships this too (`DispenserBehavior$5`) and the plan did not mention it |
+| HU56 | Brush an armadillo at Husbandry 1000, ~20× across different animals | Roughly half double (ChanceMax 50), and roughly one brush in four costs no durability — **worth a quarter of the brush each time**, since vanilla charges 16 of its 64 |
+| HU57 | Reach Husbandry 100 and harvest a hive with **no campfire** | **Bees stay calm.** ⚠️ Check **both** ways they anger: no bee targets you, *and* the hive's own occupants do not come out. The plan's version would have left the second firing |
+| HU58 | At 1000, harvest ~20 full hives and count the yield | Visibly more than 3 comb on many of them — Beekeeper's bonus **stacks** with Bountiful Harvest, so up to 3× |
+| HU59 | Shear a sheep, then a hive, then milk, then brush, all at Husbandry 1000 | All four pay, all four can double. One reward path, four verbs |
+
+### 10h. Selective Breeding, Brood and Hidden Bounty (stage 5)
+
+| # | Action | Expect |
+|---|---|---|
+| HU60 | At Husbandry 250+, breed two **mediocre horses** ~10× and record each foal's speed/jump/health | Foals trend **above** the parents' midpoint. ⚠️ Compare against a **pre-250 baseline** — this is a distribution shift, not a visible proc, so it cannot be judged from one foal |
+| HU61 | Breed horses across **several generations** at 1000 | Stock walks toward the species maximum but **does not arrive** in one or two generations. ⚠️ **The tuning row**: the effect compounds, so if generation 3 is already perfect, 0.25 is too high |
+| HU62 | Breed a horse whose stat is already at the **species maximum** | It stays there — never overshoots |
+| HU63 | Throw a **stack of eggs** at Husbandry 200+ | Visibly more than 1-in-8 hatch. Occasionally **four chicks** at once |
+| HU64 | **⚠️ The AFK row.** Let a chicken coop with a hopper run, collect eggs, throw them | **NO XP for laying, collecting, throwing or hatching.** Brood is yield-only |
+| HU65 | Let the chicks from HU63 **grow up** | **They pay nobody.** ⚠️ A hatched chick carries no bred-by marker — if it did, an AFK egg farm would become a raise-XP farm 20 minutes later |
+| HU66 | Put **eggs in a dispenser** and fire it | No Brood at all — a dispensed egg has no player owner |
+| HU67 | At Husbandry 300+, work a herd through all four harvest verbs for a while | Occasional `**HIDDEN BOUNTY**` message plus an extra item. String/leather/scute are common; a **name tag** is rare and needs level 500 |
+| HU68 | Check which treasure comes off which verb | Verb-specific: honey block only from hives, string only from shears, leather only from milk, scute only from brushing. **Keyed on the verb, never the species** |
+
+### 10i. Herdsman's Call (stage 6)
+
+| # | Action | Expect |
+|---|---|---|
+| HU69 | At Husbandry 100+, right-click a **goat horn** | `**HERDSMAN'S CALL**`, the activation sound, **and the horn still sounds normally** — mcMMO only observes the click |
+| HU70 | Sound the call near a penned herd and walk away | Animals **path toward you** without you holding food. ⚠️ **They must not clip through fences or water** — this is vanilla navigation, not a teleport or a velocity shove |
+| HU71 | Sound the call with animals behind a **closed gate** | They walk up to the gate and stop. If they come through, the ability is doing something it should not |
+| HU72 | Sound the call, then milk the **same cow** 5× in a row | **All five pay.** The cooldown bypass is one of the three effects |
+| HU73 | ⚠️ After HU72 ends, milk that cow again immediately | **Nothing** — the bypass must not have stamped the animal's clock, or the ability would be worth twice what it looks like |
+| HU74 | Sound the call, then shear/brush/harvest a hive | **Every harvest doubles**, with no roll — even at Bountiful Harvest rank 1 |
+| HU75 | Sound the call twice in a row | Second press prints `Skills.TooTired` with the remaining cooldown. A refusal must **not** burn the cooldown |
+| HU76 | `/mcability` off, then press the horn | Nothing, silently |
+| HU77 | ⚠️ **Perf:** stand in a 100-animal pen with the ability **idle** for a minute, watching tick time | No measurable cost. The radius reads 0 while idle, so no entity sweep runs at all |
+| HU78 | Sound the call in that same pen | Tick time stays sane. The sweep is capped at radius 40 in code |
+
 ### 10e. Cross-checks
 
 | # | Action | Expect |
 |---|---|---|
-| HU29 | `/mcstats husbandry` | **Four** sub-skills listed — Multi-Breed, Twins, Accelerated Growth, Bountiful Harvest — with ranks, and no `!Husbandry.…!` literals. ⚠️ **No per-effect stat lines yet**: Husbandry has no `HusbandryStatsRenderer`, so it falls through to `GenericSkillStatsRenderer` and the `.Stat` locale keys go unread. Pre-existing since stage 1, not a stage-3 regression — note it, do not file it |
+| HU29 | `/mcstats husbandry` | **All nine** sub-skills listed with ranks and per-effect stat lines, and no `!Husbandry.…!` literals. (Fixed since stage 3: `HusbandryStatsRenderer` now exists — the earlier fall-through to `GenericSkillStatsRenderer` is gone) |
+| HU79 | Check the three super-ability trigger items are distinct | Feather = Second Wind, gunpowder = Smoke Bomb, **goat horn = Herdsman's Call**. All three listen on one event; a collision activates one and prints another's refusal |
 | HU30 | Breed a **tamed wolf** | Pays **Husbandry**, not Taming. The boundary is the verb, never the species |
 | HU31 | Feed a wolf raw meat to **heal** it | Pays **Taming** (Fast Food Service), not Husbandry |
 | HU32 | Watch the XP bar while breeding | A Husbandry bar appears, coloured **yellow** |
