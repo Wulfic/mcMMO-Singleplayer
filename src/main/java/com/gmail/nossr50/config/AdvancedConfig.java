@@ -4,6 +4,7 @@ import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -895,6 +896,25 @@ public class AdvancedConfig extends ConfigLoader {
     public double getHerdsmansCallRadius() {
         return config.getDouble("Skills.Husbandry.HerdsmansCall.Radius",
                 HusbandryManager.DEFAULT_HERD_RADIUS);
+    }
+
+    // --- Hunter (Pass 2) -----------------------------------------------------------------------
+
+    /**
+     * Scales Mob Mastery's flat bonus damage when it is delivered by a player-fired projectile rather
+     * than a melee swing.
+     *
+     * <p>A melee bonus is already scaled by the attack-cooldown charge, so a spammed swing pays less;
+     * a bow shot has no equivalent throttle, which makes ranged the half of the sub-skill most likely
+     * to want retuning once §G measures it. Shipped at {@code 1.0} — the ruled behaviour, unchanged —
+     * so this knob costs nothing until somebody deliberately turns it.
+     *
+     * <p>Clamped at zero: a negative multiplier would turn earned mastery into a penalty, which is a
+     * failure no player could diagnose.
+     */
+    public double getHunterMasteryRangedDamageMultiplier() {
+        return Math.max(0.0D, config.getDouble("Skills.Hunter.MobMastery.Ranged_Damage_Multiplier",
+                HunterManager.DEFAULT_RANGED_DAMAGE_MULTIPLIER));
     }
 
     // --- Unarmored (Pass 2) --------------------------------------------------------------------

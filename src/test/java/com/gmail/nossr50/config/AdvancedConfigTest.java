@@ -60,4 +60,42 @@ class AdvancedConfigTest {
         // LevelUps: SendCopyOfMessageToChat true.
         assertTrue(config.doesNotificationSendCopyToChat(NotificationType.LEVEL_UP_MESSAGE));
     }
+
+    @Test
+    void theHunterRangedMultiplierIsShippedAtOneAndDeclaredInTheFile(@TempDir Path dataFolder)
+            throws Exception {
+        final AdvancedConfig config = new AdvancedConfig(dataFolder);
+
+        // 1.0 = the ruled behaviour, unchanged. A knob whose default alters the ruling would be a
+        // config that lies.
+        assertEquals(1.0D, config.getHunterMasteryRangedDamageMultiplier(), 0.0001D);
+
+        // ...and the key is really in the shipped document, not merely in the getter's fallback.
+        // Without this, a player would never find the knob and a "turn it down" instruction in the
+        // §G notes would refer to a line that does not exist. The written file IS the bundled
+        // resource, so asserting on it proves the resource declares the path.
+        //
+        // A substring search is safe here only because the token is long and unique — contrast the
+        // Hunter stage-2 trap where asserting on "kills" passed unconditionally against "skills".
+        final String shipped = Files.readString(dataFolder.resolve("advanced.yml"));
+        assertTrue(shipped.contains("Ranged_Damage_Multiplier: 1.0"),
+                "advanced.yml must ship the Hunter ranged tuning knob");
+    }
+
+    @Test
+    void aNegativeHunterRangedMultiplierIsClampedRatherThanInverted(@TempDir Path dataFolder)
+            throws Exception {
+        // Earned mastery must never become a penalty. A hand-edited -1.0 would otherwise make an
+        // archer's arrows hit their best-known creature for LESS than an unmastered one, which is a
+        // failure no player could ever diagnose.
+        final Path file = dataFolder.resolve("advanced.yml");
+        new AdvancedConfig(dataFolder);
+        Files.writeString(file, Files.readString(file)
+                .replace("Ranged_Damage_Multiplier: 1.0", "Ranged_Damage_Multiplier: -1.0"));
+
+        // Reading back a deliberately edited file also proves the getter consults the document at
+        // this exact path rather than always answering with its own default.
+        assertEquals(0.0D, new AdvancedConfig(dataFolder).getHunterMasteryRangedDamageMultiplier(),
+                0.0001D);
+    }
 }

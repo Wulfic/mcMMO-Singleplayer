@@ -365,6 +365,29 @@ Skills:
                 Standard: 100
                 RetroMode: 1000
     #
+    #  Settings for Hunter
+    ###
+    Hunter:
+        MobMastery:
+            # Mob Mastery is the per-creature half of Hunter: kill 500 / 2,500 / 10,000 of ONE mob
+            # type and every hit you land on that type deals +1.0 / +2.0 / +3.0 extra damage.
+            #
+            # The kill thresholds and the bonuses themselves are NOT configurable, on purpose. They
+            # are three numbers a player is meant to learn once and have mean the same thing for
+            # every creature in the game -- the whole point of the horizontal axis.
+            #
+            # This is the one knob, and it ships at 1.0 (= no change to the ruled behaviour).
+            #
+            # WHY IT EXISTS: a melee bonus is already throttled by the vanilla attack-cooldown
+            # charge, so spam-clicking pays less than a charged swing. A bow shot has no equivalent
+            # throttle, so a fully-drawn arrow collects the whole +3.0 every time. If play-testing
+            # finds ranged mastery over-tuned, turn this down instead of changing code; 0.5 halves
+            # the bonus on arrows, bolts and thrown tridents while leaving melee exactly as ruled.
+            #
+            # A negative value is clamped to 0 -- earned mastery must never become a penalty.
+            Ranged_Damage_Multiplier: 1.0
+
+    #
     #  Settings for Husbandry
     ###
     Husbandry:

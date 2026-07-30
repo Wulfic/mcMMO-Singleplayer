@@ -137,10 +137,7 @@ public final class HunterListener {
             return;
         }
 
-        // The full registry id, namespace included — the same key PlayerProfile persists, and the
-        // reason that section is written as one map rather than key-by-key: a modded namespace may
-        // legally contain a dot, which YamlConfiguration would read as a path separator.
-        final String mobId = Registries.ENTITY_TYPE.getId(victim.getType()).toString();
+        final String mobId = masteryKeyOf(victim);
         final int killsBefore = hunter.getKills(mobId);
         final int killsAfter = hunter.recordKill(mobId);
         announceFirstCountedKill(mobId, killsAfter);
@@ -148,6 +145,27 @@ public final class HunterListener {
         if (hunter.crossedMasteryThreshold(killsBefore, killsAfter)) {
             announceMastery(mmoPlayer, victim, hunter.masteryTier(killsAfter), killsAfter);
         }
+    }
+
+    /**
+     * The key one creature's mastery is filed under: its <b>full</b> registry id, namespace included
+     * ({@code minecraft:zombie}).
+     *
+     * <p>⚠️ <b>One function on purpose, and it is not pedantry.</b> Two places need this key — here,
+     * where a kill is banked, and {@code EntityDamageListener#applyHunterMastery}, where the resulting
+     * bonus is spent. They index the same map, so if the two ever disagreed about the key the counters
+     * would keep climbing and the damage bonus would read {@code 0.0} forever, with no error, no log
+     * and no failing test on either side alone. That is the one-directional-completeness trap this
+     * port has now hit three times; the cheapest possible fix is to make the two calls literally the
+     * same call.
+     *
+     * <p>Deliberately <em>not</em> {@code ConfigStringUtils.getConfigEntityTypeString(getPath())}
+     * ("{@code Cow}"), which every Husbandry table uses. Those tables are closed key spaces authored
+     * by hand in a YAML file; this one is open-ended, persisted verbatim into the player profile, and
+     * has to survive two mods shipping a creature of the same name.
+     */
+    static @NotNull String masteryKeyOf(@NotNull LivingEntity entity) {
+        return Registries.ENTITY_TYPE.getId(entity.getType()).toString();
     }
 
     /**

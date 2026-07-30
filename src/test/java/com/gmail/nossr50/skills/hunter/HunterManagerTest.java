@@ -4,12 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
+import com.gmail.nossr50.fabric.McMMOMod;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -30,14 +33,28 @@ class HunterManagerTest {
     private static final String CREEPER = "minecraft:creeper";
 
     private PlayerProfile profile;
+    private McMMOPlayer mmoPlayer;
     private HunterManager manager;
 
     @BeforeEach
     void setUp() {
         profile = new PlayerProfile("Steve", UUID.randomUUID(), 0);
-        final McMMOPlayer mmoPlayer = mock(McMMOPlayer.class);
+        mmoPlayer = mock(McMMOPlayer.class);
         when(mmoPlayer.getProfile()).thenReturn(profile);
+        // A fully charged swing. ⚠️ Stubbed rather than left at Mockito's 0.0F: unstubbed, every
+        // melee bonus below would scale to nothing and the tests would pass for the wrong reason.
+        lenient().when(mmoPlayer.getAttackStrength()).thenReturn(1.0F);
         manager = new HunterManager(mmoPlayer);
+        // ⚠️ Cleared on BOTH sides, not just after. McMMOMod's config holders are process-wide
+        // statics on a JVM JUnit reuses across classes, so a mocked AdvancedConfig left behind by
+        // some other test would answer 0.0 for the ranged multiplier and redden the asymmetry test
+        // depending only on execution order.
+        McMMOMod.setAdvancedConfig(null);
+    }
+
+    @AfterEach
+    void tearDown() {
+        McMMOMod.setAdvancedConfig(null);
     }
 
     // --- The threshold ladder -------------------------------------------------------------------
@@ -92,6 +109,46 @@ class HunterManagerTest {
             assertTrue(bonus <= 3.0, "kills=" + kills + " paid " + bonus);
             assertTrue(bonus >= 0.0, "kills=" + kills + " paid " + bonus);
         }
+    }
+
+    // --- Per-hit delivery (stage 4) --------------------------------------------------------------
+
+    @Test
+    void aMissingAdvancedConfigLeavesTheRangedBonusIntactRatherThanDeletingIt() {
+        // ⚠️ The direction of failure is the whole point. This value is a MULTIPLIER, so a defensive
+        // 0.0 fallback would not fail safe — it would silently erase the entire ranged half of the
+        // sub-skill whenever the config service was unavailable, and the symptom ("my bow stopped
+        // getting the bonus") is indistinguishable from the feature never having worked.
+        // Contrast StealthManager#getPadfootSpeedBonus, where the config value IS the bonus and 0 is
+        // correctly "no effect".
+        McMMOMod.setAdvancedConfig(null);
+        for (int i = 0; i < 500; i++) {
+            manager.recordKill(ZOMBIE);
+        }
+
+        assertEquals(1.0, manager.masteryDamageBonusForHit(ZOMBIE, false), EPSILON);
+    }
+
+    @Test
+    void theAttackCooldownChargeScalesMeleeOnly() {
+        // The D-HU4 asymmetry, pinned MC-free. A half-charged swing is worth half its mastery; a
+        // loosed arrow is worth all of it, because there is no swing behind it to charge. Both sides
+        // asserted from ONE charge value, so a scaling applied to the wrong branch cannot hide.
+        when(mmoPlayer.getAttackStrength()).thenReturn(0.5F);
+        for (int i = 0; i < 10_000; i++) {
+            manager.recordKill(ZOMBIE);
+        }
+
+        assertEquals(1.5, manager.masteryDamageBonusForHit(ZOMBIE, true), EPSILON);
+        assertEquals(3.0, manager.masteryDamageBonusForHit(ZOMBIE, false), EPSILON);
+    }
+
+    @Test
+    void anUnmasteredCreatureIsWorthNothingOnEitherDeliveryPath() {
+        // Zero has to stay exactly zero on both branches: multiplying it by a charge or by a config
+        // knob must not produce a token bonus, and must not produce NaN if either is ever unset.
+        assertEquals(0.0, manager.masteryDamageBonusForHit(ZOMBIE, true), EPSILON);
+        assertEquals(0.0, manager.masteryDamageBonusForHit(ZOMBIE, false), EPSILON);
     }
 
     @Test

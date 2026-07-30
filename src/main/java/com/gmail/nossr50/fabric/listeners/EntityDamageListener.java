@@ -16,6 +16,7 @@ import com.gmail.nossr50.skills.archery.Archery;
 import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
+import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.skills.maces.MacesManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.stealth.StealthManager;
@@ -330,6 +331,16 @@ public final class EntityDamageListener {
         // by construction — a player cannot sprint and sneak at once — so at most one of the two
         // fires for any swing. Runs after Smash so a backstab multiplies the whole melee total.
         result = applyAssassin(entity, source, result);
+
+        // Pass 2: Hunter Mob Mastery. ⚠️ LAST IN THIS CHAIN, AND THE POSITION IS LOAD-BEARING.
+        // Assassin above multiplies the *whole* running melee total, so a Hunter bonus added before
+        // it would be multiplied too — "+3.0 damage against zombies" would silently become +3.0 ×
+        // backstab × crit against a crouching player. Landing it here makes the number on the tin the
+        // number that lands. It is also the only sibling keyed on the *target's* identity rather than
+        // the attacker's state, so nothing below it could want to read a pre-Hunter figure.
+        // Pinned by EntityDamageListenerHunterTest#theMasteryBonusIsAddedAfterAssassinMultiplies —
+        // swap these two lines and that test, and only that test, goes red.
+        result = applyHunterMastery(entity, source, result);
 
         // K1 defender / K2 branch: the entity *taking* damage is a player — fall damage feeds
         // Agility Roll, an incoming entity hit feeds Agility Dodge.
@@ -1228,6 +1239,91 @@ public final class EntityDamageListener {
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
                 "Stealth.SubSkill.Assassin.Proc");
         return (float) (amount * stealth.getAssassinDamageMultiplier());
+    }
+
+    /**
+     * Hunter <b>Mob Mastery</b>: flat bonus damage against a creature this player has personally
+     * killed enough of (stage 4, D-HU3/D-HU4).
+     *
+     * <p>Third sibling of {@link #applySprintSmash} and {@link #applyAssassin} on this seam, and a
+     * sibling rather than a new arm of {@code MeleeDamageBonus} for the reason those two are: that
+     * class dispatches on the <em>weapon in hand</em>, and mastery has nothing to do with what you are
+     * holding. It is in fact the only bonus here keyed on the <b>target's identity</b> — the same
+     * creature is worth the same bonus to a fist as to a netherite sword, which is why the flat figure
+     * is deliberately small (a bare fist at tier 3 hits for 4.0, four times its base).
+     *
+     * <h2>Which hits qualify</h2>
+     * Melee swings and the player's own projectiles — arrows, bolts, thrown tridents — mirroring
+     * exactly the two K1 arms above that already accept them, and no wider. Explicitly excluded:
+     * <ul>
+     *   <li><b>The wolf-bite arm.</b> A wolf's hit is credited to the wolf, so gate 1 drops it for
+     *       free; Taming's Sharpened Claws and Gore already own that damage and adding Hunter would
+     *       double-dip on one bite.</li>
+     *   <li><b>Everything else a player can be blamed for</b> — their lit TNT, a splash potion, a
+     *       Blast Mining charge. Each is attributable to the player and none is a hunt; a flat bonus
+     *       on every tick of a lingering cloud is an exploit wearing a sub-skill's name.</li>
+     *   <li><b>Thorns</b>, for the same reason Smash and Assassin refuse it: being punched is not
+     *       swinging.</li>
+     * </ul>
+     *
+     * <p><b>Spawn origin is deliberately NOT re-checked here.</b> Stage 1's marker gates what a kill
+     * is <em>worth</em>, not what a hit is worth: a spawner zombie is still a zombie, and knowledge
+     * earned in the wild does not evaporate when the next one arrives on a mineshaft floor. Refusing
+     * the bonus there would close no farm — the farm earns no mastery either way — while making the
+     * damage a player sees depend on an invisible property of the mob they are hitting.
+     *
+     * <p>No notification and no XP. A message on every qualifying swing would be spam at exactly the
+     * moment the player is busiest; the milestone is announced once, when it is crossed
+     * ({@code HunterListener}). And no combat XP is re-paid, matching Smash and Assassin — the weapon
+     * arm already paid it on the pre-bonus figure, and this damage came from Hunter, not the weapon.
+     */
+    static float applyHunterMastery(LivingEntity target, DamageSource source, float amount) {
+        // Gate 1, and the same one HunterListener opens with: the hit has to be the player's. For a
+        // projectile getAttacker() resolves back to the shooter, so this admits both halves at once
+        // — and keeping the two entry conditions identical is what stops "the kill counted" and "the
+        // bonus applied" drifting apart.
+        if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)) {
+            return amount;
+        }
+        if (target instanceof ArmorStandEntity) {
+            return amount; // legacy skips armor stands on every combat path.
+        }
+
+        // Melee is the direct-source test the weapon arm, Smash and Assassin all use; Thorns is
+        // credited to the wearer but is not a swing.
+        final boolean melee = source.getSource() == attacker && !source.isOf(DamageTypes.THORNS);
+        if (!melee && !isProjectileFrom(source, attacker)) {
+            return amount;
+        }
+        if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.HUNTER, target)) {
+            return amount;
+        }
+
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(attacker.getUuid());
+        if (mmoPlayer == null) {
+            return amount; // data not loaded (e.g. mid-join).
+        }
+        final HunterManager hunter = mmoPlayer.getHunterManager();
+        if (hunter == null) {
+            return amount;
+        }
+
+        final double bonus = hunter.masteryDamageBonusForHit(
+                HunterListener.masteryKeyOf(target), melee);
+        return bonus <= 0 ? amount : amount + (float) bonus;
+    }
+
+    /**
+     * Whether this damage was delivered by a projectile {@code attacker} fired themselves.
+     *
+     * <p>Owner identity rather than a bare {@code instanceof ServerPlayerEntity}: the responsible
+     * entity has already been resolved, and requiring the two to agree means a projectile whose
+     * attribution and ownership disagree (a mod re-crediting a shot mid-flight) contributes nothing
+     * rather than paying the wrong player's mastery.
+     */
+    private static boolean isProjectileFrom(DamageSource source, ServerPlayerEntity attacker) {
+        return source.getSource() instanceof PersistentProjectileEntity projectile
+                && projectile.getOwner() == attacker;
     }
 
     /**

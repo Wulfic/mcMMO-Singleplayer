@@ -547,20 +547,31 @@ them. Each is now pinned by a mutation-checked test, but these rows are the live
 
 ---
 
-## Session 11 — Hunter: the anti-farm gate and the kill counters (~40 min)
+## Session 11 — Hunter: the anti-farm gate, the kill counters and the mastery damage (~60 min)
 
-Covers stages 1 and 3 **together**, and that pairing is the point: stage 1's spawn-origin marker had
-nothing to refuse until stage 3 gave it a counter, so until now it was untestable by construction.
-Stage 2 (the enum, the config, the XP bar) has nothing to play.
+Covers stages 1, 3 and 4 **together**, and that grouping is the point: each one is untestable without
+the next. Stage 1's spawn-origin marker had nothing to refuse until stage 3 gave it a counter, and
+stage 4's damage bonus does not exist until a counter has crossed 500. Stage 2 (the enum, the config,
+the XP bar) has nothing to play.
 
 **⚠️ There is no in-game screen for kill counts yet** — `/mcstats hunter` is stage 7. Read them
 straight off the save: `<instance>/saves/<world>/mcmmo/players/<uuid>.yml`, the `kills:` section.
 The file is written on the save interval and on world close, so **quit to the title screen before
 reading it**.
 
-**⚠️ Expect the whole session to be quiet.** Mastery only announces itself at 500 kills, and the
-damage those tiers are worth is not wired until stage 4. Everything below is verified by the
-`kills:` section, one log line, and one message.
+**⚠️ Expect rows HN1–HN16 to be quiet.** Mastery only announces itself at 500 kills. Everything up to
+HN17 is verified by the `kills:` section, one log line, and one message.
+
+**🔑 Shortcut for the HN20+ block, and it is the intended way to run it.** HN17 asks for 500 kills of
+one mob, which is hours. **Quit to the title screen, open `mcmmo/players/<uuid>.yml`, and hand-edit the
+`kills:` section** — e.g. `minecraft:zombie: 10000` for the top tier — then reopen the world. That is a
+legitimate fixture, not a cheat around the test: HN8–HN16 are what prove the counter is *hard to move*,
+and HN20+ are about what the number is *worth* once you have it. Do HN17/HN18 honestly at 500 first,
+then edit up to 10,000 to measure the +3.0 tier without a second grind.
+
+**Measuring damage:** `/data get entity @n[type=zombie] Health` before and after a hit. Take every
+melee reading on a **fully charged** swing (the white attack indicator full) unless the row says
+otherwise, and use the **same weapon** for the mastered and unmastered comparison.
 
 | # | Action | Expect |
 |---|---|---|
@@ -580,9 +591,26 @@ damage those tiers are worth is not wired until stage 4. Everything below is ver
 | HN14 | Kill a zombie you lured through a **nether portal** from the overworld | **Counts.** `DIMENSION_TRAVEL` is deliberately not disqualifying — the mob was already yours to fight. (A zombified piglin the *portal itself* spawns does not count; that is `STRUCTURE`) |
 | HN15 | Kill a raid pikeman / a patrol captain / an evoker's vex | All **count**, deliberately. A defended village raid is about the most legitimate combat in the game. Flag it here if raid farming feels like a shortcut — the backstop is a rolling per-hour cap, not a change to this list |
 | HN16 | **The known leak, stated not hidden.** Kill a skeleton riding a spawner-spawned spider | The **spider** does not count; the **skeleton** does. A jockey arrives with `SpawnReason.JOCKEY`, not `SPAWNER`. Report how exploitable this feels in practice |
-| HN17 | The long one. Take one mob to **500 kills** (a wild-spawn mob, so it counts) | A chat message: `[ mcMMO @Mob Mastery ] You have mastered the Zombie -- Mastery 1, 500 slain.` plus the unlock sound. **No damage change yet** — that is stage 4, and the message deliberately does not claim one |
+| HN17 | The long one. Take one mob to **500 kills** (a wild-spawn mob, so it counts) | A chat message: `[ mcMMO @Mob Mastery ] You have mastered the Zombie -- Mastery 1, 500 slain.` plus the unlock sound. The message deliberately claims **no** damage bonus even though stage 4 now applies one — it is worded as a statement of fact so it stays true at every tier |
 | HN18 | Kill one more of the same mob | **Silent.** The announcement is once per threshold crossing, not once per kill past it |
 | HN19 | Set `Enabled_For_PVE: false` under `Skills.Hunter` in `config.yml`, restart, kill 5 zombies | Counter does not move. The switch stops mobs feeding the skill entirely rather than muting a bonus — that is documented in the config and is the intended reading |
+
+### Stage 4 — what the mastery is worth (HN20+)
+
+Read the shortcut note above first. Every row here assumes a **mastered zombie** (500+ kills, or a
+hand-edited count) and an **unmastered skeleton** as the control.
+
+| # | Action | Expect |
+|---|---|---|
+| HN20 | **The headline.** Fully-charged hit on a zombie, then the same weapon on a skeleton, reading `Health` before and after each | The zombie takes exactly **+1.0** more at Mastery 1 (**+2.0** at 2,500, **+3.0** at 10,000). Flat, not a percentage — the same +1.0 with a wooden sword and a netherite one |
+| HN21 | Punch a mastered zombie **bare-fisted**, fully charged | Base 1.0 becomes 2.0 at tier 1 and **4.0 at tier 3**. ⚠️ This is the row the +2/+4/+6 → +1/+2/+3 halving exists for. If a mastered fist feels absurd, say so — it is the worst case by construction |
+| HN22 | **Spam-click** a mastered zombie without letting the swing recharge | Noticeably **less** than the full bonus — melee mastery scales with the attack-cooldown charge, like every other melee bonus in the mod. If a spammed swing gets the full +N, the charge scaling is broken |
+| HN23 | Shoot a mastered zombie with a **fully drawn bow**, then a skeleton | Zombie takes +N, skeleton does not. Then fire again **immediately after a melee swing** and again after standing still for 10s — **the arrow bonus must be identical both times**. Ranged deliberately ignores the charge, and this row is what proves it is not reading a stale melee value |
+| HN24 | Set `Ranged_Damage_Multiplier: 0.0` in `advanced.yml → Skills.Hunter.MobMastery`, restart. Shoot a mastered zombie, then melee it | Arrow: **no bonus.** Melee: **unchanged, full bonus.** This is the §G tuning knob; if it moves melee too it is wired wrong. **Set it back to 1.0 afterwards** |
+| HN25 | **The ordering row.** Crouch until Stealth Assassin is ready, backstab a mastered zombie fully charged | Total should be `(base damage × backstab multiplier) + N`, **not** `(base + N) × multiplier`. At tier 3 with a ×2 backstab on a 7.0 hit that is **17.0, not 20.0**. If the number is the larger one, Hunter is being multiplied by Assassin |
+| HN26 | Let your **wolf** kill a mastered zombie; separately, blow one up with TNT you lit | Neither gets the mastery bonus. The wolf's bite is Taming's, and an explosion is not a hunt |
+| HN27 | Kill a **spawner** zombie by hand while mastered | **It DOES take the +N** — and the counter still does not move. Deliberate: origin gates what a kill is *worth*, not what a hit is worth. Report if this reads as inconsistent in play |
+| HN28 | With `Enabled_For_PVE: false` (from HN19), hit a mastered zombie | **No bonus either.** The switch has to reach both halves of the skill, not just the counter |
 
 **⚠️ Stated up front so it is not reported as a bug: no origin closes a dark-room or nether-wastes
 farm.** Those mobs are `NATURAL` and legitimately so. What excludes most of them is HN7 — they die to

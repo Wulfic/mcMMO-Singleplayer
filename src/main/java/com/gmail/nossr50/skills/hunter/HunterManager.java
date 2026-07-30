@@ -1,7 +1,9 @@
 package com.gmail.nossr50.skills.hunter;
 
+import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.SkillManager;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
@@ -33,14 +35,13 @@ import org.jetbrains.annotations.NotNull;
  * resolver lives here, on the manager. Routing it through {@code RankUtils} would produce a sub-skill
  * whose rank display lies.
  *
- * <h2>Stage 2 scope — read this before adding to the class</h2>
- * This is the skill's plumbing stage: the kill counters and the threshold arithmetic they feed.
- * <b>Nothing calls {@link #masteryDamageBonus} yet.</b> It lands on the
- * {@code EntityDamageListener#onModifyAppliedDamage} seam in stage 4, and it must run <b>last</b> in
- * that chain — after Sprint Smash and after Stealth Assassin — because Assassin multiplies the whole
- * melee total, so a Hunter bonus applied first would be multiplied along with it. XP
- * ({@code xpForKill}), the tier table, Trophy Hunter's loot re-roll and Quarry Sense are stages 5–7
- * and are deliberately absent rather than stubbed.
+ * <h2>Scope as of stage 4 — read this before adding to the class</h2>
+ * The kill counters, the threshold arithmetic they feed, and the bonus damage a tier is worth.
+ * {@link #masteryDamageBonusForHit} is spent by {@code EntityDamageListener#applyHunterMastery},
+ * which runs <b>last</b> in that chain — after Sprint Smash and after Stealth Assassin — because
+ * Assassin multiplies the whole melee total, so a Hunter bonus applied first would be multiplied
+ * along with it. XP ({@code xpForKill}), the tier table, Trophy Hunter's loot re-roll and Quarry
+ * Sense are stages 5–7 and are deliberately absent rather than stubbed.
  *
  * @see <a href="file:../../../../../../../plans/new-skills/hunter.md">plans/new-skills/hunter.md</a>
  */
@@ -71,6 +72,18 @@ public class HunterManager extends SkillManager {
      * +3.0 the multipliers are netherite 1.375×, wooden 1.75×, bare fist 4×.
      */
     public static final double[] MASTERY_DAMAGE_BONUS = {1.0, 2.0, 3.0};
+
+    /**
+     * Shipped {@code Skills.Hunter.MobMastery.Ranged_Damage_Multiplier}: the mastery bonus is worth
+     * exactly as much from a bow as from a blade.
+     *
+     * <p>Ships at {@code 1.0} on purpose — the ruling is that mastery applies to <em>any</em> damage
+     * the player is responsible for, and a knob whose default changes the ruled behaviour would be a
+     * config that lies. It exists because the ranged half is the part of D-HU4 most likely to need a
+     * tuning pass in §G (a capped +3.0 on every fully-drawn arrow), and having it here means that pass
+     * is a config edit rather than a code change.
+     */
+    public static final double DEFAULT_RANGED_DAMAGE_MULTIPLIER = 1.0;
 
     public HunterManager(McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.HUNTER);
@@ -149,6 +162,51 @@ public class HunterManager extends SkillManager {
     /** The flat bonus damage this player currently gets against {@code mobId}. */
     public double masteryDamageBonusAgainst(@NotNull String mobId) {
         return masteryDamageBonus(getKills(mobId));
+    }
+
+    /**
+     * What this player's mastery is worth on <em>one hit</em> against {@code mobId} — the figure the
+     * damage seam actually adds.
+     *
+     * <h2>The melee/ranged asymmetry is deliberate, and it is the port's existing pattern</h2>
+     * A melee bonus is scaled by the captured attack-cooldown charge
+     * ({@link McMMOPlayer#getAttackStrength()}), exactly as every other melee bonus in this port is
+     * ({@code MeleeDamageBonus} scales Stab, Axe Mastery, Crush, Steel Arm and the melee half of
+     * Impale the same way). Without it, spam-clicking would out-damage a charged swing — an exploit,
+     * and off-pattern for the whole codebase.
+     *
+     * <p>A ranged bonus is <b>not</b> scaled, because a throw or a loosed arrow has no swing to
+     * charge; the same asymmetry Trident Impale already ships. That is not merely stylistic here:
+     * {@code attackStrength} is a field stamped at melee-swing time, so on a projectile hit it holds
+     * whatever the player's last <em>swing</em> left behind — reading it would make an archer's bonus
+     * depend on how recently they punched something.
+     *
+     * @param mobId the victim's raw registry id, e.g. {@code minecraft:zombie}
+     * @param melee whether the hit was a melee swing rather than a player-fired projectile
+     * @return the damage to add to this hit; {@code 0.0} below the first mastery threshold
+     */
+    public double masteryDamageBonusForHit(@NotNull String mobId, boolean melee) {
+        final double bonus = masteryDamageBonusAgainst(mobId);
+        if (bonus <= 0.0) {
+            return 0.0;
+        }
+        return melee ? bonus * mmoPlayer.getAttackStrength() : bonus * rangedMultiplier();
+    }
+
+    /**
+     * The {@code Ranged_Damage_Multiplier} tuning knob, or its shipped default.
+     *
+     * <p>⚠️ <b>Falls back to {@link #DEFAULT_RANGED_DAMAGE_MULTIPLIER}, not to zero</b>, and the
+     * direction matters: this value is a <em>multiplier</em>, so a defensive {@code 0.0} would not
+     * fail safe, it would silently delete the whole ranged half of the sub-skill the moment the config
+     * service were unavailable. Contrast {@code StealthManager#getPadfootSpeedBonus}, where the config
+     * value <em>is</em> the bonus and zero is correctly "no effect".
+     */
+    private double rangedMultiplier() {
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        return advanced == null
+                ? DEFAULT_RANGED_DAMAGE_MULTIPLIER
+                : advanced.getHunterMasteryRangedDamageMultiplier();
     }
 
     /**

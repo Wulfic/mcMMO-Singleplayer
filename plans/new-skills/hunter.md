@@ -204,9 +204,10 @@ a future refactor will move it.
   for the whole codebase. The melee/ranged asymmetry is already precedent: Trident Impale does exactly
   this, and `MeleeDamageBonus.java:102-108` documents why (a throw has no swing to charge).
 
-⚠️ **Watch in §G: a capped +6.0 on a fully-drawn bow.** The ranged ruling is the one most likely to
-need a follow-up tuning pass — a separate `Ranged_Multiplier` knob (default 1.0) is cheap insurance
-and costs nothing if it stays at 1.0.
+⚠️ **Watch in §G: a capped +3.0 on a fully-drawn bow** (the figure is +3.0, not +6.0 — halved by the
+2026-07-30 ruling). The ranged ruling is the one most likely to need a follow-up tuning pass.
+✅ **The `Ranged_Multiplier` knob shipped with stage 4**, as
+`advanced.yml → Skills.Hunter.MobMastery.Ranged_Damage_Multiplier: 1.0`, so that pass is a config edit.
 
 ---
 
@@ -588,8 +589,8 @@ a substring search on the raw document.
 The mastery ladder ships as the **ruled** `500 / 2,500 / 10,000` kills → **+1.0 / +2.0 / +3.0** damage,
 as parallel tables on `HunterManager` with the index of one belonging to the index of the other (pinned,
 because a threshold added without its bonus would fail at runtime, in the damage path, on somebody's
-10,000th kill). **Nothing calls `masteryDamageBonus` yet** — that is stage 4, and it must run **last**
-in the `onModifyAppliedDamage` chain, after Sprint Smash and after Stealth Assassin.
+10,000th kill). ✅ **Stage 4 now spends it**, last in the `onModifyAppliedDamage` chain — after Sprint
+Smash and after Stealth Assassin.
 
 ⚠️ **`Diminished_Returns.Threshold.Hunter` is the one entry in that table that is not decorative.**
 Every other skill sits far out of its reach; a T4 boss at ~1,500 XP means **fourteen kills in ten
@@ -685,12 +686,117 @@ static that JUnit would otherwise carry between test classes.
 `fabric/listeners/HunterListener.java` (new), `McMMOMod#onInitialize` (+1 registration),
 `locale_en_US.properties` (+1 key), `HunterListenerTest` (new, 14 tests).
 
-### ⬜ Next: stage 4
+---
 
-`applyHunterMastery` as the **fourth** sibling in `EntityDamageListener#onModifyAppliedDamage`, running
-**after** Sprint Smash and Assassin. Everything it needs already exists and is unit-tested:
-`masteryDamageBonusAgainst(mobId)` resolves the whole thing from the victim's id. The ordering test is
-the one that matters and it must be mutation-checked by swapping the two lines.
+## ✅ Stage 4 as built (2026-07-30)
+
+**Mob Mastery pays now.** One new arm on the existing K1 seam, one config knob, **no new listener, no
+new mixin, no new locale string, no new advancement.** Suite **1230 green** (+20), `./gradlew build`
+exit 0, headless boot `Done (0.921s)` with **0 exceptions, 0 mixin failures** and **1910 advancements**
+unchanged (correct — this stage ships no datapack file). **6 mutations run, each reddening exactly the
+tests it should.**
+
+### The ordering, and the proof
+
+```java
+result = applySprintSmash(entity, source, result);   // existing
+result = applyAssassin(entity, source, result);      // existing
+result = applyHunterMastery(entity, source, result); // NEW — runs last
+```
+
+The plan called for the ordering to be pinned by a test; it is, and the test **drives the real
+`onModifyAppliedDamage`** rather than the arm directly. With a top-tier mastery (+3.0) and a ×3
+backstab on a 10.0 hit the two orderings are `10×3 + 3 = 33` and `(10+3)×3 = 39`. **Mutation-proven:
+swapping the two lines reddens `theMasteryBonusIsAddedAfterAssassinMultiplies` and nothing else.**
+That test is also the only thing proving the arm is *called* at all — every other test invokes it
+directly, which is precisely the "gate proved, call site deleted" trap this port keeps hitting.
+
+### 🔑 THE ONE REAL RISK IN THIS STAGE WAS A SILENT, TOTAL KEY DRIFT
+
+Two places need the mastery key: `HunterListener`, where a kill is **banked**, and the damage arm,
+where the bonus is **spent**. They index the same map. Had they ever disagreed — full registry id on
+one side, `getPath()` on the other — **the counters would climb, the threshold message would still
+fire, and the damage would never change**, with no error, no log, and no failing test on either side
+alone, because each side is self-consistent. Same family as the one-directional-completeness trap from
+[[husbandry-wiring-audit]].
+
+Closed structurally rather than by assertion: **one function, `HunterListener#masteryKeyOf`, called by
+both.** Backed by `theBonusIsLookedUpUnderTheSameKeyTheCounterBanksItUnder`, which banks 500 kills
+through the **real** `AFTER_DEATH` handler and spends them through the **real** damage arm with no
+literal agreed in between. Mutation-proven by inlining `getPath()` on the damage side.
+
+### Which hits qualify, and the two that deliberately do not
+
+Entry gate is `source.getAttacker() instanceof ServerPlayerEntity` — **identical to `HunterListener`'s
+gate 1 on purpose**, so "the kill counted" and "the bonus applied" cannot drift apart either. It admits
+melee and projectiles in one read, since a projectile source resolves its attacker back to the shooter.
+Melee is then the direct-source test (`getSource() == attacker`, not Thorns) that the weapon arm, Smash
+and Assassin all already use.
+
+| Excluded | Why |
+|---|---|
+| The wolf-bite arm | Credited to the wolf, so gate 1 drops it free. Taming's Sharpened Claws/Gore own that damage; Hunter would double-dip on one bite. |
+| Player TNT / potions / Blast Mining | Attributable to the player, and not a hunt. **A flat bonus on every tick of a lingering cloud is an exploit wearing a sub-skill's name.** |
+| Thorns | Being punched is not swinging — the same carve-out its two siblings make. |
+| Armour stands | Legacy skips them on every combat path. |
+
+⚠️ **The plan's D-HU4 wording was "any damage attributable to the player".** Implemented as the
+narrower "melee swing or player-owned `PersistentProjectileEntity`", which is exactly the set the two
+existing K1 arms already accept — stated rather than absorbed, because the literal reading would have
+paid a flat bonus on explosions and potion clouds.
+
+### ✅ RULED HERE: spawn origin gates the KILL, not the HIT
+
+Stage 1's marker is **not** re-checked in the damage path. A spawner zombie is still a zombie, and
+knowledge earned in the wild does not evaporate when the next one arrives on a mineshaft floor.
+Re-checking would close **no** farm — the farm banks nothing either way — while making the damage a
+player sees depend on an invisible property of their target. Pinned by
+`aSpawnerMobStillTakesTheBonusItJustDoesNotAdvanceMastery`, which asserts **both** halves in one test.
+
+### The `Ranged_Damage_Multiplier` knob, shipped as the plan's "cheap insurance"
+
+`advanced.yml → Skills.Hunter.MobMastery.Ranged_Damage_Multiplier: 1.0` — the first Hunter section in
+that file. Ships at `1.0`, i.e. the ruled behaviour unchanged, so it is not a config that lies; it
+exists because ranged is the half of D-HU4 most likely to want retuning once §G measures a fully-drawn
+bow, and this makes that pass a config edit instead of a code change.
+
+- **Clamped at zero** (`Math.max`) — a hand-edited `-1.0` would make an archer's arrows hit their
+  best-known creature for *less* than an unmastered one, a failure no player could diagnose.
+- ⚠️ **The null-config fallback is `1.0`, NOT `0.0`, and the direction is load-bearing.** This is a
+  *multiplier*: a reflexive defensive zero would not fail safe, it would silently delete the entire
+  ranged half of the sub-skill. Contrast `StealthManager#getPadfootSpeedBonus`, where the config value
+  **is** the bonus and zero is correctly "no effect". Pinned by name.
+- ⚠️ **Mockito's default for a `double` is `0.0`** — an `AdvancedConfig` mock left unstubbed makes
+  every ranged test pass against a code path no player runs. Stubbed to the shipped `1.0` in `setUp`,
+  the same guard `EntityDamageListenerUnarmoredTest` needed for its per-attacker cap.
+- Verified back-filled into a pre-existing on-disk `advanced.yml` on boot (`copyMissingDefaults` does
+  fill an **absent** key — the trap is only for *changed defaults*).
+
+### The melee/ranged asymmetry, restated because it is now real code
+
+Melee scales by `mmoPlayer.getAttackStrength()`; ranged does not. Beyond the D-HU4 reasoning
+(spam-clicking must not beat a charged swing; a throw has no swing to charge) there is a concrete
+reason ranged **must not** read it: `attackStrength` is a field stamped at melee-swing time, so on a
+projectile hit it holds whatever the player's last *punch* left behind — an archer's bonus would depend
+on how recently they hit something with their fist.
+
+### Files
+
+`EntityDamageListener` (+`applyHunterMastery`, +`isProjectileFrom`, +1 call site),
+`HunterManager` (+`masteryDamageBonusForHit`, +`rangedMultiplier`, +`DEFAULT_RANGED_DAMAGE_MULTIPLIER`),
+`HunterListener` (+`masteryKeyOf`, extracted), `AdvancedConfig`
+(+`getHunterMasteryRangedDamageMultiplier`), `advanced.yml` (+`Hunter:` section), plus
+`EntityDamageListenerHunterTest` (new, 14 tests) and additions to `HunterManagerTest` /
+`AdvancedConfigTest`.
+
+### ⬜ Next: stage 5
+
+Hunter **XP** and the tier table (D-HU5): a derived default tier from the live entity plus a small
+`Hunter.Tier_Overrides` section — the `Hunter:` section it goes under now exists. ⚠️ Re-read the D-HU5
+box before starting: `experience.yml → Experience_Values.Combat.Multiplier` is **not** usable as the
+tier source (Ender Dragon is `1.0`, Witch `0.1`), and the derived default is the whole point — it is
+what stops an unlisted or modded mob resolving to `0`. The XP hook is the same `AFTER_DEATH` handler
+that already banks the kill, behind the same four gates.
 
 ---
 
@@ -705,7 +811,7 @@ the next starts. No half-wired skill sitting in the tree.
 | **1** | **The anti-farm gate (D-HU1, ruled).** Spawn-origin flag mixin + per-entity persistence | spawner mobs provably do not count, in a live world |
 | **2** | ✅ **DONE** — Enum + manager + profile persistence + all boilerplate. **No mechanics.** | old-profile regression green; the 25 → 26 skill assert updated |
 | **3** | ✅ **DONE** — Kill counters wired on `AFTER_DEATH` + threshold notification | counters move in-game and survive a restart (§G session 11) |
-| **4** | The damage bonus on the K1 seam (D-HU3/D-HU4) | ordering tests green; damage measured in-game |
+| **4** | ✅ **DONE** — The damage bonus on the K1 seam (D-HU3/D-HU4) | ordering tests green; damage measured in-game (§G) |
 | **5** | Hunter XP + the tier table | XP rate measured against the 100 h target |
 | **6** | Trophy Hunter loot mixin (D-HU6) | single-extra-roll test green; no dupe in a live world |
 | **7** | Quarry Sense / `/mcstats hunter` (D-HU7) | — |

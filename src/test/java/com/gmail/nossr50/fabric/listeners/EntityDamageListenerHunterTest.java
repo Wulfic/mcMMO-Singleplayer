@@ -1,0 +1,386 @@
+package com.gmail.nossr50.fabric.listeners;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.config.GeneralConfig;
+import com.gmail.nossr50.datatypes.mobs.MobOrigin;
+import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.player.PlayerProfile;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.fabric.McMMOAttachments;
+import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.skills.hunter.HunterManager;
+import com.gmail.nossr50.skills.stealth.StealthManager;
+import com.gmail.nossr50.util.McTestRegistries;
+import com.gmail.nossr50.util.player.UserManager;
+import java.util.UUID;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.TntEntity;
+import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.damage.DamageTypes;
+import net.minecraft.entity.decoration.ArmorStandEntity;
+import net.minecraft.entity.mob.ZombieEntity;
+import net.minecraft.entity.passive.WolfEntity;
+import net.minecraft.entity.projectile.ArrowEntity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+/**
+ * Hunter stage 4: Mob Mastery's bonus damage where it is actually spent — the half
+ * {@code HunterManagerTest} cannot reach.
+ *
+ * <p>That test pins the tier ladder against a kill count it is simply handed. What is unproven
+ * without this file is everything that can go wrong silently in a live world: that the bonus is
+ * looked up under <b>the same key the counter banks it under</b> (a drift there is total and
+ * completely silent — counters climb, damage never changes), that it lands <b>after</b> Assassin
+ * rather than inside its multiplier, that melee scales with the attack-cooldown charge and ranged
+ * does not, and that the arms which are supposed to pay nothing pay nothing.
+ *
+ * <p>Backed by a <b>real</b> {@link PlayerProfile} and a real {@link HunterManager}, like
+ * {@code HunterListenerTest} and for the same reason — a mocked manager would let the key-drift bug
+ * this file exists to catch sail straight through.
+ */
+class EntityDamageListenerHunterTest {
+
+    @BeforeAll
+    static void bootstrapRegistries() {
+        McTestRegistries.bootstrap();
+        // Needed only by the end-to-end test below, which banks its kills through the real
+        // AFTER_DEATH handler — and that reads the stage-1 spawn-origin attachment.
+        McMMOAttachments.register();
+    }
+
+    private static final float EPSILON = 1.0E-4F;
+
+    private static final String ZOMBIE_ID = "minecraft:zombie";
+
+    /** Kills for the top mastery tier, and the +3.0 it is worth. Read off the real table. */
+    private static final int TOP_TIER_KILLS =
+            HunterManager.MASTERY_THRESHOLDS[HunterManager.MASTERY_THRESHOLDS.length - 1];
+    private static final double TOP_TIER_BONUS =
+            HunterManager.MASTERY_DAMAGE_BONUS[HunterManager.MASTERY_DAMAGE_BONUS.length - 1];
+
+    private UUID playerId;
+    private PlayerProfile profile;
+    private McMMOPlayer mmoPlayer;
+    private ServerPlayerEntity attacker;
+    private AdvancedConfig advancedConfig;
+
+    @BeforeEach
+    void setUp() {
+        playerId = UUID.randomUUID();
+
+        final GeneralConfig generalConfig = mock(GeneralConfig.class);
+        lenient().when(generalConfig.getPVEEnabled(PrimarySkillType.HUNTER)).thenReturn(true);
+        lenient().when(generalConfig.getPVPEnabled(PrimarySkillType.HUNTER)).thenReturn(true);
+        McMMOMod.setGeneralConfig(generalConfig);
+
+        advancedConfig = mock(AdvancedConfig.class);
+        // ⚠️ The SHIPPED default, not Mockito's zero. This is a multiplier: left unstubbed it would
+        // read 0.0 and silently delete the entire ranged half of the sub-skill, so every ranged test
+        // below would pass against a code path no player ever runs.
+        lenient().when(advancedConfig.getHunterMasteryRangedDamageMultiplier()).thenReturn(1.0D);
+        lenient().when(advancedConfig.doesNotificationUseActionBar(any())).thenReturn(false);
+        McMMOMod.setAdvancedConfig(advancedConfig);
+
+        profile = new PlayerProfile("Steve", playerId, 0);
+        final PlatformPlayer platformPlayer = mock(PlatformPlayer.class);
+        lenient().when(platformPlayer.getUniqueId()).thenReturn(playerId);
+        mmoPlayer = mock(McMMOPlayer.class);
+        lenient().when(mmoPlayer.getPlayer()).thenReturn(platformPlayer);
+        lenient().when(mmoPlayer.getProfile()).thenReturn(profile);
+        lenient().when(mmoPlayer.useChatNotifications()).thenReturn(true);
+        lenient().when(mmoPlayer.getHunterManager()).thenReturn(new HunterManager(mmoPlayer));
+        // A fully charged swing unless a test says otherwise.
+        lenient().when(mmoPlayer.getAttackStrength()).thenReturn(1.0F);
+        UserManager.track(mmoPlayer);
+
+        attacker = player();
+    }
+
+    @AfterEach
+    void tearDown() {
+        UserManager.cleanupPlayer(mmoPlayer);
+        McMMOMod.setGeneralConfig(null);
+        McMMOMod.setAdvancedConfig(null);
+        EntityDamageListener.clear();
+        HunterListener.resetFirstKillLogForTesting();
+    }
+
+    // --- fixtures -------------------------------------------------------------------------------
+
+    /**
+     * The attacking player: neither sprinting nor sneaking, holding something no weapon skill claims.
+     *
+     * <p>The dirt matters for the ordering test, which drives the whole dispatch: it classifies as
+     * {@code MeleeWeapon.OTHER}, so the weapon arm bows out and the arithmetic under test is not
+     * buried under a Swords bonus.
+     */
+    private ServerPlayerEntity player() {
+        final MinecraftServer server = mock(MinecraftServer.class);
+        lenient().when(server.getTicks()).thenReturn(10_000);
+        final ServerWorld world = mock(ServerWorld.class);
+        lenient().when(world.getServer()).thenReturn(server);
+
+        final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
+        lenient().when(player.getUuid()).thenReturn(playerId);
+        lenient().when(player.getEntityWorld()).thenReturn(world);
+        lenient().when(player.getMainHandStack()).thenReturn(new ItemStack(Items.DIRT));
+        lenient().when(player.isSprinting()).thenReturn(false);
+        lenient().when(player.isSneaking()).thenReturn(false);
+        return player;
+    }
+
+    private static ZombieEntity zombie() {
+        final ZombieEntity zombie = mock(ZombieEntity.class);
+        Mockito.doReturn(EntityType.ZOMBIE).when(zombie).getType();
+        lenient().when(zombie.getUuid()).thenReturn(UUID.randomUUID());
+        return zombie;
+    }
+
+    /** A direct melee swing: the attacker is both the responsible and the direct damager. */
+    private DamageSource melee() {
+        final DamageSource source = mock(DamageSource.class);
+        lenient().when(source.getAttacker()).thenReturn(attacker);
+        lenient().when(source.getSource()).thenReturn(attacker);
+        lenient().when(source.isOf(any())).thenReturn(false);
+        lenient().when(source.isIn(any())).thenReturn(false);
+        return source;
+    }
+
+    /** An arrow loosed by {@code owner}, credited to {@code responsible}. */
+    private DamageSource arrow(Entity responsible, Entity owner) {
+        final ArrowEntity projectile = mock(ArrowEntity.class);
+        lenient().when(projectile.getOwner()).thenReturn(owner);
+
+        final DamageSource source = mock(DamageSource.class);
+        lenient().when(source.getAttacker()).thenReturn(responsible);
+        lenient().when(source.getSource()).thenReturn(projectile);
+        lenient().when(source.isOf(any())).thenReturn(false);
+        lenient().when(source.isIn(any())).thenReturn(false);
+        return source;
+    }
+
+    /** Bank kills straight onto the profile, bypassing the listener's gates. */
+    private void seedKills(String mobId, int count) {
+        while (profile.getMobKills(mobId) < count) {
+            profile.incrementMobKills(mobId);
+        }
+    }
+
+    // --- the payload ----------------------------------------------------------------------------
+
+    @Test
+    void aMasteredCreatureTakesTheFlatBonus() {
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+
+        assertEquals(10F + (float) TOP_TIER_BONUS,
+                EntityDamageListener.applyHunterMastery(zombie(), melee(), 10F), EPSILON);
+    }
+
+    @Test
+    void anUnmasteredCreatureTakesNothingExtra() {
+        // One kill below the first threshold. Asserted because "the bonus applies to everything" and
+        // "the bonus applies to what you have mastered" are indistinguishable once you are mastered.
+        seedKills(ZOMBIE_ID, HunterManager.MASTERY_THRESHOLDS[0] - 1);
+
+        assertEquals(10F, EntityDamageListener.applyHunterMastery(zombie(), melee(), 10F), EPSILON);
+    }
+
+    @Test
+    void masteryOfOneCreatureIsWorthNothingAgainstAnother() {
+        // The whole horizontal axis. A pooled counter would make Hunter a second XP bar, and every
+        // assertion above would still pass.
+        seedKills("minecraft:creeper", TOP_TIER_KILLS);
+
+        assertEquals(10F, EntityDamageListener.applyHunterMastery(zombie(), melee(), 10F), EPSILON);
+    }
+
+    // --- ⚠️ the ordering, which is the point of this stage ---------------------------------------
+
+    @Test
+    void theMasteryBonusIsAddedAfterAssassinMultiplies() {
+        // ⚠️ THE test of stage 4, and the only one that drives the real dispatch. Assassin multiplies
+        // the whole running melee total, so the two orderings are:
+        //     Hunter last  (correct): 10 x 3        + 3 = 33
+        //     Hunter first (wrong)  : (10 + 3) x 3      = 39
+        // Swap the two lines in onModifyAppliedDamage and only this test goes red. It is also the
+        // only thing proving applyHunterMastery is CALLED at all — every other test here invokes it
+        // directly, which is exactly the "gate proved, call site deleted" trap this port has hit.
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+        when(attacker.isSneaking()).thenReturn(true);
+
+        final StealthManager stealth = mock(StealthManager.class);
+        when(stealth.assassinReady(anyBoolean(), anyLong())).thenReturn(true);
+        when(stealth.getAssassinDamageMultiplier()).thenReturn(3.0D);
+        when(mmoPlayer.getStealthManager()).thenReturn(stealth);
+
+        assertEquals(10F * 3F + (float) TOP_TIER_BONUS,
+                EntityDamageListener.onModifyAppliedDamage(zombie(), melee(), 10F), EPSILON);
+    }
+
+    // --- the melee / ranged asymmetry (D-HU4) ----------------------------------------------------
+
+    @Test
+    void theMeleeBonusIsScaledByTheAttackCooldownCharge() {
+        // Every melee bonus in this port scales by the charge. Unscaled, spam-clicking would beat a
+        // charged swing — an exploit, and off-pattern for the whole codebase.
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+        when(mmoPlayer.getAttackStrength()).thenReturn(0.5F);
+
+        assertEquals(10F + (float) TOP_TIER_BONUS * 0.5F,
+                EntityDamageListener.applyHunterMastery(zombie(), melee(), 10F), EPSILON);
+    }
+
+    @Test
+    void aPlayersOwnArrowCarriesTheFullBonusRegardlessOfTheCharge() {
+        // Ranged deliberately does NOT scale: a loosed arrow has no swing to charge, and
+        // attackStrength is a field stamped at melee-swing time — reading it here would make an
+        // archer's bonus depend on how recently they punched something. Same asymmetry as Impale.
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+        when(mmoPlayer.getAttackStrength()).thenReturn(0.1F);
+
+        assertEquals(10F + (float) TOP_TIER_BONUS, EntityDamageListener.applyHunterMastery(
+                zombie(), arrow(attacker, attacker), 10F), EPSILON);
+    }
+
+    @Test
+    void theRangedMultiplierRetunesTheRangedHalfOnly() {
+        // Proves the §G tuning knob is actually consulted, and that it cannot reach melee by accident
+        // — both halves asserted, because a multiplier applied in the wrong place still moves a
+        // one-sided assertion.
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+        when(advancedConfig.getHunterMasteryRangedDamageMultiplier()).thenReturn(0.5D);
+
+        assertEquals(10F + (float) TOP_TIER_BONUS * 0.5F, EntityDamageListener.applyHunterMastery(
+                zombie(), arrow(attacker, attacker), 10F), EPSILON);
+        assertEquals(10F + (float) TOP_TIER_BONUS,
+                EntityDamageListener.applyHunterMastery(zombie(), melee(), 10F), EPSILON);
+    }
+
+    // --- what must pay nothing --------------------------------------------------------------------
+
+    @Test
+    void aWolfsBiteCarriesNoMasteryBonus() {
+        // Ruled out explicitly in D-HU4: that is the wolf's damage, and Taming's Sharpened Claws and
+        // Gore already own it. Adding Hunter would double-dip on a single bite.
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+        final WolfEntity wolf = mock(WolfEntity.class);
+        final DamageSource bite = mock(DamageSource.class);
+        lenient().when(bite.getAttacker()).thenReturn(wolf);
+        lenient().when(bite.getSource()).thenReturn(wolf);
+
+        assertEquals(10F, EntityDamageListener.applyHunterMastery(zombie(), bite, 10F), EPSILON);
+    }
+
+    @Test
+    void anArrowThePlayerDidNotFireCarriesNoBonus() {
+        // A dispenser's arrow, or one a mod re-credited mid-flight: something is blamed for the hit
+        // but the projectile is not this player's. Owner and attacker have to agree.
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+
+        assertEquals(10F, EntityDamageListener.applyHunterMastery(
+                zombie(), arrow(attacker, mock(ZombieEntity.class)), 10F), EPSILON);
+    }
+
+    @Test
+    void aPlayersOwnExplosionCarriesNoBonus() {
+        // Attributable to the player and emphatically not a hunt. Without the melee/projectile test
+        // this would be a flat bonus on every tick of a blast, a lingering cloud or a lit TNT cart.
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+        final DamageSource blast = mock(DamageSource.class);
+        lenient().when(blast.getAttacker()).thenReturn(attacker);
+        lenient().when(blast.getSource()).thenReturn(mock(TntEntity.class));
+        lenient().when(blast.isOf(any())).thenReturn(false);
+
+        assertEquals(10F, EntityDamageListener.applyHunterMastery(zombie(), blast, 10F), EPSILON);
+    }
+
+    @Test
+    void thornsIsNotASwing() {
+        // Credited to the wearer, direct-sourced from them, and not a hunt. Same carve-out the weapon
+        // arm, Smash and Assassin all make.
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+        final DamageSource thorns = melee();
+        when(thorns.isOf(DamageTypes.THORNS)).thenReturn(true);
+
+        assertEquals(10F, EntityDamageListener.applyHunterMastery(zombie(), thorns, 10F), EPSILON);
+    }
+
+    @Test
+    void anArmourStandIsNotAHunt() {
+        seedKills("minecraft:armor_stand", TOP_TIER_KILLS);
+
+        assertEquals(10F, EntityDamageListener.applyHunterMastery(
+                mock(ArmorStandEntity.class), melee(), 10F), EPSILON);
+    }
+
+    @Test
+    void theEnabledForPveSwitchMutesTheBonusToo() {
+        // The switch has to reach both halves of the skill. Muting only the counter would leave an
+        // operator who turned Hunter off still taking +3.0 from it.
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+        final GeneralConfig pveOff = mock(GeneralConfig.class);
+        when(pveOff.getPVEEnabled(PrimarySkillType.HUNTER)).thenReturn(false);
+        McMMOMod.setGeneralConfig(pveOff);
+
+        assertEquals(10F, EntityDamageListener.applyHunterMastery(zombie(), melee(), 10F), EPSILON);
+    }
+
+    // --- the ruling: origin gates the KILL, not the HIT ------------------------------------------
+
+    @Test
+    void aSpawnerMobStillTakesTheBonusItJustDoesNotAdvanceMastery() {
+        // Stage 1's marker decides what a kill is WORTH, not what a hit is worth. A spawner zombie is
+        // still a zombie; refusing the bonus there closes no farm (the farm banks nothing either way)
+        // while making the damage a player sees depend on an invisible property of their target.
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+        final ZombieEntity farmed = zombie();
+        when(farmed.getAttached(McMMOAttachments.MOB_ORIGIN))
+                .thenReturn(MobOrigin.SPAWNER.storageKey());
+
+        assertEquals(10F + (float) TOP_TIER_BONUS,
+                EntityDamageListener.applyHunterMastery(farmed, melee(), 10F), EPSILON);
+
+        HunterListener.onDeath(farmed, melee());
+        assertEquals(TOP_TIER_KILLS, profile.getMobKills(ZOMBIE_ID),
+                "a farmed kill must still bank nothing");
+    }
+
+    // --- ⚠️ the drift test ------------------------------------------------------------------------
+
+    @Test
+    void theBonusIsLookedUpUnderTheSameKeyTheCounterBanksItUnder() {
+        // ⚠️ The failure this exists for is silent and total: if the banking path and the damage path
+        // ever disagreed about the mob key — full registry id here, bare path there — the counters
+        // would keep climbing, the threshold message would still fire, and the damage would never
+        // change. Neither side's own tests would notice, because each is self-consistent. So the
+        // kills here are banked through the REAL AFTER_DEATH handler and spent through the REAL
+        // damage arm, with nothing in between agreeing on a literal.
+        final ZombieEntity victim = zombie();
+        for (int i = 0; i < HunterManager.MASTERY_THRESHOLDS[0]; i++) {
+            HunterListener.onDeath(victim, melee());
+        }
+
+        assertEquals(10F + (float) HunterManager.MASTERY_DAMAGE_BONUS[0],
+                EntityDamageListener.applyHunterMastery(zombie(), melee(), 10F), EPSILON);
+    }
+}
