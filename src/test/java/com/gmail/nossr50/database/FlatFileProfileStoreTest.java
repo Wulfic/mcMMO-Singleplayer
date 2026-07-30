@@ -187,6 +187,172 @@ class FlatFileProfileStoreTest {
         assertTrue(written.contains("PARKOUR: 30"), written);
     }
 
+    // --- Hunter's kill counters (D-HU2) -------------------------------------------------------
+    //
+    // The one open-ended, string-keyed section in the profile. Everything above is a fixed key set
+    // derived from an enum's .values(), so a bad entry costs one skill its default; here both the keys
+    // AND the entry count come off disk, which makes this the only place a save file can drive an
+    // allocation. Each test below pins one of the four guards in FlatFileProfileStore#readMobKills.
+
+    @Test
+    void savesAndReloadsMobKillCounters(@TempDir Path dir) {
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        McMMOMod.setProfileStore(store);
+        final UUID uuid = UUID.randomUUID();
+
+        final PlayerProfile profile = store.loadProfile(uuid, "Hunter", STARTING_LEVEL);
+        for (int i = 0; i < 3; i++) {
+            profile.incrementMobKills("minecraft:zombie");
+        }
+        profile.incrementMobKills("minecraft:creeper");
+        profile.save(true);
+
+        final PlayerProfile reloaded = store.loadProfile(uuid, "Hunter", STARTING_LEVEL);
+        assertEquals(3, reloaded.getMobKills("minecraft:zombie"));
+        assertEquals(1, reloaded.getMobKills("minecraft:creeper"));
+        assertEquals(0, reloaded.getMobKills("minecraft:skeleton"));
+        assertEquals(2, reloaded.getAllMobKills().size());
+    }
+
+    @Test
+    void aMobIdContainingADotSurvivesTheRoundTrip(@TempDir Path dir) {
+        // The trap this exists for: a registry namespace legally contains '.' ([a-z0-9_.-]), and
+        // YamlConfiguration's addresses are dot-delimited. Writing this section key-by-key as
+        // "kills.<id>" would silently bury a modded id in a phantom subsection and read back 0.
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        McMMOMod.setProfileStore(store);
+        final UUID uuid = UUID.randomUUID();
+
+        final PlayerProfile profile = store.loadProfile(uuid, "Modded", STARTING_LEVEL);
+        profile.incrementMobKills("some.pack:dread.beast");
+        profile.incrementMobKills("some.pack:dread.beast");
+        profile.save(true);
+
+        final PlayerProfile reloaded = store.loadProfile(uuid, "Modded", STARTING_LEVEL);
+        assertEquals(2, reloaded.getMobKills("some.pack:dread.beast"));
+        assertEquals(1, reloaded.getAllMobKills().size());
+    }
+
+    @Test
+    void aCountedKillAloneIsEnoughToMakeTheProfileSave(@TempDir Path dir) {
+        // save() is a no-op on a clean profile, so if incrementMobKills failed to dirty it a whole
+        // session of mastery progress would vanish on quit -- and nothing would log it.
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        McMMOMod.setProfileStore(store);
+        final UUID uuid = UUID.randomUUID();
+
+        final PlayerProfile profile = store.loadProfile(uuid, "Dirty", STARTING_LEVEL);
+        profile.incrementMobKills("minecraft:zombie");
+        profile.save(true);
+
+        assertTrue(store.hasProfile(uuid), "the kill alone must have dirtied the profile");
+        assertEquals(1, store.loadProfile(uuid, "Dirty", STARTING_LEVEL)
+                .getMobKills("minecraft:zombie"));
+    }
+
+    @Test
+    void aProfileWithNoKillsWritesNoKillsSectionAtAll(@TempDir Path dir) throws Exception {
+        // Keeps every pre-Hunter save byte-identical to what it was, and keeps the section
+        // proportional to what the player actually did rather than to the mob roster.
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        McMMOMod.setProfileStore(store);
+        final UUID uuid = UUID.randomUUID();
+
+        final PlayerProfile profile = store.loadProfile(uuid, "Pacifist", STARTING_LEVEL);
+        profile.addLevels(PrimarySkillType.MINING, 1);
+        profile.save(true);
+
+        // Asserted through the parser, NOT with a substring search on the raw text: "kills" is a
+        // substring of "skills", which every profile writes, so the naive string check passes
+        // unconditionally and proves nothing.
+        final YamlConfiguration written =
+                YamlConfiguration.loadConfiguration(dir.resolve(uuid + ".yml"));
+        assertFalse(written.contains("kills"), Files.readString(dir.resolve(uuid + ".yml")));
+        assertTrue(written.contains("skills"), "the rest of the profile is still written");
+    }
+
+    @Test
+    void aProfileWrittenBeforeHunterExistedLoadsWithNoKillCounters(@TempDir Path dir)
+            throws Exception {
+        // The old-profile regression the plan calls for: every save file on disk predates Hunter, so
+        // an absent section must read as "killed nothing", never as a failure.
+        final UUID uuid = UUID.randomUUID();
+        Files.writeString(dir.resolve(uuid + ".yml"),
+                "uuid: " + uuid + "\nname: Veteran\nskills:\n  MINING: 9\n");
+
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        final PlayerProfile profile = store.loadProfile(uuid, "Veteran", 2);
+
+        assertTrue(profile.getAllMobKills().isEmpty());
+        assertEquals(0, profile.getMobKills("minecraft:zombie"));
+        // And the rest of the profile is untouched by the new section's absence.
+        assertEquals(9, profile.getSkillLevel(PrimarySkillType.MINING));
+        assertEquals(2, profile.getSkillLevel(PrimarySkillType.HUNTER));
+    }
+
+    @Test
+    void unusableKillEntriesAreDroppedRatherThanTrusted(@TempDir Path dir) throws Exception {
+        // A count is a threshold comparison's input, so a negative or non-numeric one is worse than a
+        // missing row: it would reach the mastery resolver as a number no threshold expects.
+        final UUID uuid = UUID.randomUUID();
+        Files.writeString(dir.resolve(uuid + ".yml"),
+                "uuid: " + uuid + "\nname: Corrupt\n"
+                        + "kills:\n"
+                        + "  minecraft:zombie: 1204\n"
+                        + "  minecraft:creeper: -50\n"
+                        + "  minecraft:skeleton: 0\n"
+                        + "  minecraft:spider: not_a_number\n"
+                        + "  minecraft:blaze:\n"
+                        + "  '': 77\n");
+
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        final PlayerProfile profile = store.loadProfile(uuid, "Corrupt", STARTING_LEVEL);
+
+        assertEquals(1204, profile.getMobKills("minecraft:zombie"));
+        assertEquals(0, profile.getMobKills("minecraft:creeper"), "a negative count is dropped");
+        assertEquals(0, profile.getMobKills("minecraft:skeleton"), "a zero is not worth carrying");
+        assertEquals(0, profile.getMobKills("minecraft:spider"), "a non-numeric count is dropped");
+        assertEquals(0, profile.getMobKills("minecraft:blaze"), "a null count is dropped");
+        assertEquals(0, profile.getMobKills(""), "a blank mob id is dropped");
+        assertEquals(1, profile.getAllMobKills().size(), profile.getAllMobKills().toString());
+    }
+
+    @Test
+    void aKillsValueThatIsNotASectionIsIgnored(@TempDir Path dir) throws Exception {
+        final UUID uuid = UUID.randomUUID();
+        Files.writeString(dir.resolve(uuid + ".yml"),
+                "uuid: " + uuid + "\nname: Wrong\nskills:\n  MINING: 4\nkills: nonsense\n");
+
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        final PlayerProfile profile = store.loadProfile(uuid, "Wrong", STARTING_LEVEL);
+
+        // Degrades to "no kills" and leaves the rest of the profile intact, rather than throwing on a
+        // cast and costing the player every skill they had.
+        assertTrue(profile.getAllMobKills().isEmpty());
+        assertEquals(4, profile.getSkillLevel(PrimarySkillType.MINING));
+    }
+
+    @Test
+    void anOversizedKillSectionIsTruncatedOnReadRatherThanLoadedWhole(@TempDir Path dir)
+            throws Exception {
+        // [[placed-block-persistence]] defect #16 generalised from one number to a whole collection:
+        // never let a size read off disk drive an allocation. 4,096 is ~40x the vanilla mob roster, so
+        // reaching it means a modded world or a corrupt file -- both cases where "load it all" is a bug.
+        final int oversized = PlayerProfile.MAX_TRACKED_MOB_TYPES + 500;
+        final StringBuilder yaml = new StringBuilder(64 * oversized);
+        final UUID uuid = UUID.randomUUID();
+        yaml.append("uuid: ").append(uuid).append("\nname: Modpack\nkills:\n");
+        for (int i = 0; i < oversized; i++) {
+            yaml.append("  test:mob_").append(i).append(": 1\n");
+        }
+        Files.writeString(dir.resolve(uuid + ".yml"), yaml);
+
+        final FlatFileProfileStore store = new FlatFileProfileStore(dir);
+        final PlayerProfile profile = store.loadProfile(uuid, "Modpack", STARTING_LEVEL);
+
+        assertEquals(PlayerProfile.MAX_TRACKED_MOB_TYPES, profile.getAllMobKills().size());
+    }
+
     @Test
     void saveIsNoOpWithoutBoundStore(@TempDir Path dir) {
         final FlatFileProfileStore store = new FlatFileProfileStore(dir);

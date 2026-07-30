@@ -1,15 +1,16 @@
 {
+  "parent": "mcmmo:milestone/root",
   "display": {
     "icon": {
-      "id": "minecraft:nether_star"
+      "id": "minecraft:skeleton_skull"
     },
     "title": {
-      "text": "mcMMO",
-      "color": "gold",
+      "text": "Hunter",
+      "color": "white",
       "bold": true
     },
     "description": {
-      "text": "Every milestone you have earned across the twenty-six skills.",
+      "text": "Your milestones in Hunter.",
       "color": "yellow"
     },
     "frame": "task",

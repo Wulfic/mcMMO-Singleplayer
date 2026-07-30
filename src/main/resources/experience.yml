@@ -170,6 +170,10 @@ Experience_Bars:
         Enable: true
         Color: GREEN
         BarStyle: SEGMENTED_6
+    Hunter:
+        Enable: true
+        Color: RED
+        BarStyle: SEGMENTED_6
     Husbandry:
         Enable: true
         Color: YELLOW
@@ -287,6 +291,7 @@ Experience_Formula:
         Stealth: 1.0
         Excavation: 1.0
         Herbalism: 1.0
+        Hunter: 1.0
         Husbandry: 1.0
         Unarmed: 1.0
         Unarmored: 1.0
@@ -330,6 +335,13 @@ Diminished_Returns:
         Stealth: 20000
         Excavation: 20000
         Herbalism: 20000
+        # ⚠️ Hunter is the ONE skill this throttle would bite hardest on, and it is the reason the
+        # Hunter plan says so explicitly: a boss is worth ~1,500 XP, so fourteen wither kills inside ten
+        # minutes would trip 20,000. That is not reachable by hand, but it is trivially reachable by a
+        # farm -- which means if Diminished_Returns is ever switched on, this number is doing real work
+        # rather than sitting far out of reach the way every other entry here does. Raise it only after
+        # measuring; do not "tidy" it up to match its neighbours.
+        Hunter: 20000
         # Husbandry is gated by vanilla's own clocks -- a five-minute love cooldown per animal,
         # twenty real minutes for a baby to mature, grass regrowth before a sheep is worth shearing
         # again -- so this threshold is nowhere near reach in practice.

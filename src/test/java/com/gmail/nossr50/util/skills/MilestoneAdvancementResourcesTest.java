@@ -206,7 +206,7 @@ class MilestoneAdvancementResourcesTest {
     }
 
     /**
-     * Milestones hang off a per-skill hub so the advancement tab reads as twenty-five branches rather
+     * Milestones hang off a per-skill hub so the advancement tab reads as twenty-six branches rather
      * than one enormous row; power tiers are the player's, not a skill's, so they hang off the root.
      */
     @Test

@@ -9,9 +9,11 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
 import com.google.common.collect.ImmutableList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.DelayQueue;
 import org.jetbrains.annotations.NotNull;
@@ -43,6 +45,43 @@ public class PlayerProfile {
     private final DelayQueue<SkillXpGain> gainedSkillsXp = new DelayQueue<>();
     private final Map<PrimarySkillType, Float> rollingSkillsXp = new EnumMap<>(
             PrimarySkillType.class);
+
+    /**
+     * Hunter's per-mob-type kill counters, keyed by the mob's <em>raw</em> registry id string
+     * ({@code minecraft:zombie}) — see {@code plans/new-skills/hunter.md} D-HU2.
+     *
+     * <p><b>This is the only open-ended key space in the profile</b>, and that is the whole reason it
+     * needed a ruling. Everything else here is an {@link EnumMap} over a closed enum, so
+     * {@code FlatFileProfileStore} can write a fixed key set derived from {@code .values()}. A mob id
+     * is neither closed nor ours: a mod adds entity types, and Mojang adds them too.
+     *
+     * <p>Three properties are load-bearing rather than tidy:
+     * <ul>
+     *   <li><b>The key stays a raw {@code String}, never resolved to a registry type here.</b> Resolving
+     *       at load is the {@code isIn(TagKey)}-throws trap all over again, and a mob from a mod the
+     *       player has since uninstalled must not take the whole profile down with it. Whoever needs a
+     *       live entity type resolves it at use, where a miss costs one lookup.</li>
+     *   <li><b>{@link #MAX_TRACKED_MOB_TYPES} bounds the map.</b> Vanilla has fewer than a hundred mobs,
+     *       so the cap only ever binds on a heavily modded world or a corrupted file — which is exactly
+     *       when an unbounded, disk-driven map is a memory bug rather than a feature.</li>
+     *   <li><b>A {@link TreeMap}, so the persisted section is ordered.</b> A save file that reorders
+     *       itself on every write is unreviewable, and this section is the one part of the profile a
+     *       player might plausibly read by hand.</li>
+     * </ul>
+     */
+    private final Map<String, Integer> mobKills = new TreeMap<>();
+
+    /**
+     * The most distinct mob types one profile will track kills for.
+     *
+     * <p>Generalises {@code [[placed-block-persistence]]}'s lesson — never let a number read off disk
+     * size an allocation — from one number to a whole collection. 4,096 is roughly forty times the
+     * vanilla mob roster, so no honest world reaches it.
+     */
+    public static final int MAX_TRACKED_MOB_TYPES = 4096;
+
+    /** One WARN per profile when the cap refuses a new mob type; a per-kill log would be a flood. */
+    private boolean mobKillCapWarned;
 
     @Deprecated
     public PlayerProfile(String playerName) {
@@ -94,6 +133,21 @@ public class PlayerProfile {
             Map<PrimarySkillType, Integer> levelData, Map<PrimarySkillType, Float> xpData,
             Map<SuperAbilityType, Integer> cooldownData, int scoreboardTipsShown,
             Map<UniqueDataType, Integer> uniqueProfileData, @Nullable Long lastLogin) {
+        this(playerName, uuid, levelData, xpData, cooldownData, scoreboardTipsShown,
+                uniqueProfileData, lastLogin, Map.of());
+    }
+
+    /**
+     * The full loaded-from-disk constructor, including Hunter's per-mob kill counters.
+     *
+     * @param mobKillData kill counts by raw mob registry id; the caller has already validated and
+     *                    bounded them (see {@code FlatFileProfileStore})
+     */
+    public PlayerProfile(@NotNull String playerName, @Nullable UUID uuid,
+            Map<PrimarySkillType, Integer> levelData, Map<PrimarySkillType, Float> xpData,
+            Map<SuperAbilityType, Integer> cooldownData, int scoreboardTipsShown,
+            Map<UniqueDataType, Integer> uniqueProfileData, @Nullable Long lastLogin,
+            @NotNull Map<String, Integer> mobKillData) {
         this.playerName = playerName;
         this.uuid = uuid;
         this.scoreboardTipsShown = scoreboardTipsShown;
@@ -102,6 +156,7 @@ public class PlayerProfile {
         skillsXp.putAll(xpData);
         abilityDATS.putAll(cooldownData);
         uniquePlayerData.putAll(uniqueProfileData);
+        mobKills.putAll(mobKillData);
 
         loaded = true;
 
@@ -207,6 +262,60 @@ public class PlayerProfile {
 
     public void increaseTipsShown() {
         setScoreboardTipsShown(getScoreboardTipsShown() + 1);
+    }
+
+    /*
+     * Hunter — per-mob kill counters (D-HU2)
+     */
+
+    /**
+     * How many of {@code mobId} this player has killed, {@code 0} for a mob they have never killed.
+     *
+     * @param mobId the mob's raw registry id, e.g. {@code minecraft:zombie}
+     */
+    public int getMobKills(@NotNull String mobId) {
+        return mobKills.getOrDefault(mobId, 0);
+    }
+
+    /**
+     * Count one kill of {@code mobId} and hand back the new total.
+     *
+     * <p>Marks the profile dirty on every increment. That is cheap — the save is already debounced by
+     * {@code General.Save_Interval} — and the alternative is a player losing a session's worth of
+     * mastery progress to a crash.
+     *
+     * @param mobId the mob's raw registry id
+     * @return the count after this kill, or the unchanged count if the type cap refused a new entry
+     */
+    public int incrementMobKills(@NotNull String mobId) {
+        final Integer existing = mobKills.get(mobId);
+        if (existing == null && mobKills.size() >= MAX_TRACKED_MOB_TYPES) {
+            // Refuse rather than grow without bound. Logged because a counter that silently stops
+            // moving is indistinguishable from the whole feature being broken.
+            if (!mobKillCapWarned) {
+                mobKillCapWarned = true;
+                McMMOMod.LOGGER.warn(
+                        "{} already tracks the maximum of {} distinct mob types; kills of '{}' and any "
+                                + "further new mob type will not be counted toward Hunter mastery.",
+                        playerName, MAX_TRACKED_MOB_TYPES, mobId);
+            }
+            return 0;
+        }
+
+        markProfileDirty();
+        final int updated = (existing == null ? 0 : existing) + 1;
+        mobKills.put(mobId, updated);
+        return updated;
+    }
+
+    /**
+     * Every tracked mob type and its kill count, as an unmodifiable snapshot.
+     *
+     * <p>Used by the save path and by {@code /mcstats hunter}. Unmodifiable on purpose: a counter that
+     * anything outside this class can rewrite is a counter that can move without dirtying the profile.
+     */
+    public @NotNull Map<String, Integer> getAllMobKills() {
+        return Collections.unmodifiableMap(mobKills);
     }
 
     /*

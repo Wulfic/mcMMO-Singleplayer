@@ -1,21 +1,22 @@
 {
+  "parent": "mcmmo:milestone/skill/hunter",
   "display": {
     "icon": {
-      "id": "minecraft:nether_star"
+      "id": "minecraft:skeleton_skull"
     },
     "title": {
-      "text": "mcMMO",
+      "text": "Master Slayer",
       "color": "gold",
       "bold": true
     },
     "description": {
-      "text": "Every milestone you have earned across the twenty-six skills.",
+      "text": "Reached Hunter level 750 or higher.",
       "color": "yellow"
     },
-    "frame": "task",
-    "show_toast": false,
+    "frame": "goal",
+    "show_toast": true,
     "announce_to_chat": false,
-    "hidden": false
+    "hidden": true
   },
   "criteria": {
     "milestone": {

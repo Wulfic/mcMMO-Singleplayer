@@ -273,6 +273,12 @@ public class SkillTools {
                 PrimarySkillType.ARCHERY,
                 PrimarySkillType.AXES,
                 PrimarySkillType.CROSSBOWS,
+                // Hunter is combat without being a weapon skill: its bonus keys off WHAT you are
+                // hitting, not what you are holding, so it applies through every weapon and through
+                // none. Membership here is what wires Enabled_For_PVE/Enabled_For_PVP and the
+                // /mcstats grouping, both of which it wants -- unlike Unarmored, which is defensive
+                // and sits in MISC_SKILLS for exactly the opposite reason.
+                PrimarySkillType.HUNTER,
                 PrimarySkillType.MACES,
                 PrimarySkillType.SWORDS,
                 PrimarySkillType.SPEARS,

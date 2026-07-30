@@ -36,16 +36,16 @@ public final class McMMOSettings {
     /** Skills that have an {@code Experience_Formula.Skill_Multiplier.<name>} key. */
     private static final String[] XP_MULTIPLIER_SKILLS = {
         "Agility", "Alchemy", "Archery", "Axes", "Crossbows", "Excavation", "Fishing", "Flying",
-        "Herbalism", "Husbandry", "Maces", "Mining", "Parkour", "Repair", "Spears", "Stealth",
-        "Swimming", "Swords", "Taming", "Tridents", "Unarmed", "Unarmored", "Woodcutting"
+        "Herbalism", "Hunter", "Husbandry", "Maces", "Mining", "Parkour", "Repair", "Spears",
+        "Stealth", "Swimming", "Swords", "Taming", "Tridents", "Unarmed", "Unarmored", "Woodcutting"
     };
 
     /** Skills that have a {@code Skills.<name>.Level_Cap} key. */
     private static final String[] LEVEL_CAP_SKILLS = {
         "Agility", "Alchemy", "Archery", "Axes", "Crossbows", "Excavation", "Fishing", "Flying",
-        "Herbalism", "Husbandry", "Maces", "Mining", "Parkour", "Repair", "Salvage", "Smelting",
-        "Spears", "Stealth", "Swimming", "Swords", "Taming", "Tridents", "Unarmed", "Unarmored",
-        "Woodcutting"
+        "Herbalism", "Hunter", "Husbandry", "Maces", "Mining", "Parkour", "Repair", "Salvage",
+        "Smelting", "Spears", "Stealth", "Swimming", "Swords", "Taming", "Tridents", "Unarmed",
+        "Unarmored", "Woodcutting"
     };
 
     /**

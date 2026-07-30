@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -37,6 +38,7 @@ import org.slf4j.LoggerFactory;
  * experience: { MINING: 123.0, ... }
  * cooldowns: { BERSERK: 0, ... }
  * data:     { CHIMAERA_WING_DATS: 0 }
+ * kills:    { minecraft:zombie: 1204, ... }   # Hunter only; omitted when empty
  * </pre>
  *
  * <p>Levels/xp/cooldowns/unique-data are written per enum constant; on load, any constant absent
@@ -44,6 +46,10 @@ import org.slf4j.LoggerFactory;
  * (starting level for skills, 0 otherwise), so old saves stay forward-compatible — the same
  * back-fill contract the configs use. A skill that has been <em>renamed</em> since the file was
  * written is additionally read back from its old key — see {@link #savedKeyFor}.
+ *
+ * <p><b>{@code kills:} is the exception to all of that</b> and the only section here whose keys and
+ * size are not derived from an enum — see {@link #readMobKills} for the four guards that makes
+ * necessary.
  */
 public final class FlatFileProfileStore implements ProfileStore {
 
@@ -114,7 +120,7 @@ public final class FlatFileProfileStore implements ProfileStore {
         final Long lastLogin = yc.contains("lastLogin") ? yc.getLong("lastLogin") : null;
 
         final PlayerProfile profile = new PlayerProfile(playerName, uuid, levels, xp, cooldowns,
-                tipsShown, uniqueData, lastLogin);
+                tipsShown, uniqueData, lastLogin, readMobKills(yc, playerName));
         if (migrated) {
             // Force the rewrite. PlayerProfile#save is a no-op on a clean profile, so without this
             // the legacy key survives until the player happens to earn XP — leaving the file in the
@@ -178,6 +184,78 @@ public final class FlatFileProfileStore implements ProfileStore {
         return current;
     }
 
+    /**
+     * Read Hunter's {@code kills:} section — the profile's one open-ended, string-keyed map.
+     *
+     * <p>Everything else in this file is a fixed key set derived from an enum's {@code .values()}, so
+     * a malformed entry can only ever cost one skill its default. This section is different in kind:
+     * <b>its keys and its size both come from the file</b>, which makes it the one place in the
+     * profile where the disk can drive an allocation. Hence the guards, each of which exists for a
+     * failure this codebase has actually hit:
+     *
+     * <ul>
+     *   <li><b>Read the raw map, never a dotted path.</b> A registry id may legally contain a
+     *       {@code .} ({@code namespace} allows {@code [a-z0-9_.-]}), and
+     *       {@link YamlConfiguration}'s addresses are dot-delimited — so {@code getInt("kills." + id)}
+     *       on a modded {@code some.pack:beast} would silently descend into a phantom subsection and
+     *       read {@code 0}. Pulling the section out as a {@link Map} and iterating it sidesteps path
+     *       parsing entirely.</li>
+     *   <li><b>Cap the entry count</b> at {@link PlayerProfile#MAX_TRACKED_MOB_TYPES}, log and stop.
+     *       Never size a collection from a number on disk.</li>
+     *   <li><b>Skip anything that is not a positive count.</b> A zero is not worth carrying (the write
+     *       path omits them), and a negative or non-numeric value is corruption — dropping the entry
+     *       loses one mob's progress, whereas trusting it would hand the mastery resolver a number no
+     *       threshold comparison expects.</li>
+     *   <li><b>Never resolve the key to an entity type here.</b> It stays a string; a mob from an
+     *       uninstalled mod must cost nothing more than a row nobody reads.</li>
+     * </ul>
+     *
+     * @param yc         the loaded profile document
+     * @param playerName the owner, for log lines
+     * @return the validated kill counts, empty when the section is absent (every profile written
+     *         before Hunter existed)
+     */
+    private static @NotNull Map<String, Integer> readMobKills(@NotNull YamlConfiguration yc,
+            @NotNull String playerName) {
+        final Object raw = yc.get("kills");
+        if (!(raw instanceof Map<?, ?> section)) {
+            if (raw != null) {
+                LOGGER.warn("Ignoring {}'s 'kills' entry: expected a section, found {}.",
+                        playerName, raw.getClass().getSimpleName());
+            }
+            return Map.of();
+        }
+
+        final Map<String, Integer> kills = new TreeMap<>();
+        int rejected = 0;
+        for (Map.Entry<?, ?> entry : section.entrySet()) {
+            if (kills.size() >= PlayerProfile.MAX_TRACKED_MOB_TYPES) {
+                LOGGER.warn("{}'s profile lists more than {} mob kill counters; the remainder of the "
+                                + "'kills' section was ignored.",
+                        playerName, PlayerProfile.MAX_TRACKED_MOB_TYPES);
+                break;
+            }
+
+            final String mobId = entry.getKey() == null ? "" : String.valueOf(entry.getKey()).trim();
+            if (mobId.isEmpty()) {
+                rejected++;
+                continue;
+            }
+            if (!(entry.getValue() instanceof Number count) || count.intValue() <= 0) {
+                rejected++;
+                continue;
+            }
+            kills.put(mobId, count.intValue());
+        }
+
+        if (rejected > 0) {
+            LOGGER.warn("Dropped {} unusable entr{} from {}'s 'kills' section (a count must be a "
+                            + "positive whole number under a non-empty mob id).",
+                    rejected, rejected == 1 ? "y" : "ies", playerName);
+        }
+        return kills;
+    }
+
     private @NotNull PlayerProfile newProfile(@NotNull UUID uuid, @NotNull String playerName,
             int startingLevel) {
         final Map<PrimarySkillType, Integer> levels = new EnumMap<>(PrimarySkillType.class);
@@ -221,6 +299,21 @@ public final class FlatFileProfileStore implements ProfileStore {
         }
         for (UniqueDataType type : UniqueDataType.values()) {
             yc.set("data." + type.name(), (int) profile.getUniqueData(type));
+        }
+
+        // Hunter's kill counters, written as ONE map rather than a key per entry: a mob id may contain
+        // a '.', which YamlConfiguration's dotted addressing would turn into a nested section (see
+        // readMobKills). Zero counts are omitted so the section stays proportional to what the player
+        // has actually killed, and the section itself is omitted entirely when nothing has been --
+        // which keeps every pre-Hunter profile byte-identical to what it was before this skill landed.
+        final Map<String, Integer> kills = new TreeMap<>();
+        profile.getAllMobKills().forEach((mobId, count) -> {
+            if (count != null && count > 0) {
+                kills.put(mobId, count);
+            }
+        });
+        if (!kills.isEmpty()) {
+            yc.set("kills", kills);
         }
 
         try {

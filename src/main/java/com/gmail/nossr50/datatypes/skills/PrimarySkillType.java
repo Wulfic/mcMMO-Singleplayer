@@ -28,6 +28,17 @@ public enum PrimarySkillType {
     FISHING,
     FLYING,
     HERBALISM,
+    // Pass 2. The mob-knowledge skill, and the only one in the mod that progresses on two independent
+    // axes: a per-mob kill counter (mastery -- flat bonus damage against THAT creature only) and a
+    // normal XP level (better loot, unlocked per mob tier). Killing 10,000 zombies makes you a zombie
+    // specialist; killing 200 of everything makes you a generalist with better drops. Neither
+    // substitutes for the other, and keeping them independent is the whole design.
+    //
+    // It is a COMBAT skill but NOT a weapon skill: Swords/Axes/Unarmed/Archery already own "how hard
+    // do I hit with X", so Hunter owns "how well do I know Y" and its bonus is deliberately
+    // weapon-agnostic. That is why the bonus does not live in MeleeDamageBonus, which is per-weapon
+    // by construction.
+    HUNTER,
     // Pass 2. The livestock-lifecycle skill: breed, raise, feed, shear, harvest a hive, milk, brush.
     // Its boundary against TAMING is the VERB, never the species -- Taming pays once, for making an
     // animal yours; Husbandry pays repeatedly, for what you do with it afterwards. A species split

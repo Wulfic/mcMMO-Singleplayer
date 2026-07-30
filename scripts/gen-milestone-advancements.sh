@@ -63,6 +63,10 @@ declare -A ICON=(
     [fishing]=fishing_rod
     [flying]=elytra
     [herbalism]=wheat
+    # A trophy taken off something you killed, which is exactly what the skill's horizontal axis is.
+    # Not a weapon: Hunter is deliberately weapon-agnostic (the bonus keys off WHAT you are hitting,
+    # not what you are holding), so any sword or bow icon would say the opposite of the design.
+    [hunter]=skeleton_skull
     # Not wheat (Herbalism has it) and not an egg -- egg laying is a passive timer this skill
     # deliberately refuses to pay for. A lead is the tool for handling livestock generally, which is
     # what the skill is, rather than any one of its six verbs.
@@ -100,6 +104,9 @@ declare -A ROLE=(
     [fishing]=Angler
     [flying]=Aviator
     [herbalism]=Herbalist
+    # Not "Hunter" -- every other entry here is a role distinct from the skill's own name, and
+    # "Master Hunter" would be the only plaque that just repeats it. Taming already owns "Beast Tamer".
+    [hunter]=Slayer
     [husbandry]=Rancher
     [maces]=Crusher
     [mining]=Miner
@@ -309,7 +316,7 @@ count=0
 # `show_toast: false` keeps that from popping a toast of its own.
 write_adv "$ROOT/root.json" "" nether_star task gold \
     "mcMMO" \
-    "Every milestone you have earned across the twenty-five skills." \
+    "Every milestone you have earned across the twenty-six skills." \
     false false
 count=$((count + 1))
 
@@ -318,7 +325,7 @@ for skill in "${!ICON[@]}"; do
     icon="${ICON[$skill]}"
     role="${ROLE[$skill]}"
 
-    # Per-skill hub, so the tab is twenty-five readable branches instead of one 300-wide row.
+    # Per-skill hub, so the tab is twenty-six readable branches instead of one 300-wide row.
     # Never granted; visible once any of its children is earned.
     write_adv "$ROOT/skill/$skill.json" "root" "$icon" task white \
         "$disp" \

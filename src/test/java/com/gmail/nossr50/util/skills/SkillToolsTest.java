@@ -90,7 +90,10 @@ class SkillToolsTest {
         // Unarmored is standalone too — it earns its own XP from damage taken, and nothing derives
         // its level from anything else.
         assertFalse(SkillTools.isChildSkill(PrimarySkillType.UNARMORED));
-        // 24 skills, 3 of them children. Re-derived from the enum rather than hardcoded, so adding
+        // Hunter is standalone: it earns its own XP from kills, and its second (mastery) axis is a
+        // per-mob counter that no parent skill could possibly derive.
+        assertFalse(SkillTools.isChildSkill(PrimarySkillType.HUNTER));
+        // 26 skills, 3 of them children. Re-derived from the enum rather than hardcoded, so adding
         // a skill without deciding whether it is a child cannot silently pass this.
         assertEquals(3, skillTools.getChildSkills().size());
         assertEquals(PrimarySkillType.values().length - 3, SkillTools.NON_CHILD_SKILLS.size());
@@ -110,10 +113,14 @@ class SkillToolsTest {
 
     @Test
     void combatSkillsPinnedToCurrentGameVersion() {
-        // MC 1.21.11 target: Spears + Maces present, 9 combat skills total.
-        assertEquals(9, skillTools.getCombatSkills().size());
+        // MC 1.21.11 target: Spears + Maces present, 10 combat skills total.
+        assertEquals(10, skillTools.getCombatSkills().size());
         assertTrue(skillTools.getCombatSkills().contains(PrimarySkillType.SPEARS));
         assertTrue(skillTools.getCombatSkills().contains(PrimarySkillType.MACES));
+        // Hunter belongs here despite owning no weapon: membership of this list is what wires the
+        // Enabled_For_PVE/Enabled_For_PVP switches and the /mcstats grouping, both of which it wants.
+        // Contrast Unarmored, which is defensive and deliberately sits in MISC_SKILLS instead.
+        assertTrue(skillTools.getCombatSkills().contains(PrimarySkillType.HUNTER));
     }
 
     @Test

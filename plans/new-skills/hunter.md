@@ -5,7 +5,8 @@ belongs in **`COMBAT_SKILLS`**. It needs **no F1** (tick sampler) and **no F2** 
 it is entirely event-driven. It does need **two things nothing else in the port has**: a
 **per-mob-type persistent counter** and a **mob loot-drop seam**.
 
-> 🔶 **STATUS: IN PROGRESS as of 2026-07-30. Stage 1 (the anti-farm gate) is DONE.** Stage 0 — the §G
+> 🔶 **STATUS: IN PROGRESS as of 2026-07-30. Stages 1 (the anti-farm gate) and 2 (the enum, the
+> manager and the kill-count persistence) are DONE.** Stage 0 — the §G
 > play-test of Pass 1 + Pass 2 — was **consciously skipped on the user's instruction**, not satisfied.
 > Pass 2 now has five skills in the tree (Agility/Parkour/Swimming/Flying, Stealth, Unarmored,
 > Husbandry) that are code-complete and **never played**; Hunter is the sixth, stacked on an unverified
@@ -357,8 +358,10 @@ counts live on `PlayerProfile`; the manager reads them through `McMMOPlayer`, ne
 Do all 22 items in [00-OVERVIEW.md](00-OVERVIEW.md) §"add a PrimarySkillType". **These four are the
 ones that will bite:**
 
-1. **`DatatypeEnumTest.java:24` asserts `assertEquals(23, PrimarySkillType.values().length)`** → bump
-   to 24. It will fail loudly, which is the point — but know it is coming.
+1. ~~**`DatatypeEnumTest.java:24` asserts `assertEquals(23, PrimarySkillType.values().length)`** → bump
+   to 24.~~ **STALE — corrected 2026-07-30.** That test does **not** assert a bare literal: it
+   *re-derives* the count (`19 + 3 + 1 + 1 + 1`) with a comment naming each addition, so Hunter is
+   `+ 1` on the expression rather than a bumped number. It still fails loudly, which is the point.
 2. **`scripts/gen-milestone-advancements.sh` does `rm -rf "$ROOT"` at line 101** and regenerates from
    its own `ICON` map. **Add Hunter to that map *before* anyone runs it**, or the next run silently
    deletes `hunter.json` and the plaques stop firing. This is the exact trap that would have deleted
@@ -517,6 +520,91 @@ injector never bound" would otherwise look identical in-game.
 
 ---
 
+## ✅ Stage 2 as built (2026-07-30)
+
+**The enum, the manager, the kill-count persistence and all 22 boilerplate items. No mechanics — the
+skill is in the tree, on `/mcstats`, on the XP bar and in the advancement tab, and nothing fires it.**
+1189 tests green (+20), `./gradlew build` exit 0, boot **`Done (1.264s)`, 0 ERROR, 0 WARN, 0
+exceptions, 0 mixin failures**, and **1910 advancements = 1584 vanilla + our 326** (+7 on stage 1's
+1903: one hub, five level tiers, one maxed — exactly a skill with no sub-skills). **6 mutations run.**
+
+### 🔑 Zero sub-skill enums, deliberately
+
+`SubSkillType` gained **nothing**. Hunter's four sub-skills land with their behaviour — Mob Mastery in
+stages 3–4, Trophy Hunter and Field Dressing in 6, Quarry Sense in 7 — because a rank-less,
+config-less, behaviour-less constant reads as a half-wired sub-skill to **everything that iterates
+that enum**, `/mcstats` and the milestone generator included. This is the same call the Stealth plan
+made for Thief. Two useful consequences: `skillranks.yml` and `advanced.yml` needed no Hunter section
+at all this stage, and Hunter correctly falls through to `GenericSkillStatsRenderer` (which is right,
+not a gap — the precedent is Swimming and Flying, pinned in `SkillStatsRendererTest`).
+
+### ⚠️⚠️ THE TRAP IN D-HU2 THE PLAN DID NOT HAVE: A MOB ID MAY CONTAIN A DOT
+
+The plan specified the section shape (`kills:` in the per-player YAML) and four guards, and prescribed
+`getConfigurationSection(path)` + `getKeys(false)` to read it. **That is a bug for modded mobs, and it
+fails silently.** A registry `Identifier` namespace legally contains `.` (`[a-z0-9_.-]`), and
+`YamlConfiguration`'s addresses are **dot-delimited** — so writing this section key-by-key as
+`set("kills." + mobId, count)` buries `some.pack:dread.beast` in a phantom nested subsection, and
+reading it back through the same dotted path yields **`0`**. Vanilla ids have no dots, so every test
+written with `minecraft:zombie` passes.
+
+**Fixed by never touching a dotted path for this section:** the whole map goes through one
+`set("kills", map)`, and the read pulls the raw `Map` out with `get("kills")` and iterates its entries.
+**Mutation-proven** — restoring the key-by-key write reddens
+`FlatFileProfileStoreTest.aMobIdContainingADotSurvivesTheRoundTrip` and only that test. Same family as
+the `[[dynamic-locale-key-families]]` problem: a key built by concatenation is a key nothing greps.
+
+### The four D-HU2 guards, as built
+
+| Guard | Where | Pinned by |
+|---|---|---|
+| Key stays a raw `String`, resolved at use | the map's type | (type-level) |
+| Entry count capped at 4,096 **on read** | `FlatFileProfileStore#readMobKills` | `anOversizedKillSectionIsTruncatedOnReadRatherThanLoadedWhole` |
+| Only positive counts persisted / accepted | read + write | `unusableKillEntriesAreDroppedRatherThanTrusted`, `aProfileWithNoKillsWritesNoKillsSectionAtAll` |
+| `markProfileDirty()` on every increment | `PlayerProfile#incrementMobKills` | `aCountedKillAloneIsEnoughToMakeTheProfileSave` |
+
+Two additions the plan did not ask for, both because the cap has two sides: the **in-memory** map is
+also capped on insert (a refused new type logs one WARN per profile and returns `0`, and **must not
+freeze the counters that already exist** — otherwise a modded world stops the skill dead rather than
+merely stops widening it), and a `kills:` value that is **not a section at all** degrades to "no kills"
+instead of throwing on a cast and costing the player every skill they had.
+
+⚠️ **A `TreeMap`, not a `HashMap`.** A save file that reorders itself on every write is unreviewable,
+and this is the one section a player might plausibly read by hand.
+
+### ⚠️ A TEST BUG WORTH REMEMBERING: `"skills"` CONTAINS `"kills"`
+
+`assertFalse(Files.readString(file).contains("kills"))` — meant to prove a kill-less profile writes no
+`kills:` section — **passes unconditionally**, because every profile writes `skills:`. It was the one
+red test in the first full build. Assert through the parser (`YamlConfiguration#contains`), never with
+a substring search on the raw document.
+
+### Balance numbers restated
+
+The mastery ladder ships as the **ruled** `500 / 2,500 / 10,000` kills → **+1.0 / +2.0 / +3.0** damage,
+as parallel tables on `HunterManager` with the index of one belonging to the index of the other (pinned,
+because a threshold added without its bonus would fail at runtime, in the damage path, on somebody's
+10,000th kill). **Nothing calls `masteryDamageBonus` yet** — that is stage 4, and it must run **last**
+in the `onModifyAppliedDamage` chain, after Sprint Smash and after Stealth Assassin.
+
+⚠️ **`Diminished_Returns.Threshold.Hunter` is the one entry in that table that is not decorative.**
+Every other skill sits far out of its reach; a T4 boss at ~1,500 XP means **fourteen kills in ten
+minutes** trips 20,000 — unreachable by hand, trivial for a farm. Commented in `experience.yml` so
+nobody "tidies" it to match its neighbours.
+
+### Files
+
+`skills/hunter/HunterManager.java` (new), `PrimarySkillType.HUNTER`,
+`PlayerProfile` (the `mobKills` `TreeMap`, `MAX_TRACKED_MOB_TYPES`, three accessors, a 9-arg loaded
+constructor with the 8-arg one delegating), `FlatFileProfileStore` (`readMobKills` + the single-map
+write), `McMMOPlayer` (`initManager` case + `getHunterManager`), `SkillTools.buildCombatSkills`,
+`experience.yml` ×3, `config.yml` ×3, five locale keys, `McMMOSettings` ×2,
+`gen-milestone-advancements.sh` (`ICON[hunter]=skeleton_skull`, `ROLE[hunter]=Slayer`) + the
+regenerated datapack, and `HunterManagerTest` / `FlatFileProfileStoreTest` / `DatatypeEnumTest` /
+`SkillToolsTest`.
+
+---
+
 ## Staged build order
 
 One stage lands **fully** — code + config + locale + unit tests + green boot + played §G rows — before
@@ -526,7 +614,7 @@ the next starts. No half-wired skill sitting in the tree.
 |---|---|---|
 | **0** | 🔴 **§G play-test of Pass 1 + Pass 2** | `PLAYTEST_G.md` session 8 actually played |
 | **1** | **The anti-farm gate (D-HU1, ruled).** Spawn-origin flag mixin + per-entity persistence | spawner mobs provably do not count, in a live world |
-| **2** | Enum + manager + profile persistence + all boilerplate. **No mechanics.** | old-profile regression green; 24-skill assert updated |
+| **2** | ✅ **DONE** — Enum + manager + profile persistence + all boilerplate. **No mechanics.** | old-profile regression green; the 25 → 26 skill assert updated |
 | **3** | Kill counters wired on `AFTER_DEATH` + threshold notification | counters move in-game and survive a restart |
 | **4** | The damage bonus on the K1 seam (D-HU3/D-HU4) | ordering tests green; damage measured in-game |
 | **5** | Hunter XP + the tier table | XP rate measured against the 100 h target |

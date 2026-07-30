@@ -233,6 +233,7 @@ Hardcore:
             Excavation: false
             Fishing: false
             Herbalism: false
+            Hunter: false
             Husbandry: false
             Mining: false
             Repair: false
@@ -260,6 +261,7 @@ Hardcore:
             Excavation: false
             Fishing: false
             Herbalism: false
+            Hunter: false
             Husbandry: false
             Mining: false
             Repair: false
@@ -432,6 +434,15 @@ Skills:
     Herbalism:
         Level_Cap: 0
         Prevent_AFK_Leveling: true
+    Hunter:
+        Level_Cap: 0
+        # Hunter is a combat skill, so it carries the PVP/PVE switches -- but note what they gate. They
+        # decide whether the skill TRIGGERS against that class of target, and Hunter's whole subject is
+        # the target's identity. Turning Enabled_For_PVP off therefore does not merely mute a bonus: it
+        # means player kills stop feeding the skill at all, which is the right answer for a
+        # singleplayer port and is stated here so nobody reads it as an oversight later.
+        Enabled_For_PVP: true
+        Enabled_For_PVE: true
     Husbandry:
         Level_Cap: 0
         # Item that triggers the Herdsman's Call super ability on right-click. Never consumed.
