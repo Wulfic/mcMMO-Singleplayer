@@ -292,12 +292,16 @@ delegates to the 4-arg `public` one. So: **`@Inject(at = TAIL)` on the 3-arg ove
    the same player attribution as the counter, or a mob dying in lava on the far side of the world
    drops double.
 
-**Also verify (do not assume): whether Fabric's `ServerLivingEntityEvents.AFTER_DEATH` fires before or
-after `drop()`.** It is already registered in
-[ProjectileListener.java:59](src/main/java/com/gmail/nossr50/fabric/listeners/ProjectileListener.java#L59)
-and is the natural home for the kill counter. Ordering does not affect correctness *today* (the drop
-bonus keys off Hunter *level*, not the kill count), but it decides whether the kill that crosses a
-threshold also gets that threshold's reward — and someone will ask.
+> ✅ **ANSWERED 2026-07-30 (stage 3, bytecode): `AFTER_DEATH` fires AFTER `drop()`.** Fabric's
+> `LivingEntityMixin#notifyDeath` injects at the `World#sendEntityStatus` call inside
+> `LivingEntity#onDeath`, and in the 1.21.11 merged jar `drop(ServerWorld, DamageSource)` is at offset
+> **150** of that method while `sendEntityStatus` is at **158**. So **the kill that crosses a threshold
+> does not get that threshold's reward on the same corpse — the next one does.** Costs nothing today
+> (mastery pays damage, not loot) and it is the reason stage 6's Trophy Hunter re-roll must ride
+> `dropLoot` rather than react to anything observed at death. Two further facts from the same read: the
+> event fires inside `onDeath`'s `instanceof ServerWorld` branch, so **there is no client-side fire to
+> guard against**; and `onDeath` early-returns on its own `dead` flag, so it **cannot fire twice** for
+> one mob.
 
 ---
 
@@ -605,6 +609,91 @@ regenerated datapack, and `HunterManagerTest` / `FlatFileProfileStoreTest` / `Da
 
 ---
 
+## ✅ Stage 3 as built (2026-07-30)
+
+**Hunter now counts.** One new listener, one locale string, no new mixin, no new config, no new
+advancement. Suite **1210 green** (+14), `./gradlew build` exit 0, headless boot `Done (1.195s)` with
+**0 mcMMO ERROR/WARN, 0 exceptions, 0 mixin failures** and **1910 advancements** unchanged (correct —
+this stage ships no datapack file). **4 mutations run, each reddening exactly the tests it should.**
+
+### The seam and the ordering answer
+
+`ServerLivingEntityEvents.AFTER_DEATH`, registered by a new `HunterListener` alongside
+`ProjectileListener`'s existing handler — Fabric events fan out, so the two are independent and neither
+had to be widened to host the other. The plan's open ordering question is answered in the D-HU6 box
+above: **it fires after `drop()`**, it fires only server-side, and it cannot fire twice.
+
+### The gate chain as built, in this order
+
+| # | Gate | Why it is where it is |
+|---|---|---|
+| 1 | `source.getAttacker() instanceof ServerPlayerEntity` | Cheapest read *and* the most selective — fall/lava/suffocation farms have no attacker at all. Also excludes a wolf's kill, which is Taming's. |
+| 2 | `CombatUtils.canCombatSkillsTrigger(HUNTER, victim)` | The `Enabled_For_PVE`/`Enabled_For_PVP` switches. **Free reuse the plan did not list**: it already existed for six other combat call sites. |
+| 3 | transient summon, then player-created iron golem | Verbatim from `CombatUtils#processCombatXP`, as ruled. |
+| 4 | `MobOrigins.countsTowardMastery(victim)` | Stage 1's marker. |
+
+🔑 **Gate 4 became observable for the first time in this stage.** Stage 1's marker had nothing to
+refuse until a counter existed, which is why `PLAYTEST_G` session 11 tests stages 1 and 3 **together**
+rather than back-filling a session-10-style block per stage.
+
+### ⚠️ The counter is keyed on the FULL registry id, and that differs from Husbandry on purpose
+
+`Registries.ENTITY_TYPE.getId(type).toString()` → `minecraft:zombie`, **not**
+`ConfigStringUtils.getConfigEntityTypeString(getId(type).getPath())` → `Cow`, which is what every
+Husbandry table uses. The kills map is an open key space that has to survive two mods shipping a mob of
+the same name, and it is the same key `FlatFileProfileStore` persists. A silent switch to `getPath()`
+passes every "the counter moved" assertion, so it is pinned by name in
+`aPlayerKillIsCountedAgainstTheVictimsNamespacedRegistryId` and mutation-proven.
+
+### ⚠️ The notification promises nothing, deliberately
+
+`Hunter.SubSkill.MobMastery.Proc` is a **statement of fact** — "You have mastered the Zombie — Mastery
+1, 500 slain" — with no mention of the damage it is worth. Stage 3 moves counters; the bonus is not
+wired until stage 4, and a string advertising a bonus the build does not apply is the "config that
+lies" failure this port keeps having to undo. Worded this way it stays true *after* stage 4 lands, so
+there is no follow-up locale edit to forget.
+
+Routed as `NotificationType.SUBSKILL_UNLOCKED` rather than `SUBSKILL_MESSAGE`: that type ships action
+bar **plus a chat copy**, and 500 kills in the making must not be a flash on the action bar mid-fight
+that the player cannot scroll back to. Sound is `SKILL_UNLOCKED`, matching
+`sendPlayerUnlockNotification`.
+
+⚠️ **Only `.Proc` shipped — no `.Name`/`.Description`.** Mob Mastery still has no `SubSkillType`
+constant (see stage 2), so nothing renders those yet and shipping them would add two more dead strings
+to the seven this port has already had to find. They land with the enum, if it ever lands, where
+`SkillLocaleCompletenessTest` enforces them.
+
+### ⚠️ A TEST TRAP THIS STAGE WALKED INTO: ASSERTING A BARE DIGIT
+
+The first draft of `everyThresholdAnnouncesItsOwnTier` asserted `message.contains(String.valueOf(tier))`.
+**It is vacuous at tier 2**: the message also carries the kill count, and 2,500 contains a `2`. Same
+family as the Stealth "assert OFF the reference point" lesson. Fixed by asserting the rendered wording
+`"Mastery " + tier` **and** the count separately — which also makes it the only guard on the
+**argument order** of the three substitutions, and mutation-proven by swapping tier and kills.
+
+### The invisible-counter problem, solved the way stage 1 solved the invisible gate
+
+One `AtomicBoolean`-guarded INFO line on the first *counted* kill of a session:
+`"Hunter: mob-mastery counters are live — first counted kill this session was 'minecraft:zombie' (now 1)."`
+Without it, "every mob I killed was gated" and "the listener never bound" are indistinguishable for the
+first 499 kills. ⚠️ It does **not** appear in a headless boot of a quiet world — nothing dies there —
+which is expected, not a failure. The flag has a package-private reset because it is process-wide
+static that JUnit would otherwise carry between test classes.
+
+### Files
+
+`fabric/listeners/HunterListener.java` (new), `McMMOMod#onInitialize` (+1 registration),
+`locale_en_US.properties` (+1 key), `HunterListenerTest` (new, 14 tests).
+
+### ⬜ Next: stage 4
+
+`applyHunterMastery` as the **fourth** sibling in `EntityDamageListener#onModifyAppliedDamage`, running
+**after** Sprint Smash and Assassin. Everything it needs already exists and is unit-tested:
+`masteryDamageBonusAgainst(mobId)` resolves the whole thing from the victim's id. The ordering test is
+the one that matters and it must be mutation-checked by swapping the two lines.
+
+---
+
 ## Staged build order
 
 One stage lands **fully** — code + config + locale + unit tests + green boot + played §G rows — before
@@ -615,7 +704,7 @@ the next starts. No half-wired skill sitting in the tree.
 | **0** | 🔴 **§G play-test of Pass 1 + Pass 2** | `PLAYTEST_G.md` session 8 actually played |
 | **1** | **The anti-farm gate (D-HU1, ruled).** Spawn-origin flag mixin + per-entity persistence | spawner mobs provably do not count, in a live world |
 | **2** | ✅ **DONE** — Enum + manager + profile persistence + all boilerplate. **No mechanics.** | old-profile regression green; the 25 → 26 skill assert updated |
-| **3** | Kill counters wired on `AFTER_DEATH` + threshold notification | counters move in-game and survive a restart |
+| **3** | ✅ **DONE** — Kill counters wired on `AFTER_DEATH` + threshold notification | counters move in-game and survive a restart (§G session 11) |
 | **4** | The damage bonus on the K1 seam (D-HU3/D-HU4) | ordering tests green; damage measured in-game |
 | **5** | Hunter XP + the tier table | XP rate measured against the 100 h target |
 | **6** | Trophy Hunter loot mixin (D-HU6) | single-extra-roll test green; no dupe in a live world |

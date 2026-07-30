@@ -18,6 +18,7 @@ import com.gmail.nossr50.event.SimpleEventBus;
 import com.gmail.nossr50.fabric.listeners.AlchemyListener;
 import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
 import com.gmail.nossr50.fabric.listeners.EntityDamageListener;
+import com.gmail.nossr50.fabric.listeners.HunterListener;
 import com.gmail.nossr50.fabric.listeners.PlayerMovementTracker;
 import com.gmail.nossr50.fabric.listeners.ProjectileListener;
 import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
@@ -219,6 +220,11 @@ public class McMMOMod implements ModInitializer {
         // §C: Archery Arrow Retrieval — the death half (hand the arrows back). Its launch half is
         // driven by ProjectileSpawnMixin, vanilla having no projectile-launch event.
         ProjectileListener.register();
+        // Pass 2 / Hunter stage 3: the per-mob kill counters, on the same AFTER_DEATH event
+        // ProjectileListener uses (Fabric events fan out, so the two handlers are independent).
+        // This is mcMMO's only other death hook — combat XP is paid per hit from the K1 damage seam,
+        // but mastery counts corpses, so it genuinely needs the kill and not the swing.
+        HunterListener.register();
         // Pass 2 / F1: the per-tick movement sampler behind Agility's Land/Water/Air domains. The
         // first continuous-state hook in the mod — every Pass-1 skill rides a discrete event, so
         // there was nothing sampling player movement before this.

@@ -547,6 +547,50 @@ them. Each is now pinned by a mutation-checked test, but these rows are the live
 
 ---
 
+## Session 11 — Hunter: the anti-farm gate and the kill counters (~40 min)
+
+Covers stages 1 and 3 **together**, and that pairing is the point: stage 1's spawn-origin marker had
+nothing to refuse until stage 3 gave it a counter, so until now it was untestable by construction.
+Stage 2 (the enum, the config, the XP bar) has nothing to play.
+
+**⚠️ There is no in-game screen for kill counts yet** — `/mcstats hunter` is stage 7. Read them
+straight off the save: `<instance>/saves/<world>/mcmmo/players/<uuid>.yml`, the `kills:` section.
+The file is written on the save interval and on world close, so **quit to the title screen before
+reading it**.
+
+**⚠️ Expect the whole session to be quiet.** Mastery only announces itself at 500 kills, and the
+damage those tiers are worth is not wired until stage 4. Everything below is verified by the
+`kills:` section, one log line, and one message.
+
+| # | Action | Expect |
+|---|---|---|
+| HN1 | Start the world and grep `latest.log` for `Hunter: mob-mastery counters are live` | Nothing yet — the line fires on the first *counted* kill, not at boot |
+| HN2 | Kill one naturally-spawned zombie with a sword | **That log line appears**, naming `minecraft:zombie` and `(now 1)`. If it never appears after several kills, the listener did not bind — that is a blocker, not a balance note |
+| HN3 | Kill 5 more wild zombies and 3 wild skeletons, quit, read the profile | `kills:` holds `minecraft:zombie: 6` and `minecraft:skeleton: 3`. **Namespaced keys** — a bare `zombie:` means the id lost its namespace |
+| HN4 | Reopen the world, kill 2 more zombies, quit, read again | **8**, not 2. The counter survived a restart, which is the stage gate |
+| HN5 | Kill a zombie **with a bow** | Counts. Attribution resolves a projectile back to its shooter |
+| HN6 | Let your **wolf** kill a zombie while you stand back | Does **not** count. That hit is Taming's; paying Hunter too would make a wolf pack the fastest mastery farm in the game |
+| HN7 | Let a zombie burn to death in daylight, or die in a 3-block fall you set up | Does **not** count. No attacker means no kill — this one gate excludes most real farms on its own |
+| HN8 | **⚠️⚠️ THE ROW STAGE 1 EXISTS FOR.** Find or place a **zombie spawner**, kill 20 of its zombies **by hand**, quit, read the profile | The zombie counter is **unchanged**. Also check the log for `Hunter: mob-origin gate is live — first mob marked …` once per session; it names whichever disqualifying origin happened to be marked first, so it may say `BRED` rather than `SPAWNER` |
+| HN9 | Same, at a **cave spider** spawner in a mineshaft | Also unchanged. ⚠️ Called out separately because the plan's original seam (`MobEntity#initialize`) would have missed **cave spiders specifically** — `CaveSpiderEntity`'s override skips `super` — while passing every zombie test |
+| HN10 | Build a **drowned farm** shape: zombies from that spawner drown in a water column, kill 5 drowned | The `minecraft:drowned` counter stays at **0**. Conversion builds a *new* entity, so without the marker being carried across it the farm would launder its own origin |
+| HN11 | Spawn a cow with a **spawn egg**, kill it. Then `/summon minecraft:cow` and kill that | Neither counts. `/summon` and a dispensed egg are the same cheese as the egg by hand |
+| HN12 | **Breed** two cows, raise the calf, kill it. Then kill a **wild** cow | Bred: no. Wild: yes. Bred mobs pay nothing, which is what stops a cow farm |
+| HN13 | Kill a **player-built iron golem**, then a **village** iron golem | Built: no. Village: yes. Both halves matter — a gate that refused all golems would be wrong |
+| HN14 | Kill a zombie you lured through a **nether portal** from the overworld | **Counts.** `DIMENSION_TRAVEL` is deliberately not disqualifying — the mob was already yours to fight. (A zombified piglin the *portal itself* spawns does not count; that is `STRUCTURE`) |
+| HN15 | Kill a raid pikeman / a patrol captain / an evoker's vex | All **count**, deliberately. A defended village raid is about the most legitimate combat in the game. Flag it here if raid farming feels like a shortcut — the backstop is a rolling per-hour cap, not a change to this list |
+| HN16 | **The known leak, stated not hidden.** Kill a skeleton riding a spawner-spawned spider | The **spider** does not count; the **skeleton** does. A jockey arrives with `SpawnReason.JOCKEY`, not `SPAWNER`. Report how exploitable this feels in practice |
+| HN17 | The long one. Take one mob to **500 kills** (a wild-spawn mob, so it counts) | A chat message: `[ mcMMO @Mob Mastery ] You have mastered the Zombie -- Mastery 1, 500 slain.` plus the unlock sound. **No damage change yet** — that is stage 4, and the message deliberately does not claim one |
+| HN18 | Kill one more of the same mob | **Silent.** The announcement is once per threshold crossing, not once per kill past it |
+| HN19 | Set `Enabled_For_PVE: false` under `Skills.Hunter` in `config.yml`, restart, kill 5 zombies | Counter does not move. The switch stops mobs feeding the skill entirely rather than muting a bonus — that is documented in the config and is the intended reading |
+
+**⚠️ Stated up front so it is not reported as a bug: no origin closes a dark-room or nether-wastes
+farm.** Those mobs are `NATURAL` and legitimately so. What excludes most of them is HN7 — they die to
+fall or lava. **A grinder you stand in and swing at is excluded by nothing**, and measuring how fast
+that actually moves a counter is the single most useful thing this session produces.
+
+---
+
 ## Reporting
 
 For each item, one line: `ID | PASS/FAIL/PARTIAL | what you actually saw`. Anything FAIL or PARTIAL —
