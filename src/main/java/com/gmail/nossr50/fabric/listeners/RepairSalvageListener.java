@@ -58,6 +58,17 @@ import org.jetbrains.annotations.Nullable;
  * other interaction runs. Repair earns Repair XP and restores durability; Salvage grants no XP (it
  * recovers crafting materials).
  *
+ * <p><b>The click has to be claimed on both logical sides.</b> {@link UseBlockCallback} fires on the
+ * client as well, and per its contract a client-side {@code PASS} lets the client fall through from
+ * "use block" to "use item" — which, for the very items this listener exists to repair, means
+ * vanilla <em>equips the armour</em> (or casts the rod, or raises the shield) straight out of the
+ * hand the anvil click was meant to act on. The armour then sits in an armour slot, so the second
+ * click of the confirmation gate has nothing to repair and the skill is unusable. Returning
+ * {@code SUCCESS} from the client-side fire cancels that fall-through and still sends the
+ * block-interaction packet the server side acts on. The client-side fire therefore stops at the
+ * identity test ({@link #anvilKindAt} + {@link #isAnvilAction}) and never touches player state:
+ * both sides gate on the same lookup, so they cannot disagree about whose click it was.
+ *
  * <p>The pure math stays MC-free on {@link RepairManager}/{@link SalvageManager} (durability/yield
  * calculation, XP award, confirmation gate); this listener owns the MC-typed half: block/anvil
  * identity, the held {@link ItemStack} reads (durability, unbreakable, stack size), the
@@ -83,32 +94,101 @@ public final class RepairSalvageListener {
         UseBlockCallback.EVENT.register(RepairSalvageListener::onUseBlock);
     }
 
-    /** Right-click a block → if it is the repair anvil and the held item is repairable, repair it. */
-    private static ActionResult onUseBlock(PlayerEntity player, World world, Hand hand,
+    /** Which of mcMMO's two anvils a click landed on. */
+    enum AnvilKind {
+        REPAIR,
+        SALVAGE
+    }
+
+    /**
+     * Right-click a block → if it is an mcMMO anvil and the held item is one the matching skill works
+     * on, claim the click and (server side) perform the action. Package-private so the test can drive
+     * the real dispatch rather than the predicates alone.
+     */
+    static ActionResult onUseBlock(PlayerEntity player, World world, Hand hand,
             BlockHitResult hitResult) {
         if (hand != Hand.MAIN_HAND) {
             return ActionResult.PASS; // avoid the off-hand dispatch double-firing.
         }
-        if (!(player instanceof ServerPlayerEntity serverPlayer)) {
-            return ActionResult.PASS; // client-side callback fire.
-        }
 
         final BlockPos pos = hitResult.getBlockPos();
+        final AnvilKind kind = anvilKindAt(world, pos);
+        if (kind == null || !isAnvilAction(kind, player.getMainHandStack())) {
+            return ActionResult.PASS; // not an mcMMO anvil action — let vanilla have the click.
+        }
+
+        if (!(player instanceof ServerPlayerEntity serverPlayer)) {
+            // Client-side fire: claim the click so the client does not fall through to "use item"
+            // and equip/use the item out of our hand. No player state is touched here — the
+            // confirmation clock and the action itself belong to the server-side fire below.
+            return ActionResult.SUCCESS;
+        }
+
+        return switch (kind) {
+            case REPAIR -> handleRepairInteraction(serverPlayer);
+            case SALVAGE -> handleSalvageInteraction(serverPlayer, world, pos);
+        };
+    }
+
+    /** The mcMMO anvil at {@code pos}, or {@code null} when that block is neither anvil. */
+    private static @Nullable AnvilKind anvilKindAt(World world, BlockPos pos) {
         final Block clicked = world.getBlockState(pos).getBlock();
 
         final Block repairAnvil = anvilBlock(
                 McMMOMod.getGeneralConfig().getRepairAnvilMaterialName());
         if (repairAnvil != null && clicked == repairAnvil) {
-            return handleRepairInteraction(serverPlayer);
+            return AnvilKind.REPAIR;
         }
 
         final Block salvageAnvil = anvilBlock(
                 McMMOMod.getGeneralConfig().getSalvageAnvilMaterialName());
         if (salvageAnvil != null && clicked == salvageAnvil) {
-            return handleSalvageInteraction(serverPlayer, world, pos);
+            return AnvilKind.SALVAGE;
         }
 
-        return ActionResult.PASS;
+        return null;
+    }
+
+    /**
+     * Whether mcMMO claims an anvil click made with {@code held} — that is, whether the matching
+     * skill's config knows how to work on the item. This is the whole of the client-side decision and
+     * the server side gates on the same lookup, so a click is either mcMMO's on both sides or on
+     * neither. Anything else (durability, level, materials on hand) is a <em>failure of a claimed
+     * action</em>, reported to the player by {@link #performRepair}/{@link #performSalvage}, not a
+     * reason to hand the click back to vanilla.
+     */
+    private static boolean isAnvilAction(AnvilKind kind, ItemStack held) {
+        return switch (kind) {
+            case REPAIR -> repairableInHand(held) != null;
+            case SALVAGE -> salvageableInHand(held) != null;
+        };
+    }
+
+    /**
+     * The {@code repair.yml} entry covering the held item, or {@code null} when Repair has nothing to
+     * act on: an empty hand, an item no entry covers, or configs that never loaded (no world
+     * session).
+     */
+    private static @Nullable Repairable repairableInHand(ItemStack held) {
+        if (held.isEmpty()) {
+            return null;
+        }
+        final RepairableManager manager = McMMOMod.getRepairableManager();
+        return manager == null ? null : manager.getRepairable(itemPath(held));
+    }
+
+    /** The {@code salvage.yml} counterpart of {@link #repairableInHand}. */
+    private static @Nullable Salvageable salvageableInHand(ItemStack held) {
+        if (held.isEmpty()) {
+            return null;
+        }
+        final SalvageableManager manager = McMMOMod.getSalvageableManager();
+        return manager == null ? null : manager.getSalvageable(itemPath(held));
+    }
+
+    /** A stack's registry path ({@code minecraft:iron_sword} → {@code iron_sword}), the config key. */
+    private static String itemPath(ItemStack stack) {
+        return Registries.ITEM.getId(stack.getItem()).getPath();
     }
 
     /**
@@ -123,18 +203,11 @@ public final class RepairSalvageListener {
             return ActionResult.PASS;
         }
 
+        // Re-resolved on this side rather than carried over from onUseBlock's gate: the client fires
+        // first and the two sides hold different ItemStack instances, so the hand is read where it is
+        // acted on.
         final ItemStack item = serverPlayer.getMainHandStack();
-        if (item.isEmpty()) {
-            return ActionResult.PASS;
-        }
-
-        final RepairableManager repairableManager = McMMOMod.getRepairableManager();
-        if (repairableManager == null) {
-            return ActionResult.PASS; // configs not loaded (no world session).
-        }
-
-        final String itemPath = Registries.ITEM.getId(item.getItem()).getPath();
-        final Repairable repairable = repairableManager.getRepairable(itemPath);
+        final Repairable repairable = repairableInHand(item);
         if (repairable == null) {
             return ActionResult.PASS; // the held item is not repairable — let vanilla have the click.
         }
@@ -143,7 +216,7 @@ public final class RepairSalvageListener {
 
         // Double-click confirmation: the first click within the window only arms + prompts.
         if (repairManager.checkConfirmation(true)) {
-            performRepair(serverPlayer, mmoPlayer, repairManager, item, itemPath, repairable);
+            performRepair(serverPlayer, mmoPlayer, repairManager, item, itemPath(item), repairable);
         }
         return ActionResult.SUCCESS; // claim the click whether we repaired or merely armed.
     }
@@ -330,18 +403,9 @@ public final class RepairSalvageListener {
             return ActionResult.PASS;
         }
 
+        // Re-resolved on this side for the same reason as in handleRepairInteraction.
         final ItemStack item = serverPlayer.getMainHandStack();
-        if (item.isEmpty()) {
-            return ActionResult.PASS;
-        }
-
-        final SalvageableManager salvageableManager = McMMOMod.getSalvageableManager();
-        if (salvageableManager == null) {
-            return ActionResult.PASS; // configs not loaded (no world session).
-        }
-
-        final String itemPath = Registries.ITEM.getId(item.getItem()).getPath();
-        final Salvageable salvageable = salvageableManager.getSalvageable(itemPath);
+        final Salvageable salvageable = salvageableInHand(item);
         if (salvageable == null) {
             return ActionResult.PASS; // the held item is not salvageable.
         }
@@ -349,7 +413,7 @@ public final class RepairSalvageListener {
         final SalvageManager salvageManager = mmoPlayer.getSalvageManager();
 
         if (salvageManager.checkConfirmation(true)) {
-            performSalvage(serverPlayer, mmoPlayer, salvageManager, item, itemPath, salvageable,
+            performSalvage(serverPlayer, mmoPlayer, salvageManager, item, itemPath(item), salvageable,
                     world, pos);
         }
         return ActionResult.SUCCESS;
