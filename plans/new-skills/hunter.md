@@ -5,10 +5,15 @@ belongs in **`COMBAT_SKILLS`**. It needs **no F1** (tick sampler) and **no F2** 
 it is entirely event-driven. It does need **two things nothing else in the port has**: a
 **per-mob-type persistent counter** and a **mob loot-drop seam**.
 
-> 🔴 **STATUS: DRAFT — DO NOT START.** This queues behind §G. Pass 2 already has four skills in the
-> tree (Agility/Parkour/Swimming/Flying restructure, Stealth) that are **code-complete and never
-> played**. `PLAYTEST_G.md` session 8 is the open job. Hunter would be the fifth unplayed skill
-> stacked on an unverified base. See `[[resume-here]]`.
+> 🔶 **STATUS: IN PROGRESS as of 2026-07-30. Stage 1 (the anti-farm gate) is DONE.** Stage 0 — the §G
+> play-test of Pass 1 + Pass 2 — was **consciously skipped on the user's instruction**, not satisfied.
+> Pass 2 now has five skills in the tree (Agility/Parkour/Swimming/Flying, Stealth, Unarmored,
+> Husbandry) that are code-complete and **never played**; Hunter is the sixth, stacked on an unverified
+> base. `PLAYTEST_G.md` sessions 8–10 remain the open job. See `[[resume-here]]`.
+>
+> **Stage gate in use (the Husbandry precedent):** code + config + locale + unit tests +
+> `./gradlew build` exit 0 + a clean headless boot, per stage. Live play is deferred to one §G session
+> at the end. Each stage pauses for review and is committed to memory before the next starts.
 
 ---
 
@@ -38,11 +43,22 @@ request's *"for all combat skills"* means, and it is why the bonus does **not** 
 
 Per player, per mob type, a monotonically increasing kill count. Thresholds and rewards:
 
-| Kills of mob X | Bonus damage vs mob X | In half-hearts |
+> ✅ **RULED 2026-07-30 (user): HALVED. The table below is superseded.** The shipped numbers are
+> **+1.0 / +2.0 / +3.0** damage — half a heart per tier, not a full one. The reasoning the user was
+> shown and chose on: at the drafted +6.0 a **bare fist hits for 7.0**, a diamond sword's worth of
+> punch from kills alone and on top of whatever Unarmed already adds, and it compounds with Stealth
+> Assassin (`[[stealth-skill-build]]` row ST14 already flags Assassin as dangerous on its own). At
+> +3.0 the multipliers are netherite **1.375×**, wooden **1.75×**, bare fist **4×**.
+>
+> ⚠️ **The coherence check in §Balance is computed against the OLD numbers** and is unaffected — it
+> keys off kill *counts*, not the bonus size. But the "is a capped Hunter survivable as a design"
+> play-test row now measures 4×, not 7×.
+
+| Kills of mob X | Bonus damage vs mob X | Superseded draft |
 |---|---|---|
-| 500 | **+1 heart** | +2.0 |
-| 2,500 | **+2 hearts** | +4.0 |
-| 10,000 | **+3 hearts** (cap) | +6.0 |
+| 500 | **+1.0** (half a heart) | ~~+2.0~~ |
+| 2,500 | **+2.0** (one heart) | ~~+4.0~~ |
+| 10,000 | **+3.0** (1.5 hearts, cap) | ~~+6.0~~ |
 
 ⚠️ **Read those numbers as damage, not as flavour.** A diamond sword is **7.0** base. At the cap,
 Hunter adds **+6.0** — it very nearly doubles a diamond sword and it is a **flat** add, so it is
@@ -87,6 +103,25 @@ permanent damage buff.
 > and read at death. Spawner and bred mobs count **zero** toward mastery. This is real work — a new
 > mixin plus per-entity persistent data — and it is **Stage 1, a prerequisite**, not a follow-up.
 > Locked.
+>
+> ✅ **WIDENED 2026-07-30 (user), then corrected against bytecode. BUILT — see §"Stage 1 as built".**
+> The excluded set is spawner + trial spawner, bred, player-placed, and portal/structure. Two
+> deviations from the ruling as worded, both stated rather than absorbed:
+>
+> - **`DIMENSION_TRAVEL` is NOT flagged; `STRUCTURE` is.** The ruling was offered to the user as
+>   "`DIMENSION_TRAVEL` / portal spawns" and that label was wrong. `NetherPortalBlock#randomTick`
+>   spawns its zombified piglins with **`SpawnReason.STRUCTURE`** (bytecode: `getstatic
+>   SpawnReason.STRUCTURE` then `EntityType.spawn`); nothing in 1.21.11 is named after a portal.
+>   `DIMENSION_TRAVEL` is the unrelated case of an *existing* mob being re-created on the far side of a
+>   portal, so flagging it would disqualify any mob a player lured through one and close no hole — the
+>   marker already survives the crossing, because Fabric transfers attachments on cross-world
+>   teleportation. `STRUCTURE` is the faithful implementation of the ruling's intent (legacy's
+>   `NETHER_PORTAL_MOB`). Its only false negatives are structure-placed one-offs — a monument's elder
+>   guardians, a mansion's evokers, an end city's shulkers — every one of them non-renewable and
+>   therefore far below the 500-kill threshold anyway.
+> - **`COMMAND` and `DISPENSER` were added** to the spawn-egg bucket. `/summon` and a dispenser firing
+>   an egg are the same cheese the egg ruling closed. `BUCKET` was deliberately left counting —
+>   releasing an axolotl you caught is not free mob generation.
 
 Rejected alternatives, recorded so they are not re-litigated: shipping the three existing gates alone
 (a spawner farm caps the skill in an afternoon), and a rolling per-mob-per-hour cap (blunt, and it
@@ -183,12 +218,31 @@ XP is paid per qualifying kill, scaled by the mob's tier. Level unlocks **increa
 "Certain animals/monsters at different levels depending on tier" needs an explicit table — do **not**
 hand-wave "hostile = tier 2". Proposed shape (numbers are starting points):
 
+> ✅ **RULED 2026-07-30 (user): a DERIVED default plus a small override table.** Not a full ~90-row
+> table. `tierOf(entity)` derives a tier structurally from the live entity — passive vs hostile, max
+> health, attack damage — and a short `Hunter.Tier_Overrides` section in `advanced.yml` names only the
+> exceptions (a ghast has 10 HP and enormous damage; a witch is 26 HP and barely fights back). **The
+> reason: an unlisted mob resolves to a sane tier instead of silently resolving to `0`**, which is
+> exactly what bit Husbandry twice (`Nautilus` and `Happy_Ghast` absent from the breed table ⇒ two
+> verbs paid nothing for both species) and Fishing once (upstream defect #10). A derived default cannot
+> go stale when Mojang adds a mob or a player installs one.
+>
+> ⚠️ **`experience.yml` → `Experience_Values.Combat.Multiplier` is NOT usable as the tier source**,
+> despite being a ready-made ~90-row per-mob table. It prices XP-per-damage, not danger: Witch is
+> `0.1`, **Ender Dragon is `1.0`**, Warden is `6.0`. Deriving tiers from it would put the dragon in T1.
+> It is still the right *shape* precedent for the override section's keying.
+>
+> ✅ **RULED 2026-07-30 (user): T4 ships with members, priced conservatively at ~1,500 XP, not 5,000.**
+> That keeps the inherited 80 h guardrail intact even against a wither farm while still making bosses
+> the top of the ladder. Supersedes the "T4 is the designated cut" line under §Cuts — **there is now no
+> empty tier and no dead config section.**
+
 | Tier | Membership | Drop bonus unlocks at | Example |
 |---|---|---|---|
 | **T1** | passive / trivial | Hunter 100 | chicken, cow, sheep, rabbit |
 | **T2** | common hostiles | Hunter 300 | zombie, skeleton, creeper, spider |
 | **T3** | dangerous / nether / rare | Hunter 600 | blaze, wither skeleton, guardian, ravager |
-| **T4** | bosses | Hunter 900 (or never — see cuts) | wither, ender dragon, warden |
+| **T4** | bosses — **ships**, at ~1,500 XP | Hunter 900 | wither, ender dragon, warden |
 
 **There is already precedent for a per-mob-name table in this repo**: `experience.yml`
 → `Experience_Values.Combat.Multiplier` (line ~739) is exactly this, keyed by mob name. Mirror its
@@ -379,6 +433,90 @@ property explicitly.
 
 ---
 
+## ✅ Stage 1 as built (2026-07-30)
+
+**The seam the plan implied was unsafe, and the trap it walked into was the most-farmed mob in the
+game.** The plan pointed at `MobEntity#initialize(ServerWorldAccess, LocalDifficulty, SpawnReason,
+EntityData)` — reasonable, since both spawner logics visibly call it with their reason. Of the **57**
+classes overriding it in 1.21.11, exactly **one** does not call `super`: **`CaveSpiderEntity`**, whose
+entire override is
+
+```
+  0: aload 4
+  2: areturn
+```
+
+a bare pass-through that skips `SpiderEntity`'s jockey and effect logic. An injection there would have
+missed **every cave spider**, and a mineshaft cave-spider spawner is one of the two or three most-built
+grinders there is — the miss would have landed exactly on the case the gate exists for, while passing
+any test written with a zombie. **The funnel rule bites for the sixth time in this port.**
+
+**The seam actually used: `EntityType#create(World, SpawnReason)`.** Every reason-carrying path bottoms
+out there, verified against the merged jar:
+
+| Path | Chain |
+|---|---|
+| `MobSpawnerLogic`, `TrialSpawnerLogic` | `loadEntityWithPassengers` → `loadEntityFromData` → `getEntityFromData` → `create(World, SpawnReason)` |
+| `SpawnEggItem` | `spawnFromItemStack` → `spawn` → `create(6-arg)` → `create(World, SpawnReason)` |
+| `NetherPortalBlock` | `spawn(ServerWorld, BlockPos, SpawnReason)` → the same |
+| ~40 `createChild` implementations | `create(World, SpawnReason)` **directly**, with `BREEDING` |
+
+It is an instance method on a class with **no vanilla subclasses**, so nothing can override it away,
+and **its body ignores the `SpawnReason` it is handed** (a feature-flag check and a factory call) —
+vanilla passes the reason down only so callers further up can branch on it, which makes reading it here
+free of behavioural risk. **One injection covers ~40 breeding species with zero per-species work** —
+the exact opposite of Husbandry, where every verb needed a species roster.
+
+**A second hole the plan did not have: conversion.** A drowned farm is a zombie spawner over water. The
+zombies are stamped, then each drowns into a **different entity** that vanilla builds fresh through
+`create(world, SpawnReason.CONVERSION)` — which qualifies, so the drowned would arrive unmarked and the
+farm would launder its own origin one conversion later. Closed by a second injector on
+`MobEntity#convertTo` (the 4-arg overload; the 3-arg one is a one-line delegate that pushes
+`CONVERSION`). Fabric's `copyOnDeath` does **not** cover this: conversion is not death, and vanilla
+builds a new entity rather than transferring the old one.
+
+**⚠️ The load-bearing invariant: a qualifying origin is NEVER written.** `create(World, SpawnReason)` is
+also the path taken by `SpawnReason.LOAD` — every mob in every chunk that loads — and by
+`DIMENSION_TRAVEL`. Both arrive carrying mobs that already own a marker from a previous session or from
+the far side of a portal, so writing "NATURAL" there would erase it. The symptom would be a spawner farm
+quietly starting to count again **after a world reload**, indistinguishable from the gate never having
+worked. Pinned by `MobOriginsTest.aQualifyingOriginIsNeverWritten` and mutation-proven.
+
+**Fail closed, twice over.** The marker is stored as a raw `String` and resolved at read time, not
+through an enum codec: Fabric **drops** an attachment whose codec fails to decode, with only a
+`"Skipping invalid attachments"` warning, and for this attachment a dropped marker reads as *"this mob
+counts"* — a single future rename would silently re-open every farm. A `String` always decodes, and an
+unrecognised value becomes `MobOrigin.UNKNOWN`, which does **not** count.
+
+**⚠️ No `default` arm on `MobOrigins#classify`.** A switch expression over an enum must be exhaustive,
+so a Minecraft version that adds a `SpawnReason` **fails the compile** rather than falling through to
+"counts". `MobOriginsTest.everySpawnReasonMapsToAnOrigin` is the runtime companion for the case that
+guard cannot see — running against a newer Minecraft than the mod was built against.
+
+**Deliberately left counting, and flagged as §G watch items:** raids (`EVENT`), patrols (`PATROL`), an
+evoker's vexes (`MOB_SUMMONED`), a zombie's reinforcements (`REINFORCEMENT`). Each is farmable, but a
+defended village raid is also about the most legitimate combat in the game and excluding it would take
+more from honest play than it saves. **The known leak, stated rather than hidden:** `JOCKEY`. The
+skeleton riding a spawner-spawned spider arrives with `JOCKEY`, not `SPAWNER`, so it escapes the gate its
+mount does not. The rolling per-mob-per-hour cap D-HU1 holds in reserve is the additive backstop for all
+of these, not a re-mapping of the switch.
+
+**Also unchanged from the plan and worth noting: no natural-spawn origin closes a dark-room or
+nether-wastes farm.** Those mobs are `NATURAL` and legitimately so. What excludes them today is the
+pre-existing player-attribution gate (most such farms kill by fall, lava or suffocation) — a grinder you
+stand in and swing at is not excluded by anything, and that is the case §G has to measure.
+
+**Files:** `datatypes/mobs/MobOrigin.java` (MC-free vocabulary + predicate),
+`util/MobOrigins.java` (the `SpawnReason` mapping + attachment access),
+`fabric/mixin/EntityTypeSpawnOriginMixin.java`, `fabric/mixin/MobConversionOriginMixin.java`,
+`McMMOAttachments.MOB_ORIGIN`. **1169 tests green (+18), `./gradlew build` exit 0, 4 mutations run and
+each reddened exactly its own test.** A one-shot INFO line (`"Hunter: mob-origin gate is live"`) fires
+the first time a mob is marked in a session — the `[[smelting-furnace-arm]]` trick, because this gate is
+invisible by construction until a mastery counter exists to refuse, so "it refused the mob" and "the
+injector never bound" would otherwise look identical in-game.
+
+---
+
 ## Staged build order
 
 One stage lands **fully** — code + config + locale + unit tests + green boot + played §G rows — before
@@ -402,8 +540,9 @@ Stage 0 lesson: when a profile comes back zeroed you need to know *which* change
 
 ## Cuts / deferrals
 
-- **T4 bosses (D-HU5).** 5,000 XP/kill on a farmable boss breaks the 80 h guardrail outright. Ship
-  T1–T3; leave T4 in the config with no members. **No dead enum.**
+- ~~**T4 bosses (D-HU5).**~~ **REVERSED 2026-07-30 (user): T4 ships with members**, priced at ~1,500
+  XP/kill rather than the drafted 5,000, which is what keeps the 80 h guardrail intact against a wither
+  farm. See the ruling box under D-HU5.
 - **Quarry Sense** is the first thing to cut if Beast Lore's renderer fights back — but it is also the
   cheapest fix for D-HU7, so cut it last among the nice-to-haves.
 - **Per-mob milestone plaques.** The existing plaque machinery is keyed per *skill*; a per-mob variant

@@ -4,11 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.gmail.nossr50.datatypes.mobs.MobOrigin;
 import com.gmail.nossr50.util.McTestRegistries;
 import com.mojang.serialization.Codec;
+import java.util.List;
 import java.util.UUID;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.NbtString;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -64,9 +68,48 @@ class McMMOAttachmentsTest {
 
     @Test
     void attachmentIdentifiersLiveUnderTheModsOwnNamespace() {
-        assertEquals(McMMOMod.MOD_ID, McMMOAttachments.BRED_BY.identifier().getNamespace(),
-                "attachments share one registry across every installed mod; a foreign or default "
-                        + "namespace is a collision waiting for the first mod that picks the same "
-                        + "path, and the loser is overwritten with only a warning");
+        for (AttachmentType<?> attachment : List.of(McMMOAttachments.BRED_BY,
+                McMMOAttachments.MOB_ORIGIN)) {
+            assertEquals(McMMOMod.MOD_ID, attachment.identifier().getNamespace(),
+                    "attachments share one registry across every installed mod; a foreign or default "
+                            + "namespace is a collision waiting for the first mod that picks the same "
+                            + "path, and the loser is overwritten with only a warning");
+        }
+    }
+
+    @Test
+    void theMobOriginMarkerIsDeclaredPersistent() {
+        assertTrue(McMMOAttachments.MOB_ORIGIN.isPersistent(),
+                "a non-persistent mob-origin marker survives only until the world closes, so every "
+                        + "spawner mob already loaded would start counting toward Hunter mastery "
+                        + "again on the next reload — the gate would appear to work and then quietly "
+                        + "stop");
+    }
+
+    @Test
+    void theMobOriginMarkerRoundTripsThroughNbt() {
+        final Codec<String> codec = McMMOAttachments.MOB_ORIGIN.persistenceCodec();
+        assertNotNull(codec, "a persistent attachment must carry a codec");
+
+        final NbtElement encoded = codec.encodeStart(NbtOps.INSTANCE,
+                MobOrigin.SPAWNER.storageKey()).getOrThrow();
+        final String decoded = codec.parse(NbtOps.INSTANCE, encoded).getOrThrow();
+
+        assertEquals(MobOrigin.SPAWNER, MobOrigin.byName(decoded),
+                "the origin must survive the write/read cycle and still resolve");
+    }
+
+    @Test
+    void theMobOriginMarkerIsStoredAsAStringRatherThanAnEnumCodec() {
+        // ⚠️ Not a restatement of the declaration — the failure direction is what matters. Fabric
+        // drops an attachment whose codec fails to decode, with only a "Skipping invalid attachments"
+        // warning. For this attachment a dropped marker reads as "this mob counts", so a strict enum
+        // codec would turn any future rename into a silent re-opening of every farm the gate closes.
+        // A String always decodes, and MobOrigins maps anything it cannot interpret to UNKNOWN.
+        final Codec<String> codec = McMMOAttachments.MOB_ORIGIN.persistenceCodec();
+        assertNotNull(codec);
+        assertTrue(codec.parse(NbtOps.INSTANCE, NbtString.of("NOT_A_REAL_ORIGIN")).isSuccess(),
+                "an unrecognised stored value must still decode, so that MobOrigins gets the chance "
+                        + "to fail closed on it rather than Fabric discarding the marker entirely");
     }
 }

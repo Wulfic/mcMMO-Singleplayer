@@ -11,8 +11,10 @@ import net.minecraft.advancement.criterion.BredAnimalsCriterion;
 import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.block.entity.BrewingStandBlockEntity;
 import net.minecraft.component.type.FoodComponent;
+import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.BoggedEntity;
+import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.passive.AbstractCowEntity;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.GoatEntity;
@@ -357,6 +359,35 @@ class MixinApplicationTest {
             assertTrue(hasSave, "ShearableInteractMixin did not apply to " + shearable.getSimpleName()
                     + " — Bountiful Harvest would save no durability when shearing it");
         }
+    }
+
+    @Test
+    void mobOriginMixinsApply() {
+        // Hunter's D-HU1 anti-farm gate. Both halves are pure @Injects, so the handler's presence on
+        // the transformed target is the assertion.
+        //
+        // ⚠️ Worth stating why the target is EntityType#create and not MobEntity#initialize, because
+        // initialize is what the plan implied and what both spawner logics visibly call:
+        // CaveSpiderEntity#initialize is a bare `return entityData` with no super call, so an
+        // injection there would have missed every cave spider — and a mineshaft cave-spider spawner is
+        // one of the most-built grinders in the game. create(World, SpawnReason) is the factory all
+        // four verified spawn chains bottom out in, on a class with no vanilla subclasses.
+        assertDoesNotThrow(() -> Class.forName(EntityType.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+        assertTrue(Arrays.stream(EntityType.class.getDeclaredMethods())
+                        .anyMatch(method -> method.getName().contains("stampSpawnOrigin")),
+                "EntityTypeSpawnOriginMixin did not apply to EntityType — no mob would ever be "
+                        + "marked, so every spawner, bred, egg-placed and portal-spawned mob would "
+                        + "count toward Hunter mastery and the whole anti-farm gate would be absent "
+                        + "while looking present");
+
+        // MobEntity is loaded by EntityType's static init during bootstrap, so class-loading proves
+        // nothing; the handler does. Losing this one leaves a narrower but very real hole: a zombie
+        // spawner over water launders its origin into drowned that count.
+        assertTrue(Arrays.stream(MobEntity.class.getDeclaredMethods())
+                        .anyMatch(method -> method.getName().contains("carryOriginThroughConversion")),
+                "MobConversionOriginMixin did not apply to MobEntity — a spawner mob would shed its "
+                        + "marker the moment it converted, which is exactly how drowned farms work");
     }
 
     @Test

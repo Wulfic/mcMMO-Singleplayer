@@ -1,5 +1,6 @@
 package com.gmail.nossr50.fabric;
 
+import com.mojang.serialization.Codec;
 import java.util.UUID;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
@@ -63,6 +64,33 @@ public final class McMMOAttachments {
     public static final AttachmentType<UUID> BRED_BY = AttachmentRegistry.createPersistent(
             Identifier.of(McMMOMod.MOD_ID, "bred_by"), Uuids.INT_STREAM_CODEC);
 
+    /**
+     * Why a mob does <b>not</b> count toward Hunter's mob-mastery counters — Hunter's D-HU1 gate.
+     * See {@link com.gmail.nossr50.datatypes.mobs.MobOrigin} for the reasoning and
+     * {@code util.MobOrigins} for the read/write helpers; nothing outside those two should touch this
+     * attachment directly.
+     *
+     * <p><b>Only disqualifying origins are written.</b> A mob with no marker counts. That is load
+     * bearing rather than tidy: {@code EntityType#create(World, SpawnReason)}, where the marker is
+     * stamped, is also the path every chunk load ({@code SpawnReason.LOAD}) and every portal crossing
+     * ({@code DIMENSION_TRAVEL}) takes, so a mob arriving there may already own — or be about to be
+     * handed — a marker from a previous session. Writing a "counts" value would erase it.
+     *
+     * <p><b>Stored as a raw {@link String}, not as an enum codec, and resolved at read time.</b> A
+     * codec that fails to decode is dropped by Fabric's serializer with a {@code "Skipping invalid
+     * attachments"} warning, which is exactly the wrong failure for this attachment: a dropped marker
+     * reads as "this mob counts", silently re-opening every farm the gate closes. A string always
+     * decodes, and {@code MobOrigins} maps anything it cannot interpret to
+     * {@code MobOrigin.UNKNOWN}, which does not count.
+     *
+     * <p><b>Not {@code copyOnDeath}.</b> Mobs do not respawn. Conversion — a spawner zombie drowning
+     * into a drowned, which is how drowned farms are built — is carried across by
+     * {@code MobConversionOriginMixin} instead, because {@code convertTo} constructs a genuinely new
+     * entity that Fabric does not treat as the same one.
+     */
+    public static final AttachmentType<String> MOB_ORIGIN = AttachmentRegistry.createPersistent(
+            Identifier.of(McMMOMod.MOD_ID, "mob_origin"), Codec.STRING);
+
     private McMMOAttachments() {
     }
 
@@ -75,8 +103,9 @@ public final class McMMOAttachments {
      * the world holding last session's markers had already been read and discarded them.
      */
     public static void register() {
-        // Referencing BRED_BY is the whole point; the assignment keeps the reference from being
-        // optimized away and documents that class initialization is the mechanism.
+        // Referencing the constants is the whole point; the assertions keep the references from being
+        // optimized away and document that class initialization is the mechanism.
         assert BRED_BY != null;
+        assert MOB_ORIGIN != null;
     }
 }
