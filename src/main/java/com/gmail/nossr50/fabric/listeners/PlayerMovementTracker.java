@@ -7,6 +7,7 @@ import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.platform.SkillAttributeService;
 import com.gmail.nossr50.skills.agility.AgilityManager;
 import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.skills.stealth.StealthManager;
 import com.gmail.nossr50.skills.unarmored.UnarmoredManager;
 import com.gmail.nossr50.util.player.UserManager;
@@ -19,11 +20,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.entity.ai.pathing.EntityNavigation;
+import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.PlayerInput;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -210,6 +215,13 @@ public final class PlayerMovementTracker {
         // player's armour depend on an unrelated skill loading, and the failure would be silent.
         applyIronSkin(player, mmoPlayer);
 
+        // ⚠️ HERDSMAN'S CALL SITS ABOVE THE AGILITY GUARD TOO, AND FOR THE FOURTH TIME IN THIS CLASS
+        // THAT ORDERING IS THE WHOLE BUG. Husbandry's super has nothing to do with Agility; below the
+        // return it would stop working for any player whose Agility manager happened not to be loaded,
+        // and it would fail exactly the way Unarmored's Iron Skin and Stealth's dispatch would have —
+        // compiling, booting clean, and passing every unit test that does not drive tickPlayer itself.
+        callTheHerd(player, mmoPlayer);
+
         final AgilityManager agility = mmoPlayer.getAgilityManager();
         if (agility == null) {
             return;
@@ -251,6 +263,62 @@ public final class PlayerMovementTracker {
         }
         agility.onMovementTick(medium, distance);
     }
+
+    /**
+     * Husbandry's <b>Herdsman's Call</b>: while the horn is sounding, walk nearby livestock to the
+     * player.
+     *
+     * <p>Rides this sweep because it is the mod's only per-tick per-player hook and following has to be
+     * re-pathed continuously — the player is moving, which is the entire point of the effect.
+     *
+     * <p><b>Vanilla's own navigation, not a velocity write and not a teleport.</b>
+     * {@code getNavigation().startMovingTo(player, speed)} means fences, walls, water and drops all
+     * still stop an animal, so the ability gathers a herd rather than dragging it through the scenery —
+     * and a player cannot use it to pull animals out of a pen or across a ravine. (It is also the only
+     * option that works: a velocity write on someone else's entity is exactly the shape that failed for
+     * Agility, and teleporting livestock would be a different, much worse ability.)
+     *
+     * <p><b>Costs nothing while the ability is idle.</b> {@link HusbandryManager#getHerdRadius()}
+     * returns {@code 0} unless the call is active, so the common case is one boolean read per player per
+     * tick and no entity sweep at all. That matters: this runs for every online player, every tick,
+     * forever.
+     *
+     * <p>Only animals that are <em>already idle</em> are redirected. Overriding a live navigation target
+     * every tick would fight vanilla's own goals — an animal fleeing a wolf, or one already walking to
+     * its mate — and produce a herd that jitters in place instead of one that comes when called.
+     */
+    private static void callTheHerd(@NotNull ServerPlayerEntity player,
+            @NotNull McMMOPlayer mmoPlayer) {
+        final HusbandryManager husbandry = mmoPlayer.getHusbandryManager();
+        if (husbandry == null) {
+            return;
+        }
+        final double radius = husbandry.getHerdRadius();
+        if (radius <= 0) {
+            return; // Not sounding — the overwhelmingly common case, and it must stay cheap.
+        }
+        if (!(player.getEntityWorld() instanceof ServerWorld)) {
+            return;
+        }
+
+        final Box searchBox = player.getBoundingBox().expand(radius);
+        for (AnimalEntity animal : player.getEntityWorld().getEntitiesByClass(AnimalEntity.class,
+                searchBox, AnimalEntity::isAlive)) {
+            final EntityNavigation navigation = animal.getNavigation();
+            if (navigation.isIdle()) {
+                navigation.startMovingTo(player, HERD_FOLLOW_SPEED);
+            }
+        }
+    }
+
+    /**
+     * How fast a called animal walks toward the herdsman, as a navigation speed multiplier.
+     *
+     * <p>Vanilla's own {@code TemptGoal} — the "follow the player holding wheat" behaviour this ability
+     * imitates — uses {@code 1.25} in most species, so the herd moves at the pace a player already
+     * recognises as "that animal wants what you are holding" rather than at an uncanny sprint.
+     */
+    private static final double HERD_FOLLOW_SPEED = 1.25;
 
     /**
      * Keep Unarmored's Iron Skin armour matched to what the player is (not) wearing right now.

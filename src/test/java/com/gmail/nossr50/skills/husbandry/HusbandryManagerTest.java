@@ -17,6 +17,7 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.treasure.HusbandryTreasure;
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.fabric.McMMOMod;
@@ -167,7 +168,8 @@ class HusbandryManagerTest {
                         SubSkillType.HUSBANDRY_BEEKEEPER,
                         SubSkillType.HUSBANDRY_SELECTIVE_BREEDING,
                         SubSkillType.HUSBANDRY_BROOD,
-                        SubSkillType.HUSBANDRY_HIDDEN_BOUNTY),
+                        SubSkillType.HUSBANDRY_HIDDEN_BOUNTY,
+                        SubSkillType.HUSBANDRY_HERDSMANS_CALL),
                 new SkillTools().getSubSkills(PrimarySkillType.HUSBANDRY));
     }
 
@@ -899,5 +901,98 @@ class HusbandryManagerTest {
     private static HusbandryTreasure treasure(String material, double dropChance, int dropLevel) {
         return new HusbandryTreasure(new ItemSpec(material, 1, null, java.util.List.of()), 10,
                 dropChance, dropLevel);
+    }
+
+    // --- Stage 6: Herdsman's Call ------------------------------------------------------------------
+
+    @Test
+    void herdsmansCallIsLockedUntilItsRank() {
+        setHusbandryLevel(0);
+        assertFalse(manager.canHerdsmansCall());
+
+        setHusbandryLevel(1000);
+        assertTrue(manager.canHerdsmansCall());
+    }
+
+    @Test
+    void theHerdRadiusIsZeroUnlessTheCallIsSounding() {
+        // ⚠️ Not cosmetic. This value gates a per-tick entity sweep that runs for every online player
+        // forever, so "0 while idle" is what keeps the ability free when nobody is using it. A radius
+        // that read its configured value unconditionally would scan and discard 20 times a second.
+        setHusbandryLevel(1000);
+        assertFalse(manager.isHerdsmansCallActive());
+        assertEquals(0.0, manager.getHerdRadius());
+
+        // getMaxHerdRadius answers the other question -- "how far can this reach" -- for /mcstats.
+        assertEquals(HusbandryManager.DEFAULT_HERD_RADIUS, manager.getMaxHerdRadius());
+    }
+
+    @Test
+    void theHerdRadiusIsHardClampedEvenIfTheConfigAsksForMore() {
+        final AdvancedConfig greedy = mock(AdvancedConfig.class);
+        lenient().when(greedy.getHerdsmansCallRadius()).thenReturn(400.0);
+        McMMOMod.setAdvancedConfig(greedy);
+
+        assertEquals(HusbandryManager.HARD_MAX_HERD_RADIUS, manager.getMaxHerdRadius(),
+                "a mistyped radius must not turn a per-tick sweep into an eight-chunk box scan");
+    }
+
+    @Test
+    void theCallDurationHasAFloorOfAtLeastOneTick() {
+        assertEquals(HusbandryManager.DEFAULT_HERDSMANS_CALL_DURATION_TICKS,
+                manager.getHerdsmansCallDurationTicks());
+
+        final AdvancedConfig zero = mock(AdvancedConfig.class);
+        lenient().when(zero.getHerdsmansCallDurationTicks()).thenReturn(0);
+        McMMOMod.setAdvancedConfig(zero);
+        assertEquals(1, manager.getHerdsmansCallDurationTicks(),
+                "a 0 must not make the ability fire and end in the same tick");
+    }
+
+    @Test
+    void theCallGuaranteesTheHarvestBonusWithoutNeedingBountifulHarvest() {
+        // ⚠️ The double-yield half rides rollBonusHarvestDrop because all four harvest verbs already
+        // route their bonus through it -- so the super reaches all four for free and cannot be wired
+        // into three of them by accident. It deliberately does NOT require Bountiful Harvest's rank:
+        // gating one sub-skill's effect behind another's is a hidden dependency nobody can read off a
+        // stats screen.
+        setHusbandryLevel(1000);
+        final AdvancedConfig noBonus = mock(AdvancedConfig.class);
+        lenient().when(noBonus.getMaximumProbability(SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST))
+                .thenReturn(0.0);
+        lenient().when(noBonus.getMaxBonusLevel(SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST))
+                .thenReturn(0);
+        // ⚠️ Stub the radius too. An unstubbed Mockito double answers 0.0, which here would read as
+        // "the sweep is off" and quietly pass the bonus assertion while proving nothing about the
+        // radius -- the "stub the shipped default, not Mockito's zero" trap.
+        lenient().when(noBonus.getHerdsmansCallRadius())
+                .thenReturn(HusbandryManager.DEFAULT_HERD_RADIUS);
+        McMMOMod.setAdvancedConfig(noBonus);
+
+        assertFalse(manager.rollBonusHarvestDrop(), "a 0 ceiling must never proc on its own");
+
+        mmoPlayer.setAbilityMode(SuperAbilityType.HERDSMANS_CALL, true);
+        try {
+            assertTrue(manager.rollBonusHarvestDrop(),
+                    "while the call sounds every harvest must double, whatever the roll says");
+            assertTrue(manager.isHerdsmansCallActive());
+            assertEquals(HusbandryManager.DEFAULT_HERD_RADIUS, manager.getHerdRadius(),
+                    "and the sweep must switch on");
+        } finally {
+            mmoPlayer.setAbilityMode(SuperAbilityType.HERDSMANS_CALL, false);
+        }
+    }
+
+    @Test
+    void husbandryOwnsExactlyOneSuperAbilityAndItIsTheRightOne() {
+        // Pins the SkillTools switch arm and the subSkillTypeDefinition wiring together. Miss either
+        // and the ability compiles, boots and then resolves its cooldown against the wrong skill.
+        final SkillTools tools = new SkillTools();
+        assertEquals(SubSkillType.HUSBANDRY_HERDSMANS_CALL,
+                SuperAbilityType.HERDSMANS_CALL.getSubSkillTypeDefinition());
+        assertEquals(SuperAbilityType.HERDSMANS_CALL,
+                tools.getSuperAbility(PrimarySkillType.HUSBANDRY));
+        assertEquals(PrimarySkillType.HUSBANDRY,
+                tools.getPrimarySkillBySuperAbility(SuperAbilityType.HERDSMANS_CALL));
     }
 }

@@ -124,6 +124,21 @@ public enum SuperAbilityType {
             "Stealth.SubSkill.SmokeBomb.Name"),
 
     /**
+     * Husbandry's active (Pass 2). A third tool-free super: triggered by a held item and dispatched on
+     * nothing but the player's own position, so like {@link #SECOND_WIND} and {@link #SMOKE_BOMB} it
+     * does <b>not</b> route through {@code McMMOPlayer#checkAbilityActivation}, which dereferences the
+     * skill's {@code ToolType} — Husbandry has none, because four of its six verbs use a different tool
+     * and two use none at all.
+     */
+    HERDSMANS_CALL(
+            "Husbandry.Skills.HerdsmansCall.On",
+            "Husbandry.Skills.HerdsmansCall.Off",
+            "Husbandry.Skills.HerdsmansCall.Other.On",
+            "Husbandry.Skills.HerdsmansCall.Refresh",
+            "Husbandry.Skills.HerdsmansCall.Other.Off",
+            "Husbandry.SubSkill.HerdsmansCall.Name"),
+
+    /**
      * Has cooldown - but has to share a skill with Super Breaker, so needs special treatment
      */
     BLAST_MINING(
@@ -150,6 +165,7 @@ public enum SuperAbilityType {
         SERRATED_STRIKES.subSkillTypeDefinition = SubSkillType.SWORDS_SERRATED_STRIKES;
         SECOND_WIND.subSkillTypeDefinition = SubSkillType.AGILITY_SECOND_WIND;
         SMOKE_BOMB.subSkillTypeDefinition = SubSkillType.STEALTH_SMOKE_BOMB;
+        HERDSMANS_CALL.subSkillTypeDefinition = SubSkillType.HUSBANDRY_HERDSMANS_CALL;
         BLAST_MINING.subSkillTypeDefinition = SubSkillType.MINING_BLAST_MINING;
     }
 

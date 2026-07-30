@@ -22,6 +22,7 @@ import com.gmail.nossr50.fabric.listeners.PlayerMovementTracker;
 import com.gmail.nossr50.fabric.listeners.ProjectileListener;
 import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
 import com.gmail.nossr50.fabric.listeners.SecondWindListener;
+import com.gmail.nossr50.fabric.listeners.HerdsmansCallListener;
 import com.gmail.nossr50.fabric.listeners.SmokeBombListener;
 import com.gmail.nossr50.fabric.listeners.SmeltingListener;
 import com.gmail.nossr50.fabric.listeners.SuperAbilityListener;
@@ -229,6 +230,10 @@ public class McMMOMod implements ModInitializer {
         // MUST differ from Second Wind's (gunpowder vs feather, both configurable) — sharing one
         // would activate whichever registered first and print the other's refusal message.
         SmokeBombListener.register();
+        // Pass 2: Husbandry's Herdsman's Call super ability, the third listener on that same seam.
+        // Its trigger item must differ from BOTH of the above (goat horn vs gunpowder vs feather) —
+        // HerdsmansCallListenerTest pins the three apart so a config edit cannot collide them.
+        HerdsmansCallListener.register();
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
         // drive the legacy listeners, routing each to the ported skill managers. Preferred

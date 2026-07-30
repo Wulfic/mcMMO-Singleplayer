@@ -720,6 +720,14 @@ Husbandry:
             Rank_1: 30
         RetroMode:
             Rank_1: 300
+    # The super. Earlier than the flavour tier above on purpose: it multiplies every verb in the skill,
+    # so it is meaningless until they all work -- but once they do, it is the thing a player is actually
+    # working toward, and burying it behind the flavour perks would hide the skill's payoff.
+    HerdsmansCall:
+        Standard:
+            Rank_1: 10
+        RetroMode:
+            Rank_1: 100
 Herbalism:
     DoubleDrops:
         Standard:

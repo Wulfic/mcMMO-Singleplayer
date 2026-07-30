@@ -337,6 +337,14 @@ public class AdvancedConfig extends ConfigLoader {
             reason.add("Skills.Husbandry.HiddenBounty.MaxBonusLevel should be at least 1!");
         }
 
+        if (getHerdsmansCallDurationTicks() < 1) {
+            reason.add("Skills.Husbandry.HerdsmansCall.DurationTicks should be at least 1!");
+        }
+
+        if (getHerdsmansCallRadius() <= 0) {
+            reason.add("Skills.Husbandry.HerdsmansCall.Radius should be greater than 0!");
+        }
+
         /* MINING */
         if (getMaximumProbability(SubSkillType.MINING_DOUBLE_DROPS) < 1) {
             reason.add("Skills.Mining.DoubleDrops.ChanceMax should be at least 1!");
@@ -866,6 +874,27 @@ public class AdvancedConfig extends ConfigLoader {
     public double getBroodMultiChickChance() {
         return config.getDouble("Skills.Husbandry.Brood.MultiChickChanceMax",
                 HusbandryManager.DEFAULT_MULTI_CHICK_CHANCE);
+    }
+
+    /**
+     * Herdsman's Call's minimum duration in ticks — a <em>floor</em> under the standard super-ability
+     * length machinery, not the length itself. Same shape as {@link #getSmokeBombDurationTicks()}.
+     */
+    public int getHerdsmansCallDurationTicks() {
+        return config.getInt("Skills.Husbandry.HerdsmansCall.DurationTicks",
+                HusbandryManager.DEFAULT_HERDSMANS_CALL_DURATION_TICKS);
+    }
+
+    /**
+     * How far Herdsman's Call reaches, in blocks.
+     *
+     * <p>Clamped in the manager to {@link HusbandryManager#HARD_MAX_HERD_RADIUS}: this figure sizes an
+     * entity sweep that runs <b>every tick</b> for the whole duration of the ability, so an unclamped
+     * value is far more expensive here than Multi-Breed's per-activation equivalent.
+     */
+    public double getHerdsmansCallRadius() {
+        return config.getDouble("Skills.Husbandry.HerdsmansCall.Radius",
+                HusbandryManager.DEFAULT_HERD_RADIUS);
     }
 
     // --- Unarmored (Pass 2) --------------------------------------------------------------------

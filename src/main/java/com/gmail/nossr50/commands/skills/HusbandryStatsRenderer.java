@@ -42,6 +42,7 @@ public final class HusbandryStatsRenderer extends SkillStatsRenderer {
     private boolean canSelectiveBreeding;
     private boolean canBrood;
     private boolean canHiddenBounty;
+    private boolean canHerdsmansCall;
 
     public HusbandryStatsRenderer() {
         super(PrimarySkillType.HUSBANDRY);
@@ -59,6 +60,7 @@ public final class HusbandryStatsRenderer extends SkillStatsRenderer {
         canSelectiveBreeding = hasUnlocked(SubSkillType.HUSBANDRY_SELECTIVE_BREEDING);
         canBrood = hasUnlocked(SubSkillType.HUSBANDRY_BROOD);
         canHiddenBounty = hasUnlocked(SubSkillType.HUSBANDRY_HIDDEN_BOUNTY);
+        canHerdsmansCall = hasUnlocked(SubSkillType.HUSBANDRY_HERDSMANS_CALL);
     }
 
     @Override
@@ -122,6 +124,17 @@ public final class HusbandryStatsRenderer extends SkillStatsRenderer {
                     ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
                             SubSkillType.HUSBANDRY_BEEKEEPER)[0]));
         }
+        // --- The super -------------------------------------------------------------------------
+        if (canHerdsmansCall) {
+            // Length in seconds via the standard super-ability machinery, and reach in blocks. The
+            // reach reads 0 while the ability is idle, which is honest -- it is what the sweep sees --
+            // so the configured maximum is shown instead, the same figure Multi-Breed's line reports.
+            messages.add(getStatMessage(SubSkillType.HUSBANDRY_HERDSMANS_CALL,
+                    decimal.format(husbandry.getHerdsmansCallDurationTicks() / 20.0D) + "s"));
+            messages.add(getStatMessage(true, false, SubSkillType.HUSBANDRY_HERDSMANS_CALL,
+                    decimal.format(husbandry.getMaxHerdRadius()) + " blocks"));
+        }
+
         if (canHiddenBounty) {
             // Only the first of Hidden Bounty's two gates is a player-facing number. The second is
             // each treasure's own Drop_Chance in treasures.yml, which varies per item, so there is no

@@ -545,6 +545,25 @@ Skills:
             MaxBonusLevel:
                 Standard: 100
                 RetroMode: 1000
+
+        HerdsmansCall:
+            # Husbandry's super ability. For its duration: nearby animals follow you without you
+            # holding food, every harvest verb ignores its cooldown, and every harvest double-yields.
+            #
+            # DurationTicks is a FLOOR, not the length. The standard super-ability machinery decides
+            # the real duration from your skill level and config.yml's Ability_Length /
+            # Ability_Length_Cap / Max_Seconds.Herdsmans_Call, exactly like every other super; this
+            # number only stops the ability being worth two seconds at the level it first unlocks.
+            DurationTicks: 200
+
+            # How far the call reaches, in blocks. Animals of any breedable species inside this radius
+            # path toward you under vanilla's own navigation -- they are not teleported and not
+            # velocity-shoved, so fences, walls and water still stop them.
+            #
+            # HARD-CLAMPED to 40 in code, the same ceiling Multi-Breed has and for the same reason:
+            # this figure sizes an entity sweep that runs EVERY TICK for the whole duration, so a
+            # mistyped 400 would scan a box eight chunks across twenty times a second.
+            Radius: 16.0
     #
     #  Settings for Mining
     ###

@@ -298,6 +298,7 @@ public class SkillTools {
             case SPEARS_SUPER_ABILITY -> PrimarySkillType.SPEARS;
             case SECOND_WIND -> PrimarySkillType.AGILITY;
             case SMOKE_BOMB -> PrimarySkillType.STEALTH;
+            case HERDSMANS_CALL -> PrimarySkillType.HUSBANDRY;
         };
     }
 

@@ -1239,6 +1239,46 @@ class HusbandryListenerTest {
 
     // --- Stage 5: Hidden Bounty -----------------------------------------------------------------
 
+    // --- Stage 6: Herdsman's Call ---------------------------------------------------------------
+
+    @Test
+    void herdsmansCallLetsAHarvestIgnoreItsCooldown() {
+        // The cooldown-bypass half. Placed in the shared gate rather than at the two call sites so it
+        // cannot be wired into milking and forgotten for brushing -- so testing it through milk also
+        // covers brush.
+        allowHarvestCooldown();
+        final Entity cow = harvestable(CowEntity.class);
+        worldTime(0L);
+
+        HusbandryListener.onMilked(cow, breeder());
+        when(husbandry.isHerdsmansCallActive()).thenReturn(true);
+        HusbandryListener.onMilked(cow, breeder());
+
+        verify(husbandry, times(2)).onMilk();
+    }
+
+    @Test
+    void aBypassedHarvestDoesNotResetTheOrdinaryCooldown() {
+        // ⚠️ Otherwise blowing the horn over a herd would stamp every animal's clock, handing the
+        // player a second full round the instant the ability ended -- the super would be worth twice
+        // what it looks like, and only to someone who noticed.
+        allowHarvestCooldown();
+        final Entity cow = harvestable(CowEntity.class);
+
+        worldTime(0L);
+        HusbandryListener.onMilked(cow, breeder()); // Normal award, stamps tick 0.
+
+        when(husbandry.isHerdsmansCallActive()).thenReturn(true);
+        worldTime(100L);
+        HusbandryListener.onMilked(cow, breeder()); // Bypassed; must NOT stamp tick 100.
+
+        when(husbandry.isHerdsmansCallActive()).thenReturn(false);
+        worldTime(COOLDOWN_TICKS - 1);
+        HusbandryListener.onMilked(cow, breeder()); // Still inside the ORIGINAL window.
+
+        verify(husbandry, times(2)).onMilk();
+    }
+
     @Test
     void aHarvestWithNoTreasureConfigBoundIsSafeAndSilent() {
         // McMMOMod's TreasureConfig is unbound in this fixture, which is also the real state during

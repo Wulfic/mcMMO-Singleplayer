@@ -438,6 +438,17 @@ public class GeneralConfig extends ConfigLoader {
         return config.getString("Skills.Stealth.Smoke_Bomb_Item", "GUNPOWDER");
     }
 
+    /**
+     * The item that triggers Husbandry's Herdsman's Call on right-click; never consumed.
+     *
+     * <p>Must differ from {@link #getSecondWindItem()} and {@link #getSmokeBombItem()} — all three
+     * tool-free actives listen on the same {@code UseItemCallback}, so a shared item activates one and
+     * prints another's refusal message. {@code HerdsmansCallListenerTest} pins the three apart.
+     */
+    public String getHerdsmansCallItem() {
+        return config.getString("Skills.Husbandry.Herdsmans_Call_Item", "GOAT_HORN");
+    }
+
     /* Alchemy */
     public boolean getEnabledForHoppers() {
         return config.getBoolean("Skills.Alchemy.Enabled_for_Hoppers", true);

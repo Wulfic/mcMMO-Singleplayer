@@ -7,6 +7,7 @@ import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.treasure.HusbandryTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.SkillManager;
@@ -208,6 +209,24 @@ public class HusbandryManager extends SkillManager {
      * {@code Twins} got ruled down to: pleasant surprise at max rank, not the expected outcome.
      */
     public static final double DEFAULT_MULTI_CHICK_CHANCE = 20.0;
+
+    /**
+     * Herdsman's Call's minimum duration in ticks — ten seconds, a floor under the standard
+     * super-ability length machinery rather than the length itself.
+     */
+    public static final int DEFAULT_HERDSMANS_CALL_DURATION_TICKS = 200;
+
+    /** How far Herdsman's Call reaches at its shipped default, in blocks. */
+    public static final double DEFAULT_HERD_RADIUS = 16.0;
+
+    /**
+     * The furthest Herdsman's Call can ever reach, whatever {@code advanced.yml} says.
+     *
+     * <p>The same ceiling Multi-Breed has, and a harder requirement here: this radius sizes an entity
+     * sweep that runs <b>every tick</b> for the ability's whole duration, where Multi-Breed's runs once
+     * per activation.
+     */
+    public static final double HARD_MAX_HERD_RADIUS = 40.0;
 
     public HusbandryManager(McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.HUSBANDRY);
@@ -542,6 +561,16 @@ public class HusbandryManager extends SkillManager {
      * and the bonus inherits all of that for free instead of re-deriving a table that would rot.
      */
     public boolean rollBonusHarvestDrop() {
+        // Herdsman's Call's double-yield half. Expressed as "this roll always wins while the call is
+        // sounding" rather than as a separate doubling at each of the four harvest sites, because every
+        // verb already routes its bonus through this one method -- so the super gets its effect on all
+        // four for free and cannot be wired into three of them by accident. It deliberately does NOT
+        // require Bountiful Harvest to be unlocked: the super is its own reward, and gating one
+        // sub-skill's effect behind another's rank is the kind of hidden dependency nobody can read
+        // off a stats screen.
+        if (isHerdsmansCallActive()) {
+            return true;
+        }
         return canBountifulHarvest()
                 && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HUSBANDRY_BOUNTIFUL_HARVEST,
                         mmoPlayer);
@@ -889,6 +918,53 @@ public class HusbandryManager extends SkillManager {
      */
     public float onHiddenBountyFound(int xp) {
         return award(atLeastZero(xp));
+    }
+
+    // --- Stage 6: Herdsman's Call (the super ability) -------------------------------------------
+
+    public boolean canHerdsmansCall() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HUSBANDRY_HERDSMANS_CALL)
+                && Permissions.isSubSkillEnabled(getPlayer(),
+                        SubSkillType.HUSBANDRY_HERDSMANS_CALL);
+    }
+
+    /** Whether the call is sounding right now. */
+    public boolean isHerdsmansCallActive() {
+        return mmoPlayer.getAbilityMode(SuperAbilityType.HERDSMANS_CALL);
+    }
+
+    /**
+     * How far the call reaches, in blocks; {@code 0} when it is not active.
+     *
+     * <p>Clamped to {@link #HARD_MAX_HERD_RADIUS}. Returning {@code 0} while inactive is what keeps the
+     * per-tick sweep off the hot path entirely rather than having it scan and discard.
+     */
+    public double getHerdRadius() {
+        return isHerdsmansCallActive() ? getMaxHerdRadius() : 0.0;
+    }
+
+    /**
+     * The call's configured maximum reach in blocks, regardless of whether it is sounding.
+     *
+     * <p>Separate from {@link #getHerdRadius()} because the two answer different questions:
+     * {@code /mcstats} wants "how far this reaches", while the per-tick sweep wants "how far to scan
+     * right now", and the sweep's answer must be {@code 0} while the ability is idle or it would scan
+     * and discard twenty times a second forever.
+     */
+    public double getMaxHerdRadius() {
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        final double radius = advanced == null
+                ? DEFAULT_HERD_RADIUS
+                : advanced.getHerdsmansCallRadius();
+        return Math.min(HARD_MAX_HERD_RADIUS, Math.max(0.0, radius));
+    }
+
+    /** The configured floor on the call's duration, in ticks; never less than one tick. */
+    public int getHerdsmansCallDurationTicks() {
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        return advanced == null
+                ? DEFAULT_HERDSMANS_CALL_DURATION_TICKS
+                : Math.max(1, advanced.getHerdsmansCallDurationTicks());
     }
 
     // --- The flat verbs ---------------------------------------------------------------------

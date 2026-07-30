@@ -974,6 +974,14 @@ public final class HusbandryListener {
      * anything ever again, silently.
      */
     private static boolean harvestCooldownElapsed(HusbandryManager husbandry, Entity animal) {
+        // Herdsman's Call's cooldown-bypass half. Placed here rather than at the two call sites so it
+        // cannot be wired into milking and forgotten for brushing, and it deliberately does NOT stamp
+        // the animal's timestamp: a bypassed harvest leaves the ordinary cooldown exactly where it was,
+        // so blowing the horn over a herd cannot also reset every animal's clock and hand the player a
+        // second full round the moment the ability ends.
+        if (husbandry.isHerdsmansCallActive()) {
+            return true;
+        }
         final int seconds = husbandry.getHarvestCooldownSeconds();
         if (seconds <= 0) {
             return true; // Gate configured off.

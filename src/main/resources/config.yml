@@ -354,6 +354,7 @@ Abilities:
         Blast_Mining: 60
         Giga_Drill_Breaker: 240
         Green_Terra: 240
+        Herdsmans_Call: 240
         Second_Wind: 240
         Serrated_Strikes: 240
         Skull_Splitter: 240
@@ -365,6 +366,7 @@ Abilities:
         Blast_Mining: 0
         Giga_Drill_Breaker: 0
         Green_Terra: 0
+        Herdsmans_Call: 0
         Second_Wind: 0
         Serrated_Strikes: 0
         Skull_Splitter: 0
@@ -432,6 +434,19 @@ Skills:
         Prevent_AFK_Leveling: true
     Husbandry:
         Level_Cap: 0
+        # Item that triggers the Herdsman's Call super ability on right-click. Never consumed.
+        #
+        # Must differ from Agility's Second_Wind_Item (FEATHER) and Stealth's Smoke_Bomb_Item
+        # (GUNPOWDER): all three actives listen on the same use-item event, so a shared item would
+        # activate one of them and print another's refusal, which looks like a broken ability rather
+        # than a config collision.
+        #
+        # GOAT_HORN on purpose. It is thematic -- you blow the horn and the herd comes -- and mcMMO
+        # only observes the click, so the horn still sounds as vanilla intends. It also has a real
+        # acquisition cost (a goat has to ram a block for you), which suits an ability unlocked at
+        # Husbandry 100. Any breeding item would have been a poor choice here: feeding animals is the
+        # skill's core loop, and overloading that click invites confusion.
+        Herdsmans_Call_Item: GOAT_HORN
     Mining:
         Level_Cap: 0
         Detonator_Name: FLINT_AND_STEEL
