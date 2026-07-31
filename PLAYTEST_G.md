@@ -547,12 +547,17 @@ them. Each is now pinned by a mutation-checked test, but these rows are the live
 
 ---
 
-## Session 11 — Hunter: the anti-farm gate, the counters, the mastery damage and the XP (~80 min)
+## Session 11 — Hunter: the anti-farm gate, the counters, the mastery damage, the XP and the loot (~100 min)
 
-Covers stages 1, 3, 4 and 5 **together**, and that grouping is the point: each one is untestable
+Covers stages 1, 3, 4, 5 and 6 **together**, and that grouping is the point: each one is untestable
 without the next. Stage 1's spawn-origin marker had nothing to refuse until stage 3 gave it a counter,
-stage 4's damage bonus does not exist until a counter has crossed 500, and stage 5's XP rides the same
-gates stages 1 and 3 built. Stage 2 (the enum, the config, the XP bar) has nothing to play.
+stage 4's damage bonus does not exist until a counter has crossed 500, stage 5's XP rides the same
+gates stages 1 and 3 built, and stage 6's loot needs a Hunter *level*, which only stage 5 can produce.
+Stage 2 (the enum, the config, the XP bar) has nothing to play.
+
+**🔑 The same shortcut applies to the stage-6 block and it is the intended way to run it.** Rank 4 is
+Hunter 900; nobody grinds there to answer a play-test row. Edit the Hunter level in
+`mcmmo/players/<uuid>.yml` between world loads exactly as HN20+ does for the kill counters.
 
 **⚠️ There is no in-game screen for kill counts yet** — `/mcstats hunter` is stage 7. Read them
 straight off the save: `<instance>/saves/<world>/mcmmo/players/<uuid>.yml`, the `kills:` section.
@@ -647,6 +652,37 @@ built. **Report kills-per-10-minutes and the XP total, not an opinion.**
 | HN39 | Set `Tier_2: 1` under `Experience_Values.Hunter` in `experience.yml`, restart, kill a zombie | Pays **1**. Confirms the ladder is read from the file rather than baked in — and it is how you would retune after HN33–HN35 |
 | HN40 | Add `Zombie: 4` under `Skills.Hunter.Tiers.Overrides` in `advanced.yml`, restart, kill a zombie | Pays the T4 rate. **Set it back afterwards.** This is the escape hatch for any mob HN33+ shows to be mis-tiered |
 | HN41 | Put a deliberate typo in that section — `Zombie: 9` — restart, kill a zombie | Pays **300** (the derived tier) and the log carries one WARN naming the key. Refused, not clamped to 4: a config that quietly reinterprets your number is worse than one that tells you |
+
+### Stage 6 — Trophy Hunter's bonus loot (HN42+)
+
+What the vertical axis is *for*. A qualifying kill has a chance to roll the creature's **own** loot
+table a second time — so it respects Looting, and it pays in whatever that creature drops (more rotten
+flesh, but also more gunpowder and ender pearls). The four ranks are the four mob tiers, unlocking at
+Hunter **100 / 300 / 600 / 900**.
+
+**🔑 This proc is deliberately SILENT — no message, no sound.** That makes it the hardest thing in the
+skill to observe honestly, so read these rows carefully:
+
+- **Confirm it is wired before judging it.** `run/logs/latest.log` carries **one** INFO line the first
+  time it fires in a session: `Hunter: Trophy Hunter is live — first bonus loot roll this session was
+  on 'minecraft:zombie' (tier 2).` **If that line never appears, everything below is measuring
+  nothing** — say so rather than reporting "the drops felt normal".
+- **Never judge it on a handful of kills.** At the shipped `ChanceMax: 50` a max-level Hunter procs on
+  about half of kills, and a single doubled drop proves nothing either way — vanilla loot tables are
+  random on their own. **Count 50 kills of one mob and compare the total against a rough baseline.**
+- ⚠️ **A proc is not "double the items".** It is a second independent roll, so a mob whose table has a
+  0–2 range can roll 0 on the bonus and look like nothing happened. That is correct behaviour.
+
+| # | Action | Expect |
+|---|---|---|
+| HN42 | **The wiring row, do it first.** At Hunter 100+, kill wild chickens until the log line above appears | The line appears, naming a **tier 1** creature. If it never does at 20+ chicken kills, stop and report — the mixin is not bound or the rank gate is wrong |
+| HN43 | **The rank ladder.** At Hunter **100–299**, kill ~50 chickens, then ~50 zombies, keeping both drop totals | Chickens visibly over baseline; **zombies exactly baseline.** Rank 1 unlocks tier 1 only. This is the row that proves the rank number is the mob tier and not just "unlocked" |
+| HN44 | Level past **300** and repeat the zombie half | Zombies now over baseline too. If HN43 and HN44 look the same, the tier gate is not being consulted |
+| HN45 | **The dupe row.** Kill 50 zombies at max Hunter and total the rotten flesh | At most **double** the baseline, never triple or more. ⚠️ The failure this sub-skill can have is an extra roll, not a missing one — if the totals look absurd, stop playing and report immediately |
+| HN46 | Let a mob die with **no killer** — drown a zombie, or let one burn in daylight — while at max Hunter | **Ordinary loot.** `dropLoot` fires for every death in the world, so this is the row that proves the player-attribution gate reaches the loot path |
+| HN47 | Kill a **spawner** mob and a **bred** cow by hand at max Hunter, 50 of each | **Ordinary loot for both.** Ruled: loot rides the same four gates as the counter. ⚠️ Note this differs from HN27 on purpose — a spawner mob *does* take the mastery damage bonus but pays **no** loot, because loot is a property of the kill and damage is a property of the hit |
+| HN48 | Kill a **wither** at Hunter 900+ | Rank 4. The nether star may or may not double — that is a 50 % roll. ⚠️ **Report how it feels**: this is the one place the shipped `ChanceMax: 50` is most likely to be judged too generous, and turning it down is a one-line `advanced.yml` edit |
+| HN49 | Set `ChanceMax: 0.0` under `Skills.Hunter.TrophyHunter` in `advanced.yml`, restart, kill 50 zombies at max Hunter | **Exactly baseline**, and the log line from HN42 never appears. The tuning knob has to reach the roll. **Set it back to 50 afterwards** |
 
 ---
 

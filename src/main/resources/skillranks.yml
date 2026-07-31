@@ -662,6 +662,35 @@ Mining:
             Rank_6: 750
             Rank_7: 850
             Rank_8: 1000
+Hunter:
+    # Trophy Hunter's four ranks ARE the four mob tiers, in order: rank N unlocks the bonus loot roll
+    # against tier-N creatures and nothing above them. There is no fifth rank and there never will
+    # be -- the tier scale is 1-4 (see advanced.yml -> Skills.Hunter.Tiers).
+    #
+    #   Rank 1  T1  anything that is not a monster        chicken, cow, sheep, horse
+    #   Rank 2  T2  ordinary monsters                     zombie, skeleton, creeper, spider
+    #   Rank 3  T3  dangerous monsters                    blaze, guardian, enderman, ravager
+    #   Rank 4  T4  bosses                                wither, ender dragon, warden
+    #
+    # WHY IT CLIMBS INSTEAD OF UNLOCKING AT ONCE: the whole vertical axis of Hunter is "kill a wide
+    # variety of things and get better loot for it", and a ladder that starts on livestock and ends
+    # on bosses is that sentence as a config. It also means the reward arrives while the skill is
+    # still cheap to level, rather than all at once at the far end.
+    #
+    # Hunter's OTHER sub-skill, Mob Mastery, is deliberately absent from this file. It unlocks on a
+    # per-creature kill counter (500 / 2,500 / 10,000 of ONE mob), which no level-keyed rank can
+    # express -- putting it here would produce a rank display that lies. See HunterManager.
+    TrophyHunter:
+        Standard:
+            Rank_1: 10
+            Rank_2: 30
+            Rank_3: 60
+            Rank_4: 90
+        RetroMode:
+            Rank_1: 100
+            Rank_2: 300
+            Rank_3: 600
+            Rank_4: 900
 Husbandry:
     # Both breed-family sub-skills unlock immediately. Breeding IS the skill's entry verb -- it is
     # the first thing a player does and the only XP source Husbandry has until stage 2 -- so gating

@@ -44,4 +44,43 @@ class RankConfigTest {
         assertEquals(20,
                 config.getSubSkillUnlockLevel(SubSkillType.ARCHERY_ARCHERY_LIMIT_BREAK, 2, false));
     }
+
+    @Test
+    void trophyHunterShipsFourRanksOnePerMobTier(@TempDir Path dataFolder) {
+        final RankConfig config = new RankConfig(dataFolder);
+
+        // Hunter's rank number IS the mob tier it unlocks (livestock → ordinary monsters →
+        // dangerous monsters → bosses), so there are exactly four and no fifth is meaningful.
+        assertEquals(4, SubSkillType.HUNTER_TROPHY_HUNTER.getNumRanks());
+
+        final int[] retro = {100, 300, 600, 900};
+        final int[] standard = {10, 30, 60, 90};
+        for (int rank = 1; rank <= 4; rank++) {
+            assertEquals(retro[rank - 1], config.getSubSkillUnlockLevel(
+                    SubSkillType.HUNTER_TROPHY_HUNTER, rank, true), "RetroMode rank " + rank);
+            assertEquals(standard[rank - 1], config.getSubSkillUnlockLevel(
+                    SubSkillType.HUNTER_TROPHY_HUNTER, rank, false), "Standard rank " + rank);
+        }
+    }
+
+    @Test
+    void aRankAddressNoConfigCarriesReadsAsZero(@TempDir Path dataFolder) {
+        // ⚠️ Documents a failure DIRECTION that is dangerous and easy to misread, so it is worth
+        // being exact about which config it applies to.
+        //
+        // getSubSkillUnlockLevel reads config.getInt(key, defaultConfig.getInt(key)) — so an
+        // operator who deletes a section from their own skillranks.yml still gets the bundled
+        // values, and nothing breaks. The hole is only reachable if the BUNDLED RESOURCE loses the
+        // section: then every rank answers 0, RankUtils hands a level-0 player the TOP rank, and
+        // Hunter would pay boss trophies from the first kill. checkKeys cannot catch it (0 is not
+        // negative and 0,0,0,0 is not descending), so the guard has to be a test, and the four that
+        // actually assert Hunter's ladder are what redden — this one just pins the mechanism.
+        //
+        // Rank 5 is absent from both the on-disk copy and the bundled default, which is the only
+        // way to observe the raw behaviour without breaking the shipped file.
+        final RankConfig config = new RankConfig(dataFolder);
+        assertEquals(0,
+                config.getSubSkillUnlockLevel(SubSkillType.HUNTER_TROPHY_HUNTER, 5, true),
+                "there is no rank 5; if this ever answers a real level the ladder grew silently");
+    }
 }

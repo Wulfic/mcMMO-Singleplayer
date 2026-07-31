@@ -12,12 +12,14 @@ import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.GeneralConfig;
+import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.mobs.MobOrigin;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOAttachments;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
@@ -25,8 +27,10 @@ import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.TrackedSummon;
 import com.gmail.nossr50.util.player.UserManager;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
@@ -44,6 +48,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
@@ -73,6 +78,10 @@ class HunterListenerTest {
 
     private static final String ZOMBIE_ID = "minecraft:zombie";
     private static final String CREEPER_ID = "minecraft:creeper";
+
+    /** Data folder for the real bundled {@code skillranks.yml}, which Trophy Hunter's rank gate reads. */
+    @TempDir
+    Path rankFolder;
 
     private UUID playerId;
     private PlayerProfile profile;
@@ -125,6 +134,10 @@ class HunterListenerTest {
         McMMOMod.setGeneralConfig(null);
         McMMOMod.setAdvancedConfig(null);
         McMMOMod.setExperienceConfig(null);
+        // Only the Trophy Hunter tests set this, but it is the same process-wide static as the rest:
+        // a RankConfig left behind would give an unrelated test class a rank ladder it never asked
+        // for, and the symptom would be an ordering-dependent failure somewhere else entirely.
+        McMMOMod.setRankConfig(null);
         // Process-wide static on a JVM JUnit reuses across classes: without this the first test to
         // run decides whether any later one logs, and `theFirstCountedKillOfASessionIsLogged` would
         // depend on execution order.
@@ -509,5 +522,137 @@ class HunterListenerTest {
         while (profile.getMobKills(mobId) < count) {
             profile.incrementMobKills(mobId);
         }
+    }
+
+    // --- stage 6: Trophy Hunter's bonus loot roll ------------------------------------------------
+
+    /**
+     * Wire the rank ladder and the chance ceiling for Trophy Hunter, then hand back a counter that
+     * stands in for the mixin's re-roll.
+     *
+     * <p>Counting a {@link Runnable} is the whole reason {@code onLootDropped} takes the roll as a
+     * parameter: the "exactly one extra roll" property D-HU6 demands is not otherwise assertable
+     * without a live world and a loot table, and the failure it guards against is an item-duplication
+     * bomb rather than a clean error.
+     */
+    private AtomicInteger trophySetUp(int hunterLevel, double chanceMax) {
+        final GeneralConfig generalConfig = mock(GeneralConfig.class);
+        lenient().when(generalConfig.getPVEEnabled(PrimarySkillType.HUNTER)).thenReturn(true);
+        lenient().when(generalConfig.getPVPEnabled(PrimarySkillType.HUNTER)).thenReturn(true);
+        // RetroMode is the shipped default, so skillranks.yml unlocks the four tiers at
+        // 100 / 300 / 600 / 900. Stubbed explicitly: Mockito's false would silently switch the
+        // ladder to Standard and make every level below mean something else.
+        lenient().when(generalConfig.getIsRetroMode()).thenReturn(true);
+        McMMOMod.setGeneralConfig(generalConfig);
+        McMMOMod.setRankConfig(new RankConfig(rankFolder));
+
+        final AdvancedConfig advanced = mock(AdvancedConfig.class);
+        lenient().when(advanced.doesNotificationUseActionBar(any())).thenReturn(false);
+        lenient().when(advanced.getHunterTierOverride(any())).thenReturn(0);
+        lenient().when(advanced.getMaximumProbability(SubSkillType.HUNTER_TROPHY_HUNTER))
+                .thenReturn(chanceMax);
+        lenient().when(advanced.getMaxBonusLevel(SubSkillType.HUNTER_TROPHY_HUNTER)).thenReturn(0);
+        McMMOMod.setAdvancedConfig(advanced);
+
+        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(hunterLevel);
+        return new AtomicInteger();
+    }
+
+    @Test
+    void aQualifyingKillRollsTheLootTableExactlyOnce() {
+        // ⚠️ "Exactly once", not "at least once". The whole family of mistakes this sub-skill can
+        // make -- injecting on the 4-arg dropLoot instead of the 3-arg, re-invoking inside a loop --
+        // produces MORE rolls rather than none, so an at-least assertion would pass against the bug.
+        final AtomicInteger rolls = trophySetUp(1_000, 100.0D);
+
+        HunterListener.onLootDropped(zombie(), killedBy(killer), rolls::incrementAndGet);
+
+        assertEquals(1, rolls.get());
+    }
+
+    @Test
+    void aKillWithNoAttackerNeverRollsABonusTrophy() {
+        // ⚠️ D-HU6's second trap, and the one that makes this method different from the AFTER_DEATH
+        // handler: dropLoot fires for EVERY death in the world. A creature burning in lava on the far
+        // side of the map reaches here, and without gate 1 it would drop double.
+        final AtomicInteger rolls = trophySetUp(1_000, 100.0D);
+
+        HunterListener.onLootDropped(zombie(), killedBy(null), rolls::incrementAndGet);
+
+        assertEquals(0, rolls.get());
+    }
+
+    @Test
+    void aFarmedCreatureDropsItsLootOnceLikeAnyOther() {
+        // ✅ Ruled: loot rides the SAME four gates as the counter and the XP. Loot is a property of
+        // the kill, not of a hit, so stage 4's "origin gates the kill, not the hit" carve-out does
+        // not reach it -- and doubling a spawner or bred creature's drops is precisely the farm
+        // amplification stage 1 exists to prevent.
+        final AtomicInteger rolls = trophySetUp(1_000, 100.0D);
+
+        for (MobOrigin origin : MobOrigin.values()) {
+            if (origin.countsTowardMastery()) {
+                continue;
+            }
+            final ZombieEntity farmed = zombie();
+            markOrigin(farmed, origin);
+
+            HunterListener.onLootDropped(farmed, killedBy(killer), rolls::incrementAndGet);
+
+            assertEquals(0, rolls.get(), origin + " must not pay a bonus trophy");
+        }
+
+        // ...and the reference point, so the loop above is not passing because the roll is dead.
+        HunterListener.onLootDropped(zombie(), killedBy(killer), rolls::incrementAndGet);
+        assertEquals(1, rolls.get(), "a wild creature must still roll");
+    }
+
+    @Test
+    void aManufacturedGolemDropsItsLootOnce() {
+        // Gate 3. A snow golem is a pumpkin and two snow blocks, so a dispenser loop would otherwise
+        // be an infinite snowball press once Trophy Hunter unlocked tier 1.
+        final AtomicInteger rolls = trophySetUp(1_000, 100.0D);
+
+        HunterListener.onLootDropped(snowGolem(), killedBy(killer), rolls::incrementAndGet);
+        HunterListener.onLootDropped(copperGolem(), killedBy(killer), rolls::incrementAndGet);
+
+        assertEquals(0, rolls.get());
+    }
+
+    @Test
+    void aCreatureAboveThePlayersTrophyRankDropsItsLootOnce() {
+        // Both halves in one test. Rank 1 (Hunter 100) unlocks tier 1 only, so a chicken rolls and a
+        // zombie does not -- and a rank check that was missing, inverted or comparing against the
+        // wrong number would fail exactly one of these two assertions.
+        final AtomicInteger rolls = trophySetUp(100, 100.0D);
+
+        HunterListener.onLootDropped(zombie(), killedBy(killer), rolls::incrementAndGet);
+        assertEquals(0, rolls.get(), "a tier-2 creature is locked at Trophy Hunter rank 1");
+
+        HunterListener.onLootDropped(chicken(), killedBy(killer), rolls::incrementAndGet);
+        assertEquals(1, rolls.get(), "a tier-1 creature is unlocked at Trophy Hunter rank 1");
+    }
+
+    @Test
+    void aZeroChanceCeilingRollsNothingEvenForAFullyRankedHunter() {
+        // The other end of the RNG, so a roll hard-wired to true cannot pass the file.
+        final AtomicInteger rolls = trophySetUp(1_000, 0.0D);
+
+        HunterListener.onLootDropped(zombie(), killedBy(killer), rolls::incrementAndGet);
+
+        assertEquals(0, rolls.get());
+    }
+
+    @Test
+    void anUntrackedKillerRollsNothingRatherThanThrowing() {
+        // A player whose profile has not finished loading -- ordinary during a join, and this runs on
+        // every mob death in the world, so it must be a quiet no-op rather than an exception in the
+        // middle of vanilla's loot drop.
+        final AtomicInteger rolls = trophySetUp(1_000, 100.0D);
+        UserManager.cleanupPlayer(mmoPlayer);
+
+        HunterListener.onLootDropped(zombie(), killedBy(killer), rolls::incrementAndGet);
+
+        assertEquals(0, rolls.get());
     }
 }

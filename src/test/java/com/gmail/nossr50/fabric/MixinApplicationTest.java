@@ -343,6 +343,22 @@ class MixinApplicationTest {
     }
 
     @Test
+    void hunterTrophyLootMixinApplies() {
+        assertDoesNotThrow(() -> Class.forName(LivingEntity.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+
+        // Trophy Hunter's second roll of the creature's own loot table. The injection names the
+        // 3-argument dropLoot by full descriptor, so a drift in either overload's signature — or in
+        // the pair's relationship, which is the entire reason the re-roll cannot recurse — fails the
+        // injection under defaultRequire=1 rather than silently costing the sub-skill its payout.
+        final boolean hasTrophyHook = Arrays.stream(LivingEntity.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().contains("trophyHunterBonusRoll"));
+        assertTrue(hasTrophyHook,
+                "LivingEntityTrophyHunterMixin did not apply to LivingEntity — Trophy Hunter would "
+                        + "never roll a bonus trophy and nothing in-game would say so");
+    }
+
+    @Test
     void bountifulHarvestDurabilitySaveAppliesToEveryShearableItNames() {
         // ⚠️ THE point of this test. Unlike the XP hook above, the durability save cannot ride a
         // shared funnel — vanilla damages the shears back inside each species' own interactMob —

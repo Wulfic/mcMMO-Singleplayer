@@ -67,6 +67,23 @@ public enum SubSkillType {
     HERBALISM_HYLIAN_LUCK,
     HERBALISM_SHROOM_THUMB,
 
+    /*
+     * HUNTER
+     *
+     * Pass 2. Mob Mastery is deliberately absent and always will be: it unlocks on a per-mob kill
+     * counter, not on a skill level, so it cannot be expressed in skillranks.yml and a constant here
+     * would produce a sub-skill whose rank display lies (see HunterManager's class javadoc).
+     *
+     * Trophy Hunter's four ranks ARE the four mob tiers -- rank N means "you may trophy-hunt a tier-N
+     * creature" -- so the rank number indexes MobTiers directly rather than a second ladder living in
+     * advanced.yml and drifting from skillranks.yml. Same call Unarmored's Iron Skin made.
+     *
+     * Field Dressing (rare-slot weighting on the bonus roll) is not here: D-HU6 ruled it the upgrade
+     * path for AFTER §G measures whether a proportional re-roll is satisfying, and it needs loot-table
+     * introspection this port does not have.
+     */
+    HUNTER_TROPHY_HUNTER(4),
+
     /* Husbandry */
     // Pass 2, stages 1-6 — the skill's full planned roster, nothing outstanding.
     HUSBANDRY_MULTI_BREED(1),

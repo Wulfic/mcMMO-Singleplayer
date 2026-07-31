@@ -156,4 +156,37 @@ class AdvancedConfigTest {
         // rather than extending it.
         assertEquals(3, new AdvancedConfig(dataFolder).getHunterTierOverride("Ghast"));
     }
+
+    @Test
+    void trophyHunterShipsAtHalfChanceAndNotTheHundredPercentBlockDropsUse(@TempDir Path dataFolder) {
+        final AdvancedConfig config = new AdvancedConfig(dataFolder);
+
+        // ⚠️ 50, not the 100 that Herbalism's and Mining's double drops carry. Those are blocks;
+        // this is the mob economy, and at rank 4 it reaches bosses -- 100 would mean two nether
+        // stars from every wither. Asserted as a literal so a retune has to come through this test.
+        assertEquals(50.0D, config.getMaximumProbability(SubSkillType.HUNTER_TROPHY_HUNTER), 0.0001D);
+
+        // Standard scaling, because McMMOMod.isRetroModeEnabled() is false with the config service
+        // un-wired in a unit test (see the class javadoc). RetroMode's 1000 is pinned in the file.
+        assertEquals(100, config.getMaxBonusLevel(SubSkillType.HUNTER_TROPHY_HUNTER));
+    }
+
+    @Test
+    void trophyHuntersScalingCapIsDeclaredRatherThanCollectedFromTheGettersOwnDefault(
+            @TempDir Path dataFolder) throws Exception {
+        // ⚠️ This is not redundant with the assertion above, and MaxBonusLevel is the reason.
+        // getMaxBonusLevel falls back to 100 for Standard and 1000 for RetroMode — exactly the two
+        // values shipped — so if the section were deleted tomorrow, every read would keep answering
+        // the right number and nothing would notice until an operator went looking for a knob that
+        // was not there. Asserted through the parser rather than as a substring of the raw document
+        // (the stage-2 "skills" contains "kills" trap).
+        new AdvancedConfig(dataFolder);
+        final YamlConfiguration written =
+                YamlConfiguration.loadConfiguration(dataFolder.resolve("advanced.yml"));
+        assertTrue(written.contains("Skills.Hunter.TrophyHunter.ChanceMax"),
+                "advanced.yml must ship the Trophy Hunter chance ceiling");
+        assertTrue(written.contains("Skills.Hunter.TrophyHunter.MaxBonusLevel.RetroMode"),
+                "advanced.yml must ship the Trophy Hunter RetroMode scaling cap");
+        assertEquals(1000, written.getInt("Skills.Hunter.TrophyHunter.MaxBonusLevel.RetroMode"));
+    }
 }

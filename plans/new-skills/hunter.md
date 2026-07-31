@@ -5,9 +5,10 @@ belongs in **`COMBAT_SKILLS`**. It needs **no F1** (tick sampler) and **no F2** 
 it is entirely event-driven. It does need **two things nothing else in the port has**: a
 **per-mob-type persistent counter** and a **mob loot-drop seam**.
 
-> 🔶 **STATUS: IN PROGRESS as of 2026-07-30. Stages 1–5 are DONE** — the anti-farm gate; the enum,
-> manager and kill-count persistence; the kill counters; the mastery damage bonus; and Hunter XP with
-> the derived tier rule. Stage 0 — the §G
+> 🔶 **STATUS: IN PROGRESS as of 2026-07-31. Stages 1–6 are DONE** — the anti-farm gate; the enum,
+> manager and kill-count persistence; the kill counters; the mastery damage bonus; Hunter XP with
+> the derived tier rule; and Trophy Hunter's loot re-roll. Only stage 7 (Quarry Sense /
+> `/mcstats hunter`) remains. Stage 0 — the §G
 > play-test of Pass 1 + Pass 2 — was **consciously skipped on the user's instruction**, not satisfied.
 > Pass 2 now has five skills in the tree (Agility/Parkour/Swimming/Flying, Stealth, Unarmored,
 > Husbandry) that are code-complete and **never played**; Hunter is the sixth, stacked on an unverified
@@ -964,13 +965,181 @@ to do with the tier the player is being paid for. **The tier already prices the 
 `MobTiersTest` (**new**, 10 tests) and additions to `HunterManagerTest` / `HunterListenerTest` /
 `AdvancedConfigTest` / `ExperienceConfigTest`.
 
-### ⬜ Next: stage 6
+### ✅ Stage 6 — DONE, see the section below
 
-**Trophy Hunter** (D-HU6): the chance-gated second roll of the mob's own loot table, `@Inject(at =
-TAIL)` on the **3-arg** `dropLoot` re-invoking the **4-arg** overload. ⚠️ Re-read D-HU6's two traps
-first — both produce an item-duplication bomb rather than a clean failure — and note that the tier
-resolution stage 5 just built is what the per-tier unlock is keyed on. The `AFTER_DEATH`-fires-after-
-`drop()` finding is why that re-roll must ride `dropLoot` rather than react to anything seen at death.
+---
+
+## ✅ Stage 6 as built (2026-07-31)
+
+**Trophy Hunter pays now.** One new mixin, one new sub-skill enum, two config sections, one locale
+pair, and the four gates extracted into a function all three of Hunter's rewards share. **No new
+listener class, no new notification.** Suite **1277 green** (+17), `./gradlew build` exit 0, headless
+boot `Done (1.120s)` with **0 ERROR, 0 exceptions, 0 mixin failures**, and **1912 advancements**
+(+2 on stage 5's 1910 — exactly one 4-rank sub-skill: `unlocked` + `improved`, with **no existing
+file rewritten**). **5 mutations run, each reddening exactly the tests it should.**
+
+### ✅ The seam is exactly what D-HU6 predicted, and this time the funnel is clean
+
+Both overloads verified against the merged jar, and the plan's shape holds verbatim: `@Inject(at =
+TAIL)` on the **3-arg** `dropLoot`, re-invoking the **4-arg** one.
+
+🔑 **The funnel rule did NOT bite this time, and it was checked rather than assumed.** A binary grep
+of the merged jar for `dropLoot` returns **exactly two classes** — `LivingEntity` and `MobEntity`.
+`MobEntity` *does* override the 3-arg method, but it calls `super.dropLoot(...)` **first** (offset 4)
+and only then clears its one-shot `lootTable` field (offset 11), so the handler runs while the key is
+still resolvable. Nothing skips the super call ⇒ **no `CaveSpiderEntity`-shaped hole** of the kind that
+forced stage 1 off `initialize`. *Seventh application of the rule, first time it came back clean — the
+check is still what makes that knowable.*
+
+### 🔑 The no-recursion property is real, and the bytecode says why in one line
+
+The 4-arg overload's **entire body is offsets 0–16: one `generateLoot` call and `return`.** It cannot
+re-enter the 3-arg method, so injecting on the 3-arg and re-invoking the 4-arg is loop-free by
+construction rather than by luck. D-HU6 called the property "accidental"; it is better described as
+**a property of that specific pair**, and the class javadoc now carries the disassembly so the next
+person does not have to re-derive it. Move the injection to the 4-arg overload and it recurses until
+the stack dies, duplicating loot the whole way down.
+
+⚠️ **`TAIL`, not `RETURN`, and the difference matters.** The 3-arg method has **two** `return`
+instructions (offsets 14 and 30); the first is the early-out for a creature with no loot table at all.
+`TAIL` binds to the last, so a loot-table-less creature never reaches the roll — correct, and free.
+
+### 🔑 A THIRD free fact from the same read: the second roll is genuinely independent
+
+`LivingEntity#getLootTableSeed()` is a hard `lconst_0 / lreturn`, and
+`LootContext.Builder#random(long)` **ignores a zero seed** (`lcmp / ifeq`) rather than pinning the RNG
+to it. So the bonus roll is a *fresh* roll, not a copy of the first — which is the whole difference
+between "a second roll of the table" and "double the exact items", and it was worth confirming rather
+than assuming. (`MobEntity` can return a non-zero seed, but only when NBT set one — in practice a
+spawner-placed creature, refused by gate 4 long before it reaches here.)
+
+### ✅ RULED HERE: loot rides the SAME four gates — and it is stage 5's precedent, not stage 4's
+
+Trophy Hunter is Hunter's **third** reward and it passes the identical chain the counter and the XP
+do. The two candidate precedents point opposite ways and only one of them applies:
+
+- Stage 4 ruled **"origin gates the kill, not the hit"** — a spawner zombie still takes the mastery
+  damage. That carve-out is about *hits*, and loot is not a hit: it happens once, at death.
+- Stage 5 ruled **"both axes ride the same four gates."** Loot is a property of the kill, so this is
+  the one that governs. Concretely, doubling a spawner or bred creature's drops is exactly the farm
+  amplification stage 1 exists to prevent, and **a bred-cow pen paying double leather would be the
+  clearest example of it in the game.**
+
+⚠️ **The drift risk this created is the same one stage 4 spent a section closing, and it is worse
+here** — the two call sites are in *different places in the tick* (`AFTER_DEATH` for the counter,
+inside `dropLoot` for the loot), so a re-derived chain would look entirely reasonable at each. Closed
+structurally: **one `HunterListener#qualifyingKiller`**, returning the killer or `null`. Mutation-proven
+— replacing the call with an inlined gate-1-only check reddens
+`aFarmedCreatureDropsItsLootOnceLikeAnyOther` and `aManufacturedGolemDropsItsLootOnce`, and nothing else.
+
+### 🔑 The roll is handed in as a `Runnable`, and that is what makes D-HU6's key property testable
+
+`onLootDropped(victim, source, Runnable bonusRoll)`. Everything Minecraft-shaped about the re-roll —
+which overload, which arguments — stays at the injection site where the bytecode it must match is
+visible; the decision stays in the listener. **The payoff is that the "exactly one extra roll" property
+is assertable from a plain unit test with a counter for a `Runnable`**, with no world and no loot
+table. D-HU6 asked for that test and this is the shape that makes it possible.
+
+⚠️ **`assertEquals(1, rolls)`, never `assertTrue(rolls >= 1)`.** Every mistake this sub-skill can make
+— injecting on the wrong overload, re-invoking in a loop — produces **more** rolls, not none, so an
+at-least assertion would pass against the bug it exists to catch. Mutation-proven by calling
+`bonusRoll.run()` twice: three tests redden, two of them on their reference-point assertion.
+
+### The rank number IS the mob tier
+
+`SubSkillType.HUNTER_TROPHY_HUNTER(4)` — the four ranks **are** the four tiers, in order, so
+`canTrophyHunt(tier)` is `RankUtils.hasReachedRank(tier, …)`. Indexing the tier straight off the rank
+is what stops a second ladder of breakpoint levels living in `advanced.yml` and drifting from the one
+in `skillranks.yml`; the same call `UNARMORED_IRON_SKIN` made for its four armour tiers.
+`skillranks.yml → Hunter.TrophyHunter` = **100 / 300 / 600 / 900** RetroMode (10/30/60/90 Standard),
+which is D-HU5's table unchanged.
+
+`eachTrophyHunterRankUnlocksExactlyOneMoreMobTier` drives the **real bundled `skillranks.yml`** across
+a 5×4 truth table, so it asserts **both halves at once** — that the code indexes the tier off the rank,
+*and* that the shipped file carries four ranks at the right levels. Either half alone is worthless: a
+stubbed ladder passes against an empty config section, and a config read alone would not notice
+`canTrophyHunt` comparing against the wrong number.
+
+⚠️ **A tier outside 1–4 is refused, not clamped** — same call as stage 5's out-of-range override.
+Every tier reaching the method comes from `MobTiers.tierOf`, which cannot produce one, so an
+out-of-range value means something upstream broke and reading it as tier 1 would hand a bonus roll to
+a creature nobody has priced.
+
+### ⚠️ A FAILURE DIRECTION FOUND BY MUTATION: a missing rank section unlocks EVERYTHING at level 0
+
+Deleting the `TrophyHunter` block from `skillranks.yml` reddened four tests — and the *reason* is the
+point. `getSubSkillUnlockLevel` answers **0** for an address no config carries, and `RankUtils` reads
+0 as "unlocked", so **every rank including boss trophies would unlock at level 0.**
+
+🔑 **Two things make this survivable, and both are worth knowing:** the getter falls back to the
+**bundled** default (`config.getInt(key, defaultConfig.getInt(key))`), so an operator deleting the
+section from *their* file is harmless — the hazard only exists if the **shipped resource** loses it.
+And `RankConfig#checkKeys` **cannot** catch it: `0` is not negative, and `0,0,0,0` is not descending.
+⇒ the guard has to be a test, which is now four of them. Pinned and explained in
+`aRankAddressNoConfigCarriesReadsAsZero`.
+
+### ChanceMax is 50, not the 100 that block double-drops use
+
+`advanced.yml → Skills.Hunter.TrophyHunter.ChanceMax: 50.0`, `MaxBonusLevel` 100/1000. Herbalism's and
+Mining's double drops ship at **100**; those are blocks. This is the **mob economy**, which is the half
+of the game a grinder attacks — and at rank 4 it reaches bosses, so 100 would mean **two nether stars
+from every wither**. The port's own Pass-2 authorship has consistently gone the other way (Husbandry's
+Twins at 25 against the wiki's 100), and turning a number down after §G is a config edit.
+
+⚠️ **The `MaxBonusLevel` assertion needed a second test and it is not redundant.** That getter falls
+back to **exactly the two values shipped** (100 Standard / 1000 RetroMode), so if the section were
+deleted every read would keep answering correctly and nothing would notice until an operator went
+looking for a knob that was not there. Asserted through the parser, never as a substring of the raw
+document (the stage-2 `"skills"` contains `"kills"` trap).
+
+### ⚠️ A MUTATION THAT SILENTLY HIT THE WRONG SECTION — and reported success
+
+The first `ChanceMax: 50.0 → 100.0` mutation ran **green**, which read as "the shipped value is not
+pinned". It was not: **nine sections of `advanced.yml` carry the identical four-line block**
+(`ChanceMax: 50.0` + `MaxBonusLevel` + `Standard: 100` + `RetroMode: 1000`), and a non-global `perl -0pi
+-e s///` replaced the **first** one — Archery's, at line 232. 🔑 **A mutation that does not redden is
+not evidence until you have proved it landed where you aimed it.** Re-run line-targeted (`if $. == 450`)
+it reddened both intended tests. Generalises: *anchor a config mutation on a line number or a unique
+neighbouring token, never on a block shape that a settings file repeats by design.*
+
+### Deliberately not shipped, and why each
+
+- **Field Dressing** (rare-slot weighting on the bonus roll). D-HU6 already ruled it the **upgrade
+  path**, to be taken only if §G finds a proportional re-roll unsatisfying — and it needs loot-table
+  introspection the port does not have. The sub-skill table above lists it; the staged build order
+  never did. It reuses this exact seam, so deferring it costs nothing.
+- **A `.Stat` locale key.** Hunter still falls through to `GenericSkillStatsRenderer`, which emits no
+  stats section, so a `.Stat` string would be **dead shipped string #8** in a port that has had to find
+  seven. It lands with `HunterStatsRenderer` in stage 7, which is D-HU7's own item.
+- **A proc notification.** Trophy Hunter fires on up to half of every kill at max level; a chat or
+  action-bar line there is the permanent-furniture-for-a-fast-changing-number failure the Stealth plan
+  already ruled out. mcMMO's own double drops are silent. **The player sees the items.**
+- **A `@Unique` re-entrancy flag.** It would be dead code — the 4-arg overload cannot reach the 3-arg
+  one — and a guard that can never fire teaches the next reader that recursion is possible here.
+
+### The invisible-proc problem, solved the way stages 1 and 3 solved theirs
+
+One `AtomicBoolean`-guarded INFO line on the first trophy of a session, naming the creature and its
+tier. ⚠️ **The proc is visible and still undiagnosable without it**: nobody can tell a cow that dropped
+two leather from a bonus roll from a cow that rolled two leather first time, so *"the mixin never
+bound"*, *"your rank is too low for this tier"* and *"the RNG said no"* look identical in-game.
+
+### Files
+
+`fabric/mixin/LivingEntityTrophyHunterMixin.java` (**new**), `mcmmo.mixins.json` (+1),
+`SubSkillType.HUNTER_TROPHY_HUNTER(4)`, `HunterManager` (+`canTrophyHunt`, +`rollTrophyDrop`),
+`HunterListener` (+`onLootDropped`, +`qualifyingKiller` extracted from `onDeath`, +`hunterPlayer`,
++`announceFirstTrophy`), `skillranks.yml` (+`Hunter.TrophyHunter`), `advanced.yml`
+(+`Skills.Hunter.TrophyHunter`), `locale_en_US.properties` (+2), the regenerated datapack (+2), plus
+additions to `HunterManagerTest` / `HunterListenerTest` / `AdvancedConfigTest` / `RankConfigTest` /
+`MixinApplicationTest`.
+
+### ⬜ Next: stage 7
+
+**Quarry Sense + `/mcstats hunter`** (D-HU7). A `HunterStatsRenderer` is where the `.Stat` keys this
+stage deliberately withheld belong, and Beast Lore's renderer
+([EntityDamageListener.java:246](../../src/main/java/com/gmail/nossr50/fabric/listeners/EntityDamageListener.java#L246))
+is the reuse target for the diegetic "Killed: 1,204 — Mastery II" line.
 
 ---
 
@@ -987,7 +1156,7 @@ the next starts. No half-wired skill sitting in the tree.
 | **3** | ✅ **DONE** — Kill counters wired on `AFTER_DEATH` + threshold notification | counters move in-game and survive a restart (§G session 11) |
 | **4** | ✅ **DONE** — The damage bonus on the K1 seam (D-HU3/D-HU4) | ordering tests green; damage measured in-game (§G) |
 | **5** | ✅ **DONE** — Hunter XP + the derived tier rule (D-HU5) | XP rate measured against the 100 h target (§G HN33–HN35) |
-| **6** | Trophy Hunter loot mixin (D-HU6) | single-extra-roll test green; no dupe in a live world |
+| **6** | ✅ **DONE** — Trophy Hunter loot mixin (D-HU6) | single-extra-roll test green; no dupe in a live world (§G HN41–HN47) |
 | **7** | Quarry Sense / `/mcstats hunter` (D-HU7) | — |
 
 Stages 1 and 2 are pure risk with zero visible feature. Ship them alone anyway. That is the Agility

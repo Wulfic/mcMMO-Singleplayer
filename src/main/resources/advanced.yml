@@ -428,6 +428,30 @@ Skills:
                 # Note what is NOT here: the witch, which the plan expected to need an override and
                 # which the rule already places correctly at T2 (26 health, below the T3 line).
 
+        TrophyHunter:
+            # Chance that a creature you kill rolls its OWN loot table a second time.
+            #
+            # Not a bespoke bonus-item table and not a rare-slot bias: a second roll of the mob's own
+            # table respects Looting, needs no per-mob data to go stale, and gives "more of what that
+            # creature drops" -- more gunpowder and ender pearls, but also more rotten flesh.
+            #
+            # WHICH creatures you may roll is skillranks.yml -> Hunter.TrophyHunter, one rank per mob
+            # tier. This is only HOW OFTEN, and it is the same number for every tier.
+            #
+            # ChanceMax ships at 50, not the 100 that Herbalism's and Mining's double drops use.
+            # Those are blocks; this is the mob economy, which is what a grinder attacks -- and at
+            # rank 4 it applies to bosses, so 100 would mean two nether stars from every wither. At 50
+            # a trophy is a windfall at max level rather than the expected outcome. Turn it down
+            # before turning it up.
+            #
+            # The roll is gated on the same four checks the kill counter passes (player-attributed,
+            # PVE/PVP enabled, not a manufactured golem or summon, not spawner/bred/placed), so a farm
+            # cannot be made to pay out twice by standing in it.
+            ChanceMax: 50.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+
     #
     #  Settings for Husbandry
     ###

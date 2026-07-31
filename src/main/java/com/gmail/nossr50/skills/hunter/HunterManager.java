@@ -6,8 +6,12 @@ import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.SkillManager;
+import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.random.ProbabilityUtil;
+import com.gmail.nossr50.util.skills.RankUtils;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
 
@@ -38,16 +42,18 @@ import org.jetbrains.annotations.NotNull;
  * resolver lives here, on the manager. Routing it through {@code RankUtils} would produce a sub-skill
  * whose rank display lies.
  *
- * <h2>Scope as of stage 5 — read this before adding to the class</h2>
+ * <h2>Scope as of stage 6 — read this before adding to the class</h2>
  * Both axes: the kill counters and the threshold arithmetic they feed (with the bonus damage a tier
- * is worth), and the mob-tier rule with the XP each tier pays.
+ * is worth), the mob-tier rule with the XP each tier pays, and Trophy Hunter's per-tier unlock and
+ * chance.
  *
  * <p>{@link #masteryDamageBonusForHit} is spent by {@code EntityDamageListener#applyHunterMastery},
  * which runs <b>last</b> in that chain — after Sprint Smash and after Stealth Assassin — because
  * Assassin multiplies the whole melee total, so a Hunter bonus applied first would be multiplied
- * along with it. {@link #awardKillXp} is spent by {@code HunterListener}, behind the same four gates
- * the counter passes. Trophy Hunter's loot re-roll and Quarry Sense are stages 6–7 and are
- * deliberately absent rather than stubbed.
+ * along with it. {@link #awardKillXp} is spent by {@code HunterListener} and
+ * {@link #rollTrophyDrop} by {@code LivingEntityTrophyHunterMixin} through
+ * {@code HunterListener#onLootDropped}, all three behind the same four gates. Quarry Sense is stage 7
+ * and is deliberately absent rather than stubbed.
  *
  * @see <a href="file:../../../../../../../plans/new-skills/hunter.md">plans/new-skills/hunter.md</a>
  */
@@ -415,5 +421,51 @@ public class HunterManager extends SkillManager {
         }
         applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF);
         return xp;
+    }
+
+    // --- Sub-skill: Trophy Hunter ----------------------------------------------------------------
+
+    /**
+     * Whether this player may take a bonus trophy from a tier-{@code tier} creature.
+     *
+     * <h2>🔑 The rank number IS the mob tier</h2>
+     * {@code skillranks.yml → Hunter.TrophyHunter} carries four ranks and they are the four tiers in
+     * order — rank 1 unlocks livestock, rank 4 unlocks bosses. Indexing the tier straight off the rank
+     * is what stops a second ladder of breakpoint levels existing in {@code advanced.yml} and drifting
+     * away from the one in {@code skillranks.yml}; the same call {@code UNARMORED_IRON_SKIN} made for
+     * its four armour tiers.
+     *
+     * <p>⚠️ <b>A tier outside {@link #MIN_TIER}..{@link #MAX_TIER} is refused rather than clamped.</b>
+     * Every tier reaching this method comes from {@code MobTiers.tierOf}, which cannot produce one —
+     * so an out-of-range value means something upstream is broken, and quietly treating it as tier 1
+     * would hand a bonus roll to a creature nobody has priced.
+     *
+     * @param tier the victim's mob tier, 1–4
+     */
+    public boolean canTrophyHunt(int tier) {
+        if (tier < MIN_TIER || tier > MAX_TIER) {
+            return false;
+        }
+        return RankUtils.hasReachedRank(tier, mmoPlayer, SubSkillType.HUNTER_TROPHY_HUNTER)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.HUNTER_TROPHY_HUNTER);
+    }
+
+    /**
+     * Whether this kill should roll the creature's loot table a second time.
+     *
+     * <p>Chance scales with Hunter level up to {@code Skills.Hunter.TrophyHunter.ChanceMax}, which
+     * ships at <b>50 %</b> rather than the 100 % that Herbalism's and Mining's double drops use. Those
+     * are blocks; this is the mob economy, which is the half of the game a grinder attacks — and at
+     * rank 4 it reaches bosses, so 100 % would mean two nether stars from every wither.
+     *
+     * <p>The chance is deliberately the <em>same for every tier</em>. The tier already decides
+     * <em>whether</em> a creature can be trophy-hunted at all, via {@link #canTrophyHunt}; making it
+     * decide the odds as well would price the same thing twice.
+     *
+     * @param tier the victim's mob tier, 1–4
+     */
+    public boolean rollTrophyDrop(int tier) {
+        return canTrophyHunt(tier)
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HUNTER_TROPHY_HUNTER, mmoPlayer);
     }
 }

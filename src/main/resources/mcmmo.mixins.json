@@ -27,6 +27,7 @@
     "LivingEntityDamageMixin",
     "LivingEntityGlideMixin",
     "LivingEntityShearDropsMixin",
+    "LivingEntityTrophyHunterMixin",
     "MobConversionOriginMixin",
     "MooshroomStewMixin",
     "PassiveEntityGrowthMixin",

@@ -13,16 +13,21 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.config.GeneralConfig;
+import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import java.nio.file.Path;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The MC-free half of Hunter as it stands after stage 2: the per-mob kill counters and the mastery
@@ -43,12 +48,22 @@ class HunterManagerTest {
     private PlayerProfile profile;
     private McMMOPlayer mmoPlayer;
     private HunterManager manager;
+    private Path dataFolder;
 
     @BeforeEach
-    void setUp() {
+    void setUp(@TempDir Path dataFolder) {
+        this.dataFolder = dataFolder;
         profile = new PlayerProfile("Steve", UUID.randomUUID(), 0);
         mmoPlayer = mock(McMMOPlayer.class);
         when(mmoPlayer.getProfile()).thenReturn(profile);
+        // Trophy Hunter's rank gate reads the REAL bundled skillranks.yml, and RankConfig resolves
+        // Standard vs RetroMode through the general config -- so both have to be wired for the rank
+        // ladder to mean anything. RetroMode is the shipped default, hence the 100/300/600/900
+        // unlock levels the tests below assert against.
+        final GeneralConfig generalConfig = mock(GeneralConfig.class);
+        lenient().when(generalConfig.getIsRetroMode()).thenReturn(true);
+        McMMOMod.setGeneralConfig(generalConfig);
+        McMMOMod.setRankConfig(new RankConfig(dataFolder));
         // A fully charged swing. ⚠️ Stubbed rather than left at Mockito's 0.0F: unstubbed, every
         // melee bonus below would scale to nothing and the tests would pass for the wrong reason.
         lenient().when(mmoPlayer.getAttackStrength()).thenReturn(1.0F);
@@ -66,6 +81,8 @@ class HunterManagerTest {
     void tearDown() {
         McMMOMod.setAdvancedConfig(null);
         McMMOMod.setExperienceConfig(null);
+        McMMOMod.setGeneralConfig(null);
+        McMMOMod.setRankConfig(null);
     }
 
     // --- The threshold ladder -------------------------------------------------------------------
@@ -356,5 +373,98 @@ class HunterManagerTest {
         assertEquals(0.0F, manager.awardKillXp(0), EPSILON);
 
         verify(mmoPlayer, never()).beginXpGain(any(), anyFloat(), any(), any());
+    }
+
+    // --- Stage 6: Trophy Hunter -----------------------------------------------------------------
+
+    /** Chance ceiling and scaling cap for Trophy Hunter, as a mocked advanced config. */
+    private void trophyChance(double chanceMax) {
+        final AdvancedConfig advanced = mock(AdvancedConfig.class);
+        lenient().when(advanced.getMaximumProbability(SubSkillType.HUNTER_TROPHY_HUNTER))
+                .thenReturn(chanceMax);
+        // 0 makes every player count as fully scaled, so these tests are about the ceiling and the
+        // rank gate rather than about the level ramp (which SkillManager#scaleToLevel owns).
+        lenient().when(advanced.getMaxBonusLevel(SubSkillType.HUNTER_TROPHY_HUNTER)).thenReturn(0);
+        McMMOMod.setAdvancedConfig(advanced);
+    }
+
+    @Test
+    void eachTrophyHunterRankUnlocksExactlyOneMoreMobTier() {
+        // 🔑 THE STAGE'S LOAD-BEARING INVARIANT: the rank number IS the mob tier. Driven against the
+        // REAL bundled skillranks.yml rather than a stubbed ladder, so this asserts both halves at
+        // once -- that the code indexes the tier off the rank, and that the shipped file actually
+        // carries four ranks at 100 / 300 / 600 / 900. Either half alone proves nothing: a stubbed
+        // ladder would pass against an empty config section, and a config read alone would not
+        // notice canTrophyHunt comparing against the wrong number.
+        final int[][] expected = {
+                //          T1     T2     T3     T4
+                /*   0 */ {0, 0, 0, 0},
+                /* 100 */ {1, 0, 0, 0},
+                /* 300 */ {1, 1, 0, 0},
+                /* 600 */ {1, 1, 1, 0},
+                /* 900 */ {1, 1, 1, 1},
+        };
+        final int[] levels = {0, 100, 300, 600, 900};
+
+        for (int row = 0; row < levels.length; row++) {
+            when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(levels[row]);
+            for (int tier = 1; tier <= 4; tier++) {
+                assertEquals(expected[row][tier - 1] == 1, manager.canTrophyHunt(tier),
+                        "Hunter " + levels[row] + " vs tier " + tier);
+            }
+        }
+    }
+
+    @Test
+    void aTierOffTheScaleIsRefusedRatherThanTreatedAsTheNearestOne() {
+        // Every tier reaching canTrophyHunt comes from MobTiers.tierOf, which cannot produce one of
+        // these -- so an out-of-range value means something upstream broke, and quietly reading it
+        // as tier 1 would hand a bonus roll to a creature nobody has priced. Asserted at the level
+        // cap so the rank gate cannot be what makes it false.
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(1_000);
+
+        assertTrue(manager.canTrophyHunt(HunterManager.MAX_TIER), "the reference point still passes");
+        assertFalse(manager.canTrophyHunt(0));
+        assertFalse(manager.canTrophyHunt(-1));
+        assertFalse(manager.canTrophyHunt(HunterManager.MAX_TIER + 1));
+    }
+
+    @Test
+    void aLockedTierNeverRollsATrophyEvenAtACertaintyOfChance() {
+        // The gate ordering that matters: rank first, RNG second. At a 100% ceiling the roll is a
+        // constant true, so if the rank check were missing or ran second this would still pay out --
+        // which is precisely the failure a farm would find first.
+        trophyChance(100.0D);
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(100); // rank 1 = tier 1
+
+        assertTrue(manager.rollTrophyDrop(1), "the unlocked tier must roll at a 100% ceiling");
+        assertFalse(manager.rollTrophyDrop(2), "a locked tier must not roll at any chance");
+        assertFalse(manager.rollTrophyDrop(3));
+        assertFalse(manager.rollTrophyDrop(4));
+    }
+
+    @Test
+    void theChanceCeilingIsHonouredInBothDirections() {
+        // Asserted at both extremes rather than at one: a roll hard-wired to true passes the 100%
+        // case, and one hard-wired to false passes the 0% case. Only the pair pins the RNG.
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(1_000);
+
+        trophyChance(100.0D);
+        assertTrue(manager.rollTrophyDrop(4), "a 100% ceiling must always roll");
+
+        trophyChance(0.0D);
+        assertFalse(manager.rollTrophyDrop(4), "a 0% ceiling must never roll");
+    }
+
+    @Test
+    void theShippedTrophyChanceIsHalfAndTheTiersAllShareIt() {
+        // Read off the REAL advanced.yml. ⚠️ 50, not the 100 Herbalism's and Mining's double drops
+        // use: those are blocks, this is the mob economy, and rank 4 reaches bosses.
+        McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
+
+        assertEquals(50.0D,
+                McMMOMod.getAdvancedConfig().getMaximumProbability(
+                        SubSkillType.HUNTER_TROPHY_HUNTER),
+                EPSILON, "advanced.yml Skills.Hunter.TrophyHunter.ChanceMax");
     }
 }

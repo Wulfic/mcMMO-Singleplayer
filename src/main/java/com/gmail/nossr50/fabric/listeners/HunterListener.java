@@ -23,11 +23,18 @@ import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundCategory;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Hunter's kill handler: the one place a mob's death is turned into progress, and the four gates that
- * decide whether it is allowed to. Both of the skill's axes are paid here — the per-mob mastery
- * counter (stage 3) and the skill's own XP (stage 5).
+ * decide whether it is allowed to. All three of the skill's rewards are decided here — the per-mob
+ * mastery counter (stage 3), the skill's own XP (stage 5) and Trophy Hunter's bonus loot roll
+ * (stage 6).
+ *
+ * <p>The first two are paid from {@link #onDeath} on {@code AFTER_DEATH}; the third from
+ * {@link #onLootDropped}, called by {@code LivingEntityTrophyHunterMixin} from inside
+ * {@code dropLoot} — <b>earlier in the same death</b>, since {@code drop()} runs before the event
+ * fires. They share {@link #qualifyingKiller} rather than each carrying a copy of the chain.
  *
  * <p>MC-typed glue only. {@link HunterManager} owns every number — what a threshold is, which tier a
  * count has reached, whether this kill crossed one, what a tier pays; this class answers "who killed
@@ -102,6 +109,17 @@ public final class HunterListener {
      */
     private static final AtomicBoolean LOGGED_FIRST_KILL = new AtomicBoolean();
 
+    /**
+     * Guards a single INFO line the first time Trophy Hunter procs this session.
+     *
+     * <p>The proc is <em>visible</em> — items land on the ground — and still indistinguishable from
+     * ordinary loot from inside the game: nobody can tell a cow that dropped two leather because of a
+     * bonus roll from a cow that rolled two leather on the first try. So "the mixin never bound",
+     * "your rank is too low for this tier" and "the RNG said no" all look the same, exactly as stage
+     * 1's origin gate and stage 3's counters did. One line separates them.
+     */
+    private static final AtomicBoolean LOGGED_FIRST_TROPHY = new AtomicBoolean();
+
     private HunterListener() {
     }
 
@@ -121,43 +139,15 @@ public final class HunterListener {
      * @param source what killed it
      */
     static void onDeath(@NotNull LivingEntity victim, @NotNull DamageSource source) {
-        // Gate 1, first because it is both the cheapest read and the most selective: a farm that
-        // kills by fall damage, lava or suffocation has no attacker at all. getAttacker() resolves a
-        // projectile back to its shooter, so an arrow kill is the player's; a wolf's kill is the
-        // wolf's, and Taming owns that hit.
-        if (!(source.getAttacker() instanceof ServerPlayerEntity killer)) {
+        final ServerPlayerEntity killer = qualifyingKiller(victim, source);
+        if (killer == null) {
             return;
         }
-
-        // Gate 2: the operator's Enabled_For_PVE / Enabled_For_PVP switches. Tamed animals and
-        // players route to the PVP switch; everything else to PVE.
-        if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.HUNTER, victim)) {
-            return;
-        }
-
-        // Gate 3: mobs the player manufactures at will. The summon check and the iron-golem half of
-        // isManufactured are verbatim from CombatUtils#processCombatXP; the other two golems are
-        // Hunter's own and stage 5 had to add them -- see isManufactured.
-        if (McMMOMod.getTransientEntityTracker().isTransient(victim.getUuid())) {
-            return;
-        }
-        if (isManufactured(victim)) {
-            return;
-        }
-
-        // Gate 4: stage 1's spawn-origin marker.
-        if (!MobOrigins.countsTowardMastery(victim)) {
-            return;
-        }
-
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(killer.getUuid());
+        final McMMOPlayer mmoPlayer = hunterPlayer(killer);
         if (mmoPlayer == null) {
-            return; // data not loaded (e.g. mid-join).
+            return;
         }
         final HunterManager hunter = mmoPlayer.getHunterManager();
-        if (hunter == null) {
-            return;
-        }
 
         final String mobId = masteryKeyOf(victim);
         final int killsBefore = hunter.getKills(mobId);
@@ -172,6 +162,116 @@ public final class HunterListener {
         if (hunter.crossedMasteryThreshold(killsBefore, killsAfter)) {
             announceMastery(mmoPlayer, victim, hunter.masteryTier(killsAfter), killsAfter);
         }
+    }
+
+    /**
+     * The bonus loot roll for Trophy Hunter, called from {@code LivingEntityTrophyHunterMixin} while
+     * the creature is dropping its loot.
+     *
+     * <h2>🔑 Why the roll is handed in as a {@link Runnable}</h2>
+     * Everything Minecraft-shaped about the second roll — which overload to re-invoke, with which
+     * arguments — belongs at the injection site, where the bytecode it has to match is visible. What
+     * belongs here is the decision. Passing the roll in rather than reaching back for it means this
+     * method is drivable from a plain unit test with a counter for a {@code Runnable}, which is the
+     * only way the <b>exactly one extra roll</b> property D-HU6 demands can be asserted without a live
+     * world. It runs the roll <b>once</b> or not at all; there is no path here that runs it twice.
+     *
+     * <h2>⚠️ The same four gates as the counter, and that is a ruling not an accident</h2>
+     * This is Hunter's <em>third</em> reward and it rides {@link #qualifyingKiller}, the identical
+     * chain the mastery counter and the XP award pass. Loot is unambiguously a property of the kill
+     * rather than of a hit, so stage 4's "origin gates the kill, not the hit" carve-out does not apply
+     * to it — stage 5's "both axes ride the same four gates" does. Concretely: doubling the drops of a
+     * spawner or bred creature is precisely the farm amplification stage 1 exists to prevent, and a
+     * bred-cow pen paying double leather would be the clearest example of it in the game.
+     *
+     * <p>⚠️ <b>{@code dropLoot} fires for every death, including ones with no killer at all</b> — a
+     * creature burning in lava on the far side of the world reaches this method. Gate 1 is what stops
+     * that dropping double, and it is the reason this cannot simply be "if the player is nearby".
+     *
+     * <p>The proc is deliberately <b>silent</b>: no chat line, no action bar. It fires on up to half of
+     * every kill at max level, and the port has already ruled out permanent screen furniture for a
+     * number that changes several times a minute. The player sees the items.
+     *
+     * @param victim    the creature dropping its loot
+     * @param source    what killed it
+     * @param bonusRoll re-rolls the creature's own loot table exactly once
+     */
+    public static void onLootDropped(@NotNull LivingEntity victim, @NotNull DamageSource source,
+            @NotNull Runnable bonusRoll) {
+        final ServerPlayerEntity killer = qualifyingKiller(victim, source);
+        if (killer == null) {
+            return;
+        }
+        final McMMOPlayer mmoPlayer = hunterPlayer(killer);
+        if (mmoPlayer == null) {
+            return;
+        }
+        if (!mmoPlayer.getHunterManager().rollTrophyDrop(MobTiers.tierOf(victim))) {
+            return;
+        }
+
+        bonusRoll.run();
+        announceFirstTrophy(victim);
+    }
+
+    /**
+     * The four gates, in the order they are cheapest and most selective, or {@code null} if this death
+     * does not count as a hunt.
+     *
+     * <h2>🔑 One function, called by everything Hunter pays for</h2>
+     * The mastery counter, the XP award and Trophy Hunter's loot roll all ask the same question, and
+     * they ask it in two different places in the tick — {@code AFTER_DEATH} for the first two, inside
+     * {@code dropLoot} for the third. Re-deriving the chain at the second site is the drift this port
+     * has now had to close three times: each copy would be self-consistent, each would pass its own
+     * tests, and a farm closed for the counter would quietly stay open for the loot. The same argument
+     * that made {@link #masteryKeyOf} a shared function makes this one.
+     *
+     * @return the player to credit, or {@code null} if any gate refuses
+     */
+    static @Nullable ServerPlayerEntity qualifyingKiller(@NotNull LivingEntity victim,
+            @NotNull DamageSource source) {
+        // Gate 1, first because it is both the cheapest read and the most selective: a farm that
+        // kills by fall damage, lava or suffocation has no attacker at all. getAttacker() resolves a
+        // projectile back to its shooter, so an arrow kill is the player's; a wolf's kill is the
+        // wolf's, and Taming owns that hit.
+        if (!(source.getAttacker() instanceof ServerPlayerEntity killer)) {
+            return null;
+        }
+
+        // Gate 2: the operator's Enabled_For_PVE / Enabled_For_PVP switches. Tamed animals and
+        // players route to the PVP switch; everything else to PVE.
+        if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.HUNTER, victim)) {
+            return null;
+        }
+
+        // Gate 3: mobs the player manufactures at will. The summon check and the iron-golem half of
+        // isManufactured are verbatim from CombatUtils#processCombatXP; the other two golems are
+        // Hunter's own and stage 5 had to add them -- see isManufactured.
+        if (McMMOMod.getTransientEntityTracker().isTransient(victim.getUuid())) {
+            return null;
+        }
+        if (isManufactured(victim)) {
+            return null;
+        }
+
+        // Gate 4: stage 1's spawn-origin marker.
+        if (!MobOrigins.countsTowardMastery(victim)) {
+            return null;
+        }
+
+        return killer;
+    }
+
+    /**
+     * The killer's loaded mcMMO data, or {@code null} when there is none to pay.
+     *
+     * <p>Both null cases are ordinary rather than exceptional: a profile is not loaded during the
+     * first moments of a join, and {@code getHunterManager()} is null for a mocked player in a test
+     * that is not about Hunter. Neither is worth logging on a path that runs on every mob death.
+     */
+    private static @Nullable McMMOPlayer hunterPlayer(@NotNull ServerPlayerEntity killer) {
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(killer.getUuid());
+        return mmoPlayer == null || mmoPlayer.getHunterManager() == null ? null : mmoPlayer;
     }
 
     /**
@@ -260,14 +360,23 @@ public final class HunterListener {
         }
     }
 
+    /** See {@link #LOGGED_FIRST_TROPHY}. */
+    private static void announceFirstTrophy(@NotNull LivingEntity victim) {
+        if (LOGGED_FIRST_TROPHY.compareAndSet(false, true)) {
+            McMMOMod.LOGGER.info("Hunter: Trophy Hunter is live — first bonus loot roll this session "
+                    + "was on '{}' (tier {}).", masteryKeyOf(victim), MobTiers.tierOf(victim));
+        }
+    }
+
     /**
-     * Forget that this session has already logged its first counted kill.
+     * Forget that this session has already logged its first counted kill and its first trophy.
      *
-     * <p>Test seam only, and the narrowest one available: {@link #LOGGED_FIRST_KILL} is process-wide
-     * static state on a JVM JUnit reuses across classes, so without a reset one test's first kill
-     * decides whether another's logs at all.
+     * <p>Test seam only, and the narrowest one available: both flags are process-wide static state on
+     * a JVM JUnit reuses across classes, so without a reset one test's first kill decides whether
+     * another's logs at all.
      */
     static void resetFirstKillLogForTesting() {
         LOGGED_FIRST_KILL.set(false);
+        LOGGED_FIRST_TROPHY.set(false);
     }
 }
