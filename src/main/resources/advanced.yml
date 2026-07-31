@@ -387,6 +387,47 @@ Skills:
             # A negative value is clamped to 0 -- earned mastery must never become a penalty.
             Ranged_Damage_Multiplier: 1.0
 
+        Tiers:
+            # Every creature in the game belongs to one of four Hunter tiers, and the tier decides
+            # how much XP killing it pays. What each tier is WORTH lives in experience.yml under
+            # Experience_Values.Hunter; this section decides only which tier a creature is IN.
+            #
+            # THERE IS NO MOB TABLE HERE, AND THAT IS THE DESIGN.
+            #
+            # The tier is worked out from the creature itself:
+            #
+            #   T1  anything that is not a monster                    chicken, cow, sheep, horse
+            #   T2  any other monster                                 zombie, skeleton, creeper, spider
+            #   T3  a monster with >= 30 health OR >= 6 attack damage  blaze, guardian, enderman, ravager
+            #   T4  a monster with >= 150 health                      wither, ender dragon, warden
+            #
+            # (A non-monster with >= 60 health is promoted to T2. In vanilla that is the iron golem
+            # and nothing else; it exists so a modded 300-health passive beast is not paid as a
+            # chicken.)
+            #
+            # WHY DERIVED INSTEAD OF LISTED: a hand-written ~90-row mob table goes stale the moment
+            # Mojang adds a creature or you install a mod, and its failure mode is SILENT -- the
+            # unlisted mob resolves to zero and pays nothing forever. That has already happened
+            # three times in this port (two species missing from Husbandry's breed table, three from
+            # Fishing's). A derived tier cannot go stale, and it fails LOW rather than high.
+            #
+            # Overrides below name only the exceptions. Keys use the same form as
+            # experience.yml's Combat.Multiplier table (Wither_Skeleton, not minecraft:wither_skeleton).
+            # A value outside 1-4 is ignored with a warning and the derived tier is used instead.
+            Overrides:
+                # Both shipped entries fail the same way: THEIR DANGER IS NOT IN THEIR ATTRIBUTES.
+                #
+                # A ghast has 10 health and no attack-damage attribute at all -- it never melees,
+                # it throws fireballs across a lava sea -- so it derives as an ordinary T2 monster.
+                Ghast: 3
+                # A wither skeleton's attack-damage attribute is the inherited default 2.0, exactly
+                # the same as a plain skeleton's. Its stone sword and the wither effect do the work,
+                # and neither is an attribute.
+                Wither_Skeleton: 3
+                #
+                # Note what is NOT here: the witch, which the plan expected to need an override and
+                # which the rule already places correctly at T2 (26 health, below the T3 line).
+
     #
     #  Settings for Husbandry
     ###

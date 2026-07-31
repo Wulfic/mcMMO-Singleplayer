@@ -5,8 +5,9 @@ belongs in **`COMBAT_SKILLS`**. It needs **no F1** (tick sampler) and **no F2** 
 it is entirely event-driven. It does need **two things nothing else in the port has**: a
 **per-mob-type persistent counter** and a **mob loot-drop seam**.
 
-> 🔶 **STATUS: IN PROGRESS as of 2026-07-30. Stages 1 (the anti-farm gate) and 2 (the enum, the
-> manager and the kill-count persistence) are DONE.** Stage 0 — the §G
+> 🔶 **STATUS: IN PROGRESS as of 2026-07-30. Stages 1–5 are DONE** — the anti-farm gate; the enum,
+> manager and kill-count persistence; the kill counters; the mastery damage bonus; and Hunter XP with
+> the derived tier rule. Stage 0 — the §G
 > play-test of Pass 1 + Pass 2 — was **consciously skipped on the user's instruction**, not satisfied.
 > Pass 2 now has five skills in the tree (Agility/Parkour/Swimming/Flying, Stealth, Unarmored,
 > Husbandry) that are code-complete and **never played**; Hunter is the sixth, stacked on an unverified
@@ -129,9 +130,16 @@ Rejected alternatives, recorded so they are not re-litigated: shipping the three
 throttles legitimate heavy play). The rolling cap remains available as a **backstop** if play-testing
 finds a farm the origin flags miss — it is additive, not an alternative.
 
-Note that mastery kills and Hunter XP may use **different** gates: it is entirely reasonable for a
+~~Note that mastery kills and Hunter XP may use **different** gates: it is entirely reasonable for a
 spawner zombie to pay XP but not mastery, and that is the recommended split (XP keeps the looser
-`processCombatXP` gates it already has).
+`processCombatXP` gates it already has).~~
+
+> ❌ **OVERRULED 2026-07-30 (user), after stage 5 costed it. Both axes ride the SAME four gates.**
+> This paragraph was written before stage 1 existed and does not survive its own arithmetic: at 300 XP
+> for a common hostile against an 11,010,000 XP curve, the loose split maxes Hunter in **~37 h at a
+> modest spawner farm** and **~12 h at a gold farm**, against the 80 h floor §Balance inherits from
+> Agility's D-AG6. One gate chain also means "the kill counted" and "the kill paid" cannot drift
+> apart. See §"Stage 5 as built".
 
 ### ⚠️ D-HU2 — Persistence: this is a genuinely new shape in this codebase
 
@@ -221,9 +229,11 @@ XP is paid per qualifying kill, scaled by the mob's tier. Level unlocks **increa
 hand-wave "hostile = tier 2". Proposed shape (numbers are starting points):
 
 > ✅ **RULED 2026-07-30 (user): a DERIVED default plus a small override table.** Not a full ~90-row
-> table. `tierOf(entity)` derives a tier structurally from the live entity — passive vs hostile, max
-> health, attack damage — and a short `Hunter.Tier_Overrides` section in `advanced.yml` names only the
-> exceptions (a ghast has 10 HP and enormous damage; a witch is 26 HP and barely fights back). **The
+> table. `tierOf(entity)` derives a tier structurally — passive vs hostile, max
+> health, attack damage — and a short `Hunter.Tiers.Overrides` section in `advanced.yml` names only the
+> exceptions. ⚠️ **"from the live entity" is how this was drafted and it shipped differently and
+> deliberately: the stats are read from the entity TYPE**, because a live read is contaminated by the
+> individual's equipment, its rolled health and the world difficulty — see §"Stage 5 as built" (a ghast has 10 HP and enormous damage; a witch is 26 HP and barely fights back). **The
 > reason: an unlisted mob resolves to a sane tier instead of silently resolving to `0`**, which is
 > exactly what bit Husbandry twice (`Nautilus` and `Happy_Ghast` absent from the breed table ⇒ two
 > verbs paid nothing for both species) and Fishing once (upstream defect #10). A derived default cannot
@@ -789,14 +799,178 @@ on how recently they hit something with their fist.
 `EntityDamageListenerHunterTest` (new, 14 tests) and additions to `HunterManagerTest` /
 `AdvancedConfigTest`.
 
-### ⬜ Next: stage 5
+### ✅ Stage 5 — DONE, see the section below
 
-Hunter **XP** and the tier table (D-HU5): a derived default tier from the live entity plus a small
-`Hunter.Tier_Overrides` section — the `Hunter:` section it goes under now exists. ⚠️ Re-read the D-HU5
-box before starting: `experience.yml → Experience_Values.Combat.Multiplier` is **not** usable as the
-tier source (Ender Dragon is `1.0`, Witch `0.1`), and the derived default is the whole point — it is
-what stops an unlisted or modded mob resolving to `0`. The XP hook is the same `AFTER_DEATH` handler
-that already banks the kill, behind the same four gates.
+---
+
+## ✅ Stage 5 as built (2026-07-30)
+
+**Hunter has a level now.** The tier rule, the XP ladder, two config sections and one new arm on the
+existing `AFTER_DEATH` handler. **No new listener, no new mixin, no new locale string, no new
+advancement, no new sub-skill enum.** Suite **1260 green** (+30), `./gradlew build` exit 0, headless
+boot `Done (1.231s)` with **0 exceptions, 0 mixin failures, 0 mcMMO ERROR**, and **1910 advancements**
+unchanged. **7 mutations run, each reddening exactly the tests it should.**
+
+### ✅ RULED 2026-07-30 (user): both axes ride the SAME four gates
+
+The plan's D-HU1 note recommended the opposite and said so explicitly — *"it is entirely reasonable for
+a spawner zombie to pay XP but not mastery, and that is the recommended split"*. **That
+recommendation predates stage 1 and it does not survive its own arithmetic.** The curve is 11,010,000
+XP and a common hostile pays 300, so:
+
+| Source | Rate | Hours to max Hunter |
+|---|---|---|
+| Hand-killing, ~6/min | 360/h | **~102 h** ✅ the design target |
+| A modest spawner farm | 1,000/h | **~37 h** ❌ against an 80 h floor |
+| A gold farm | 3,000/h | **~12 h** ❌ |
+
+The loose split would have handed rows 2 and 3 to the player for free. It also reintroduces exactly
+the drift stage 4 spent a whole section closing: with one gate chain, *"the kill counted"* and *"the
+kill paid"* cannot disagree, because they are the same `if`.
+
+⚠️ **What this still does not close, and it is stated rather than hidden:** row 3 is a
+**nether-wastes** farm. Those piglins are `NATURAL` and legitimately so, and **no spawn origin will
+ever exclude them** — the same is true of dark-room hostiles, End endermen and monument guardians. A
+grinder the player stands in and swings at is excluded by nothing. **D-HU1's reserved rolling
+per-mob-per-hour cap is the additive backstop for precisely this**, and §G rows **HN33–HN35** now
+measure the three worst cases by name so the decision is made on numbers rather than on a hunch.
+
+### The tier rule, and why nothing in the game is listed
+
+`HunterManager.deriveTier(hostile, maxHealth, attackDamage)`:
+
+```
+not hostile              -> T1   (T2 if >= 60 health)
+hostile, >= 150 health   -> T4   warden 500, wither 300, ender dragon 200
+hostile, >= 30 health
+        or >= 6 damage   -> T3   blaze, guardian, shulker, enderman, ravager
+any other hostile        -> T2
+```
+
+**It fails low by construction.** A non-hostile heavyweight stops at T2 — health alone cannot tell
+"tanky" from "dangerous" — and a type with no attribute container at all reads as 0/0 and lands in T1
+or T2. Hunter XP is the axis a farm attacks, so the safe direction for a mistake is *pays too little*.
+
+⚠️ **`DANGEROUS_ATTACK_DAMAGE` is 6.0 and not 5.0, and that one number was chosen from the farm data.**
+At 5.0 the rule also promotes the **zombified piglin and the piglin** — and a gold farm is the
+most-built grinder there is, against which no origin helps. One point of nominal attack damage would
+have made the worst farm in the port two and a half times worse. The blaze (6.0) is what the clause
+exists to catch, and a blaze farm is spawner-fed, which stage 1 already closes.
+
+⚠️ **The `>= 60` non-hostile promotion catches exactly one vanilla mob (the iron golem, 100 HP) and
+that is fine** — it is there for the mobs that do not exist yet. The nearest miss is a horse at 53, so
+a rule written as `>= 50` would have swept every horse, donkey, mule and llama into T2.
+
+### 🔑 THE STATS COME FROM THE ENTITY **TYPE**, NEVER FROM THE ENTITY THAT DIED
+
+`DefaultAttributeRegistry.get(type)` holds each species' base container. Reading the live victim's
+`getMaxHealth()` / `getAttributeValue(ATTACK_DAMAGE)` is the reading that comes to hand first and it is
+wrong three separate ways:
+
+- **Equipment lands on the live value.** A zombie holding an iron sword carries that sword's modifier
+  on its own `ATTACK_DAMAGE` and would out-rank an identical bare-handed zombie. **Tier has to be a
+  fact about the species that a player can learn.**
+- **Several mobs roll their health on spawn.** `HorseEntity#initialize` picks from a range; the
+  container is one fixed number.
+- **Difficulty and potion effects move it**, and a hard-mode zombie is not a different creature.
+
+Pinned by `theTierIsReadFromTheSpeciesNotFromTheIndividualThatDied`, which mocks a **500-health
+zombie** and asserts it is still T2. Mutation-proven. Modded mobs come free: Fabric's
+`FabricDefaultAttributeRegistry` writes into the same registry.
+
+### The override table is two entries, and both fail the same way
+
+`advanced.yml → Skills.Hunter.Tiers.Overrides` ships **`Ghast: 3`** and **`Wither_Skeleton: 3`**.
+⚠️ **Their danger is not in their attributes**: a ghast has 10 health and **no `ATTACK_DAMAGE` entry
+whatsoever** (it throws fireballs), and a wither skeleton's is the inherited default **2.0, identical
+to a plain skeleton's** — its sword and the wither effect do the work, and neither is an attribute.
+
+✅ **The plan predicted a third and was wrong: the witch does not need one.** 26 health is below the
+T3 line, so the rule places it at T2 for free. Pinned by name so nobody "completes" the table.
+
+`theTwoShippedOverridesAreBothLoadBearingAndTheTableIsActuallyConsulted` asserts **both** halves — that
+derivation alone gets each mob wrong, *and* that the shipped config fixes it. Either half alone is
+worthless: without the first the entries could be deleted and nothing would notice; without the second
+a broken lookup is invisible.
+
+⚠️ **Out-of-range values are refused, not clamped.** A hand-written `7` means the operator misread the
+scale, and silently reinterpreting it as "boss" is a worse answer than the one the game can work out
+for itself. One WARN, then the derived tier.
+
+⚠️ **The stage-2 dotted-key trap, in a new section.** The table is read as **one whole map**
+(`config.get(SECTION)` → `Map` → `map.get(key)`), never as `getInt(SECTION + "." + key)` — a registry
+path may legally contain a `.` and this config's addresses are dot-delimited. Vanilla ids have no
+dots, so **every other assertion in the file passes either way**; `aHunterTierOverrideForAMobIdContainingADotStillResolves`
+is the only guard, and it is mutation-proven.
+
+### ⚠️⚠️ A HOLE STAGE 5 *CREATED* AND HAD TO CLOSE IN THE SAME COMMIT: THE CONSTRUCTED GOLEMS
+
+`CarvedPumpkinBlock#trySpawnEntity` builds the **snow, iron and copper** golems, and creates all three
+with **`SpawnReason.TRIGGERED`** (bytecode-verified: three `create(World, TRIGGERED)` call sites at
+offsets 18, 72 and 134, with `setPlayerCreated` only on the iron one). Stage 1 maps `TRIGGERED` to
+`NATURAL`, so the origin gate passes every one of them, and legacy's gate 3 only ever knew about the
+iron golem.
+
+🔑 **And that mapping is correct and must not change.** A binary grep of the merged jar for
+`TRIGGERED` returns sixteen classes, and the `SpawnReason` users among them include
+**`SculkShriekerBlockEntity` (a warden leaving a shrieker)**, **`InfestedBlock` (silverfish)**,
+**`SlimeEntity` (a slime splitting)**, `OozingStatusEffect`, `EggEntity` and `EnderPearlEntity`.
+Re-mapping `TRIGGERED` to a disqualifying origin — the one-line fix that looks obviously right — would
+have **stopped every warden, every silverfish and every split slime from counting.**
+
+So the exclusion is by species, and it can afford to be narrow: **snow and copper golems are excluded
+unconditionally** (neither has any natural spawn, so there is no honest instance to protect and
+neither carries an `isPlayerCreated` flag), while the iron golem keeps legacy's `isPlayerCreated()`
+test because a village's own golem is a real creature.
+
+**Before stage 5 the leak was worth nothing** — the only reward was bonus damage against a mob you
+manufacture. Paying skill XP is what turns a dispenser loop into an exploit, which is why it closes
+here and not "later".
+
+### ⚠️ Withers are deliberately left counting, and the same grep is why
+
+Every wither is player-built (`WitherSkullBlock`, also `TRIGGERED`), so the same instinct says exclude
+them — and that would empty T4 to the warden alone and undo the 2026-07-30 ruling that T4 ships with
+members. It is not needed: a wither costs **three wither-skeleton skulls at ~2.5% drop**, so the farm
+is rate-limited by skull acquisition long before 1,500 XP/kill matters.
+
+### Where the numbers live, and why they are split across two files
+
+`experience.yml → Experience_Values.Hunter.Tier_1..4` = **100 / 300 / 800 / 1500**.
+`advanced.yml → Skills.Hunter.Tiers.Overrides` = which tier a mob is *in*.
+
+Split because that is the house rule — `experience.yml` prices things, `advanced.yml` decides
+mechanics — and each section's comment points at the other. Both were **verified back-filling into a
+pre-existing on-disk config** on boot.
+
+⚠️ **`xpForTier`'s null-config fallback is the shipped ladder, NOT `0.0F`** — the same
+failure-direction call as stage 4's `Ranged_Damage_Multiplier`. A defensive zero would not fail safe;
+it would silently stop the entire vertical axis, and the player would kill for an hour, gain nothing,
+and have no error to point at. Mutation-proven (reddens 5 tests).
+
+### Per kill, not per hit — and Hunter is the only combat skill like that
+
+Every other combat skill pays `damage × Combat.Multiplier` on **every hit** (the 2026-07-17 ruling).
+Hunter cannot: its subject is *which creature died*, which is not a question a hit can answer, and
+paying per hit would make a 500-health warden worth twenty-five zombies for reasons that have nothing
+to do with the tier the player is being paid for. **The tier already prices the danger.**
+
+### Files
+
+`skills/hunter/HunterManager.java` (+`deriveTier`, +`resolveTier`, +`xpForTier`, +`awardKillXp`,
++5 constants), `util/MobTiers.java` (**new**), `config/AdvancedConfig` (+`getHunterTierOverride`),
+`config/experience/ExperienceConfig` (+`getHunterXpForTier`), `fabric/listeners/HunterListener`
+(+the XP arm, +`isManufactured`), `advanced.yml` (+`Tiers`), `experience.yml` (+`Hunter`), plus
+`MobTiersTest` (**new**, 10 tests) and additions to `HunterManagerTest` / `HunterListenerTest` /
+`AdvancedConfigTest` / `ExperienceConfigTest`.
+
+### ⬜ Next: stage 6
+
+**Trophy Hunter** (D-HU6): the chance-gated second roll of the mob's own loot table, `@Inject(at =
+TAIL)` on the **3-arg** `dropLoot` re-invoking the **4-arg** overload. ⚠️ Re-read D-HU6's two traps
+first — both produce an item-duplication bomb rather than a clean failure — and note that the tier
+resolution stage 5 just built is what the per-tier unlock is keyed on. The `AFTER_DEATH`-fires-after-
+`drop()` finding is why that re-roll must ride `dropLoot` rather than react to anything seen at death.
 
 ---
 
@@ -812,7 +986,7 @@ the next starts. No half-wired skill sitting in the tree.
 | **2** | ✅ **DONE** — Enum + manager + profile persistence + all boilerplate. **No mechanics.** | old-profile regression green; the 25 → 26 skill assert updated |
 | **3** | ✅ **DONE** — Kill counters wired on `AFTER_DEATH` + threshold notification | counters move in-game and survive a restart (§G session 11) |
 | **4** | ✅ **DONE** — The damage bonus on the K1 seam (D-HU3/D-HU4) | ordering tests green; damage measured in-game (§G) |
-| **5** | Hunter XP + the tier table | XP rate measured against the 100 h target |
+| **5** | ✅ **DONE** — Hunter XP + the derived tier rule (D-HU5) | XP rate measured against the 100 h target (§G HN33–HN35) |
 | **6** | Trophy Hunter loot mixin (D-HU6) | single-extra-roll test green; no dupe in a live world |
 | **7** | Quarry Sense / `/mcstats hunter` (D-HU7) | — |
 

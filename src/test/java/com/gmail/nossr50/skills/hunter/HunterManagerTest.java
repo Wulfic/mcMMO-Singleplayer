@@ -4,12 +4,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyFloat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.datatypes.experience.XPGainReason;
+import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -48,13 +56,16 @@ class HunterManagerTest {
         // ⚠️ Cleared on BOTH sides, not just after. McMMOMod's config holders are process-wide
         // statics on a JVM JUnit reuses across classes, so a mocked AdvancedConfig left behind by
         // some other test would answer 0.0 for the ranged multiplier and redden the asymmetry test
-        // depending only on execution order.
+        // depending only on execution order. The same applies to the experience config, which
+        // xpForTier reads: a mock left behind by another class answers 0.0F for every tier.
         McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setExperienceConfig(null);
     }
 
     @AfterEach
     void tearDown() {
         McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setExperienceConfig(null);
     }
 
     // --- The threshold ladder -------------------------------------------------------------------
@@ -234,5 +245,116 @@ class HunterManagerTest {
         // today; a command or a data fix would, and swallowing it silently is the failure mode.
         assertTrue(manager.crossedMasteryThreshold(0, 3_000));
         assertFalse(manager.crossedMasteryThreshold(10_000, 20_000));
+    }
+
+    // --- Stage 5: the tier rule -----------------------------------------------------------------
+
+    @Test
+    void everyTierBoundaryHoldsFromBothSides() {
+        // Each threshold asserted on both sides. A `>` mistyped as `>=` -- or the health and damage
+        // clauses swapped -- passes any test that only checks the qualifying side.
+        assertEquals(4, HunterManager.deriveTier(true, 150.0D, 0.0D));
+        assertEquals(3, HunterManager.deriveTier(true, 149.9D, 0.0D));
+
+        assertEquals(3, HunterManager.deriveTier(true, 30.0D, 0.0D));
+        assertEquals(2, HunterManager.deriveTier(true, 29.9D, 0.0D));
+
+        assertEquals(3, HunterManager.deriveTier(true, 1.0D, 6.0D));
+        assertEquals(2, HunterManager.deriveTier(true, 1.0D, 5.9D));
+
+        assertEquals(2, HunterManager.deriveTier(false, 60.0D, 0.0D));
+        assertEquals(1, HunterManager.deriveTier(false, 59.9D, 0.0D));
+    }
+
+    @Test
+    void aNonHostileIsNeverPromotedPastTheSecondTierHoweverLargeOrAngryItIs() {
+        // The rule fails LOW, deliberately, and this is where that is decided. A passive creature
+        // with boss health and boss damage stops at T2: health alone cannot tell "tanky" from
+        // "dangerous", and Hunter XP is the axis a mob farm attacks -- the safe direction for a
+        // mistake is "pays too little".
+        assertEquals(2, HunterManager.deriveTier(false, 10_000.0D, 10_000.0D));
+        assertEquals(1, HunterManager.deriveTier(false, 1.0D, 10_000.0D),
+                "attack damage must not promote a passive creature at all -- a frog hits for 10");
+    }
+
+    @Test
+    void aValidOverrideWinsAndAnInvalidOneIsIgnoredRatherThanClamped() {
+        final AdvancedConfig advanced = mock(AdvancedConfig.class);
+        McMMOMod.setAdvancedConfig(advanced);
+
+        // A zombie derives to 2.
+        when(advanced.getHunterTierOverride("Zombie")).thenReturn(4);
+        assertEquals(4, HunterManager.resolveTier("Zombie", true, 20.0D, 3.0D));
+
+        // 0 is the config layer's "nothing usable here" -- a missing entry and a rejected one look
+        // the same to this method on purpose, so both fall through to the derived tier.
+        when(advanced.getHunterTierOverride("Zombie")).thenReturn(0);
+        assertEquals(2, HunterManager.resolveTier("Zombie", true, 20.0D, 3.0D));
+
+        // Not clamped to MAX_TIER: a hand-written 7 means the operator misread the scale, and
+        // guessing "they meant boss" is a worse answer than the one the game can work out itself.
+        when(advanced.getHunterTierOverride("Zombie")).thenReturn(7);
+        assertEquals(2, HunterManager.resolveTier("Zombie", true, 20.0D, 3.0D));
+    }
+
+    @Test
+    void aMissingConfigServiceFallsBackToTheDerivedTierRatherThanRefusingToResolve() {
+        // setUp already cleared the holder. The point is that tier resolution has no dependency it
+        // can fail on -- there is no code path where a mob resolves to "no tier".
+        assertEquals(2, HunterManager.resolveTier("Zombie", true, 20.0D, 3.0D));
+    }
+
+    // --- Stage 5: what a tier pays --------------------------------------------------------------
+
+    @Test
+    void theShippedLadderIsWhatAnUnconfiguredBuildPays() {
+        // ⚠️ The fallback direction is load-bearing and it is NOT zero. A defensive 0.0F here would
+        // not fail safe -- it would silently stop the entire vertical axis of the skill, and the
+        // player would kill for an hour and gain nothing with no error to point at. Same call as
+        // Ranged_Damage_Multiplier's 1.0, and the opposite of StealthManager#getPadfootSpeedBonus,
+        // where the config value IS the bonus.
+        assertEquals(100.0F, HunterManager.xpForTier(1), EPSILON);
+        assertEquals(300.0F, HunterManager.xpForTier(2), EPSILON);
+        assertEquals(800.0F, HunterManager.xpForTier(3), EPSILON);
+        assertEquals(1_500.0F, HunterManager.xpForTier(4), EPSILON);
+    }
+
+    @Test
+    void aTierOutsideTheLadderPaysNothingRatherThanIndexingOffTheEnd() {
+        assertEquals(0.0F, HunterManager.xpForTier(0), EPSILON);
+        assertEquals(0.0F, HunterManager.xpForTier(HunterManager.MAX_TIER + 1), EPSILON);
+        assertEquals(0.0F, HunterManager.xpForTier(-1), EPSILON);
+    }
+
+    @Test
+    void theLadderRisesWithEveryTier() {
+        // Not decoration: the two tables that price the skill (this one and the mastery bonuses) are
+        // parallel arrays, and a tier that pays less than the one below it would invert the whole
+        // vertical axis while every individual number still looked plausible in review.
+        for (int tier = HunterManager.MIN_TIER; tier < HunterManager.MAX_TIER; tier++) {
+            assertTrue(HunterManager.xpForTier(tier) < HunterManager.xpForTier(tier + 1),
+                    "tier " + tier + " must pay less than tier " + (tier + 1));
+        }
+        assertEquals(HunterManager.MAX_TIER, HunterManager.DEFAULT_TIER_XP.length,
+                "one XP value per tier, or xpForTier indexes off the end on somebody's boss kill");
+    }
+
+    @Test
+    void awardingAKillRoutesThroughTheSharedXpPipeline() {
+        // Through applyXpGain rather than a bespoke path, so Hunter inherits the skill multiplier,
+        // the global modifier, diminishing returns and the XP bar like every other skill.
+        assertEquals(300.0F, manager.awardKillXp(2), EPSILON);
+
+        verify(mmoPlayer).beginXpGain(PrimarySkillType.HUNTER, 300.0F, XPGainReason.PVE,
+                XPGainSource.SELF);
+    }
+
+    @Test
+    void anInvalidTierPaysNothingAndDoesNotTouchThePipelineAtAll() {
+        // Asserted as "never called", not as "awarded 0". A 0 XP gain still walks the whole pipeline
+        // and can still flash an XP bar at a player who earned nothing.
+        assertEquals(0.0F, manager.awardKillXp(0), EPSILON);
+
+        verify(mmoPlayer, never()).beginXpGain(any(), anyFloat(), any(), any());
     }
 }

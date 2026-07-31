@@ -9,6 +9,8 @@ import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * {@code advanced.yml} — per-subskill tuning (max-bonus levels, chance caps, damage modifiers,
@@ -915,6 +917,49 @@ public class AdvancedConfig extends ConfigLoader {
     public double getHunterMasteryRangedDamageMultiplier() {
         return Math.max(0.0D, config.getDouble("Skills.Hunter.MobMastery.Ranged_Damage_Multiplier",
                 HunterManager.DEFAULT_RANGED_DAMAGE_MULTIPLIER));
+    }
+
+    /** Where the operator's per-mob tier exceptions live. */
+    private static final String HUNTER_TIER_OVERRIDES = "Skills.Hunter.Tiers.Overrides";
+
+    /**
+     * The operator's tier override for one creature, or {@code 0} when there is none.
+     *
+     * <p>This is an <em>exception list</em>, not a mob table: everything absent from it is derived
+     * from the creature by {@link HunterManager#deriveTier}, which is the whole point of D-HU5 — an
+     * unlisted or modded mob resolves to a sane tier rather than silently to zero.
+     *
+     * <h2>⚠️ Read as a whole map, never through a dotted path</h2>
+     * A registry path may legally contain a {@code .} ({@code [a-z0-9_.-]}) and this config's
+     * addresses are dot-delimited, so {@code config.getInt(SECTION + "." + key)} would look for a
+     * modded {@code Dread.beast} inside a phantom {@code Dread} subsection and read back nothing.
+     * Vanilla ids have no dots, so a test written with {@code Ghast} passes either way — this is the
+     * same trap the {@code kills:} section walked into in stage 2, and the same fix.
+     *
+     * <p>An entry that is not a whole number, or is outside {@link HunterManager#MIN_TIER}..{@link
+     * HunterManager#MAX_TIER}, returns {@code 0} and the caller falls back to the derived tier. It is
+     * not clamped: a hand-written {@code 7} means the operator misunderstood the scale, and silently
+     * treating that as "boss" would be a worse answer than the one the game can work out for itself.
+     *
+     * @param entityConfigKey the mob's config key, e.g. {@code Wither_Skeleton}
+     * @return a tier in {@code MIN_TIER..MAX_TIER}, or {@code 0} for "no usable override"
+     */
+    public int getHunterTierOverride(@NotNull String entityConfigKey) {
+        if (!(config.get(HUNTER_TIER_OVERRIDES) instanceof Map<?, ?> overrides)) {
+            return 0;
+        }
+        if (!(overrides.get(entityConfigKey) instanceof Number tier)) {
+            return 0;
+        }
+        final int value = tier.intValue();
+        if (value != tier.doubleValue() || value < HunterManager.MIN_TIER
+                || value > HunterManager.MAX_TIER) {
+            LOGGER.warn("Ignoring {}.{}: {} — a Hunter tier must be a whole number from {} to {}.",
+                    HUNTER_TIER_OVERRIDES, entityConfigKey, tier, HunterManager.MIN_TIER,
+                    HunterManager.MAX_TIER);
+            return 0;
+        }
+        return value;
     }
 
     // --- Unarmored (Pass 2) --------------------------------------------------------------------

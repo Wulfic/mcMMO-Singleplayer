@@ -9,6 +9,7 @@ import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
 import com.gmail.nossr50.skills.agility.Medium;
 import com.gmail.nossr50.skills.agility.MovementXpSettings;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
+import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.skills.stealth.StealthXpSettings;
 import com.gmail.nossr50.skills.unarmored.UnarmoredManager;
 import com.gmail.nossr50.util.text.StringUtils;
@@ -440,6 +441,30 @@ public class ExperienceConfig extends ConfigLoader {
      */
     public boolean isSneakInputRequired() {
         return config.getBoolean("ExploitFix.Stealth.Require_Movement_Input", true);
+    }
+
+    /* Hunter */
+
+    /**
+     * Hunter XP paid for one qualifying kill of a tier-{@code tier} creature (Pass 2).
+     *
+     * <p>Which tier a creature belongs to is <em>not</em> configured here — it is derived from the
+     * creature itself, with a small exception list in {@code advanced.yml → Skills.Hunter.Tiers}. This
+     * file owns only what a tier is worth. The split matches the rest of the port: {@code
+     * experience.yml} prices things, {@code advanced.yml} decides mechanics.
+     *
+     * <p>Clamped at zero rather than trusted: a negative value would hand a player negative XP on
+     * every kill and walk their level backwards, which is not a tuning choice anybody makes on
+     * purpose.
+     *
+     * @param tier a tier in {@link HunterManager#MIN_TIER}..{@link HunterManager#MAX_TIER}
+     */
+    public float getHunterXpForTier(int tier) {
+        if (tier < HunterManager.MIN_TIER || tier > HunterManager.MAX_TIER) {
+            return 0.0F;
+        }
+        return (float) Math.max(0.0D, config.getDouble("Experience_Values.Hunter.Tier_" + tier,
+                HunterManager.DEFAULT_TIER_XP[tier - 1]));
     }
 
     /* Unarmored */

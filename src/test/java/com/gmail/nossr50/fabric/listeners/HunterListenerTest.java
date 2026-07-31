@@ -3,6 +3,7 @@ package com.gmail.nossr50.fabric.listeners;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyFloat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -11,6 +12,8 @@ import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.GeneralConfig;
+import com.gmail.nossr50.datatypes.experience.XPGainReason;
+import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.mobs.MobOrigin;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
@@ -22,6 +25,7 @@ import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.TrackedSummon;
 import com.gmail.nossr50.util.player.UserManager;
+import java.util.List;
 import java.util.UUID;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
@@ -29,7 +33,10 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.mob.CreeperEntity;
 import net.minecraft.entity.mob.ZombieEntity;
+import net.minecraft.entity.passive.ChickenEntity;
+import net.minecraft.entity.passive.CopperGolemEntity;
 import net.minecraft.entity.passive.IronGolemEntity;
+import net.minecraft.entity.passive.SnowGolemEntity;
 import net.minecraft.entity.passive.WolfEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -88,7 +95,15 @@ class HunterListenerTest {
         // chat copy, which would fire both.)
         final AdvancedConfig advancedConfig = mock(AdvancedConfig.class);
         lenient().when(advancedConfig.doesNotificationUseActionBar(any())).thenReturn(false);
+        // Stubbed explicitly even though 0 is Mockito's default for an int: 0 happens to be this
+        // getter's "no usable override" value, so relying on the default would leave the tier
+        // assertions below silently dependent on that coincidence.
+        lenient().when(advancedConfig.getHunterTierOverride(any())).thenReturn(0);
         McMMOMod.setAdvancedConfig(advancedConfig);
+        // Left unset on purpose, so the XP figures below come from HunterManager.DEFAULT_TIER_XP --
+        // which is the fallback a player hits if the config service is ever unavailable, and the one
+        // direction where a defensive 0 would silently stop the whole vertical axis.
+        McMMOMod.setExperienceConfig(null);
 
         profile = new PlayerProfile("Steve", playerId, 0);
         platformPlayer = mock(PlatformPlayer.class);
@@ -109,6 +124,7 @@ class HunterListenerTest {
         UserManager.cleanupPlayer(mmoPlayer);
         McMMOMod.setGeneralConfig(null);
         McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setExperienceConfig(null);
         // Process-wide static on a JVM JUnit reuses across classes: without this the first test to
         // run decides whether any later one logs, and `theFirstCountedKillOfASessionIsLogged` would
         // depend on execution order.
@@ -362,6 +378,130 @@ class HunterListenerTest {
 
         verify(platformPlayer, never()).sendMessage(any());
         assertEquals(HunterManager.MASTERY_THRESHOLDS[0] - 1, killsOf(ZOMBIE_ID));
+    }
+
+    // --- stage 5: the XP award ------------------------------------------------------------------
+
+    @Test
+    void aCountedKillPaysHunterXpForTheVictimsTier() {
+        // The vertical axis, wired here rather than in a listener of its own precisely so it cannot
+        // drift from the counter. A zombie is a common hostile: tier 2, 300 XP.
+        HunterListener.onDeath(zombie(), killedBy(killer));
+
+        verify(mmoPlayer).beginXpGain(PrimarySkillType.HUNTER, 300.0F, XPGainReason.PVE,
+                XPGainSource.SELF);
+    }
+
+    @Test
+    void theXpPaidTracksTheVictimRatherThanBeingFlat() {
+        // Two mobs of different tiers through the real handler. Without this, a hard-coded award
+        // would satisfy every other test in this file -- the tier lookup could be deleted entirely.
+        HunterListener.onDeath(chicken(), killedBy(killer));
+        verify(mmoPlayer).beginXpGain(PrimarySkillType.HUNTER, 100.0F, XPGainReason.PVE,
+                XPGainSource.SELF);
+
+        HunterListener.onDeath(zombie(), killedBy(killer));
+        verify(mmoPlayer).beginXpGain(PrimarySkillType.HUNTER, 300.0F, XPGainReason.PVE,
+                XPGainSource.SELF);
+    }
+
+    @Test
+    void everyGateThatStopsTheCounterAlsoStopsTheXp() {
+        // ⚠️ THE stage-5 test, and the one that pins the 2026-07-30 ruling.
+        //
+        // The plan's D-HU1 note recommended the opposite -- strict gates for mastery, the looser
+        // processCombatXP set for XP, so a spawner zombie would pay XP but not mastery. The
+        // arithmetic killed it: 11,010,000 XP to max, 300 a kill, and a modest spawner farm turns
+        // over a thousand mobs an hour = 37 hours, against an 80 h floor.
+        //
+        // Asserted across all four gates in one loop, because the failure this guards is that the
+        // award drifts ABOVE or BELOW one of them during a later refactor -- and a per-gate test
+        // written by hand is exactly the kind that gets added for three gates and forgotten for the
+        // fourth.
+        final List<Runnable> gatedKills = List.of(
+                // gate 1: nothing killed it but the world.
+                () -> HunterListener.onDeath(zombie(), killedBy(null)),
+                // gate 1: the wolf's kill, which is Taming's.
+                () -> HunterListener.onDeath(zombie(), killedBy(mock(WolfEntity.class))),
+                // gate 3: a golem the player stacked out of blocks.
+                () -> HunterListener.onDeath(snowGolem(), killedBy(killer)),
+                // gate 4: stage 1's spawn-origin marker.
+                () -> {
+                    final ZombieEntity farmed = zombie();
+                    markOrigin(farmed, MobOrigin.SPAWNER);
+                    HunterListener.onDeath(farmed, killedBy(killer));
+                });
+
+        for (Runnable gatedKill : gatedKills) {
+            gatedKill.run();
+        }
+
+        verify(mmoPlayer, never()).beginXpGain(any(), anyFloat(), any(), any());
+    }
+
+    @Test
+    void theEnabledForPveSwitchStopsTheXpAsWellAsTheCounter() {
+        // Gate 2 needs its own test: it is the one gate driven by a config object rather than by the
+        // victim, so it cannot be expressed as a fixture in the loop above.
+        final GeneralConfig pveOff = mock(GeneralConfig.class);
+        when(pveOff.getPVEEnabled(PrimarySkillType.HUNTER)).thenReturn(false);
+        McMMOMod.setGeneralConfig(pveOff);
+
+        HunterListener.onDeath(zombie(), killedBy(killer));
+
+        verify(mmoPlayer, never()).beginXpGain(any(), anyFloat(), any(), any());
+    }
+
+    // --- stage 5: the golems stage 5 had to close -----------------------------------------------
+
+    @Test
+    void aConstructedSnowOrCopperGolemPaysNothingOnEitherAxis() {
+        // ⚠️ A hole stage 5 CREATED and therefore had to close in the same commit.
+        //
+        // CarvedPumpkinBlock builds the snow, iron and copper golems alike with
+        // SpawnReason.TRIGGERED, which stage 1 correctly maps to NATURAL -- TRIGGERED is also how a
+        // warden leaves a shrieker, how silverfish leave infested stone and how a slime splits, so
+        // that mapping must NOT change. Legacy's gate only ever knew about the iron golem.
+        //
+        // Before stage 5 the leak was worth nothing (bonus damage against a mob you manufacture).
+        // Paying skill XP is what makes a dispenser loop an exploit.
+        HunterListener.onDeath(snowGolem(), killedBy(killer));
+        HunterListener.onDeath(copperGolem(), killedBy(killer));
+
+        assertEquals(0, killsOf("minecraft:snow_golem"));
+        assertEquals(0, killsOf("minecraft:copper_golem"));
+        verify(mmoPlayer, never()).beginXpGain(any(), anyFloat(), any(), any());
+    }
+
+    @Test
+    void theGolemExclusionDoesNotSweepUpOrdinaryPassiveCreatures() {
+        // Asserted OFF the reference point. `victim instanceof GolemEntity` would look like a tidier
+        // version of the same rule and would silently take the village iron golem with it -- and a
+        // check written against the wrong supertype would take far more.
+        HunterListener.onDeath(chicken(), killedBy(killer));
+
+        assertEquals(1, killsOf("minecraft:chicken"));
+    }
+
+    private ChickenEntity chicken() {
+        final ChickenEntity chicken = mock(ChickenEntity.class);
+        Mockito.doReturn(EntityType.CHICKEN).when(chicken).getType();
+        lenient().when(chicken.getUuid()).thenReturn(UUID.randomUUID());
+        return chicken;
+    }
+
+    private SnowGolemEntity snowGolem() {
+        final SnowGolemEntity golem = mock(SnowGolemEntity.class);
+        Mockito.doReturn(EntityType.SNOW_GOLEM).when(golem).getType();
+        lenient().when(golem.getUuid()).thenReturn(UUID.randomUUID());
+        return golem;
+    }
+
+    private CopperGolemEntity copperGolem() {
+        final CopperGolemEntity golem = mock(CopperGolemEntity.class);
+        Mockito.doReturn(EntityType.COPPER_GOLEM).when(golem).getType();
+        lenient().when(golem.getUuid()).thenReturn(UUID.randomUUID());
+        return golem;
     }
 
     /** Put the counter one below a threshold without going through the listener's gates. */

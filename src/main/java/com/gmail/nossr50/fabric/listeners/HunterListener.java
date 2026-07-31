@@ -6,6 +6,7 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.util.MobOrigins;
+import com.gmail.nossr50.util.MobTiers;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.CombatUtils;
@@ -15,19 +16,38 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.passive.CopperGolemEntity;
 import net.minecraft.entity.passive.IronGolemEntity;
+import net.minecraft.entity.passive.SnowGolemEntity;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundCategory;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Hunter's per-mob kill counters (stage 3): the one place a mob's death is turned into mastery
- * progress, and the four gates that decide whether it is allowed to.
+ * Hunter's kill handler: the one place a mob's death is turned into progress, and the four gates that
+ * decide whether it is allowed to. Both of the skill's axes are paid here — the per-mob mastery
+ * counter (stage 3) and the skill's own XP (stage 5).
  *
  * <p>MC-typed glue only. {@link HunterManager} owns every number — what a threshold is, which tier a
- * count has reached, whether this kill crossed one; this class answers "who killed what, and does it
- * count".
+ * count has reached, whether this kill crossed one, what a tier pays; this class answers "who killed
+ * what, and does it count".
+ *
+ * <h2>✅ Both axes ride the SAME gates — ruled 2026-07-30 (user)</h2>
+ * The plan's D-HU1 note recommended the opposite: keep the counter strict but let XP through the
+ * looser {@code CombatUtils#processCombatXP} gates, so a spawner zombie would pay XP without paying
+ * mastery. That was written before stage 1 existed and it does not survive the arithmetic. Hunter's
+ * curve is 11,010,000 XP, common hostiles pay 300, and a modest spawner farm turns over a thousand
+ * mobs an hour — <b>37 hours to a maxed skill</b>, against an 80 h floor inherited from Agility's
+ * D-AG6. One gate chain also means "the kill counted" and "the kill paid" can never drift apart,
+ * which is the same structural argument that made {@link #masteryKeyOf} a single shared function.
+ *
+ * <p>⚠️ <b>What this still does not close, stated rather than hidden:</b> nether-wastes piglins,
+ * dark-room hostiles, endermen in the End and guardians in a monument are all legitimately
+ * {@code NATURAL}, and no spawn origin will ever exclude them. A grinder the player stands in and
+ * swings at is excluded by nothing. D-HU1 holds a rolling per-mob-per-hour cap in reserve as the
+ * additive backstop for exactly that, and §G is what decides whether it is needed — see the
+ * PLAYTEST_G session 11 rows, which measure the three worst cases by name.
  *
  * <h2>The seam, and the ordering question the plan left open</h2>
  * {@code ServerLivingEntityEvents.AFTER_DEATH}. Fabric fires it from {@code LivingEntity#onDeath} at
@@ -55,8 +75,9 @@ import org.jetbrains.annotations.NotNull;
  *   <li><b>The PVE/PVP switches</b>, via {@link CombatUtils#canCombatSkillsTrigger}. Hunter is a
  *       combat skill and its subject <em>is</em> the target's identity, so these decide whether a
  *       class of target feeds the skill at all rather than merely muting a bonus.</li>
- *   <li><b>Call-of-the-Wild summons and player-built iron golems</b>, which a player can manufacture
- *       and kill on demand.</li>
+ *   <li><b>Manufactured creatures</b> — Call-of-the-Wild summons, plus the golems a player can stack
+ *       out of blocks and kill on demand. See {@link #isManufactured}, which is wider than legacy's
+ *       iron-golem check and had to be.</li>
  *   <li><b>Spawn origin</b> — stage 1's {@link MobOrigins} marker. Spawner, trial-spawner, bred,
  *       player-placed and structure mobs pay nothing.</li>
  * </ol>
@@ -114,12 +135,13 @@ public final class HunterListener {
             return;
         }
 
-        // Gate 3, both halves verbatim from CombatUtils#processCombatXP. A Call-of-the-Wild summon
-        // and a player-built iron golem are both mobs the player manufactures at will.
+        // Gate 3: mobs the player manufactures at will. The summon check and the iron-golem half of
+        // isManufactured are verbatim from CombatUtils#processCombatXP; the other two golems are
+        // Hunter's own and stage 5 had to add them -- see isManufactured.
         if (McMMOMod.getTransientEntityTracker().isTransient(victim.getUuid())) {
             return;
         }
-        if (victim instanceof IronGolemEntity golem && golem.isPlayerCreated()) {
+        if (isManufactured(victim)) {
             return;
         }
 
@@ -142,9 +164,48 @@ public final class HunterListener {
         final int killsAfter = hunter.recordKill(mobId);
         announceFirstCountedKill(mobId, killsAfter);
 
+        // The vertical axis, added in stage 5. Deliberately behind the SAME four gates the counter
+        // just passed rather than the looser CombatUtils#processCombatXP set the plan originally
+        // recommended -- see the "Both axes ride the SAME gates" section on this class.
+        hunter.awardKillXp(MobTiers.tierOf(victim));
+
         if (hunter.crossedMasteryThreshold(killsBefore, killsAfter)) {
             announceMastery(mmoPlayer, victim, hunter.masteryTier(killsAfter), killsAfter);
         }
+    }
+
+    /**
+     * Whether this creature only exists because a player made it — the third half of gate 3.
+     *
+     * <h2>⚠️ The three constructed golems all reach this listener as ordinary kills</h2>
+     * {@code CarvedPumpkinBlock#trySpawnEntity} builds the snow golem, the iron golem and (new in
+     * 1.21.11) the copper golem, and it creates all three with {@code SpawnReason.TRIGGERED}. Stage 1
+     * maps {@code TRIGGERED} to {@link com.gmail.nossr50.datatypes.mobs.MobOrigin#NATURAL}, so the
+     * spawn-origin gate lets every one of them through — and that mapping is <b>correct and must not
+     * change</b>, because {@code TRIGGERED} is also how a warden emerges from a sculk shrieker, how
+     * silverfish come out of infested stone and how a slime splits when you cut it.
+     *
+     * <p>So the exclusion has to be by species, and it is narrow because it can afford to be:
+     *
+     * <ul>
+     *   <li><b>Iron golem</b> — only when {@code isPlayerCreated()}. A village's own golem is a real
+     *       creature with a real origin; the one you stacked out of four iron blocks is not. This
+     *       half is legacy's, verbatim from {@code CombatUtils#processCombatXP}.</li>
+     *   <li><b>Snow golem and copper golem</b> — <em>always</em>. Neither has any natural spawn in the
+     *       game, so unlike the iron golem there is no honest instance to protect, and neither
+     *       carries an {@code isPlayerCreated} flag to test. A pumpkin and two snow blocks is a
+     *       dispenser loop.</li>
+     * </ul>
+     *
+     * <p>Before stage 5 this leak was worth nothing — the only reward was mastery against snow golems
+     * specifically, i.e. bonus damage versus a mob you manufacture. Paying skill XP is what turns it
+     * into an exploit, so it is closed in the same stage that creates it.
+     */
+    private static boolean isManufactured(@NotNull LivingEntity victim) {
+        if (victim instanceof IronGolemEntity golem) {
+            return golem.isPlayerCreated();
+        }
+        return victim instanceof SnowGolemEntity || victim instanceof CopperGolemEntity;
     }
 
     /**

@@ -60,6 +60,36 @@ class ExperienceConfigTest {
     }
 
     @Test
+    void readsTheShippedHunterTierLadder(@TempDir Path dataFolder) {
+        final ExperienceConfig config = new ExperienceConfig(dataFolder);
+
+        // The four numbers the ~100 h target is built on: 11,010,000 XP to max, ~6 kills/min by
+        // hand, so an average kill has to be worth about 306 -- which is what puts common hostiles
+        // at 300. T4 is 1500 and NOT the drafted 5000 (ruled 2026-07-30), because 5000 lets a wither
+        // farm outrun the 80 h guardrail.
+        assertEquals(100.0F, config.getHunterXpForTier(1));
+        assertEquals(300.0F, config.getHunterXpForTier(2));
+        assertEquals(800.0F, config.getHunterXpForTier(3));
+        assertEquals(1500.0F, config.getHunterXpForTier(4));
+
+        // Out of range pays nothing rather than indexing off the end of the ladder.
+        assertEquals(0.0F, config.getHunterXpForTier(0));
+        assertEquals(0.0F, config.getHunterXpForTier(5));
+    }
+
+    @Test
+    void aNegativeHunterTierXpIsClampedRatherThanWalkingTheLevelBackwards(@TempDir Path dataFolder)
+            throws Exception {
+        final Path file = dataFolder.resolve("experience.yml");
+        new ExperienceConfig(dataFolder);
+        Files.writeString(file, Files.readString(file).replace("Tier_2: 300", "Tier_2: -300"));
+
+        // Reading back a deliberately edited file also proves the getter consults the document at
+        // this exact path rather than always answering with its own default.
+        assertEquals(0.0F, new ExperienceConfig(dataFolder).getHunterXpForTier(2));
+    }
+
+    @Test
     void reloadsAfterExternalEditWithoutLosingUserBlockXp(@TempDir Path dataFolder) {
         // First construction writes the default out.
         new ExperienceConfig(dataFolder);

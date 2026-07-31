@@ -547,12 +547,12 @@ them. Each is now pinned by a mutation-checked test, but these rows are the live
 
 ---
 
-## Session 11 — Hunter: the anti-farm gate, the kill counters and the mastery damage (~60 min)
+## Session 11 — Hunter: the anti-farm gate, the counters, the mastery damage and the XP (~80 min)
 
-Covers stages 1, 3 and 4 **together**, and that grouping is the point: each one is untestable without
-the next. Stage 1's spawn-origin marker had nothing to refuse until stage 3 gave it a counter, and
-stage 4's damage bonus does not exist until a counter has crossed 500. Stage 2 (the enum, the config,
-the XP bar) has nothing to play.
+Covers stages 1, 3, 4 and 5 **together**, and that grouping is the point: each one is untestable
+without the next. Stage 1's spawn-origin marker had nothing to refuse until stage 3 gave it a counter,
+stage 4's damage bonus does not exist until a counter has crossed 500, and stage 5's XP rides the same
+gates stages 1 and 3 built. Stage 2 (the enum, the config, the XP bar) has nothing to play.
 
 **⚠️ There is no in-game screen for kill counts yet** — `/mcstats hunter` is stage 7. Read them
 straight off the save: `<instance>/saves/<world>/mcmmo/players/<uuid>.yml`, the `kills:` section.
@@ -616,6 +616,37 @@ hand-edited count) and an **unmastered skeleton** as the control.
 farm.** Those mobs are `NATURAL` and legitimately so. What excludes most of them is HN7 — they die to
 fall or lava. **A grinder you stand in and swing at is excluded by nothing**, and measuring how fast
 that actually moves a counter is the single most useful thing this session produces.
+
+### Stage 5 — Hunter XP and the mob tiers (HN29+)
+
+The **vertical** axis. Everything above was the per-mob counter; this is the skill level itself, which
+is what will unlock Trophy Hunter's loot in stage 6. XP is paid **per kill**, scaled by the victim's
+tier — unlike every other combat skill in the mod, which pays per *hit*.
+
+**🔑 Read the XP off the boss bar or `/mcstats hunter`.** A kill that pays nothing is the failure mode
+to watch for, and it looks exactly like "I did not notice the bar move".
+
+**⚠️ Rows HN33–HN35 are the ones that matter most and they are measurements, not pass/fail.** The
+skill is balanced to ~100 h of hand-killing, on an inherited rule that *no single source may max a
+skill in under 80 h of doing only that thing*. The origin gate cannot enforce that on its own, and
+these three rows are what decide whether D-HU1's reserved rolling per-mob-per-hour cap has to be
+built. **Report kills-per-10-minutes and the XP total, not an opinion.**
+
+| # | Action | Expect |
+|---|---|---|
+| HN29 | Kill a wild chicken, then a wild zombie, reading the Hunter XP bar after each | Chicken **100**, zombie **300**. Different numbers is the whole point — a flat award means the tier lookup is not wired |
+| HN30 | Kill a wild **blaze** (nether fortress, not a spawner one), a **ghast** and a **wither skeleton** | All three pay **800**. Ghast and wither skeleton are the two `advanced.yml` overrides — their danger is not in their stats, so if either pays 300 the override table is not being read |
+| HN31 | Kill a **witch** and a **zombified piglin** | Both **300**, not 800. Deliberate: the witch barely fights back, and pricing the piglin higher would make a gold farm two and a half times worse |
+| HN32 | Kill a **wither** | **1,500.** ⚠️ Not 5,000 — that was the draft, and it let a wither farm outrun the 80 h guardrail |
+| HN33 | **⚠️ THE MEASUREMENT ROW.** At a **gold farm** (or any nether-wastes grinder) kill by hand for a timed **10 minutes**. Record kills and total Hunter XP | Piglins are `NATURAL`, so **nothing gates this** — it is the fastest legitimate XP in the game. Extrapolate to hours-to-max and compare against 80 h. Report the raw numbers |
+| HN34 | Same 10-minute measurement at an **enderman farm** in the End | Endermen are T3 (**800**) and an End farm is the highest-throughput one there is. This is the worst case by arithmetic; if any row forces the hourly cap it will be this one |
+| HN35 | Same at an **ocean monument guardian** farm, if you have one | Guardians are also T3. Included because guardian farms are usually fall-damage kills (HN7 excludes those) — the question is what happens in the designs where you swing |
+| HN36 | Kill a mob at a **spawner** farm by hand, watching the XP bar | **No XP at all**, not merely no mastery. Ruled 2026-07-30: both axes ride the same four gates. If the bar moves, the split the plan originally recommended has crept back in |
+| HN37 | Build a **snow golem** (pumpkin + 2 snow blocks) and kill it. Then a **copper golem** | Neither pays XP nor moves a counter. Both are player-manufactured with no natural spawn — this was a live hole until stage 5 closed it |
+| HN38 | Kill a **village** iron golem, then a **player-built** one | Village: pays **300** (it is a 100-health non-hostile, promoted out of T1). Built: **nothing.** Both halves matter |
+| HN39 | Set `Tier_2: 1` under `Experience_Values.Hunter` in `experience.yml`, restart, kill a zombie | Pays **1**. Confirms the ladder is read from the file rather than baked in — and it is how you would retune after HN33–HN35 |
+| HN40 | Add `Zombie: 4` under `Skills.Hunter.Tiers.Overrides` in `advanced.yml`, restart, kill a zombie | Pays the T4 rate. **Set it back afterwards.** This is the escape hatch for any mob HN33+ shows to be mis-tiered |
+| HN41 | Put a deliberate typo in that section — `Zombie: 9` — restart, kill a zombie | Pays **300** (the derived tier) and the log carries one WARN naming the key. Refused, not clamped to 4: a config that quietly reinterprets your number is worse than one that tells you |
 
 ---
 

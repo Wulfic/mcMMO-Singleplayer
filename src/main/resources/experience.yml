@@ -852,6 +852,39 @@ Experience_Values:
         Redstone_Ore: 15
         Nether_Gold_Ore: 35
         Cobbled_Deepslate: 5
+    Hunter:
+        # XP for ONE qualifying kill, by the victim's tier.
+        #
+        # Which tier a creature is in is NOT set here -- it is derived from the creature itself, with
+        # a short exception list in advanced.yml under Skills.Hunter.Tiers. This file only prices the
+        # tiers. (T1 passive, T2 common hostile, T3 dangerous, T4 boss.)
+        #
+        # PER KILL, NOT PER HIT -- Hunter is the only combat skill like that. Swords, Axes, Archery
+        # and the rest pay per hit, scaled by the damage that hit landed. Hunter's subject is WHICH
+        # CREATURE died, which is not a question a hit can answer, and paying per hit would make a
+        # 500-health warden worth twenty-five zombies for reasons that have nothing to do with the
+        # tier the player is being paid for.
+        #
+        # WHERE THESE NUMBERS COME FROM. The curve is 10N^2 + 1010N, so a RetroMode level-1000 Hunter
+        # costs 11,010,000 XP. At a sustained hand-killing rate of about 6 kills/min (360/h) the
+        # ~100 hour target wants roughly 306 XP for an average kill -- which is what puts common
+        # hostiles, the overwhelming majority of what anyone actually kills, at 300.
+        #
+        #   T1  100  -> 110,100 kills to max on that tier alone
+        #   T2  300  ->  36,700
+        #   T3  800  ->  13,762
+        #   T4 1500  ->   7,340
+        #
+        # T4 IS 1500 AND NOT THE DRAFTED 5000 on purpose (ruled 2026-07-30). At 5000 a wither farm
+        # outruns the 80-hour guardrail every skill in this port is held to. A tier nobody can safely
+        # reach is worse than a cheap one.
+        #
+        # A negative value is clamped to 0. Handing a player negative XP walks their level backwards,
+        # which is not a tuning choice anyone makes deliberately.
+        Tier_1: 100
+        Tier_2: 300
+        Tier_3: 800
+        Tier_4: 1500
     Stealth:
         # Sneak XP.
         #
