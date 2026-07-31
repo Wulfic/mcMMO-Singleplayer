@@ -5,10 +5,10 @@ belongs in **`COMBAT_SKILLS`**. It needs **no F1** (tick sampler) and **no F2** 
 it is entirely event-driven. It does need **two things nothing else in the port has**: a
 **per-mob-type persistent counter** and a **mob loot-drop seam**.
 
-> 🔶 **STATUS: IN PROGRESS as of 2026-07-31. Stages 1–6 are DONE** — the anti-farm gate; the enum,
-> manager and kill-count persistence; the kill counters; the mastery damage bonus; Hunter XP with
-> the derived tier rule; and Trophy Hunter's loot re-roll. Only stage 7 (Quarry Sense /
-> `/mcstats hunter`) remains. Stage 0 — the §G
+> ✅ **STATUS: CODE-COMPLETE as of 2026-07-31. All seven stages are DONE** — the anti-farm gate; the
+> enum, manager and kill-count persistence; the kill counters; the mastery damage bonus; Hunter XP
+> with the derived tier rule; Trophy Hunter's loot re-roll; and D-HU7's two windows onto the
+> horizontal axis (`/mcstats hunter` + Quarry Sense). **Never played.** Stage 0 — the §G
 > play-test of Pass 1 + Pass 2 — was **consciously skipped on the user's instruction**, not satisfied.
 > Pass 2 now has five skills in the tree (Agility/Parkour/Swimming/Flying, Stealth, Unarmored,
 > Husbandry) that are code-complete and **never played**; Hunter is the sixth, stacked on an unverified
@@ -321,10 +321,10 @@ delegates to the 4-arg `public` one. So: **`@Inject(at = TAIL)` on the 3-arg ove
 
 | Sub-skill | Type | Mechanic | Ranks | Risk |
 |---|---|---|---|---|
-| **Mob Mastery** | passive | The 500/2500/10000 per-mob damage thresholds | 3 (fixed thresholds, not level-gated) | **High** — D-HU1, D-HU2 |
-| **Trophy Hunter** | passive | Bonus loot-table re-roll, unlocked per tier | 4 (one per tier) | Med — D-HU6 |
-| **Field Dressing** | passive | Higher chance for the *rare* slot of the re-roll at high level | some | Low |
-| **Quarry Sense** *(optional)* | passive | Beast Lore on a mob also shows your kill count / mastery tier | 1 | Low — see D-HU7 |
+| **Mob Mastery** ✅ | passive | The 500/2500/10000 per-mob damage thresholds | 3 (fixed thresholds, not level-gated) | **High** — D-HU1, D-HU2 |
+| **Trophy Hunter** ✅ | passive | Bonus loot-table re-roll, unlocked per tier | 4 (one per tier) | Med — D-HU6 |
+| **Field Dressing** ❌ | passive | Higher chance for the *rare* slot of the re-roll at high level | some | Low — **deferred**, D-HU6's upgrade path pending §G |
+| **Quarry Sense** ✅ | passive | Crouch + bone on **any** creature shows your kill count / mastery tier | 1 (level 1, like Beast Lore) | Low — see D-HU7 |
 
 ⚠️ **Mob Mastery does not fit the `RankUtils` model.** Every other sub-skill in the mod unlocks on
 *skill level* via `skillranks.yml`. Mastery unlocks on a *per-mob counter*. Do not force it through
@@ -336,17 +336,26 @@ three. Forcing it will produce a sub-skill whose rank display lies.
 Three thresholds across ~120 mob types is a lot of invisible state. If the player cannot see progress,
 the whole horizontal axis feels like nothing is happening for the first 499 kills.
 
-Minimum viable surfacing, in priority order:
+Minimum viable surfacing, in priority order — **all three shipped; see §"Stage 7 as built"**:
 
-1. **A notification on crossing a threshold.** The milestone-plaque machinery already exists
+1. ✅ **A notification on crossing a threshold.** The milestone-plaque machinery already exists
    (`[[milestone-advancement-plaques]]`) — but note it grants *hidden vanilla advancements* keyed per
    skill, so a per-mob plaque is a different shape. A `NotificationManager` chat/actionbar line is the
-   cheap correct answer.
-2. **`/mcstats hunter`** showing the top N most-killed mobs and their tier — not all 120.
-3. **Quarry Sense**: reuse Taming's Beast Lore renderer
+   cheap correct answer. **Shipped in stage 3** as `Hunter.SubSkill.MobMastery.Proc`.
+2. ✅ **`/mcstats hunter`** showing the top N most-killed mobs and their tier — not all 120.
+   **Shipped in stage 7**; N is 3, and the tier shown is the *mastery* tier — a creature's own tier is
+   a fact about the creature, which belongs on the other screen.
+3. ✅ **Quarry Sense**: reuse Taming's Beast Lore renderer
    ([EntityDamageListener.java:246](src/main/java/com/gmail/nossr50/fabric/listeners/EntityDamageListener.java#L246))
    to add a "Killed: 1,204 — Mastery II" line. This is the *good* answer: it is diegetic, it costs
    almost nothing, and it reuses an existing screen.
+   > ⚠️ **The renderer was free; the GATE was not, and that is the one thing this item got wrong.**
+   > Beast Lore's gate is `entity instanceof Tameable`, and every creature Hunter actually counts —
+   > zombie, skeleton, creeper, spider — is excluded by it, so an appended line would have shown only
+   > on the four creatures nobody has 500 kills of. Quarry Sense had to widen the trigger to every
+   > creature, and the widening turned Beast Lore's harmless cancelled blow into a real hazard,
+   > because **a bone is a skeleton's own drop**. Closed by requiring the player to be **crouching**,
+   > with Beast Lore's own trigger left exactly as it was. See §"Stage 7 as built".
 
 ---
 
@@ -1134,12 +1143,155 @@ bound"*, *"your rank is too low for this tier"* and *"the RNG said no"* look ide
 additions to `HunterManagerTest` / `HunterListenerTest` / `AdvancedConfigTest` / `RankConfigTest` /
 `MixinApplicationTest`.
 
-### ⬜ Next: stage 7
+### ✅ Stage 7 — DONE, see the section below
 
-**Quarry Sense + `/mcstats hunter`** (D-HU7). A `HunterStatsRenderer` is where the `.Stat` keys this
-stage deliberately withheld belong, and Beast Lore's renderer
-([EntityDamageListener.java:246](../../src/main/java/com/gmail/nossr50/fabric/listeners/EntityDamageListener.java#L246))
-is the reuse target for the diegetic "Killed: 1,204 — Mastery II" line.
+---
+
+## ✅ Stage 7 as built (2026-07-31) — the skill is code-complete
+
+**Both of D-HU7's windows onto the invisible half.** One new renderer, one new sub-skill, one widened
+seam, seven withheld `.Stat` keys finally spent. **No new mixin, no new listener class, no new config
+section.** Suite **1297 green** (+20), `./gradlew build` exit 0, headless boot `Done (1.255s)` with
+**0 mcMMO ERROR, 0 exceptions, 0 mixin failures**, and **1913 advancements** (+1 on stage 6's 1912 —
+exactly one 1-rank sub-skill, `unlocked` with no `improved`, and **no existing file rewritten**).
+**6 mutations run, each reddening exactly the tests it should.**
+
+### ⚠️⚠️ D-HU7 SAID "REUSE BEAST LORE'S RENDERER". THE RENDERER WAS FREE; THE **GATE** WAS THE PROBLEM
+
+The plan's item 3 reads as a half-hour job: Taming already draws a stat readout when you hit an animal
+with a bone, so add a line to it. The renderer *is* free. **Beast Lore's gate is
+`entity instanceof Tameable`** — and the creatures Hunter counts are exactly the ones it excludes.
+Zombie, skeleton, creeper, spider: not one of them is tameable, and they are the entire subject of the
+horizontal axis. A Quarry Sense that only appended to Beast Lore's readout would work on wolves, cats,
+horses and parrots — **the four creatures nobody has 500 kills of** — and would have passed any test
+written against a wolf.
+
+🔑 **Generalises, and it is the funnel rule's cousin: when a plan says "reuse X's seam", check what X's
+seam REFUSES, not just what it accepts.** The output half of a feature is usually the cheap half; the
+predicate in front of it is where the assumption lives.
+
+### ⚠️⚠️ WIDENING THE GATE CREATED A REAL HAZARD, AND THE FIX IS ONE KEYPRESS
+
+Beast Lore **cancels the blow**. That is legacy's behaviour and it is harmless there — nobody punches a
+wolf by accident. Extend the same gesture to every creature in the game and it stops being harmless:
+**a bone is a skeleton's own drop.** A player who picks one up mid-fight and is then set upon could not
+swing back at anything, and would have no idea why.
+
+✅ **Quarry Sense requires the player to be CROUCHING; Beast Lore's own trigger is left untouched.**
+Crouching cannot happen in a panic, costs a keypress the player is already within arm's reach to make,
+and makes the gesture unambiguous. The asymmetry is deliberate and stated rather than smoothed over: to
+read a wolf you need not crouch, to read a zombie you must. Stealth's Assassin also fires on a crouched
+melee hit and loses nothing that matters — the gate needs a **bone in the main hand**, so an armed
+assassin never reaches it. Armour stands are excluded too: sneak-hitting one is how a player dismantles
+it. Pinned by `aBoneSwungWithoutCrouchingIsAnOrdinaryPunch` and `anArmourStandIsNotQuarryEither`, both
+mutation-proven.
+
+⚠️ **§G row HN53 asks the player to judge the crouch requirement explicitly**, because it is the one
+decision in this stage that is a matter of feel rather than of fact.
+
+### 🔑 `Registries.ENTITY_TYPE` IS A `DefaultedRegistry` AND ITS `get` LIES — bytecode-confirmed
+
+The kill map stores **raw strings**, deliberately: stage 2's first D-HU2 guard is "never resolve the key
+to an `EntityType` at load time", so a creature from an uninstalled mod cannot cost a player their
+profile. `/mcstats hunter` is therefore **the one place in the port those unresolvable keys surface**,
+and the obvious read is a silent, plausible lie:
+
+```
+SimpleDefaultedRegistry#get(Identifier)   -> SimpleRegistry.get, and on null substitutes defaultEntry
+SimpleDefaultedRegistry#getOptionalValue  -> SimpleRegistry.get wrapped in Optional.ofNullable
+```
+
+`Registries.ENTITY_TYPE`'s default is **`minecraft:pig`**, so `get` would file somebody's 4,000 modded
+kills under **"Pig"** — no exception, no log, a perfectly reasonable-looking line. `getOptionalValue`
+skips the default substitution entirely (bytecode: `invokespecial SimpleRegistry.get` then
+`Optional.ofNullable`), which makes it the honest read. Pinned by
+`anUnknownMobIdIsShownAsItsIdAndNeverAsAPig`, mutation-proven by swapping it back.
+
+🔑 **Generalises: a "defaulted" registry is a registry that cannot tell you it does not know.** Any
+lookup whose key came off disk needs `getOptionalValue`, never `get`.
+
+### ⚠️ A TEST THAT LOOKED LIKE IT PINNED THE TIE-BREAK AND PINNED NOTHING
+
+`topKills` ranks by count descending and breaks ties on the mob id. The first test seeded two
+creatures on the same count through the real profile and asserted the order — **and it passed with the
+tie-break comparator deleted.** `Stream#sorted` is stable, and `PlayerProfile` hands over a
+`TreeMap`, so the encounter order is *already* alphabetical: the comparator and the map were producing
+the same answer for different reasons.
+
+✅ Fixed by feeding a deliberately **reversed** `LinkedHashMap` through a mocked profile, which is the
+only arrangement that can tell the two apart. Same family as the Stealth "assert off the reference
+point" lesson. The property is worth keeping rather than leaning on the `TreeMap`: the encounter order
+is another class's implementation detail, and a stats screen that reorders itself while nothing has
+happened reads as the counters moving on their own.
+
+### The two screens, and what each is for
+
+| | `/mcstats hunter` | Quarry Sense |
+|---|---|---|
+| Question | "how is my mastery going overall" | "what do I know about *this* creature" |
+| Shows | creatures hunted / mastered, top **3** by kills, Trophy chance + highest tier reached | count, mastery tier + its damage, countdown to the next tier, the creature's tier + whether Trophy Hunter reaches it |
+| Tier shown | **mastery** tier (the kill count is meaningless without it) | **both** — mastery tier and the creature's own Hunter tier |
+
+Top **3**, not all of them: D-HU7 asked for "the top N, not all 120", the profile allows 4,096 entries,
+and the chat screen cannot scroll far. The complete per-creature answer is Quarry Sense's job, asked in
+front of the creature.
+
+⚠️ **An empty kill log gets a sentence of its own**, not an empty block: `Nothing hunted yet -- every
+creature you kill is counted from now on.` A first-time Hunter opening this screen is precisely the
+player who most needs telling the counters are live, and a blank section reads as a broken screen.
+
+### The seven withheld `.Stat` keys, and one that could not be a `.Stat` key at all
+
+Stages 3 and 6 both deliberately withheld locale strings rather than ship them dead (`.Stat` keys with
+no renderer to read them would have been dead shipped strings #8 and #9 in a port that has had to find
+seven). They land here. **Mob Mastery's could not use the normal machinery**: `getStatMessage` takes a
+`SubSkillType`, and Mob Mastery has no constant and never will — it unlocks on a per-creature counter,
+which no rank config can express. So its lines are built from bespoke keys through
+`Ability.Generic.Template` directly, which is the shape `TamingStatsRenderer` has always used.
+
+⚠️ **`.Stat` keys are exempt from `SkillLocaleCompletenessTest`** ([[pass2-stats-renderers]]), so
+nothing would have caught a typo in any of them. `hunterRendersBothAxesAndEverySubSkillStatLabel`
+asserts every label by name and that no line resolved to `!Hunter…!`.
+
+### Quarry Sense is one rank at level 1, exactly like Beast Lore
+
+Not laziness — the same call for the same reason. Mob Mastery's counters are invisible **from the first
+kill**, and this is the only place in the world a player can see one; gating the window behind a level
+recreates precisely the problem the sub-skill exists to solve. `quarrySenseShipsOneRankAtLevelOneInBothModes`
+asserts against Taming's Beast Lore rather than a literal, and asserts **level 0 is locked** as well —
+without that half, a Quarry Sense section that was never shipped would pass, because
+`getSubSkillUnlockLevel` answers `0` for an address no config carries and `RankUtils` reads 0 as
+"unlocked" (stage 6's `aRankAddressNoConfigCarriesReadsAsZero`).
+
+### The `onAllowDamage` dispatcher is package-private now, on purpose
+
+Every Quarry Sense test drives the **real** dispatcher rather than the inspect branch it calls. The
+sneak gate in particular is worth nothing if the dispatcher never consults it, and "gate proved, call
+site deleted" is a trap this port has walked into before.
+
+### Deliberately not shipped
+
+- **Field Dressing.** Unchanged from stage 6: D-HU6 ruled it the upgrade path pending §G, and it needs
+  loot-table introspection the port does not have. Hunter ships with three sub-skills, not four.
+- **A creature's Hunter tier on the `/mcstats` league table.** The line is dense enough; the tier is a
+  fact about the creature, which is Quarry Sense's half of the split.
+- **Any kill-count HUD.** Ruled out in the plan's Cuts section and still right.
+
+### Files
+
+`commands/skills/HunterStatsRenderer.java` (**new**), `SkillStatsRenderer#forSkill` (+1 case),
+`SubSkillType.HUNTER_QUARRY_SENSE(1)`, `HunterManager` (+`canQuarrySense`, +`nextMasteryThreshold`,
++`killsToNextMasteryTier`, +`masteredCreatureCount`, +`topKills`), `EntityDamageListener`
+(`maybeBeastLore`/`sendBeastLore` → `maybeInspect`/`beastLore` + `quarrySenseLore`, `onAllowDamage`
+made package-private), `skillranks.yml` (+`Hunter.QuarrySense`), `locale_en_US.properties` (+21 keys),
+the regenerated datapack (+1), plus additions to `HunterManagerTest` /
+`EntityDamageListenerHunterTest` / `SkillStatsRendererTest` / `RankConfigTest`.
+
+### ⬜ What is left in this skill: nothing but §G
+
+`PLAYTEST_G.md` session 11 now runs **HN1–HN60**. Rows **HN53** (does the crouch requirement feel
+right) and **HN33–HN35** (the nether-wastes / dark-room / monument farms no spawn origin can close)
+are the two open design questions, and both are answered with numbers rather than opinions.
 
 ---
 
@@ -1157,7 +1309,7 @@ the next starts. No half-wired skill sitting in the tree.
 | **4** | ✅ **DONE** — The damage bonus on the K1 seam (D-HU3/D-HU4) | ordering tests green; damage measured in-game (§G) |
 | **5** | ✅ **DONE** — Hunter XP + the derived tier rule (D-HU5) | XP rate measured against the 100 h target (§G HN33–HN35) |
 | **6** | ✅ **DONE** — Trophy Hunter loot mixin (D-HU6) | single-extra-roll test green; no dupe in a live world (§G HN41–HN47) |
-| **7** | Quarry Sense / `/mcstats hunter` (D-HU7) | — |
+| **7** | ✅ **DONE** — Quarry Sense + `/mcstats hunter` (D-HU7) | both screens render in a live world (§G HN50–HN60) |
 
 Stages 1 and 2 are pure risk with zero visible feature. Ship them alone anyway. That is the Agility
 Stage 0 lesson: when a profile comes back zeroed you need to know *which* change did it.

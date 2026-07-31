@@ -64,6 +64,25 @@ class RankConfigTest {
     }
 
     @Test
+    void quarrySenseShipsOneRankAtLevelOneInBothModes(@TempDir Path dataFolder) {
+        final RankConfig config = new RankConfig(dataFolder);
+
+        assertEquals(1, SubSkillType.HUNTER_QUARRY_SENSE.getNumRanks());
+        // ⚠️ Level 1, not 0, and the difference is the whole assertion. A missing section reads as 0
+        // (see the test below), which RankUtils treats as unlocked — so an accidentally deleted
+        // Quarry Sense block would behave identically in-game to the shipped one and this is the
+        // only thing that would notice. The shipped value mirrors Taming's Beast Lore exactly:
+        // an inspection readout is not something to make a player earn twice.
+        assertEquals(1, config.getSubSkillUnlockLevel(SubSkillType.HUNTER_QUARRY_SENSE, 1, true),
+                "RetroMode");
+        assertEquals(1, config.getSubSkillUnlockLevel(SubSkillType.HUNTER_QUARRY_SENSE, 1, false),
+                "Standard");
+        assertEquals(config.getSubSkillUnlockLevel(SubSkillType.TAMING_BEAST_LORE, 1, true),
+                config.getSubSkillUnlockLevel(SubSkillType.HUNTER_QUARRY_SENSE, 1, true),
+                "Quarry Sense is the same kind of thing as Beast Lore and unlocks with it");
+    }
+
+    @Test
     void aRankAddressNoConfigCarriesReadsAsZero(@TempDir Path dataFolder) {
         // ⚠️ Documents a failure DIRECTION that is dangerous and easy to misread, so it is worth
         // being exact about which config it applies to.

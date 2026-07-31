@@ -25,6 +25,7 @@ import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.skills.unarmored.UnarmoredManager;
 import com.gmail.nossr50.util.ItemUtils;
+import com.gmail.nossr50.util.MobTiers;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.CombatUtils;
@@ -136,19 +137,25 @@ public final class EntityDamageListener {
      * consume the arrow, so the veto is the faithful seam, not a workaround.
      *
      * <p>Branches, in dispatch order: Unarmed's <b>Arrow Deflect</b> (a bare-handed player swats an
-     * arrow; see {@link #isArrowDeflected}), Taming's <b>Beast Lore</b> (a player bone-whacks a
-     * tameable animal to inspect it; see {@link #maybeBeastLore}) and Taming's <b>Environmentally
+     * arrow; see {@link #isArrowDeflected}), the two <b>bone-inspection</b> sub-skills — Taming's
+     * <b>Beast Lore</b> and Hunter's <b>Quarry Sense</b>, which share one dispatcher (see
+     * {@link #maybeInspect}) — and Taming's <b>Environmentally
      * Aware</b> FALL arm (a tamed wolf's fall damage is negated; see {@link #isEnvironmentallyAwareFall}).
      * Environmentally Aware's other environmental causes only teleport the wolf and leave the hit
      * intact, so they ride the reduce-only mixin instead (see {@link #handleWolfDamage}).
      *
+     * <p>Package-private rather than private so the tests can drive the <b>real</b> dispatcher
+     * instead of the branch methods it calls — otherwise a branch could be proved in full and then
+     * quietly dropped from this method, which is the "gate proved, call site deleted" trap the port
+     * has walked into before.
+     *
      * @return {@code false} to cancel the hit, {@code true} to let it proceed
      */
-    private static boolean onAllowDamage(LivingEntity entity, DamageSource source, float amount) {
+    static boolean onAllowDamage(LivingEntity entity, DamageSource source, float amount) {
         if (entity instanceof ServerPlayerEntity serverPlayer) {
             return !isArrowDeflected(serverPlayer, source);
         }
-        if (maybeBeastLore(entity, source)) {
+        if (maybeInspect(entity, source)) {
             return false; // inspected with a bone — the blow is cancelled.
         }
         if (entity instanceof WolfEntity wolf && isEnvironmentallyAwareFall(wolf, source)) {
@@ -209,51 +216,93 @@ public final class EntityDamageListener {
     }
 
     /**
-     * Taming Beast Lore: a player who left-clicks a tameable animal while holding a bone inspects it
-     * instead of hitting it. Ports the {@code target instanceof Tameable} + {@code heldItem == BONE}
-     * arm of legacy {@code CombatUtils#processCombatAttack}, which prints the beast's stats and
-     * {@code event.setCancelled(true)}s the blow. Only a <em>direct</em> melee swing counts (legacy's
-     * {@code entityType == EntityType.PLAYER}, i.e. the player is the direct damager), so a bone can't
-     * inspect via a projectile.
+     * The shared entry point for both <b>bone-inspection</b> sub-skills: a player who left-clicks a
+     * creature while holding a bone reads it instead of hitting it, and the blow is cancelled.
      *
-     * @return {@code true} if the animal was inspected (the caller should cancel the hit)
+     * <p>Taming's <b>Beast Lore</b> (legacy's) and Hunter's <b>Quarry Sense</b> (stage 7, D-HU7) are
+     * the same gesture on the same seam, so they dispatch from one place and can appear in one
+     * message. A player with both, sneaking, bone in hand, hitting their own wolf gets the beast's
+     * vitals <em>and</em> their hunt log against wolves in a single readout.
+     *
+     * <h2>⚠️ Quarry Sense needs the player to be SNEAKING and Beast Lore does not</h2>
+     * The plan's D-HU7 said "reuse Taming's Beast Lore renderer", which is cheap and right. Reusing
+     * its <b>gate</b> is not: that gate is {@code entity instanceof Tameable}, and the creatures
+     * Hunter counts — zombie, skeleton, creeper, spider — are precisely the ones it excludes. Quarry
+     * Sense therefore has to work on <em>anything</em> a player can kill, and the moment it does, the
+     * cancelled blow becomes a hazard rather than a curiosity: <b>a bone is a skeleton's own drop</b>,
+     * so a player who picks one up and is then set upon cannot swing back. Nobody has ever punched a
+     * wolf by accident, which is why Beast Lore never had this problem and why its own trigger is left
+     * exactly as it was.
+     *
+     * <p>Crouching is the unambiguous "I meant that" modifier, it cannot happen in a panic, and it
+     * costs a keypress the player is already within arm's reach to make. Stealth's Assassin also fires
+     * on a crouched melee hit, but only ever loses a backstab worth 1.0 damage here — the gate needs
+     * a bone in the main hand, so an armed assassin is untouched.
+     *
+     * <p>Armour stands are excluded from Quarry Sense (never from Beast Lore, which cannot see one):
+     * they are not creatures anybody hunts, their count is permanently zero, and sneak-hitting one is
+     * how a player dismantles it.
+     *
+     * @return {@code true} if the creature was inspected (the caller should cancel the hit)
      */
-    private static boolean maybeBeastLore(LivingEntity entity, DamageSource source) {
-        if (!(entity instanceof Tameable)) {
-            return false; // Beast Lore only inspects tameable animals.
-        }
+    private static boolean maybeInspect(LivingEntity entity, DamageSource source) {
+        // Legacy's entry conditions, unchanged and shared: a *direct* melee swing (legacy's
+        // `entityType == EntityType.PLAYER`, i.e. the player is the direct damager, so a bone cannot
+        // inspect by proxy through a projectile) thrown by a player holding a bone.
         if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)
                 || source.getSource() != attacker) {
-            return false; // not a direct melee swing by a player.
+            return false;
         }
         if (!attacker.getMainHandStack().isOf(Items.BONE)) {
             return false;
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(attacker.getUuid());
         if (mmoPlayer == null) {
-            return false;
+            return false; // data not loaded (e.g. mid-join).
         }
+
         final TamingManager taming = mmoPlayer.getTamingManager();
-        if (taming == null || !taming.canUseBeastLore()) {
+        final boolean beastLore =
+                entity instanceof Tameable && taming != null && taming.canUseBeastLore();
+
+        final HunterManager hunter = mmoPlayer.getHunterManager();
+        final boolean quarrySense = attacker.isSneaking()
+                && !(entity instanceof ArmorStandEntity)
+                && hunter != null && hunter.canQuarrySense();
+
+        if (!beastLore && !quarrySense) {
             return false;
         }
-        sendBeastLore(attacker, entity);
+
+        final StringBuilder message = new StringBuilder();
+        if (beastLore) {
+            message.append(beastLore(entity));
+        }
+        if (quarrySense) {
+            if (!message.isEmpty()) {
+                message.append('\n');
+            }
+            message.append(quarrySenseLore(hunter, entity.getType().getName().getString(),
+                    HunterListener.masteryKeyOf(entity), MobTiers.tierOf(entity)));
+        }
+        attacker.sendMessage(TextUtils.toText(message.toString()));
         return true;
     }
 
     /**
-     * Builds and sends the Beast Lore stat readout, porting legacy {@code TamingManager#beastLore}.
+     * Builds the Beast Lore stat readout, porting legacy {@code TamingManager#beastLore}.
      * MC-typed display glue: it reads the target's live health, tamed owner and (for the horse family)
      * movement-speed / jump-strength attributes, and hands the jump attribute to the already-extracted
      * pure conversion {@link TamingManager#beastLoreHorseJumpStrength}. The message is assembled as a
-     * legacy {@code §}-coded string exactly as upstream did, then parsed once into {@link Text}.
+     * legacy {@code §}-coded string exactly as upstream did, and parsed into {@link Text} by the
+     * caller — which may have a Quarry Sense block to append to it first.
      *
      * <p>{@link Tameable#getOwner()} returns {@code null} unless the animal is tamed and its owner is
      * resolvable, so it stands in for legacy's {@code isTamed() && getOwner() != null}. Llamas are
      * excluded from the horse block just as legacy excluded them (they carry no rideable jump/speed
      * stats worth showing).
      */
-    private static void sendBeastLore(ServerPlayerEntity viewer, LivingEntity target) {
+    private static String beastLore(LivingEntity target) {
         final Tameable beast = (Tameable) target;
         String message = LocaleLoader.getString("Combat.BeastLore") + " ";
 
@@ -276,7 +325,61 @@ public final class EntityDamageListener {
                     + "\n" + LocaleLoader.getString("Combat.BeastLoreHorseJumpStrength", jumpStrength);
         }
 
-        viewer.sendMessage(TextUtils.toText(message));
+        return message;
+    }
+
+    /**
+     * Builds Hunter <b>Quarry Sense</b>'s readout: what this player knows about this creature.
+     *
+     * <h2>Why it takes four plain values instead of the entity</h2>
+     * Every Minecraft read this block needs — the creature's display name, its registry id, its
+     * Hunter tier — is done by the caller, so the composition itself is registry-free and drivable
+     * from a plain unit test across all six of its branches. Two of those reads are also the exact
+     * two the port has had drift on before: the mastery key is
+     * {@link HunterListener#masteryKeyOf} (never a locally re-derived id — the counters and the damage
+     * bonus already share that one function for the same reason), and the tier is
+     * {@link MobTiers#tierOf} (never a live health read).
+     *
+     * <p>Four lines, and each one answers a question the player would otherwise have to guess at:
+     * how many have I killed, what is that worth, how many more until it is worth more, and does my
+     * Trophy Hunter rank even reach this creature. The last is the reason the tier is shown at all —
+     * a tier number with nothing hanging off it would be trivia.
+     *
+     * @param hunter       the viewing player's Hunter manager
+     * @param creatureName the creature's display name, e.g. {@code Zombie}
+     * @param mobId        the creature's full registry id, the key its counter is filed under
+     * @param mobTier      the creature's Hunter tier, 1-4
+     */
+    static String quarrySenseLore(HunterManager hunter, String creatureName, String mobId,
+            int mobTier) {
+        final int kills = hunter.getKills(mobId);
+        final int tier = hunter.masteryTier(kills);
+
+        final StringBuilder lore = new StringBuilder()
+                .append(LocaleLoader.getString("Hunter.SubSkill.QuarrySense.Lore", creatureName))
+                .append('\n')
+                .append(LocaleLoader.getString("Hunter.SubSkill.QuarrySense.Lore.Slain", kills))
+                .append(' ');
+
+        lore.append(tier <= 0
+                ? LocaleLoader.getString("Hunter.SubSkill.QuarrySense.Lore.Unmastered")
+                : LocaleLoader.getString("Hunter.SubSkill.QuarrySense.Lore.Mastery", tier,
+                        String.valueOf(hunter.masteryDamageBonus(kills))));
+
+        final int toNext = hunter.killsToNextMasteryTier(kills);
+        lore.append('\n').append(toNext <= 0
+                ? LocaleLoader.getString("Hunter.SubSkill.QuarrySense.Lore.Capped")
+                : LocaleLoader.getString("Hunter.SubSkill.QuarrySense.Lore.Next", toNext, tier + 1));
+
+        // The tier line carries the trophy state because on its own the tier is trivia: what a player
+        // wants to know standing in front of a creature is whether their rank reaches it.
+        lore.append('\n').append(LocaleLoader.getString("Hunter.SubSkill.QuarrySense.Lore.Tier",
+                mobTier,
+                LocaleLoader.getString(hunter.canTrophyHunt(mobTier)
+                        ? "Hunter.SubSkill.QuarrySense.Lore.Trophy.Unlocked"
+                        : "Hunter.SubSkill.QuarrySense.Lore.Trophy.Locked")));
+
+        return lore.toString();
     }
 
     /**

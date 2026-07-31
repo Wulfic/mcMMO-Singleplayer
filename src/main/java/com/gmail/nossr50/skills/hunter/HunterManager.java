@@ -12,6 +12,8 @@ import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
 
@@ -42,18 +44,24 @@ import org.jetbrains.annotations.NotNull;
  * resolver lives here, on the manager. Routing it through {@code RankUtils} would produce a sub-skill
  * whose rank display lies.
  *
- * <h2>Scope as of stage 6 — read this before adding to the class</h2>
+ * <h2>Scope as of stage 7 — the skill is complete</h2>
  * Both axes: the kill counters and the threshold arithmetic they feed (with the bonus damage a tier
- * is worth), the mob-tier rule with the XP each tier pays, and Trophy Hunter's per-tier unlock and
- * chance.
+ * is worth), the mob-tier rule with the XP each tier pays, Trophy Hunter's per-tier unlock and
+ * chance, and the reporting arithmetic the two screens need.
  *
  * <p>{@link #masteryDamageBonusForHit} is spent by {@code EntityDamageListener#applyHunterMastery},
  * which runs <b>last</b> in that chain — after Sprint Smash and after Stealth Assassin — because
  * Assassin multiplies the whole melee total, so a Hunter bonus applied first would be multiplied
  * along with it. {@link #awardKillXp} is spent by {@code HunterListener} and
  * {@link #rollTrophyDrop} by {@code LivingEntityTrophyHunterMixin} through
- * {@code HunterListener#onLootDropped}, all three behind the same four gates. Quarry Sense is stage 7
- * and is deliberately absent rather than stubbed.
+ * {@code HunterListener#onLootDropped}, all three behind the same four gates.
+ * {@link #killsToNextMasteryTier}, {@link #masteredCreatureCount} and {@link #topKills} exist for
+ * D-HU7's two windows onto the invisible horizontal axis — {@code HunterStatsRenderer} and Quarry
+ * Sense's in-world readout ({@code EntityDamageListener#quarrySenseLore}).
+ *
+ * <p><b>Field Dressing is not here and that is deliberate</b>, not an omission: D-HU6 ruled it the
+ * upgrade path to be taken only if §G finds a proportional loot re-roll unsatisfying, and it needs
+ * loot-table introspection the port does not have.
  *
  * @see <a href="file:../../../../../../../plans/new-skills/hunter.md">plans/new-skills/hunter.md</a>
  */
@@ -278,6 +286,81 @@ public class HunterManager extends SkillManager {
     }
 
     /**
+     * The kill count the <em>next</em> mastery tier wants, or {@code 0} once the top tier is reached.
+     *
+     * <p>Derived by walking {@link #MASTERY_THRESHOLDS} for the first entry above the current count
+     * rather than by indexing {@code MASTERY_THRESHOLDS[masteryTier(kills)]}, which reads as the
+     * shorter spelling of the same thing and is not: at the cap that index is off the end of the
+     * table, so the tidier version throws on the kill counts this method exists to describe.
+     *
+     * @param killsOfThisMob kills of the mob in question
+     */
+    public int nextMasteryThreshold(int killsOfThisMob) {
+        for (int threshold : MASTERY_THRESHOLDS) {
+            if (killsOfThisMob < threshold) {
+                return threshold;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * How many more of this creature the next mastery tier wants, or {@code 0} at the cap.
+     *
+     * <p>The number Quarry Sense puts in front of the player. It is the whole answer to D-HU7's
+     * complaint — a counter with no visible target is 499 kills of nothing appearing to happen.
+     *
+     * @param killsOfThisMob kills of the mob in question
+     */
+    public int killsToNextMasteryTier(int killsOfThisMob) {
+        final int next = nextMasteryThreshold(killsOfThisMob);
+        return next == 0 ? 0 : next - Math.max(0, killsOfThisMob);
+    }
+
+    /**
+     * How many creature types this player has taken to at least the first mastery tier.
+     *
+     * <p>Counted rather than stored: the kill map is the single source of truth for the horizontal
+     * axis, and a cached total is a second one that can disagree with it.
+     */
+    public int masteredCreatureCount() {
+        int mastered = 0;
+        for (int kills : getAllKills().values()) {
+            if (masteryTier(kills) > 0) {
+                mastered++;
+            }
+        }
+        return mastered;
+    }
+
+    /**
+     * This player's most-killed creatures, most first, at most {@code limit} of them.
+     *
+     * <p>⚠️ <b>Ties break on the mob id, and that is load-bearing rather than tidy.</b> The map is a
+     * {@code TreeMap} but the sort here is by count, so without the second comparator two creatures on
+     * the same total would swap places between renders of the same unchanged screen — the same
+     * argument that made the stored map a {@code TreeMap} in the first place. A stats screen that
+     * reorders itself while nothing has happened reads as a bug in the counters.
+     *
+     * <p>MC-free on purpose even though its only caller is a renderer: the entries are raw registry
+     * id strings, so the ranking is unit-testable with no registry bootstrap. Resolving those ids to
+     * creature names is the caller's problem, and a genuinely awkward one — see
+     * {@code HunterStatsRenderer}.
+     *
+     * @param limit the most entries to return; {@code 0} or less returns nothing
+     */
+    public @NotNull List<Map.Entry<String, Integer>> topKills(int limit) {
+        if (limit <= 0) {
+            return List.of();
+        }
+        return getAllKills().entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue(Comparator.reverseOrder())
+                        .thenComparing(Map.Entry.comparingByKey()))
+                .limit(limit)
+                .toList();
+    }
+
+    /**
      * Whether this kill just crossed a mastery threshold — the trigger for stage 3's notification.
      *
      * <p>Expressed as "did the tier change" rather than "is the count exactly a threshold" on purpose:
@@ -467,5 +550,20 @@ public class HunterManager extends SkillManager {
     public boolean rollTrophyDrop(int tier) {
         return canTrophyHunt(tier)
                 && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.HUNTER_TROPHY_HUNTER, mmoPlayer);
+    }
+
+    // --- Sub-skill: Quarry Sense -----------------------------------------------------------------
+
+    /**
+     * Whether this player may read a creature's hunt log off the creature itself.
+     *
+     * <p>One rank at level 1, so in practice this answers {@code true} for anyone who has the skill —
+     * see {@code skillranks.yml → Hunter.QuarrySense} for why that is the ruling and not an oversight.
+     * The gate exists anyway because an operator can disable the sub-skill, and because a sub-skill
+     * with no gate at all is a sub-skill that cannot be turned off.
+     */
+    public boolean canQuarrySense() {
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.HUNTER_QUARRY_SENSE)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.HUNTER_QUARRY_SENSE);
     }
 }

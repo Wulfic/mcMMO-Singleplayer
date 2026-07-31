@@ -67,22 +67,22 @@ every non‑child skill.
 
 ## Skills
 
-**24 skills** — **21 primary** skills that earn XP directly, plus **3 child skills** whose level is
+**26 skills** — **23 primary** skills that earn XP directly, plus **3 child skills** whose level is
 the average of their parents and which earn no XP of their own.
 
 | Category | Skills |
 |---|---|
-| **Gathering** | Mining, Woodcutting, Herbalism, Excavation, Fishing |
-| **Combat** | Swords, Axes, Unarmed, Archery, Crossbows, Tridents, Maces, Spears, Taming |
+| **Gathering** | Mining, Woodcutting, Herbalism, Excavation, Fishing, **Husbandry** |
+| **Combat** | Swords, Axes, Unarmed, Archery, Crossbows, Tridents, Maces, Spears, Taming, **Hunter** |
 | **Movement** | **Parkour**, **Swimming**, **Flying** |
 | **Misc** | **Stealth**, **Unarmored**, Repair, Alchemy |
 | **Child skills** | **Agility** (avg. of Parkour + Swimming + Flying), **Salvage** (avg. of Repair + Fishing), **Smelting** (avg. of Mining + Repair) |
 
 ### New in this port
 
-Six skills that upstream mcMMO does not have. **Acrobatics was renamed to Agility** and restructured:
-it now owns ten movement sub-skills but earns no XP itself — instead it is the mean of three new
-primary skills, one per medium you travel through.
+Eight skills that upstream mcMMO does not have. **Acrobatics was renamed to Agility** and
+restructured: it now owns ten movement sub-skills but earns no XP itself — instead it is the mean of
+three new primary skills, one per medium you travel through.
 
 | Skill | How you train it | What it gives you |
 |---|---|---|
@@ -92,6 +92,8 @@ primary skills, one per medium you travel through.
 | **Agility** *(child)* | — derived — | Dodge, Roll, Fleet Footed, Athlete, Smash, Lead Lungs, Glide, Lake Raider, Solar Wings, and the **Second Wind** super ability. |
 | **Stealth** | Sneaking under your own power | **Padfoot** (sneak nearly at walking speed), **Assassin** (backstab damage), **Smoke Bomb** super ability. |
 | **Unarmored** | Taking damage with **every armour slot empty** | **Iron Skin** (real armour points at four tiers — leather/gold/iron/diamond) and **Thorny Skin** (reflect a sting at melee attackers). |
+| **Husbandry** | Breeding, taming, shearing, milking, feeding and robbing hives | Nine sub-skills across six XP verbs — **Multi-Breed**, **Twins**, **Selective Breeding**, **Accelerated Growth**, **Brood**, **Bountiful Harvest**, **Hidden Bounty**, **Beekeeper** and the **Herdsman's Call** super ability. |
+| **Hunter** | Killing creatures — **not** a weapon skill | Two independent axes. **Mob Mastery**: kill 500 / 2,500 / 10,000 of *one* creature for +1.0 / +2.0 / +3.0 damage against **that creature only**, forever. **Trophy Hunter**: a second roll of a kill's own loot table, unlocked one mob tier per rank. **Quarry Sense**: crouch and hit a creature with a bone to read your hunt log against it. Farmed creatures — spawner, bred, player-placed — count for nothing. |
 
 Movement and sneak XP are **speed-normalised**: you are paid per *second* of travel, with each tick's
 distance clamped at that medium's reference speed. Travelling faster than the reference pays no more,
@@ -99,8 +101,9 @@ so speed buffs, elytra rockets and ice boats are not XP multipliers. Standing st
 walking pays nothing, and being *carried* pays nothing — Stealth reads your actual server-side
 movement input, so a taped-down shift key in a water current earns zero.
 
-> **Still planned:** Husbandry, Cooking and Hunter — designs are drafted in [`plans/new-skills/`](plans/new-skills/),
-> no code yet.
+> **Still planned:** Cooking — the design is drafted in [`plans/new-skills/`](plans/new-skills/), no
+> code yet. Husbandry and Hunter are **code-complete but not yet play-tested**, along with the six
+> movement/stealth skills above; see [`PLAYTEST_G.md`](PLAYTEST_G.md).
 
 **RetroMode is on by default** — levels scale 1–1000 rather than 1–100, and every level requirement
 in the configs is multiplied by 10. Turn it off in `config.yml` under `General.RetroMode.Enabled`.

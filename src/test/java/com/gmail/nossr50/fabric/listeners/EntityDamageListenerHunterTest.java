@@ -1,6 +1,8 @@
 package com.gmail.nossr50.fabric.listeners;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -10,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.GeneralConfig;
+import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.mobs.MobOrigin;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
@@ -21,6 +24,7 @@ import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.skills.stealth.StealthManager;
 import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
+import java.nio.file.Path;
 import java.util.UUID;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
@@ -37,10 +41,13 @@ import net.minecraft.item.Items;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 /**
@@ -85,13 +92,17 @@ class EntityDamageListenerHunterTest {
     private AdvancedConfig advancedConfig;
 
     @BeforeEach
-    void setUp() {
+    void setUp(@TempDir Path dataFolder) {
         playerId = UUID.randomUUID();
 
         final GeneralConfig generalConfig = mock(GeneralConfig.class);
         lenient().when(generalConfig.getPVEEnabled(PrimarySkillType.HUNTER)).thenReturn(true);
         lenient().when(generalConfig.getPVPEnabled(PrimarySkillType.HUNTER)).thenReturn(true);
         McMMOMod.setGeneralConfig(generalConfig);
+        // Stage 7's Quarry Sense and Trophy Hunter both read the REAL bundled skillranks.yml through
+        // RankUtils. ⚠️ The general-config mock answers false for getIsRetroMode(), so the ladders
+        // resolve in STANDARD mode here — Quarry Sense at 1, Trophy Hunter at 10/30/60/90.
+        McMMOMod.setRankConfig(new RankConfig(dataFolder));
 
         advancedConfig = mock(AdvancedConfig.class);
         // ⚠️ The SHIPPED default, not Mockito's zero. This is a multiplier: left unstubbed it would
@@ -111,6 +122,9 @@ class EntityDamageListenerHunterTest {
         lenient().when(mmoPlayer.getHunterManager()).thenReturn(new HunterManager(mmoPlayer));
         // A fully charged swing unless a test says otherwise.
         lenient().when(mmoPlayer.getAttackStrength()).thenReturn(1.0F);
+        // A maxed Hunter unless a test says otherwise, so the stage-7 rank gates are open. Nothing
+        // in stages 4-6 reads the level, so this changes no existing test.
+        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(1_000);
         UserManager.track(mmoPlayer);
 
         attacker = player();
@@ -121,6 +135,7 @@ class EntityDamageListenerHunterTest {
         UserManager.cleanupPlayer(mmoPlayer);
         McMMOMod.setGeneralConfig(null);
         McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setRankConfig(null);
         EntityDamageListener.clear();
         HunterListener.resetFirstKillLogForTesting();
     }
@@ -382,5 +397,162 @@ class EntityDamageListenerHunterTest {
 
         assertEquals(10F + (float) HunterManager.MASTERY_DAMAGE_BONUS[0],
                 EntityDamageListener.applyHunterMastery(zombie(), melee(), 10F), EPSILON);
+    }
+
+    // --- Stage 7: Quarry Sense, the in-world readout ---------------------------------------------
+
+    /**
+     * The messages the real {@code ALLOW_DAMAGE} dispatcher sent, and whether it cancelled the hit.
+     *
+     * <p>Everything below drives {@link EntityDamageListener#onAllowDamage} rather than the inspect
+     * branch directly: a gate proved on a method nothing calls is the trap this port keeps hitting,
+     * and the sneak requirement in particular is only meaningful if the dispatcher consults it.
+     */
+    private record Inspection(boolean cancelled, String message) {
+    }
+
+    private Inspection inspect(LivingEntity target) {
+        final boolean allowed = EntityDamageListener.onAllowDamage(target, melee(), 1F);
+        final ArgumentCaptor<Text> sent = ArgumentCaptor.forClass(Text.class);
+        Mockito.verify(attacker, Mockito.atMost(1)).sendMessage(sent.capture());
+        return new Inspection(!allowed,
+                sent.getAllValues().isEmpty() ? "" : sent.getValue().getString());
+    }
+
+    /** Put a bone in the attacker's hand and crouch them — the full Quarry Sense gesture. */
+    private void readyToInspect() {
+        when(attacker.getMainHandStack()).thenReturn(new ItemStack(Items.BONE));
+        when(attacker.isSneaking()).thenReturn(true);
+    }
+
+    @Test
+    void quarrySenseReadsBackTheCountTheTierAndWhatThatTierIsWorth() {
+        seedKills(ZOMBIE_ID, HunterManager.MASTERY_THRESHOLDS[1]);
+        readyToInspect();
+
+        final Inspection inspection = inspect(zombie());
+
+        assertTrue(inspection.cancelled(), "an inspected creature is not also hit");
+        assertTrue(inspection.message().contains("Zombie"), inspection.message());
+        // ⚠️ The count is asserted MessageFormat-grouped, which is how it reaches the player, and the
+        // tier as its rendered wording rather than a bare "2" — the count 2,500 contains a 2, so a
+        // digit search here would pass against a readout that never printed the tier at all. Same
+        // trap stage 3's threshold notification walked into.
+        assertTrue(inspection.message().contains("2,500"), inspection.message());
+        assertTrue(inspection.message().contains("Mastery 2"), inspection.message());
+        assertTrue(inspection.message().contains("+2.0"), inspection.message());
+        // The countdown to Mastery III: 10,000 - 2,500.
+        assertTrue(inspection.message().contains("7,500"), inspection.message());
+    }
+
+    @Test
+    void anUnhuntedCreatureStillReadsBackTheTargetToAimAt() {
+        // The first-kill case is the whole reason the sub-skill exists: without it the horizontal
+        // axis is 499 kills of nothing appearing to happen.
+        readyToInspect();
+
+        final Inspection inspection = inspect(zombie());
+
+        assertTrue(inspection.message().contains("500"), "the first threshold is the target");
+        // ⚠️ NOT `!contains("Mastery 1")` — that reads right and is wrong, because the countdown
+        // line names the tier being worked toward ("500 more for Mastery 1"). The real claim is that
+        // the mastery slot itself is empty, so assert the wording that fills it.
+        assertTrue(inspection.message().contains("No mastery yet"), inspection.message());
+    }
+
+    @Test
+    void aFullyMasteredCreatureIsToldSoInsteadOfCountingDownPastZero() {
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+        readyToInspect();
+
+        final Inspection inspection = inspect(zombie());
+
+        assertTrue(inspection.message().contains("fully mastered"), inspection.message());
+        assertTrue(inspection.message().contains("Mastery 3"), inspection.message());
+    }
+
+    @Test
+    void everyBranchOfTheReadoutResolvesItsLocaleKey() {
+        // ⚠️ Nine keys, and a miss renders as literal "!Hunter.SubSkill.QuarrySense.Lore.Capped!"
+        // rather than throwing — the ungreppable-locale-family failure this port has shipped seven
+        // times. Driven across all three both-ways branches (mastered/not, capped/not, trophy
+        // reached/not) so no arm is left unrendered.
+        readyToInspect();
+        for (int kills : new int[] {0, HunterManager.MASTERY_THRESHOLDS[0], TOP_TIER_KILLS}) {
+            seedKills(ZOMBIE_ID, kills);
+            // ⚠️ Both levels must UNLOCK Quarry Sense or the assertion is vacuous — a locked readout
+            // prints nothing at all and contains no unresolved key either. Level 1 is the lowest
+            // level that opens it (and leaves Trophy Hunter at rank 0, the "does not reach" arm);
+            // 1,000 opens rank 4, the other arm.
+            for (int level : new int[] {1, 1_000}) {
+                when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(level);
+                final String message = inspect(zombie()).message();
+                assertTrue(message.contains("QUARRY SENSE"),
+                        "the readout must actually render at " + kills + " kills, level " + level);
+                assertFalse(message.contains("!Hunter."),
+                        "unresolved locale key at " + kills + " kills, level " + level
+                                + ": " + message);
+                Mockito.clearInvocations(attacker);
+            }
+        }
+    }
+
+    @Test
+    void theTrophyLineTellsThePlayerWhetherTheirRankReachesThisCreature() {
+        // Both arms, in one test, driven off the REAL Standard ladder (10/30/60/90): a zombie is
+        // tier 2, so rank 2 is what reaches it. Asserting only the unlocked arm would pass against a
+        // line hard-wired to "yes", which is the more dangerous of the two lies.
+        readyToInspect();
+
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(10); // rank 1 -- T1 only
+        assertTrue(inspect(zombie()).message().contains("does not reach"),
+                "rank 1 must not claim to reach a tier-2 creature");
+        Mockito.clearInvocations(attacker);
+
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(30); // rank 2 -- T2
+        assertTrue(inspect(zombie()).message().contains("reaches this creature"));
+    }
+
+    // --- ⚠️ the gate that keeps a bone usable as a bone -------------------------------------------
+
+    @Test
+    void aBoneSwungWithoutCrouchingIsAnOrdinaryPunch() {
+        // ⚠️ THE reason Quarry Sense needs a modifier Beast Lore does not: it works on every creature
+        // in the game, and a bone is a SKELETON'S OWN DROP. Without this, a player who picks one up
+        // and is then set upon cannot swing back at anything.
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+        when(attacker.getMainHandStack()).thenReturn(new ItemStack(Items.BONE));
+        when(attacker.isSneaking()).thenReturn(false);
+
+        final Inspection inspection = inspect(zombie());
+
+        assertFalse(inspection.cancelled(), "the hit must land");
+        assertEquals("", inspection.message(), "and nothing is printed");
+    }
+
+    @Test
+    void crouchingWithoutABoneIsAnOrdinaryBackstab() {
+        seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
+        when(attacker.isSneaking()).thenReturn(true);
+
+        assertFalse(inspect(zombie()).cancelled(), "the hit must land");
+    }
+
+    @Test
+    void anArmourStandIsNotQuarryEither() {
+        // Sneak-hitting an armour stand is how a player dismantles one, and its counter is
+        // permanently zero — a readout there would be all cost and no information.
+        readyToInspect();
+
+        assertFalse(inspect(mock(ArmorStandEntity.class)).cancelled());
+    }
+
+    @Test
+    void aLockedQuarrySenseInspectsNothing() {
+        // Level 0 leaves rank 1 unreached, so an operator who disables the skill gets a bone back.
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(0);
+        readyToInspect();
+
+        assertFalse(inspect(zombie()).cancelled());
     }
 }

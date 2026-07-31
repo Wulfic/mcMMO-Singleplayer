@@ -684,6 +684,36 @@ skill to observe honestly, so read these rows carefully:
 | HN48 | Kill a **wither** at Hunter 900+ | Rank 4. The nether star may or may not double — that is a 50 % roll. ⚠️ **Report how it feels**: this is the one place the shipped `ChanceMax: 50` is most likely to be judged too generous, and turning it down is a one-line `advanced.yml` edit |
 | HN49 | Set `ChanceMax: 0.0` under `Skills.Hunter.TrophyHunter` in `advanced.yml`, restart, kill 50 zombies at max Hunter | **Exactly baseline**, and the log line from HN42 never appears. The tuning knob has to reach the roll. **Set it back to 50 afterwards** |
 
+### Stage 7 — the two windows onto the invisible half (HN50+)
+
+The last stage, and the only one whose whole subject is **being able to see the other six**. Everything
+Mob Mastery does has been invisible since stage 3: three thresholds across every creature in the game,
+with no number anywhere a player can read. Stage 7 ships both answers D-HU7 asked for —
+**`/mcstats hunter`** for the overview and **Quarry Sense** for the creature in front of you.
+
+**🔑 Quarry Sense needs you to be CROUCHING.** Sneak, hold a **bone** in your main hand, and left-click
+the creature. The blow is cancelled and you get a four-line readout instead. Taming's Beast Lore is the
+same gesture *without* the crouch, and it is unchanged — the crouch is Quarry Sense's own requirement,
+because unlike Beast Lore it works on **every** creature and a bone is a skeleton's own drop.
+
+⚠️ **The row that matters most is HN53.** If crouching with a bone turns out to be an annoyance in
+normal play rather than a convenience, say so — the alternatives (a different item, a right-click, no
+modifier at all) are all cheap, and this is the last chance to change it before the skill is done.
+
+| # | Action | Expect |
+|---|---|---|
+| HN50 | Type `/mcstats hunter` at any level | Header, both sub-skills listed with their ranks, then a **Stats** block. If there is no Stats block at all, the renderer is not wired — stop and report |
+| HN51 | `/mcstats hunter` on a **brand-new** Hunter who has killed nothing | `Nothing hunted yet -- every creature you kill is counted from now on.` **Not** an empty block and not a list of zeroes |
+| HN52 | Kill a mixed bag — say 30 zombies, 12 skeletons, 5 cows — then `/mcstats hunter` | `Creatures Hunted: 3`, `Creatures Mastered: 0`, and **three** entry lines, most-killed first, each reading `Zombie: 30 slain -- no mastery yet`. Only the top three are listed however many you have hunted; that is deliberate |
+| HN53 | **The feel row.** Crouch, hold a bone, left-click a zombie | Four lines: the creature, `Slain (30) No mastery yet`, `Next tier (470 more for Mastery 1)`, `Tier 2 (...)`. **The zombie takes no damage.** ⚠️ Report whether the crouch requirement feels right — see the warning above |
+| HN54 | **The bone-is-a-weapon row.** Stand up (do not crouch), hold the same bone, hit the same zombie | **An ordinary punch.** No readout, damage lands. This is the gate that keeps a bone usable while you are being chased, and it is the single most important row in this block |
+| HN55 | Crouch, bone in hand, left-click a **tamed wolf** with Taming's Beast Lore also unlocked | **Both** readouts in one message — Beast Lore's health/owner block *then* the Quarry Sense block. Neither replaces the other |
+| HN56 | Do the same to that wolf **without** crouching | Beast Lore **only**, exactly as it behaved before this stage. Beast Lore's own trigger was not changed |
+| HN57 | Crouch, bone in hand, hit an **armour stand** | Nothing. The stand takes the hit as usual — sneak-hitting one is how you dismantle it, and it is not a creature anybody hunts |
+| HN58 | Hand-edit `kills:` in `mcmmo/players/<uuid>.yml` to give one mob **12,004** kills, reload, then `/mcstats hunter` and Quarry Sense that mob | Stats shows `Mastery 3 (+3.0 damage)`; the readout shows `Next tier (fully mastered)` — **never** a negative countdown |
+| HN59 | Quarry Sense a creature your Trophy Hunter rank does **not** reach (a wither or warden below Hunter 900) | `Tier 4 (Trophy Hunter does not reach this tier yet)`. Then level past 900 and repeat: it flips to `reaches this creature`. Both arms, or the line is decoration |
+| HN60 | Hand-add a nonsense entry to `kills:` — e.g. `somemod:dread_beast: 3000` — reload, `/mcstats hunter` | The line reads **`somemod:dread_beast`**, its raw id. ⚠️ **If it says "Pig", report it immediately** — that is the vanilla registry's default-value behaviour leaking through, and it would mean the screen is attributing kill counts to the wrong creature |
+
 ---
 
 ## Reporting

@@ -680,6 +680,19 @@ Hunter:
     # Hunter's OTHER sub-skill, Mob Mastery, is deliberately absent from this file. It unlocks on a
     # per-creature kill counter (500 / 2,500 / 10,000 of ONE mob), which no level-keyed rank can
     # express -- putting it here would produce a rank display that lies. See HunterManager.
+    QuarrySense:
+        # Sneak and hit a creature with a bone in hand to read your hunt log against it: how many you
+        # have killed, which mastery tier that is, and how many more the next tier wants.
+        #
+        # LEVEL 1 IN BOTH MODES, and that is not laziness -- it is Taming's Beast Lore, which this
+        # extends, and it is the same call for the same reason. Mob Mastery's counters are invisible
+        # from the very first kill, and this is the only place in the world a player can see one.
+        # Gating the window behind a level would recreate exactly the problem the sub-skill exists to
+        # solve: 499 kills of nothing appearing to happen.
+        Standard:
+            Rank_1: 1
+        RetroMode:
+            Rank_1: 1
     TrophyHunter:
         Standard:
             Rank_1: 10

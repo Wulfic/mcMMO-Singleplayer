@@ -23,6 +23,9 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -466,5 +469,120 @@ class HunterManagerTest {
                 McMMOMod.getAdvancedConfig().getMaximumProbability(
                         SubSkillType.HUNTER_TROPHY_HUNTER),
                 EPSILON, "advanced.yml Skills.Hunter.TrophyHunter.ChanceMax");
+    }
+
+    // --- Stage 7: the reporting arithmetic the two screens run on -------------------------------
+
+    @Test
+    void theNextThresholdIsTheFirstONEABOVETheCountAndTheCapAnswersZero() {
+        // Asserted from BOTH sides of every boundary, because the off-by-one this method can have is
+        // "the threshold you are standing on is still ahead of you" -- which at exactly 500 kills
+        // would tell a player who just earned Mastery I that they need 0 more to earn it.
+        assertEquals(500, manager.nextMasteryThreshold(0));
+        assertEquals(500, manager.nextMasteryThreshold(499));
+        assertEquals(2_500, manager.nextMasteryThreshold(500));
+        assertEquals(2_500, manager.nextMasteryThreshold(2_499));
+        assertEquals(10_000, manager.nextMasteryThreshold(2_500));
+        assertEquals(10_000, manager.nextMasteryThreshold(9_999));
+
+        assertEquals(0, manager.nextMasteryThreshold(10_000), "the top tier has nothing after it");
+        assertEquals(0, manager.nextMasteryThreshold(10_000_000), "and a count past it still has not");
+    }
+
+    @Test
+    void theCountdownToTheNextTierReachesOneAndThenStops() {
+        assertEquals(500, manager.killsToNextMasteryTier(0));
+        assertEquals(1, manager.killsToNextMasteryTier(499), "the last kill before a threshold");
+        assertEquals(2_000, manager.killsToNextMasteryTier(500));
+        assertEquals(1, manager.killsToNextMasteryTier(9_999));
+
+        // ⚠️ Zero at the cap, NEVER a negative countdown. The readout renders this number straight,
+        // so the alternative is a player being told they need -8,000 more of something.
+        assertEquals(0, manager.killsToNextMasteryTier(10_000));
+        assertEquals(0, manager.killsToNextMasteryTier(10_000_000));
+
+        // A negative count cannot happen through the counter, but it can be hand-edited into a
+        // profile YAML -- and the answer has to be the first threshold, not 500 + the nonsense.
+        assertEquals(500, manager.killsToNextMasteryTier(-40));
+    }
+
+    @Test
+    void masteredCreaturesAreCountedFromTheKillMapRatherThanTracked() {
+        seed(ZOMBIE, 500);      // Mastery I
+        seed(CREEPER, 499);     // one kill short
+        seed("minecraft:pig", 10_000); // Mastery III
+
+        assertEquals(3, manager.getAllKills().size(), "three creatures hunted");
+        assertEquals(2, manager.masteredCreatureCount(), "only two of them mastered");
+    }
+
+    @Test
+    void theLeagueTableRanksByCountAndBreaksTiesOnTheMobIdSoItCannotReorderItself() {
+        seed(ZOMBIE, 100);
+        seed(CREEPER, 100);              // a deliberate tie with the zombie
+        seed("minecraft:skeleton", 900);
+        seed("minecraft:bee", 5);
+
+        assertEquals(List.of("minecraft:skeleton", "minecraft:creeper", "minecraft:zombie"),
+                manager.topKills(3).stream().map(Map.Entry::getKey).toList());
+        assertEquals(900, manager.topKills(3).get(0).getValue());
+    }
+
+    @Test
+    void theTieBreakIsTheRankersOwnAndNotBorrowedFromTheProfilesMapOrder() {
+        // ⚠️ THIS is the test that pins the tie-break, and the obvious version of it does not.
+        // Sorting a stream by value alone is STABLE, so it preserves whatever order it was handed —
+        // and PlayerProfile hands over a TreeMap, i.e. already alphabetical. A test driven off a real
+        // profile therefore passes identically with the tie-break comparator deleted, which is the
+        // "assert off the reference point" trap. Feeding a deliberately REVERSED map is the only way
+        // to tell the two apart, and the property is worth keeping: the encounter order is another
+        // class's implementation detail, and a screen that reorders itself while nothing has changed
+        // reads as the counters moving on their own.
+        final Map<String, Integer> reversed = new LinkedHashMap<>();
+        reversed.put("minecraft:zombie", 100);
+        reversed.put("minecraft:creeper", 100);
+
+        final PlayerProfile shuffled = mock(PlayerProfile.class);
+        when(shuffled.getAllMobKills()).thenReturn(reversed);
+        final McMMOPlayer owner = mock(McMMOPlayer.class);
+        when(owner.getProfile()).thenReturn(shuffled);
+
+        assertEquals(List.of("minecraft:creeper", "minecraft:zombie"),
+                new HunterManager(owner).topKills(2).stream().map(Map.Entry::getKey).toList());
+    }
+
+    @Test
+    void theLeagueTableHonoursItsLimitInBothDirections() {
+        assertTrue(manager.topKills(3).isEmpty(), "an empty log ranks nothing");
+
+        seed(ZOMBIE, 10);
+        seed(CREEPER, 20);
+
+        assertEquals(2, manager.topKills(5).size(), "a limit above the log returns the whole log");
+        assertEquals(1, manager.topKills(1).size());
+        assertTrue(manager.topKills(0).isEmpty(), "a zero limit lists nothing");
+        assertTrue(manager.topKills(-1).isEmpty(), "and a negative one does not throw");
+    }
+
+    @Test
+    void quarrySenseUnlocksAtLevelOneExactlyLikeBeastLore() {
+        // Read off the REAL bundled skillranks.yml, and asserted at 0 as well as 1. Level 0 is what
+        // makes it a real assertion: getSubSkillUnlockLevel answers 0 for an address no config
+        // carries and RankUtils reads 0 as "unlocked", so a Quarry Sense section that was never
+        // shipped would pass a level-1-only test (see aRankAddressNoConfigCarriesReadsAsZero).
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(0);
+        assertFalse(manager.canQuarrySense(), "nothing is unlocked at level 0");
+
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(1);
+        assertTrue(manager.canQuarrySense(),
+                "Quarry Sense ships at level 1 in both modes -- the counters are invisible from the "
+                        + "first kill, so the window onto them cannot be level-gated");
+    }
+
+    /** Bank {@code count} kills of {@code mobId} straight onto the profile. */
+    private void seed(String mobId, int count) {
+        while (profile.getMobKills(mobId) < count) {
+            profile.incrementMobKills(mobId);
+        }
     }
 }

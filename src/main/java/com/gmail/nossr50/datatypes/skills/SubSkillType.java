@@ -81,7 +81,13 @@ public enum SubSkillType {
      * Field Dressing (rare-slot weighting on the bonus roll) is not here: D-HU6 ruled it the upgrade
      * path for AFTER §G measures whether a proportional re-roll is satisfying, and it needs loot-table
      * introspection this port does not have.
+     *
+     * Quarry Sense is one rank at level 1, mirroring Taming's Beast Lore exactly -- it is the same
+     * kind of thing (an inspection readout) and it is the ONLY in-world window onto a counter that is
+     * invisible from the first kill, so level-gating it would recreate the very problem D-HU7 says it
+     * exists to solve.
      */
+    HUNTER_QUARRY_SENSE(1),
     HUNTER_TROPHY_HUNTER(4),
 
     /* Husbandry */

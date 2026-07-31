@@ -22,6 +22,7 @@ import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.fishing.FishingManager;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
+import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.skills.maces.MacesManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
@@ -40,7 +41,9 @@ import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import net.minecraft.text.Text;
@@ -66,6 +69,9 @@ class SkillStatsRendererTest {
 
     private McMMOPlayer mmoPlayer;
 
+    /** A field rather than a local: the Hunter tests below stub the kill map on it. */
+    private PlayerProfile profile;
+
     @BeforeAll
     static void bootstrapRegistries() {
         McTestRegistries.bootstrap();
@@ -83,7 +89,7 @@ class SkillStatsRendererTest {
         mmoPlayer = mock(McMMOPlayer.class);
         when(mmoPlayer.getPlayer()).thenReturn(platformPlayer);
 
-        final PlayerProfile profile = mock(PlayerProfile.class);
+        profile = mock(PlayerProfile.class);
         when(profile.getSkillXpLevel(PrimarySkillType.MINING)).thenReturn(123);
         when(profile.getXpToLevel(PrimarySkillType.MINING)).thenReturn(456);
         when(mmoPlayer.getProfile()).thenReturn(profile);
@@ -112,6 +118,7 @@ class SkillStatsRendererTest {
         when(mmoPlayer.getHusbandryManager()).thenReturn(new HusbandryManager(mmoPlayer));
         when(mmoPlayer.getStealthManager()).thenReturn(new StealthManager(mmoPlayer));
         when(mmoPlayer.getUnarmoredManager()).thenReturn(new UnarmoredManager(mmoPlayer));
+        when(mmoPlayer.getHunterManager()).thenReturn(new HunterManager(mmoPlayer));
         UserManager.track(mmoPlayer);
     }
 
@@ -219,11 +226,68 @@ class SkillStatsRendererTest {
         // GenericSkillStatsRenderer, so their .Stat locale keys were written but never read and the
         // screens showed a header and a sub-skill list with no effect values at all.
         for (PrimarySkillType s : List.of(PrimarySkillType.HUSBANDRY, PrimarySkillType.STEALTH,
-                PrimarySkillType.UNARMORED, PrimarySkillType.PARKOUR)) {
+                PrimarySkillType.UNARMORED, PrimarySkillType.PARKOUR, PrimarySkillType.HUNTER)) {
             when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
             assertTrue(anyLineContains(render(SkillStatsRenderer.forSkill(s)), "Stats"),
                     s.name() + " shows effect stats at max level");
         }
+    }
+
+    @Test
+    void hunterRendersBothAxesAndEverySubSkillStatLabel() {
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(1000);
+        when(profile.getAllMobKills()).thenReturn(new LinkedHashMap<>(Map.of(
+                "minecraft:zombie", 12_004, "minecraft:creeper", 40)));
+        when(profile.getMobKills("minecraft:zombie")).thenReturn(12_004);
+        when(profile.getMobKills("minecraft:creeper")).thenReturn(40);
+
+        final List<String> lines = render(new HunterStatsRenderer());
+
+        // The horizontal axis: the two totals and the league table underneath them.
+        for (String label : List.of("Creatures Hunted", "Creatures Mastered", "Zombie", "12,004",
+                "Mastery 3", "Creeper", "no mastery yet")) {
+            assertTrue(anyLineContains(lines, label),
+                    "Hunter stats missing '" + label + "'; lines=" + lines);
+        }
+        // The vertical axis, plus the sub-skill whose whole job is telling the player how to use it.
+        for (String label : List.of("Trophy Chance", "Highest Tier Reached", "4/4", "Quarry Sense")) {
+            assertTrue(anyLineContains(lines, label),
+                    "Hunter stats missing '" + label + "'; lines=" + lines);
+        }
+        assertFalse(anyLineContains(lines, "!Hunter"),
+                "a stat line resolved to a locale miss; lines=" + lines);
+    }
+
+    @Test
+    void anUnknownMobIdIsShownAsItsIdAndNeverAsAPig() {
+        // ⚠️ Registries.ENTITY_TYPE is a DefaultedRegistry: its get(Identifier) answers an unknown id
+        // with the registry DEFAULT — minecraft:pig — instead of null. The kill map deliberately
+        // stores raw strings and resolves them only here (stage 2, so an uninstalled mod cannot cost
+        // a player their profile), which makes this screen the one place such keys surface. Read
+        // through get(), somebody's 4,000 modded kills would be filed under "Pig", plausibly and
+        // silently. Mutation check: swap getOptionalValue for get and this is the test that reddens.
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(1000);
+        when(profile.getAllMobKills())
+                .thenReturn(new LinkedHashMap<>(Map.of("somemod:dread_beast", 3_000)));
+        when(profile.getMobKills("somemod:dread_beast")).thenReturn(3_000);
+
+        final List<String> lines = render(new HunterStatsRenderer());
+
+        assertTrue(anyLineContains(lines, "somemod:dread_beast"),
+                "an unresolvable creature keeps its raw id; lines=" + lines);
+        assertFalse(anyLineContains(lines, "Pig"),
+                "the DefaultedRegistry default must never stand in for a missing mob; lines=" + lines);
+    }
+
+    @Test
+    void aHunterWhoHasKilledNothingIsToldSoRatherThanShownAnEmptyBlock() {
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HUNTER)).thenReturn(1000);
+
+        final List<String> lines = render(new HunterStatsRenderer());
+
+        assertTrue(anyLineContains(lines, "Nothing hunted yet"), "lines=" + lines);
+        assertFalse(anyLineContains(lines, "Creatures Mastered"),
+                "no league table without a log; lines=" + lines);
     }
 
     @Test
