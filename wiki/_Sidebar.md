@@ -12,6 +12,8 @@
 - [Movement Skills](Movement-Skills)
 - [Stealth](Stealth)
 - [Unarmored](Unarmored)
+- [Husbandry](Husbandry)
+- [Hunter](Hunter)
 - [Super Abilities](Super-Abilities)
 - [XP and Levelling](XP-and-Levelling)
 

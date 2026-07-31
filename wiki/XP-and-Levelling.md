@@ -75,6 +75,12 @@ Both are **0 by default** — mobs that weren't naturally spawned pay no combat 
 
 Per-mob multipliers live in `experience.yml` → `Experience_Values.Combat.Multiplier`, e.g. Creeper 4.0, Skeleton 3.0, Spider 2.0, Zombie 2.0, animals 1.0.
 
+### Hunter is the one exception
+
+**[Hunter](Hunter) pays per kill**, priced by the victim's danger tier — 100 / 300 / 800 / 1,500 for T1–T4.
+
+It can't work the other way: Hunter's subject is *which creature died*, which no single hit can answer, and per-hit would make a 500-health warden worth twenty-five zombies for reasons that have nothing to do with the tier being paid for. The tier already prices the danger. [How a tier is decided](Hunter#how-a-creatures-tier-is-decided).
+
 ---
 
 ## Movement and sneak XP are speed-normalised
@@ -103,8 +109,16 @@ This is the most unusual XP model in the mod, and it exists so speed buffs aren'
 | `Stealth.Require_Movement_Input` | Earning sneak XP while being *carried*. [Details](Stealth#the-anti-afk-gate). |
 | `Unarmored.Require_Living_Attacker` | Cactus/fire/drowning damage farms. [Details](Unarmored#the-two-exploit-gates). |
 | `Unarmored.Max_Awards_Per_Attacker` | One zombie hitting you through a slab forever. |
+| `Husbandry.Harvest_Cooldown_Seconds` | Milking the same cow, or brushing the same armadillo, on a loop. [Details](Husbandry#the-anti-exploit-gates). |
+
+Two more gates are structural rather than config keys:
+
+- **[Hunter's spawn-origin gate](Hunter#the-spawn-origin-gate)** — spawner, bred, spawn-egg, `/summon` and structure-spawned creatures pay Hunter nothing, and never advance Mob Mastery or Trophy Hunter. The marker is persisted, so it survives a world reload and survives a mob converting into another mob.
+- **[Husbandry requires a real player](Husbandry#what-deliberately-pays-nothing)** mid-interaction with the animal for every harvest verb, which is what keeps an AFK dispenser-and-hopper wool farm worth zero. There is no toggle for it on purpose.
 
 There is also a **diminishing-returns** system, and `Skills.Herbalism.Prevent_AFK_Leveling` (shipped on), which stops crops harvested **from horseback** paying XP.
+
+> **`Diminished_Returns.Threshold.Hunter` is the one entry in that table that isn't decorative.** Every other skill sits far out of the throttle's reach; a T4 boss at ~1,500 XP means fourteen kills in ten minutes trips the 20,000 threshold. Unreachable by hand, trivial for a farm. Don't tidy it to match its neighbours.
 
 ---
 

@@ -1,11 +1,11 @@
 # Skills
 
-**24 skills** — **21 primary** skills that earn XP directly, and **3 child skills** whose level is the average of their parents and which earn no XP of their own.
+**26 skills** — **23 primary** skills that earn XP directly, and **3 child skills** whose level is the average of their parents and which earn no XP of their own.
 
 | Category | Skills |
 |---|---|
-| **Gathering** | [Mining](#mining), [Woodcutting](#woodcutting), [Herbalism](#herbalism), [Excavation](#excavation), [Fishing](#fishing) |
-| **Combat** | [Swords](#swords), [Axes](#axes), [Unarmed](#unarmed), [Archery](#archery), [Crossbows](#crossbows), [Tridents](#tridents), [Maces](#maces), [Spears](#spears), [Taming](#taming) |
+| **Gathering** | [Mining](#mining), [Woodcutting](#woodcutting), [Herbalism](#herbalism), [Excavation](#excavation), [Fishing](#fishing), [Husbandry](#husbandry) |
+| **Combat** | [Swords](#swords), [Axes](#axes), [Unarmed](#unarmed), [Archery](#archery), [Crossbows](#crossbows), [Tridents](#tridents), [Maces](#maces), [Spears](#spears), [Taming](#taming), [Hunter](#hunter) |
 | **Movement** | [Parkour](#parkour), [Swimming](#swimming), [Flying](#flying) |
 | **Misc** | [Stealth](#stealth), [Unarmored](#unarmored), [Repair](#repair), [Alchemy](#alchemy) |
 | **Child** | [Agility](#agility-child), [Salvage](#salvage-child), [Smelting](#smelting-child) |
@@ -99,11 +99,31 @@ Earn XP by fishing.
 
 > Fishing has an **overfishing punishment**: casting repeatedly into the same small patch of water eventually stops paying and warns you. Move the boat.
 
+## Husbandry
+
+**New in this port.** The livestock lifecycle. **Six XP verbs** — breed, raise, feed a baby, shear, harvest a hive, and milk or brush. Super ability: **Herdsman's Call**. Full page: **[Husbandry](Husbandry)**.
+
+| Sub-skill | Unlocks at | Effect |
+|---|---|---|
+| Multi-Breed | 1 | One handful of feed sets nearby animals of the same species courting too — up to 4 extra, out to 40 blocks. |
+| Twins | 1 | Chance for a breeding to bear two young. Egg-laying breeders never twin. |
+| Bountiful Harvest | 1 | Shear, hive, milk and brush all yield a second helping, and sometimes cost the tool no durability. |
+| Beekeeper | 100 | Rob a hive and the bees never mind — no campfire needed, ever. Plus extra comb and honey. |
+| Accelerated Growth | 150 | Animals you bred grow up sooner, and a feed sometimes counts twice. |
+| Brood | 200 | Thrown eggs hatch far more often, sometimes in fours. |
+| Selective Breeding | 250 | Foals are nudged toward the best their species allows. Horse family only. |
+| Hidden Bounty | 300 | A rare find on any harvest — name tags, honey blocks, string, scutes. |
+| Herdsman's Call | 100 | The herd follows you, harvest cooldowns are ignored and every harvest doubles. Super ability, triggered by holding a **goat horn** and right-clicking. |
+
+> **Husbandry vs Taming: the line is the verb, never the species.** Taming pays *once*, for making an animal yours. Husbandry pays *repeatedly*, for what you do with it afterwards. Breeding a tamed wolf is Husbandry; feeding a wolf to heal it in a fight is Taming.
+
+> **Nothing a dispenser does pays anything**, and an unlisted species pays nothing for either breeding *or* raising. Both are deliberate — see the [full page](Husbandry#what-deliberately-pays-nothing).
+
 ---
 
 # Combat
 
-Combat XP is paid **per hit**, not per kill. See [XP and Levelling](XP-and-Levelling#combat-xp-is-per-hit).
+Combat XP is paid **per hit**, not per kill. See [XP and Levelling](XP-and-Levelling#combat-xp-is-per-hit). **[Hunter](#hunter) is the one exception** — it pays per kill.
 
 ## Swords
 
@@ -202,6 +222,20 @@ Earn XP by taming animals and fighting alongside your wolves.
 | Fast Food Service | 1 | Chance for wolves to heal on attack. |
 | Environmentally Aware | 1 | Cactus/lava phobia, fall-damage immunity. |
 | Pummel | 1 | Wolves have a chance to knock foes back. |
+
+## Hunter
+
+**New in this port,** and **not a weapon skill** — Hunter cares only about *what died*, never about what you swung. XP is paid **per kill**, priced by the victim's danger tier. Full page: **[Hunter](Hunter)**.
+
+| Sub-skill | Ranks | Effect |
+|---|---|---|
+| Mob Mastery | — | Kill **500 / 2,500 / 10,000** of *one* creature for **+1.0 / +2.0 / +3.0** damage against that creature, forever. |
+| Trophy Hunter | 4 | Chance for a kill to roll its **own loot table a second time**. One mob tier per rank: 100 / 300 / 600 / 900. |
+| Quarry Sense | 1 | **Crouch** and hit any creature with a bone to read your hunt log against it. |
+
+**Mob Mastery has no rank ladder** and deliberately no `skillranks.yml` entry — it unlocks on a per-creature kill counter, which no level-keyed rank can express, so a rank display would only lie. It is the one sub-skill in the mod that doesn't appear in `/mcstats`' ranks list.
+
+> **Farmed creatures count for nothing** — spawner, trial spawner, bred, spawn-egg, `/summon` and structure spawns are all excluded, for XP, mastery *and* Trophy Hunter alike. The marker survives world reloads and survives a zombie drowning into a drowned.
 
 ---
 

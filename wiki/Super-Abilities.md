@@ -39,14 +39,15 @@ Taming's ability, and a different gesture again: **sneak + left-click a block** 
 
 ## Item-triggered abilities
 
-The two Pass-2 abilities are **not gated on holding a tool**. They fire immediately on right-click while holding a configured item, which is **never consumed** — there's no readying step and no arming window.
+The three Pass-2 abilities are **not gated on holding a tool**. They fire immediately on right-click while holding a configured item, which is **never consumed** — there's no readying step and no arming window.
 
 | Ability | Skill | Trigger item | Config key |
 |---|---|---|---|
 | **Second Wind** | [Agility](Movement-Skills#second-wind--the-super-ability) | `FEATHER` | `Skills.Agility.Second_Wind_Item` |
 | **Smoke Bomb** | [Stealth](Stealth#smoke-bomb--unlocks-at-250) | `GUNPOWDER` | `Skills.Stealth.Smoke_Bomb_Item` |
+| **Herdsman's Call** | [Husbandry](Husbandry#herdsmans-call--the-super-ability) | `GOAT_HORN` | `Skills.Husbandry.Herdsmans_Call_Item` |
 
-> ⚠️ **The two items must differ from each other.** Both actives listen on the same use-item event, so sharing an item fires one and prints the other's refusal message.
+> ⚠️ **All three items must differ from each other.** The actives listen on the same use-item event, so sharing an item fires one and prints another's refusal message — which looks like a broken ability rather than a config collision.
 
 ### Second Wind
 
@@ -63,6 +64,18 @@ The two Pass-2 abilities are **not gated on holding a tool**. They fire immediat
 Vanilla **Invisibility for 100 ticks (5 s)**, no firework, no particle burst. Unlocks at Stealth 250.
 
 Remember that vanilla invisibility does **not** hide armour or held items.
+
+### Herdsman's Call
+
+Unlocks at Husbandry **100**. Three effects at once, for the duration:
+
+| Effect | Detail |
+|---|---|
+| **The herd follows you** | Breedable animals within 16 blocks path toward you under vanilla's own navigation — not teleported, so fences and water still stop them. |
+| **Harvest cooldowns are ignored** | The five-minute per-animal milk/brush gate is skipped, and the animal's clock is **not** stamped. |
+| **Every harvest double-yields** | All four harvest verbs, without needing a Bountiful Harvest rank. |
+
+mcMMO only *observes* the click, so **the horn still sounds** as vanilla intends.
 
 ---
 
@@ -81,6 +94,7 @@ Abilities:
         Blast_Mining: 60
         Giga_Drill_Breaker: 240
         Green_Terra: 240
+        Herdsmans_Call: 240
         Second_Wind: 240
         Serrated_Strikes: 240
         Skull_Splitter: 240
