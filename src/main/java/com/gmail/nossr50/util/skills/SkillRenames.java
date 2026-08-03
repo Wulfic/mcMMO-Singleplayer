@@ -50,6 +50,18 @@ public final class SkillRenames {
      */
     private static final Map<String, String> LEGACY_CONFIG_SECTIONS = new LinkedHashMap<>();
 
+    /**
+     * Legacy dotted YAML <em>path</em> → the path it lives at today. Insertion-ordered, same as
+     * above.
+     *
+     * <p>Distinct from {@link #LEGACY_CONFIG_SECTIONS} because that table matches a whole path
+     * <em>segment</em> anywhere in a key, which can only express "this skill was renamed". A
+     * sub-skill that moves from one parent to another moves a sub-tree while both parents keep
+     * existing — {@code Skills.Agility.Roll} → {@code Skills.Parkour.Roll} — and a segment match on
+     * "Agility" would fire for Dodge, Fleet Footed and eight others that did not move.
+     */
+    private static final Map<String, String> LEGACY_CONFIG_PATHS = new LinkedHashMap<>();
+
     static {
         // Pass 2 / D5 (2026-07-25): ACROBATICS was renamed AGILITY when it absorbed the Land, Water
         // and Air movement domains, and a `skills.AGILITY` read-alias for `skills.ACROBATICS` lived
@@ -64,6 +76,14 @@ public final class SkillRenames {
         // LEGACY_ENUM_NAMES is intentionally left EMPTY rather than deleted. It is the mechanism, not
         // the data: the next rename costs one line here instead of a silent profile reset.
         LEGACY_CONFIG_SECTIONS.put("Acrobatics", "Agility");
+
+        // 2026-08-03 (GitHub #4): Roll was re-parented from AGILITY to PARKOUR so that the falls it
+        // pays XP for level the skill that gates it. Every derived address moved with the enum name;
+        // a user who had tuned the old block would otherwise find it silently ignored, because
+        // copyMissingDefaults back-fills only ABSENT keys and would happily write shipped defaults
+        // to the new path alongside their edits at the old one.
+        LEGACY_CONFIG_PATHS.put("Skills.Agility.Roll", "Skills.Parkour.Roll");
+        LEGACY_CONFIG_PATHS.put("Skills.Agility.GracefulRoll", "Skills.Parkour.GracefulRoll");
     }
 
     /**
@@ -84,5 +104,14 @@ public final class SkillRenames {
      */
     public static @NotNull Map<String, String> legacyConfigSections() {
         return Map.copyOf(LEGACY_CONFIG_SECTIONS);
+    }
+
+    /**
+     * Legacy dotted config paths mapped to where they live now, for the config-orphan warning.
+     *
+     * @return an unmodifiable view; never {@code null}
+     */
+    public static @NotNull Map<String, String> legacyConfigPaths() {
+        return Map.copyOf(LEGACY_CONFIG_PATHS);
     }
 }

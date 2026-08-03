@@ -251,9 +251,12 @@ Earn XP by **sprinting on land**. Falling, rolling and dodging pay into Parkour 
 
 | Sub-skill | Ranks | Effect |
 |---|---|---|
+| Roll | — | Land strategically to avoid fall damage. Hold **sneak** as you land for a **Graceful Roll**: twice the odds and twice the damage negated. |
 | Snow Walker | 1 | Cross **powder snow** without sinking into it. Unlocks at Parkour 100 (RetroMode). |
 
-Snow Walker is deliberately parented to Parkour rather than Agility, so you earn it by running and jumping — not by a swimmer and a flier dragging the three-skill average up.
+Both are deliberately parented to Parkour rather than Agility, so you earn them by running, jumping and landing — not by a swimmer and a flier dragging the three-skill average up. Roll matters most: falling pays its XP into Parkour, so gating it on Agility's mean meant the falls that earn it levelled its own unlock at a third rate.
+
+Roll has no rank ladder — it is available from level 1 and its odds scale linearly with Parkour, reaching the configured maximum at Parkour 1000 (RetroMode). `/mcstats parkour` shows both the plain and the Graceful figure.
 
 ## Swimming
 
@@ -317,14 +320,13 @@ Earn XP by brewing potions.
 
 ## Agility (child)
 
-Level = mean of **Parkour + Swimming + Flying**. Earns no XP itself, but owns **ten sub-skills** — the largest sub-skill set in the mod. Super ability: **Second Wind**.
+Level = mean of **Parkour + Swimming + Flying**. Earns no XP itself, but owns **nine sub-skills** — the largest sub-skill set in the mod. Super ability: **Second Wind**.
 
 Full page: **[Movement Skills](Movement-Skills)**.
 
 | Sub-skill | Ranks | Effect |
 |---|---|---|
 | Dodge | 1 | Halve incoming attack damage. |
-| Roll | 1 | Land strategically to avoid fall damage (Graceful Roll is twice as effective). |
 | Fleet Footed | 3 | Move faster through whatever you're travelling through. Rank 1 = land, 2 = water, 3 = air. |
 | Athlete | 1 | Sprinting costs less hunger. |
 | Smash | 1 | Sprint attacks hit harder and send targets flying. |

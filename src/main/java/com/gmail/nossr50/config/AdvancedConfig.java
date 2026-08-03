@@ -64,20 +64,22 @@ public class AdvancedConfig extends ConfigLoader {
             reason.add("Skills.Agility.Dodge.DamageModifier should be greater than 1!");
         }
 
-        if (getMaximumProbability(SubSkillType.AGILITY_ROLL) < 1) {
-            reason.add("Skills.Agility.Roll.ChanceMax should be at least 1!");
+        // Roll moved from Skills.Agility.* to Skills.Parkour.* on 2026-08-03 (GitHub #4) — see
+        // SubSkillType.PARKOUR_ROLL. The addresses below are the sub-skill's new home.
+        if (getMaximumProbability(SubSkillType.PARKOUR_ROLL) < 1) {
+            reason.add("Skills.Parkour.Roll.ChanceMax should be at least 1!");
         }
 
-        if (getMaxBonusLevel(SubSkillType.AGILITY_ROLL) < 1) {
-            reason.add("Skills.Agility.Roll.MaxBonusLevel should be at least 1!");
+        if (getMaxBonusLevel(SubSkillType.PARKOUR_ROLL) < 1) {
+            reason.add("Skills.Parkour.Roll.MaxBonusLevel should be at least 1!");
         }
 
         if (getRollDamageThreshold() < 0) {
-            reason.add("Skills.Agility.Roll.DamageThreshold should be at least 0!");
+            reason.add("Skills.Parkour.Roll.DamageThreshold should be at least 0!");
         }
 
         if (getGracefulRollDamageThreshold() < 0) {
-            reason.add("Skills.Agility.GracefulRoll.DamageThreshold should be at least 0!");
+            reason.add("Skills.Parkour.GracefulRoll.DamageThreshold should be at least 0!");
         }
 
         if (getCatalysisMinSpeed() <= 0) {
@@ -646,12 +648,26 @@ public class AdvancedConfig extends ConfigLoader {
         return config.getDouble("Skills.Agility.Dodge.DamageModifier", 2.0D);
     }
 
+    /**
+     * The flat fall damage a successful Roll negates. Roll lives under {@code Skills.Parkour} as of
+     * 2026-08-03 (GitHub #4) — see {@link SubSkillType#PARKOUR_ROLL}. Read as a literal path rather
+     * than through the enum because {@code DamageThreshold} is not one of the two addresses
+     * {@code getMaximumProbability} / {@code getMaxBonusLevel} derive.
+     */
     public double getRollDamageThreshold() {
-        return config.getDouble("Skills.Agility.Roll.DamageThreshold", 7.0D);
+        return config.getDouble("Skills.Parkour.Roll.DamageThreshold", 7.0D);
     }
 
+    /**
+     * ⚠️ <b>Read by nothing but the validator above.</b> {@code AgilityManager#rollCheck} hardcodes
+     * the graceful threshold as {@code getRollDamageThreshold() * 2}, exactly as legacy's
+     * {@code Roll#rollCheck} did, so this key is a knob that does not turn — and it is not shipped in
+     * {@code advanced.yml} either, so it always answers with the default below. Left in place (rather
+     * than deleted) because it is the address a future "graceful negates its own amount" change would
+     * claim; do not advertise it in docs until something actually reads it.
+     */
     public double getGracefulRollDamageThreshold() {
-        return config.getDouble("Skills.Agility.GracefulRoll.DamageThreshold", 14.0D);
+        return config.getDouble("Skills.Parkour.GracefulRoll.DamageThreshold", 14.0D);
     }
 
     // --- Agility movement domains (Pass 2) ---------------------------------------------------

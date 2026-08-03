@@ -86,10 +86,10 @@ three new primary skills, one per medium you travel through.
 
 | Skill | How you train it | What it gives you |
 |---|---|---|
-| **Parkour** | Sprinting and falling on land | Feeds Agility. Owns **Snow Walker** — cross powder snow without sinking. |
+| **Parkour** | Sprinting and falling on land | Feeds Agility. Owns **Roll** (negate fall damage; hold sneak on landing for a Graceful Roll at double odds) and **Snow Walker** (cross powder snow without sinking). |
 | **Swimming** | Swimming | Feeds Agility. |
 | **Flying** | Elytra gliding | Feeds Agility. |
-| **Agility** *(child)* | — derived — | Dodge, Roll, Fleet Footed, Athlete, Smash, Lead Lungs, Glide, Lake Raider, Solar Wings, and the **Second Wind** super ability. |
+| **Agility** *(child)* | — derived — | Dodge, Fleet Footed, Athlete, Smash, Lead Lungs, Glide, Lake Raider, Solar Wings, and the **Second Wind** super ability. |
 | **Stealth** | Sneaking under your own power | **Padfoot** (sneak nearly at walking speed), **Assassin** (backstab damage), **Smoke Bomb** super ability. |
 | **Unarmored** | Taking damage with **every armour slot empty** | **Iron Skin** (real armour points at four tiers — leather/gold/iron/diamond) and **Thorny Skin** (reflect a sting at melee attackers). |
 | **Husbandry** | Breeding, taming, shearing, milking, feeding and robbing hives | Nine sub-skills across six XP verbs — **Multi-Breed**, **Twins**, **Selective Breeding**, **Accelerated Growth**, **Brood**, **Bountiful Harvest**, **Hidden Bounty**, **Beekeeper** and the **Herdsman's Call** super ability. |

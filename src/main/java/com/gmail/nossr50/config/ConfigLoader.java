@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -39,6 +40,7 @@ public abstract class ConfigLoader {
         this.config = initConfig();
         copyMissingDefaults();
         warnOnRenamedSections();
+        warnOnRenamedPaths();
     }
 
     /** The bundled default config shipped inside the jar at the classpath root. */
@@ -122,6 +124,51 @@ public abstract class ConfigLoader {
                 break; // One warning per file per rename; the whole section moves together.
             }
         }
+    }
+
+    /**
+     * Warn about tuning stranded at a dotted path that has since moved somewhere else.
+     *
+     * <p>Same failure and the same warn-don't-rewrite policy as {@link #warnOnRenamedSections()},
+     * one level finer: this fires when a <em>sub-skill</em> is re-parented, which moves its config
+     * sub-tree while both the old and the new parent section legitimately continue to exist. The
+     * section-level check cannot express that without warning about every unmoved sibling.
+     *
+     * <p>Silent unless the file actually still carries the old path, which a freshly generated
+     * config never does — a warning that fires for everyone is a warning nobody reads.
+     */
+    private void warnOnRenamedPaths() {
+        for (Map.Entry<String, String> moved : strandedLegacyPaths().entrySet()) {
+            LOGGER.warn("{} still contains '{}', which moved to '{}'. Any values you set under "
+                            + "'{}' are being ignored — move them to '{}'.",
+                    fileName, moved.getKey(), moved.getValue(), moved.getKey(), moved.getValue());
+        }
+    }
+
+    /**
+     * The subset of {@link SkillRenames#legacyConfigPaths()} this config file still carries values
+     * for: legacy path → where it moved to.
+     *
+     * <p>Split out of {@link #warnOnRenamedPaths()} purely so the detection is assertable — a bare
+     * {@code LOGGER.warn} is not. Package-private for the test.
+     *
+     * @return an insertion-ordered map, empty (the common case) when nothing is stranded
+     */
+    @NotNull Map<String, String> strandedLegacyPaths() {
+        final Map<String, String> stranded = new LinkedHashMap<>();
+        for (Map.Entry<String, String> moved : SkillRenames.legacyConfigPaths().entrySet()) {
+            final String legacy = moved.getKey();
+            for (String key : config.getKeys(true)) {
+                // Whole-path match or a descendant of it — never a prefix match on a partial
+                // segment, so "Skills.Agility.Roll" cannot claim a hypothetical
+                // "Skills.Agility.RollTwo".
+                if (key.equals(legacy) || key.startsWith(legacy + ".")) {
+                    stranded.put(legacy, moved.getValue());
+                    break; // The whole sub-tree moves together; one entry per move.
+                }
+            }
+        }
+        return stranded;
     }
 
     /**

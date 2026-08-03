@@ -11,14 +11,19 @@ import java.util.List;
 /**
  * {@code /mcstats agility} — the widest stats screen in the mod, and the reason it needs structure.
  *
- * <p>Agility carries ten sub-skills across four movement domains. Rendered as one flat list they are
- * unreadable, and it is impossible to tell at a glance which apply to what the player is currently
- * doing — so the effect lines are grouped under <b>Falling / Land / Water / Air</b> headers. Fleet
- * Footed and Second Wind each appear under every domain whose rank the player has reached, rather
- * than once with three numbers crammed into a single line.
+ * <p>Agility carries nine sub-skills across four movement domains. Rendered as one flat list they
+ * are unreadable, and it is impossible to tell at a glance which apply to what the player is
+ * currently doing — so the effect lines are grouped under <b>Falling / Land / Water / Air</b>
+ * headers. Fleet Footed and Second Wind each appear under every domain whose rank the player has
+ * reached, rather than once with three numbers crammed into a single line.
  *
  * <p>A section with nothing unlocked is omitted entirely, so a new player still sees the short
  * Falling-only screen the skill shipped with rather than three empty headings.
+ *
+ * <p><b>Roll is not here.</b> It was the tenth sub-skill until 2026-08-03, when GitHub #4 moved it
+ * to {@link SubSkillType#PARKOUR_ROLL} — it is gated on the Parkour level now, not on Agility's mean
+ * of Parkour/Swimming/Flying, so it renders on {@link ParkourStatsRenderer} where that level is
+ * shown. Dodge stayed behind and is still Agility-gated.
  */
 public final class AgilityStatsRenderer extends SkillStatsRenderer {
 
@@ -30,9 +35,7 @@ public final class AgilityStatsRenderer extends SkillStatsRenderer {
     private AgilityManager agility;
 
     private boolean canDodge;
-    private boolean canRoll;
     private String dodgeChance;
-    private String rollChance;
 
     public AgilityStatsRenderer() {
         super(PrimarySkillType.AGILITY);
@@ -43,15 +46,10 @@ public final class AgilityStatsRenderer extends SkillStatsRenderer {
         agility = mmoPlayer.getAgilityManager();
 
         canDodge = hasUnlocked(SubSkillType.AGILITY_DODGE);
-        canRoll = hasUnlocked(SubSkillType.AGILITY_ROLL);
 
         if (canDodge) {
             dodgeChance = ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
                     SubSkillType.AGILITY_DODGE)[0];
-        }
-        if (canRoll) {
-            rollChance = ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
-                    SubSkillType.AGILITY_ROLL)[0];
         }
     }
 
@@ -59,13 +57,13 @@ public final class AgilityStatsRenderer extends SkillStatsRenderer {
     protected List<String> statsDisplay(float skillValue) {
         final List<String> messages = new ArrayList<>();
 
-        // --- Falling: the roster Agility shipped with as Acrobatics ---
+        // --- Falling: what is left of the roster Agility shipped with as Acrobatics ---
+        // Roll used to sit here beside Dodge. It moved to /mcstats parkour on 2026-08-03 (GitHub #4)
+        // along with the sub-skill itself, so that its odds are shown next to the level that gates
+        // them. Dodge stays: it is still gated on Agility's three-skill mean.
         final List<String> falling = new ArrayList<>();
         if (canDodge) {
             falling.add(getStatMessage(SubSkillType.AGILITY_DODGE, dodgeChance));
-        }
-        if (canRoll) {
-            falling.add(getStatMessage(SubSkillType.AGILITY_ROLL, rollChance));
         }
         addSection(messages, SECTION_FALLING, falling);
 

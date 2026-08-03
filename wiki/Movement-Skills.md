@@ -79,14 +79,15 @@ Wearing boots with **Feather Falling** multiplies these by **2.0**.
 
 ## Agility's sub-skills
 
-All ten perks live on Agility and are gated on Agility's *derived* level. RetroMode unlock levels shown.
+Nine perks live on Agility and are gated on Agility's *derived* level. RetroMode unlock levels shown.
+
+**Roll is the exception and is documented under [Parkour](Skills#parkour).** It moved there on 2026-08-03: fall XP is paid to Parkour, so gating Roll on the three-skill mean meant the falls that earn it levelled its own unlock at a third rate, and only for players who also swam and flew.
 
 ### Fall domain
 
 | Sub-skill | Unlocks | Effect |
 |---|---|---|
 | **Dodge** | 1 | Chance to halve incoming attack damage. |
-| **Roll** | — | Land strategically to avoid fall damage. **Graceful Roll** is twice as effective. |
 
 ### Land domain
 
@@ -144,7 +145,8 @@ Neither has sub-skills of its own. They exist to feed Agility, and their `Level_
 |---|---|
 | `experience.yml` | `Experience_Values.Agility.Movement` — baseline, reference speeds, multipliers |
 | `experience.yml` | `Experience_Values.Agility.{Dodge,Roll,Fall,FeatherFall_Multiplier}` |
-| `advanced.yml` | `Skills.Agility.*` — every sub-skill's numbers |
+| `advanced.yml` | `Skills.Agility.*` — every sub-skill's numbers except Roll |
+| `advanced.yml` | `Skills.Parkour.Roll` — Roll's odds and damage threshold (moved here 2026-08-03) |
 | `skillranks.yml` | `Agility.*` / `Parkour.*` — unlock levels |
 | `config.yml` | `Skills.Agility` — level cap, PVP/PVE gates, Second Wind item, `XP_After_Teleport_Cooldown` |
 

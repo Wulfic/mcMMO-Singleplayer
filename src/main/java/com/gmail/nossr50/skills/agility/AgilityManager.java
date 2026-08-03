@@ -122,7 +122,7 @@ public class AgilityManager extends SkillManager {
             final boolean isGraceful = getPlayer().isSneaking();
             final Probability probability = isGraceful
                     ? ProbabilityUtil.getGracefulRollProbability(mmoPlayer)
-                    : ProbabilityUtil.getSubSkillProbability(SubSkillType.AGILITY_ROLL, mmoPlayer);
+                    : ProbabilityUtil.getSubSkillProbability(SubSkillType.PARKOUR_ROLL, mmoPlayer);
             final boolean rngSuccess = ProbabilityUtil.isStaticSkillRNGSuccessful(
                     PrimarySkillType.AGILITY, mmoPlayer, probability);
 
@@ -217,11 +217,18 @@ public class AgilityManager extends SkillManager {
 
     /**
      * Whether the Roll subskill is unlocked and enabled for this player. Singleplayer permission is
-     * always granted; the rank gate is the real check.
+     * always granted, and {@link SubSkillType#PARKOUR_ROLL} carries zero ranks (so
+     * {@code getRank} returns {@code -1} = "always unlocked"), which makes this unconditionally
+     * true today. It is kept as a real check rather than collapsed to {@code true} because the odds
+     * — not the unlock — are the gate, and a future rank ladder would want exactly this call.
+     *
+     * <p>Roll lives on {@link PrimarySkillType#PARKOUR} rather than on this manager's own skill; see
+     * {@link SubSkillType#PARKOUR_ROLL} for why. The manager still owns the behaviour, because every
+     * movement sub-skill does.
      */
     public boolean canRoll() {
-        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_ROLL)
-                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_ROLL);
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.PARKOUR_ROLL)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.PARKOUR_ROLL);
     }
 
     /**

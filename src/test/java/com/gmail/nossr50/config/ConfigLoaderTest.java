@@ -78,4 +78,48 @@ class ConfigLoaderTest {
         final TestConfig reloaded = new TestConfig(dataFolder);
         assertEquals(999, reloaded.config().getInt("General.MaxLevel"));
     }
+
+    // --- The re-parented sub-skill warning (GitHub #4) -------------------------------------------
+
+    @Test
+    void detectsTuningStrandedAtAPathThatMoved(@TempDir Path dataFolder) throws IOException {
+        // Roll moved from Skills.Agility.Roll to Skills.Parkour.Roll on 2026-08-03. Because
+        // copyMissingDefaults back-fills only ABSENT keys, a user who had tuned the old block ends up
+        // with BOTH: shipped defaults at the new path (which the code reads) and their own values at
+        // the old one, silently ignored. That is the failure this warning exists to name.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                Skills:
+                  Agility:
+                    Roll:
+                      ChanceMax: 42.0
+                """);
+
+        final TestConfig loader = new TestConfig(dataFolder);
+
+        assertEquals("Skills.Parkour.Roll",
+                loader.strandedLegacyPaths().get("Skills.Agility.Roll"),
+                "the stranded block must be reported, pointing at where it moved to");
+    }
+
+    @Test
+    void staysSilentForAConfigThatNeverHadTheOldPath(@TempDir Path dataFolder) {
+        // The common case, and every freshly generated config. A warning here would cry wolf on every
+        // boot for every user, which is how warnings stop being read.
+        final TestConfig loader = new TestConfig(dataFolder);
+
+        assertTrue(loader.strandedLegacyPaths().isEmpty(),
+                "nothing is stranded in a config written from current defaults");
+    }
+
+    @Test
+    void theShippedAdvancedYmlDoesNotStillDefineTheOldRollPath(@TempDir Path dataFolder) {
+        // The trap this closes: if advanced.yml kept its Skills.Agility.Roll block after the move,
+        // copyMissingDefaults would write it into every user's file and the warning above would then
+        // fire on a config mcMMO itself had just authored.
+        final AdvancedConfig advanced = new AdvancedConfig(dataFolder);
+
+        assertTrue(advanced.strandedLegacyPaths().isEmpty(),
+                "the shipped advanced.yml must not carry both spellings; stranded="
+                        + advanced.strandedLegacyPaths());
+    }
 }

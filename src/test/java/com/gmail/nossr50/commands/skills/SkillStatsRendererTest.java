@@ -322,6 +322,44 @@ class SkillStatsRendererTest {
     }
 
     @Test
+    void parkourShowsBothTheRollAndTheGracefulRollChance() {
+        // GitHub #4. Two regressions in one screen:
+        //  1. Roll moved from AGILITY to PARKOUR (2026-08-03) so its odds are shown beside the level
+        //     that actually moves them. Rendering it under /mcstats agility again would show the
+        //     three-skill mean and re-create the confusion the move fixed.
+        //  2. "Graceful Roll Chance" (the .Stat.Extra label) has existed in the shipped locale since
+        //     the Bukkit port and was NEVER rendered by anything, so the doubled number a sneaking
+        //     player actually rolls against was invisible everywhere in the game.
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR)).thenReturn(500);
+
+        final List<String> lines = render(new ParkourStatsRenderer());
+
+        assertTrue(anyLineContains(lines, "Roll Chance"),
+                "the plain roll chance must be shown; lines=" + lines);
+        assertTrue(anyLineContains(lines, "Graceful Roll Chance"),
+                "the doubled sneaking chance must be shown too; lines=" + lines);
+        // 500/1000 * 100 = 50%, and graceful is exactly double it. Asserting the values (not just
+        // the labels) is what stops the two lines silently rendering the same number.
+        assertTrue(anyLineContains(lines, "50.00%"), "plain roll at Parkour 500; lines=" + lines);
+        assertTrue(anyLineContains(lines, "100.00%"), "graceful roll at Parkour 500; lines=" + lines);
+        assertFalse(anyLineContains(lines, "!Parkour"),
+                "a stat line resolved to a locale miss; lines=" + lines);
+    }
+
+    @Test
+    void agilityNoLongerRendersRoll() {
+        // The other half of the move: Roll must not appear on both screens. Dodge stays, because it
+        // is still gated on Agility's mean.
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY)).thenReturn(1000);
+
+        final List<String> lines = render(new AgilityStatsRenderer());
+
+        assertTrue(anyLineContains(lines, "Dodge"), "Dodge is still Agility's; lines=" + lines);
+        assertFalse(anyLineContains(lines, "Roll Chance"),
+                "Roll belongs to /mcstats parkour now; lines=" + lines);
+    }
+
+    @Test
     void swimmingAndFlyingDeliberatelyFallBackToTheGenericRenderer() {
         // NOT an oversight, and pinned so it is not "fixed" into an empty stats section later:
         // Swimming and Flying own no sub-skills of their own. They are parents of the child skill

@@ -9,9 +9,8 @@ public enum SubSkillType {
     /* !! Warning -- Do not let subskills share a name with any existing PrimarySkillType as it will clash with the static import !! */
 
     /* AGILITY */
-    // Fall domain (shipped since the Bukkit port).
+    // Fall domain (shipped since the Bukkit port). Roll used to live here too; see PARKOUR_ROLL.
     AGILITY_DODGE(1),
-    AGILITY_ROLL,
     // Land / Water / Air domains (Pass 2). Fleet Footed and Second Wind each carry one rank per
     // medium — land, then water, then air — rather than being three sub-skills apiece.
     AGILITY_FLEET_FOOTED(3),
@@ -118,13 +117,29 @@ public enum SubSkillType {
     /*
      * PARKOUR
      *
-     * Parkour is one of Agility's three parent skills and normally has no sub-skills of its own —
-     * its XP is simply what Agility's level is averaged from. Snow Walker is the deliberate
-     * exception. Parenting it here rather than under AGILITY means it is gated on the Parkour level
-     * itself (the parent map keys off the enum name's prefix), so it is earned by running and
-     * jumping rather than by a swimmer and a flier dragging the three-skill average up.
+     * Parkour is one of Agility's three parent skills, so a sub-skill parked here is gated on the
+     * Parkour level itself (the parent map keys off the enum name's prefix) rather than on the mean
+     * of Parkour, Swimming and Flying that AGILITY_* sub-skills read. Both constants below are here
+     * for the same reason: a swimmer and a flier should not drag the average that gates a
+     * running-and-jumping perk.
      */
     PARKOUR_SNOW_WALKER(1),
+    /*
+     * ⚠️ MOVED FROM AGILITY_ROLL, 2026-08-03 — GitHub #4 ("rolling never procs"), and the move IS
+     * the fix.
+     *
+     * Roll's odds are `skillLevel / MaxBonusLevel * ChanceMax`, which with the shipped RetroMode
+     * numbers is `level / 10` percent. Under AGILITY that level was the *mean* of Parkour, Swimming
+     * and Flying — but fall XP is paid to PARKOUR alone (AgilityManager#EPISODIC_XP_SKILL), so
+     * falling levelled Roll's own gate at a third rate and only while the player also swam and flew.
+     * The reporter's PARKOUR 126 / SWIMMING 8 / FLYING 0 bought Agility 44: a 4.4% roll, 8.8%
+     * graceful. Legacy Acrobatics had no such gap — it earned XP from the very falls Roll gates on,
+     * a self-reinforcing loop this rename restores.
+     *
+     * Consequence worth knowing: Dodge stays on AGILITY (it is a combat reaction, not a landing) yet
+     * still pays its XP into Parkour. That asymmetry is deliberate, not an oversight.
+     */
+    PARKOUR_ROLL,
 
     /* Repair */
     REPAIR_ARCANE_FORGING(8),

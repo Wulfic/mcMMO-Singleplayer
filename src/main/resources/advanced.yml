@@ -118,15 +118,8 @@ Skills:
                 RetroMode: 1000
             DamageModifier: 2.0
 
-        Roll:
-            # ChanceMax: Maximum chance of rolling when on <MaxBonusLevel> or higher
-            # MaxBonusLevel: On this level or higher, the roll chance will not go higher than <ChanceMax>
-            # DamageThreshold: The max damage a player can negate with a roll, graceful roll doubles this number
-            ChanceMax: 100.0
-            MaxBonusLevel:
-                Standard: 100
-                RetroMode: 1000
-            DamageThreshold: 7.0
+        # Roll moved to `Skills.Parkour.Roll` on 2026-08-03 (GitHub #4) -- it is gated on the Parkour
+        # level now, not on Agility's three-skill mean. See the Parkour section below.
 
         FleetFooted:
             # Move faster in whichever medium you are travelling through. One sub-skill, three ranks:
@@ -729,6 +722,26 @@ Skills:
                 Rank_6: 3.0
                 Rank_7: 4.0
                 Rank_8: 4.0
+    #
+    #  Settings for Parkour
+    ###
+    #  Parkour is one of Agility's three parent skills. Roll lives here rather than under Agility
+    #  because Agility's level is the MEAN of Parkour, Swimming and Flying, while the fall XP that
+    #  Roll earns is paid to Parkour alone -- so gating Roll on Agility levelled it at a third rate
+    #  and only for players who also swam and flew. Moved 2026-08-03 (GitHub #4). If you tuned the
+    #  old `Skills.Agility.Roll` block, move your values here; mcMMO warns on boot if you have not.
+    ###
+    Parkour:
+        Roll:
+            # ChanceMax: Maximum chance of rolling when on <MaxBonusLevel> or higher
+            # MaxBonusLevel: On this level or higher, the roll chance will not go higher than <ChanceMax>
+            # DamageThreshold: The max damage a player can negate with a roll, graceful roll doubles this number
+            ChanceMax: 100.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            DamageThreshold: 7.0
+
     #
     #  Settings for Repair
     ###

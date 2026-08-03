@@ -288,7 +288,7 @@ public class ProbabilityUtil {
      */
     public static @NotNull Probability getGracefulRollProbability(@Nullable McMMOPlayer mmoPlayer) {
         double gracefulOdds =
-                getSubSkillProbability(SubSkillType.AGILITY_ROLL, mmoPlayer).getValue() * 2;
+                getSubSkillProbability(SubSkillType.PARKOUR_ROLL, mmoPlayer).getValue() * 2;
         return Probability.ofValue(gracefulOdds);
     }
 

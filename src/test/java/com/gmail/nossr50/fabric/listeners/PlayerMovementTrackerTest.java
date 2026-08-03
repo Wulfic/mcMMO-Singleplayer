@@ -211,6 +211,26 @@ class PlayerMovementTrackerTest {
     }
 
     @Test
+    void holdingShiftThroughAFallPaysStealthNothing() {
+        // GitHub #4 reported Graceful Roll "never procs" and said Stealth XP fired "instead",
+        // implying Stealth was claiming the landing and short-circuiting Agility. It is not: the two
+        // are independent, and the ground requirement means a player who holds shift for the whole
+        // descent earns exactly zero Stealth XP for it. (What #4 actually was: Roll's odds were gated
+        // on Agility's three-skill mean instead of on Parkour — see RollProbabilityTest.)
+        //
+        // Distinct from airborneSneakingDoesNotQualify above, which pins the gate; this pins the
+        // claim in the bug report, so it is not silently deleted as a duplicate.
+        final ServerPlayerEntity falling = sneakingPlayer();
+        lenient().when(falling.isOnGround()).thenReturn(false);
+
+        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(falling),
+                "no Stealth credit while airborne, however long the fall");
+        // ...and the landing tick itself is ordinary sneak-travel, worth one tick like any other.
+        assertTrue(PlayerMovementTracker.qualifiesAsSneakTravel(sneakingPlayer()),
+                "touchdown is not special-cased either way");
+    }
+
+    @Test
     void aStuckShiftKeyWithNoDirectionalInputDoesNotQualify() {
         // The whole point of the skill's anti-AFK design: sneak held down, being pushed along by a
         // water current or a piston loop, with nobody at the keyboard. Position moves; no movement
