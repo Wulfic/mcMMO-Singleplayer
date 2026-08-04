@@ -150,10 +150,17 @@ public final class HusbandryListener {
 
         final String entityConfigString = ConfigStringUtils.getConfigEntityTypeString(
                 Registries.ENTITY_TYPE.getId(parent.getType()).getPath());
-        husbandry.onBreed(entityConfigString);
+        final HusbandryManager.BreedAward award =
+                husbandry.onBreed(entityConfigString, parent.getEntityWorld().getTime());
+        if (award.capReached()) {
+            // Once per window, not once per breeding. A gate that pays nothing and says nothing is
+            // indistinguishable from a broken one -- the lesson GitHub #4 and #5 both turned on.
+            NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                    "Husbandry.BreedAwardCap.Reached");
+        }
 
-        claimOffspring(husbandry, breeder, child);
-        maybeBearTwin(mmoPlayer, husbandry, breeder, parent, mate, child);
+        claimOffspring(husbandry, breeder, child, award.paid());
+        maybeBearTwin(mmoPlayer, husbandry, breeder, parent, mate, child, award.paid());
     }
 
     /**
@@ -172,13 +179,29 @@ public final class HusbandryListener {
      * reversed on 2026-07-29. It used to be a {@code MetadataStore} entry, which meant a calf bred
      * before a restart quietly paid nothing when it matured; twenty minutes of vanilla growth is
      * long enough that "did you quit in between?" was a real and invisible condition on the payout.
+     *
+     * <h2>⚠️ A breeding the award cap refused marks nothing</h2>
+     * {@code paid} is what carries that, and it is the difference between a cap and a twenty-minute
+     * delay. The raise verb pays a full breeding's worth of XP off this marker alone, so marking a
+     * calf whose breeding paid nothing would let a pen bred past the cap collect the whole refused
+     * amount anyway — later, invisibly, and with the cap's own log line saying it had been stopped.
+     * <b>Brood already sets this precedent</b> and for the same reason: a hatched chick is
+     * deliberately unmarked so an AFK egg farm cannot become a raise-XP farm twenty minutes on.
+     *
+     * <p>The growth acceleration is applied either way. It is a yield effect, not a payout — no XP
+     * flows from a calf growing up sooner unless it also carries the marker — so withholding it
+     * would only make a refused breeding feel arbitrarily punished.
+     *
+     * @param paid whether the breeding that produced this child actually paid Husbandry XP
      */
     private static void claimOffspring(HusbandryManager husbandry, ServerPlayerEntity breeder,
-            PassiveEntity child) {
+            PassiveEntity child, boolean paid) {
         if (child == null) {
             return; // Egg-laying breeder: the clutch is not an entity we can mark.
         }
-        child.setAttached(McMMOAttachments.BRED_BY, breeder.getUuid());
+        if (paid) {
+            child.setAttached(McMMOAttachments.BRED_BY, breeder.getUuid());
+        }
 
         final int acceleratedAge = husbandry.applyGrowthAcceleration(child.getBreedingAge());
         if (acceleratedAge != child.getBreedingAge()) {
@@ -206,7 +229,7 @@ public final class HusbandryListener {
      */
     private static void maybeBearTwin(McMMOPlayer mmoPlayer, HusbandryManager husbandry,
             ServerPlayerEntity breeder, AnimalEntity parent, AnimalEntity mate,
-            PassiveEntity child) {
+            PassiveEntity child, boolean paid) {
         if (child == null || mate == null) {
             return; // Egg-laying breeder: vanilla produced no baby for us to double.
         }
@@ -225,8 +248,9 @@ public final class HusbandryListener {
         twin.refreshPositionAndAngles(parent.getX(), parent.getY(), parent.getZ(), 0.0F, 0.0F);
         // Claimed exactly like its sibling, and after setBaby so there is a childhood to shorten.
         // A twin with no bred-by marker would be the one baby in the game whose breeder could never
-        // be paid for raising it.
-        claimOffspring(husbandry, breeder, twin);
+        // be paid for raising it -- and by the same token it inherits its sibling's refusal, so a
+        // breeding the award cap turned down cannot smuggle a payable calf out through Twins.
+        claimOffspring(husbandry, breeder, twin, paid);
         serverWorld.spawnEntityAndPassengers(twin);
 
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
@@ -237,11 +261,26 @@ public final class HusbandryListener {
      * {@code Multi-Breed}: a player has just set one animal in love, so set its nearby same-species
      * neighbours in love too, from that one breeding item.
      *
-     * <p>Called from {@code AnimalLovePlayerMixin}. Bounded on <b>two</b> independent axes and both
-     * matter: the radius decides how far a player can reach, while
-     * {@link HusbandryManager#getMultiBreedMaxAdditionalAnimals()} decides how much XP a single
-     * click can be worth. Husbandry pays per breeding, so without the count cap one item in a large
-     * pen would pay dozens of breedings at once — see that method for the full reasoning.
+     * <p>Called from {@code AnimalLovePlayerMixin}. <b>Bounded by the radius alone</b> — every
+     * eligible animal it reaches is set in love, however many that is.
+     *
+     * <h2>The count cap that used to live here (GitHub #3, 2026-08-04)</h2>
+     * There was a second bound: at most four neighbours per item. It is gone, and the gate it was
+     * standing in for now sits on the XP payout instead
+     * ({@link HusbandryManager#getBreedXpAwardsPerWindow()}). Two reasons, and the second is why the
+     * move was not merely a preference:
+     *
+     * <ul>
+     *   <li>It taxed the mechanic rather than the reward — the sub-skill exists so you can feed the
+     *       pen from where you stand, and a cap of four sent you walking to the rest of the herd.</li>
+     *   <li>It bounded XP <b>per item</b>, and wheat is free. Twenty clicks in one breath paid fifty
+     *       breedings straight through it, so the farm it was written against was never closed.</li>
+     * </ul>
+     *
+     * <p><b>The sweep's cost is unchanged</b> by removing it: {@code getEntitiesByClass} already
+     * walked and filtered every animal in the box, and the cap only decided how many of the survivors
+     * got a {@code lovePlayer} call. The radius is what sizes that scan, and it keeps its own hard
+     * clamp ({@link HusbandryManager#HARD_MAX_MULTI_BREED_RADIUS}).
      *
      * @param fed    the animal the player actually fed
      * @param player the feeder; ignored unless it is a real server player
@@ -266,9 +305,8 @@ public final class HusbandryListener {
             return;
         }
 
-        final int maxAdditional = husbandry.getMultiBreedMaxAdditionalAnimals();
         final double radius = husbandry.getMultiBreedRadius();
-        if (maxAdditional <= 0 || radius <= 0) {
+        if (radius <= 0) {
             return;
         }
 
@@ -278,13 +316,8 @@ public final class HusbandryListener {
 
         SPREADING_LOVE.set(true);
         try {
-            int spread = 0;
             for (AnimalEntity neighbour : neighbours) {
-                if (spread >= maxAdditional) {
-                    break;
-                }
                 neighbour.lovePlayer(serverPlayer);
-                spread++;
             }
         } finally {
             SPREADING_LOVE.set(false);

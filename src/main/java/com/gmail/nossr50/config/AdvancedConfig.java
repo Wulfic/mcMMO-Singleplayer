@@ -281,10 +281,6 @@ public class AdvancedConfig extends ConfigLoader {
             reason.add("Skills.Husbandry.MultiBreed.MaxRadius should be at least BaseRadius!");
         }
 
-        if (getMultiBreedMaxAdditionalAnimals() < 0) {
-            reason.add("Skills.Husbandry.MultiBreed.MaxAdditionalAnimals should be at least 0!");
-        }
-
         if (getMaxBonusLevel(SubSkillType.HUSBANDRY_ACCELERATED_GROWTH) < 1) {
             reason.add("Skills.Husbandry.AcceleratedGrowth.MaxBonusLevel should be at least 1!");
         }
@@ -835,17 +831,12 @@ public class AdvancedConfig extends ConfigLoader {
                 HusbandryManager.DEFAULT_MULTI_BREED_MAX_RADIUS);
     }
 
-    /**
-     * How many extra animals one breeding item may set in love at max level.
-     *
-     * <p><b>This is Multi-Breed's anti-exploit gate, not a flavour knob</b> — see
-     * {@link HusbandryManager#DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS}. Husbandry pays per
-     * breeding, so this number is the ceiling on how much XP a single click can be worth.
-     */
-    public int getMultiBreedMaxAdditionalAnimals() {
-        return config.getInt("Skills.Husbandry.MultiBreed.MaxAdditionalAnimals",
-                HusbandryManager.DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS);
-    }
+    // Skills.Husbandry.MultiBreed.MaxAdditionalAnimals was removed on 2026-08-04 (GitHub #3). The
+    // spread is now unbounded inside the radius, and the gate it used to be moved onto the XP payout
+    // as ExploitFix.Husbandry.Breed_Xp_Awards_Per_Window in experience.yml -- see
+    // HusbandryManager#DEFAULT_BREED_XP_AWARDS_PER_WINDOW for why capping the item never worked.
+    // SkillRenames.LEGACY_CONFIG_PATHS carries the warning for anyone whose advanced.yml still has
+    // the old key, since copyMissingDefaults leaves an orphaned key sitting there looking effective.
 
     /**
      * What fraction of a newborn's childhood Accelerated Growth skips at max level.

@@ -600,6 +600,35 @@ public class ExperienceConfig extends ConfigLoader {
                 HusbandryManager.DEFAULT_HARVEST_COOLDOWN_SECONDS);
     }
 
+    /**
+     * How many breedings may pay Husbandry XP inside one award window; {@code 0} disables the cap.
+     *
+     * <p><b>The skill's headline anti-exploit gate</b> since GitHub #3 (2026-08-04), and it replaced
+     * one that did not work. The old gate capped how many animals a single breeding item could set in
+     * love, which bounded XP <em>per item</em> — and wheat is free, so twenty clicks in one breath
+     * still paid fifty breedings. Counting payouts per unit of <em>time</em> is what closes that,
+     * because time is the one input a farm cannot manufacture. See
+     * {@link HusbandryManager#DEFAULT_BREED_XP_AWARDS_PER_WINDOW}.
+     */
+    public int getHusbandryBreedXpAwardsPerWindow() {
+        return config.getInt("ExploitFix.Husbandry.Breed_Xp_Awards_Per_Window",
+                HusbandryManager.DEFAULT_BREED_XP_AWARDS_PER_WINDOW);
+    }
+
+    /**
+     * How long one breed-XP award window lasts, in seconds; {@code 0} disables the cap.
+     *
+     * <p>The shipped thirty seconds is <b>derived rather than tuned</b>: it is vanilla's own love
+     * duration ({@code AnimalEntity#lovePlayer} sets {@code loveTicks = 600}), so every breeding one
+     * breeding item can cause falls inside a single window. Shortening it silently raises the
+     * effective cap by splitting one click's burst in two — see
+     * {@link HusbandryManager#DEFAULT_BREED_XP_AWARD_WINDOW_SECONDS}.
+     */
+    public int getHusbandryBreedXpAwardWindowSeconds() {
+        return config.getInt("ExploitFix.Husbandry.Breed_Xp_Award_Window_Seconds",
+                HusbandryManager.DEFAULT_BREED_XP_AWARD_WINDOW_SECONDS);
+    }
+
     /* Archery */
     public double getArcheryDistanceMultiplier() {
         return config.getDouble("Experience_Values.Archery.Distance_Multiplier", 0.025);

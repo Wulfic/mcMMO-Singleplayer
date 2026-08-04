@@ -84,6 +84,17 @@ public final class SkillRenames {
         // to the new path alongside their edits at the old one.
         LEGACY_CONFIG_PATHS.put("Skills.Agility.Roll", "Skills.Parkour.Roll");
         LEGACY_CONFIG_PATHS.put("Skills.Agility.GracefulRoll", "Skills.Parkour.GracefulRoll");
+
+        // 2026-08-04 (GitHub #3): Husbandry's anti-exploit gate moved off the BREEDING and onto the
+        // XP PAYOUT, which also moved it out of advanced.yml and into experience.yml. The old key is
+        // not renamed so much as retired -- there is no longer any cap on how many animals one item
+        // may set in love -- but the failure it leaves behind is the same one this table exists for:
+        // copyMissingDefaults never deletes anything, so a player who deliberately tuned
+        // MaxAdditionalAnimals is left with an edited-looking key the game no longer reads.
+        //
+        // The target names its file, because unlike every other entry here this move crosses one.
+        LEGACY_CONFIG_PATHS.put("Skills.Husbandry.MultiBreed.MaxAdditionalAnimals",
+                "experience.yml → ExploitFix.Husbandry.Breed_Xp_Awards_Per_Window");
     }
 
     /**

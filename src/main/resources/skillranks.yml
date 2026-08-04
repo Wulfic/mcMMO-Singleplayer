@@ -709,7 +709,7 @@ Husbandry:
     # the first thing a player does and the only XP source Husbandry has until stage 2 -- so gating
     # its two sub-skills behind levels would mean the early skill is levelled by doing the one thing
     # neither of them affects yet. Their strength scales from zero regardless, via ChanceMax and
-    # MaxAdditionalAnimals in advanced.yml, so "unlocked at 1" does not mean "strong at 1".
+    # MultiBreed's radius in advanced.yml, so "unlocked at 1" does not mean "strong at 1".
     MultiBreed:
         Standard:
             Rank_1: 1

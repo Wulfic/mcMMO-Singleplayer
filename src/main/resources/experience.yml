@@ -106,6 +106,49 @@ ExploitFix:
         # Five minutes matches vanilla's own post-breeding love cooldown, so the two clocks a player
         # has to keep in their head are the same clock.
         Harvest_Cooldown_Seconds: 300
+
+        # How many breedings may pay Husbandry XP inside one window, and how long that window is.
+        # Set either to 0 to disable the cap entirely.
+        #
+        # ######################################################################################
+        # THIS IS HUSBANDRY'S ANTI-EXPLOIT GATE. It is not a flavour knob.
+        # ######################################################################################
+        # Husbandry pays XP per BREEDING, and Multi-Breed turns one player action into many
+        # breedings, so something has to bound what a pen can produce.
+        #
+        # Until 2026-08-04 that gate lived in advanced.yml as
+        # Skills.Husbandry.MultiBreed.MaxAdditionalAnimals -- a ceiling of four on how many animals
+        # ONE breeding item could set in love. It was moved here (GitHub #3) because it was wrong
+        # twice over:
+        #
+        #   * It taxed the mechanic instead of the reward. Multi-Breed exists so you can feed the
+        #     pen from where you stand; a cap of four sent you walking to the rest of the herd
+        #     anyway, which is exactly what the issue reports as painful.
+        #   * IT NEVER BOUNDED THE XP RATE. It bounded XP per ITEM, and wheat is free. Twenty clicks
+        #     in one breath set a hundred animals in love and paid all fifty resulting breedings, so
+        #     the farm the cap was written against went straight through it.
+        #
+        # Counting PAYOUTS PER UNIT OF TIME closes that, because time is the one input a farm cannot
+        # manufacture. Same shape as the Unarmored per-attacker cap and the Agility dodge cap above:
+        # this port's answer to a repeatable award has consistently been a ceiling on the AWARD.
+        #
+        # The thirty seconds is DERIVED, not tuned -- it is vanilla's own love duration
+        # (AnimalEntity#lovePlayer sets loveTicks = 600), so every breeding that one handful of feed
+        # can possibly cause lands inside a single window. That is what makes the cap readable as
+        # "one handful of feed pays at most eight breedings". Do NOT shorten the window to "make it
+        # fairer": a window briefer than vanilla's love duration splits one click's burst across two
+        # windows and silently doubles the effective cap.
+        #
+        # Eight is double the old four, per the issue. At the shipped cow price of 350 that is
+        # 336,000 XP/h sustained, comfortably above the skill's ~51 h design budget -- so it does
+        # not bite a player breeding by hand or working a normal pen, only the loop that repeats
+        # forever.
+        #
+        # A refused breeding still happens and still produces its calf. It simply pays nothing --
+        # and it leaves the calf UNMARKED, so the raise verb pays nothing for it either twenty
+        # minutes later. Otherwise the cap would be a delay rather than a cap.
+        Breed_Xp_Awards_Per_Window: 8
+        Breed_Xp_Award_Window_Seconds: 30
 Fishing_ExploitFix_Options:
     MoveRange: 3
     OverFishLimit: 10

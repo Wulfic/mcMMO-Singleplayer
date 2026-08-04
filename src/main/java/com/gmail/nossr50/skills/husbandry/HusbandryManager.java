@@ -11,6 +11,7 @@ import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.treasure.HusbandryTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.SkillManager;
+import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
@@ -105,27 +106,54 @@ public class HusbandryManager extends SkillManager {
     public static final double DEFAULT_MULTI_BREED_MAX_RADIUS = HARD_MAX_MULTI_BREED_RADIUS;
 
     /**
-     * How many <em>extra</em> animals one breeding item can set in love at {@code MaxBonusLevel}.
+     * How many breedings may pay Husbandry XP inside one
+     * {@link #DEFAULT_BREED_XP_AWARD_WINDOW_SECONDS window}.
      *
-     * <p><b>This number, not the radius, is the anti-exploit gate — read this before raising it.</b>
-     * Husbandry pays per breeding, and Multi-Breed is the only thing in the skill that turns one
-     * player action into many breedings. Left uncapped at the 40-block radius, one wheat thrown into
-     * a hundred-cow pen would pay fifty breedings at once, repeatable as fast as a player can click,
-     * and the whole XP budget in {@code plans/new-skills/husbandry.md} (~51 h of active breeding to
-     * max) would collapse to under an hour.
+     * <p><b>This is the skill's anti-exploit gate — read this before raising it.</b> Husbandry pays
+     * per breeding, and Multi-Breed turns one player action into many breedings, so something has to
+     * bound how much XP a pen can produce.
      *
-     * <p>Capping the <em>count</em> rather than the radius keeps what makes the sub-skill good — you
-     * reach across the pen instead of walking to each animal — while keeping the XP per click
-     * bounded. It is the same shape as Unarmored's per-attacker award cap and Agility's Dodge cap:
-     * the port's answer to a repeatable award has consistently been a hard ceiling on awards, not a
-     * softer rate.
+     * <h2>Why the cap moved off the breeding and onto the payout (GitHub #3, 2026-08-04)</h2>
+     * Until now the gate was {@code MultiBreed.MaxAdditionalAnimals}, a ceiling of four on how many
+     * animals one breeding item could set in love. It had two problems and the second one is fatal:
      *
-     * <p><b>Ruled at four, down from the eight stage 1 shipped</b> (2026-07-29). Four keeps
-     * Multi-Breed a convenience — you feed the pen from where you stand instead of chasing each
-     * animal — rather than making it the skill's primary income: at eight, one click was worth nine
-     * breedings and the sub-skill quietly became the only sensible way to level Husbandry at all.
+     * <ul>
+     *   <li>It taxed the <em>mechanic</em> rather than the reward. The sub-skill's whole appeal is
+     *       feeding the pen from where you stand, and a cap of four meant walking to the rest of the
+     *       herd anyway — which is what the issue reports as painful.</li>
+     *   <li><b>It never actually bounded the XP rate.</b> It bounded XP <em>per item</em>, and wheat
+     *       is free. Twenty clicks in one breath set a hundred animals in love and paid every one of
+     *       the resulting fifty breedings, so the exploit the cap was written against — a big pen and
+     *       a wheat farm — went straight through it.</li>
+     * </ul>
+     *
+     * A cap counted <em>per unit of time</em> closes that, because time is the one input a farm
+     * cannot manufacture. It is also the same shape the port has reached for twice already:
+     * Unarmored's per-attacker award cap and Agility's Dodge cap both bound the award rather than the
+     * mechanic.
+     *
+     * <p><b>Eight, doubled from the old four</b>, per the issue. At the shipped cow price of 350 that
+     * is 336,000 XP/h sustained — comfortably above the skill's ~51 h design budget, so the cap does
+     * not bite a player breeding by hand or working a normal pen. It bites only the loop that repeats
+     * forever.
      */
-    public static final int DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS = 4;
+    public static final int DEFAULT_BREED_XP_AWARDS_PER_WINDOW = 8;
+
+    /**
+     * How long one breed-XP award window lasts, in seconds.
+     *
+     * <p><b>Derived, not tuned: it is vanilla's own love duration.</b>
+     * {@code AnimalEntity#lovePlayer} sets {@code loveTicks = 600} (bytecode-verified), so an animal
+     * a player feeds forgets about it after exactly thirty seconds. Every breeding one breeding item
+     * can possibly cause therefore lands inside a single window, which is what makes this cap
+     * readable as <em>"one handful of feed pays at most {@value #DEFAULT_BREED_XP_AWARDS_PER_WINDOW}
+     * breedings"</em> — precisely the job the old per-item cap was doing, now expressed in a unit a
+     * wheat farm cannot inflate.
+     *
+     * <p>Do not shorten this to "make it fairer". A window briefer than vanilla's love duration
+     * splits one click's burst across two windows and quietly doubles the effective cap.
+     */
+    public static final int DEFAULT_BREED_XP_AWARD_WINDOW_SECONDS = 30;
 
     /**
      * How much of a newborn's childhood {@code Accelerated Growth} removes at {@code MaxBonusLevel},
@@ -266,22 +294,143 @@ public class HusbandryManager extends SkillManager {
     }
 
     /**
-     * Credit one successful breeding.
+     * What one breeding was worth, and whether it was the moment the award cap started biting.
+     *
+     * @param xp         the XP awarded; {@code 0} when the species is unpriced <em>or</em> when this
+     *                   window's awards are already spent
+     * @param capReached {@code true} only on the <b>first</b> breeding a window refuses. The caller
+     *                   uses it to tell the player once per window rather than once per breeding —
+     *                   a gate that silently pays nothing is indistinguishable from a broken one,
+     *                   and a gate that says so on every breeding in a hundred-cow pen is worse
+     */
+    public record BreedAward(float xp, boolean capReached) {
+
+        /** Whether this breeding actually moved the player's XP. */
+        public boolean paid() {
+            return xp > 0;
+        }
+    }
+
+    /** A breeding that reached neither the price table nor the cap. */
+    private static final BreedAward NOTHING = new BreedAward(0F, false);
+
+    /**
+     * Whether the award window is open at all — distinct from a start tick of zero, which is a
+     * perfectly ordinary world time on a freshly created world.
+     */
+    private boolean breedWindowOpen;
+
+    /** The world tick the current award window opened on; meaningless while {@link #breedWindowOpen} is false. */
+    private long breedWindowStartTick;
+
+    /** Awards already spent in the current window. */
+    private int breedAwardsThisWindow;
+
+    /** Whether the player has already been told the cap bit, in the current window. */
+    private boolean breedCapAnnouncedThisWindow;
+
+    /**
+     * Credit one successful breeding, unless this window's award cap is already spent.
      *
      * <p>Called once per <b>breeding</b>, never once per parent. The trigger layer sits on the single
      * point vanilla itself uses to record "this player bred these two animals", so the pair arrives
      * here already collapsed into one event.
      *
+     * <p><b>The cap is claimed after the price, never before.</b> A species the table does not price
+     * must not burn a slot on its way to paying nothing, or a pen of dolphins would throttle the cows
+     * next to it.
+     *
      * @param entityConfigString the animal's config key, e.g. {@code "Cow"}
-     * @return the XP awarded, or {@code 0} for a species the table does not price
+     * @param worldTick          the world's current tick — the clock this cap is measured on. Passed
+     *                           in rather than read, both to keep this class free of Minecraft and
+     *                           because it makes the whole window assertable without a fake clock
+     * @return what the breeding paid, and whether this was the moment the cap started biting
      */
-    public float onBreed(String entityConfigString) {
+    public BreedAward onBreed(String entityConfigString, long worldTick) {
         final float xp = getBreedXp(entityConfigString);
         if (xp <= 0) {
-            return 0F;
+            return NOTHING;
+        }
+        if (!claimBreedAward(worldTick)) {
+            final boolean announce = !breedCapAnnouncedThisWindow;
+            breedCapAnnouncedThisWindow = true;
+            return new BreedAward(0F, announce);
         }
         applyXpGain(xp, XPGainReason.PVE, XPGainSource.SELF);
-        return xp;
+        return new BreedAward(xp, false);
+    }
+
+    /**
+     * Spend one of this window's breed-XP awards.
+     *
+     * <p>A fixed window rather than a sliding one: the window opens on the first award after the last
+     * one expired and runs for a fixed length, so at a boundary a player can collect up to two
+     * windows' worth in quick succession. That is deliberate and harmless — the burst is bounded at
+     * twice the cap and the sustained rate is exactly the cap — and it costs one long and one int of
+     * state instead of a queue of timestamps per player.
+     *
+     * <p>A window that appears to have started in the future counts as expired. The world clock can
+     * legitimately move backwards ({@code /time set}, or the player changing dimension), and of the
+     * two ways to be wrong about that, refusing to reset would lock the player out of breeding XP
+     * for as long as the clock stayed behind — silently, and with no way to tell it from a bug.
+     *
+     * @return {@code true} if an award was available and has now been spent
+     */
+    private boolean claimBreedAward(long worldTick) {
+        final int max = getBreedXpAwardsPerWindow();
+        final int windowTicks = getBreedXpAwardWindowTicks();
+        if (max <= 0 || windowTicks <= 0) {
+            return true; // Gate configured off.
+        }
+        final long elapsed = worldTick - breedWindowStartTick;
+        if (!breedWindowOpen || elapsed < 0 || elapsed >= windowTicks) {
+            breedWindowOpen = true;
+            breedWindowStartTick = worldTick;
+            breedAwardsThisWindow = 0;
+            breedCapAnnouncedThisWindow = false;
+        }
+        if (breedAwardsThisWindow >= max) {
+            return false;
+        }
+        breedAwardsThisWindow++;
+        return true;
+    }
+
+    /**
+     * How many breedings may pay XP per window; {@code 0} or less disables the cap entirely.
+     *
+     * <p>See {@link #DEFAULT_BREED_XP_AWARDS_PER_WINDOW} for why this gate exists and why it counts
+     * payouts rather than breedings.
+     */
+    public int getBreedXpAwardsPerWindow() {
+        final ExperienceConfig experience = experience();
+        return experience == null
+                ? DEFAULT_BREED_XP_AWARDS_PER_WINDOW
+                : experience.getHusbandryBreedXpAwardsPerWindow();
+    }
+
+    /** How long one award window lasts, in seconds; {@code 0} or less disables the cap entirely. */
+    public int getBreedXpAwardWindowSeconds() {
+        final ExperienceConfig experience = experience();
+        return experience == null
+                ? DEFAULT_BREED_XP_AWARD_WINDOW_SECONDS
+                : experience.getHusbandryBreedXpAwardWindowSeconds();
+    }
+
+    /** The same window in world ticks, which is the clock {@link #onBreed} is actually measured on. */
+    public int getBreedXpAwardWindowTicks() {
+        final int seconds = getBreedXpAwardWindowSeconds();
+        return seconds <= 0 ? 0 : seconds * Misc.TICK_CONVERSION_FACTOR;
+    }
+
+    /**
+     * Whether the award cap is switched on at all.
+     *
+     * <p>Read by {@code /mcstats husbandry}, which renders the cap only when there is one — a line
+     * reading "0 per 0s" would be worse than no line.
+     */
+    public boolean isBreedXpAwardCapped() {
+        return getBreedXpAwardsPerWindow() > 0 && getBreedXpAwardWindowTicks() > 0;
     }
 
     // --- Sub-skill: Twins ---------------------------------------------------------------------
@@ -335,34 +484,6 @@ public class HusbandryManager extends SkillManager {
         final double max = Math.max(base, advanced.getMultiBreedMaxRadius());
         final double scaled = base + scaleToLevel(max - base, advanced.getMultiBreedMaxBonusLevel());
         return Math.min(HARD_MAX_MULTI_BREED_RADIUS, scaled);
-    }
-
-    /**
-     * How many <em>additional</em> animals one breeding item may set in love, beyond the one the
-     * player actually fed.
-     *
-     * <p>See {@link #DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS} for why this cap exists and why it
-     * is the count rather than the radius that carries it. Scales from one at unlock to the
-     * configured maximum at {@code MaxBonusLevel}.
-     *
-     * @return the cap, or {@code 0} when Multi-Breed is locked or configured off
-     */
-    public int getMultiBreedMaxAdditionalAnimals() {
-        if (!canMultiBreed()) {
-            return 0;
-        }
-        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
-        final int max = advanced == null
-                ? DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS
-                : advanced.getMultiBreedMaxAdditionalAnimals();
-        if (max <= 0) {
-            return 0; // Configured off: the sub-skill still "unlocks" but spreads to nobody.
-        }
-        final int maxBonusLevel = advanced == null
-                ? 0
-                : advanced.getMultiBreedMaxBonusLevel();
-        // Floor of one: an unlocked Multi-Breed that reaches nobody at all would read as broken.
-        return Math.max(1, (int) Math.floor(1 + scaleToLevel(max - 1, maxBonusLevel)));
     }
 
     // --- Raise ------------------------------------------------------------------------------

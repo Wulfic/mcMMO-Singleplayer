@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -57,9 +59,10 @@ import org.mockito.Mockito;
  * <p>That test pins the pricing and the gates as arithmetic. What is unproven without this file is
  * the wiring that can silently go wrong in-game: that a breeding actually reaches
  * {@link HusbandryManager#onBreed}, that the species charged is the one bred, that {@code Twins}
- * respects its roll, that Multi-Breed honours <b>both</b> of its bounds, and — the one no
- * predicate-level test would catch — that the re-entrancy guard holds, without which one piece of
- * wheat propagates outward animal by animal until the stack overflows.
+ * respects its roll, that Multi-Breed honours its radius, that a breeding the per-window award cap
+ * refused leaves no payable calf behind, and — the one no predicate-level test would catch — that the
+ * re-entrancy guard holds, without which one piece of wheat propagates outward animal by animal until
+ * the stack overflows.
  */
 class HusbandryListenerTest {
 
@@ -116,8 +119,22 @@ class HusbandryListenerTest {
         mmoPlayer = mock(McMMOPlayer.class);
         lenient().when(mmoPlayer.getPlayer()).thenReturn(platformPlayer);
         lenient().when(mmoPlayer.getHusbandryManager()).thenReturn(husbandry);
+        // ⚠️ Not optional. onBreed returns a record, and an unstubbed mock hands back null, which
+        // the listener dereferences immediately -- every breeding test would die on an NPE rather
+        // than on whatever it was actually asserting. A paying breeding is the default because it is
+        // the case all the marker and Twins tests below are written against; the refusal is stubbed
+        // locally by the tests that mean it.
+        lenient().when(husbandry.onBreed(any(), anyLong())).thenReturn(PAID);
         UserManager.track(mmoPlayer);
     }
+
+    /** A breeding that paid, and did not trip the award cap. */
+    private static final HusbandryManager.BreedAward PAID =
+            new HusbandryManager.BreedAward(350F, false);
+
+    /** A breeding the per-window award cap refused, announcing itself for the first time. */
+    private static final HusbandryManager.BreedAward REFUSED =
+            new HusbandryManager.BreedAward(0F, true);
 
     @AfterEach
     void tearDown() {
@@ -169,9 +186,8 @@ class HusbandryListenerTest {
         return animal;
     }
 
-    private void allowMultiBreed(int maxAdditional, double radius) {
+    private void allowMultiBreed(double radius) {
         when(husbandry.canMultiBreed()).thenReturn(true);
-        lenient().when(husbandry.getMultiBreedMaxAdditionalAnimals()).thenReturn(maxAdditional);
         lenient().when(husbandry.getMultiBreedRadius()).thenReturn(radius);
     }
 
@@ -223,7 +239,7 @@ class HusbandryListenerTest {
         // The config key is derived from the parent's registry path, so a wrong-entity slip would
         // price every breeding as whatever animal happened to be passed first.
         HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), calf(-24000));
-        verify(husbandry).onBreed("Cow");
+        verify(husbandry).onBreed(eq("Cow"), anyLong());
     }
 
     @Test
@@ -232,7 +248,7 @@ class HusbandryListenerTest {
         // them, so the verb pays — only Twins, which needs a baby to copy, is skipped.
         HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), null);
 
-        verify(husbandry).onBreed("Cow");
+        verify(husbandry).onBreed(eq("Cow"), anyLong());
         verify(husbandry, never()).rollTwins();
     }
 
@@ -243,7 +259,7 @@ class HusbandryListenerTest {
         lenient().when(stranger.getUuid()).thenReturn(UUID.randomUUID());
 
         HusbandryListener.onAnimalsBred(stranger, eligibleCow(), eligibleCow(), null);
-        verify(husbandry, never()).onBreed(any());
+        verify(husbandry, never()).onBreed(any(), anyLong());
         mmoPlayer = null; // already cleaned up
     }
 
@@ -340,6 +356,59 @@ class HusbandryListenerTest {
         HusbandryListener.onBreedingAgeChange(child, -1, 0);
         HusbandryListener.onBreedingAgeChange(child, -1, 0);
         verify(husbandry, times(1)).onRaise("Cow");
+    }
+
+    @Test
+    void aBreedingTheAwardCapRefusedMarksNoCalfAndSoPaysNothingWhenItMatures() {
+        // ⚠️⚠️ THE HALF THAT MAKES IT A CAP RATHER THAN A TWENTY-MINUTE DELAY. The raise verb pays a
+        // full breeding's worth of XP off the bred-by marker alone, so a refused breeding that still
+        // marked its calf would hand over the whole refused amount anyway -- later, invisibly, and
+        // with the cap's own message saying it had been stopped. Brood already sets this precedent
+        // for exactly the same reason (a hatched chick is deliberately unmarked).
+        when(husbandry.onBreed(any(), anyLong())).thenReturn(REFUSED);
+        final PassiveEntity child = calf(-24000);
+        lenient().when(husbandry.applyGrowthAcceleration(anyInt()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
+
+        verify(child, never()).setAttached(any(), any());
+        HusbandryListener.onBreedingAgeChange(child, -1, 0);
+        verify(husbandry, never()).onRaise(any());
+    }
+
+    @Test
+    void aRefusedBreedingStillHappensAndItsCalfStillGrowsUpFaster() {
+        // The cap gates the REWARD, never the game. Vanilla bred the pair, the calf exists, and
+        // Accelerated Growth is a yield effect with no XP behind it -- withholding that would only
+        // make a refused breeding feel arbitrarily punished. Asserted off the reference point above:
+        // without this, "marks nothing" could have been implemented as "does nothing".
+        when(husbandry.onBreed(any(), anyLong())).thenReturn(REFUSED);
+        final PassiveEntity child = calf(-24000);
+        when(husbandry.applyGrowthAcceleration(-24000)).thenReturn(-16800);
+
+        HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
+        verify(child).setBreedingAge(-16800);
+    }
+
+    @Test
+    void aTwinBornOfARefusedBreedingIsUnmarkedToo() {
+        // Otherwise Twins is a hole straight through the cap: the refused breeding's own calf pays
+        // nobody, and its sibling quietly pays the full raise verb twenty minutes later.
+        when(husbandry.onBreed(any(), anyLong())).thenReturn(REFUSED);
+        final PassiveEntity child = calf(-24000);
+        final PassiveEntity twin = calf(-24000);
+        final AnimalEntity parent = eligibleCow();
+        lenient().when(husbandry.applyGrowthAcceleration(anyInt()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(husbandry.rollTwins()).thenReturn(true);
+        Mockito.doReturn(twin).when(parent).createChild(any(), any());
+
+        HusbandryListener.onAnimalsBred(breeder(), parent, eligibleCow(), child);
+
+        verify(twin, never()).setAttached(any(), any());
+        HusbandryListener.onBreedingAgeChange(twin, -1, 0);
+        verify(husbandry, never()).onRaise(any());
     }
 
     @Test
@@ -639,7 +708,7 @@ class HusbandryListenerTest {
 
     @Test
     void multiBreedSetsEligibleSameSpeciesNeighboursInLoveFromTheOneItem() {
-        allowMultiBreed(8, 40.0);
+        allowMultiBreed(40.0);
         final AnimalEntity fed = eligibleCow();
         final AnimalEntity neighbourA = eligibleCow();
         final AnimalEntity neighbourB = eligibleCow();
@@ -655,7 +724,7 @@ class HusbandryListenerTest {
 
     @Test
     void multiBreedSkipsAnimalsVanillaItselfWouldRefuseToFeed() {
-        allowMultiBreed(8, 40.0);
+        allowMultiBreed(40.0);
         final AnimalEntity fed = eligibleCow();
         final AnimalEntity baby = cow(true, -1200, true);       // still a baby
         final AnimalEntity onCooldown = cow(true, 6000, true);  // just bred
@@ -675,10 +744,12 @@ class HusbandryListenerTest {
     }
 
     @Test
-    void multiBreedStopsAtTheSpreadCapNoMatterHowManyAnimalsAreInRange() {
-        // THE anti-exploit assertion. Husbandry pays per breeding, so without this cap one wheat in
-        // a large pen would pay dozens of breedings at once and collapse the skill's XP budget.
-        allowMultiBreed(3, 40.0);
+    void multiBreedSpreadsToEveryEligibleAnimalInRange() {
+        // GitHub #3, and the direct inverse of what this test used to assert. There was a cap of four
+        // here; it is gone, because it taxed the mechanic rather than the reward and because it
+        // bounded XP per ITEM in a game where wheat is free. The anti-exploit gate now sits on the XP
+        // payout, one window at a time, and is pinned by HusbandryManagerTest.
+        allowMultiBreed(40.0);
         final AnimalEntity fed = eligibleCow();
         worldAnimals.add(fed);
         for (int i = 0; i < 30; i++) {
@@ -691,7 +762,7 @@ class HusbandryListenerTest {
                 .filter(animal -> animal != fed)
                 .filter(HusbandryListenerTest::wasSetInLove)
                 .count();
-        assertEquals(3, spread, "exactly MaxAdditionalAnimals neighbours may be set in love");
+        assertEquals(30, spread, "every eligible neighbour in the radius is set in love");
     }
 
     /** Whether this mock ever had {@code lovePlayer} called on it. */
@@ -715,8 +786,10 @@ class HusbandryListenerTest {
     }
 
     @Test
-    void aZeroSpreadCapSkipsTheSweepEntirely() {
-        allowMultiBreed(0, 40.0);
+    void aZeroRadiusSkipsTheSweepEntirely() {
+        // The radius is the only bound left on the spread, so it is also the only remaining way to
+        // switch it off -- and switching it off must skip the entity scan, not merely discard it.
+        allowMultiBreed(0.0);
         final AnimalEntity fed = eligibleCow();
         worldAnimals.addAll(Arrays.asList(fed, eligibleCow()));
 
@@ -733,7 +806,7 @@ class HusbandryListenerTest {
         //
         // The mock cannot re-enter on its own, so the cascade is simulated: every neighbour's
         // lovePlayer feeds the call straight back into the listener, exactly as the real mixin does.
-        allowMultiBreed(8, 40.0);
+        allowMultiBreed(40.0);
         final AnimalEntity fed = eligibleCow();
         worldAnimals.add(fed);
         for (int i = 0; i < 8; i++) {
@@ -757,7 +830,7 @@ class HusbandryListenerTest {
     void multiBreedSizesItsSweepFromTheConfiguredRadius() {
         // The radius is read per activation rather than baked in, so a maxed player reaches further
         // than a fresh one. Asserted by driving two different radii and reading the box back.
-        allowMultiBreed(8, 40.0);
+        allowMultiBreed(40.0);
         final AnimalEntity fed = eligibleCow();
         worldAnimals.add(fed);
 
@@ -769,7 +842,7 @@ class HusbandryListenerTest {
 
     @Test
     void aNonServerPlayerNeverTriggersTheSweep() {
-        allowMultiBreed(8, 40.0);
+        allowMultiBreed(40.0);
         final AnimalEntity fed = eligibleCow();
         worldAnimals.add(fed);
 
@@ -1231,7 +1304,7 @@ class HusbandryListenerTest {
         HusbandryListener.onEggHatchRoll(egg, 5);
         HusbandryListener.onFullClutchRoll(egg, 17);
 
-        verify(husbandry, never()).onBreed(any());
+        verify(husbandry, never()).onBreed(any(), anyLong());
         verify(husbandry, never()).onRaise(any());
         verify(husbandry, never()).onFeedBaby(any());
         verify(egg, never()).setAttached(any(), any());

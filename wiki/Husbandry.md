@@ -74,11 +74,19 @@ It covers **milking and brushing, and only those two**, because they are the onl
 
 The cooldown counts **world ticks**, not wall-clock time — pausing the game does not drain it.
 
-### `Skills.Husbandry.MultiBreed.MaxAdditionalAnimals` (default `4`)
+### `ExploitFix.Husbandry.Breed_Xp_Awards_Per_Window` (default `8`) and `Breed_Xp_Award_Window_Seconds` (default `30`)
 
-Not a flavour knob. Husbandry pays per **breeding**, and Multi-Breed is the only thing in the skill that turns one player action into many breedings. Uncapped at the 40-block radius, one wheat thrown into a hundred-cow pen would pay fifty breedings at once, repeatable as fast as you can click, and the skill's whole XP budget would collapse from ~51 hours to well under one.
+**How many breedings pay Husbandry XP in a given window.** Set either to 0 to disable the cap.
 
-**The count is capped rather than the radius**, so the sub-skill keeps being worth having — you still reach across the pen instead of walking to every animal.
+Not a flavour knob. Husbandry pays per **breeding**, and Multi-Breed turns one player action into many breedings, so something has to bound what a pen can produce.
+
+**The 30 seconds is derived, not tuned.** It is vanilla's own love duration — feeding an animal sets `loveTicks = 600` — so every breeding one handful of feed can possibly cause lands inside a single window. That is what makes the cap readable as *"one handful of feed pays at most eight breedings"*. Do not shorten the window to make it feel fairer: a window briefer than vanilla's love duration splits one click's burst across two windows and silently doubles the effective cap.
+
+A refused breeding still **happens** and still produces its calf — the cap gates the reward, never the game. It simply pays nothing, and it leaves the calf **unmarked**, so the raise verb pays nothing for it either twenty minutes later. Otherwise the cap would be a delay rather than a cap. You are told once per window when it starts biting.
+
+The window counts **world ticks**, not wall-clock time — pausing the game does not drain it.
+
+> **Replaced `Skills.Husbandry.MultiBreed.MaxAdditionalAnimals` (was `4`) on 2026-08-04.** That knob capped how many animals **one breeding item** could set in love. It was wrong twice: it taxed the mechanic rather than the reward — the whole point of Multi-Breed is feeding the pen from where you stand — and it never actually bounded the XP *rate*, because it bounded XP per **item** and wheat is free. Twenty clicks in one breath paid fifty breedings straight through it. If your `advanced.yml` still carries the old key it does nothing, and the log says so at startup; delete it.
 
 ---
 
@@ -90,14 +98,15 @@ RetroMode unlock levels shown. Divide by 10 for Standard mode.
 
 **One handful of feed sets the whole pen courting.**
 
-Feed **one** animal its breeding item and nearby animals of the same species are set in love too, from that single item.
+Feed **one** animal its breeding item and **every** eligible animal of the same species within the radius is set in love too, from that single item. There is no cap on the count — the radius is the only bound.
 
 | Knob | Default |
 |---|---|
-| `MaxAdditionalAnimals` | **4** — see [above](#skillshusbandrymultibreedmaxadditionalanimals-default-4) |
 | `BaseRadius` → `MaxRadius` | 4.0 blocks at unlock → 40.0 at max level |
 
 `MaxRadius` is **hard-clamped to 40 in code** whatever you write: it sizes an entity sweep that runs every time any player feeds any animal, so a mistyped 400 would scan a box eight chunks across.
+
+How much XP that spread is worth is bounded separately, by the [per-window award cap](#exploitfixhusbandrybreed_xp_awards_per_window-default-8-and-breed_xp_award_window_seconds-default-30).
 
 Unlocked at level 1, along with Twins and Bountiful Harvest, because breeding and shearing are the skill's *entry* verbs — gating them would mean the early skill is levelled by doing the one thing nothing rewards yet. Their strength still scales from zero.
 

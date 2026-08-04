@@ -300,7 +300,7 @@ class SkillStatsRendererTest {
 
         final List<String> lines = render(new HusbandryStatsRenderer());
 
-        for (String label : List.of("Multi-Breed Reach", "Additional Animals Bred", "Twin Chance",
+        for (String label : List.of("Multi-Breed Reach", "Breedings That Pay XP", "Twin Chance",
                 "Growth Acceleration", "Double Feed Chance", "Bonus Yield Chance",
                 "Tool Durability Save Chance")) {
             assertTrue(anyLineContains(lines, label),

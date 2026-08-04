@@ -137,6 +137,29 @@ class ConfigLoaderTest {
                         + advanced.strandedLegacyPaths());
     }
 
+    @Test
+    void detectsTuningStrandedAtAKeyThatWasRetiredAltogether(@TempDir Path dataFolder)
+            throws IOException {
+        // GitHub #3, 2026-08-04. Husbandry's anti-exploit gate moved off the BREEDING and onto the XP
+        // PAYOUT, which retired Skills.Husbandry.MultiBreed.MaxAdditionalAnimals and moved its
+        // replacement into a different FILE. The old key is not renamed so much as deleted, but the
+        // failure it leaves behind is identical: copyMissingDefaults never removes anything, so a
+        // player who had deliberately tuned it keeps an edited-looking key nothing reads.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                Skills:
+                  Husbandry:
+                    MultiBreed:
+                      MaxAdditionalAnimals: 12
+                """);
+
+        final TestConfig loader = new TestConfig(dataFolder);
+
+        assertEquals("experience.yml → ExploitFix.Husbandry.Breed_Xp_Awards_Per_Window",
+                loader.strandedLegacyPaths()
+                        .get("Skills.Husbandry.MultiBreed.MaxAdditionalAnimals"),
+                "the warning must name the file too, because this move crosses one");
+    }
+
     // --- Retuned shipped defaults (ConfigRetunes) ------------------------------------------------
 
     @Test

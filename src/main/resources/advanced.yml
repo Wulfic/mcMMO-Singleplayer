@@ -467,26 +467,20 @@ Skills:
                 RetroMode: 1000
 
         MultiBreed:
-            # Feed ONE animal its breeding item and nearby animals of the same species are set in
-            # love too, from that single item.
+            # Feed ONE animal its breeding item and EVERY eligible animal of the same species within
+            # the radius is set in love too, from that single item.
             #
-            # ####################################################################################
-            # MaxAdditionalAnimals IS THE ANTI-EXPLOIT GATE. It is not a flavour knob.
-            # ####################################################################################
-            # Husbandry pays XP per BREEDING, and this is the only thing in the skill that turns one
-            # player action into many breedings. With the count uncapped at the 40-block radius, one
-            # wheat thrown into a hundred-cow pen would pay fifty breedings at once, repeatable as
-            # fast as you can click, and the skill's whole XP budget (~51 hours of active breeding to
-            # reach 1000) would collapse to well under an hour.
+            # There is no cap on the count any more. MaxAdditionalAnimals used to live here and was
+            # removed on 2026-08-04 (GitHub #3): it taxed the mechanic rather than the reward -- the
+            # whole point of the sub-skill is feeding the pen from where you stand -- and it never
+            # actually bounded the XP rate, because it bounded XP per ITEM and wheat is free.
             #
-            # Capping the COUNT rather than the RADIUS is what keeps the sub-skill worth having --
-            # you still reach right across the pen instead of walking to every animal -- while
-            # keeping the XP a single click can be worth bounded. Set to 0 to disable the spread
-            # entirely without removing the sub-skill.
+            # The anti-exploit gate it was standing in for now sits on the XP payout instead, in
+            # experience.yml as ExploitFix.Husbandry.Breed_Xp_Awards_Per_Window. Read the comment
+            # there before tuning either one; the radius below is now the ONLY bound on the spread.
             #
-            # Four, not eight: at eight one click was worth nine breedings, which made Multi-Breed
-            # the only sensible way to level the skill at all rather than a convenience on top of it.
-            MaxAdditionalAnimals: 4
+            # If your advanced.yml still carries MaxAdditionalAnimals, it does nothing and the log
+            # says so at startup. Delete it.
 
             # Reach in blocks, at unlock and at MaxBonusLevel. MaxRadius is HARD-CLAMPED to 40 in
             # code whatever you put here: this number sizes an entity sweep that runs every time any

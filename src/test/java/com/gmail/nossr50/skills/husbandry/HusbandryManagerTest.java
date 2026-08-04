@@ -5,8 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
@@ -22,6 +24,7 @@ import com.gmail.nossr50.datatypes.treasure.HusbandryTreasure;
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.util.skills.SkillRenames;
 import com.gmail.nossr50.util.skills.SkillTools;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -244,7 +247,10 @@ class HusbandryManagerTest {
     @Test
     void breedingAwardsThePricedXpAndReportsIt() {
         setHusbandryLevel(0);
-        assertEquals(COW_BREED_XP, manager.onBreed("Cow"));
+        final HusbandryManager.BreedAward award = manager.onBreed("Cow", 0L);
+        assertEquals(COW_BREED_XP, award.xp());
+        assertTrue(award.paid());
+        assertFalse(award.capReached());
         assertTrue(profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY) > 0,
                 "onBreed must actually move the player's XP, not just compute a number");
     }
@@ -253,9 +259,137 @@ class HusbandryManagerTest {
     void breedingAnUnpricedSpeciesAwardsNothingAtAll() {
         setHusbandryLevel(0);
         final float before = profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY);
-        assertEquals(0F, manager.onBreed("Not_A_Real_Animal"));
+        assertEquals(0F, manager.onBreed("Not_A_Real_Animal", 0L).xp());
         assertEquals(before, profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY),
                 "an unpriced species must not reach the XP pipeline at all");
+    }
+
+    // --- Breed: the per-window award cap (GitHub #3) -----------------------------------------------
+
+    /** The shipped ExploitFix.Husbandry values, restated so a retune has to come through this test. */
+    private static final int AWARD_CAP = 8;
+    private static final int WINDOW_SECONDS = 30;
+    private static final long WINDOW_TICKS = WINDOW_SECONDS * 20L;
+
+    @Test
+    void theShippedAwardCapMatchesTheBundledConfig() {
+        // The cap doubled from the old four when it moved off the breeding and onto the payout
+        // (GitHub #3), and the window is vanilla's own love duration rather than a tuned number:
+        // AnimalEntity#lovePlayer sets loveTicks = 600, so one handful of feed's whole burst of
+        // breedings lands inside a single window. Pinned so a retune has to read that reasoning.
+        assertEquals(AWARD_CAP, manager.getBreedXpAwardsPerWindow());
+        assertEquals(WINDOW_SECONDS, manager.getBreedXpAwardWindowSeconds());
+        assertEquals(WINDOW_TICKS, manager.getBreedXpAwardWindowTicks());
+        assertTrue(manager.isBreedXpAwardCapped());
+    }
+
+    @Test
+    void theCapPaysExactlyNBreedingsInAWindowAndRefusesTheRest() {
+        setHusbandryLevel(0);
+        for (int i = 0; i < AWARD_CAP; i++) {
+            assertTrue(manager.onBreed("Cow", 100L).paid(),
+                    "breeding " + (i + 1) + " of " + AWARD_CAP + " is inside the cap");
+        }
+
+        final float afterTheCap = profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY);
+        final HusbandryManager.BreedAward refused = manager.onBreed("Cow", 100L);
+        assertFalse(refused.paid(), "the " + (AWARD_CAP + 1) + "th breeding in a window pays nothing");
+        assertEquals(0F, refused.xp());
+        assertEquals(afterTheCap, profile.getSkillXpLevelRaw(PrimarySkillType.HUSBANDRY),
+                "a refused breeding must not reach the XP pipeline at all");
+    }
+
+    @Test
+    void theWindowExpiresAndTheNextBreedingPaysAgain() {
+        setHusbandryLevel(0);
+        for (int i = 0; i <= AWARD_CAP; i++) {
+            manager.onBreed("Cow", 100L);
+        }
+        assertFalse(manager.onBreed("Cow", 100L + WINDOW_TICKS - 1).paid(),
+                "one tick short of the window is still inside it");
+        assertTrue(manager.onBreed("Cow", 100L + WINDOW_TICKS).paid(),
+                "the window is measured in world ticks and it has now elapsed");
+    }
+
+    @Test
+    void anUnpricedSpeciesDoesNotBurnAnAwardSlot() {
+        // ⚠️ The ordering trap. If the cap were claimed before the price were read, a pen of animals
+        // the table does not price would throttle the cows standing next to them -- and there would be
+        // nothing anywhere to say why.
+        setHusbandryLevel(0);
+        for (int i = 0; i < 50; i++) {
+            manager.onBreed("Not_A_Real_Animal", 100L);
+        }
+        for (int i = 0; i < AWARD_CAP; i++) {
+            assertTrue(manager.onBreed("Cow", 100L).paid(),
+                    "the whole cap must still be available after 50 unpriced breedings");
+        }
+    }
+
+    @Test
+    void theCapAnnouncesItselfOnceAndOnlyOncePerWindow() {
+        // A gate that silently pays nothing is indistinguishable from a broken one -- the lesson both
+        // GitHub #4 and #5 turned on. A gate that says so on every breeding in a hundred-cow pen is
+        // worse, so exactly one breeding per window carries the flag.
+        setHusbandryLevel(0);
+        for (int i = 0; i < AWARD_CAP; i++) {
+            assertFalse(manager.onBreed("Cow", 100L).capReached(),
+                    "a breeding that pays must never claim the cap was reached");
+        }
+        assertTrue(manager.onBreed("Cow", 100L).capReached(), "the first refusal announces itself");
+        for (int i = 0; i < 20; i++) {
+            assertFalse(manager.onBreed("Cow", 100L).capReached(),
+                    "every later refusal in the same window stays quiet");
+        }
+
+        // A fresh window rearms the announcement, or a player who kept breeding for an hour would be
+        // told once at the start and never again. Exactly AWARD_CAP breedings here, so the assertion
+        // below is the window's genuine FIRST refusal rather than a later quiet one.
+        for (int i = 0; i < AWARD_CAP; i++) {
+            manager.onBreed("Cow", 100L + WINDOW_TICKS);
+        }
+        assertTrue(manager.onBreed("Cow", 100L + WINDOW_TICKS).capReached(),
+                "the next window announces its own first refusal");
+    }
+
+    @Test
+    void aClockThatRunsBackwardsReopensTheWindowRatherThanLockingThePlayerOut() {
+        // /time set, or the player stepping through a portal into a dimension with its own count.
+        // Of the two ways to be wrong about a backwards clock, refusing to reset is much the worse:
+        // the player would stop earning breed XP for as long as the clock stayed behind, silently.
+        setHusbandryLevel(0);
+        for (int i = 0; i <= AWARD_CAP; i++) {
+            manager.onBreed("Cow", 1_000_000L);
+        }
+        assertTrue(manager.onBreed("Cow", 5L).paid(),
+                "a window that appears to start in the future counts as expired");
+    }
+
+    @Test
+    void aZeroCapOrAZeroWindowDisablesTheGateEntirely() {
+        setHusbandryLevel(0);
+
+        // ⚠️ A SPY on the real config, not a bare mock. onBreed's paying branch runs the whole XP
+        // pipeline, which reads the formula type and the level curve straight back out of
+        // ExperienceConfig -- a wholesale mock answers those with null and the test dies inside
+        // FormulaManager, nowhere near the cap it was aiming at.
+        final ExperienceConfig shipped = McMMOMod.getExperienceConfig();
+
+        final ExperienceConfig noCap = spy(shipped);
+        doReturn(0).when(noCap).getHusbandryBreedXpAwardsPerWindow();
+        managerWithConfig(noCap);
+        assertFalse(manager.isBreedXpAwardCapped());
+        for (int i = 0; i < AWARD_CAP * 3; i++) {
+            assertTrue(manager.onBreed("Cow", 100L).paid(), "Awards_Per_Window: 0 means no cap");
+        }
+
+        final ExperienceConfig noWindow = spy(shipped);
+        doReturn(0).when(noWindow).getHusbandryBreedXpAwardWindowSeconds();
+        managerWithConfig(noWindow);
+        assertFalse(manager.isBreedXpAwardCapped());
+        for (int i = 0; i < AWARD_CAP * 3; i++) {
+            assertTrue(manager.onBreed("Cow", 100L).paid(), "Window_Seconds: 0 means no cap");
+        }
     }
 
     // --- Sub-skill: Twins -------------------------------------------------------------------------
@@ -306,7 +440,6 @@ class HusbandryManagerTest {
         setHusbandryLevel(0);
         assertFalse(manager.canMultiBreed());
         assertEquals(0.0, manager.getMultiBreedRadius(), "a locked sub-skill must sweep nothing");
-        assertEquals(0, manager.getMultiBreedMaxAdditionalAnimals());
     }
 
     @Test
@@ -344,38 +477,23 @@ class HusbandryManagerTest {
     }
 
     @Test
-    void multiBreedSpreadCapGrowsWithLevelAndTopsOutAtTheConfiguredMaximum() {
-        // THE anti-exploit gate. Husbandry pays per breeding and Multi-Breed is the only thing that
-        // turns one click into many breedings, so this ceiling is what bounds the XP a single
-        // breeding item can be worth.
-        setHusbandryLevel(1);
-        assertEquals(1, manager.getMultiBreedMaxAdditionalAnimals(),
-                "a fresh unlock reaches one extra animal, not the configured maximum");
-
+    void theRadiusIsTheOnlyBoundOnTheSpread() {
+        // GitHub #3: MaxAdditionalAnimals is gone. It capped how many animals ONE ITEM could set in
+        // love, which taxed the mechanic instead of the reward and — fatally — bounded XP per item
+        // rather than per unit of time, so a wheat farm walked straight through it. The gate now
+        // lives on the payout (see the award-cap tests above), leaving the radius alone out here.
+        //
+        // Pinned as a config-surface assertion rather than a comment: a user who deliberately tuned
+        // the removed key is left with an edited-looking value the game no longer reads, and the
+        // orphan warning is the only thing that says so. (That the shipped advanced.yml no longer
+        // DEFINES the key is pinned by ConfigLoaderTest, which asserts nothing is stranded in a file
+        // mcMMO authored itself.)
+        assertTrue(SkillRenames.legacyConfigPaths()
+                        .containsKey("Skills.Husbandry.MultiBreed.MaxAdditionalAnimals"),
+                "a user who tuned the removed key must be warned it is being ignored");
         setHusbandryLevel(1000);
-        assertEquals(HusbandryManager.DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS,
-                manager.getMultiBreedMaxAdditionalAnimals());
-
-        setHusbandryLevel(500);
-        final int halfway = manager.getMultiBreedMaxAdditionalAnimals();
-        assertTrue(halfway > 1
-                        && halfway < HusbandryManager.DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS,
-                "half-levelled spread must sit strictly between the ends, was " + halfway);
-    }
-
-    @Test
-    void aZeroSpreadCapDisablesTheSpreadWithoutDisablingTheSubSkill() {
-        final AdvancedConfig off = mock(AdvancedConfig.class);
-        lenient().when(off.getMultiBreedMaxAdditionalAnimals()).thenReturn(0);
-        lenient().when(off.getMultiBreedBaseRadius()).thenReturn(4.0);
-        lenient().when(off.getMultiBreedMaxRadius()).thenReturn(40.0);
-        lenient().when(off.getMultiBreedMaxBonusLevel()).thenReturn(1000);
-        McMMOMod.setAdvancedConfig(off);
-
-        setHusbandryLevel(1000);
-        assertTrue(manager.canMultiBreed(), "the sub-skill is still unlocked and still shown");
-        assertEquals(0, manager.getMultiBreedMaxAdditionalAnimals(),
-                "MaxAdditionalAnimals: 0 is the documented way to switch the spread off");
+        assertEquals(HusbandryManager.DEFAULT_MULTI_BREED_MAX_RADIUS, manager.getMultiBreedRadius(),
+                1e-9, "the radius is what bounds the spread now, and it still scales");
     }
 
     @Test
@@ -385,8 +503,6 @@ class HusbandryManagerTest {
                 shipped.getMultiBreedBaseRadius());
         assertEquals(HusbandryManager.DEFAULT_MULTI_BREED_MAX_RADIUS,
                 shipped.getMultiBreedMaxRadius());
-        assertEquals(HusbandryManager.DEFAULT_MULTI_BREED_MAX_ADDITIONAL_ANIMALS,
-                shipped.getMultiBreedMaxAdditionalAnimals());
     }
 
     // --- Raise ------------------------------------------------------------------------------------

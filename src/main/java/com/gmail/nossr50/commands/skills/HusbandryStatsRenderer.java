@@ -18,9 +18,16 @@ import java.util.List;
  * <p>Two of the four sub-skills carry <b>two independent numbers</b>, rendered as a {@code .Stat} plus
  * a {@code .Stat.Extra} line rather than crammed into one:
  * <ul>
- *   <li><b>Multi-Breed</b> — how far it reaches, and how many animals one breeding item may set in
- *       love. The second is the one that bounds XP per click, so it is the more important of the two
- *       to surface (see {@link HusbandryManager#getMultiBreedMaxAdditionalAnimals()}).</li>
+ *   <li><b>Multi-Breed</b> — how far it reaches, and how many breedings will actually pay XP in a
+ *       window. The second is the number that bounds the skill's income, so it is the more important
+ *       of the two to surface (see {@link HusbandryManager#getBreedXpAwardsPerWindow()}).
+ *
+ *       <p>Strictly speaking the award cap is a <em>skill-wide</em> gate rather than a Multi-Breed
+ *       one — it applies to breeding by hand too. It is rendered here anyway because Multi-Breed is
+ *       the only thing that can realistically reach it, because it answers exactly the question the
+ *       old line answered ("how much is one handful of feed worth?"), and because {@code /mcstats}
+ *       has no other place to hang a number that belongs to no sub-skill. It unlocks at Husbandry 1,
+ *       so in practice every player who has this screen also has this line.</li>
  *   <li><b>Accelerated Growth</b> — the passive childhood-shortening, and the active double-feed
  *       roll. <b>Bountiful Harvest</b> is the same shape: a bonus-drop chance and a durability save.</li>
  * </ul>
@@ -74,8 +81,11 @@ public final class HusbandryStatsRenderer extends SkillStatsRenderer {
         if (canMultiBreed) {
             messages.add(getStatMessage(SubSkillType.HUSBANDRY_MULTI_BREED,
                     decimal.format(husbandry.getMultiBreedRadius()) + " blocks"));
-            messages.add(getStatMessage(true, false, SubSkillType.HUSBANDRY_MULTI_BREED,
-                    String.valueOf(husbandry.getMultiBreedMaxAdditionalAnimals())));
+            if (husbandry.isBreedXpAwardCapped()) {
+                messages.add(getStatMessage(true, false, SubSkillType.HUSBANDRY_MULTI_BREED,
+                        husbandry.getBreedXpAwardsPerWindow() + " per "
+                                + husbandry.getBreedXpAwardWindowSeconds() + "s"));
+            }
         }
         if (canTwins) {
             messages.add(getStatMessage(SubSkillType.HUSBANDRY_TWINS,
