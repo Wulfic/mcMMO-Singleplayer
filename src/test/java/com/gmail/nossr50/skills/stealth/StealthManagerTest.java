@@ -254,17 +254,27 @@ class StealthManagerTest {
     // --- budget ----------------------------------------------------------------------------------
 
     @Test
-    void sneakingCannotMaxTheSkillInUnderEightyHours() {
-        // The actual definition of "not ridiculously fast". Total XP to RetroMode level 1000 on the
-        // shipped linear curve (base 1020, multiplier 20) is 10N^2 + 1010N = 11,010,000. A cheap
-        // arithmetic test that fails loudly if someone bumps the baseline without re-deriving what
-        // it buys.
+    void sneakingDeliberatelyBreachesTheEightyHourGuardrailAndNothingElseMay() {
+        // ⚠️ This test ASSERTED hours >= 80 until GitHub #6, and it did its job: doubling the
+        // baseline reddened it. The 80h floor is not gone — it is waived here, once, for this skill,
+        // by an explicit ruling. Sneaking halves your speed and demands constant attention, so it is
+        // priced for what it costs the player, not by a guardrail that measures distance covered.
+        //
+        // Total XP to RetroMode level 1000 on the shipped linear curve (base 1020, multiplier 20) is
+        // 10N^2 + 1010N = 11,010,000.
         final long xpToMax = 10L * 1000 * 1000 + 1010L * 1000;
         assertEquals(11_010_000L, xpToMax);
 
         final double hours = xpToMax / StealthXpSettings.DEFAULT_BASELINE_XP_PER_SECOND / 3600.0;
-        assertTrue(hours >= 80.0,
-                "Stealth maxes in " + Math.round(hours) + "h, under the 80h guardrail");
+        // A floor is still a floor, just a lower one: ~61h at the ruled 50 XP/s. This is what stops
+        // the next "make it faster" from landing without a fresh ruling, which is the whole value the
+        // deleted assertion had.
+        assertTrue(hours >= 60.0,
+                "Stealth maxes in " + Math.round(hours) + "h, under the 60h floor ruled for #6");
+        assertTrue(hours <= 65.0,
+                "Stealth maxes in " + Math.round(hours) + "h — the #6 ruling was ~61h, so the "
+                        + "baseline has been changed without re-deriving what it buys");
+
         // ...and it should still out-earn Agility on land, which is the slower, more passive skill.
         assertTrue(StealthXpSettings.DEFAULT_BASELINE_XP_PER_SECOND
                         > com.gmail.nossr50.skills.agility.MovementXpSettings

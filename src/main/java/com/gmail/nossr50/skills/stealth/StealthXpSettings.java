@@ -28,10 +28,12 @@ import org.jetbrains.annotations.NotNull;
  *       0.3 factor is exact; the walk speed is the conventional figure and is still a §G
  *       measurement item.</li>
  *   <li>{@link #DEFAULT_BASELINE_XP_PER_SECOND} is picked from a time-to-max, not by feel:
- *       11,010,000 XP to RetroMode 1000 on the shipped linear curve, at 25 XP/s, is ≈122 hours of
- *       continuous sneaking — comfortably past the ≥80 h guardrail, and meaningfully faster than
- *       Agility's land rate (≈204 h) because sneaking is slow, tedious and done in short bursts
- *       rather than as a way of getting anywhere.</li>
+ *       11,010,000 XP to RetroMode 1000 on the shipped linear curve, at 50 XP/s, is ≈61 hours of
+ *       continuous sneaking. That is deliberately the fastest continuous earner in the mod and
+ *       deliberately below the ≥80 h guardrail every other skill is held to (GitHub #6, ruled by
+ *       the user; doubled from the original 25 XP/s ≈122 h). Sneaking halves your speed and demands
+ *       constant attention, so it is priced for what it costs the player rather than by a guardrail
+ *       that measures distance.</li>
  * </ul>
  *
  * <p>A snapshot rather than live config reads because it is consulted 20×/s per player — the
@@ -47,8 +49,13 @@ public final class StealthXpSettings {
      * XP defaults; {@code ExperienceConfig} reads them rather than keeping a second copy, because a
      * config fallback that disagrees with the class it feeds is a silent balance bug in exactly the
      * tests that do not wire a config.
+     *
+     * <p>⚠️ It must equal {@code experience.yml}'s shipped value, and the ModMenu editor's "reset to
+     * default" reads it too. Those three drifted apart once already (the editor offered 30.0 long
+     * after the YAML was halved to 15.0), so
+     * {@code ExperienceConfigTest#shippedSneakBaselineMatchesTheConstant} now pins the pair.
      */
-    public static final double DEFAULT_BASELINE_XP_PER_SECOND = 25.0;
+    public static final double DEFAULT_BASELINE_XP_PER_SECOND = 50.0;
 
     /**
      * Blocks per second at which sneak-travel pays its full rate: vanilla walk speed × the

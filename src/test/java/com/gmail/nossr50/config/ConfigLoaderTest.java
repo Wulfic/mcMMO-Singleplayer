@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -22,6 +23,10 @@ class ConfigLoaderTest {
             super("test-config.yml", dataFolder);
         }
 
+        TestConfig(Path dataFolder, List<ConfigRetunes.Retune> retunes) {
+            super("test-config.yml", dataFolder, retunes);
+        }
+
         @Override
         protected void loadKeys() {
             // no-op: tests read the protected config directly
@@ -31,6 +36,15 @@ class ConfigLoaderTest {
             return config;
         }
     }
+
+    /**
+     * The fixture's shipped {@code MaxLevel} moving 100 → 200. Declared here rather than in
+     * {@link ConfigRetunes} so these tests exercise the <em>mechanism</em>; the real registry's one
+     * live entry is covered end-to-end in {@code ExperienceConfigTest}.
+     */
+    private static final List<ConfigRetunes.Retune> MAX_LEVEL_DOUBLED = List.of(
+            new ConfigRetunes.Retune("test-config.yml", "General.MaxLevel", 100, 200, 1,
+                    "a fixture retune"));
 
     @Test
     void writesDefaultsToDiskWhenUserFileMissing(@TempDir Path dataFolder) {
@@ -121,5 +135,132 @@ class ConfigLoaderTest {
         assertTrue(advanced.strandedLegacyPaths().isEmpty(),
                 "the shipped advanced.yml must not carry both spellings; stranded="
                         + advanced.strandedLegacyPaths());
+    }
+
+    // --- Retuned shipped defaults (ConfigRetunes) ------------------------------------------------
+
+    @Test
+    void carriesAChangedDefaultOntoAnExistingFileThatNeverTouchedIt(@TempDir Path dataFolder)
+            throws IOException {
+        // The failure this whole mechanism exists for: copyMissingDefaults back-fills only ABSENT
+        // keys, so a value edit in the bundled resource reaches nobody who has run the mod once.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                General:
+                  Enabled: true
+                  MaxLevel: 100
+                """);
+
+        assertEquals(200, new TestConfig(dataFolder, MAX_LEVEL_DOUBLED).config()
+                        .getInt("General.MaxLevel"),
+                "a value still at the old shipped default is the definition of 'never touched'");
+    }
+
+    @Test
+    void refusesToOverwriteAValueTheUserChose(@TempDir Path dataFolder) throws IOException {
+        // The more important half. 55 is neither default, so it was typed on purpose, and this file
+        // belongs to the player -- the same policy as warn-don't-rewrite on renamed sections.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                General:
+                  MaxLevel: 55
+                """);
+
+        assertEquals(55, new TestConfig(dataFolder, MAX_LEVEL_DOUBLED).config()
+                        .getInt("General.MaxLevel"),
+                "a customised value must survive a shipped-default change");
+    }
+
+    @Test
+    void appliesARetuneOnceEvenIfTheOldValueComesBack(@TempDir Path dataFolder) throws IOException {
+        // ⚠️ Why the version stamp exists. Value comparison alone cannot tell "never touched it"
+        // from "put it back on purpose": without the stamp this second load would re-migrate, and a
+        // player who wanted 100 could never keep it.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                General:
+                  MaxLevel: 100
+                """);
+        new TestConfig(dataFolder, MAX_LEVEL_DOUBLED);
+
+        final Path file = dataFolder.resolve("test-config.yml");
+        final YamlConfiguration restored = YamlConfiguration.loadConfiguration(file);
+        restored.set("General.MaxLevel", 100);
+        restored.save(file);
+
+        assertEquals(100, new TestConfig(dataFolder, MAX_LEVEL_DOUBLED).config()
+                        .getInt("General.MaxLevel"),
+                "a spent retune must not fire again");
+    }
+
+    @Test
+    void matchesTheOldDefaultAcrossYamlNumericTypes(@TempDir Path dataFolder) throws IOException {
+        // ⚠️ SnakeYAML reads `50` as an Integer and `50.0` as a Double, so Object#equals would call a
+        // hand-typed `50` "customised" and strand exactly the retune that needed to fire. A YAML
+        // value the user never edited can still arrive in the other numeric type -- e.g. a config
+        // written before a default gained its decimal point.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                Skills:
+                  Mining:
+                    DoubleDrops:
+                      ChanceMax: 50
+                """);
+
+        final List<ConfigRetunes.Retune> retune = List.of(
+                new ConfigRetunes.Retune("test-config.yml", "Skills.Mining.DoubleDrops.ChanceMax",
+                        50.0D, 75.0D, 1, "a fixture retune across numeric types"));
+
+        assertEquals(75.0D,
+                new TestConfig(dataFolder, retune).config()
+                        .getDouble("Skills.Mining.DoubleDrops.ChanceMax"),
+                0.0001D, "an int 50 on disk is the double 50.0 default, not a customisation");
+    }
+
+    @Test
+    void leavesAFileWithNoRetunesCompletelyUnstamped(@TempDir Path dataFolder) throws IOException {
+        // Every config in the mod is in this state today except experience.yml. Stamping a version
+        // onto a file that has never been retuned would add a key nobody can explain, to every file,
+        // forever.
+        new TestConfig(dataFolder);
+
+        assertFalse(Files.readString(dataFolder.resolve("test-config.yml"))
+                        .contains(ConfigRetunes.VERSION_KEY),
+                "a never-retuned config must not gain a version stamp");
+    }
+
+    @Test
+    void stampsAFreshFileSoItsRetunesAreAlreadySpent(@TempDir Path dataFolder) throws IOException {
+        // A brand-new file has the NEW defaults, so every retune for it is by definition already
+        // applied. Without the writtenFresh signal the next load would read version 0 and reconsider
+        // them all -- harmless only while no retune's old default is ever re-used as a new one.
+        new TestConfig(dataFolder, MAX_LEVEL_DOUBLED);
+
+        assertEquals(1, YamlConfiguration.loadConfiguration(dataFolder.resolve("test-config.yml"))
+                        .getInt(ConfigRetunes.VERSION_KEY),
+                "a freshly written file carries the current stamp");
+        // ...and the fixture's own 100 is untouched: it is this file's shipped default, and a fresh
+        // file is not a stale one.
+        assertEquals(100, new TestConfig(dataFolder, MAX_LEVEL_DOUBLED).config()
+                        .getInt("General.MaxLevel"));
+    }
+
+    @Test
+    void neverInventsAKeyThatIsAbsentFromBothTheFileAndTheDefaults(@TempDir Path dataFolder)
+            throws IOException {
+        // Back-filling absent keys is copyMissingDefaults' job, and it runs immediately after this.
+        // A retune must therefore do nothing at all with an absent path -- not write its newDefault
+        // (which would resurrect a key deleted from the shipped resource) and not log a spurious
+        // "keeping your value" line about a value that does not exist.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                General:
+                  Enabled: false
+                """);
+
+        final TestConfig loader = new TestConfig(dataFolder, List.of(
+                new ConfigRetunes.Retune("test-config.yml", "General.RemovedSetting", 1, 2, 1,
+                        "a retune whose key no longer exists anywhere")));
+
+        assertFalse(loader.config().contains("General.RemovedSetting"),
+                "a retune must not create a key that neither the file nor the defaults have");
+        // ...and the file was still stamped, so a dead retune does not get reconsidered forever.
+        assertEquals(1, YamlConfiguration.loadConfiguration(dataFolder.resolve("test-config.yml"))
+                .getInt(ConfigRetunes.VERSION_KEY));
     }
 }

@@ -12,12 +12,14 @@ Stealth uses the **same speed-normalised model** as the [movement skills](Moveme
 
 | Setting (`experience.yml` → `Experience_Values.Stealth.Sneak`) | Default |
 |---|---|
-| `Baseline_Xp_Per_Second` | **25.0** |
+| `Baseline_Xp_Per_Second` | **50.0** |
 | `Reference_Speed` | **1.295** blocks/s |
 
-25 XP/s is **the highest continuous rate in the mod** — it maxes a RetroMode level-1000 skill in about **122 hours** of continuous sneaking, versus ~204 h for Parkour on land. That's deliberate: sneaking is slow, tedious, and something players do in short bursts rather than to get anywhere.
+50 XP/s is **the highest continuous rate in the mod** — it maxes a RetroMode level-1000 skill in about **61 hours** of continuous sneaking, versus ~204 h for Parkour on land. That's deliberate: sneaking halves your speed and demands constant attention, so it's priced for what it costs you rather than for the distance it covers. It's the one skill allowed under the 80-hour floor every other skill is held to.
 
-The reference speed is derived as vanilla walk speed (4.317) × the `sneaking_speed` attribute default (0.3). At the default baseline that's ~19.3 XP per block — again, a **derived** number. Don't tune it.
+> **Raised from 25.0** in the §G play-test pass. If you already had an `experience.yml`, it was updated for you on the next load — but **only if you hadn't changed the value yourself**. A number you typed is never overwritten. See [Configuration](Configuration#when-a-shipped-default-changes).
+
+The reference speed is derived as vanilla walk speed (4.317) × the `sneaking_speed` attribute default (0.3). At the default baseline that's ~38.6 XP per block — again, a **derived** number. Don't tune it.
 
 ### Why the clamp matters even more here
 

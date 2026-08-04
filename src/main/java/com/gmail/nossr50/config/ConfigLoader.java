@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -34,10 +35,25 @@ public abstract class ConfigLoader {
     protected @NotNull YamlConfiguration config;
 
     protected ConfigLoader(@NotNull String fileName, @NotNull Path dataFolder) {
+        this(fileName, dataFolder, ConfigRetunes.forFile(fileName));
+    }
+
+    /**
+     * @param retunes the changed shipped defaults for this file. Injected rather than looked up so
+     *        the migration mechanism can be exercised against a fixture resource — a test that can
+     *        only drive it through a real config file is a test of one retune, not of the mechanism.
+     */
+    protected ConfigLoader(@NotNull String fileName, @NotNull Path dataFolder,
+            @NotNull List<ConfigRetunes.Retune> retunes) {
         this.fileName = fileName;
         this.dataFolder = dataFolder;
         this.defaultConfig = loadDefaults();
+        // ⚠️ Order matters: a file this constructor is about to write from the defaults is already
+        // current, and applyRetunedDefaults has to be told so before initConfig blurs the
+        // distinction between "brand new" and "predates every retune".
+        final boolean writtenFresh = !Files.exists(getFile());
         this.config = initConfig();
+        applyRetunedDefaults(retunes, writtenFresh);
         copyMissingDefaults();
         warnOnRenamedSections();
         warnOnRenamedPaths();
@@ -95,6 +111,94 @@ public abstract class ConfigLoader {
                 LOGGER.error("Failed to save merged defaults into config: {}", fileName, e);
             }
         }
+    }
+
+    /**
+     * Carry changed shipped defaults onto an existing config file — see {@link ConfigRetunes} for
+     * why this is needed at all and what it refuses to touch.
+     *
+     * <p>Three outcomes per retune, and only the first two write anything:
+     * <ul>
+     *   <li>on-disk value equals the <em>old</em> shipped default → the player never expressed an
+     *       opinion, so it is updated and logged at INFO with the reason;</li>
+     *   <li>on-disk value equals the <em>new</em> default already → silent no-op (a fresh file, or a
+     *       file migrated on an earlier boot);</li>
+     *   <li>anything else → the player tuned it deliberately. Left exactly as it is, logged once so
+     *       that "the changelog says 50 but mine says 30" has a visible answer.</li>
+     * </ul>
+     *
+     * <p>The version stamp is written whether or not anything changed, which is what makes each
+     * retune fire once ever rather than every boot.
+     *
+     * @param retunes every changed default declared for this file
+     * @param writtenFresh whether {@link #initConfig()} just created this file from the defaults, in
+     *        which case there is nothing to migrate and the stamp goes straight to current
+     */
+    private void applyRetunedDefaults(@NotNull List<ConfigRetunes.Retune> retunes,
+            boolean writtenFresh) {
+        final int current = ConfigRetunes.highestVersion(retunes);
+        if (current == 0) {
+            return; // This file has never been retuned; do not stamp a version onto it for nothing.
+        }
+
+        final int applied = writtenFresh ? current : config.getInt(ConfigRetunes.VERSION_KEY, 0);
+        if (applied < current) {
+            for (ConfigRetunes.Retune retune : retunes) {
+                if (retune.version() > applied) {
+                    applyRetune(retune);
+                }
+            }
+        }
+
+        if (config.getInt(ConfigRetunes.VERSION_KEY, -1) == current) {
+            return;
+        }
+        config.set(ConfigRetunes.VERSION_KEY, current);
+        try {
+            config.save(getFile());
+        } catch (IOException e) {
+            // Left unstamped, so the same retunes are reconsidered next boot. That is the safe
+            // direction (they are value-guarded), but it must not happen silently.
+            LOGGER.error("Failed to save config after retuning defaults: {}", fileName, e);
+        }
+    }
+
+    /** One retune, already known to be newer than this file's stamp. */
+    private void applyRetune(@NotNull ConfigRetunes.Retune retune) {
+        final Object onDisk = config.get(retune.path());
+        if (onDisk == null) {
+            // Absent entirely: copyMissingDefaults writes the new default a moment from now, which
+            // is the right outcome, so there is nothing to do here.
+            return;
+        }
+        if (valuesMatch(onDisk, retune.newDefault())) {
+            return;
+        }
+        if (!valuesMatch(onDisk, retune.oldDefault())) {
+            LOGGER.info("{}: keeping your '{}' = {} (the shipped default changed {} → {}: {})",
+                    fileName, retune.path(), onDisk, retune.oldDefault(), retune.newDefault(),
+                    retune.reason());
+            return;
+        }
+        config.set(retune.path(), retune.newDefault());
+        LOGGER.info("{}: updated '{}' {} → {} ({}). It was still at the old shipped default; set it "
+                        + "back by hand if you preferred it.",
+                fileName, retune.path(), retune.oldDefault(), retune.newDefault(), retune.reason());
+    }
+
+    /**
+     * Whether an on-disk value is the same as a declared default.
+     *
+     * <p>Numbers are compared by value, not by type: SnakeYAML reads {@code 25} as an {@code Integer}
+     * and {@code 25.0} as a {@code Double}, so {@code Object#equals} would report a hand-typed
+     * {@code 25} as "customised" and strand exactly the retune that needs to fire. Everything else
+     * (booleans, strings) falls through to {@code equals}.
+     */
+    private static boolean valuesMatch(@NotNull Object onDisk, @NotNull Object declared) {
+        if (onDisk instanceof Number a && declared instanceof Number b) {
+            return Double.compare(a.doubleValue(), b.doubleValue()) == 0;
+        }
+        return onDisk.equals(declared);
     }
 
     /**

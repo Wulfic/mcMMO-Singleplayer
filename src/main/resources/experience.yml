@@ -904,10 +904,16 @@ Experience_Values:
         Sneak:
             # XP per second of qualifying sneak-travel.
             #
-            # 25 XP/s maxes a RetroMode level-1000 skill in ~122 hours of continuous sneaking, versus
-            # ~204h for Agility on land. Deliberately the faster of the two: sneaking is slow,
-            # tedious, and something players do in short bursts rather than to get anywhere.
-            Baseline_Xp_Per_Second: 25.0
+            # 50 XP/s maxes a RetroMode level-1000 skill in ~61 hours of continuous sneaking, versus
+            # ~204h for Agility on land -- deliberately the fastest continuous earner in the mod
+            # (GitHub #6, doubled from 25). Sneaking is slow, tedious, halves your speed and is
+            # something players do in short bursts rather than to get anywhere, so it is priced for
+            # the attention it costs rather than the distance it covers.
+            #
+            # Raised AFTER release, so the change is declared in ConfigRetunes and carried onto an
+            # existing config on the next load -- editing this line alone would reach nobody who has
+            # already run the mod. See that class before changing any shipped value here.
+            Baseline_Xp_Per_Second: 50.0
 
             # Blocks per second sneaking pays full rate at. Sneaking faster than this -- with
             # Padfoot, or a Speed potion -- is clamped and pays no more.

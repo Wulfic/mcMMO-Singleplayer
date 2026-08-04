@@ -12,13 +12,23 @@ You can edit them by hand, or install **[Mod Menu + Cloth Config](Optional-Integ
 
 ## ⚠️ The one thing to know first
 
-**Editing defaults in the jar does not update an existing config.**
+**A key that's absent from your file is back-filled. A key that's present is yours.**
 
-On load, mcMMO **back-fills keys that are absent** from your file. Keys already present on disk are left exactly as they are — including ones you never touched. So if a new release changes a *default value*, your existing config silently keeps the old one.
+On load, mcMMO copies in any keys your file doesn't have — that's how new options reach an existing config. Keys already on disk are left exactly as they are. So a **new** setting arrives automatically; a **changed default** for a setting you already have does not, unless it's declared as a retune (below).
 
-**To pick up a changed default, delete the key (or the whole file) and let it regenerate.**
+If a documented default doesn't match what you're seeing in game, check your on-disk file first.
 
-This catches people out constantly. If a documented default doesn't match what you're seeing in game, check your on-disk file first.
+---
+
+## When a shipped default changes
+
+Some releases retune a value that already exists in your config — sneak XP went from 25 to 50/s in the §G pass, for example. Deleting your file to pick that up would throw away every other edit you'd made, so mcMMO carries those changes across for you:
+
+- **If the value on disk is still the old shipped default** — you never had an opinion about it — it's updated, and the log says so at INFO with the reason.
+- **If you changed it to anything else**, it is left alone. The log notes that it kept your value and what the default moved to, so "the docs say 50 but mine says 30" has a visible answer.
+- **Each retune runs once, ever.** Setting a value back to the old default afterwards keeps it — the file records which retunes have already been applied, in a `Config_Version` key at its root. Don't delete that key unless you want the retunes reconsidered.
+
+Only files that have actually been retuned carry a `Config_Version`. Today that is `experience.yml` alone.
 
 ---
 

@@ -4,8 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.gmail.nossr50.config.ConfigRetunes;
 import com.gmail.nossr50.datatypes.experience.FormulaType;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.skills.stealth.StealthXpSettings;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -87,6 +89,81 @@ class ExperienceConfigTest {
         // Reading back a deliberately edited file also proves the getter consults the document at
         // this exact path rather than always answering with its own default.
         assertEquals(0.0F, new ExperienceConfig(dataFolder).getHunterXpForTier(2));
+    }
+
+    // --- Stealth sneak XP, doubled (GitHub #6) -------------------------------------------------
+
+    @Test
+    void shippedSneakBaselineMatchesTheConstant(@TempDir Path dataFolder) {
+        // These two and the ModMenu editor's "reset to default" all read the same number, and they
+        // drifted apart once already: the editor offered 30.0 long after the YAML was halved to 15.0
+        // for Agility, so "reset to default" quietly rewrote a value that had not been the default
+        // for months. Nothing but this assertion notices.
+        assertEquals(StealthXpSettings.DEFAULT_BASELINE_XP_PER_SECOND,
+                new ExperienceConfig(dataFolder).getSneakBaselineXpPerSecond(), 0.0001D);
+        assertEquals(50.0D, StealthXpSettings.DEFAULT_BASELINE_XP_PER_SECOND, 0.0001D,
+                "GitHub #6 doubled sneak XP from 25 to 50/s");
+    }
+
+    @Test
+    void anExistingConfigStillHoldingTheOldSneakBaselineIsMigrated(@TempDir Path dataFolder)
+            throws Exception {
+        // The whole point of ConfigRetunes, on the real file. Editing experience.yml in the jar
+        // reaches nobody who has already run the mod, because copyMissingDefaults back-fills only
+        // ABSENT keys -- so without this the reporter of #6 would have kept 25.0 forever and the
+        // issue would have been closed by a change that did nothing for them.
+        final Path file = dataFolder.resolve("experience.yml");
+        new ExperienceConfig(dataFolder);
+        Files.writeString(file, Files.readString(file)
+                .replace("Baseline_Xp_Per_Second: 50.0", "Baseline_Xp_Per_Second: 25.0")
+                .replace(ConfigRetunes.VERSION_KEY + ": 1", ConfigRetunes.VERSION_KEY + ": 0"));
+
+        assertEquals(50.0D, new ExperienceConfig(dataFolder).getSneakBaselineXpPerSecond(), 0.0001D,
+                "an untouched old default must be carried forward");
+    }
+
+    @Test
+    void aHandTunedSneakBaselineSurvivesTheMigration(@TempDir Path dataFolder) throws Exception {
+        // The other half of the promise, and the more important one: the file belongs to the player.
+        // 30.0 is neither the old default nor the new one, so it was typed on purpose.
+        final Path file = dataFolder.resolve("experience.yml");
+        new ExperienceConfig(dataFolder);
+        Files.writeString(file, Files.readString(file)
+                .replace("Baseline_Xp_Per_Second: 50.0", "Baseline_Xp_Per_Second: 30.0")
+                .replace(ConfigRetunes.VERSION_KEY + ": 1", ConfigRetunes.VERSION_KEY + ": 0"));
+
+        assertEquals(30.0D, new ExperienceConfig(dataFolder).getSneakBaselineXpPerSecond(), 0.0001D,
+                "a deliberately tuned value must never be reverted by a shipped-default change");
+    }
+
+    @Test
+    void deliberatelyRestoringTheOldSneakBaselineIsNotUndoneOnTheNextLoad(@TempDir Path dataFolder)
+            throws Exception {
+        // ⚠️ The reason the version stamp exists at all. Value comparison alone cannot tell "never
+        // touched it" from "put it back on purpose", so a purely value-driven migrator would re-apply
+        // this retune on EVERY boot and the player could never keep 25.0. Here the file is left
+        // stamped, so the retune is spent.
+        final Path file = dataFolder.resolve("experience.yml");
+        new ExperienceConfig(dataFolder);
+        Files.writeString(file, Files.readString(file)
+                .replace("Baseline_Xp_Per_Second: 50.0", "Baseline_Xp_Per_Second: 25.0"));
+
+        assertEquals(25.0D, new ExperienceConfig(dataFolder).getSneakBaselineXpPerSecond(), 0.0001D,
+                "an already-applied retune must not fire a second time");
+    }
+
+    @Test
+    void aFreshExperienceConfigIsStampedWithTheCurrentRetuneVersion(@TempDir Path dataFolder)
+            throws Exception {
+        new ExperienceConfig(dataFolder);
+        final String written = Files.readString(dataFolder.resolve("experience.yml"));
+
+        // Without the stamp on a brand-new file, the first reload would treat it as predating every
+        // retune. That is harmless today only because the values already match; it would stop being
+        // harmless the moment a retune's old default was ever re-used as a new one.
+        assertTrue(written.contains(ConfigRetunes.VERSION_KEY + ": "
+                        + ConfigRetunes.highestVersion(ConfigRetunes.forFile("experience.yml"))),
+                "a freshly written experience.yml must carry the current retune stamp");
     }
 
     @Test
