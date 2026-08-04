@@ -40,7 +40,7 @@ Earn XP by mining ore and stone. Super ability: **Super Breaker**.
 
 | Sub-skill | Ranks | Effect |
 |---|---|---|
-| Super Breaker | 1 | Speed boost + triple-drop chance. Super ability. |
+| Super Breaker | 1 | Speed boost, doubles your Double Drops chance, and turns each one into a triple. Super ability. |
 | Double Drops | 1 | Skilfully mine double the loot. |
 | Mother Lode | 1 | Masterfully mine triple the loot. |
 | Blast Mining | 8 | Bonuses to mining with TNT. Detonate with flint & steel. |

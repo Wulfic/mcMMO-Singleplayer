@@ -2,8 +2,10 @@ package com.gmail.nossr50.commands.skills;
 
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.skills.mining.MiningManager;
+import com.gmail.nossr50.util.random.Probability;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
 import java.util.ArrayList;
@@ -12,7 +14,8 @@ import java.util.List;
 /**
  * {@code /mcstats mining} — port of legacy {@code MiningCommand}. Shows Blast Mining (rank, ore
  * bonus, bonus TNT drops), Bigger Bombs (radius), Demolitions Expertise (blast damage reduction),
- * Double/Triple (Mother Lode) drop chances, and Super Breaker duration.
+ * Double/Triple (Mother Lode) drop chances, and Super Breaker's duration <i>and</i> its boosted
+ * bonus-drop chance (GitHub #5 — that second figure is the evidence the reporter never had).
  */
 public final class MiningStatsRenderer extends SkillStatsRenderer {
 
@@ -25,6 +28,7 @@ public final class MiningStatsRenderer extends SkillStatsRenderer {
     private String doubleDropChance;
     private String tripleDropChance;
     private String superBreakerLength;
+    private String superBreakerDropChance;
 
     public MiningStatsRenderer() {
         super(PrimarySkillType.MINING);
@@ -54,6 +58,16 @@ public final class MiningStatsRenderer extends SkillStatsRenderer {
         }
         if (hasUnlocked(SubSkillType.MINING_SUPER_BREAKER)) {
             superBreakerLength = calculateLength(skillValue);
+            // GitHub #5: the ability's effect on the bonus-drop CHANCE was invisible, so a player had
+            // no way to tell a boost from an unlucky streak. Shown from the config multiplier rather
+            // than MiningManager#bonusDropChanceMultiplier() because this is what the ability WOULD do
+            // — /mcstats is almost never read with Super Breaker already running.
+            final double boosted = Math.min(1.0D,
+                    ProbabilityUtil.getSkillProbability(SubSkillType.MINING_DOUBLE_DROPS, mmoPlayer)
+                            .getValue()
+                            * McMMOMod.getAdvancedConfig().getSuperBreakerBonusDropChanceMultiplier());
+            superBreakerDropChance =
+                    ProbabilityUtil.getRNGDisplayValues(Probability.ofValue(boosted))[0];
         }
     }
 
@@ -83,6 +97,8 @@ public final class MiningStatsRenderer extends SkillStatsRenderer {
         }
         if (hasUnlocked(SubSkillType.MINING_SUPER_BREAKER)) {
             messages.add(getStatMessage(SubSkillType.MINING_SUPER_BREAKER, superBreakerLength));
+            messages.add(getStatMessage(true, false, SubSkillType.MINING_SUPER_BREAKER,
+                    superBreakerDropChance));
         }
 
         return messages;

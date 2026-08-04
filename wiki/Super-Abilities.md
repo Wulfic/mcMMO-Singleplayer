@@ -13,7 +13,7 @@ Most abilities use mcMMO's traditional **ready → activate** gesture:
 
 | Ability | Skill | Tool | Effect |
 |---|---|---|---|
-| **Super Breaker** | Mining | Pickaxe | Speed boost + triple-drop chance on ore. |
+| **Super Breaker** | Mining | Pickaxe | Speed boost, **double** bonus-drop chance, and every bonus drop is a triple. |
 | **Giga Drill Breaker** | Excavation | Shovel | 3× drop rate, 3× XP, speed boost. |
 | **Tree Feller** | Woodcutting | Axe | Fells a whole tree at once. |
 | **Green Terra** | Herbalism | Hoe | Triple drops, boosts Green Thumb. |
@@ -22,6 +22,17 @@ Most abilities use mcMMO's traditional **ready → activate** gesture:
 | **Skull Splitter** | Axes | Axe | AoE damage. |
 
 The three **combat** abilities (Serrated Strikes, Skull Splitter, Berserk) also arm on a right-click, then fire on your **next hit** rather than on a block.
+
+### Super Breaker and bonus drops
+
+Super Breaker does **two** things to your loot, and until recently only the second one existed:
+
+- it **multiplies your Double Drops chance** by `Skills.Mining.SuperBreaker.BonusDropChanceMultiplier`
+  (`advanced.yml`, ships at **2.0**), and
+- every bonus drop that lands while it's running is a **triple** instead of a double
+  (`Skills.Mining.SuperBreaker.AllowTripleDrops`).
+
+Upstream Bukkit mcMMO only ever did the second, which made the ability feel like a pure speed boost — at Mining 267 the roll landed 26.7 % of the time whether or not you'd fired it. Set the multiplier to `1.0` for that original behaviour. `/mcstats mining` shows both the base chance and the boosted one.
 
 ### Blast Mining
 

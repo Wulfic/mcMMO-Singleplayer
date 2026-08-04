@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.skills.mining.MiningManager;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.regex.Matcher;
@@ -99,6 +100,54 @@ class AdvancedConfigTest {
         // this exact path rather than always answering with its own default.
         assertEquals(0.0D, new AdvancedConfig(dataFolder).getHunterMasteryRangedDamageMultiplier(),
                 0.0001D);
+    }
+
+    // --- Super Breaker's bonus-drop chance boost (GitHub #5) ------------------------------------
+
+    @Test
+    void theShippedSuperBreakerDropChanceMultiplierDoublesTheOdds(@TempDir Path dataFolder)
+            throws Exception {
+        final AdvancedConfig config = new AdvancedConfig(dataFolder);
+
+        assertEquals(MiningManager.DEFAULT_SUPER_BREAKER_DROP_CHANCE_MULTIPLIER,
+                config.getSuperBreakerBonusDropChanceMultiplier(), 0.0001D);
+
+        // The key must be in the shipped document, not only in the getter's fallback: this one is a
+        // deliberate divergence from legacy, so an operator who wants the old behaviour back has to
+        // be able to find the line and set it to 1.0.
+        final String shipped = Files.readString(dataFolder.resolve("advanced.yml"));
+        assertTrue(shipped.contains("BonusDropChanceMultiplier: 2.0"),
+                "advanced.yml must ship the Super Breaker drop-chance knob");
+    }
+
+    @Test
+    void aSuperBreakerDropChanceMultiplierBelowOneIsRefused(@TempDir Path dataFolder)
+            throws Exception {
+        // A super ability that LOWERS your drop rate is undiagnosable from in-game feedback: the
+        // player sees fewer ores while their headline ability is running and has no way to attribute
+        // it. Refused back to 1.0 (legacy behaviour) with a warning rather than honoured.
+        final Path file = dataFolder.resolve("advanced.yml");
+        new AdvancedConfig(dataFolder);
+        Files.writeString(file, Files.readString(file)
+                .replace("BonusDropChanceMultiplier: 2.0", "BonusDropChanceMultiplier: 0.5"));
+
+        assertEquals(MiningManager.MIN_SUPER_BREAKER_DROP_CHANCE_MULTIPLIER,
+                new AdvancedConfig(dataFolder).getSuperBreakerBonusDropChanceMultiplier(), 0.0001D);
+    }
+
+    @Test
+    void aSuperBreakerDropChanceMultiplierOfOneIsHonouredAsLegacyBehaviour(@TempDir Path dataFolder)
+            throws Exception {
+        // 1.0 is the documented escape hatch, and it sits exactly on the refusal boundary — an
+        // off-by-one guard (`<= 1.0`) would log a warning at the one value the docs tell people to
+        // use. Reading it back also proves the getter consults this exact path.
+        final Path file = dataFolder.resolve("advanced.yml");
+        new AdvancedConfig(dataFolder);
+        Files.writeString(file, Files.readString(file)
+                .replace("BonusDropChanceMultiplier: 2.0", "BonusDropChanceMultiplier: 1.0"));
+
+        assertEquals(1.0D,
+                new AdvancedConfig(dataFolder).getSuperBreakerBonusDropChanceMultiplier(), 0.0001D);
     }
 
     @Test

@@ -6,6 +6,7 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.agility.Medium;
 import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
+import com.gmail.nossr50.skills.mining.MiningManager;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -1165,6 +1166,32 @@ public class AdvancedConfig extends ConfigLoader {
 
     public boolean getAllowMiningTripleDrops() {
         return config.getBoolean("Skills.Mining.SuperBreaker.AllowTripleDrops", true);
+    }
+
+    /** Where Super Breaker's bonus-drop chance boost lives. */
+    private static final String SUPER_BREAKER_DROP_CHANCE_MULTIPLIER =
+            "Skills.Mining.SuperBreaker.BonusDropChanceMultiplier";
+
+    /**
+     * How much Super Breaker multiplies the Mining bonus-drop chance by while active (GitHub #5).
+     *
+     * <p>Shipped at {@code 2.0}; {@code 1.0} means "quantity only", which is exactly what legacy
+     * Bukkit mcMMO did and what made the ability feel inert. Values below {@code 1.0} are refused with
+     * a warning rather than clamped silently — a super ability that <em>reduced</em> your drop rate is
+     * a misconfiguration no player could ever diagnose from in-game feedback.
+     */
+    public double getSuperBreakerBonusDropChanceMultiplier() {
+        final double configured = config.getDouble(SUPER_BREAKER_DROP_CHANCE_MULTIPLIER,
+                MiningManager.DEFAULT_SUPER_BREAKER_DROP_CHANCE_MULTIPLIER);
+        if (configured < MiningManager.MIN_SUPER_BREAKER_DROP_CHANCE_MULTIPLIER) {
+            LOGGER.warn("Ignoring {}: {} — a super ability may not lower its own skill's drop rate; "
+                            + "using {}. Set it to {} for legacy behaviour (quantity boost only).",
+                    SUPER_BREAKER_DROP_CHANCE_MULTIPLIER, configured,
+                    MiningManager.MIN_SUPER_BREAKER_DROP_CHANCE_MULTIPLIER,
+                    MiningManager.MIN_SUPER_BREAKER_DROP_CHANCE_MULTIPLIER);
+            return MiningManager.MIN_SUPER_BREAKER_DROP_CHANCE_MULTIPLIER;
+        }
+        return configured;
     }
 
     public int getBlastMiningRankLevel(int rank) {

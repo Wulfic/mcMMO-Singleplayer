@@ -655,7 +655,20 @@ Skills:
                 RetroMode: 10000
             ChanceMax: 50.0
         SuperBreaker:
+            # Whether a bonus-drop roll that succeeds WHILE Super Breaker is active yields two extra
+            # copies (triple drops) instead of one. This is the quantity half of the ability's payout.
             AllowTripleDrops: true
+            # How much Super Breaker multiplies the bonus-drop CHANCE by while it is active.
+            #
+            # Legacy mcMMO had no such knob: the ability changed only the quantity above, so the odds
+            # of getting anything extra at all were identical with it on or off. That is what GitHub
+            # #5 measured -- at Mining 267 the roll lands 26.7% of the time either way, and only the
+            # size of that one success moved, while Excavation's Giga Drill Breaker triples EVERY
+            # block. Set this to 1.0 for exact legacy behaviour.
+            #
+            # The result is capped at 100% by the probability itself, and values below 1.0 are refused
+            # with a warning: a super ability must never lower its own skill's drop rate.
+            BonusDropChanceMultiplier: 2.0
         DoubleDrops:
             SilkTouch: true
             # ChanceMax: Maximum chance of receiving double drops when on <MaxBonusLevel> or higher

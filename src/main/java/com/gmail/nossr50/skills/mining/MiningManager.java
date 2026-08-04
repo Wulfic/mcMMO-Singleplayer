@@ -49,6 +49,19 @@ public class MiningManager extends SkillManager {
             "infested_stone_bricks", "infested_cracked_stone_bricks", "infested_mossy_stone_bricks",
             "infested_chiseled_stone_bricks", "infested_deepslate");
 
+    /**
+     * How much Super Breaker multiplies the bonus-drop <i>chance</i> by while it is active
+     * (GitHub #5). {@code 1.0} restores exact legacy behaviour — see {@link #rollBonusDropCount()}.
+     */
+    public static final double DEFAULT_SUPER_BREAKER_DROP_CHANCE_MULTIPLIER = 2.0D;
+
+    /**
+     * The floor for that multiplier. A super ability may not make its own skill <i>worse</i>: a value
+     * below 1 would mean activating Super Breaker lowered your drop rate, which is a failure no player
+     * could diagnose from in-game feedback (the same reasoning as Hunter's ranged-damage clamp).
+     */
+    public static final double MIN_SUPER_BREAKER_DROP_CHANCE_MULTIPLIER = 1.0D;
+
     public MiningManager(@NotNull McMMOPlayer mmoPlayer) {
         super(mmoPlayer, PrimarySkillType.MINING);
     }
@@ -171,11 +184,38 @@ public class MiningManager extends SkillManager {
     }
 
     /**
+     * The multiplier applied to the {@link SubSkillType#MINING_DOUBLE_DROPS} chance right now: the
+     * configured Super Breaker boost while that ability is active, {@code 1.0} (no change) otherwise.
+     *
+     * <p>Public because {@code /mcstats mining} shows the boosted figure — the whole reason GitHub #5
+     * was filed as "Super Breaker does not increase drop chance" is that nothing on screen ever told
+     * the player what the ability was doing to their odds.
+     */
+    public double bonusDropChanceMultiplier() {
+        if (!mmoPlayer.getAbilityMode(SuperAbilityType.SUPER_BREAKER)) {
+            return 1.0D;
+        }
+        return McMMOMod.getAdvancedConfig().getSuperBreakerBonusDropChanceMultiplier();
+    }
+
+    /**
      * Rolls the number of <i>extra</i> copies of the broken block's drops to spawn (0, 1, or 2),
-     * assuming {@link #isBonusDropsEligible} already passed. Mirrors legacy {@code processTripleDrops}
-     * / {@code processDoubleDrops}: Mother Lode grants a triple-drop roll first (2 extra copies on
-     * success), otherwise a double-drop roll yields 1 extra copy — or 2 while Super Breaker is active
-     * and triple drops are allowed in config.
+     * assuming {@link #isBonusDropsEligible} already passed. Mother Lode grants a triple-drop roll
+     * first (2 extra copies on success), otherwise a double-drop roll yields 1 extra copy — or 2 while
+     * Super Breaker is active and triple drops are allowed in config.
+     *
+     * <h2>⚠️ Deliberate divergence from legacy — GitHub #5</h2>
+     * Legacy (and this port until now) let Super Breaker change only the <i>quantity</i> of a
+     * successful roll, never its <i>probability</i>. That is why the reporter measured no change:
+     * at Mining 267 the double-drop roll succeeds 26.7% of the time with the ability on or off, and
+     * only the size of that one success moved. Meanwhile Excavation's Giga Drill Breaker triples
+     * <i>every</i> block unconditionally, so the two supers felt nothing alike. Super Breaker now also
+     * scales the roll's chance by {@link #bonusDropChanceMultiplier()}. Setting the config key to
+     * {@code 1.0} restores legacy exactly.
+     *
+     * <p>The Mother Lode roll is deliberately <em>not</em> boosted: it is Mining's mastery sub-skill,
+     * unlocked far above Super Breaker, and doubling both would compound into a near-guaranteed triple
+     * for a maxed player.
      *
      * @return the number of extra drop rounds to spawn (0 = the roll failed)
      */
@@ -184,7 +224,8 @@ public class MiningManager extends SkillManager {
                 && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.MINING_MOTHER_LODE, mmoPlayer)) {
             return 2;
         }
-        if (ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.MINING_DOUBLE_DROPS, mmoPlayer)) {
+        if (ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.MINING_DOUBLE_DROPS, mmoPlayer,
+                bonusDropChanceMultiplier())) {
             final boolean superBreakerTriple =
                     mmoPlayer.getAbilityMode(SuperAbilityType.SUPER_BREAKER)
                             && McMMOMod.getAdvancedConfig().getAllowMiningTripleDrops();

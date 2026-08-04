@@ -11,6 +11,7 @@ import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
@@ -292,5 +293,61 @@ class MiningManagerTest {
         // advanced.yml Skills.Mining.DoubleDrops.SilkTouch defaults to true.
         assertTrue(miningManager.isBonusDropsEligible("minecraft:coal_ore", true),
                 "silk touch does not suppress bonus drops while the config allows it");
+    }
+
+    // --- Super Breaker's bonus-drop chance boost (GitHub #5) ------------------------------------
+
+    private void withSuperBreaker(boolean active) {
+        when(mmoPlayer.getAbilityMode(SuperAbilityType.SUPER_BREAKER)).thenReturn(active);
+    }
+
+    @Test
+    void bonusDropChanceIsUnmodifiedWhileSuperBreakerIsInactive() {
+        withSuperBreaker(false);
+        assertEquals(1.0D, miningManager.bonusDropChanceMultiplier(), 0.0001D,
+                "no ability running → the roll must be exactly the unboosted one");
+    }
+
+    @Test
+    void bonusDropChanceIsBoostedWhileSuperBreakerIsActive() {
+        withSuperBreaker(true);
+        assertEquals(MiningManager.DEFAULT_SUPER_BREAKER_DROP_CHANCE_MULTIPLIER,
+                miningManager.bonusDropChanceMultiplier(), 0.0001D,
+                "GitHub #5: the ability raises the chance, not only the quantity");
+    }
+
+    @Test
+    void superBreakerDoublesTheOddsOfTheBonusDropRollLanding() {
+        // Mining 500 in RetroMode is exactly half of DoubleDrops' MaxBonusLevel (1000) at
+        // ChanceMax 100 ⇒ a 50% base roll, which the 2.0 multiplier lifts to a certainty. Choosing
+        // that level is what makes an RNG-driven method assertable without stubbing the RNG: the
+        // boosted branch has NO failing outcome, so a single zero here is a real defect and not a
+        // streak. (Probability#evaluate succeeds when value >= nextDouble(1.0), so 1.0 always wins.)
+        atMiningLevel(500);
+        withSuperBreaker(true);
+
+        for (int i = 0; i < 500; i++) {
+            // 2 rather than >= 1: AllowTripleDrops ships true, so every success — Mother Lode's or
+            // Double Drops' — is a triple. An at-least assertion would pass against a boost that had
+            // silently stopped applying the triple quantity.
+            assertEquals(2, miningManager.rollBonusDropCount(),
+                    "boosted to 100%, every break must bonus-drop a triple (iteration " + i + ")");
+        }
+    }
+
+    @Test
+    void withoutSuperBreakerTheSameLevelStillMissesRolls() {
+        // The reference point for the test above: assert OFF it, or a rollBonusDropCount() hard-wired
+        // to return 2 would pass that test and this suite would prove nothing. At a 50% base roll the
+        // odds of 500 consecutive successes are 2^-500, so a single zero is guaranteed in practice.
+        atMiningLevel(500);
+        withSuperBreaker(false);
+
+        boolean sawAFailedRoll = false;
+        for (int i = 0; i < 500 && !sawAFailedRoll; i++) {
+            sawAFailedRoll = miningManager.rollBonusDropCount() == 0;
+        }
+        assertTrue(sawAFailedRoll,
+                "unboosted, a 50% roll must sometimes fail — the boost is not unconditional");
     }
 }
