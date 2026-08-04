@@ -8,6 +8,7 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.fabric.mixin.HoeTillingActionsAccessor;
 import com.gmail.nossr50.platform.Materials;
 import com.gmail.nossr50.skills.herbalism.Herbalism;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
@@ -19,7 +20,10 @@ import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
+import com.mojang.datafixers.util.Pair;
 import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
@@ -27,8 +31,10 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.item.HoeItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.ItemUsageContext;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -132,7 +138,13 @@ public final class SuperAbilityListener {
 
         // Tool-skill activation: legacy nests this inside the abilities-enabled gate, so — unlike the
         // Herbalism interactions below — it doesn't run when abilities are disabled.
-        if (McMMOMod.getGeneralConfig().getAbilitiesEnabled() && BlockUtils.canActivateTools(state)) {
+        //
+        // GitHub #1: ...but not when this click is a TILL. Tilling is a right-click with a hoe and so
+        // is readying the hoe, and legacy could not tell them apart, so farming a row re-readied the
+        // tool on every till — a message and a sound every few seconds, and a permanently armed hoe
+        // whose next left-click on a crop spent Green Terra's 240-second cooldown by accident.
+        if (McMMOMod.getGeneralConfig().getAbilitiesEnabled() && BlockUtils.canActivateTools(state)
+                && !isTillAction(player, hand, hitResult, state)) {
             if (BlockUtils.canActivateHerbalism(state)) {
                 mmoPlayer.processAbilityActivation(PrimarySkillType.HERBALISM);
             }
@@ -571,6 +583,61 @@ public final class SuperAbilityListener {
         mmoPlayer.processAbilityActivation(PrimarySkillType.SWORDS);
         mmoPlayer.processAbilityActivation(PrimarySkillType.UNARMED);
         mmoPlayer.processAbilityActivation(PrimarySkillType.WOODCUTTING);
+    }
+
+    /**
+     * Whether this right-click is about to <b>till</b> — vanilla is going to turn the block into
+     * farmland (or a dirt path / de-waxed copper, whatever else its table holds), so the click is a
+     * tool <i>use</i> and not a request to ready the hoe (GitHub #1).
+     *
+     * <p>Asked of vanilla's own {@code HoeItem#TILLING_ACTIONS} rather than a block list of ours:
+     * {@code useOnBlock} looks the block up in that map, passes when there is no entry, and otherwise
+     * runs the entry's own predicate (bytecode-verified). Reproducing that here means the answer stays
+     * right when Mojang adds a tillable block or changes a condition, and it costs one map lookup on a
+     * path that already builds several objects.
+     *
+     * <p><b>⚠️ The held-item check is the load-bearing half, not the table lookup.</b>
+     * {@code useOnBlock} is an <i>instance</i> method on {@code HoeItem}, so vanilla only ever reaches
+     * that table when the held item is a hoe — and no entry's predicate looks at the item, because by
+     * then it cannot be anything else. The table itself is the five blocks a player spends the game
+     * standing on ({@code grass_block}, {@code dirt}, {@code coarse_dirt}, {@code dirt_path},
+     * {@code rooted_dirt}), so a block-only test would call every right-click on the ground a till and
+     * suppress the ready for <i>every</i> tool: Super Breaker, Giga Drill Breaker, Tree Feller,
+     * Serrated Strikes and Berserk would all become unreadyable while aiming at the floor, which is
+     * exactly where you aim before mining or digging. Trading this issue for that one is not a fix.
+     *
+     * <p>Deliberately narrow. It suppresses <em>only</em> the click that actually tills:
+     * <ul>
+     *   <li>anything but a hoe readies exactly as before — the ground keeps working as a readying
+     *       surface for the other five tool skills;</li>
+     *   <li>right-clicking a crop, farmland, or anything else non-tillable still readies the hoe, so
+     *       the legitimate "ready hoe → strike → Green Terra" flow is untouched — and that flow is
+     *       order-sensitive (the strike that activates Green Terra also converts the block it hit);</li>
+     *   <li>a hoe click on a tillable block where the predicate fails (something is on top of it) is
+     *       not a till, so it still readies.</li>
+     * </ul>
+     *
+     * <p>The hoe test is {@code instanceof HoeItem} rather than {@link ItemUtils#isHoe}, because the
+     * question is "will <i>vanilla</i> till", not "does mcMMO call this a hoe". The two can disagree
+     * and both disagreements are safe: a modded hoe outside {@code HoeItem} does not reach this table
+     * so it must still ready, and a {@code HoeItem} outside mcMMO's list cannot ready Herbalism anyway
+     * ({@code processAbilityActivation} gates on {@code isHoldingTool}).
+     *
+     * <p>Package-private for {@code SuperAbilityListenerTillingTest}.
+     *
+     * @return whether vanilla will till this block with this click
+     */
+    static boolean isTillAction(PlayerEntity player, Hand hand, BlockHitResult hitResult,
+            BlockState state) {
+        if (!(player.getStackInHand(hand).getItem() instanceof HoeItem)) {
+            return false;
+        }
+        final Pair<Predicate<ItemUsageContext>, Consumer<ItemUsageContext>> tilling =
+                HoeTillingActionsAccessor.getTillingActions().get(state.getBlock());
+        if (tilling == null) {
+            return false;
+        }
+        return tilling.getFirst().test(new ItemUsageContext(player, hand, hitResult));
     }
 
     /**

@@ -4,10 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.fabric.mixin.BrewingStandBrewTimeAccessor;
+import com.gmail.nossr50.fabric.mixin.HoeTillingActionsAccessor;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Arrays;
 import java.util.List;
 import net.minecraft.advancement.criterion.BredAnimalsCriterion;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.block.entity.BrewingStandBlockEntity;
 import net.minecraft.component.type.FoodComponent;
@@ -27,6 +29,7 @@ import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.BowItem;
+import net.minecraft.item.HoeItem;
 import net.minecraft.screen.slot.FurnaceOutputSlot;
 import net.minecraft.world.explosion.ExplosionImpl;
 import org.junit.jupiter.api.BeforeAll;
@@ -404,6 +407,31 @@ class MixinApplicationTest {
                         .anyMatch(method -> method.getName().contains("carryOriginThroughConversion")),
                 "MobConversionOriginMixin did not apply to MobEntity — a spawner mob would shed its "
                         + "marker the moment it converted, which is exactly how drowned farms work");
+    }
+
+    @Test
+    void hoeTillingActionsAccessorApplies() {
+        // GitHub #1's gate: SuperAbilityListener asks vanilla's own TILLING_ACTIONS table whether a
+        // right-click is about to till, so it can suppress the hoe re-ready on a till without
+        // breaking the readying gesture. Nothing during boot loads HoeItem, so class-loading it here
+        // is what forces the accessor to apply.
+        assertDoesNotThrow(() -> Class.forName(HoeItem.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+
+        // An applied accessor mixin makes the target implement the interface. Without it the accessor
+        // body throws AssertionError on first use, which on this path is a right-click on dirt — so
+        // the failure would be a crash in the player's hand rather than anything visible at boot.
+        assertTrue(HoeTillingActionsAccessor.class.isAssignableFrom(HoeItem.class),
+                "HoeTillingActionsAccessor did not apply to HoeItem — mcMMO could not tell a till "
+                        + "from a hoe-ready, so GitHub #1 (every till re-readies the hoe and burns "
+                        + "Green Terra's cooldown by accident) would reopen");
+
+        // The field name is the part that can drift silently: an @Accessor naming a field that no
+        // longer exists fails at apply time, but only once something loads the class. Reading it here
+        // proves the mapping still resolves and returns vanilla's real table rather than an empty one.
+        assertTrue(HoeTillingActionsAccessor.getTillingActions().containsKey(Blocks.GRASS_BLOCK),
+                "TILLING_ACTIONS no longer holds grass_block — the accessor resolved to the wrong "
+                        + "field or an empty map, and every till would re-ready the hoe again");
     }
 
     @Test
