@@ -19,12 +19,16 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.minecraft.command.permission.PermissionSourcePredicate;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.VisibleForTesting;
 
 /**
  * mcMMO's in-game commands, converted from the legacy Bukkit {@code CommandExecutor}/{@code
@@ -42,7 +46,8 @@ import net.minecraft.util.Formatting;
  *       XP-gain method, level/XP, sub-skill ranks, and each sub-skill's current effect values,
  *       rendered by {@link SkillStatsRenderer}.</li>
  *   <li>{@code /mcability} — toggle whether super abilities may be readied/activated.</li>
- *   <li>{@code /mcrefresh} — clear the caller's super-ability cooldowns and active modes.</li>
+ *   <li>{@code /mcrefresh} — clear the caller's super-ability cooldowns and active modes
+ *       (op level 2; it removes the entire cost model of the super abilities).</li>
  *   <li>{@code /addlevels <skill|all> <amount>} — admin: grant skill levels (op level 2).</li>
  *   <li>{@code /addxp <skill|all> <amount>} — admin: grant raw XP through the real gain pipeline.</li>
  * </ul>
@@ -61,7 +66,19 @@ public final class McMMOCommands {
                 (dispatcher, registryAccess, environment) -> registerAll(dispatcher));
     }
 
-    private static void registerAll(CommandDispatcher<ServerCommandSource> dispatcher) {
+    /**
+     * The gate on every command that hands out progress or removes a cost — level 2, the same level
+     * vanilla puts {@code /gamemode} and {@code /give} behind (GitHub #8).
+     *
+     * <p>Package-private so {@code McMMOCommandsTest} can assert <em>which</em> commands carry it.
+     * The class is a record implementing {@code Predicate}, so it compares by value.
+     */
+    static final PermissionSourcePredicate<ServerCommandSource> CHEAT_COMMAND =
+            CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK);
+
+    @VisibleForTesting
+    static void registerAll(CommandDispatcher<ServerCommandSource> dispatcher) {
+        // Read-only, and deliberately ungated: they show the caller their own data and nothing else.
         dispatcher.register(literal("mcmmo").executes(ctx -> info(ctx.getSource())));
         dispatcher.register(literal("mcstats")
                 .executes(ctx -> stats(ctx.getSource()))
@@ -69,22 +86,48 @@ public final class McMMOCommands {
                         .suggests(skillOnlySuggestions())
                         .executes(ctx -> statsForSkill(ctx.getSource(),
                                 StringArgumentType.getString(ctx, "skill")))));
+        // Also ungated on purpose: /mcability only ever RESTRICTS the caller (it is the build-mode
+        // switch that stops Super Breaker firing while you place blocks). Gating a self-imposed
+        // restriction behind op would be a worse game with no cheat closed.
         dispatcher.register(literal("mcability").executes(ctx -> ability(ctx.getSource())));
-        dispatcher.register(literal("mcrefresh").executes(ctx -> refresh(ctx.getSource())));
+
+        // Cheat-adjacent: clears every super-ability cooldown on demand, which is the whole cost
+        // model of the super abilities. It shipped ungated -- GitHub #8.
+        dispatcher.register(literal("mcrefresh")
+                .requires(CHEAT_COMMAND)
+                .executes(ctx -> refresh(ctx.getSource())));
 
         dispatcher.register(literal("addlevels")
-                .requires(CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK))
+                .requires(CHEAT_COMMAND)
                 .then(argument("skill", StringArgumentType.word())
                         .suggests(skillSuggestions())
                         .then(argument("amount", IntegerArgumentType.integer(1))
                                 .executes(McMMOCommands::addLevels))));
 
         dispatcher.register(literal("addxp")
-                .requires(CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK))
+                .requires(CHEAT_COMMAND)
                 .then(argument("skill", StringArgumentType.word())
                         .suggests(skillSuggestions())
                         .then(argument("amount", IntegerArgumentType.integer(1))
                                 .executes(McMMOCommands::addXp))));
+    }
+
+    /**
+     * Every command this class registers, and whether it needs the {@link #CHEAT_COMMAND} gate.
+     *
+     * <p>Exists so the audit is a data structure a test can walk rather than six registration calls
+     * somebody has to re-read. Adding a command without adding it here fails
+     * {@code McMMOCommandsTest#everyRegisteredCommandIsAccountedFor} — which is the point: GitHub #8
+     * happened because a cheat command was registered and nobody re-checked the list.
+     */
+    static @NotNull Map<String, Boolean> commandGating() {
+        return Map.of(
+                "mcmmo", false,
+                "mcstats", false,
+                "mcability", false,
+                "mcrefresh", true,
+                "addlevels", true,
+                "addxp", true);
     }
 
     // --- /mcmmo -------------------------------------------------------------

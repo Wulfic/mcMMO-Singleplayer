@@ -14,7 +14,6 @@ The command list is **much shorter than upstream mcMMO's**. Most of the legacy t
 | `/mcstats` | Level, current XP and XP-to-next for **every** skill, plus your **power level**. |
 | `/mcstats <skill>` | The full per-skill screen — see below. |
 | `/mcability` | Toggle whether super abilities may be readied/activated **at all**. |
-| `/mcrefresh` | Clear all of your super-ability cooldowns and cancel any active ability. |
 
 ### `/mcstats <skill>`
 
@@ -43,6 +42,7 @@ These require **permission level 2** — op level 2 on a server, or a single-pla
 
 | Command | What it does |
 |---|---|
+| `/mcrefresh` | Clear all of your super-ability cooldowns and cancel any active ability. |
 | `/addlevels <skill\|all> <amount>` | Grant skill levels directly. |
 | `/addxp <skill\|all> <amount>` | Grant raw XP through the **real gain pipeline**. |
 

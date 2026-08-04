@@ -46,7 +46,6 @@ All commands are Brigadier‑registered, so tab‑completion works everywhere.
 | `/mcstats` | Level, current XP and XP‑to‑next for every skill, plus your **power level**. |
 | `/mcstats <skill>` | The full per‑skill screen — XP‑gain methods, sub‑skill ranks, and the *live computed values* of every sub‑skill effect at your current level (chance to activate, damage bonus, duration, drop rates…). This is the port's equivalent of legacy mcMMO's `/mining`, `/swords`, `/archery`, … commands. |
 | `/mcability` | Toggle whether super abilities may be readied/activated at all. Useful when you're building and don't want Super Breaker firing. |
-| `/mcrefresh` | Clear all of your super‑ability cooldowns and cancel any active ability. |
 
 ### Admin commands
 
@@ -54,6 +53,7 @@ Require **permission level 2** (op level 2, or "Allow Cheats" in a single‑play
 
 | Command | What it does |
 |---|---|
+| `/mcrefresh` | Clear all of your super‑ability cooldowns and cancel any active ability. |
 | `/addlevels <skill\|all> <amount>` | Grant skill levels directly. |
 | `/addxp <skill\|all> <amount>` | Grant raw XP through the real gain pipeline (so level‑ups, milestones and the XP bar all fire normally). |
 
