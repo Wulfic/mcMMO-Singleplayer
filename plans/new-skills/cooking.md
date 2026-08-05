@@ -25,6 +25,13 @@ and **no F2** (attribute service): every one of its verbs is a discrete event.
 > Three completeness tests now go red the instant the enum constant lands, and two Cooking mechanics
 > are **not** covered by the per-skill disable switch for free. See the new **D-CK9**.
 >
+> ✅ **STAGE 0 RAN 2026-08-05 — see [Stages](#stages). The 15-row Power Cook table survived it whole;
+> five claims *about* the table did not.** The headline is **D-CK8a**: `dried_kelp` and `honey_bottle`
+> craft out of their own storage block and back, so both are **free infinite XP loops** under the
+> per-item×count pricing D-CK8 requires. Also: the "nine vanilla-effect foods" list was wrong on four
+> of nine, `instanceof InstantStatusEffect` misses four of the seven per-tick effects, and 44 items
+> carry `FOOD` while only 40 are edible. Defect ledger 21–25.
+>
 > ⚠️ **This file was rewritten 2026-08-03 from the draft committed in `162d6f593`.** The draft was a
 > raw YAML config blob written against a **Bukkit plugin** that does not exist here — it referenced
 > "economy plugins", "the server plugin", NBT, and "hotkeys exposed by the server". Its mechanics
@@ -152,7 +159,8 @@ else                                                    { return; }     // "not 
 ```
 
 Appending Cooking as a third `else if` — the obvious edit, and the one a code reviewer would wave
-through — means **Cooking never fires on 17 of the 41 foods in the game**, including `bread`,
+through — means **Cooking never fires on 17 of the 40 foods in the game** (12 + 5, the two diet
+sets exactly), including `bread`,
 `cookie`, `pumpkin_pie`, `mushroom_stew`, `baked_potato`, `golden_carrot`, `cooked_cod` and
 `cooked_salmon`. Those are exactly the foods a cook cooks.
 
@@ -176,10 +184,17 @@ Two more properties of that seam, both load-bearing:
 
 - **`if (nutrition <= 0) return;` sits ABOVE the chain.** Anything Cooking wants to do for a
   zero-nutrition consumable is unreachable without moving the guard.
-- **`milk_bucket` and `cake` have no `FoodComponent` at all** (javap: `FoodComponents` has 41 fields
-  and neither is one — cake is a *block*, eaten through `CakeBlock`). The seam **can never fire for
-  them.** The draft mapped both. Delete them or hook `CakeBlock` deliberately; do not leave them in a
-  table implying they work.
+- **`milk_bucket` and `cake` have no `FoodComponent` at all** (javap: `FoodComponents` has **40**
+  fields and neither is one — cake is a *block*, eaten through `CakeBlock`). The seam **can never fire
+  for them.** The draft mapped both. Delete them or hook `CakeBlock` deliberately; do not leave them
+  in a table implying they work.
+- ⚠️ **Carrying `FOOD` is not the same as being edible, and the two counts differ by four** (Stage 0).
+  **44** registry items carry `DataComponentTypes.FOOD`; only **40** are edible. The four extras are
+  `cod_bucket`, `salmon_bucket`, `pufferfish_bucket` and `tropical_fish_bucket`, which carry `FOOD`
+  but **no `CONSUMABLE` component** — and eating runs through `ConsumableComponent#finishConsumption`
+  (it is that method's `streamAll(Consumable.class)` that reaches `FoodComponent#onConsume`), so the
+  seam can never fire for them. 🔑 **Filter the food set on `CONSUMABLE`, not on `FOOD`**, or Cooking's
+  domain silently gains four items it can never see.
 
 ### D-CK3 — Kitchen Efficiency and Master Chef are legal, and they are Smelting's mechanics on a different item class
 
@@ -254,11 +269,23 @@ at level 100, scaling to 1000.
 >    raw meat and fish are out. The rule is legible in one sentence ("Cooking rewards you for eating
 >    what you cooked") and it drops the table from 21 rows to 15.
 >
-> ⚠️ Vanilla already grants effects from `golden_apple`, `enchanted_golden_apple`, `golden_carrot`,
-> `chorus_fruit`, `suspicious_stew`, `poisonous_potato`, `pufferfish`, `rotten_flesh` and
-> `spider_eye`. Cooking **must not touch those nine** — stacking our effect on top of vanilla's is
-> the "does not stack, extend duration instead" clause the draft hand-waved, and it is not worth the
-> code. They are simply absent from the table.
+> ⚠️⚠️ **CORRECTED BY STAGE 0 — the hand-written list was wrong on four of nine, and it still added
+> up to nine, which is why nobody re-counted it.** Dumped from `CONSUMABLE.onConsumeEffects()` (the
+> component effects actually live on — *not* `FOOD`), the nine are: **`chicken`**, `chorus_fruit`,
+> `enchanted_golden_apple`, `golden_apple`, **`honey_bottle`**, `poisonous_potato`, `pufferfish`,
+> `rotten_flesh`, `spider_eye`.
+>
+> - **`golden_carrot` carries no effect at all** — it is 6 nutrition and 14.4 saturation, nothing more.
+> - **`suspicious_stew`'s effects are on `DataComponentTypes.SUSPICIOUS_STEW_EFFECTS`**, a separate
+>   component the `CONSUMABLE` walk never sees.
+> - **Raw `chicken` grants Hunger** (`hunger@0 × 600t`, probability 0.3) and **`honey_bottle` carries a
+>   `RemoveEffectsConsumeEffect`** (it cures poison). Neither was on the list.
+>
+> All four stay out of the table regardless — but two of them were excluded **for a reason that is
+> false**, which is defect #15's mistake repeated ("excluded for the opposite reason to the one
+> stated"). Cooking **must not touch those nine**: stacking our effect on top of vanilla's is the
+> "does not stack, extend duration instead" clause the draft hand-waved, and it is not worth the code.
+> 🔑 **An effect a food grants may live on any of three components. Derive the list; never write it.**
 
 #### ⚠️⚠️ D-CK5a — the Saturation rows were a hunger cannon (found 2026-08-05, bytecode-verified)
 
@@ -283,10 +310,21 @@ a resource in this game.
 > row that had to be re-authored rather than deleted.
 >
 > 🔑 **The reusable rule: an effect's NAME does not tell you its tick cadence.** Check
-> `canApplyUpdateEffect` before putting any status effect in a config table. `InstantStatusEffect`
-> subclasses (Saturation, Instant Health, Instant Damage) apply *per tick* for the whole duration and
-> are never safe on a duration-scaled mechanic. **Stage 0 must dump the cadence for every effect the
-> final table names**, not just the food list.
+> `canApplyUpdateEffect` before putting any status effect in a config table.
+>
+> ✅ **STAGE 0 RAN THIS OVER THE WHOLE REGISTRY, and it widened the rule.** Seven effects return
+> `true` at duration 1 and therefore fire **every tick**: `instant_health`, `instant_damage`
+> (`InstantHealthOrDamageStatusEffect`), `saturation`, **`hunger`** (`HungerStatusEffect`),
+> **`absorption`** (`AbsorptionStatusEffect`), **`bad_omen`** and **`raid_omen`**.
+>
+> ⚠️⚠️ **Only three of the seven are `InstantStatusEffect` subclasses.** A test written as
+> `instanceof InstantStatusEffect` — the obvious way to write it, and the way D-CK5a originally
+> implied — **passes `hunger`, `absorption`, `bad_omen` and `raid_omen` straight through.** Test #7
+> below must assert on `canApplyUpdateEffect(1, 0) == false`, which is the behaviour that actually
+> matters, not on the class.
+>
+> ✅ All seven effects the shipped table names are clean: `speed`, `haste`, `strength`, `jump_boost`,
+> `regeneration`, `resistance`, `dolphins_grace` all return `false` at duration 1 **and** at 20.
 
 ### D-CK6 — No super ability
 
@@ -397,6 +435,40 @@ and the ~80–100 h floor every skill in this port is held to:
 > `ItemStack#onCraftByPlayer(player, amount)`. **XP must be priced per item and multiplied by the
 > count**, or a shift-click that crafts 64 cookies pays for one. Getting this backwards in either
 > direction is an 8×–64× error and it will not look like a bug in a unit test that crafts one loaf.
+>
+> ⚠️ **Stage 0: there are exactly three batch recipes among the foods, not one.** `cookie` ×8,
+> `dried_kelp` ×9, `honey_bottle` ×4. The plan named only cookies.
+
+#### ⚠️⚠️ D-CK8a — `dried_kelp` and `honey_bottle` are FREE INFINITE XP LOOPS (found by Stage 0)
+
+Both are craftable **out of their own storage block**, and the block is craftable back out of them:
+
+```
+9 dried_kelp  ->  dried_kelp_block  ->  9 dried_kelp     (crafting_shapeless x9)
+4 honey_bottle ->  honey_block      ->  4 honey_bottle   (crafting_shapeless x4, bottles returned)
+```
+
+**Nothing is consumed on either round trip.** With crafting XP priced per item × count — which is the
+rule the paragraph directly above *requires* — a player holding one dried kelp block earns Cooking XP
+at the speed of a crafting grid, forever, with no ingredient, no fuel and no farm. The block half
+pays nothing (a block is not a food), so the loop is pure profit in one direction.
+
+This is a strictly worse leak than the eight-smoker array D-CK8 was written against: the smoker array
+is bounded by chickens and by 5 s per item; this is bounded by click rate.
+
+> ✅ **Required, and it is not the cap.** `Max_Cooks_Per_Hour` would *contain* it — that is what a
+> rolling cap is for — but it would also let a player hit the entire hourly budget in under a minute
+> from a single block, which makes the cap the whole skill instead of a backstop. **Price both at 0 in
+> `Experience_Values.Cooking`**, and pin it with a test.
+>
+> 🔑 **The reusable rule: before pricing a crafted item, check whether it round-trips through its own
+> storage block.** The recipe set is the only place that shows up — no amount of reading the skill's
+> own code reveals it. Stage 0 found it by dumping result counts; it was invisible to every earlier
+> pass over this plan.
+>
+> ⚠️ `dried_kelp` is *also* a legitimate smelting/smoking output and stays priced at 60 **on the
+> furnace path**. The two paths are keyed separately (see Stage 2's three-hooks note) — which is
+> exactly what makes a per-item-not-per-path price wrong here.
 
 ### ⚠️⚠️ D-CK9 — The registration surface moved under this plan. GitHub #9 and #10 shipped after it was written.
 
@@ -488,17 +560,18 @@ noted here so it is a known property at §G rather than a surprise.
 
 ## Power Cook — the food → effect table
 
-⚠️ **This table is a STARTING POINT and Stage 0 must verify it against the live registry.** Use the
-Hunter calibration method (`[[hunter-skill-build]]`): a throwaway JUnit test that walks
-`Registries.ITEM`, filters on `DataComponentTypes.FOOD`, and dumps the set to TSV. **Do not author a
-food list from memory** — the draft did, and 11 of its 44 entries were items with no food component
-at all.
+✅ **STAGE 0 RAN 2026-08-05 AND ALL 15 ROWS SURVIVED IT.** Every row is a real food, every row is
+cooked or crafted per the shipped recipe data, no row carries a vanilla effect, and none of the seven
+effects named is instant. **Do not author a food list from memory** — the draft did, and 11 of its 44
+entries were items with no food component at all. The corrections Stage 0 *did* force are in the
+exclusion groups below, in D-CK5, and in D-CK8.
 
-`javap net.minecraft.component.type.FoodComponents` reports **41** foods in 1.21.11. The nine that
-already carry a vanilla effect are excluded (D-CK5), as are pure ingredients with no sensible mapping.
+**The counts, measured rather than recalled:** `javap FoodComponents` declares **40** fields; **44**
+registry items carry `DataComponentTypes.FOOD`; **40** are edible (the four fish buckets carry `FOOD`
+with no `CONSUMABLE` — see D-CK2). Of those 40, **19 are cooked or crafted** and 15 are in the table.
 
 **15 rows.** Every one is a food that came out of a furnace, smoker, campfire or crafting grid —
-D-CK5 clause 5. No `InstantStatusEffect` appears anywhere in it (D-CK5a).
+D-CK5 clause 5. No instant-cadence effect appears anywhere in it (D-CK5a).
 
 | Food | Made by | Effect | Note |
 |---|---|---|---|
@@ -518,17 +591,24 @@ D-CK5 clause 5. No `InstantStatusEffect` appears anywhere in it (D-CK5a).
 | `beetroot_soup` | craft | Regeneration | |
 | `rabbit_stew` | craft | Jump Boost | |
 
-**Deliberately absent, in three groups:**
+**Deliberately absent, in four groups** (the fourth added by Stage 0):
 
-1. **Vanilla already grants an effect** (D-CK5) — `golden_apple`, `enchanted_golden_apple`,
-   `golden_carrot`, `chorus_fruit`, `suspicious_stew`, `poisonous_potato`, `pufferfish`,
-   `rotten_flesh`, `spider_eye`.
+1. **Vanilla already grants an effect** (D-CK5, **list corrected by Stage 0**) — `chicken`,
+   `chorus_fruit`, `enchanted_golden_apple`, `golden_apple`, `honey_bottle`, `poisonous_potato`,
+   `pufferfish`, `rotten_flesh`, `spider_eye`. ⚠️ `golden_carrot` and `suspicious_stew` were on this
+   list and do **not** belong on it (see D-CK5); they are excluded under group 4 instead.
 2. **Raw** — `beef`, `chicken`, `cod`, `salmon`, `mutton`, `porkchop`, `rabbit`, `potato`, `carrot`,
    `beetroot`, `tropical_fish`. Cooking them is the point; paying for eating them raw inverts the skill.
 3. **Not cooked or crafted** (D-CK5 clause 5, the 2026-08-05 ruling) — `apple`, `melon_slice`,
-   `sweet_berries`, `glow_berries`, `honey_bottle`. Picked, not made. **Saturation and Glowing
-   therefore no longer appear in the table at all**; Saturation is banned outright (D-CK5a), Glowing
-   simply lost its only carrier.
+   `sweet_berries`, `glow_berries`. Picked, not made. **Saturation and Glowing therefore no longer
+   appear in the table at all**; Saturation is banned outright (D-CK5a), Glowing simply lost its only
+   carrier. ⚠️ **`honey_bottle` was in this group and is wrong here** — Stage 0 found it *is* crafted
+   (`crafting_shapeless` ×4 from a honey block). It is excluded under group 1 instead.
+4. ⚠️ **Cooked or crafted, and excluded anyway** (Stage 0 — these are the four made foods the table
+   omits, and each needs an explicit `0` in `Experience_Values.Cooking`, not an accidental absence):
+   `golden_apple`, `golden_carrot` (both 8 gold ingots — a gold farm is not a cooking skill, and this
+   is the XP table's existing ruling), `honey_bottle` and `suspicious_stew`. The last two were never
+   priced at all because the plan believed they carried vanilla effects and stopped there.
 
 ⚠️ **Cross-skill interaction the earlier draft missed — a §G row, not a blocker.** `Speed` (3 foods)
 and `Dolphin's Grace` (2) are **movement** buffs, and Agility's Parkour/Swimming domains pay
@@ -580,18 +660,27 @@ Cooking-specific entries:
 One stage lands **fully** — code + config + locale + unit tests + `./gradlew build` exit 0 + clean
 headless boot — before the next starts. Pause and commit to memory at each gate.
 
-**Stage 0 — Verify, don't author.**
-Throwaway JUnit test dumps every `Registries.ITEM` entry carrying `DataComponentTypes.FOOD` to TSV,
-with nutrition / saturation / `eat_seconds` / existing effects. Reconcile against the Power Cook table
-and against `FARMERS_DIET_FOODS` (12) and `FISHERMANS_DIET_FOODS` (5) so the overlap is a known set
-before D-CK2's restructure, not after.
-⚠️ **Also dump, for every effect the final table names, whether `canApplyUpdateEffect` is true at
-duration 1** — the D-CK5a check. An `InstantStatusEffect` in a duration-scaled table is a hunger
-cannon and the name does not warn you.
-⚠️ **And derive the cooked/crafted set from the recipe manager, not by eye** (D-CK5 clause 5): walk
-`RecipeManager` for `AbstractCookingRecipe` and `CraftingRecipe` results that carry a `FOOD`
-component. That set *is* the Power Cook whitelist's domain; authoring it by hand is how the draft got
-11 phantom foods. **No production code.** Delete the test when done.
+**✅ Stage 0 — Verify, don't author. DONE 2026-08-05.**
+`CookingStage0DumpTest` (throwaway, deleted) dumped three sets and reconciled them against this plan:
+every `Registries.ITEM` entry carrying `DataComponentTypes.FOOD`; every registered status effect's
+cadence at `canApplyUpdateEffect(1, 0)`; and the cooked/crafted food set derived from the **1,470
+shipped recipe JSONs in the merged jar** — which is the data `RecipeManager` loads, and is readable
+without a server.
+
+**Verdict: the 15-row table survives intact. Five things around it did not.**
+
+| # | Finding | Where it landed |
+|---|---|---|
+| 1 | ⚠️⚠️ **`dried_kelp` and `honey_bottle` round-trip through their own storage block** — free infinite crafting XP | **D-CK8a** (new) |
+| 2 | ⚠️⚠️ **The "nine vanilla-effect foods" list was wrong on 4 of 9** and still summed to nine | D-CK5 |
+| 3 | ⚠️⚠️ **`instanceof InstantStatusEffect` misses 4 of the 7 per-tick effects** | D-CK5a, test #7 |
+| 4 | **44 items carry `FOOD`, only 40 are edible** — the four fish buckets have no `CONSUMABLE` | D-CK2, test #10 |
+| 5 | **Three batch recipes, not one** — `cookie` ×8, `dried_kelp` ×9, `honey_bottle` ×4 | D-CK8 |
+
+Also measured and unchanged: **7 of the 15 rows are claimed by a diet sub-skill** (`baked_potato`,
+`bread`, `cookie`, `mushroom_stew`, `pumpkin_pie` — Farmer's; `cooked_cod`, `cooked_salmon` —
+Fisherman's), so **D-CK2's restructure is load-bearing, not defensive**. All 12 Farmer's and 5
+Fisherman's foods are real foods. No planned row is a phantom item, and no planned effect is instant.
 
 **Stage 1 — Registration.**
 `PrimarySkillType.COOKING`, the three `SubSkillType`s, `CookingManager extends SkillManager`
@@ -683,13 +772,21 @@ Beyond the checklist's items 20–22:
    assert **fuel is not boosted** and **eating a steak grants no effect**. Both fail today's
    `SkillGating` coverage and neither is caught by any existing test — the RNG-proc chokepoint that
    covers Master Chef does not exist on either path.
-7. **⚠️ The no-InstantStatusEffect test** (D-CK5a). Walk every effect named in
-   `Skills.Cooking.Power_Cook_Effects` and assert none is instant. It is three lines and it stops the
-   hunger cannon coming back through a config edit rather than a code edit — the one direction no
-   other test in this list covers.
+7. **⚠️ The no-instant-cadence test** (D-CK5a). Walk every effect named in
+   `Skills.Cooking.Power_Cook_Effects` and assert **`canApplyUpdateEffect(1, 0)` is false**. It is
+   three lines and it stops the hunger cannon coming back through a config edit rather than a code
+   edit — the one direction no other test in this list covers.
+   ⚠️⚠️ **Do NOT write it as `instanceof InstantStatusEffect`** — Stage 0 proved that misses
+   `hunger`, `absorption`, `bad_omen` and `raid_omen`, four of the seven per-tick effects.
 8. **⚠️ The stronger-effect test.** Apply a 3:00 Strength II, eat a steak, assert the potion is
    intact. The Stage-4 clause above, pinned.
-9. **Mutation-test every gate.** Break each one, prove the specific test reddens.
+9. **⚠️ The self-crafting-loop test** (D-CK8a). Assert `dried_kelp` and `honey_bottle` pay **0** on
+   the crafting path, **and** that `dried_kelp` still pays on the furnace path. Both directions — a
+   one-directional completeness test is half a test (`[[husbandry-wiring-audit]]`).
+10. **⚠️ The bucket test.** Assert the four fish buckets (`cod_bucket`, `salmon_bucket`,
+    `pufferfish_bucket`, `tropical_fish_bucket`) are not in Cooking's food domain. They carry `FOOD`
+    and no `CONSUMABLE`, so filtering on the wrong component silently adds four unreachable items.
+11. **Mutation-test every gate.** Break each one, prove the specific test reddens.
    ⚠️ **A mutation that does not redden is not evidence until you have proved it landed where you
    aimed** — nine sections of `advanced.yml` carry an identical `ChanceMax` block and a non-global
    `perl -0pi` silently edits the first (`[[hunter-skill-build]]`). ⚠️ **CRLF kills `perl -0pi` `$`
@@ -760,3 +857,17 @@ its own, and two of these were mine.
 | 18 | **`tropical_fish` → Dolphin's Grace** was added by the rewrite as a "missing food" — but it is **raw**, and the same file's own exclusion rule bars raw foods | Cut by D-CK5 clause 5. 🔑 *Adding a row because an item was missing from a list is not the same as it belonging in the list.* |
 | 19 | **No cross-skill check against Agility.** Five of 21 rows granted movement buffs to a mod whose newest skill pays XP per unit of movement | → §G row CK7 |
 | 20 | **No "don't overwrite a stronger effect" clause.** Eating a steak mid-potion would have cut a 3:00 Strength II to 15 s of Strength I — a Cooking *downgrade* | → Stage 4 |
+
+### Defects found by Stage 0 — 2026-08-05
+
+Every one of these was in a list a human wrote and nobody re-derived. The 15-row table itself came
+through clean, which is the argument for Stage 0 rather than against it: the rows were fine and
+**everything asserted *about* the rows was not**.
+
+| # | Defect | Evidence |
+|---|---|---|
+| 21 | ⚠️⚠️ **`dried_kelp` and `honey_bottle` are free infinite XP loops.** Both craft out of their own storage block (`x9` / `x4`) and back into it, consuming nothing. Priced per item × count — the rule D-CK8 requires — a single dried kelp block earns Cooking XP at click speed, forever | Recipe walk: `dried_kelp` is `cook+craft`, `crafting_shapeless x9`. → **D-CK8a**. 🔑 *Before pricing a crafted item, check whether it round-trips through its own storage block* |
+| 22 | ⚠️⚠️ **The "nine foods vanilla already gives an effect" list was wrong on four of nine — and still added up to nine.** `golden_carrot` (no effect at all) and `suspicious_stew` (effects live on `SUSPICIOUS_STEW_EFFECTS`, a different component) were in; raw `chicken` (Hunger, p=0.3) and `honey_bottle` (`RemoveEffectsConsumeEffect`) were out | `CONSUMABLE.onConsumeEffects()` dump. → D-CK5. 🔑 *A food's effect can live on any of three components; the matching count is what stopped anyone re-deriving it* |
+| 23 | ⚠️⚠️ **The D-CK5a test as specified would not have caught D-CK5a's own successors.** `instanceof InstantStatusEffect` matches only 3 of the **7** effects that fire every tick — `hunger`, `absorption`, `bad_omen`, `raid_omen` are not subclasses | Registry cadence dump. → D-CK5a, test #7. 🔑 *Assert the behaviour (`canApplyUpdateEffect(1,0)`), never the class that happens to implement it today* |
+| 24 | **"41 foods" was wrong in both directions.** `FoodComponents` declares **40** fields; **44** items carry `DataComponentTypes.FOOD`. The four extra are the fish buckets, which have `FOOD` but no `CONSUMABLE` and so can never reach the eat seam | `ConsumableComponent#finishConsumption` is what calls `FoodComponent#onConsume`, via `streamAll(Consumable.class)`. → D-CK2, test #10 |
+| 25 | **`honey_bottle` was listed as "not cooked or crafted".** It is crafted, ×4 from a honey block | Recipe walk. → exclusion group 1, and defect 21 |
