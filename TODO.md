@@ -221,16 +221,51 @@ is now `ExploitFix.Husbandry.Breed_Xp_Awards_Per_Window: 8` / `Breed_Xp_Award_Wi
 
 ## P2 — new features
 
-### [#10] Per-skill enable/disable toggle
+### ✅ [#10] Per-skill enable/disable toggle — DONE 2026-08-05
 <https://github.com/Wulfic/mcMMO-Singleplayer/issues/10>
 
-Add an option to disable an entire skill. Scope this properly before coding — "disabled" has to
-mean *all* of: no XP gain, no sub-skill procs, no super ability, no XP bar, no `/mcstats` section,
-no milestone plaques. A half-disabled skill is worse than none.
+**The switch already existed and was wired to nothing.** `coreskills.yml` has carried
+`<Skill>.Enabled` since the Phase 8 config port and `CoreSkillsConfig#isPrimarySkillEnabled` could
+read it — but **no caller anywhere in the codebase ever asked**. Setting it to `false` did precisely
+nothing. The funnel rule again, 11th time.
 
-Interacts with **#9** (both want a settings surface) and with the child-skill structure: disabling
-Parkour/Swimming/Flying changes Agility's level, since Agility is the **mean of its parents** and
-earns no XP of its own. Decide what a disabled parent contributes to that mean.
+**Shipped:** `util/skills/SkillGating` as the single authority, consulted at the funnels that between
+them cover all six meanings of "disabled". `coreskills.yml` regrown from 1 skill (plus a stale `Roll`
+sub-key that outlived GitHub #4) to all **26**.
+
+- 🔑 **The XP pipeline needed TWO gates, and a test proved it.** `beginXpGain` and `applyXpGain` are
+  both public and **each owns its own copy of the child-skill split**; `beginXpGain`'s split recurses
+  into `beginXpGain`, never reaching `applyXpGain`. With only the `applyXpGain` gate, switching
+  Agility off **redirected its XP into Parkour, Swimming and Flying** instead of refusing it.
+- ⚠️⚠️ **The rank is deliberately never forced to 0.** The tempting shortcut — make `getRank` answer 0
+  and let every rank gate fail on its own — walks straight onto the §F #9 landmine for the *fourth*
+  time: several `AdvancedConfig` getters index a defaults array by `rank - 1` with an eagerly
+  evaluated fallback and throw at rank 0. A fresh player never reaches them because an outer gate
+  checks their *level* first; **a level-1000 player who disables the skill keeps that level** and
+  sails right in. So only the *booleans* are gated (`hasUnlockedSubskill`, `hasReachedRank`); the
+  number keeps telling the truth. Mutation-proven.
+- 🔑 **Three proc chokepoints, not one**, because no single one covers all 23 skill managers:
+  `Permissions` (+ the 8 per-ability predicates), `RankUtils`' two boolean rank gates, and
+  `ProbabilityUtil#isSkillRNGSuccessful` (several sub-skills proc on a bare RNG roll with no rank or
+  permission check in front of them).
+- 🔑 **XP bar and plaques came free from the XP gate — except one route.** A *child* skill's level is
+  derived and climbs without any XP of its own ever being applied, so `snapshotMilestones` needed its
+  own gate or a disabled Agility would keep plaquing off an enabled Parkour's level-ups.
+- ⚠️ `checkAbilityActivation`'s gate sits **above** the rank check on purpose: the rank gate would also
+  refuse, but on the way out it tells the player they need N more levels — a lie, and a confusing one
+  at level 800.
+- ⚠️ **The docs claimed `coreskills.yml` disabled individual sub-skills. It never did in this port** —
+  that reader was dropped in Phase 10 and the claim had been copied into README, `wiki/Configuration`
+  and `wiki/Super-Abilities`. Same shape as #7. All three corrected.
+- 🔑 **New keys ⇒ no `ConfigRetunes`, 4th time.** All 26 `Enabled` keys back-filled into the
+  pre-existing `run/config/mcmmo/coreskills.yml` for free (verified live).
+- **The ruling (user, 2026-08-05):** a disabled Agility parent contributes **its frozen stored level**
+  and **the divisor stays at three**. So `getChildSkillLevel` needed no change at all. Excluding the
+  parent instead was rejected as an exploit — a pure Parkour player could disable Swimming and Flying
+  and jump from Agility 102 to Agility 300, unlocking every perk by turning skills *off*. Pinned by
+  two tests; the mutation that implements the exploit reddens both.
+- 18 new tests; **4 mutations run, 4 kills**. Suite 1396 green, boot `Done (0.989s)` with
+  `MINING is DISABLED` logged from a hand-edited live config.
 
 ### [#9] Cheats tab in ModMenu
 <https://github.com/Wulfic/mcMMO-Singleplayer/issues/9>
@@ -267,9 +302,12 @@ cheat-adjacent command registered without a level. Fix them in one pass, not one
 5. **#6** — trivial edit, but blocked on the trap-#1 migration decision, which #3 also needs. Do them together.
 6. ✅ **#7** — done. Was never a docs bug; the skill was wired to nothing.
 7. ✅ **#2** — done. The distance was never the gate; being ticked was.
-8. **#9** + **#10** — one settings pass, blocked on the cheat-method list. ⬅️ **next**
+8. ✅ **#10** — done. The switch already existed and was wired to nothing.
+9. **#9** — the cheats tab. ⬅️ **next**
 
 ## Blocked on the reporter
 
-- **#9** — which cheat methods get a toggle?
+- ~~**#9** — which cheat methods get a toggle?~~ **Answered 2026-08-05: all of them.** The canonical
+  list is `experience.yml`'s `ExploitFix` section, plus the placed-block tracker, which is the single
+  biggest anti-farm gate in the mod and currently has **no config key at all**.
 - **#6 / #3 / #5** — do we migrate their on-disk configs, or ship new keys?

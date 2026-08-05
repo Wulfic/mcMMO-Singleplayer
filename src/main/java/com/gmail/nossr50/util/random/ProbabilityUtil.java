@@ -5,6 +5,7 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.skills.SkillGating;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.Locale;
@@ -145,6 +146,14 @@ public class ProbabilityUtil {
      */
     public static boolean isSkillRNGSuccessful(@NotNull SubSkillType subSkillType,
             @Nullable McMMOPlayer mmoPlayer) {
+        // GitHub #10: a switched-off skill rolls nothing. This is the third proc chokepoint
+        // (with Permissions and RankUtils' boolean rank gates) because no single one of them
+        // covers all 23 skill managers -- several proc purely on an RNG roll with no rank or
+        // permission check in front of it, and those would otherwise still fire while disabled.
+        if (!SkillGating.isSubSkillEnabled(subSkillType)) {
+            return false;
+        }
+
         final Probability probability = getSkillProbability(subSkillType, mmoPlayer);
 
         //Luck
@@ -182,6 +191,14 @@ public class ProbabilityUtil {
     public static boolean isSkillRNGSuccessful(@NotNull SubSkillType subSkillType,
             @Nullable McMMOPlayer mmoPlayer,
             double probabilityMultiplier) {
+        // GitHub #10: a switched-off skill rolls nothing. This is the third proc chokepoint
+        // (with Permissions and RankUtils' boolean rank gates) because no single one of them
+        // covers all 23 skill managers -- several proc purely on an RNG roll with no rank or
+        // permission check in front of it, and those would otherwise still fire while disabled.
+        if (!SkillGating.isSubSkillEnabled(subSkillType)) {
+            return false;
+        }
+
         final Probability probability = getSkillProbability(subSkillType, mmoPlayer);
 
         //Luck

@@ -140,7 +140,7 @@ Abilities:
 - **`/mcability`** — toggles readying and activation for you, right now. The build-mode switch.
 - **`/mcrefresh`** — clears all your cooldowns and cancels any active ability. **Op level 2**: it removes the entire cost model of the super abilities, so it sits with `/addxp` rather than with `/mcability`.
 - **`Abilities.Enabled: false`** in `config.yml` — off globally.
-- **`coreskills.yml`** — disable an individual sub-skill, including a super ability, permanently.
+- **`coreskills.yml`** — set a skill's `Enabled: false` and its super ability can no longer be readied or activated, along with the rest of the skill. There is **no per-sub-skill switch**, so this cannot remove one super ability while leaving its skill intact; to do that, push its unlock level out of reach in `skillranks.yml`. See [Configuration](Configuration#turn-a-whole-skill-off).
 
 ---
 

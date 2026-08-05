@@ -4,12 +4,14 @@ import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
 import com.gmail.nossr50.commands.skills.SkillStatsRenderer;
+import com.gmail.nossr50.config.CoreSkillsConfig;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.skills.SkillGating;
 import com.gmail.nossr50.util.skills.SkillTools;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -158,6 +160,13 @@ public final class McMMOCommands {
                 false);
 
         for (PrimarySkillType skill : SkillTools.NON_CHILD_SKILLS) {
+            // GitHub #10: a skill the player switched off is not listed at all. Their level is still
+            // stored and still counts toward the power level below — disabling is a pause, not a
+            // reset — but a line reading "Mining: Lv.412" for a skill that pays nothing and procs
+            // nothing is exactly the half-disabled state the issue warns about.
+            if (!SkillGating.isSkillEnabled(skill)) {
+                continue;
+            }
             final int level = mmoPlayer.getSkillLevel(skill);
             final int xp = mmoPlayer.getProfile().getSkillXpLevel(skill);
             final int xpToLevel = mmoPlayer.getProfile().getXpToLevel(skill);
@@ -194,6 +203,21 @@ public final class McMMOCommands {
         if (skill == null) {
             source.sendError(Text.literal("Unknown skill: " + token));
             return 0;
+        }
+
+        // GitHub #10. Named explicitly rather than treated as an unknown skill: the player asked about
+        // a real skill and deserves the actual reason, plus the level they still have and where to
+        // switch it back on. Rendering the normal screen would list ranks and proc chances that are
+        // all, right now, zero in practice.
+        if (!SkillGating.isSkillEnabled(skill)) {
+            final String name = McMMOMod.getSkillTools().getLocalizedSkillName(skill);
+            final int level = mmoPlayer.getSkillLevel(skill);
+            source.sendFeedback(() -> Text.literal(name + " is disabled.").formatted(Formatting.RED)
+                    .append(Text.literal(" Your level (" + level + ") is saved and will come back "
+                                    + "untouched — re-enable it under '"
+                                    + CoreSkillsConfig.enabledPath(skill) + "' in coreskills.yml.")
+                            .formatted(Formatting.GRAY)), false);
+            return 1;
         }
 
         SkillStatsRenderer.forSkill(skill)

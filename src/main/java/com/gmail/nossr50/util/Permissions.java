@@ -3,6 +3,7 @@ package com.gmail.nossr50.util;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.util.skills.SkillGating;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -14,9 +15,13 @@ import org.jetbrains.annotations.Nullable;
  * backend, so — per the Phase 6 decision — permission checks collapse to fixed answers: gameplay
  * checks default to "allowed" and the opt-in "perk" nodes default to "not granted".
  *
- * <p>Only the surface the currently-ported code needs lives here; the remaining nodes
- * ({@code isSubSkillEnabled}, activation/tool perks, XP perks, etc.) get ported the same way as the
- * skills that reference them land. PORT Phase 6 — revisit if a config toggle should back any of these.
+ * <p><b>GitHub #10 took the "revisit if a config toggle should back any of these" up.</b> The
+ * gameplay checks are no longer unconditionally {@code true}: they now answer to the per-skill
+ * master switch in {@code coreskills.yml} via {@link SkillGating}, which is the closest thing
+ * singleplayer has to the {@code mcmmo.ability.<skill>.<subskill>} node they were ported from — one
+ * switch per skill rather than per node, because that is what the issue asked for. The <em>perk</em>
+ * nodes ({@link #lucky}, the bypasses) stay hard {@code false}: they were never grantable here, and a
+ * skill being switched off cannot make one grantable.
  */
 public final class Permissions {
 
@@ -37,109 +42,112 @@ public final class Permissions {
 
     /**
      * Whether a given sub-skill is enabled for a player. In the Bukkit plugin this gated each
-     * sub-skill behind an {@code mcmmo.ability.<skill>.<subskill>} permission node. Per the Phase 6
-     * decision, gameplay checks default to "allowed" in singleplayer — the lone player always has
-     * every sub-skill enabled.
+     * sub-skill behind an {@code mcmmo.ability.<skill>.<subskill>} permission node. Singleplayer has no permission backend, so
+     * this now answers to the parent skill's master switch in {@code coreskills.yml} (GitHub #10):
+     * allowed unless the player switched the whole skill off.
      *
      * @param player the player (unused — retained to mirror the legacy call sites)
      * @param subSkillType the sub-skill being checked
-     * @return always {@code true} — no permission backend in singleplayer
+     * @return {@code true} unless the parent skill is switched off in {@code coreskills.yml}
      */
     public static boolean isSubSkillEnabled(@Nullable PlatformPlayer player,
             @NotNull SubSkillType subSkillType) {
-        return true;
+        return SkillGating.isSubSkillEnabled(subSkillType);
     }
 
     /**
      * Whether a player may use a given sub-skill. The Bukkit plugin gated this on the
-     * {@code mcmmo.ability.<skill>.<subskill>} node; per the Phase 6 decision gameplay checks
-     * default to "allowed" in singleplayer. Distinct from {@link #isSubSkillEnabled} only in the
-     * legacy node it mirrored (Maces/Spears call sites used this variant).
+     * {@code mcmmo.ability.<skill>.<subskill>} node; singleplayer has no permission backend, so it
+     * answers to the parent skill's master switch (GitHub #10). Distinct from
+     * {@link #isSubSkillEnabled} only in the legacy node it mirrored (Maces/Spears used this variant).
      *
      * @param player the player (unused — retained to mirror the legacy call sites)
      * @param subSkillType the sub-skill being checked
-     * @return always {@code true} — no permission backend in singleplayer
+     * @return {@code true} unless the parent skill is switched off in {@code coreskills.yml}
      */
     public static boolean canUseSubSkill(@Nullable PlatformPlayer player,
             @NotNull SubSkillType subSkillType) {
-        return true;
+        return SkillGating.isSubSkillEnabled(subSkillType);
     }
 
     /**
-     * Berserk super-ability activation ({@code mcmmo.ability.unarmed.berserk}). A gameplay
-     * activation check, so it defaults to "allowed" in singleplayer.
+     * Berserk super-ability activation ({@code mcmmo.ability.unarmed.berserk}). A gameplay check:
+     * allowed unless the skill is switched off in {@code coreskills.yml}.
      *
      * @param player the player (unused — retained to mirror the legacy call sites)
-     * @return always {@code true} — no permission backend in singleplayer
+     * @return {@code true} unless the skill is switched off in {@code coreskills.yml}
      */
     public static boolean berserk(@Nullable PlatformPlayer player) {
-        return true;
+        return SkillGating.isSkillEnabled(PrimarySkillType.UNARMED);
     }
 
     /**
      * Serrated Strikes super-ability activation ({@code mcmmo.ability.swords.serratedstrikes}).
-     * A gameplay activation check, so it defaults to "allowed" in singleplayer.
+     * A gameplay check:
+     * allowed unless the skill is switched off in {@code coreskills.yml}.
      *
      * @param player the player (unused — retained to mirror the legacy call sites)
-     * @return always {@code true} — no permission backend in singleplayer
+     * @return {@code true} unless the skill is switched off in {@code coreskills.yml}
      */
     public static boolean serratedStrikes(@Nullable PlatformPlayer player) {
-        return true;
+        return SkillGating.isSkillEnabled(PrimarySkillType.SWORDS);
     }
 
     /**
-     * Skull Splitter super-ability activation ({@code mcmmo.ability.axes.skullsplitter}). A
-     * gameplay activation check, so it defaults to "allowed" in singleplayer.
+     * Skull Splitter super-ability activation ({@code mcmmo.ability.axes.skullsplitter}). A gameplay check:
+     * allowed unless the skill is switched off in {@code coreskills.yml}.
      *
      * @param player the player (unused — retained to mirror the legacy call sites)
-     * @return always {@code true} — no permission backend in singleplayer
+     * @return {@code true} unless the skill is switched off in {@code coreskills.yml}
      */
     public static boolean skullSplitter(@Nullable PlatformPlayer player) {
-        return true;
+        return SkillGating.isSkillEnabled(PrimarySkillType.AXES);
     }
 
     /**
      * Demolitions Expertise sub-skill ({@code mcmmo.ability.mining.demolitionsexpertise}), which
-     * reduces Blast Mining self-damage. A gameplay check, so it defaults to "allowed".
+     * reduces Blast Mining self-damage. A gameplay check:
+     * allowed unless the skill is switched off in {@code coreskills.yml}.
      *
      * @param player the player (unused — retained to mirror the legacy call sites)
-     * @return always {@code true} — no permission backend in singleplayer
+     * @return {@code true} unless the skill is switched off in {@code coreskills.yml}
      */
     public static boolean demolitionsExpertise(@Nullable PlatformPlayer player) {
-        return true;
+        return SkillGating.isSkillEnabled(PrimarySkillType.MINING);
     }
 
     /**
      * Bigger Bombs sub-skill ({@code mcmmo.ability.mining.biggerbombs}), which widens the Blast
-     * Mining radius. A gameplay check, so it defaults to "allowed".
+     * Mining radius. A gameplay check:
+     * allowed unless the skill is switched off in {@code coreskills.yml}.
      *
      * @param player the player (unused — retained to mirror the legacy call sites)
-     * @return always {@code true} — no permission backend in singleplayer
+     * @return {@code true} unless the skill is switched off in {@code coreskills.yml}
      */
     public static boolean biggerBombs(@Nullable PlatformPlayer player) {
-        return true;
+        return SkillGating.isSkillEnabled(PrimarySkillType.MINING);
     }
 
     /**
-     * Blast Mining remote detonation ({@code mcmmo.ability.mining.blastmining.detonate}). A gameplay
-     * activation check, so it defaults to "allowed" in singleplayer.
+     * Blast Mining remote detonation ({@code mcmmo.ability.mining.blastmining.detonate}). A gameplay check:
+     * allowed unless the skill is switched off in {@code coreskills.yml}.
      *
      * @param player the player (unused — retained to mirror the legacy call sites)
-     * @return always {@code true} — no permission backend in singleplayer
+     * @return {@code true} unless the skill is switched off in {@code coreskills.yml}
      */
     public static boolean remoteDetonation(@Nullable PlatformPlayer player) {
-        return true;
+        return SkillGating.isSkillEnabled(PrimarySkillType.MINING);
     }
 
     /**
-     * Green Terra super-ability activation ({@code mcmmo.ability.herbalism.greenterra}). A
-     * gameplay activation check, so it defaults to "allowed" in singleplayer.
+     * Green Terra super-ability activation ({@code mcmmo.ability.herbalism.greenterra}). A gameplay check:
+     * allowed unless the skill is switched off in {@code coreskills.yml}.
      *
      * @param player the player (unused — retained to mirror the legacy call sites)
-     * @return always {@code true} — no permission backend in singleplayer
+     * @return {@code true} unless the skill is switched off in {@code coreskills.yml}
      */
     public static boolean greenTerra(@Nullable PlatformPlayer player) {
-        return true;
+        return SkillGating.isSkillEnabled(PrimarySkillType.HERBALISM);
     }
 
     /**
@@ -168,13 +176,14 @@ public final class Permissions {
 
     /**
      * Arcane Salvage sub-skill ({@code mcmmo.ability.salvage.arcanesalvage}), which extracts an
-     * enchanted book from a salvaged item. A gameplay check, so it defaults to "allowed".
+     * enchanted book from a salvaged item. A gameplay check:
+     * allowed unless the skill is switched off in {@code coreskills.yml}.
      *
      * @param player the player (unused — retained to mirror the legacy call sites)
-     * @return always {@code true} — no permission backend in singleplayer
+     * @return {@code true} unless the skill is switched off in {@code coreskills.yml}
      */
     public static boolean arcaneSalvage(@Nullable PlatformPlayer player) {
-        return true;
+        return SkillGating.isSkillEnabled(PrimarySkillType.SALVAGE);
     }
 
     /**

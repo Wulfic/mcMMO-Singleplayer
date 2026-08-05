@@ -1,9 +1,89 @@
 #
-# This file includes a few settings for each skill in mcMMO
+# Per-skill master switches (GitHub #10).
+#
+# Set a skill to Enabled: false and it stops existing for you, in every sense the game can
+# express:
+#
+#   * it earns no XP, from any source, ever;
+#   * none of its sub-skills proc -- no bonus drops, no bonus damage, no passives;
+#   * its super ability cannot be readied or activated;
+#   * it never shows an XP bar;
+#   * it is omitted from /mcstats, and /mcstats <skill> says it is disabled;
+#   * it grants no milestone advancement plaques.
+#
+# A half-disabled skill is worse than none, so all six of those move together. There is no
+# partial mode and no per-sub-skill switch.
+#
+# YOUR LEVEL AND XP ARE NOT TOUCHED. Disabling is a pause, not a reset: nothing is deleted from
+# your save, and turning the skill back on returns you to exactly the level you left. This is
+# also why disabling a skill is not a way to "respec" -- it cannot give you anything.
+#
+# ---------------------------------------------------------------------------------------------
+# AGILITY IS DERIVED, AND ITS THREE PARENTS ARE NOT
+# ---------------------------------------------------------------------------------------------
+# Agility earns no XP of its own; its level is the mean of Parkour, Swimming and Flying, always
+# divided by three. So disabling one of those three FREEZES that parent's contribution at
+# whatever level it had reached -- the parent stops climbing, and Agility stops climbing with it.
+#
+#   Parkour 300, Swimming 60, Flying 90 (disabled)  ->  Agility = (300 + 60 + 90) / 3 = 150
+#
+# The divisor deliberately stays at three. Dropping the disabled parent out of the average
+# instead would make Agility the mean of only what you still train, so switching off the two
+# domains you never use would hand you up to 200 free Agility levels and every perk gated behind
+# them. Turning a skill OFF must never be a way to get stronger.
+#
+# Agility itself can be disabled independently of its parents, and vice versa.
+# ---------------------------------------------------------------------------------------------
 
-#Agility
 Agility:
-    # turn this to false to disable all subskills for this skill
     Enabled: true
-    Roll:
-        Enabled: true
+Alchemy:
+    Enabled: true
+Archery:
+    Enabled: true
+Axes:
+    Enabled: true
+Crossbows:
+    Enabled: true
+Excavation:
+    Enabled: true
+Fishing:
+    Enabled: true
+Flying:
+    Enabled: true
+Herbalism:
+    Enabled: true
+Hunter:
+    Enabled: true
+Husbandry:
+    Enabled: true
+Maces:
+    Enabled: true
+Mining:
+    Enabled: true
+Parkour:
+    Enabled: true
+Repair:
+    Enabled: true
+Salvage:
+    Enabled: true
+Smelting:
+    Enabled: true
+Spears:
+    Enabled: true
+Stealth:
+    Enabled: true
+Swimming:
+    Enabled: true
+Swords:
+    Enabled: true
+Taming:
+    Enabled: true
+Tridents:
+    Enabled: true
+Unarmed:
+    Enabled: true
+Unarmored:
+    Enabled: true
+Woodcutting:
+    Enabled: true

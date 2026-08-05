@@ -40,7 +40,7 @@ Only files that have actually been retuned carry a `Config_Version`. Today that 
 | `advanced.yml` | **The numbers behind every sub-skill** — activation chances, damage bonuses, max levels, caps. |
 | `experience.yml` | XP curve, per-skill XP tables, XP bars, diminishing returns, exploit fixes. |
 | `skillranks.yml` | The level at which each sub-skill rank unlocks (**Standard and RetroMode ladders**). |
-| `coreskills.yml` | Enable/disable whole skills and individual sub-skills. |
+| `coreskills.yml` | The per-skill master switch — turn a whole skill off. |
 | `treasures.yml` | Excavation loot tables, Hylian Luck treasure. |
 | `fishing_treasures.yml` | Fishing loot, enchantment tables, shake drops. |
 | `repair.vanilla.yml` | Repairable items and their materials. |
@@ -55,7 +55,38 @@ Only files that have actually been retuned carry a `Config_Version`. Today that 
 
 ### Turn a whole skill off
 
-`coreskills.yml`. It also switches off **individual sub-skills**, which is the cleanest way to remove a mechanic you dislike without touching its numbers.
+`coreskills.yml` — one switch per skill:
+
+```yaml
+Mining:
+    Enabled: false
+```
+
+Disabling is total. The skill earns no XP from any source, none of its sub-skills proc, its super
+ability cannot be readied or activated, it shows no XP bar, it is omitted from `/mcstats`, and it
+grants no milestone plaques. A half-disabled skill is worse than none, so all six move together.
+
+**Your level and XP are not touched.** Disabling is a pause, not a reset — turn the skill back on
+and you are exactly where you left off. That is also why it cannot be used to respec.
+
+There is **no per-sub-skill switch.** (Earlier versions of this page said there was; that was never
+true in this port.) To remove one mechanic without removing its skill, set its chance or bonus to
+`0` in `advanced.yml`, or push its unlock level out of reach in `skillranks.yml`.
+
+#### Disabling one of Agility's parents
+
+Agility earns no XP of its own — its level is the mean of Parkour, Swimming and Flying, and **the
+divisor stays at three**. Disabling one of those three freezes that parent's contribution at
+whatever level it had reached:
+
+> Parkour 300, Swimming 60, Flying 90 *(disabled)* → Agility = (300 + 60 + 90) / 3 = **150**
+
+The disabled parent is deliberately *not* dropped out of the average. Doing that would make Agility
+the mean of only what you still train, so switching off the two domains you never use would hand you
+up to 200 free Agility levels and every perk gated behind them. Turning a skill off must never be a
+way to get stronger.
+
+Agility itself can be switched off independently of its three parents, and vice versa.
 
 ### Make levelling faster or slower
 

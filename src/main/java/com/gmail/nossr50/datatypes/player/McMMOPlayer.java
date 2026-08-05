@@ -45,6 +45,7 @@ import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.skills.Milestones;
 import com.gmail.nossr50.util.skills.PerksUtils;
 import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.skills.SkillGating;
 import com.gmail.nossr50.util.skills.SkillTools;
 import com.gmail.nossr50.util.skills.SkillUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
@@ -362,6 +363,17 @@ public class McMMOPlayer {
             return;
         }
 
+        // GitHub #10. ⚠️ This gate is NOT redundant with the one in applyXpGain, and a test proves it:
+        // the child-skill split below recurses into *this* method, so a disabled child's gain would be
+        // divided among its parents and paid in full before anything reached applyXpGain. Switching
+        // Agility off would have quietly redirected its XP into Parkour, Swimming and Flying.
+        //
+        // Both gates are load-bearing because both methods are public entry points that each own a
+        // copy of the child split. This one closes the child route; applyXpGain's closes direct calls.
+        if (!SkillGating.isSkillEnabled(skill)) {
+            return;
+        }
+
         if (SkillTools.isChildSkill(skill)) {
             var parentSkills = McMMOMod.getSkillTools().getChildSkillParents(skill);
             float splitXp = xp / parentSkills.size();
@@ -404,7 +416,15 @@ public class McMMOPlayer {
      */
     public void applyXpGain(PrimarySkillType primarySkillType, float xp, XPGainReason xpGainReason,
             XPGainSource xpGainSource) {
-        // PORT Phase 6: skill permission gate dropped — singleplayer always permits.
+        // PORT Phase 6: skill permission gate dropped — singleplayer always permits. GitHub #10 put a
+        // config gate back in its place. Paired with the one in beginXpGain: that one closes the
+        // child-skill split (which recurses into beginXpGain and never arrives here), this one closes
+        // every direct call, including the SkillManager-driven awards that land here via
+        // beginUnsharedXpGain. Gating XP is also what stops a disabled skill levelling, which is in
+        // turn what stops its XP bar and its milestone plaques — those need no separate gate.
+        if (!SkillGating.isSkillEnabled(primarySkillType)) {
+            return;
+        }
 
         // PORT Phase 3: McMMOPlayerPreXpGainEvent (a cancellable/mutable pre-gain API event fired
         // via Bukkit's PluginManager) dropped. It let other plugins adjust the gain; singleplayer
@@ -570,6 +590,13 @@ public class McMMOPlayer {
         for (PrimarySkillType candidate : PrimarySkillType.values()) {
             if (SkillTools.isChildSkill(candidate)
                     && McMMOMod.getSkillTools().getChildSkillParents(candidate).contains(skill)) {
+                // GitHub #10: the one plaque route the XP gate does NOT close. A disabled skill stops
+                // levelling and therefore stops plaquing for free — but a *child* skill's level is a
+                // function of its parents and climbs without any XP of its own ever being applied, so
+                // a disabled Agility would keep firing plaques every time an enabled Parkour levelled.
+                if (!SkillGating.isSkillEnabled(candidate)) {
+                    continue;
+                }
                 tracked.add(candidate);
             }
         }
@@ -999,12 +1026,21 @@ public class McMMOPlayer {
      * timestamp, clears the tool-prep flag, and schedules the {@link AbilityDisableTask} that ends it.
      */
     public void checkAbilityActivation(@NotNull PrimarySkillType primarySkillType) {
+        // GitHub #10: the legacy getPermissions(player) gate was dropped in Phase 6 as "always granted
+        // in singleplayer"; the per-skill master switch is what now stands in its place.
+        //
+        // Deliberately ABOVE the rank check below rather than leaning on it. The rank gate would also
+        // refuse (hasUnlockedSubskill answers false for a disabled skill), but on its way out it tells
+        // the player they need N more levels — which is a lie, and an especially confusing one at
+        // level 800. Silence is the honest answer: they turned the skill off.
+        if (!SkillGating.isSkillEnabled(primarySkillType)) {
+            return;
+        }
+
         ToolType tool = McMMOMod.getSkillTools().getPrimarySkillToolType(primarySkillType);
         SuperAbilityType superAbilityType = McMMOMod.getSkillTools().getSuperAbility(primarySkillType);
         SubSkillType subSkillType = superAbilityType.getSubSkillTypeDefinition();
 
-        // Singleplayer: super-ability permissions are always granted (legacy getPermissions(player)
-        // gate dropped, Phase 6 by-design).
         if (getAbilityMode(superAbilityType)) {
             return;
         }
@@ -1072,6 +1108,13 @@ public class McMMOPlayer {
      * and schedules the {@link ToolLowerTask} that lowers it after the readiness window.
      */
     public void processAbilityActivation(@NotNull PrimarySkillType primarySkillType) {
+        // GitHub #10. Readying is the half of the super-ability flow with no rank gate in it at all,
+        // so without this a disabled skill would still announce "You ready your Axe" with the sound
+        // every time the player right-clicked — an ability that cannot activate, advertising itself.
+        if (!SkillGating.isSkillEnabled(primarySkillType)) {
+            return;
+        }
+
         if (McMMOMod.getGeneralConfig().getAbilitiesOnlyActivateWhenSneaking() && !player.isSneaking()) {
             return;
         }

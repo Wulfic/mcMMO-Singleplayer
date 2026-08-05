@@ -73,6 +73,14 @@ public final class RankUtils {
      * @return true if the player has at least one rank in the skill (or the skill has no ranks)
      */
     public static boolean hasUnlockedSubskill(McMMOPlayer mmoPlayer, SubSkillType subSkillType) {
+        // GitHub #10: a switched-off skill has nothing unlocked. Gated here rather than inside
+        // getRank on purpose — see the rank-0 landmine note on SkillGating: forcing the *number* to
+        // zero throws in the AdvancedConfig getters that index a defaults array by rank - 1, and a
+        // player who disables a skill keeps their level, so they reach those call sites.
+        if (!SkillGating.isSubSkillEnabled(subSkillType)) {
+            return false;
+        }
+
         int curRank = getRank(mmoPlayer, subSkillType);
 
         // -1 means the skill has no unlockable levels and is therefore always unlocked
@@ -88,7 +96,10 @@ public final class RankUtils {
      * @return true if the player is at least that rank in this subskill
      */
     public static boolean hasReachedRank(int rank, McMMOPlayer mmoPlayer, SubSkillType subSkillType) {
-        return getRank(mmoPlayer, subSkillType) >= rank;
+        // GitHub #10, same gate and same reasoning as hasUnlockedSubskill above: the boolean answers
+        // "no", the number keeps telling the truth.
+        return SkillGating.isSubSkillEnabled(subSkillType)
+                && getRank(mmoPlayer, subSkillType) >= rank;
     }
 
     /**

@@ -233,7 +233,7 @@ Configs are plain YAML, written on first load to:
 | `advanced.yml` | The numbers behind every sub‑skill — activation chances, damage bonuses, max levels, caps. |
 | `experience.yml` | XP curve, per‑skill XP tables, XP bars, diminishing returns, exploit fixes. |
 | `skillranks.yml` | The level at which each sub‑skill rank unlocks (standard **and** RetroMode ladders). |
-| `coreskills.yml` | Enable/disable whole skills and individual sub‑skills. |
+| `coreskills.yml` | The per‑skill master switch — turn a whole skill off (no XP, no procs, no super, no XP bar, no `/mcstats`, no plaques). |
 | `treasures.yml` / `fishing_treasures.yml` | Excavation & Fishing loot tables, Hylian Luck, shake drops. |
 | `repair.vanilla.yml` / `salvage.vanilla.yml` | Repairable/salvageable items and their materials. |
 | `potions.yml` | Alchemy brewing tree and custom potion concoctions. |
