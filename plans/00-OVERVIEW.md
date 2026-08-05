@@ -12,30 +12,35 @@ boot-verified — see `PLAYTEST_G.md`. **Do not start Pass 2 code until §G play
 run.** Building six brand-new skills on top of a port that has never been played once is how you ship
 six new skills' worth of bugs on top of an unverified base.
 
-## The five skills
+## The six skills
+
+Five are **code-complete** (`plans/completed/`); one is **plan-only** (`plans/new-skills/`).
 
 | Plan | Skill | XP trigger | Headline risk |
 |---|---|---|---|
-| [agility.md](agility.md) | **Agility** — the merged movement skill (**renamed Acrobatics** + Sprinting + Swimming + Flying) | falling/dodging + distance sprinted, swum, glided | It's a **rename of a shipped skill**: save-file key migration. Then 10 sub-skills and 4 XP sources on one bar |
-| [husbandry.md](husbandry.md) | **Husbandry** (+ Shearing) | the livestock lifecycle — breed, raise, feed, shear, hive, milk/brush | Fabric exposes a callback for none of them — six new mixins. `onGrowUp` fires on both age transitions **and** on chunk load; hooking `Shearable#sheared` would ship an AFK dispenser wool farm |
-| [stealth.md](stealth.md) | **Stealth** (Sneaking) | distance sneaked | "Thief" mob-blindness is hard + overlaps vanilla; anti-AFK critical |
-| [unarmored.md](unarmored.md) | **Unarmored** | damage taken w/ no armor | Managed armor attribute + equip/unequip reactivity |
-| [hunter.md](hunter.md) | **Hunter** (Mob Mastery) | mob kills | Per-mob kill counters are a **net-new persistence shape**; mob farms trivially cap a permanent +6 damage buff unless spawn-origin gating is ported |
+| [agility.md](completed/agility.md) | **Agility** — the merged movement skill (**renamed Acrobatics** + Sprinting + Swimming + Flying) | falling/dodging + distance sprinted, swum, glided | It's a **rename of a shipped skill**: save-file key migration. Then 10 sub-skills and 4 XP sources on one bar |
+| [husbandry.md](completed/husbandry.md) | **Husbandry** (+ Shearing) | the livestock lifecycle — breed, raise, feed, shear, hive, milk/brush | Fabric exposes a callback for none of them — six new mixins. `onGrowUp` fires on both age transitions **and** on chunk load; hooking `Shearable#sheared` would ship an AFK dispenser wool farm |
+| [stealth.md](completed/stealth.md) | **Stealth** (Sneaking) | distance sneaked | "Thief" mob-blindness is hard + overlaps vanilla; anti-AFK critical |
+| [unarmored.md](completed/unarmored.md) | **Unarmored** | damage taken w/ no armor | Managed armor attribute + equip/unequip reactivity |
+| [hunter.md](completed/hunter.md) | **Hunter** (Mob Mastery) | mob kills | Per-mob kill counters are a **net-new persistence shape**; mob farms trivially cap a permanent +6 damage buff unless spawn-origin gating is ported |
+| 🔴 [cooking.md](new-skills/cooking.md) | **Cooking** — *plan only, no code* | cooking + crafting food | The draft's item-borne quality tier **jams the furnace** (`canAcceptRecipeOutput` compares the whole component map). And Cooking has **no origin flag to gate on** — an unattended smoker array is 5,760 cooks/h, so the rolling exploit cap is the only gate that exists |
 
 > **The movement plans went six → four.** `swimming.md` and `flying.md` are **deleted**; the old
 > sprint-only `agility.md` is **rewritten**. All three are folded into the single merged
-> [agility.md](agility.md) — see **D5**. [hunter.md](hunter.md) was added later (2026-07-28) and is
+> [agility.md](completed/agility.md) — see **D5**. [hunter.md](completed/hunter.md) was added later (2026-07-28) and is
 > unrelated to that merge.
 
 Read this file first, then the per-skill file. This file owns everything they share: the two pieces
 of **net-new foundation**, the **"add a PrimarySkillType" checklist**, and the **cross-cutting design
 decisions** that need a human ruling before anyone writes a manager.
 
-Note that after D5, **Husbandry**, **Stealth**, **Unarmored** and **Hunter** are the new
-`PrimarySkillType`s — the checklist below applies to them in full, and to Agility only for the
-*rename* half (new sub-skills, new configs, new locale keys; no new enum constant). **Hunter
-additionally needs a persistence shape the checklist does not cover** (an open-ended, string-keyed
-per-mob counter map) — see [hunter.md](hunter.md) D-HU2.
+Note that after D5, **Husbandry**, **Stealth**, **Unarmored**, **Hunter** and (when it is built)
+**Cooking** are the new `PrimarySkillType`s — the checklist below applies to them in full, and to
+Agility only for the *rename* half (new sub-skills, new configs, new locale keys; no new enum
+constant). **Hunter additionally needs a persistence shape the checklist does not cover** (an
+open-ended, string-keyed per-mob counter map) — see [hunter.md](completed/hunter.md) D-HU2. **Cooking
+needs no new shape at all** — it is the only Pass-2 skill whose every seam either already exists or is
+a straight copy of one that does; see [cooking.md](new-skills/cooking.md) §"The seams".
 
 ---
 
@@ -70,7 +75,7 @@ What this changes, concretely:
   regression test and its own playtest, before a single new mechanic.
 - **New cost:** Agility becomes the largest skill in the mod (10 sub-skills, 4 XP sources, one level
   bar). Sub-skill folding (Fleet Footed, Second Wind) and an explicit XP budget handle it — see D-AG3
-  and D-AG6 in [agility.md](agility.md).
+  and D-AG6 in [agility.md](completed/agility.md).
 - ✅ **Stealth does NOT join** (user ruling, 2026-07-25). It stays its own skill — its payoff is
   *not-being-seen*, not locomotion. The Padfoot ↔ Fleet Footed speed overlap still has to be resolved
   (separate modifier identities, never both live, **verify sneak-swimming**) — see D-AG5.
@@ -79,7 +84,7 @@ What this changes, concretely:
   cannot outpay a slow one, and no speed buff (rockets, Depth Strider, Speed II, or **Fleet Footed
   itself**) becomes an XP multiplier. The budget is deliberately wide: ~89–170 h of continuous travel
   to max, per medium. Full formula, measured reference speeds and the derived numbers are in
-  [agility.md](agility.md) §"XP: the speed-normalised budget".
+  [agility.md](completed/agility.md) §"XP: the speed-normalised budget".
 
 ### D1 — Child skill vs standalone skill (Husbandry, ~~Swimming, Flying~~)
 
@@ -131,7 +136,7 @@ Default stance: **cut from v1, config-gated `false`, revisit later.** Per-skill 
   version or defer.**
 - **Stealth → Smoke Bomb**, **Agility → Dart / Limitless / Aquaman**: fine as cooldowned actives.
   **Keep**, on the existing super-ability infra. Post-D5 the last three are one ability with three
-  bodies (`SECOND_WIND`) rather than three abilities — see D-AG2 in [agility.md](agility.md).
+  bodies (`SECOND_WIND`) rather than three abilities — see D-AG2 in [agility.md](completed/agility.md).
 
 ### D3 — Overlap with vanilla and with each other
 
@@ -143,7 +148,7 @@ Call these out to the user; they are balance questions, not bugs:
 - Swim speed vs vanilla **Depth Strider** / **Dolphin's Grace**; Lead Lungs vs **Respiration**;
   glide speed vs elytra physics and **firework rockets** — all now one skill's problem (D-AG4).
 - Unarmored "free armor" vs actually wearing armor — the wiki's "stacks and doubles" clause is
-  incoherent; see [unarmored.md](unarmored.md) D-U1.
+  incoherent; see [unarmored.md](completed/unarmored.md) D-U1.
 
 ### D4 — XP curve & balance pass
 
@@ -154,7 +159,7 @@ max at level 1000**. Use that number; do not eyeball XP values.
 
 Distance-based XP will either trickle or firehose depending on the per-block value, so **Agility does
 not use a per-block value at all** — it pays per *second* of travel with a per-medium speed clamp
-(D5, and [agility.md](agility.md) §"XP: the speed-normalised budget"). **Stealth should use the same
+(D5, and [agility.md](completed/agility.md) §"XP: the speed-normalised budget"). **Stealth should use the same
 mechanism** for sneak distance rather than inventing a second model; sneaking has a well-defined
 reference speed (1.295 b/s) and the same "every speed buff is an XP multiplier" trap via Padfoot.
 Every plan has a balance section; the numbers in them are starting points pending §G measurement.
@@ -324,7 +329,7 @@ before anything references the manager.
 2. **Agility Stage 0 — the `ACROBATICS` → `AGILITY` rename, alone, with the save-file migration.**
    Zero new mechanics. It is pure risk with zero new feature value, so it must not be entangled with
    anything: if a profile comes back zeroed you need to know it was the rename. Ships with its own
-   old-profile regression test and its own client playtest. See [agility.md](agility.md) Stage 0.
+   old-profile regression test and its own client playtest. See [agility.md](completed/agility.md) Stage 0.
 3. **F1 `PlayerMovementTracker` + F2 `SkillAttributeService`** with unit tests. No skill behaviour yet —
    just the foundation, proven idempotent and AFK-proof.
 4. **Unarmored** — event-driven (damage taken) for XP and needs only F2, so it validates the attribute
@@ -334,8 +339,14 @@ before anything references the manager.
 6. **Stealth** — leans on F1 and F2; do it after Agility's Land domain has proven both in a live world.
 7. **Husbandry** — independent of F1/F2 (event-driven), but needs six new mixins; can be built in
    parallel by a second dev at any point. It has its own internal stage order (0–6) in
-   [husbandry.md](husbandry.md), and its breed half (stages 1–2) and harvest half (stages 3–4) are
+   [husbandry.md](completed/husbandry.md), and its breed half (stages 1–2) and harvest half (stages 3–4) are
    independent of each other, so either can ship first.
+8. **Cooking** — last, and deliberately so. It is the cheapest skill in Pass 2 to build (three of its
+   five seams already exist) and the easiest to get wrong, because two of its four sub-skills are
+   Smelting's mechanics pointed at food and its only anti-farm gate is a rate cap. Its stage order
+   (0–5) is in [cooking.md](new-skills/cooking.md). **Do not start it before §G has run** — its whole
+   balance case rests on measured numbers, and the one row that decides whether it ships (CK6, an
+   eight-smoker array AFK for an hour) has to be played, not reasoned about.
 
 One skill (or, for Agility, one **stage**) lands **fully** — code + config + locale + unit tests + green
 boot + §G rows *played* — before the next starts. No half-wired skills sitting in the tree; that was the

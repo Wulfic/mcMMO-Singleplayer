@@ -81,9 +81,12 @@ dependencies {
 // -----------------------------------------------------------------------------
 
 processResources {
-    inputs.property 'version', project.version
+    // Captured at CONFIGURATION time. Dereferencing `project` inside the filesMatching closure
+    // reads a Gradle script object at EXECUTION time, which the configuration cache rejects.
+    def modVersion = project.version
+    inputs.property 'version', modVersion
     filesMatching('fabric.mod.json') {
-        expand version: project.version
+        expand version: modVersion
     }
     // Legacy Bukkit resource files (plugin.yml, locale/**, *.yml configs) are
     // migrated in later phases; only fabric.mod.json + mixin configs matter now.
@@ -106,10 +109,24 @@ tasks.withType(JavaCompile).configureEach {
 
 test {
     useJUnitPlatform()
+
+    // The fabric-loader-junit tests call McTestRegistries.bootstrap() -> Bootstrap.initialize(),
+    // which builds the whole vanilla registry set. Measured 2026-08-05: that @BeforeAll costs ~53s
+    // and is CPU-bound, not GC-bound (512m and 3g time identically), so it is a fixed per-JVM cost.
+    // The only way to beat it is to overlap it with real work in sibling JVMs.
+    //
+    // Forked PROCESSES, not JUnit in-JVM threads: mcMMO's main code is full of static singletons
+    // (RankUtils is a plain HashMap, the config/mcMMO.p statics likewise), so sharing one JVM
+    // across test threads would race. A process fork isolates them for free.
+    maxParallelForks = 4
+    maxHeapSize = '1g'
 }
 
 jar {
+    // Same configuration-cache rule as processResources: resolve the name up front, not in the
+    // rename closure, which runs at execution time.
+    def archiveName = project.base.archivesName.get()
     from('LICENSE') {
-        rename { "${it}_${project.base.archivesName.get()}" }
+        rename { "${it}_${archiveName}" }
     }
 }
