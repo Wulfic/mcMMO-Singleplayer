@@ -15,6 +15,7 @@
     "BrewingStandBlockEntityMixin",
     "BrewingStandBrewTimeAccessor",
     "CowMilkMixin",
+    "CraftingResultSlotMixin",
     "EggHatchMixin",
     "EndermanEndermiteLureMixin",
     "EntityTypeSpawnOriginMixin",

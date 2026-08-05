@@ -9,6 +9,7 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
 import com.gmail.nossr50.skills.agility.Medium;
 import com.gmail.nossr50.skills.agility.MovementXpSettings;
+import com.gmail.nossr50.skills.cooking.CookingManager;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.skills.stealth.StealthXpSettings;
@@ -717,6 +718,51 @@ public class ExperienceConfig extends ConfigLoader {
      * raw metals carry a value, everything else resolves to 0 (no reward). */
     public int getSmeltingXP(String materialConfigString) {
         return config.getInt("Experience_Values.Smelting." + materialConfigString);
+    }
+
+    /* Cooking — TWO key spaces on purpose; see CookingManager's class doc before merging them. */
+
+    /**
+     * XP for one item cooked in a furnace, smoker, blast furnace or campfire, keyed by the
+     * <b>input</b> material's config string (see {@code ConfigStringUtils}), e.g. {@code "Beef"}.
+     *
+     * <p>The input, not the result, because the existing furnace seam injects <em>before</em>
+     * vanilla's {@code craftRecipe} — which is the call that decrements the input slot — and that is
+     * also Smelting's own convention on the same block. Anything without a value here resolves to 0
+     * and pays nothing.
+     *
+     * <p>⚠️ Note that one of the nine vanilla cooking inputs, {@code kelp}, is <b>not itself a
+     * food</b>. A table written by filtering "food inputs" silently drops dried kelp entirely.
+     */
+    public int getCookingCookXp(String inputConfigString) {
+        return config.getInt("Experience_Values.Cooking.Cook." + inputConfigString);
+    }
+
+    /**
+     * XP for <b>one item</b> of a crafted food, keyed by the <b>result</b> item's config string, e.g.
+     * {@code "Bread"}. The caller multiplies by the batch size.
+     *
+     * <p>⚠️ Deliberately a separate section from {@link #getCookingCookXp}. {@code dried_kelp} is the
+     * reason: smoking a {@code kelp} is a real 60-XP cook, while crafting a {@code dried_kelp} back
+     * out of a dried kelp block consumes nothing and must price <b>0</b>. One flat section could not
+     * express both.
+     */
+    public int getCookingCraftXp(String resultConfigString) {
+        return config.getInt("Experience_Values.Cooking.Craft." + resultConfigString);
+    }
+
+    /**
+     * How many cooked or crafted <b>items</b> may pay Cooking XP inside one rolling hour; {@code 0}
+     * disables the cap.
+     *
+     * <p>This is the only anti-farm gate Cooking has — an item carries no spawn origin, so none of
+     * Hunter's four checks have an equivalent here. See
+     * {@link CookingManager#DEFAULT_MAX_COOKS_PER_HOUR} for the arithmetic behind the number and for
+     * why it counts items rather than crafting events.
+     */
+    public int getCookingMaxCooksPerHour() {
+        return config.getInt("ExploitFix.Cooking.Max_Cooks_Per_Hour",
+                CookingManager.DEFAULT_MAX_COOKS_PER_HOUR);
     }
 
     /* Taming — keyed by config-entity string (see ConfigStringUtils). */

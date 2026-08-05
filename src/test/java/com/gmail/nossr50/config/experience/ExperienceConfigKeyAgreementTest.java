@@ -102,6 +102,8 @@ class ExperienceConfigKeyAgreementTest {
                 ExperienceConfig::isUnarmoredLivingAttackerRequired));
         gates.add(new Gate("ExploitFix.Unarmored.Max_Awards_Per_Attacker", 7,
                 ExperienceConfig::getUnarmoredMaxAwardsPerAttacker));
+        gates.add(new Gate("ExploitFix.Cooking.Max_Cooks_Per_Hour", 137,
+                ExperienceConfig::getCookingMaxCooksPerHour));
         gates.add(new Gate("ExploitFix.Husbandry.Harvest_Cooldown_Seconds", 77,
                 ExperienceConfig::getHusbandryHarvestCooldownSeconds));
         gates.add(new Gate("ExploitFix.Husbandry.Breed_Xp_Awards_Per_Window", 3,

@@ -282,6 +282,11 @@ public final class McMMOSettings {
                 "Unarmored: Max Awards Per Attacker",
                 "How often one mob can pay you before it stops counting. 0 disables the cap."));
         list.add(ConfigSetting.integer(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.Cooking.Max_Cooks_Per_Hour", 1200, 0, 20000,
+                "Cooking: Max Paid Cooks Per Hour",
+                "How many cooked or crafted items pay XP each hour. Counts items, not crafts. "
+                        + "1200 is two non-stop smokers. 0 disables the cap."));
+        list.add(ConfigSetting.integer(CAT_EXPLOITS, EXPERIENCE_YML,
                 "ExploitFix.Husbandry.Harvest_Cooldown_Seconds", 300, 0, 3600,
                 "Husbandry: Harvest Cooldown (sec)",
                 "How long one animal waits before milking or brushing it pays again. 0 disables."));

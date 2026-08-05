@@ -740,12 +740,35 @@ Stage 2 would never reach anyone who has already run the mod ([[xp-boss-bar]]). 
 existing config; a changed value does not. `Max_Cooks_Per_Hour` is deferred for the separate and
 stronger reason in D-CK9 item 3.
 
-**Stage 2 — Cook XP + the exploit cap.**
-The food branch of `SmeltingListener.onFurnaceSmelt`; `CraftingResultSlotMixin` for the crafted foods
-(⚠️ **× the batch count**); `Max_Cooks_Per_Hour` **and its `CAT_EXPLOITS` tab entry, same stage**
-(D-CK9 item 3 — #9's rule forces the ordering). Campfires are **not** in this stage — furnace,
-smoker and blast furnace all come free off the existing mixin, and shipping the free 90% first proves
-the XP model before a new mixin is written.
+**✅ Stage 2 — Cook XP + the exploit cap. DONE 2026-08-05.**
+The food branch of `SmeltingListener.onFurnaceSmelt`; a new `CookingListener` +
+`CraftingResultSlotMixin` for the crafted foods (**× the batch count**); `Experience_Values.Cooking`;
+`ExploitFix.Cooking.Max_Cooks_Per_Hour` **with** its `CAT_EXPLOITS` tab entry and its
+`ExperienceConfigKeyAgreementTest` gate, same stage. Campfires deferred to Stage 5 as planned.
+
+**Suite 1459 green (+31), `./gradlew build` exit 0, boot `Done (1.310s)` with 0 ERROR, 0 exceptions,
+0 mixin failures. 5 mutations run, 5 kills.** Verified in the live `run/config/mcmmo` tree that
+every new key back-filled into the pre-existing on-disk `experience.yml`.
+
+**What this stage measured that the plan had not:**
+
+| # | Finding |
+|---|---|
+| 1 | ⚠️⚠️ **The cap has to count ITEMS, not crafting events.** XP is priced per item × batch, so an event-counting cap lets one shift-click of 64 cookies spend **one** unit of a 1,200 budget while paying 64 items' worth — a 64× hole in the skill's only gate. Mutation-proven (5 tests redden) |
+| 2 | ⚠️⚠️ **`CraftingResultSlot#onCrafted(ItemStack)` zeroes its own `amount` field on its last line** (`aload_0; iconst_0; putfield amount`). **HEAD is mandatory** — a RETURN injection reads a batch of 0 for every craft ever made, pays nothing, and compiles perfectly |
+| 3 | ⚠️ **`kelp` is a cooking input that is NOT a food** (no food component; dried kelp has one). The furnace section is keyed on the **input**, so a table written by filtering "which foods can be cooked" **drops dried kelp from the skill entirely**, silently. Pinned by its own listener test |
+| 4 | ⚠️ **`chorus_fruit` is a 10th furnace food input this plan never mentioned.** It smelts to popped chorus fruit (not a food, not cooking) and a chorus farm is fully automatable ⇒ explicit `0`, not absence |
+| 5 | **`enchanted_golden_apple` has no crafting recipe at all** (uncraftable since 1.9). The XP table above lists it at 0 — that key would reach no code ever, so it is **omitted** rather than shipped dead (#9's rule) |
+| 6 | 🔑 **The two key spaces became two config SUBSECTIONS** — `Experience_Values.Cooking.Cook` (input-keyed) and `.Craft` (result-keyed) — which makes D-CK8a **structural instead of coincidental**: `Kelp: 60` and `Dried_Kelp: 0` are now different keys in different sections rather than two names that happen not to collide |
+
+**The Smelting/Cooking ambiguity is resolved and pinned:** `onFurnaceSmelt` checks
+`SmeltingManager.isSmeltable(input)` first and Cooking is the `else` — the same order
+`boostFuelTime` has enforced since the Smelting port. `CookingListenerTest` asserts both directions
+on a real config, and `CookingManagerTest` asserts the shipped tables are disjoint so nothing relies
+on the tie-break.
+
+⚠️ **Deliberately deferred:** `Bonus_Drops.Cooking` (Stage 3, with Master Chef) and
+`Power_Cook_Effects` (Stage 4) — same `copyMissingDefaults` reasoning as Stage 1.
 
 ⚠️ **Three hooks, and they are keyed on deliberately different things. Write that down before anyone
 "unifies" them:**

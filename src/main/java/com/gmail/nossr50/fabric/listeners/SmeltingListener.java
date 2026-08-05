@@ -1,8 +1,11 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.skills.cooking.CookingManager;
 import com.gmail.nossr50.skills.smelting.SmeltingManager;
+import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.HashSet;
@@ -127,8 +130,15 @@ public final class SmeltingListener {
         smeltedOreProducts = Set.of();
     }
 
-    /** Right-click a furnace → remember this player as its owner for XP-award purposes. */
-    private static ActionResult onUseBlock(PlayerEntity player, World world, Hand hand,
+    /**
+     * Right-click a furnace → remember this player as its owner for XP-award purposes.
+     *
+     * <p>Package-private rather than private so {@code CookingListenerTest} can claim a furnace the
+     * way a player does. There is no other route into {@link #FURNACE_OWNERS}, and without one the
+     * food branch of {@link #onFurnaceSmelt} is untestable — which is exactly how a hook ends up
+     * wired to nothing.
+     */
+    static ActionResult onUseBlock(PlayerEntity player, World world, Hand hand,
             BlockHitResult hitResult) {
         if (!(player instanceof ServerPlayerEntity)) {
             return ActionResult.PASS; // client-side fire — the server copy does the bookkeeping.
@@ -141,11 +151,21 @@ public final class SmeltingListener {
     }
 
     /**
-     * Award Smelting XP to the furnace's owner for a freshly smelted item. Called from the furnace
-     * smelt mixin. A no-op when the furnace has no tracked owner, the owner isn't loaded, or the
-     * smelted material carries no configured Smelting XP.
+     * Award the furnace's owner for a freshly finished cook — <b>Smelting XP for an ore, Cooking XP
+     * for a food</b>. Called from the furnace smelt mixin. A no-op when the furnace has no tracked
+     * owner, the owner isn't loaded, or the input carries no configured XP under either skill.
      *
-     * @param world the furnace's world
+     * <h2>⚠️ The two skills are mutually exclusive here, and the order is Smelting first</h2>
+     * Both are keyed on the same thing — the furnace's <em>input</em> — so nothing in the config
+     * format stops an operator listing one item under both {@code Experience_Values.Smelting} and
+     * {@code Experience_Values.Cooking.Cook}. Left ambiguous, one smelt would pay twice.
+     *
+     * <p><b>Smelting wins, and Cooking is the {@code else}.</b> That is not an arbitrary tie-break:
+     * it is the same gate {@link #boostFuelTime} has enforced since the Smelting port, whose comment
+     * reads <em>"so cooking food burns at vanilla speed"</em>. Writing the XP branch the other way
+     * round would leave the XP and the fuel bonus disagreeing about which skill owns a given input.
+     *
+     * @param world the furnace's world — its time is the clock Cooking's rate cap is measured on
      * @param pos   the furnace position
      * @param input the item that was smelted (the input slot's stack, read before it is consumed)
      */
@@ -153,11 +173,23 @@ public final class SmeltingListener {
         if (input.isEmpty()) {
             return;
         }
-        final SmeltingManager smelting = ownerSkill(pos);
-        if (smelting == null) {
+        final McMMOPlayer owner = owner(pos);
+        if (owner == null) {
             return;
         }
-        smelting.awardSmeltingXP(materialConfigString(input));
+        final String inputConfigString = materialConfigString(input);
+        if (SmeltingManager.isSmeltable(inputConfigString)) {
+            owner.getSmeltingManager().awardSmeltingXP(inputConfigString);
+            return; // An ore. Smelting's, and never also Cooking's.
+        }
+        final CookingManager.CookAward award =
+                owner.getCookingManager().onCook(inputConfigString, world.getTime());
+        if (award.capReached()) {
+            // Once per window, not once per cook: a rate cap that pays nothing and says nothing is
+            // indistinguishable from a broken skill, and an eight-smoker array would spam the chat.
+            NotificationManager.sendPlayerInformation(owner, NotificationType.SUBSKILL_MESSAGE,
+                    "Cooking.CookRateCap.Reached");
+        }
     }
 
     /**
@@ -343,24 +375,41 @@ public final class SmeltingListener {
     }
 
     /**
-     * The {@link SmeltingManager} of the player who owns the furnace at {@code pos}, or {@code null}
-     * when nobody has interacted with it this session or the owner's data is not loaded. A furnace
-     * with no tracked owner behaves exactly like vanilla.
+     * The player who owns the furnace at {@code pos}, or {@code null} when nobody has interacted with
+     * it this session or their data is not loaded. A furnace with no tracked owner behaves exactly
+     * like vanilla.
+     *
+     * <p>Resolved once and handed out whole rather than per-skill, because the furnace is shared:
+     * {@link #onFurnaceSmelt} has to choose between this player's Smelting and Cooking managers on
+     * the same tick, and doing that through two skill-typed lookups would walk the owner map twice.
+     * <b>One map, two managers</b> — do not duplicate {@link #FURNACE_OWNERS} for Cooking.
      */
-    private static SmeltingManager ownerSkill(BlockPos pos) {
+    private static McMMOPlayer owner(BlockPos pos) {
         final UUID ownerId = FURNACE_OWNERS.get(pos.asLong());
         if (ownerId == null) {
             return null; // no one has interacted with this furnace this session.
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(ownerId);
-        if (mmoPlayer == null) {
-            return null; // owner data not loaded (offline / not yet joined).
-        }
-        return mmoPlayer.getSmeltingManager();
+        return UserManager.getPlayer(ownerId); // null when owner data is not loaded.
     }
 
-    /** e.g. {@code minecraft:iron_ore} → {@code "Iron_Ore"}, the key the smelting configs use. */
-    private static String materialConfigString(ItemStack stack) {
+    /**
+     * The {@link SmeltingManager} of the furnace's owner, or {@code null}. The null-owner fast path
+     * is {@link #owner}'s; this only narrows it to a skill.
+     */
+    private static SmeltingManager ownerSkill(BlockPos pos) {
+        final McMMOPlayer mmoPlayer = owner(pos);
+        return mmoPlayer == null ? null : mmoPlayer.getSmeltingManager();
+    }
+
+    /**
+     * e.g. {@code minecraft:iron_ore} → {@code "Iron_Ore"}, the key the smelting and cooking configs
+     * are both written against.
+     *
+     * <p><b>Package-private on purpose:</b> {@link CookingListener}'s crafting path derives the same
+     * kind of key from a different stack, and the two must agree. Hunter's lesson — where two paths
+     * derive the same key, give them one shared function rather than two tests.
+     */
+    static String materialConfigString(ItemStack stack) {
         return ConfigStringUtils.getMaterialConfigString(
                 Registries.ITEM.getId(stack.getItem()).getPath());
     }

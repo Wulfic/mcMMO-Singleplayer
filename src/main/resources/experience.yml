@@ -19,6 +19,34 @@ ExploitFix:
         XPCeiling:
             Enabled: true
             Damage_Limit: 100
+    Cooking:
+        # How many cooked or crafted ITEMS may pay Cooking XP inside one rolling hour.
+        #
+        # ######################################################################################
+        # THIS IS THE ONLY ANTI-FARM GATE COOKING HAS.
+        # ######################################################################################
+        # Every other skill that could be farmed has something concrete to check. Hunter has four
+        # separate gates -- a transient-entity check, a player-created-golem check, a
+        # player-attributed killing blow, and a spawn origin recorded on the mob itself. Cooking has
+        # NONE of them, for one reason: an item has no spawn origin. A cooked steak is a cooked
+        # steak whether you caught the cow yourself or a hopper fed it to a smoker while you slept.
+        #
+        # Vanilla's own cook times are 100 ticks smoking, 200 smelting, 600 campfire, so ONE smoker
+        # is 720 items/hour unattended and eight are 5,760/hour. The furnace-owner map is filled by
+        # a single right-click and held for the whole session, so that array keeps paying its owner
+        # the entire time.
+        #
+        # 1200 is two continuously-running smokers. Against Cooking's XP curve that is roughly the
+        # skill's intended ~100-hour pace, so it does not bite anyone cooking by hand or running a
+        # normal kitchen -- it bites the array that runs forever.
+        #
+        # NOTE: it counts ITEMS, not crafts. XP is priced per item and multiplied by the batch, so a
+        # cap counting crafting ACTIONS would let one shift-click of 64 cookies spend a single unit
+        # of this budget while paying 64 items' worth of XP.
+        #
+        # Set to 0 to disable the cap entirely. Cooks past the cap still cook; they just pay nothing,
+        # and you are told once per hour when that starts happening.
+        Max_Cooks_Per_Hour: 1200
     COTWBreeding: true
     UnsafeEnchantments: false
     # Prevent many exploits related to fishing
@@ -919,6 +947,64 @@ Experience_Values:
         Redstone_Ore: 15
         Nether_Gold_Ore: 35
         Cobbled_Deepslate: 5
+    # Cooking sits directly under Smelting because it is Smelting's other half: the two share the
+    # furnace and split it by INPUT. Ore pays Smelting, food pays Cooking, and never both -- the
+    # listener checks Smelting first and Cooking is the else, which is the same order the fuel-bonus
+    # gate has enforced since the Smelting port ("so cooking food burns at vanilla speed").
+    #
+    # ##########################################################################################
+    # TWO SUBSECTIONS, AND THEY ARE NOT INTERCHANGEABLE. DO NOT MERGE THEM.
+    # ##########################################################################################
+    # Cook:  keyed by what goes INTO the furnace/smoker/campfire (beef, potato, kelp).
+    # Craft: keyed by what comes OUT of the crafting grid (bread, cookie, dried_kelp).
+    #
+    # dried kelp is why the split exists. Smoking a KELP is a real cook worth 60. But crafting a
+    # DRIED_KELP is not: 9 dried kelp craft into a dried kelp block and the block crafts straight
+    # back into 9 dried kelp, consuming nothing at all. Priced per item, that is infinite XP at the
+    # speed of a crafting grid, with no ingredient, no fuel and no farm. Honey bottles round-trip
+    # through a honey block exactly the same way. Both are therefore 0 under Craft and only under
+    # Craft -- one flat section could not have said that.
+    Cooking:
+        # What the furnace, smoker, blast furnace or campfire consumed. These nine are every food
+        # input vanilla has (derived from the shipped recipe JSONs, not written from memory).
+        Cook:
+            # The core verb, and the number the whole XP budget is derived from.
+            Beef: 100
+            Porkchop: 100
+            Chicken: 100
+            Mutton: 100
+            Rabbit: 100
+            Cod: 100
+            Salmon: 100
+            # One free ingredient and no crafting step, so worth less than a slaughtered animal.
+            Potato: 60
+            # NOTE: kelp is not itself a food -- it has no food component at all, dried kelp does.
+            # It is listed here because this section is keyed on the INPUT. A table written by
+            # filtering "which foods can be cooked" drops dried kelp from the skill entirely.
+            Kelp: 60
+            # Explicitly 0, not merely absent. Chorus fruit IS a furnace food input, but it smelts
+            # into popped chorus fruit, which is not food and is not cooking -- and a chorus farm is
+            # fully automatable. Left absent, a future reader would take it for an oversight.
+            Chorus_Fruit: 0
+        # What came out of the crafting grid. Priced PER ITEM: the game hands the whole batch over
+        # in one take, so these are multiplied by the count produced.
+        Craft:
+            Bread: 80                # 3 wheat
+            Mushroom_Stew: 150       # 2 mushrooms + a bowl
+            Beetroot_Soup: 150       # 6 beetroot + a bowl
+            Rabbit_Stew: 150         # 5 ingredients + a bowl
+            Pumpkin_Pie: 200         # pumpkin + sugar + egg
+            Cake: 300                # 3 milk + 2 sugar + 1 egg + 3 wheat, and it yields ONE
+            Cookie: 10               # x8 per craft, so 80 for the recipe -- see the per-item note
+            # The two free-loop foods. See the block comment above; these must stay at 0.
+            Dried_Kelp: 0
+            Honey_Bottle: 0
+            # 8 gold ingots. A gold farm is not a cooking skill.
+            Golden_Apple: 0
+            Golden_Carrot: 0
+            # 0 on purpose rather than absent: suspicious stew IS crafted (16 recipes, one per
+            # flower), and its effects live on their own component, so Cooking stays out of it.
+            Suspicious_Stew: 0
     Hunter:
         # XP for ONE qualifying kill, by the victim's tier.
         #
