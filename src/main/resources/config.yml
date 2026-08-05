@@ -510,6 +510,21 @@ Skills:
         Enabled_For_PVP: true
         Enabled_For_PVE: true
         Level_Cap: 0
+        # Bring tamed pets along when you make a long jump inside the same world -- an ender pearl, a
+        # /tp, a chorus fruit, a respawn. This is a deliberate override of vanilla, not a port fix.
+        #
+        # Vanilla already means to do this: a wolf's follow goal teleports it to you from ANY distance
+        # once you are 12+ blocks away. What breaks is that the wolf stops being ticked the moment it
+        # falls outside your simulation distance, so a long jump leaves it dormant and it never runs
+        # the goal at all. Setting this to false restores that vanilla behaviour exactly.
+        #
+        # Cross-world moves are deliberately NOT covered (issue scope). A sitting, leashed or ridden
+        # pet is never moved -- "sit" is an explicit order to stay, and honouring it is the point.
+        Pets_Follow_Teleport: true
+        # How far from where you left a pet may be and still be brought along, in blocks. Not
+        # unbounded on purpose: pets you left behind at a base should stay there, and whether a distant
+        # chunk happens to be loaded is not something a player can see or predict.
+        Pets_Follow_Teleport_Radius: 32
         Call_Of_The_Wild:
             # Item_Material: Material of the item needed to summon the pet
             # Item_Amount: Amount of items required to summon the pet

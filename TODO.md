@@ -70,22 +70,44 @@ So there are two candidate defects and they need different fixes:
 legacy call site, not just the method (the multiply-by-zero landmine). Then do the same audit for
 Giga Drill Breaker and Berserk, which share this shape.
 
-### [#2] Tamed pets don't follow through a long teleport
+### ✅ [#2] Tamed pets don't follow through a long teleport — DONE 2026-08-05
 <https://github.com/Wulfic/mcMMO-Singleplayer/issues/2>
 
-Symptom: same server-side vanilla bug — wolves stay behind when the teleport distance is large.
-Wanted: follow unconditionally **when in the same world**.
+Symptom: wolves stay behind when the teleport distance is large. Wanted: follow unconditionally
+**when in the same world**.
 
-Notes:
-- This is a vanilla behaviour we're choosing to override, not a port regression. Scope it as a
-  Taming feature and gate it behind a config key so it can be turned off.
-- Cross-world is explicitly **out of scope** per the issue.
-- Watch the entity-recreation path: `respawnPlayer` is the only path that rebuilds a player handle
-  (death *and* End-exit) — rebind, never rebuild. A pet-follow implementation that caches a player
-  reference will go stale there.
+**The distance was never the gate.** `FollowOwnerGoal#tick` asks
+`TameableEntity#shouldTryTeleportToOwner()` — which is nothing but `squaredDistanceTo(owner) >= 144`
+— and on a yes calls `tryTeleportToOwner()`, with **no upper bound at all** (javap on the merged
+jar). Vanilla already intends pets to keep up over any distance. What breaks is that a pet outside
+the player's simulation distance **stops being ticked**, so the goal never runs at all and the pet
+sits dormant where it was left. *Being ticked* is the gate, not the distance.
 
-Acceptance: pet teleports to owner on any same-world teleport distance; a test that pins the
-cross-world case is still a no-op; config key documented.
+**Shipped:** `fabric/listeners/PetFollowTeleport`, behind `Skills.Taming.Pets_Follow_Teleport: true`
+/ `Pets_Follow_Teleport_Radius: 32` in `config.yml`. New keys ⇒ `copyMissingDefaults` back-fills
+them into an existing config for free (verified live against the pre-existing `run/config/mcmmo/`),
+so **no `ConfigRetunes` entry was needed**. Documented in `wiki/Skills`, `wiki/Configuration` and
+`wiki/Differences-from-mcMMO`.
+
+- 🔑 **It rides `PlayerMovementTracker`'s per-tick sweep, not a teleport mixin.** A player is
+  relocated by commands, pearls, chorus fruit, portals, respawn and other mods, and those do not
+  share one method — `teleportTo(TeleportTarget)` and `requestTeleport(d,d,d)` bottom out in the
+  network handler by different routes. A position delta cannot be bypassed by any of them, and the
+  tracker already keeps the baseline. One tick of latency is free: entity unloading is queued.
+- 🔑 **Vanilla's own `cannotFollowOwner()` is the eligibility gate** — sitting, leashed, ridden and
+  spectating-owner in one `public final` call, so "sit means stay" needs no second implementation.
+- ⚠️ **The fallback is refused over an airborne owner.** `tryTeleportNear` can find nowhere to put
+  the pet (a ledge, an alcove) and nothing ever retries — so a direct placement fallback is
+  load-bearing. But dropping a wolf out of an elytra flight trades "left behind" for "died on
+  landing", which is strictly worse than the bug. Airborne ⇒ leave it, which is the vanilla outcome.
+- 🔑 **The respawn stale-handle trap does not apply here.** `LazyEntityReference#resolve` checks
+  `isRemoved()` on its cached entity and re-looks-up by UUID (bytecode), so vanilla's owner reference
+  survives `respawnPlayer` on its own.
+- ⚠️ The tracker needed a **world** baseline as well as a position one: the coordinates either side
+  of a nether portal are both real and 8× apart, so a box drawn at the old position in the new world
+  is somewhere plausible and wrong.
+- 3 mutations run (dispatch moved below the profile guard; airborne refusal deleted; search box
+  centred on arrival instead of departure) — 3 kills.
 
 ### ✅ [#7] Spears paid nothing at all — DONE 2026-08-05
 <https://github.com/Wulfic/mcMMO-Singleplayer/issues/7>
@@ -244,8 +266,8 @@ cheat-adjacent command registered without a level. Fix them in one pass, not one
 4. **#3** — real design work.
 5. **#6** — trivial edit, but blocked on the trap-#1 migration decision, which #3 also needs. Do them together.
 6. ✅ **#7** — done. Was never a docs bug; the skill was wired to nothing.
-7. **#2** — self-contained Taming feature. ⬅️ **next**
-8. **#9** + **#10** — one settings pass, blocked on the cheat-method list.
+7. ✅ **#2** — done. The distance was never the gate; being ticked was.
+8. **#9** + **#10** — one settings pass, blocked on the cheat-method list. ⬅️ **next**
 
 ## Blocked on the reporter
 

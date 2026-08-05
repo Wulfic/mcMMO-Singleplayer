@@ -84,6 +84,23 @@ class GeneralConfigTest {
     }
 
     @Test
+    void petFollowTeleportDefaultsAreReadFromTheBundledConfig(@TempDir Path dataFolder) {
+        // GitHub #2. Both keys are new, so copyMissingDefaults back-fills them into an existing
+        // on-disk config for free — but only if they are really in the shipped resource under the
+        // paths the getters name. A typo in either would fall through to the hardcoded default and be
+        // invisible: the feature would work and the config knob would silently do nothing.
+        final GeneralConfig config = new GeneralConfig(dataFolder);
+        assertTrue(config.arePetsFollowingTeleports());
+        assertEquals(32.0D, config.getPetFollowTeleportRadius());
+
+        // Assert off the reference point: the getter must read the file, not return its default.
+        config.config.set("Skills.Taming.Pets_Follow_Teleport", false);
+        config.config.set("Skills.Taming.Pets_Follow_Teleport_Radius", 8.0D);
+        assertFalse(config.arePetsFollowingTeleports());
+        assertEquals(8.0D, config.getPetFollowTeleportRadius());
+    }
+
+    @Test
     void superAbilityCooldownTypedOverloadDelegatesToStringKey(@TempDir Path dataFolder) {
         final GeneralConfig config = new GeneralConfig(dataFolder);
         // SuperAbilityType.toString() yields the PascalCase config key (e.g. "Super_Breaker").

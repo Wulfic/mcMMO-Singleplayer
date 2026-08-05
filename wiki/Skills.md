@@ -227,6 +227,12 @@ Earn XP by taming animals and fighting alongside your wolves.
 | Environmentally Aware | 1 | Cactus/lava phobia, fall-damage immunity. |
 | Pummel | 1 | Wolves have a chance to knock foes back. |
 
+> **Pets follow you through a teleport.** *New in this port, and not a sub-skill* — it has no level gate and no rank. Make a long jump inside one world (an ender pearl, a `/tp`, a chorus fruit, a respawn) and your tamed wolves, cats and parrots come with you.
+>
+> This is a deliberate override of vanilla, not a port fix. Vanilla *means* to do this — a wolf's follow goal teleports it to you from any distance once you're 12+ blocks away — but a pet outside your simulation distance stops being ticked, so it never runs the goal and is simply left behind. Turn it off with `Skills.Taming.Pets_Follow_Teleport: false` in `config.yml` to get vanilla behaviour back exactly.
+>
+> Three deliberate limits: **a sitting pet never moves** (so is a leashed or ridden one — "sit" is an order to stay, and posting a guard still works); only pets within `Pets_Follow_Teleport_Radius` (default **32** blocks) of where you left come along, so pets you left at a base stay there; and **cross-world moves are not covered** — a nether portal leaves your wolves in the overworld, same as vanilla.
+
 ## Hunter
 
 **New in this port,** and **not a weapon skill** — Hunter cares only about *what died*, never about what you swung. XP is paid **per kill**, priced by the victim's danger tier. Full page: **[Hunter](Hunter)**.

@@ -24,12 +24,14 @@ import net.minecraft.entity.ai.pathing.EntityNavigation;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.PlayerInput;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -95,8 +97,11 @@ public final class PlayerMovementTracker {
      * swimming or even a rocket-boosted dive, and far below a typical teleport. Being generous here
      * is safe because the speed clamp already caps the payout of any single tick; the guard exists to
      * stop a dimension change from registering as a lifetime of travel, not to police speed.
+     *
+     * <p>Package-private because {@link PetFollowTeleport} asks the same question from the other side
+     * — "was that a teleport?" — and two constants for one threshold would drift.
      */
-    private static final double TELEPORT_DELTA = 10.0;
+    static final double TELEPORT_DELTA = 10.0;
 
     /**
      * Movement below this is treated as standing still. Floating-point position jitter and the
@@ -106,6 +111,17 @@ public final class PlayerMovementTracker {
 
     /** Last tick's position per player. Not a session field, so it can be reset independently. */
     private static final Map<UUID, Vec3d> LAST_POSITIONS = new HashMap<>();
+
+    /**
+     * Last tick's world per player, so a position baseline is never compared across worlds.
+     *
+     * <p>Only {@link PetFollowTeleport} reads it today, and it is load-bearing there: the coordinates
+     * either side of a nether portal are both valid and 8× apart, so a box drawn at the old position
+     * in the new world is a box somewhere real that happens to be wrong. Keyed by
+     * {@link net.minecraft.registry.RegistryKey} rather than by the world object so nothing here keeps
+     * an unloaded world alive.
+     */
+    private static final Map<UUID, RegistryKey<World>> LAST_WORLDS = new HashMap<>();
 
     /** Ticks since each player's last Solar Wings repair, so the trickle is rate-limited. */
     private static final Map<UUID, Integer> SOLAR_WINGS_TICKS = new HashMap<>();
@@ -161,12 +177,14 @@ public final class PlayerMovementTracker {
     /** Drop all per-player movement state (server stop). */
     public static void clear() {
         LAST_POSITIONS.clear();
+        LAST_WORLDS.clear();
         SOLAR_WINGS_TICKS.clear();
         SNOW_WALKERS.clear();
     }
 
     private static void onQuit(@NotNull ServerPlayerEntity player) {
         LAST_POSITIONS.remove(player.getUuid());
+        LAST_WORLDS.remove(player.getUuid());
         SOLAR_WINGS_TICKS.remove(player.getUuid());
         SNOW_WALKERS.remove(player.getUuid());
         // Same reasoning for Stealth's Assassin window: this is the mod's one per-player disconnect
@@ -203,6 +221,18 @@ public final class PlayerMovementTracker {
         final UUID uuid = player.getUuid();
         final Vec3d current = player.getEntityPos();
         final Vec3d previous = LAST_POSITIONS.put(uuid, current);
+        final ServerWorld world = player.getEntityWorld();
+        final RegistryKey<World> previousWorld =
+                LAST_WORLDS.put(uuid, world == null ? null : world.getRegistryKey());
+        final boolean sameWorld =
+                world != null && world.getRegistryKey().equals(previousWorld);
+
+        // ⚠️ TAMING'S PET FOLLOW SITS ABOVE THE MISSING-PROFILE RETURN BELOW, AND THAT IS THE WHOLE
+        // POINT OF IT BEING HERE. It is not level-gated, not per-profile and not an mcMMO mechanic at
+        // all — it is a vanilla override — so making it wait on a loaded profile would mean pets
+        // silently stop following during exactly the window (a fresh join, a failed load) where a
+        // player is most likely to be teleporting. It takes no McMMOPlayer for the same reason.
+        PetFollowTeleport.onPlayerMoved(player, previous, current, sameWorld);
 
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(uuid);
         if (mmoPlayer == null) {

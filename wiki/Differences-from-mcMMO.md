@@ -57,6 +57,7 @@ Stored in `<world save>/mcmmo/players/`, not in a global profile or a database. 
 | **Sub-100 Repair destroys all enchantments** | Faithful to upstream, but a harsh surprise. Get an Arcane Forging rank first. |
 | **Placed blocks are tracked across restarts** | Place → quit → reopen → mine still pays nothing. |
 | **Old Acrobatics progress zeroes out** | Child skills have no save key, so there's nothing to migrate to. See [Movement Skills](Movement-Skills). |
+| **Tamed pets follow you through a teleport** | An override of *vanilla*, not of upstream mcMMO — a pet outside your simulation distance stops being ticked and never runs its follow goal. Same world only; sitting pets stay. `Skills.Taming.Pets_Follow_Teleport: false` restores vanilla. |
 
 ---
 

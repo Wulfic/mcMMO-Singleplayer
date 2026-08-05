@@ -112,6 +112,17 @@ Skills:
         Confirm_Required: true
 ```
 
+### Stop pets following you through a teleport
+
+```yaml
+Skills:
+    Taming:
+        Pets_Follow_Teleport: true
+        Pets_Follow_Teleport_Radius: 32
+```
+
+On by default. `false` restores vanilla behaviour exactly — pets left outside your simulation distance stop being ticked and never catch up. The radius is measured from where you *left*, not where you arrived. A sitting, leashed or ridden pet is never moved either way, and cross-world moves are not covered.
+
 ### Cap a skill
 
 ```yaml

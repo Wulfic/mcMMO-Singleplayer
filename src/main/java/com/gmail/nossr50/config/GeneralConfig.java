@@ -587,6 +587,23 @@ public class GeneralConfig extends ConfigLoader {
                 "Skills.Taming.Call_Of_The_Wild." + cotwEntity + ".Per_Player_Limit", 1);
     }
 
+    /**
+     * Whether tamed pets are pulled along when their owner makes a long jump inside one world
+     * (GitHub #2). Off restores vanilla behaviour exactly.
+     */
+    public boolean arePetsFollowingTeleports() {
+        return config.getBoolean("Skills.Taming.Pets_Follow_Teleport", true);
+    }
+
+    /**
+     * How far from the departure point a pet may be and still be brought along, in blocks. See
+     * {@code fabric.listeners.PetFollowTeleport} for why this is a radius rather than "every pet you
+     * own".
+     */
+    public double getPetFollowTeleportRadius() {
+        return config.getDouble("Skills.Taming.Pets_Follow_Teleport_Radius", 32.0D);
+    }
+
     /* Woodcutting */
     public boolean getTreeFellerSoundsEnabled() {
         return config.getBoolean("Skills.Woodcutting.Tree_Feller_Sounds", true);
