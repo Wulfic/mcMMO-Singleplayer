@@ -18,13 +18,21 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.subskills.taming.CallOfTheWildType;
 import com.gmail.nossr50.fabric.McMMOAttachments;
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.util.McTestRegistries;
+import com.gmail.nossr50.util.TrackedSummon;
 import com.gmail.nossr50.util.player.UserManager;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,6 +59,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 
 /**
@@ -149,6 +158,11 @@ class HusbandryListenerTest {
         // Stage 4's harvest cooldown is a process-wide static side-table. Each test mints fresh
         // animal UUIDs so collisions are not the risk -- unbounded growth across the run is.
         MetadataStore.clearAll();
+        // Both JVM-wide singletons. The COTW gate's tests install a config and register a summon;
+        // leaving either behind would silently change what every later test in this fork does --
+        // the config in particular, because with one loaded the gate stops being a no-op.
+        McMMOMod.setExperienceConfig(null);
+        McMMOMod.getTransientEntityTracker().cleanupPlayer(uuid);
     }
 
     private ServerPlayerEntity breeder() {
@@ -171,6 +185,9 @@ class HusbandryListenerTest {
         lenient().when(animal.getBreedingAge()).thenReturn(breedingAge);
         lenient().when(animal.canEat()).thenReturn(canEat);
         lenient().when(animal.getEntityWorld()).thenReturn(world);
+        // Every real entity has one, and since the COTW gate looks each parent up in the summon
+        // tracker by UUID, a mock without one is not a cow -- it is a null key in a map lookup.
+        lenient().when(animal.getUuid()).thenReturn(UUID.randomUUID());
         lenient().when(animal.getBoundingBox()).thenReturn(UNIT_BOX);
         return animal;
     }
@@ -261,6 +278,87 @@ class HusbandryListenerTest {
         HusbandryListener.onAnimalsBred(stranger, eligibleCow(), eligibleCow(), null);
         verify(husbandry, never()).onBreed(any(), anyLong());
         mmoPlayer = null; // already cleaned up
+    }
+
+    // --- ExploitFix.COTWBreeding (GitHub #9) ------------------------------------------------
+
+    /**
+     * Registers {@code animal} with the transient tracker as a live Call-of-the-Wild summon, the way
+     * {@code CallOfTheWildHandler} does for a real one.
+     */
+    private void registerAsSummon(AnimalEntity animal) {
+        final UUID summonId = UUID.randomUUID();
+        lenient().when(animal.getUuid()).thenReturn(summonId);
+        final TrackedSummon summon = mock(TrackedSummon.class);
+        lenient().when(summon.getEntityId()).thenReturn(summonId);
+        lenient().when(summon.getCallOfTheWildType()).thenReturn(CallOfTheWildType.WOLF);
+        McMMOMod.getTransientEntityTracker().initPlayer(uuid);
+        McMMOMod.getTransientEntityTracker().addSummon(uuid, summon);
+    }
+
+    @Test
+    void breedingYourOwnCallOfTheWildSummonPaysNothing(@TempDir Path dir) {
+        McMMOMod.setExperienceConfig(new ExperienceConfig(dir));
+        final AnimalEntity summon = eligibleCow();
+        registerAsSummon(summon);
+
+        HusbandryListener.onAnimalsBred(breeder(), summon, eligibleCow(), calf(-24000));
+
+        // Taming conjures the parents out of a few bones; paying for their offspring would turn one
+        // skill's ability into another skill's XP tap.
+        verify(husbandry, never()).onBreed(any(), anyLong());
+    }
+
+    @Test
+    void aRefusedCotwBreedingLeavesNoPayableCalfBehind(@TempDir Path dir) {
+        // The GitHub #3 lesson, applied to this gate: if the calf were still claimed, the raise verb
+        // would pay for it when it grew up and the gate would be a twenty-minute delay, not a gate.
+        McMMOMod.setExperienceConfig(new ExperienceConfig(dir));
+        final AnimalEntity summon = eligibleCow();
+        registerAsSummon(summon);
+        final PassiveEntity child = calf(-24000);
+
+        HusbandryListener.onAnimalsBred(breeder(), summon, eligibleCow(), child);
+
+        verify(child, never()).setAttached(eq(McMMOAttachments.BRED_BY), any());
+    }
+
+    @Test
+    void theSummonMayBeEitherParent(@TempDir Path dir) {
+        McMMOMod.setExperienceConfig(new ExperienceConfig(dir));
+        final AnimalEntity summon = eligibleCow();
+        registerAsSummon(summon);
+
+        // Mate side, not just the parent side -- the check has to be on both or feeding the summon
+        // second is a trivial bypass.
+        HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), summon, calf(-24000));
+
+        verify(husbandry, never()).onBreed(any(), anyLong());
+    }
+
+    @Test
+    void switchingOffTheCotwGateLetsSummonsBreedForXp(@TempDir Path dir) throws IOException {
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("experience.yml"),
+                "ExploitFix:\n    COTWBreeding: false\n", StandardCharsets.UTF_8);
+        McMMOMod.setExperienceConfig(new ExperienceConfig(dir));
+        final AnimalEntity summon = eligibleCow();
+        registerAsSummon(summon);
+
+        HusbandryListener.onAnimalsBred(breeder(), summon, eligibleCow(), calf(-24000));
+
+        verify(husbandry, times(1)).onBreed(any(), anyLong());
+    }
+
+    @Test
+    void anOrdinaryBreedingIsUnaffectedByTheCotwGate(@TempDir Path dir) {
+        // The reference point: with the gate on and the config loaded, two wild cows still pay.
+        // Without this, a bug that refused every breeding would satisfy all three tests above.
+        McMMOMod.setExperienceConfig(new ExperienceConfig(dir));
+
+        HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), calf(-24000));
+
+        verify(husbandry, times(1)).onBreed(any(), anyLong());
     }
 
     @Test

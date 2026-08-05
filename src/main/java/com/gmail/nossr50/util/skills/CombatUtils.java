@@ -3,11 +3,14 @@ package com.gmail.nossr50.util.skills;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.CombatXp;
 import com.gmail.nossr50.util.ItemUtils;
+import com.gmail.nossr50.util.MobOrigins;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.Tameable;
@@ -35,6 +38,17 @@ import org.jetbrains.annotations.NotNull;
  * {@code modifyAppliedDamage} mixin seam. This class holds only what those bodies call into.
  */
 public final class CombatUtils {
+
+    /**
+     * Transient marker on an enderman that has been aggro'd by an endermite — the signature of an
+     * endermite-lure grinder ({@code ExploitFix.EndermanEndermiteFarms}, legacy's
+     * {@code METADATA_KEY_EXPLOITED_ENDERMEN}). Stamped by
+     * {@code fabric.mixin.EndermanEndermiteLureMixin}, read by {@link #processCombatXP}.
+     *
+     * <p>The name matches legacy's key so the two are recognisably the same flag, even though
+     * upstream never reads its own.
+     */
+    public static final String ENDERMITE_LURED_KEY = "mcmmo_exploited_endermen";
 
     /**
      * Set for the duration of an mcMMO-dealt {@link #safeDealDamage} call, so the K1 damage hook can
@@ -238,11 +252,13 @@ public final class CombatUtils {
      *   <li><b>Absorption.</b> Vanilla subtracts absorption <em>after</em> this seam returns, so a hit
      *       fully soaked by a mob's absorption hearts pays XP here where legacy's health diff would
      *       have measured nothing. Vanilla mobs do not have absorption.</li>
-     *   <li><b>Mob-origin multipliers.</b> Legacy scales the base by where the mob came from (spawner /
-     *       nether portal / egg / bred / tamed) and zeroes it for a Call-of-the-Wild summon. Those
-     *       ride {@code MobMetaFlagType}, which is unported (the summon path itself is still deferred),
-     *       so the multipliers do nothing yet. A pre-existing §B gap this arm inherits, not one it
-     *       introduces.</li>
+     *   <li><b>Mob-origin multipliers — now live (GitHub #9).</b> Legacy scales the base by where the
+     *       mob came from (spawner / nether portal / egg / bred) and zeroes it for a Call-of-the-Wild
+     *       summon. This note used to say they "do nothing yet" because {@code MobMetaFlagType} was
+     *       unported — a reason that expired when {@link com.gmail.nossr50.datatypes.mobs.MobOrigin}
+     *       landed and {@code EntityTypeSpawnOriginMixin} began stamping every mob. Only the config
+     *       lookup was ever missing; it is
+     *       {@link com.gmail.nossr50.config.experience.ExperienceConfig#getMobOriginXpMultiplier}.</li>
      * </ul>
      *
      * <p>Dropped: legacy's PvP arm (there is no second player to hit) and its
@@ -271,9 +287,37 @@ public final class CombatUtils {
             return;
         }
 
+        // An enderman that has been lured by an endermite is farm output, not a fight
+        // (ExploitFix.EndermanEndermiteFarms). The flag is stamped by EndermanEndermiteLureMixin.
+        //
+        // ⚠️ Legacy stamps this flag and NEVER READS IT -- `EXPLOITED_ENDERMEN` appears in exactly one
+        // place upstream, the write in EntityListener#onEntityTargetEntity, and no arm of upstream's
+        // own mob-flag XP chain mentions it. So upstream's endermite gate has never done anything at
+        // all, in any version. It is implemented here rather than faithfully left dead because the
+        // key ships in our experience.yml claiming to prevent exactly this, and an endermite lure is
+        // the standard way to build an enderman grinder.
+        //
+        // Re-checked against the config here as well as at the write, so switching the gate off frees
+        // endermen that were already flagged instead of blacklisting them for the rest of the session.
+        final ExperienceConfig experienceConfig = McMMOMod.getExperienceConfig();
+        if (experienceConfig != null && experienceConfig.isEndermanEndermiteFarmingPrevented()
+                && MetadataStore.has(target, ENDERMITE_LURED_KEY)) {
+            return;
+        }
+
+        // Scale by where the mob came from (Experience_Formula.Mobspawners / Eggs / Nether_Portal /
+        // Breeding). All but breeding ship at 0, so a spawner grinder pays no combat XP at all --
+        // which is what experience.yml has claimed since the port began while nothing read the keys.
+        // Applied to the multiplier rather than the result so a 0 short-circuits on the xp <= 0 check
+        // below, and so the scaling happens before xpForHit truncates.
+        double originScaled = multiplier;
+        if (experienceConfig != null) {
+            originScaled *= experienceConfig.getMobOriginXpMultiplier(MobOrigins.of(target));
+        }
+
         final int xp = CombatXp.xpForHit(
                 Registries.ENTITY_TYPE.getId(target.getType()).toString(), categoryOf(target),
-                damage, target.getHealth(), multiplier);
+                damage, target.getHealth(), originScaled);
         if (xp <= 0) {
             return;
         }

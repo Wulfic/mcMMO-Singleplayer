@@ -99,6 +99,59 @@ class McMMOSettingsTest {
         }
     }
 
+    /**
+     * Every {@code ExploitFix} key the shipped {@code experience.yml} carries must appear in the
+     * catalogue — the same converse guard as
+     * {@link #everyCooldownKeyInConfigIsOfferedInTheCatalogue()}, aimed at the section that needs it
+     * most.
+     *
+     * <p><b>Why this section specifically.</b> The GitHub #9 audit found twelve anti-farm gates whose
+     * config keys shipped, and read, and did nothing — no caller anywhere in the port. A player
+     * reading {@code SnowGolemExcavation: true} believed they were protected and were not. Those are
+     * wired now, and this test is what stops the gap re-opening from the other direction: a gate
+     * added to the yml but never surfaced is invisible, exactly as {@code Herdsmans_Call}'s cooldown
+     * was.
+     *
+     * <p><b>The rule it enforces:</b> a <em>getter</em> may be legacy-faithful and dead — the port
+     * keeps {@code isPistonExploitPrevented}, which upstream also never calls — but a <em>shipped
+     * key</em> may not, because only the key makes a promise to the player. That is why
+     * {@code PreventPluginNPCInteraction} was deleted from the yml in the same pass rather than
+     * given a switch: NPC plugins cannot exist in singleplayer, so no toggle could ever be honest.
+     */
+    @Test
+    void everyExploitFixKeyIsOfferedInTheCatalogue() throws IOException {
+        final YamlConfiguration experience = bundled(McMMOSettings.EXPERIENCE_YML);
+        final Set<String> shipped = new HashSet<>();
+        collectScalarPaths(experience, "ExploitFix", shipped);
+        assertFalse(shipped.isEmpty(),
+                "no ExploitFix keys found in experience.yml — the test is asserting nothing");
+
+        final Set<String> offered = new HashSet<>();
+        McMMOSettings.all().forEach(setting -> offered.add(setting.path()));
+
+        for (String path : shipped) {
+            assertTrue(offered.contains(path),
+                    "experience.yml ships " + path + " but the Anti-Cheat tab does not offer it — "
+                            + "an anti-farm gate a player cannot see or change");
+        }
+    }
+
+    /** Collects the dotted paths of every scalar (non-section) leaf beneath {@code root}. */
+    private static void collectScalarPaths(YamlConfiguration doc, String root, Set<String> into) {
+        final YamlConfiguration section = doc.getConfigurationSection(root);
+        if (section == null) {
+            return;
+        }
+        for (String key : section.getKeys(false)) {
+            final String path = root + "." + key;
+            if (section.isConfigurationSection(key)) {
+                collectScalarPaths(doc, path, into);
+            } else {
+                into.add(path);
+            }
+        }
+    }
+
     @Test
     void noDuplicateKeys() {
         final Set<String> seen = new HashSet<>();

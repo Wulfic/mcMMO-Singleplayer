@@ -267,20 +267,39 @@ sub-key that outlived GitHub #4) to all **26**.
 - 18 new tests; **4 mutations run, 4 kills**. Suite 1396 green, boot `Done (0.989s)` with
   `MINING is DISABLED` logged from a hand-edited live config.
 
-### [#9] Cheats tab in ModMenu
+### ✅ [#9] Cheats tab in ModMenu — DONE 2026-08-05
 <https://github.com/Wulfic/mcMMO-Singleplayer/issues/9>
 
-A ModMenu tab with a toggle per major cheat method.
+**The tab was the small half.** Auditing what to put in it found that **12 of the 22 anti-farm gates
+were wired to nothing** — config keys that shipped, and read, and reached no code anywhere in the
+port. A toggle over those would have been worse than no toggle: a player reads `SnowGolemExcavation:
+true` and believes they are protected.
 
-Where: [McMMOSettings.java](src/main/java/com/gmail/nossr50/fabric/client/modmenu/McMMOSettings.java),
-[McMMOModMenuIntegration.java](src/main/java/com/gmail/nossr50/fabric/client/modmenu/McMMOModMenuIntegration.java),
-[ConfigDocument.java](src/main/java/com/gmail/nossr50/fabric/client/modmenu/ConfigDocument.java).
+**Shipped:** the gates first, then the tab.
 
-First task is not code — it's enumerating what "major cheat methods" means. Get that list from the
-reporter. Then reuse the existing key-validation test that stops typo'd keys becoming silent
-no-ops; every new toggle must be covered by it.
-
-Do #10 and #9 together if the toggle surface is shared.
+- ⚠️⚠️ **`ExploitFix.Combat.XPCeiling.Damage_Limit` was read by nobody.** The yml ships
+  `Damage_Limit`; `ExperienceConfig` asked for legacy's `HP_Modifier_Limit`. The documented knob did
+  nothing, ever, and no test caught it because the fallback default and the shipped value were both
+  `100`. Now pinned by `ExperienceConfigKeyAgreementTest`, which writes a **non-default** value at
+  every shipped path and demands the getter return it.
+- **Newly wired:** lava-generator blocks (stone/basalt — `FluidBlockFormationMixin` +
+  `LavaFluidStoneFormationMixin`), snow-golem trails (`SnowGolemTrailMixin`), piston flag carry
+  (`PistonMoveFlagsMixin`), endermite-lured endermen (`EndermanEndermiteLureMixin`), COTW breeding,
+  armour stands **and mannequins** (five hard-coded `instanceof` checks that never read their key),
+  and **all four spawn-origin XP multipliers** — so a spawner grinder finally pays the `0` the file
+  has always claimed.
+- **New key:** `ExploitFix.PlacedBlocks` — the tracker had no config key at all. On/off, default on,
+  and the master switch for the three gates that share its bookkeeping.
+- **Removed key:** `PreventPluginNPCInteraction`. Bukkit NPC plugins cannot exist here, so no toggle
+  could ever be honest. *A getter may be legacy-faithful and dead; a shipped key may not.*
+- 🔑 **The K9 "conservative-tracking collapse" was wrong about block-form.** It argued legacy's
+  hook family was unneeded because the tracker only ever marks hand-placed blocks. But a snow layer
+  or a basalt block **was never hand-placed** — conservative tracking cannot produce those flags at
+  all, so two of the three hooks were load-bearing, not redundant.
+- ⚠️ **Upstream never read its own `EXPLOITED_ENDERMEN` flag** — it appears exactly once in legacy,
+  at the write. Implemented here anyway, because our yml promises it.
+- `McMMOSettingsTest#everyExploitFixKeyIsOfferedInTheCatalogue` is the converse guard: a gate in the
+  yml that never reaches the tab now fails the build (mutation-proven).
 
 ### [#8] `/mcrefresh` → OP only
 <https://github.com/Wulfic/mcMMO-Singleplayer/issues/8>
@@ -303,11 +322,13 @@ cheat-adjacent command registered without a level. Fix them in one pass, not one
 6. ✅ **#7** — done. Was never a docs bug; the skill was wired to nothing.
 7. ✅ **#2** — done. The distance was never the gate; being ticked was.
 8. ✅ **#10** — done. The switch already existed and was wired to nothing.
-9. **#9** — the cheats tab. ⬅️ **next**
+9. ✅ **#9** — done. The tab was the small half; 12 of 22 gates were wired to nothing.
+
+**🎉 All ten issues are closed.**
 
 ## Blocked on the reporter
 
-- ~~**#9** — which cheat methods get a toggle?~~ **Answered 2026-08-05: all of them.** The canonical
-  list is `experience.yml`'s `ExploitFix` section, plus the placed-block tracker, which is the single
-  biggest anti-farm gate in the mod and currently has **no config key at all**.
-- **#6 / #3 / #5** — do we migrate their on-disk configs, or ship new keys?
+- ~~**#9** — which cheat methods get a toggle?~~ **Answered 2026-08-05: all of them.**
+- ~~**#6 / #3 / #5** — migrate on-disk configs, or ship new keys?~~ **Answered: new keys.**
+  `copyMissingDefaults` back-fills an absent key into an existing config for free, so every gate
+  added since has shipped that way; `ConfigRetunes` still has exactly one customer.

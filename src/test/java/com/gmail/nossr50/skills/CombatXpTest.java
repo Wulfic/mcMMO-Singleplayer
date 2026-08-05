@@ -75,8 +75,8 @@ class CombatXpTest {
 
     @Test
     void theHpCeilingCapsASingleHugeHit() {
-        // ExploitFix.Combat.XPCeiling defaults: enabled, HP_Modifier_Limit 100. Neither key ships in
-        // experience.yml, so the ceiling is live and clamps a 500-damage hit on a 500-HP modded mob.
+        // ExploitFix.Combat.XPCeiling ships as Enabled: true / Damage_Limit: 100, matching the
+        // getter defaults, so the ceiling is live and clamps a 500-damage hit on a 500-HP modded mob.
         assertEquals(100.0, CombatXp.creditableDamage(500.0, 500.0));
     }
 

@@ -1,5 +1,6 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
@@ -45,6 +46,7 @@ import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.decoration.ArmorStandEntity;
+import net.minecraft.entity.decoration.MannequinEntity;
 import net.minecraft.entity.mob.CreeperEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.passive.AbstractHorseEntity;
@@ -809,6 +811,36 @@ public final class EntityDamageListener {
      * in this port (PvP-only in singleplayer, and its {@code AllowPVE} switch defaults off), so it is
      * not applied here either; and Daze only targets another player, of which singleplayer has none.
      */
+    /**
+     * Whether this target is a decoration rather than a fight — an armour stand or a mannequin
+     * ({@code ExploitFix.PreventArmorStandInteraction} / {@code PreventMannequinInteraction}, legacy
+     * {@code EntityListener#onEntityDamageByEntity}'s two skips).
+     *
+     * <p>Both are {@link LivingEntity}s that stand still and never fight back, so without this every
+     * combat skill would train on one: an armour stand in a hole is an XP source that needs no food,
+     * no armour and no attention. <b>A mannequin is the newer and worse of the two</b> — it arrived in
+     * 1.21.11, this port had no handling for it at all, and it is a {@code PlayerLikeEntity}, so it
+     * reaches the combat paths looking far more like a real opponent than an armour stand does.
+     *
+     * <p>Replaces five hard-coded {@code instanceof ArmorStandEntity} checks that were spread across
+     * the damage paths. The mechanic was right and the <em>config key was never read</em> — turning
+     * {@code PreventArmorStandInteraction} off did nothing whatever, which is the defect GitHub #9's
+     * audit exists to find. One predicate means the next combat path added gets both entity types and
+     * both switches for free, instead of a sixth copy that remembers only the armour stand.
+     *
+     * <p>Fails closed when no config is loaded: excluded, matching the shipped default of both keys.
+     */
+    private static boolean isTargetDummy(LivingEntity target) {
+        final ExperienceConfig config = McMMOMod.getExperienceConfig();
+        if (target instanceof ArmorStandEntity) {
+            return config == null || config.isArmorStandInteractionPrevented();
+        }
+        if (target instanceof MannequinEntity) {
+            return config == null || config.isMannequinInteractionPrevented();
+        }
+        return false;
+    }
+
     private static float applyProjectileAttackBonus(LivingEntity target, DamageSource source,
             float amount) {
         if (!(source.getSource() instanceof PersistentProjectileEntity projectile)) {
@@ -817,8 +849,8 @@ public final class EntityDamageListener {
         if (!(projectile.getOwner() instanceof ServerPlayerEntity shooter)) {
             return amount; // wild/dispenser projectile, or not fired by this player.
         }
-        if (target instanceof ArmorStandEntity) {
-            return amount; // legacy skips armor stands on every combat path (processCombatAttack top).
+        if (isTargetDummy(target)) {
+            return amount;
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(shooter.getUuid());
         if (mmoPlayer == null) {
@@ -1137,8 +1169,8 @@ public final class EntityDamageListener {
         if (source.getSource() != attacker || source.isOf(DamageTypes.THORNS)) {
             return amount;
         }
-        if (target instanceof ArmorStandEntity) {
-            return amount; // legacy skips armor stands.
+        if (isTargetDummy(target)) {
+            return amount;
         }
 
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(attacker.getUuid());
@@ -1225,7 +1257,7 @@ public final class EntityDamageListener {
         if (source.getSource() != attacker || source.isOf(DamageTypes.THORNS)) {
             return amount;
         }
-        if (!attacker.isSprinting() || target instanceof ArmorStandEntity) {
+        if (!attacker.isSprinting() || isTargetDummy(target)) {
             return amount;
         }
 
@@ -1332,7 +1364,7 @@ public final class EntityDamageListener {
         if (source.getSource() != attacker || source.isOf(DamageTypes.THORNS)) {
             return amount;
         }
-        if (!attacker.isSneaking() || target instanceof ArmorStandEntity) {
+        if (!attacker.isSneaking() || isTargetDummy(target)) {
             return amount;
         }
 
@@ -1395,8 +1427,8 @@ public final class EntityDamageListener {
         if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)) {
             return amount;
         }
-        if (target instanceof ArmorStandEntity) {
-            return amount; // legacy skips armor stands on every combat path.
+        if (isTargetDummy(target)) {
+            return amount;
         }
 
         // Melee is the direct-source test the weapon arm, Smash and Assassin all use; Thorns is

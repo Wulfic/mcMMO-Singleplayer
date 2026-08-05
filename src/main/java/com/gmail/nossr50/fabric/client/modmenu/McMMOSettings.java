@@ -32,6 +32,7 @@ public final class McMMOSettings {
     private static final String CAT_XP_SKILL = "XP Multipliers";
     private static final String CAT_ABILITIES = "Abilities";
     private static final String CAT_CAPS = "Skill Level Caps";
+    private static final String CAT_EXPLOITS = "Anti-Cheat";
 
     /** Skills that have an {@code Experience_Formula.Skill_Multiplier.<name>} key. */
     private static final String[] XP_MULTIPLIER_SKILLS = {
@@ -194,6 +195,122 @@ public final class McMMOSettings {
                     "Abilities.Cooldowns." + ability, def, 0, 6000,
                     ability.replace('_', ' ') + " Cooldown (sec)", null));
         }
+
+        // ---- Anti-cheat / exploit gates (experience.yml) ---------------------------------------
+        // GitHub #9. Every switch below is verified to reach live code by
+        // ExperienceConfigKeyAgreementTest (the getter reads the shipped key) and
+        // McMMOSettingsTest#everyExploitFixKeyIsOffered (no shipped gate is missing from this tab).
+        //
+        // ⚠️ Half of these guarded nothing when the tab was written: eight ExploitFix gates and all
+        // four spawn-origin multipliers had no caller anywhere in the port, so the file promised
+        // protection it never delivered. They were wired first, precisely because a settings screen
+        // is the one place a dead mechanic becomes an active lie — a player reads "on" and believes
+        // they are covered. Do not add a toggle here without first proving its gate has a caller.
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML, "ExploitFix.PlacedBlocks", true,
+                "Track Hand-Placed Blocks",
+                "Blocks you place by hand give no gathering rewards when you mine them again. This "
+                        + "is the biggest anti-farm gate in the mod — with it off, one stack of ore "
+                        + "is infinite Mining XP. It is also the master switch for the lava, snow "
+                        + "golem and piston gates below, which share its bookkeeping. Crops are "
+                        + "unaffected: they pay on maturity instead."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.LavaStoneAndCobbleFarming", true, "Lava Generator Blocks Give No XP",
+                "Stone, cobblestone and basalt made by lava meeting water pay no Mining XP. A "
+                        + "basalt generator is otherwise 40 XP a block, forever, unattended. "
+                        + "Obsidian is exempt — making it costs the lava source."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML, "ExploitFix.SnowGolemExcavation",
+                true, "Snow Golem Trails Give No XP",
+                "Snow laid down by a snow golem pays no Excavation XP. A penned golem over an "
+                        + "auto-breaker is otherwise an income you can leave running."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML, "ExploitFix.PistonCheating", true,
+                "Pistons Carry Placed-Block Flags",
+                "A block a piston moves keeps its hand-placed flag. Without this, place → push → "
+                        + "mine turns a block you placed back into one that rewards you."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.EndermanEndermiteFarms", true, "Endermite-Lured Endermen Give No XP",
+                "An enderman that has been aggro'd by an endermite pays no combat XP — the "
+                        + "signature of an enderman grinder."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML, "ExploitFix.COTWBreeding", true,
+                "Summoned Animals Cannot Be Bred For XP",
+                "Breeding your own Call of the Wild summons pays no Husbandry XP, so Taming "
+                        + "cannot be turned into a Husbandry tap."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.PreventArmorStandInteraction", true, "Armour Stands Are Not Opponents",
+                "Hitting an armour stand trains no combat skill."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.PreventMannequinInteraction", true, "Mannequins Are Not Opponents",
+                "Hitting a mannequin trains no combat skill."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML, "ExploitFix.Fishing", true,
+                "Fishing Anti-Exploit", "Limits rapid re-casting in the same spot."));
+        list.add(ConfigSetting.integer(CAT_EXPLOITS, EXPERIENCE_YML,
+                "Fishing_ExploitFix_Options.MoveRange", 3, 0, 64, "Fishing: Move Range (blocks)",
+                "How far you must move before fishing the same spot counts again."));
+        list.add(ConfigSetting.integer(CAT_EXPLOITS, EXPERIENCE_YML,
+                "Fishing_ExploitFix_Options.OverFishLimit", 10, 0, 1000, "Fishing: Over-Fish Limit",
+                "Casts in one spot before the catch quality starts dropping."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML, "ExploitFix.Agility", true,
+                "Agility Anti-Exploit", "Blocks self-inflicted damage from feeding Agility XP."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML, "ExploitFix.TreeFellerReducedXP",
+                true, "Tree Feller Pays Reduced XP",
+                "Felling a whole tree at once pays less per log than cutting it by hand."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.LimitTallPlantFarming", true, "Limit Bone-Meal Plant Farming",
+                "Caps XP from unnaturally tall plants, such as bone-mealed sugar cane."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML, "ExploitFix.UnsafeEnchantments",
+                false, "Allow Unsafe Enchantments",
+                "⚠️ Reversed: ON permits above-vanilla enchantment levels through Repair and "
+                        + "Salvage. Off is the safe setting."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.Combat.XPCeiling.Enabled", true, "Cap XP From One Huge Hit",
+                "Stops an enormous-health modded mob paying its whole health bar in one blow."));
+        list.add(ConfigSetting.integer(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.Combat.XPCeiling.Damage_Limit", 100, 1, 10000,
+                "Combat: Damage Counted Per Hit",
+                "The most damage a single hit may be paid for. Nothing in vanilla reaches 100."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.Stealth.Require_Movement_Input", true,
+                "Stealth: Require Real Movement Input",
+                "Sneak XP needs you actually holding a movement key, so a taped-down shift on a "
+                        + "boat or a piston loop earns nothing."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.Unarmored.Require_Living_Attacker", true,
+                "Unarmored: Require A Living Attacker",
+                "Only damage from a mob or player pays. Off, a cactus or a drowning pool does."));
+        list.add(ConfigSetting.integer(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.Unarmored.Max_Awards_Per_Attacker", 20, 0, 1000,
+                "Unarmored: Max Awards Per Attacker",
+                "How often one mob can pay you before it stops counting. 0 disables the cap."));
+        list.add(ConfigSetting.integer(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.Husbandry.Harvest_Cooldown_Seconds", 300, 0, 3600,
+                "Husbandry: Harvest Cooldown (sec)",
+                "How long one animal waits before milking or brushing it pays again. 0 disables."));
+        list.add(ConfigSetting.integer(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.Husbandry.Breed_Xp_Awards_Per_Window", 8, 0, 100,
+                "Husbandry: Paid Breedings Per Window",
+                "How many breedings pay XP inside one window. 0 disables the cap."));
+        list.add(ConfigSetting.integer(CAT_EXPLOITS, EXPERIENCE_YML,
+                "ExploitFix.Husbandry.Breed_Xp_Award_Window_Seconds", 30, 0, 600,
+                "Husbandry: Breeding Window (sec)",
+                "The window the cap above counts in. 30s is vanilla's own love duration — "
+                        + "shortening it silently doubles the effective cap."));
+        list.add(ConfigSetting.decimal(CAT_EXPLOITS, EXPERIENCE_YML,
+                "Experience_Formula.Mobspawners.Multiplier", 0.0, 0.0, 10.0,
+                "XP From Spawner Mobs (×)",
+                "Combat XP multiplier for mobs from a monster or trial spawner. 0 = a grinder "
+                        + "pays nothing."));
+        list.add(ConfigSetting.decimal(CAT_EXPLOITS, EXPERIENCE_YML,
+                "Experience_Formula.Eggs.Multiplier", 0.0, 0.0, 10.0,
+                "XP From Spawn-Egg Mobs (×)",
+                "Combat XP multiplier for mobs placed by a spawn egg or /summon."));
+        list.add(ConfigSetting.decimal(CAT_EXPLOITS, EXPERIENCE_YML,
+                "Experience_Formula.Nether_Portal.Multiplier", 0.0, 0.0, 10.0,
+                "XP From Portal / Structure Mobs (×)",
+                "Combat XP multiplier for mobs spawned by a nether portal or placed by structure "
+                        + "generation."));
+        list.add(ConfigSetting.decimal(CAT_EXPLOITS, EXPERIENCE_YML,
+                "Experience_Formula.Breeding.Multiplier", 1.0, 0.0, 10.0,
+                "XP From Bred Mobs (×)",
+                "Combat XP multiplier for animals born from breeding."));
 
         // ---- Skill level caps (config.yml) -----------------------------------------------------
         for (String skill : LEVEL_CAP_SKILLS) {

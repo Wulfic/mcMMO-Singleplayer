@@ -77,10 +77,11 @@ public final class CombatXp {
      *       health}, which clamps the delta to the health the victim had left; hitting a 2-HP zombie
      *       for 40 pays for 2. Clamping the damage to {@code remainingHealth} here says the same thing
      *       against the pre-hit health this seam reads.</li>
-     *   <li><b>The exploit-fix HP ceiling</b> ({@code ExploitFix.Combat.XPCeiling}), which caps the
-     *       creditable damage of any single hit — a guard against enormous-health modded mobs. The
-     *       bundled {@code experience.yml} ships neither key, so the defaults apply (enabled, 100 HP)
-     *       and it does not bind for anything vanilla.</li>
+     *   <li><b>The exploit-fix damage ceiling</b> ({@code ExploitFix.Combat.XPCeiling}), which caps
+     *       the creditable damage of any single hit — a guard against enormous-health modded mobs.
+     *       The bundled {@code experience.yml} ships both keys ({@code Enabled: true},
+     *       {@code Damage_Limit: 100}), so the ceiling is live but does not bind for anything
+     *       vanilla.</li>
      * </ul>
      *
      * @param damage          the damage this hit is about to land (post-armor)

@@ -1,5 +1,6 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.config.treasure.TreasureConfig;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
@@ -10,6 +11,7 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.ItemSpecBuilder;
 import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
+import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
@@ -35,6 +37,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.world.World;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Husbandry's breed-verb trigger layer (stage 1): breeding XP, {@code Twins} and {@code Multi-Breed}.
@@ -124,6 +127,26 @@ public final class HusbandryListener {
     }
 
     /**
+     * Whether this animal is a live Call-of-the-Wild summon, and so may not price a breeding.
+     *
+     * <p>Answered from the transient summon tracker rather than a mob flag: it already holds every
+     * live summon for exactly as long as the summon exists, which is the same lifetime legacy's
+     * {@code COTW_SUMMONED_MOB} metadata had. {@code CombatUtils#processCombatXP} closes the combat
+     * half of the same exploit off the same tracker.
+     *
+     * <p>A {@code null} mate is treated as not-a-summon: the egg-laying breeders reach
+     * {@link #onAnimalsBred} with only one parent, and refusing those would break turtles and frogs
+     * for everyone.
+     */
+    private static boolean isCallOfTheWildSummon(@Nullable AnimalEntity animal) {
+        final ExperienceConfig config = McMMOMod.getExperienceConfig();
+        if (animal == null || config == null || !config.isCOTWBreedingPrevented()) {
+            return false;
+        }
+        return McMMOMod.getTransientEntityTracker().isTransient(animal.getUuid());
+    }
+
+    /**
      * A player bred two animals: award Husbandry XP, then roll {@code Twins}.
      *
      * <p>Called from {@code BredAnimalsCriterionMixin}. See the class javadoc for why that is the
@@ -145,6 +168,24 @@ public final class HusbandryListener {
         }
         final HusbandryManager husbandry = mmoPlayer.getHusbandryManager();
         if (husbandry == null) {
+            return;
+        }
+
+        // Breeding your own Call-of-the-Wild summons pays nothing (ExploitFix.COTWBreeding, legacy
+        // EntityListener#onEntityBreed). Taming conjures the parents out of a few bones, so paying
+        // for their offspring turns one skill's ability into another skill's XP tap.
+        //
+        // Legacy cancels the breeding outright and zeroes both parents' love ticks. This port cannot:
+        // its seam is the bred-animals advancement criterion, which fires *after* vanilla has already
+        // decided. Refusing the award is the reachable half, and it is the half that matters -- the
+        // XP, not the calf.
+        //
+        // ⚠️ It must refuse the calf as well as the XP, exactly as the award cap does (GitHub #3):
+        // leaving the child claimed would let the raise verb pay for it twenty minutes later, making
+        // this a delay rather than a gate.
+        if (isCallOfTheWildSummon(parent) || isCallOfTheWildSummon(mate)) {
+            LogUtils.debug("Refusing Husbandry breed XP for " + breeder.getUuid()
+                    + ": a parent is a Call of the Wild summon.");
             return;
         }
 

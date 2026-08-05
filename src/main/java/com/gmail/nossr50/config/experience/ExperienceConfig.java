@@ -3,6 +3,7 @@ package com.gmail.nossr50.config.experience;
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.config.YamlConfiguration;
 import com.gmail.nossr50.datatypes.experience.FormulaType;
+import com.gmail.nossr50.datatypes.mobs.MobOrigin;
 import com.gmail.nossr50.datatypes.skills.MaterialType;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
@@ -19,6 +20,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * mcMMO's XP tuning config ({@code experience.yml}), ported onto {@link ConfigLoader}.
@@ -151,12 +153,68 @@ public class ExperienceConfig extends ConfigLoader {
         return config.getBoolean("ExploitFix.LimitTallPlantFarming", true);
     }
 
+    /**
+     * Whether hand-placed blocks are tracked and denied gathering rewards when re-mined (the §A/K9
+     * {@code PlacedBlockTracker}).
+     *
+     * <p>This is the single biggest anti-farm gate in the mod and it had <b>no config key at all</b>
+     * until GitHub #9 — turning it off restores the pre-K9 behaviour, where placing a stack of ore
+     * and re-mining it pays full XP every time. There is no legacy counterpart: upstream's
+     * {@code UserBlockTracker} is unconditional.
+     */
+    public boolean isPlacedBlockTrackingEnabled() {
+        return config.getBoolean("ExploitFix.PlacedBlocks", true);
+    }
+
+    /**
+     * The combat-XP multiplier for a mob with this spawn origin — legacy's per-{@code MobMetaFlagType}
+     * scaling, which shipped in {@code experience.yml} from the start and was read by nothing until
+     * GitHub #9.
+     *
+     * <p>All four keys default to <b>0</b> except breeding, so with this wired a spawner grinder
+     * stops paying combat XP entirely — which is what the file has always claimed. The markers were
+     * already being stamped on every mob by {@code EntityTypeSpawnOriginMixin}; only this lookup was
+     * missing, so {@code CombatUtils#processCombatXP}'s note that "the multipliers do nothing yet"
+     * had outlived its own reason (it blamed the unported {@code MobMetaFlagType}, which
+     * {@link MobOrigin} replaced).
+     *
+     * <p>{@link MobOrigin#UNKNOWN} deliberately pays in full rather than failing closed, unlike the
+     * mastery gate. That asymmetry is {@link MobOrigin}'s own ruling — "XP is a rate; mastery is
+     * permanent, and only the permanent thing needs the strict gate" — and the only way to see an
+     * {@code UNKNOWN} today is to downgrade the mod, where silently zeroing all combat XP would be a
+     * far worse failure than paying for a mob whose marker we cannot read.
+     */
+    public double getMobOriginXpMultiplier(@NotNull MobOrigin origin) {
+        return switch (origin) {
+            case NATURAL, UNKNOWN -> 1.0D;
+            case SPAWNER -> getSpawnedMobXpMultiplier();
+            case BRED -> getBredMobXpMultiplier();
+            case PLAYER_PLACED -> getEggXpMultiplier();
+            case STRUCTURE -> getNetherPortalXpMultiplier();
+        };
+    }
+
     public boolean useCombatHPCeiling() {
         return config.getBoolean("ExploitFix.Combat.XPCeiling.Enabled", true);
     }
 
+    /**
+     * The creditable-damage ceiling for a single hit.
+     *
+     * <p>⚠️ <b>Reads {@code Damage_Limit}, not legacy's {@code HP_Modifier_Limit}.</b> This port's
+     * hand-authored {@code experience.yml} has always shipped the key as {@code Damage_Limit} —
+     * legacy publishes no {@code experience.yml} resource at all, so there was nothing to copy — and
+     * until 2026-08-05 this getter read the legacy name. The two never met: the shipped key was read
+     * by nobody and the getter fell back to its hard-coded {@code 100} forever, so <em>editing the
+     * documented key did nothing</em>. The shipped name wins because it is the one on every existing
+     * config on disk (changing the file instead would strand every player's tuning) and because it
+     * is the accurate one — this clamps damage, it modifies no HP.
+     *
+     * <p>Pinned by {@code ExperienceConfigKeyAgreementTest}, which drives every ExploitFix getter
+     * through a non-default value written at the <em>shipped</em> path.
+     */
     public int getCombatHPCeiling() {
-        return config.getInt("ExploitFix.Combat.XPCeiling.HP_Modifier_Limit", 100);
+        return config.getInt("ExploitFix.Combat.XPCeiling.Damage_Limit", 100);
     }
 
     /*

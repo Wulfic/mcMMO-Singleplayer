@@ -31,12 +31,30 @@ ExploitFix:
     SnowGolemExcavation: true
     PreventArmorStandInteraction: true
     PreventMannequinInteraction: true
-    # This include NPCs from stuff like Citizens, this is not a setting for Vanilla Minecraft Villagers (Which can be considered NPCs)
-    # mcMMO normally doesn't process attacks against an Entity if it is an NPC from another plugin
-    # Of course, mcMMO doesn't know for sure whether something is an NPC, it checks a few known things, see our source code to see how
-    PreventPluginNPCInteraction: true
+    # PreventPluginNPCInteraction was removed here in the GitHub #9 pass. It guarded against NPCs
+    # from Bukkit plugins such as Citizens -- a thing that cannot exist in a singleplayer Fabric
+    # world, and whose detection helpers were dropped back in Phase 9. Leaving the key would have
+    # offered a switch that changes nothing, which is the exact defect that pass went looking for.
     # This will limit XP gained from unnaturally tall plants, like those created by Bone Meal
     LimitTallPlantFarming: true
+    # Blocks you place by hand give no gathering rewards when you mine them again.
+    #
+    # ######################################################################################
+    # THIS IS THE SINGLE BIGGEST ANTI-FARM GATE IN THE MOD.
+    # ######################################################################################
+    # Without it, one stack of any valuable ore is infinite Mining XP: place it, mine it,
+    # place it again. The same loop works for Woodcutting (logs), Excavation (sand/gravel)
+    # and Herbalism. Every gathering skill in mcMMO is trivially maxed in an afternoon.
+    #
+    # The flags follow the world, not the session -- they are saved to
+    # <world>/mcmmo/placed_blocks.dat, so a block you placed before a restart is still
+    # ineligible after one. Only still-standing placed blocks are remembered; mining one
+    # forgets it again, so the file stays small.
+    #
+    # NOTE: crops are NOT governed by this. Planting a seed places a block, so gating crops
+    # on placed-ness would zero out Herbalism entirely. Crops pay on MATURITY instead, which
+    # is their own anti-exploit and is unaffected by this setting.
+    PlacedBlocks: true
     Stealth:
         # Require a live movement keypress for sneak XP, not merely a change in position.
         #

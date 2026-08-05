@@ -168,6 +168,54 @@ Skills:
 
 ---
 
+## Anti-cheat: the exploit gates
+
+Every automated XP farm mcMMO knows how to refuse has a switch, all of them under `ExploitFix` in
+`experience.yml`. With **Mod Menu + Cloth Config** installed they are the **Anti-Cheat** tab.
+
+They are on by default. Turning one off is not "cheating" in a singleplayer world — it is your
+world — but each one exists because the thing it blocks is otherwise unbounded and usually
+unattended.
+
+| Key | What it refuses |
+|---|---|
+| `PlacedBlocks` | Gathering rewards for blocks you placed by hand. **The big one**: without it, one stack of ore is infinite Mining XP. Also the master switch for the three below, which share its bookkeeping. |
+| `LavaStoneAndCobbleFarming` | Mining XP for stone, cobblestone and basalt made by a lava generator. Obsidian is exempt — making it costs the lava source, so it cannot loop. |
+| `SnowGolemExcavation` | Excavation XP for snow a snow golem laid down. |
+| `PistonCheating` | Laundering a placed block by pushing it — the flag travels with the block. |
+| `EndermanEndermiteFarms` | Combat XP for an enderman that an endermite lured in. |
+| `COTWBreeding` | Husbandry XP for breeding your own Call of the Wild summons. |
+| `PreventArmorStandInteraction` / `PreventMannequinInteraction` | Combat XP for hitting a decoration. |
+| `Fishing` (+ `Fishing_ExploitFix_Options`) | Re-casting into the same spot forever. |
+| `Agility` | Self-inflicted damage feeding Agility XP. |
+| `TreeFellerReducedXP` | Full per-log XP when a whole tree comes down at once. |
+| `LimitTallPlantFarming` | XP from bone-mealed plants grown past natural height. |
+| `Combat.XPCeiling` | One enormous hit paying out a modded mob's whole health bar. |
+| `Stealth.Require_Movement_Input` | Sneak XP while you are being *carried* — a taped-down shift key on a boat. |
+| `Unarmored.*` | Environmental damage, and one mob paying you forever. |
+| `Husbandry.*` | Milking the same cow on a loop, and one handful of feed paying for a whole pen. |
+
+Separately, `Experience_Formula` scales combat XP by **where a mob came from**:
+
+```yaml
+Experience_Formula:
+    Mobspawners:
+        Multiplier: 0     # a spawner grinder pays nothing
+    Eggs:
+        Multiplier: 0     # spawn-egg / /summon mobs
+    Nether_Portal:
+        Multiplier: 0     # portal and structure-placed mobs
+    Breeding:
+        Multiplier: 1.0   # bred animals pay in full
+```
+
+> **Note for existing worlds:** `ExploitFix.PlacedBlocks` is a new key, so it is added to your
+> existing `experience.yml` automatically the next time you load a world. `PreventPluginNPCInteraction`
+> was removed — it guarded against Bukkit NPC plugins, which cannot exist here. If your config still
+> has that line it is simply ignored, and deleting it is safe.
+
+---
+
 ## When to expect a change to take effect
 
 Most values are read **once at load time**, so:

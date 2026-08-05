@@ -28,6 +28,17 @@ Versions targeting MC 1.21.11:
 | **Mod Menu only** | The button still works, but opens a small info screen with an **Open Config Folder** shortcut instead of the editor. |
 | **Neither** | Nothing is lost. Hand-editing YAML remains the way in and the mod runs identically. |
 
+### The tabs
+
+| Tab | Holds |
+|---|---|
+| **General** | RetroMode, autosave, level-up broadcasts and sounds, milestone plaques, master volume. |
+| **Experience** | Global XP multiplier, early-game boost, curve shape, the Agility and Stealth per-second rates. |
+| **XP Multipliers** | A per-skill XP multiplier for all 24 earning skills. |
+| **Abilities** | Super-ability master switch, activation rules, tool durability, a cooldown slider per ability. |
+| **Anti-Cheat** | Every anti-farm gate — see [Configuration](Configuration#anti-cheat-the-exploit-gates). |
+| **Skill Level Caps** | A cap per skill; 0 means no cap. |
+
 ### When edits take effect
 
 Edits are written **straight back to the YAML on disk** — this is a real config editor, not a parallel settings store — and take effect on the **next world load**, not instantly. Most mcMMO values are read once at load time.

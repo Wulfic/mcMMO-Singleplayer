@@ -5,15 +5,24 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.BlockUtils.AgeableState;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.state.property.Properties;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.world.World;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,11 +47,14 @@ class BlockUtilsTest {
     @BeforeEach
     void loadConfig(@TempDir Path dir) {
         McMMOMod.setExperienceConfig(new ExperienceConfig(dir));
+        // The placed-block tracker is a JVM singleton, so flags leak between tests unless cleared.
+        McMMOMod.getPlacedBlockTracker().clear();
     }
 
     @AfterEach
     void clearConfig() {
         McMMOMod.setExperienceConfig(null);
+        McMMOMod.getPlacedBlockTracker().clear();
     }
 
     // --- MaterialMapStore-backed (registry-path key, config-independent) -----
@@ -177,6 +189,213 @@ class BlockUtilsTest {
         // A block with no age property is returned unchanged.
         assertEquals(Blocks.STONE.getDefaultState(),
                 BlockUtils.withAge(Blocks.STONE.getDefaultState(), 3));
+    }
+
+    // --- The placed-block gate (ExploitFix.PlacedBlocks, GitHub #9) ----------
+
+    /** A world that answers only the one question the tracker asks it: which world am I? */
+    private static World overworld() {
+        final World world = mock(World.class);
+        when(world.getRegistryKey()).thenReturn(World.OVERWORLD);
+        return world;
+    }
+
+    /** An {@link ExperienceConfig} whose {@code ExploitFix.PlacedBlocks} is switched off. */
+    private static ExperienceConfig configWithTrackingOff(Path dir) throws IOException {
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("experience.yml"), "ExploitFix:\n    PlacedBlocks: false\n",
+                StandardCharsets.UTF_8);
+        return new ExperienceConfig(dir);
+    }
+
+    @Test
+    void placedBlocksAreIneligibleWhileTheGateIsOn() {
+        final World world = overworld();
+        final BlockPos pos = new BlockPos(10, 64, -20);
+
+        assertFalse(BlockUtils.isRewardIneligible(world, pos), "a never-placed block is eligible");
+        BlockUtils.markPlaced(world, pos);
+        assertTrue(BlockUtils.isRewardIneligible(world, pos), "a hand-placed block must not reward");
+        BlockUtils.markNatural(world, pos);
+        assertFalse(BlockUtils.isRewardIneligible(world, pos), "breaking it makes the spot natural");
+    }
+
+    @Test
+    void switchingTheGateOffStopsBothReadingAndWritingFlags(@TempDir Path dir) throws IOException {
+        final World world = overworld();
+        final BlockPos pos = new BlockPos(3, 70, 4);
+        McMMOMod.setExperienceConfig(configWithTrackingOff(dir));
+
+        BlockUtils.markPlaced(world, pos);
+        assertFalse(BlockUtils.isRewardIneligible(world, pos),
+                "with the gate off a hand-placed block pays out again (the pre-K9 behaviour)");
+        // The write must be refused too, not merely the read: otherwise the flags still accumulate
+        // in memory and in placed_blocks.dat, and re-enabling the gate resurrects them.
+        assertEquals(0, McMMOMod.getPlacedBlockTracker().size(),
+                "no flag should have been recorded at all while the gate is off");
+    }
+
+    @Test
+    void flagsAlreadyOnDiskStopBitingTheMomentTheGateIsOff(@TempDir Path dir) throws IOException {
+        // The case the write-side gate alone cannot cover, and the one a player actually hits:
+        // they played with the gate ON, so placed_blocks.dat is full of flags, and *then* they
+        // switch it off. Those flags are restored into the tracker at world load by PlacedBlockStore
+        // without ever going through markPlaced -- so the read side has to be gated too, or turning
+        // the setting off does nothing for every block they had already placed.
+        final World world = overworld();
+        final BlockPos pos = new BlockPos(64, 11, 64);
+        BlockUtils.markPlaced(world, pos); // written while the gate was still on
+        assertTrue(BlockUtils.isRewardIneligible(world, pos));
+
+        McMMOMod.setExperienceConfig(configWithTrackingOff(dir));
+
+        assertFalse(BlockUtils.isRewardIneligible(world, pos),
+                "a flag recorded before the gate was switched off must stop applying");
+    }
+
+    // --- The lava-generator gate (ExploitFix.LavaStoneAndCobbleFarming) ------
+
+    @Test
+    void lavaGeneratedBlocksThatPayMiningXpAreFlagged() {
+        final World world = overworld();
+        // Basalt is the one that matters: 40 Mining XP a block from a blue-ice generator that runs
+        // itself, and the K9 tracker can never see it because nobody placed it.
+        final BlockPos basaltPos = new BlockPos(0, 30, 0);
+        BlockUtils.markLavaFormed(world, basaltPos, Blocks.BASALT);
+        assertTrue(BlockUtils.isRewardIneligible(world, basaltPos));
+
+        // Stone comes from the other seam (LavaFluid#flow) but through the same decision.
+        final BlockPos stonePos = new BlockPos(0, 31, 0);
+        BlockUtils.markLavaFormed(world, stonePos, Blocks.STONE);
+        assertTrue(BlockUtils.isRewardIneligible(world, stonePos));
+    }
+
+    @Test
+    void obsidianIsExemptFromTheLavaGate() {
+        // Making obsidian consumes the lava source, so it cannot repeat without another bucket --
+        // it is a trade, not a generator. Legacy exempts it by name and so do we.
+        final World world = overworld();
+        final BlockPos pos = new BlockPos(1, 30, 0);
+        BlockUtils.markLavaFormed(world, pos, Blocks.OBSIDIAN);
+        assertFalse(BlockUtils.isRewardIneligible(world, pos));
+    }
+
+    @Test
+    void aFormedBlockWorthNoMiningXpIsNotFlagged() {
+        // Plain cobblestone has no entry in the shipped Mining table, so the classic cobble
+        // generator pays nothing regardless -- flagging it would grow the tracker for no reason.
+        assertFalse(McMMOMod.getExperienceConfig()
+                        .doesBlockGiveSkillXP(PrimarySkillType.MINING, "Cobblestone"),
+                "test premise: shipped experience.yml gives plain Cobblestone no Mining XP");
+        final World world = overworld();
+        final BlockPos pos = new BlockPos(2, 30, 0);
+        BlockUtils.markLavaFormed(world, pos, Blocks.COBBLESTONE);
+        assertFalse(BlockUtils.isRewardIneligible(world, pos));
+    }
+
+    @Test
+    void switchingOffTheLavaGateStopsFlaggingGeneratedBlocks(@TempDir Path dir) throws IOException {
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("experience.yml"),
+                "ExploitFix:\n    LavaStoneAndCobbleFarming: false\n", StandardCharsets.UTF_8);
+        McMMOMod.setExperienceConfig(new ExperienceConfig(dir));
+
+        final World world = overworld();
+        final BlockPos pos = new BlockPos(3, 30, 0);
+        BlockUtils.markLavaFormed(world, pos, Blocks.BASALT);
+        assertFalse(BlockUtils.isRewardIneligible(world, pos));
+    }
+
+    // --- The piston gate (ExploitFix.PistonCheating) -------------------------
+
+    @Test
+    void aPushedBlockCarriesItsPlacedFlagWithIt() {
+        final World world = overworld();
+        final BlockPos from = new BlockPos(0, 64, 0);
+        final BlockPos to = from.offset(Direction.EAST);
+        BlockUtils.markPlaced(world, from);
+
+        BlockUtils.movePlacedFlags(world, List.of(from), List.of(), Direction.EAST);
+
+        assertFalse(BlockUtils.isRewardIneligible(world, from), "the old spot is empty now");
+        assertTrue(BlockUtils.isRewardIneligible(world, to),
+                "place -> push -> mine must not launder a hand-placed block into a rewarding one");
+    }
+
+    @Test
+    void pushingANaturalBlockDoesNotMakeItWorthless() {
+        // Legacy marks every destination unnatural, because its tracker over-marks anyway. Doing
+        // that here would invent a false positive: a natural stone wall nudged sideways by a piston
+        // would stop paying forever. A piston moves blocks, it does not create them.
+        final World world = overworld();
+        final BlockPos from = new BlockPos(5, 64, 5);
+
+        BlockUtils.movePlacedFlags(world, List.of(from), List.of(), Direction.UP);
+
+        assertFalse(BlockUtils.isRewardIneligible(world, from.offset(Direction.UP)));
+        assertEquals(0, McMMOMod.getPlacedBlockTracker().size());
+    }
+
+    @Test
+    void everyBlockOfAPushedColumnKeepsItsFlag() {
+        // The case the three-pass implementation exists for: in a column, one block's destination is
+        // the next block's source. Clearing sources as you go would wipe a flag that had just been
+        // written, and the middle of every pushed column would quietly become farmable again.
+        final World world = overworld();
+        final BlockPos a = new BlockPos(0, 64, 0);
+        final BlockPos b = new BlockPos(0, 64, 1);
+        final BlockPos c = new BlockPos(0, 64, 2);
+        BlockUtils.markPlaced(world, a);
+        BlockUtils.markPlaced(world, b);
+        BlockUtils.markPlaced(world, c);
+
+        BlockUtils.movePlacedFlags(world, List.of(a, b, c), List.of(), Direction.SOUTH);
+
+        assertTrue(BlockUtils.isRewardIneligible(world, b), "a moved onto b's old spot");
+        assertTrue(BlockUtils.isRewardIneligible(world, c), "b moved onto c's old spot");
+        assertTrue(BlockUtils.isRewardIneligible(world, c.offset(Direction.SOUTH)), "c moved on");
+        assertFalse(BlockUtils.isRewardIneligible(world, a), "only a's old spot is vacated");
+        assertEquals(3, McMMOMod.getPlacedBlockTracker().size(), "three blocks, three flags");
+    }
+
+    @Test
+    void aBlockDestroyedByThePushLosesItsFlag() {
+        final World world = overworld();
+        final BlockPos broken = new BlockPos(9, 64, 9);
+        BlockUtils.markPlaced(world, broken);
+
+        BlockUtils.movePlacedFlags(world, List.of(), List.of(broken), Direction.WEST);
+
+        assertFalse(BlockUtils.isRewardIneligible(world, broken));
+        assertEquals(0, McMMOMod.getPlacedBlockTracker().size(), "a destroyed block frees its flag");
+    }
+
+    @Test
+    void switchingOffThePistonGateLeavesFlagsBehind(@TempDir Path dir) throws IOException {
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("experience.yml"),
+                "ExploitFix:\n    PistonCheating: false\n", StandardCharsets.UTF_8);
+        final World world = overworld();
+        final BlockPos from = new BlockPos(2, 64, 2);
+        BlockUtils.markPlaced(world, from);
+        McMMOMod.setExperienceConfig(new ExperienceConfig(dir));
+
+        BlockUtils.movePlacedFlags(world, List.of(from), List.of(), Direction.NORTH);
+
+        assertTrue(BlockUtils.isRewardIneligible(world, from), "the flag stays where it was");
+        assertFalse(BlockUtils.isRewardIneligible(world, from.offset(Direction.NORTH)));
+    }
+
+    @Test
+    void theGateFailsClosedBeforeAnyConfigIsLoaded() {
+        // A gate whose config has not arrived yet must behave as ON. Failing open would pay full
+        // gathering rewards for hand-placed blocks during world load, which is the exploit itself.
+        McMMOMod.setExperienceConfig(null);
+        final World world = overworld();
+        final BlockPos pos = new BlockPos(-8, 12, 9);
+
+        BlockUtils.markPlaced(world, pos);
+        assertTrue(BlockUtils.isRewardIneligible(world, pos));
     }
 
     @Test

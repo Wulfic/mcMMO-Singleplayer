@@ -4,6 +4,8 @@ import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -12,6 +14,7 @@ import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.state.property.IntProperty;
 import net.minecraft.state.property.Property;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -339,15 +342,156 @@ public final class BlockUtils {
     /**
      * Record that a player hand-placed the block at this position, so gathering skills give it no
      * rewards (legacy {@code BlockUtils#setUnnaturalBlock} → {@code UserBlockTracker#setIneligible}).
-     * The sole caller is {@code BlockPlaceMixin} (vanilla's {@code BlockItem#place} being the only
-     * hand-placement seam), so — unlike legacy — grown/fallen/world-gen blocks are never marked.
+     * Its caller is {@code BlockPlaceMixin} (vanilla's {@code BlockItem#place} being the only
+     * hand-placement seam), so grown / fallen / world-gen blocks are never marked by <em>this</em>
+     * path — see {@link #markUnnatural} for the manufactured-block sources that are.
      *
      * <p>A vanilla {@link BlockState} carries no location (Bukkit's {@code Block} did), so these take a
      * live {@link World} + {@link BlockPos} and pack them into the MC-free
      * {@link PlacedBlockTracker}'s two keys (the world's registry key + {@code BlockPos#asLong()}).
      */
     public static void markPlaced(@NotNull World world, @NotNull BlockPos pos) {
+        markUnnatural(world, pos);
+    }
+
+    /**
+     * Record that the block at this position did not get there naturally, so gathering skills give it
+     * no rewards (legacy {@code BlockUtils#setUnnaturalBlock}). The general form of
+     * {@link #markPlaced}: hand placement is one source, but a block a player <em>manufactured</em>
+     * without touching it is the same exploit and the same flag.
+     *
+     * <p>Callers other than the block-place seam gate themselves on their own {@code ExploitFix} key
+     * before calling (lava formation, snow golems, pistons) — this method enforces only the tracker's
+     * master switch.
+     */
+    public static void markUnnatural(@NotNull World world, @NotNull BlockPos pos) {
+        if (!isPlacedBlockTrackingEnabled()) {
+            // Don't just refuse to *read* the flags when the gate is off -- refuse to write them.
+            // Otherwise every placed block still costs memory and still lands in placed_blocks.dat,
+            // and switching the gate back on resurrects a session's worth of stale flags.
+            return;
+        }
         McMMOMod.getPlacedBlockTracker().setIneligible(worldKey(world), pos.asLong());
+    }
+
+    /**
+     * Deny gathering rewards for a block that a lava/water interaction just manufactured — the
+     * cobblestone, stone, obsidian and basalt "generators" (legacy {@code BlockListener#onBlockFormEvent},
+     * {@code ExploitFix.LavaStoneAndCobbleFarming}).
+     *
+     * <p><b>The §A/K9 tracker cannot reach this on its own.</b> Its only writer is the hand-placement
+     * seam, on the reasoning that a block nobody placed needs no flag. A generated block <em>is</em>
+     * a block nobody placed, and it is manufactured on demand, for free, forever: at the shipped
+     * prices a basalt generator pays 40 Mining XP per block and a stone generator 15, both fully
+     * automatable. Conservative tracking is right about grown and world-gen blocks and wrong about
+     * these, which is why legacy hooks them explicitly.
+     *
+     * <p>Two conditions, both legacy's:
+     * <ul>
+     *   <li><b>Obsidian is exempt.</b> Making it consumes the lava source, so the loop cannot repeat
+     *       without hauling another bucket — it is not a generator, it is a lava-to-obsidian trade.</li>
+     *   <li><b>The block must actually pay Mining XP.</b> Plain cobblestone has no entry in the
+     *       shipped table, so the classic cobble generator was never worth anything anyway; flagging
+     *       it would only grow the tracker for nothing.</li>
+     * </ul>
+     *
+     * @param formed the block that has just appeared at {@code pos}
+     */
+    public static void markLavaFormed(@NotNull World world, @NotNull BlockPos pos,
+            @NotNull Block formed) {
+        final ExperienceConfig config = McMMOMod.getExperienceConfig();
+        if (config == null || !config.preventStoneLavaFarming()) {
+            return;
+        }
+        if (formed == Blocks.OBSIDIAN) {
+            return;
+        }
+        if (!givesSkillXp(formed, PrimarySkillType.MINING)) {
+            return;
+        }
+        markUnnatural(world, pos);
+    }
+
+    /**
+     * Deny Excavation rewards for a snow layer a snow golem just laid down
+     * ({@code ExploitFix.SnowGolemExcavation}, legacy {@code BlockListener#onEntityBlockFormEvent}).
+     *
+     * <p>A snow golem walking in a pen lays snow indefinitely, for free, with nobody at the keyboard;
+     * the shipped table pays 20 Excavation XP for a layer and 40 for a block. Like the lava
+     * generators this is invisible to the §A/K9 tracker, because the golem is not a player and the
+     * snow was never placed by hand.
+     *
+     * <p>Gated on the snow actually being worth Excavation XP, so a resource pack or config that
+     * zeroes it stops the tracker growing for nothing.
+     *
+     * @param formed the block the golem just created — always {@code snow} in vanilla, passed in so
+     *               the caller reads the world rather than this method assuming it
+     */
+    public static void markSnowGolemFormed(@NotNull World world, @NotNull BlockPos pos,
+            @NotNull Block formed) {
+        final ExperienceConfig config = McMMOMod.getExperienceConfig();
+        if (config == null || !config.isSnowExploitPrevented()) {
+            return;
+        }
+        if (!givesSkillXp(formed, PrimarySkillType.EXCAVATION)) {
+            return;
+        }
+        markUnnatural(world, pos);
+    }
+
+    /**
+     * Carry placed-block flags along with the blocks a piston just pushed or pulled
+     * ({@code ExploitFix.PistonCheating}, legacy {@code BlockListener#onBlockPistonExtend}/
+     * {@code onBlockPistonRetract}).
+     *
+     * <p>Without this the flags stay at the old coordinates while the blocks walk away from them, so
+     * <em>place → push → mine</em> launders a hand-placed block back into a rewarding one. Legacy
+     * closes it by marking every destination unnatural.
+     *
+     * <p><b>This port moves the flag instead, which is strictly narrower.</b> Legacy's blanket mark
+     * is a consequence of its over-marking design; applied to this tracker it would introduce the
+     * false positive the tracker was built to avoid — pushing a <em>natural</em> stone wall one block
+     * sideways would make it worthless forever. A piston moves blocks, it does not create them, so
+     * the honest update is to move what we know.
+     *
+     * <p>The three passes are not decoration. Sources and destinations overlap whenever a piston
+     * pushes a column (the destination of one block is the source of the next), so reading, clearing
+     * and re-setting have to happen as separate phases or a flag is cleared after it was just
+     * written and the middle of every pushed column silently loses its flag.
+     *
+     * @param moved    the positions the blocks occupied <em>before</em> the push
+     * @param broken   positions destroyed by the push (a torch in the way) — those blocks are gone,
+     *                 so their flags are simply dropped
+     * @param motion   the direction the blocks travelled
+     */
+    public static void movePlacedFlags(@NotNull World world, @NotNull List<BlockPos> moved,
+            @NotNull List<BlockPos> broken, @NotNull Direction motion) {
+        final ExperienceConfig config = McMMOMod.getExperienceConfig();
+        if (config == null || !config.isPistonCheatingPrevented()
+                || !isPlacedBlockTrackingEnabled()) {
+            return;
+        }
+        final PlacedBlockTracker tracker = McMMOMod.getPlacedBlockTracker();
+        final String worldKey = worldKey(world);
+
+        // 1. Read every source flag before anything is written.
+        final List<BlockPos> destinations = new ArrayList<>();
+        for (BlockPos pos : moved) {
+            if (tracker.isIneligible(worldKey, pos.asLong())) {
+                destinations.add(pos.offset(motion));
+            }
+        }
+        // 2. Vacate every source (and every broken block — that one is simply gone).
+        for (BlockPos pos : moved) {
+            tracker.setEligible(worldKey, pos.asLong());
+        }
+        for (BlockPos pos : broken) {
+            tracker.setEligible(worldKey, pos.asLong());
+        }
+        // 3. Only now write the destinations.
+        for (BlockPos pos : destinations) {
+            tracker.setIneligible(worldKey, pos.asLong());
+        }
     }
 
     /**
@@ -366,7 +510,26 @@ public final class BlockUtils {
      * branch). Any block never hand-placed reads as eligible (the default).
      */
     public static boolean isRewardIneligible(@NotNull World world, @NotNull BlockPos pos) {
+        if (!isPlacedBlockTrackingEnabled()) {
+            return false;
+        }
         return McMMOMod.getPlacedBlockTracker().isIneligible(worldKey(world), pos.asLong());
+    }
+
+    /**
+     * Whether the placed-block gate is switched on ({@code ExploitFix.PlacedBlocks}, GitHub #9).
+     *
+     * <p>Gated at both ends of the tracker rather than at its call sites: this class is the only
+     * bridge to it, and the alternative — a check in each of the four consumers (block break, blast
+     * mining, tree feller, the crop diversion) — is four chances to add a fifth consumer and forget.
+     *
+     * <p>Defaults to <b>on</b> when no config is loaded yet. A gate whose config has not arrived must
+     * fail closed; failing open would pay full rewards for hand-placed blocks during world load,
+     * which is the exploit itself.
+     */
+    private static boolean isPlacedBlockTrackingEnabled() {
+        final ExperienceConfig config = McMMOMod.getExperienceConfig();
+        return config == null || config.isPlacedBlockTrackingEnabled();
     }
 
     /** The world's registry key, stringified — the {@link PlacedBlockTracker}'s per-world key. */
