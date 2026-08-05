@@ -422,6 +422,11 @@ Skills:
         Enabled_For_PVP: true
         Enabled_For_PVE: true
         Level_Cap: 0
+    # Cooking is a processing skill, not a gathering one: it pays for turning food into better food
+    # in a furnace, smoker, blast furnace, campfire or crafting grid. Its boundary against Smelting
+    # is the input -- ore pays Smelting, food pays Cooking, and neither pays both.
+    Cooking:
+        Level_Cap: 0
     Excavation:
         Level_Cap: 0
     Fishing:

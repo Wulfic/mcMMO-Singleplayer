@@ -209,6 +209,11 @@ Experience_Bars:
         Enable: true
         Color: BLUE
         BarStyle: SEGMENTED_6
+    # YELLOW is free: PURPLE is Repair/Salvage/Smelting, GREEN Woodcutting, PINK Agility/Stealth.
+    Cooking:
+        Enable: true
+        Color: YELLOW
+        BarStyle: SEGMENTED_6
     Crossbows:
         Enable: true
         Color: BLUE
@@ -363,6 +368,7 @@ Experience_Formula:
         Repair: 1.0
         Fishing: 1.0
         Alchemy: 1.0
+        Cooking: 1.0
 
     # XP earned by players with the permission mcmmo.perks.xp.customboost.<skillname> will get multiplied
     # with 1.25 by default, resulting in a 25% XP boost

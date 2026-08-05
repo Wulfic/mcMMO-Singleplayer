@@ -40,6 +40,28 @@ public enum SubSkillType {
     AXES_GREATER_IMPACT(1),
     AXES_SKULL_SPLITTER(1),
 
+    /*
+     * COOKING
+     *
+     * Pass 2. Three sub-skills, and the roster is deliberately small rather than padded: a quality
+     * tier (Gourmet Meal, Precision Cooking, Meal Memory) was CUT outright because stamping a
+     * component onto a food stack JAMS the furnace -- canAcceptRecipeOutput compares the WHOLE
+     * component map with no exclusion list, so one stamped steak stops the smoker until a human
+     * empties it. Cook's Diet is cut too (Cooking grants no hunger, ever); Butchery belongs to
+     * Husbandry; Flavor Burst and a super ability are cut by the effect budget.
+     *
+     * ⚠️ Two of the three are NOT covered by the per-skill disable switch for free. SkillGating
+     * enforces at Permissions, RankUtils booleans and ProbabilityUtil#isSkillRNGSuccessful, so
+     * MASTER_CHEF (an RNG proc) is free while KITCHEN_EFFICIENCY (a multiplier) and POWER_COOK (a
+     * deterministic effect) each need an explicit gate at their own call site.
+     *
+     * ⚠️ COOKING_SMELTING and COOKING_ALCHEMY would collide with a PrimarySkillType name. Do not
+     * reach for them later.
+     */
+    COOKING_POWER_COOK(5),
+    COOKING_MASTER_CHEF(5),
+    COOKING_KITCHEN_EFFICIENCY(3),
+
     /* CROSSBOWS */
     CROSSBOWS_CROSSBOWS_LIMIT_BREAK(10),
     CROSSBOWS_TRICK_SHOT(3),

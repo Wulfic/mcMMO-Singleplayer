@@ -1,15 +1,16 @@
 {
+  "parent": "mcmmo:milestone/root",
   "display": {
     "icon": {
-      "id": "minecraft:nether_star"
+      "id": "minecraft:cooked_beef"
     },
     "title": {
-      "text": "mcMMO",
-      "color": "gold",
+      "text": "Cooking",
+      "color": "white",
       "bold": true
     },
     "description": {
-      "text": "Every milestone you have earned across the twenty-seven skills.",
+      "text": "Your milestones in Cooking.",
       "color": "yellow"
     },
     "frame": "task",

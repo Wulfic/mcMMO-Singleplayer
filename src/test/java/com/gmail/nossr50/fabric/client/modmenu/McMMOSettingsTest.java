@@ -100,6 +100,64 @@ class McMMOSettingsTest {
     }
 
     /**
+     * Every {@code Experience_Formula.Skill_Multiplier.<name>} key the shipped
+     * {@code experience.yml} carries must appear in the catalogue.
+     *
+     * <p>The same converse guard as {@link #everyCooldownKeyInConfigIsOfferedInTheCatalogue()},
+     * aimed at the two hand-kept arrays in {@code McMMOSettings} that had none. Both
+     * {@code XP_MULTIPLIER_SKILLS} and {@code LEVEL_CAP_SKILLS} are transcribed rosters, so a new
+     * skill lands in the yml and simply never reaches the array — no failure, no error, just a
+     * skill with no slider. Cooking was added on 2026-08-05 and neither array reddened for it,
+     * which is how this gap was found.
+     */
+    @Test
+    void everySkillMultiplierKeyIsOfferedInTheCatalogue() throws IOException {
+        final YamlConfiguration experience = bundled(McMMOSettings.EXPERIENCE_YML);
+        final Set<String> shipped = new HashSet<>();
+        collectScalarPaths(experience, "Experience_Formula.Skill_Multiplier", shipped);
+        assertFalse(shipped.isEmpty(),
+                "no Skill_Multiplier keys found in experience.yml — the test is asserting nothing");
+
+        final Set<String> offered = new HashSet<>();
+        McMMOSettings.all().forEach(setting -> offered.add(setting.path()));
+
+        for (String path : shipped) {
+            assertTrue(offered.contains(path),
+                    "experience.yml ships " + path + " but the XP Multipliers tab does not offer "
+                            + "it — that skill's XP rate has no slider");
+        }
+    }
+
+    /**
+     * Every {@code Skills.<name>.Level_Cap} key the shipped {@code config.yml} carries must appear
+     * in the catalogue. The {@code LEVEL_CAP_SKILLS} half of the guard above.
+     */
+    @Test
+    void everyLevelCapKeyIsOfferedInTheCatalogue() throws IOException {
+        final YamlConfiguration config = bundled(McMMOSettings.CONFIG_YML);
+        final YamlConfiguration skills = config.getConfigurationSection("Skills");
+        assertNotNull(skills, "config.yml has no Skills section at all");
+
+        final Set<String> shipped = new HashSet<>();
+        for (String skill : skills.getKeys(false)) {
+            if (config.contains("Skills." + skill + ".Level_Cap")) {
+                shipped.add("Skills." + skill + ".Level_Cap");
+            }
+        }
+        assertFalse(shipped.isEmpty(),
+                "no Skills.*.Level_Cap keys found in config.yml — the test is asserting nothing");
+
+        final Set<String> offered = new HashSet<>();
+        McMMOSettings.all().forEach(setting -> offered.add(setting.path()));
+
+        for (String path : shipped) {
+            assertTrue(offered.contains(path),
+                    "config.yml ships " + path + " but the Skill Level Caps tab does not offer it — "
+                            + "that skill's cap has no slider");
+        }
+    }
+
+    /**
      * Every {@code ExploitFix} key the shipped {@code experience.yml} carries must appear in the
      * catalogue — the same converse guard as
      * {@link #everyCooldownKeyInConfigIsOfferedInTheCatalogue()}, aimed at the section that needs it

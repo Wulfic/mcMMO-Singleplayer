@@ -477,18 +477,40 @@ This plan was authored 2026-08-03. `8a5470941` (#10, the per-skill enable/disabl
 `PrimarySkillType` is now obliged to satisfy.** The `00-OVERVIEW.md` checklist does not mention any
 of it. All three items below are **Stage 1**, not clean-up.
 
-**1. Four completeness tests go red the moment the enum constant lands.** Stage 1 is not "nothing
-fires yet" — it is *satisfy all four before you write a mechanic*. Verified by grep, not recalled:
+**1. Completeness tests go red the moment the enum constant lands.** Stage 1 is not "nothing
+fires yet" — it is *satisfy every one of them before you write a mechanic*.
 
-| Test | What breaks |
-|---|---|
-| `DatatypeEnumTest.primarySkillTypeHasAllTwentySixSkills` | asserts `19 + 3 + 1 + 1 + 1 + 1`. **A hard-coded count** — re-derive it as `+ 1`, and rename the method; it already lies about "twenty-six" if you only bump the sum |
-| `SkillGatingTest.everyPrimarySkillHasAnEntryInTheShippedConfig` | `coreskills.yml` must gain a `Cooking:` block. **This is #10's; the old checklist predates the file having all 26 entries** |
-| `SkillLocaleCompletenessTest` | **five** separate loops over `values()` — XP-bar title, the title's `{0}` placeholder, `Overhaul.Name`, `SkillName`, `Commands.XPGain` |
-| `SkillStatsRendererTest.everySkillResolvesToANonNullRenderer` + `noRenderedLineLeaksARawColourCode` | the generic fallback covers the first; the second renders Cooking at levels 0 / 500 / 1000 |
+> ✅ **STAGE 1 RAN 2026-08-05 AND MEASURED THIS. The prediction was wrong in both directions.**
+> Seven tests reddened, across **four** classes — and the class this section was most confident
+> about was not one of them.
 
-`FlatFileProfileStoreTest` also loops `values()` and should pass free — that is checklist item 19
-already working. **Confirm it does; do not assume it.**
+| Test | Predicted | Actually |
+|---|---|---|
+| `DatatypeEnumTest.primarySkillTypeHasAllTwentySixSkills` | red | ✅ **red** — hard-coded `19+3+1+1+1+1`; renamed to `…TwentySeven…` and re-derived as `+ 1` |
+| `SkillGatingTest.everyPrimarySkillHasAnEntryInTheShippedConfig` | red | ✅ **red** — needed the `coreskills.yml` `Cooking:` block |
+| `SkillLocaleCompletenessTest` | five loops red | ✅ **red, but five *tests* of which 5 failed** — XP-bar title, `Overhaul.Name`, `SkillName`, `Commands.XPGain`, sub-skill `.Name`/`.Description`. The `{0}`-placeholder test stayed green (it only checks titles that *exist*) |
+| `SkillStatsRendererTest` | red | ❌ **STAYED GREEN.** ⚠️⚠️ Its three roster tests are **hard-coded `List.of(...)`, not loops over `values()`** — `weaponAndTamingRenderers…`, `miscRenderers…`, `pass2Renderers…`. A new skill reddens *nothing* there |
+| `MilestoneAdvancementResourcesTest` | **not mentioned at all** | ⚠️⚠️ **red, 4 failures** — the plaque datapack is a **Stage 1 hard gate**, not the Stage 5 nicety this plan filed it as |
+
+🔑 **The reusable rule: a "completeness" test is only complete if it is driven off `values()`.**
+`SkillStatsRendererTest` reads like the guard for "every skill renders" and is in fact a hand-kept
+list — the same shape as `McMMOSettings`'s arrays below. ⇒ **`CookingStatsRenderer` has no test
+telling anyone it is missing.** Stage 5 must *add* `COOKING` to `pass2RenderersEmitAStatsSectionAtMaxLevel`;
+nothing will remind you.
+
+⚠️ **The milestone generator is a Stage 1 obligation.** `scripts/gen-milestone-advancements.sh`
+iterates a hand-kept `ICON` map (and a matching `ROLE` map) and **`rm -rf`s the whole output tree**
+before regenerating — the mechanism that once deleted `agility.json` ([[agility-child-skill-restructure]]).
+Sub-skills are parsed straight off `SubSkillType.java`, so the three `COOKING_*` constants became
+grantable ids with no files the instant they landed. Both maps gained a `[cooking]` entry and the
+generator was re-run: **342 files, additions only, no deletions.**
+⚠️ `ROLE[cooking]` is **`Provisioner`, deliberately not `Chef`** — Cooking's own `MasterChef`
+sub-skill emits rank plaques titled "Master Chef", so the Master *tier* plaque would have been a
+byte-identical title in the same advancement tab.
+
+`FlatFileProfileStoreTest.backfillsSkillsMissingFromOldFile` loops `values()` and **passed free** —
+checklist item 19 confirmed working, not assumed. Cooking needs no new persistence shape, so unlike
+Hunter it needs no second test.
 
 **2. ⚠️⚠️ Two of Cooking's three sub-skills are NOT covered by the disable switch for free.**
 [`SkillGating`](../../src/main/java/com/gmail/nossr50/util/skills/SkillGating.java) derives a
@@ -517,6 +539,19 @@ at [McMMOSettings.java:284-294](../../src/main/java/com/gmail/nossr50/fabric/cli
 > a live caller.** For Cooking that ordering is forced — the key, the gate and the toggle all land
 > together in Stage 2, so the tab never describes a mechanic that does not exist. **A settings screen
 > is the one place a dead mechanic becomes an active lie.**
+
+**4. ⚠️⚠️ Two MORE hand-kept arrays in `McMMOSettings`, and neither had a converse guard (found in
+Stage 1).** `XP_MULTIPLIER_SKILLS` and `LEVEL_CAP_SKILLS` are transcribed rosters. Cooking's
+`Experience_Formula.Skill_Multiplier.Cooking` and `Skills.Cooking.Level_Cap` shipped into the YAML
+and **neither array reddened** — the skill would have had *no slider* for either, which is exactly
+the `Herdsmans_Call` bug the `COOLDOWN_ABILITIES` javadoc describes, two arrays further down the same
+file. Both arrays gained `"Cooking"`, and two new converse guards
+(`everySkillMultiplierKeyIsOfferedInTheCatalogue`, `everyLevelCapKeyIsOfferedInTheCatalogue`) now
+close the gap for every future skill. Mutation-proven: dropping `"Cooking"` from
+`XP_MULTIPLIER_SKILLS` reddens the first and only the first.
+
+🔑 **The generalisation, and it is the same sentence as item 1: in this file, every hand-kept roster
+drifts silently. Grep `McMMOSettings` for `String[]` before adding a skill.**
 
 ---
 
@@ -682,17 +717,28 @@ Also measured and unchanged: **7 of the 15 rows are claimed by a diet sub-skill*
 Fisherman's), so **D-CK2's restructure is load-bearing, not defensive**. All 12 Farmer's and 5
 Fisherman's foods are real foods. No planned row is a phantom item, and no planned effect is instant.
 
-**Stage 1 — Registration.**
-`PrimarySkillType.COOKING`, the three `SubSkillType`s, `CookingManager extends SkillManager`
-(**MC-free**), `McMMOPlayer.initManager` + typed getter, `SkillTools.MISC_SKILLS`, all five config
-files, the locale block, and the **old-profile regression test** (checklist item 19). Nothing fires
-yet. `/mcstats` renders the skill generically.
+**✅ Stage 1 — Registration. DONE 2026-08-05.**
+`PrimarySkillType.COOKING` (27th), the three `SubSkillType`s, `CookingManager extends SkillManager`
+(**MC-free, a deliberate shell**), `McMMOPlayer.initManager` + typed getter, `SkillTools.MISC_SKILLS`,
+five config files, the locale block, the milestone plaques, and `CookingManagerTest` (8 tests).
+Nothing fires yet; `/mcstats` renders the skill generically.
 
-⚠️ **Stage 1 is gated on four completeness tests going green, not on "it compiles" — see D-CK9.**
-`DatatypeEnumTest` (a **hard-coded** enum count), `SkillGatingTest.everyPrimarySkillHasAnEntryInTheShippedConfig`
-(the new `coreskills.yml` entry), `SkillLocaleCompletenessTest` (five loops), and
-`SkillStatsRendererTest` (two). Run the suite *before* writing the config, so you see all four fail
-and know each one was actually satisfied rather than never reached.
+**Suite 1428 green (+10), `./gradlew build` exit 0, boot `Done (1.569s)` with 0 ERROR, 0 exceptions,
+0 mixin failures.** Verified in the live `run/config/mcmmo` tree that every new key back-filled into
+the pre-existing on-disk configs. One mutation run per new gate, both killed.
+
+The gate was run the prescribed way — enum first, suite second, *then* fix each failure — and what
+that measured is written up in **D-CK9 item 1**: the four predicted tests were actually **three**,
+`SkillStatsRendererTest` never reddens for a new skill at all, and `MilestoneAdvancementResourcesTest`
+(unmentioned by this plan) is a Stage 1 hard gate.
+
+⚠️ **What Stage 1 deliberately did NOT ship**, against the older "all five config files" wording:
+`Experience_Values.Cooking`, `Skills.Cooking.Power_Cook_Effects` and `Bonus_Drops.Cooking` are
+**data their own mechanic reads**, and each lands with that mechanic (stages 2, 4 and 3). The reason
+is `copyMissingDefaults`: it back-fills **absent** keys only, so a number shipped now and retuned in
+Stage 2 would never reach anyone who has already run the mod ([[xp-boss-bar]]). A new key reaches an
+existing config; a changed value does not. `Max_Cooks_Per_Hour` is deferred for the separate and
+stronger reason in D-CK9 item 3.
 
 **Stage 2 — Cook XP + the exploit cap.**
 The food branch of `SmeltingListener.onFurnaceSmelt`; `CraftingResultSlotMixin` for the crafted foods

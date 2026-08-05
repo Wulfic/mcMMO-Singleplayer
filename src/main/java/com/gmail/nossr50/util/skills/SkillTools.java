@@ -122,6 +122,11 @@ public class SkillTools {
         this.MISC_SKILLS = ImmutableList.of(
                 PrimarySkillType.AGILITY,
                 PrimarySkillType.ALCHEMY,
+                // Cooking sits with Smelting, Repair and Salvage rather than in GATHERING_SKILLS:
+                // it consumes what the gathering skills produce and makes something else out of it.
+                // Nothing is harvested from the world on any of its seams -- a furnace, a crafting
+                // grid and a campfire are all processing steps on an item you already had.
+                PrimarySkillType.COOKING,
                 PrimarySkillType.FLYING,
                 PrimarySkillType.PARKOUR,
                 PrimarySkillType.REPAIR,

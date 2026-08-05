@@ -23,6 +23,17 @@ public enum PrimarySkillType {
     ALCHEMY,
     ARCHERY,
     AXES,
+    // Pass 2. The food-processing skill: XP for cooking food in a furnace/smoker/blast furnace and
+    // for crafting food at a bench. Its boundary against SMELTING is already enforced in shipped
+    // code, in both directions -- Experience_Values.Smelting is 25 ore entries, and boostFuelTime
+    // gates on isSmeltable(input) so that "cooking food burns at vanilla speed". Kitchen Efficiency
+    // is literally the else of a gate that already exists.
+    //
+    // It has NO spawn-origin flag and no equivalent gate to hide behind: an item carries no record
+    // of where it came from, so an unattended hopper-fed smoker array pays exactly like a hand-fed
+    // one. The rolling ExploitFix.Cooking.Max_Cooks_Per_Hour cap is the only anti-farm gate the
+    // skill has, which is why it ships in the same stage as the XP that needs it.
+    COOKING,
     CROSSBOWS,
     EXCAVATION,
     FISHING,

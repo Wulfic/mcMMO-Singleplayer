@@ -1,21 +1,22 @@
 {
+  "parent": "mcmmo:milestone/skill/cooking",
   "display": {
     "icon": {
-      "id": "minecraft:nether_star"
+      "id": "minecraft:cooked_beef"
     },
     "title": {
-      "text": "mcMMO",
+      "text": "Master Provisioner",
       "color": "gold",
       "bold": true
     },
     "description": {
-      "text": "Every milestone you have earned across the twenty-seven skills.",
+      "text": "Reached Cooking level 750 or higher.",
       "color": "yellow"
     },
-    "frame": "task",
-    "show_toast": false,
+    "frame": "goal",
+    "show_toast": true,
     "announce_to_chat": false,
-    "hidden": false
+    "hidden": true
   },
   "criteria": {
     "milestone": {

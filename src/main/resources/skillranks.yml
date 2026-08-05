@@ -261,6 +261,50 @@ Axes:
             Rank_2: 100
             Rank_3: 150
             Rank_4: 200
+Cooking:
+    # Authored in RetroMode; the Standard column is the same ladder divided by ten. Power Cook's
+    # rank 1 at RetroMode 100 is deliberate -- it is the wiki's own number, and it is early enough
+    # that the skill's only genuinely new mechanic shows up while you are still cooking your first
+    # stacks rather than after the food problem is already solved.
+    #
+    # NOTHING UNLOCKS BETWEEN 1000 AND THE CAP. Power Cook rank 5 also sits at 1000, so the last 300
+    # levels of the skill are flat. That is a known property of a three-sub-skill processing skill
+    # (Salvage is no denser) and no filler is being added to hide it.
+    PowerCook:
+        Standard:
+            Rank_1: 10
+            Rank_2: 25
+            Rank_3: 45
+            Rank_4: 70
+            Rank_5: 100
+        RetroMode:
+            Rank_1: 100
+            Rank_2: 250
+            Rank_3: 450
+            Rank_4: 700
+            Rank_5: 1000
+    MasterChef:
+        Standard:
+            Rank_1: 5
+            Rank_2: 20
+            Rank_3: 40
+            Rank_4: 65
+            Rank_5: 90
+        RetroMode:
+            Rank_1: 50
+            Rank_2: 200
+            Rank_3: 400
+            Rank_4: 650
+            Rank_5: 900
+    KitchenEfficiency:
+        Standard:
+            Rank_1: 25
+            Rank_2: 50
+            Rank_3: 85
+        RetroMode:
+            Rank_1: 250
+            Rank_2: 500
+            Rank_3: 850
 Crossbows:
     TrickShot:
         Standard:

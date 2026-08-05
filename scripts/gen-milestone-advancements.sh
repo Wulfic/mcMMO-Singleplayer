@@ -58,6 +58,11 @@ declare -A ICON=(
     [alchemy]=brewing_stand
     [archery]=bow
     [axes]=diamond_axe
+    # The food, not the appliance. Smelting already holds the furnace family (blast_furnace), and a
+    # smoker or campfire icon would put the two skills in the same visual bucket when the whole
+    # point of the boundary is that ore pays one and food pays the other. A steak is also the
+    # skill's own headline example.
+    [cooking]=cooked_beef
     [crossbows]=crossbow
     [excavation]=diamond_shovel
     [fishing]=fishing_rod
@@ -99,6 +104,10 @@ declare -A ROLE=(
     [alchemy]=Alchemist
     [archery]=Archer
     [axes]=Reaver
+    # NOT "Chef" -- Cooking's own MasterChef sub-skill emits rank plaques titled "Master Chef", and
+    # the Master tier plaque would then be a byte-identical title sitting in the same tab. "Cook"
+    # is out for the reason at the top of this map (it just repeats the skill name).
+    [cooking]=Provisioner
     [crossbows]=Sharpshooter
     [excavation]=Excavator
     [fishing]=Angler
@@ -316,7 +325,7 @@ count=0
 # `show_toast: false` keeps that from popping a toast of its own.
 write_adv "$ROOT/root.json" "" nether_star task gold \
     "mcMMO" \
-    "Every milestone you have earned across the twenty-six skills." \
+    "Every milestone you have earned across the twenty-seven skills." \
     false false
 count=$((count + 1))
 
@@ -325,7 +334,7 @@ for skill in "${!ICON[@]}"; do
     icon="${ICON[$skill]}"
     role="${ROLE[$skill]}"
 
-    # Per-skill hub, so the tab is twenty-six readable branches instead of one 300-wide row.
+    # Per-skill hub, so the tab is twenty-seven readable branches instead of one 300-wide row.
     # Never granted; visible once any of its children is earned.
     write_adv "$ROOT/skill/$skill.json" "root" "$icon" task white \
         "$disp" \

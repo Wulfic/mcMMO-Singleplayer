@@ -43,6 +43,8 @@ Archery:
     Enabled: true
 Axes:
     Enabled: true
+Cooking:
+    Enabled: true
 Crossbows:
     Enabled: true
 Excavation:

@@ -276,6 +276,47 @@ Skills:
             # DamageModifier: Damage will get divided by this modifier
             DamageModifier: 2.0
     #
+    #  Settings for Cooking
+    ###
+    Cooking:
+
+        MasterChef:
+            # ChanceMax: Maximum chance of pulling a second helping out of a finished cook.
+            # MaxBonusLevel: On this level, that chance reaches <ChanceMax>.
+            #
+            # Deliberately below Smelting's SecondSmelt (50.0). A furnace's ore throughput is gated
+            # by having to mine the ore; a smoker's food throughput is gated by nothing but chickens
+            # and 5 seconds an item, so the same chance is worth appreciably more here.
+            ChanceMax: 33.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+
+        PowerCook:
+            # How long the mapped effect lasts, in seconds, per rank. Amplifier is ALWAYS 0 -- these
+            # are a nudge, not a potion. A brewed Strength potion is 3:00 at amplifier 1, so even
+            # rank 5 is twelve times shorter before the amplifier is counted; that gap is what stops
+            # Cooking deleting Alchemy, and it is the whole effect budget.
+            #
+            # ⚠️ Any effect this grants must be one that does NOT fire every tick. See
+            # config.yml -> Skills.Cooking.Power_Cook_Effects for the ban and the reason.
+            Seconds_Per_Rank:
+                Rank_1: 3
+                Rank_2: 6
+                Rank_3: 9
+                Rank_4: 12
+                Rank_5: 15
+
+        KitchenEfficiency:
+            # Fuel burns this many times longer when the furnace's INPUT is a food. Mirrors Smelting's
+            # FuelEfficiency ladder exactly, because it is the same mechanic on the other side of a
+            # gate that already exists (SmeltingManager#boostFuelTime gates on isSmeltable(input) so
+            # that "cooking food burns at vanilla speed" -- this is that comment's else).
+            Multiplier_Per_Rank:
+                Rank_1: 2
+                Rank_2: 3
+                Rank_3: 4
+    #
     #  Settings for Fishing
     ###
     Fishing:
