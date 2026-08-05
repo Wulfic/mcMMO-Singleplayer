@@ -301,8 +301,8 @@ Deliberately **not** ported (and not coming back):
 - Admin chat, scoreboards, MOTD/broadcast systems
 - MySQL and database conversion tooling
 - Chimaera Wing, Limit Break, permission‑node integrations
-- **Spears**' super ability — the sub‑skill depends on a custom item and a `spear` damage type that
-  do not exist in 1.21.11
+- The **Spears**, **Maces**, **Tridents** and **Crossbows** super abilities — registered placeholders
+  with no behaviour, upstream included. The skills themselves are fully playable.
 
 ---
 

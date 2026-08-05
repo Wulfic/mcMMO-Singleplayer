@@ -10,6 +10,7 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.MeleeDamageBonus.MeleeWeapon;
 import com.gmail.nossr50.skills.axes.AxesManager;
+import com.gmail.nossr50.skills.spears.SpearsManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import org.junit.jupiter.api.Test;
@@ -144,5 +145,28 @@ class MeleeDamageBonusTest {
         when(player.getUnarmedManager()).thenReturn(unarmed);
         // 5 + 2 * 1 + 3.5 * 1 = 10.5
         assertEquals(10.5f, MeleeDamageBonus.applyBonus(player, MeleeWeapon.UNARMED, 5.0f, TARGET), 1e-6);
+    }
+
+    @Test
+    void spearAddsSpearMasteryScaledByAttackStrength() {
+        final McMMOPlayer player = playerWithStrength(0.5f);
+        final SpearsManager spears = mock(SpearsManager.class);
+        when(spears.canUseSpearMastery()).thenReturn(true);
+        when(spears.getSpearMasteryBonusDamage()).thenReturn(3.2);
+        when(player.getSpearsManager()).thenReturn(spears);
+        // 5 + 3.2 * 0.5 = 6.6
+        assertEquals(6.6f, MeleeDamageBonus.applyBonus(player, MeleeWeapon.SPEAR, 5.0f, TARGET), 1e-6);
+    }
+
+    @Test
+    void spearBelowTheMasteryUnlockAddsNothing() {
+        final McMMOPlayer player = playerWithStrength(1.0f);
+        final SpearsManager spears = mock(SpearsManager.class);
+        when(spears.canUseSpearMastery()).thenReturn(false);
+        when(player.getSpearsManager()).thenReturn(spears);
+
+        assertEquals(5.0f, MeleeDamageBonus.applyBonus(player, MeleeWeapon.SPEAR, 5.0f, TARGET), 1e-6,
+                "an unmet Spear Mastery gate contributes nothing");
+        verify(spears, never()).getSpearMasteryBonusDamage();
     }
 }

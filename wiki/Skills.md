@@ -201,10 +201,14 @@ Fighting with an empty hand. Super ability: **Berserk**. (Not to be confused wit
 | Sub-skill | Ranks | Effect |
 |---|---|---|
 | Spear Mastery | 8 | Bonus damage. |
-| Momentum | 10 | Chance of a short movement-speed burst on attack. |
+| Momentum | 10 | Chance of a short Speed burst on you when you land a hit. |
 | Spears Limit Break | ❌ | **Not implemented.** |
 
-> **Spears has no super ability.** The sub-skill depends on a custom item and a `spear` damage type that do not exist in 1.21.11.
+Trained with any of the seven vanilla spears (wooden, stone, copper, iron, golden, diamond, netherite). XP is paid per hit on the damage that lands, like every other melee skill.
+
+> **Spears has no super ability** — the `SuperAbilityType` constant is a registered placeholder with no behaviour, the same as the Tridents and Maces ones. This is not a Fabric limitation; upstream never shipped one either.
+>
+> ⚠️ **Fixed in GitHub #7:** before that, spears paid **no XP and no bonus damage at all** — the combat dispatch had no arm for them, on a stale belief that spears weren't vanilla items. If you swung a spear on an older build, none of it counted.
 
 ## Taming
 

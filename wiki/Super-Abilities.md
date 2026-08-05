@@ -148,4 +148,6 @@ Abilities:
 
 Four `SuperAbilityType` constants are registered placeholders with no behaviour: **Super Shotgun** (Crossbows), and the Tridents, Maces and Spears abilities. **Explosive Shot** (Archery) is also not wired as a triggerable ability.
 
-**Spears' super ability is not coming** — it depends on a custom item and a `spear` damage type that don't exist in 1.21.11.
+Upstream mcMMO never shipped a behaviour for any of the four — they are named slots waiting on a design, not ports that were dropped. Spears, Maces and Tridents are all fully playable without one; so are Swords and Axes' *sub-skills*, which is most of what a super ability adds.
+
+> **Correction (GitHub #7).** This page used to say Spears' super ability "is not coming" because it depended on a custom item and a `spear` damage type that didn't exist in 1.21.11. That was wrong, and the same belief had been written into the combat code, where it kept the entire Spears skill from paying anything. All seven spears (`minecraft:wooden_spear` … `minecraft:netherite_spear`), the `minecraft:spears` item tag and the `minecraft:spear` damage type are vanilla in 1.21.11. Spears is now a working skill — see [Skills](Skills#spears).

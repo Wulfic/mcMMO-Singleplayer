@@ -4,6 +4,7 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.maces.MacesManager;
+import com.gmail.nossr50.skills.spears.SpearsManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.tridents.TridentsManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
@@ -22,9 +23,10 @@ import org.jetbrains.annotations.NotNull;
  * legacy's ordering between them is load-bearing (see {@link #applyBonus}). They reach the entity
  * through the {@link PlatformLivingEntity} adapter, so this class stays server-free.
  *
- * <p>Only damage <em>contributions</em> belong here. The on-hit sub-skills that act on the target
- * without feeding this total — Rupture, the Serrated Strikes / Skull Splitter AoEs, Counter Attack,
- * Maces Cripple — live in {@code EntityDamageListener}, as does per-hit combat XP. Limit Break is
+ * <p>Only damage <em>contributions</em> belong here. The on-hit sub-skills that do not feed this
+ * total — Rupture, the Serrated Strikes / Skull Splitter AoEs, Counter Attack, Maces Cripple, and
+ * Spears Momentum (the one that buffs the <em>attacker</em> rather than touching the target) — live
+ * in {@code EntityDamageListener}, as does per-hit combat XP. Limit Break is
  * dropped across every combat skill in this port (PvP-only in singleplayer, and its {@code AllowPVE}
  * switch defaults off); Disarm is unreachable in singleplayer and deliberately unported.
  */
@@ -36,6 +38,7 @@ public final class MeleeDamageBonus {
         AXE,
         MACE,
         TRIDENT,
+        SPEAR,
         UNARMED,
         OTHER
     }
@@ -106,6 +109,15 @@ public final class MeleeDamageBonus {
                     // asymmetry is legacy's, preserved deliberately.
                     boostedDamage += tridents.impaleDamageBonus() * attackStrength;
                 }
+            }
+            case SPEAR -> {
+                final SpearsManager spears = mmoPlayer.getSpearsManager();
+                if (spears != null && spears.canUseSpearMastery()) {
+                    boostedDamage += spears.getSpearMasteryBonusDamage() * attackStrength;
+                }
+                // Momentum is a movement buff on the attacker, not a damage contribution, so it runs
+                // from EntityDamageListener alongside Cripple — legacy's processSpearsCombat calls it
+                // after event.setDamage() for the same reason.
             }
             case UNARMED -> {
                 final UnarmedManager unarmed = mmoPlayer.getUnarmedManager();

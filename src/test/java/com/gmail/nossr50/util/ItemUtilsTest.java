@@ -39,6 +39,14 @@ class ItemUtilsTest {
         assertTrue(ItemUtils.isCrossbow(new ItemStack(Items.CROSSBOW)));
         assertTrue(ItemUtils.isTrident(new ItemStack(Items.TRIDENT)));
         assertTrue(ItemUtils.isMace(new ItemStack(Items.MACE)));
+
+        // Spears are real vanilla items in 1.21.11 (Items.WOODEN_SPEAR … NETHERITE_SPEAR, the
+        // minecraft:spears tag, data/minecraft/damage_type/spear.json). The port believed otherwise
+        // until GitHub #7 and left the whole skill unreachable — see MeleeWeaponClassificationTest,
+        // which pins all seven against the registry rather than a list.
+        assertTrue(ItemUtils.isSpear(new ItemStack(Items.IRON_SPEAR)));
+        assertFalse(ItemUtils.isSpear(new ItemStack(Items.TRIDENT)));
+        assertFalse(ItemUtils.isSword(new ItemStack(Items.IRON_SPEAR)));
     }
 
     @Test

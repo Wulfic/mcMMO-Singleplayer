@@ -12,6 +12,8 @@ import net.minecraft.component.type.NbtComponent;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -375,6 +377,30 @@ public final class PlatformPlayer {
     }
 
     // --- Super/Giga Breaker dig-speed boost (K3 enchant-write / K4) ----------
+
+    // --- Status effects (Bukkit addPotionEffect) ----------------------------
+
+    /**
+     * Give the player the Speed effect for {@code durationTicks} at the given {@code amplifier}.
+     * Ports Bukkit {@code addPotionEffect(SPEED.createEffect(duration, amplifier))} — Spears
+     * Momentum. The sibling call on the <em>target</em> side is
+     * {@link PlatformLivingEntity#applySlowness} (Maces Cripple).
+     *
+     * <p>Legacy wrapped this in its own {@code canMomentumBeApplied} comparison against any Speed the
+     * player already had. That check is vanilla's: {@code addStatusEffect} defers to
+     * {@code StatusEffectInstance#upgrade}, which accepts the new effect only when it is stronger, or
+     * equally strong and longer (bytecode-verified). Delegating means a spear hit can never downgrade
+     * a Speed II potion to a shorter Momentum, and the boolean says whether anything actually
+     * happened — so the caller can keep the "MOMENTUM ACTIVATED!" message honest.
+     *
+     * @param durationTicks effect duration in ticks
+     * @param amplifier     effect level, zero-based (Bukkit's amplifier, so {@code 1} is Speed II)
+     * @return {@code true} if the effect was applied or upgraded an existing one
+     */
+    public boolean applySpeed(int durationTicks, int amplifier) {
+        return handle.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, durationTicks,
+                amplifier));
+    }
 
     /**
      * Config-string key under {@code minecraft:custom_data} that stashes the tool's pre-boost

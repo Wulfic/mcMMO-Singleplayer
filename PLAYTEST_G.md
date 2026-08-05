@@ -109,7 +109,7 @@ action 5–10×, `/mcstats` again, record the delta. **A zero delta is a failure
 | 16 | Salvage | Right-click a damaged tool on a **gold block** | |
 | 17 | Smelting | Smelt ore in a furnace and take the result | Take it both by click **and** by shift-click — different code paths |
 | 18 | Alchemy | Brew a potion at a brewing stand | |
-| 19 | ~~Spears~~ | **N/A — unreachable.** No spear item and no `spear` damage type exists in 1.21.11. Documented collapse; skip. |
+| 19 | Spears | Hit a mob with a spear (any of the seven tiers) | ⚠️ **Newly wired in GitHub #7 — this line used to read "N/A, unreachable", and it was wrong.** Confirm three things: XP is paid per hit; at Spears 50+ the hit does **more** damage than the same spear at level 0 (Spear Mastery); and at any level you sometimes get a short **Speed** burst on hit (Momentum, 5% at rank 1 → 50% at rank 10). Momentum will not fire while you already have a stronger Speed effect — that is deliberate, so test it sober |
 
 ---
 

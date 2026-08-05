@@ -87,21 +87,40 @@ Notes:
 Acceptance: pet teleports to owner on any same-world teleport distance; a test that pins the
 cross-world case is still a no-op; config key documented.
 
-### [#7] Spear skill needs correcting — spear is a real vanilla item now
+### ✅ [#7] Spears paid nothing at all — DONE 2026-08-05
 <https://github.com/Wulfic/mcMMO-Singleplayer/issues/7>
 
-The issue text is thin. **Get the exact defect from the reporter before coding** — the port
-already maps the seven vanilla spear ids:
-[MaterialMapStore.java:564-570](src/main/java/com/gmail/nossr50/util/MaterialMapStore.java#L564-L570)
-(`wooden_/stone_/copper_/iron_/golden_/diamond_/netherite_spear`), plus tier tables at
-[705-772](src/main/java/com/gmail/nossr50/util/MaterialMapStore.java#L705-L772), a
-[SpearsManager](src/main/java/com/gmail/nossr50/skills/spears/SpearsManager.java), a stats
-renderer, and full milestone advancement JSON.
+**Ruled a docs bug up front; the audit disproved that.** It was a real code defect, and a total one:
+[EntityDamageListener.java](src/main/java/com/gmail/nossr50/fabric/listeners/EntityDamageListener.java)'s
+`classifyMainHand` had **no spear arm**, so a spear returned `MeleeWeapon.OTHER` and
+`applyAttackerWeaponBonus` returned on the spot — **no XP, no Spear Mastery, no Momentum**. Spears
+could not leave level 0. Everything else in the skill was already built and shipped: manager, ranks,
+config block, `/mcstats` renderer, milestone advancements, locale strings.
 
-Audit checklist while waiting on the reporter:
-- Does XP actually fire on a spear hit, or does `EntityDamageListener` route spears to Swords/Unarmed?
-- Is `SPEARS_LIMIT_BREAK` live, or is it one of the dead enums that still render on `/mcstats`?
-- Are the spear ids correct against the current MC version — **verify with `javap-mc.sh`, never from memory.**
+The arm was missing on a comment asserting that "neither the `spear` damage type nor any spear item
+exists in vanilla 1.21.11". **Both exist** (javap on the merged jar): `Items.WOODEN_SPEAR` …
+`NETHERITE_SPEAR`, `data/minecraft/tags/item/spears.json`, `data/minecraft/damage_type/spear.json`.
+The belief was true of an earlier MC version and was never re-checked — and it had been copied into
+the wiki, which is how the reporter found it.
+
+**Shipped:** `MeleeWeapon.SPEAR` + the `ItemUtils.isSpear` arm + `skillOf` → `SPEARS`; Spear Mastery
+composed in `MeleeDamageBonus`; **Momentum implemented** (it never had an effect body) as
+`SpearsManager#processMomentum` → `PlatformPlayer#applySpeed`. Docs corrected in README, `wiki/Skills`,
+`wiki/Super-Abilities`, `wiki/Differences-from-mcMMO`, and PLAYTEST_G session 1 line 19.
+
+- 🔑 **Keying on the held item is the same test as legacy's damage-type dispatch.**
+  `Item.Settings.spear(…)` stamps every spear with `DAMAGE_TYPE = DamageTypes.SPEAR`, and
+  `PlayerEntity#attack` builds its source via `ItemStack#getDamageSource(weaponStack)` — so a swing is
+  spear-typed *because* a spear is held. The 2-arg `DamageSource` ctor sets `source == attacker`, so
+  the existing direct-melee gate needed no change.
+- ⚠️ **The rank-0 landmine, third sighting** (§F #9, after Cripple): `getMomentumChanceToApplyOnHit(0)`
+  evaluates `defaultMomentumValues[-1]` eagerly as the `getDouble` default and throws. Mutation-proven.
+- 🔑 Legacy's hand-rolled `canMomentumBeApplied` comparison is **vanilla's**:
+  `addStatusEffect` → `StatusEffectInstance#upgrade` accepts only a stronger-or-longer effect, and
+  returns whether anything changed — so the "MOMENTUM ACTIVATED!" message stays honest.
+- **Spears' super ability stays a placeholder** — upstream never shipped one either, same as Maces and
+  Tridents. That part of the old docs was right for the wrong reason.
+- `SPEARS_LIMIT_BREAK` remains a dead enum, consistent with the other seven weapon skills.
 
 ---
 
@@ -224,12 +243,11 @@ cheat-adjacent command registered without a level. Fix them in one pass, not one
 3. **#8** — small, self-contained, ship it.
 4. **#3** — real design work.
 5. **#6** — trivial edit, but blocked on the trap-#1 migration decision, which #3 also needs. Do them together.
-6. **#7** — blocked on the reporter clarifying the defect. Run the audit checklist meanwhile.
-7. **#2** — self-contained Taming feature.
+6. ✅ **#7** — done. Was never a docs bug; the skill was wired to nothing.
+7. **#2** — self-contained Taming feature. ⬅️ **next**
 8. **#9** + **#10** — one settings pass, blocked on the cheat-method list.
 
 ## Blocked on the reporter
 
-- **#7** — what specifically is wrong with the spear skill?
 - **#9** — which cheat methods get a toggle?
 - **#6 / #3 / #5** — do we migrate their on-disk configs, or ship new keys?

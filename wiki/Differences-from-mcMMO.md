@@ -77,7 +77,7 @@ Stored in `<world save>/mcmmo/players/`, not in a global profile or a database. 
 
 - **Chimaera Wing**
 - **Limit Break** — see below
-- **Spears' super ability** — depends on a custom item and a `spear` damage type that don't exist in 1.21.11
+- **Spears' super ability** — a registered placeholder, like the Tridents and Maces ones (see below)
 
 ---
 

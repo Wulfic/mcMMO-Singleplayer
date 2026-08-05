@@ -18,6 +18,7 @@ import com.gmail.nossr50.skills.axes.AxesManager;
 import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
 import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.skills.maces.MacesManager;
+import com.gmail.nossr50.skills.spears.SpearsManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.stealth.StealthManager;
 import com.gmail.nossr50.skills.taming.TamingManager;
@@ -58,6 +59,7 @@ import net.minecraft.registry.tag.DamageTypeTags;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.VisibleForTesting;
 import net.minecraft.sound.SoundCategory;
 
 /**
@@ -70,13 +72,16 @@ import net.minecraft.sound.SoundCategory;
  * <p>Currently wired: <b>K2 — fall damage → Agility Roll</b>, the defender half of <b>K1 — combat
  * damage → Agility Dodge</b> (attacker resolved via {@link DamageSource#getAttacker()}), and the
  * attacker half of <b>K1 — melee weapon on-hit damage bonuses</b> (Swords Stab / Axe Mastery /
- * Unarmed Steel Arm + Berserk / Maces Crush, composed MC-free in {@link MeleeDamageBonus}), and the
+ * Unarmed Steel Arm + Berserk / Maces Crush / Spear Mastery, composed MC-free in
+ * {@link MeleeDamageBonus}), and the
  * on-hit <em>effect</em> sub-skills: <b>Swords Rupture</b> (bleed DoT — see {@link #maybeProcessRupture})
  * and the two combat super abilities, <b>Serrated Strikes</b> and <b>Skull Splitter</b> (AoE — see
  * {@link #maybeProcessSerratedStrikes} / {@link #maybeProcessSkullSplitter}), and — on the defender
  * side again — <b>Swords Counter Attack</b> (see {@link #maybeProcessCounterAttack}) and
  * <b>Unarmored Thorny Skin</b> (see {@link #maybeProcessThornySkin}) — and, after a
- * mace hit the target survives, <b>Maces Cripple</b> (Slowness — see {@link #maybeProcessCripple}). The Axes
+ * mace hit the target survives, <b>Maces Cripple</b> (Slowness — see {@link #maybeProcessCripple}),
+ * and on any spear hit <b>Spears Momentum</b> (Speed on the <em>attacker</em> — see
+ * {@link #maybeProcessMomentum}). The Axes
  * target-inspecting sub-skills (<b>Armor Impact</b> / <b>Greater Impact</b> / <b>Critical
  * Strikes</b>) ride the attacker branch inside {@link MeleeDamageBonus}, since they feed the same
  * damage total. <b>Taming</b>'s damage modifiers ride both branches: a tamed wolf's bite carries its
@@ -1185,6 +1190,8 @@ public final class EntityDamageListener {
             maybeProcessSkullSplitter(mmoPlayer, attacker, platformTarget, target, amount);
         } else if (weapon == MeleeWeapon.MACE) {
             maybeProcessCripple(mmoPlayer, target, boostedDamage);
+        } else if (weapon == MeleeWeapon.SPEAR) {
+            maybeProcessMomentum(mmoPlayer);
         }
 
         // Per-hit combat XP, paid on the *boosted* damage — legacy ends every processXCombat with
@@ -1470,9 +1477,10 @@ public final class EntityDamageListener {
                     mmoPlayer.checkAbilityActivation(PrimarySkillType.UNARMED);
                 }
             }
-            case MACE, TRIDENT, OTHER -> {
+            case MACE, TRIDENT, SPEAR, OTHER -> {
                 // No super ability on these skills — legacy has no activation call in their combat
-                // paths either.
+                // paths either. SPEARS_SUPER_ABILITY exists as a registered SuperAbilityType constant
+                // but is a placeholder with no behaviour, exactly like the Maces and Tridents ones.
             }
         }
     }
@@ -1547,6 +1555,25 @@ public final class EntityDamageListener {
     }
 
     /**
+     * Spears <b>Momentum</b>: a spear hit may grant the attacker a short Speed burst. Ports the
+     * {@code spearsManager.potentiallyApplyMomentum()} line that closes legacy
+     * {@code CombatUtils#processSpearsCombat}, just before its combat XP.
+     *
+     * <p>Unlike Cripple there is no survival check and no target argument at all — Momentum buffs the
+     * player who swung, so killing the mob with the same hit does not cancel it. That asymmetry is
+     * legacy's: {@code processCripple(target)} is guarded by
+     * {@code target.getHealth() - getFinalDamage() > 0}, {@code potentiallyApplyMomentum()} is not
+     * guarded by anything.
+     */
+    private static void maybeProcessMomentum(McMMOPlayer mmoPlayer) {
+        final SpearsManager spears = mmoPlayer.getSpearsManager();
+        if (spears == null) {
+            return;
+        }
+        spears.processMomentum(mmoPlayer.getAttackStrength());
+    }
+
+    /**
      * Swords Counter Attack: a player hit while holding a sword may reflect a fraction of the damage
      * back at their assailant. Ports legacy {@code CombatUtils#processCombatAttack}'s defender arm
      * plus {@code SwordsManager#counterAttackChecks}.
@@ -1603,6 +1630,7 @@ public final class EntityDamageListener {
             case AXE -> PrimarySkillType.AXES;
             case MACE -> PrimarySkillType.MACES;
             case TRIDENT -> PrimarySkillType.TRIDENTS;
+            case SPEAR -> PrimarySkillType.SPEARS;
             case UNARMED -> PrimarySkillType.UNARMED;
             case OTHER -> throw new IllegalArgumentException("OTHER has no skill; gate it first");
         };
@@ -1618,16 +1646,24 @@ public final class EntityDamageListener {
      * <p>{@code OTHER} means "not a weapon mcMMO trains" (a pickaxe, a block, a bow used as a club),
      * and pays no bonus and no XP — matching legacy, whose dispatch simply has no arm for those.
      *
-     * <p><b>Spears are deliberately absent — the skill is unreachable in this port, an honest collapse
-     * like Disarm/Daze.</b> Legacy fires Spears off a custom {@code spear} <em>damage type</em>
-     * ({@code event.getDamageSource().getDamageType() == "spear"}) dealt by custom spear items
-     * ({@code wooden_spear} … {@code netherite_spear}). Neither the {@code spear} damage type nor any
-     * spear item exists in vanilla 1.21.11, and this port ships no datapack that adds them, so a spear
-     * can never be held and nothing ever deals spear-typed damage. Wiring a classifier arm for it would
-     * be dead code that never runs — the exact "code that lies" trap this port avoids. See
-     * CONVERSION_TODO §C.
+     * <p><b>Spears dispatch off the held item here, where legacy dispatched off the damage type</b>
+     * ({@code event.getDamageSource().getDamageType() == "spear"}). The two are the same test in
+     * 1.21.11: {@code Item.Settings.spear(…)} stamps every one of the seven vanilla spears with
+     * {@code DataComponentTypes.DAMAGE_TYPE = DamageTypes.SPEAR}, and {@code PlayerEntity#attack}
+     * builds its source through {@code ItemStack#getDamageSource(weaponStack)}, so a spear swing is
+     * spear-typed <em>because</em> a spear is held (all bytecode-verified). Keying on the item keeps
+     * every arm of this chain the same shape.
+     *
+     * <p>⚠️ This arm was missing until GitHub #7, on the belief — written into the comment that used
+     * to sit here, and into the wiki — that neither the {@code spear} damage type nor any spear item
+     * existed in 1.21.11 and that a Spears arm would therefore be dead code. Both exist:
+     * {@code Items.WOODEN_SPEAR}…{@code NETHERITE_SPEAR}, the {@code minecraft:spears} item tag, and
+     * {@code data/minecraft/damage_type/spear.json} all ship in the merged jar. The belief was true of
+     * an earlier MC version and was never re-checked, so a spear classified as {@code OTHER} and the
+     * whole skill — XP included — paid nothing.
      */
-    private static MeleeWeapon classifyMainHand(ItemStack held) {
+    @VisibleForTesting
+    static MeleeWeapon classifyMainHand(ItemStack held) {
         if (ItemUtils.isSword(held)) {
             return MeleeWeapon.SWORD;
         }
@@ -1639,6 +1675,9 @@ public final class EntityDamageListener {
         }
         if (ItemUtils.isTrident(held)) {
             return MeleeWeapon.TRIDENT;
+        }
+        if (ItemUtils.isSpear(held)) {
+            return MeleeWeapon.SPEAR;
         }
         if (ItemUtils.isUnarmed(held)) {
             return MeleeWeapon.UNARMED;
