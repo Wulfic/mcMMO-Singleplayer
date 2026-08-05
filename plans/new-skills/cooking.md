@@ -9,6 +9,22 @@ and **no F2** (attribute service): every one of its verbs is a discrete event.
 > are three comments in `SmeltingListener` / `SmeltingManager` explaining why food is *excluded* from
 > Smelting).
 >
+> ✅ **REFINEMENT PASS 2026-08-05 — four user rulings landed, and the plan below reflects them:**
+> 1. **D-CK1: quality is DROPPED ENTIRELY.** Not stored on the item (it jams the furnace), and not
+>    rolled at eat time either. ⇒ **`COOKING_GOURMET_MEAL` is CUT** and the roster is **three**
+>    sub-skills, not four.
+> 2. **D-CK4: no Cook's Diet.** Confirmed cut.
+> 3. **D-CK8: flat `Max_Cooks_Per_Hour: 1200`**, one rolling hour, as originally written.
+> 4. **D-CK5 scope: Power Cook fires on COOKED/CRAFTED foods only.** An apple you picked off a tree
+>    grants nothing. Table re-authored: 21 rows → **15**.
+>
+> ⚠️⚠️ **And one correctness defect found in that pass, bytecode-verified — see D-CK5.** Three rows
+> mapped to **Saturation**, which is an `InstantStatusEffect` that fires *every tick*. Remapped.
+>
+> ⚠️ **The plan was written before GitHub #9 and #10 shipped and its registration surface was stale.**
+> Three completeness tests now go red the instant the enum constant lands, and two Cooking mechanics
+> are **not** covered by the per-skill disable switch for free. See the new **D-CK9**.
+>
 > ⚠️ **This file was rewritten 2026-08-03 from the draft committed in `162d6f593`.** The draft was a
 > raw YAML config blob written against a **Bukkit plugin** that does not exist here — it referenced
 > "economy plugins", "the server plugin", NBT, and "hotkeys exposed by the server". Its mechanics
@@ -103,18 +119,26 @@ never be component-equal to the stamped stack sitting on top of it. And in the i
 > **pickaxes and shovels** (`canBeDigBoosted`), which have max stack size 1. Non-stacking costs nothing
 > there. Reusing the mechanism on a food stack is the trap.
 
-> ✅ **RECOMMENDED — needs a ruling: quality is rolled at EAT time, from the eater's Cooking level.
-> The item carries nothing.** No component write, no persistence, no stacking bug, no jammed furnace,
-> and it satisfies the draft's own `core_philosophy` ("no reinterpretation of existing items") better
-> than the NBT design did.
+> ✅ **RULED 2026-08-05 (user): quality is DROPPED ENTIRELY.** Not on the item, and not rolled at eat
+> time either. There is no Normal/Great/Gourmet tier anywhere in this skill.
 >
-> **The cost, stated honestly:** you cannot gift or trade a Gourmet steak, and a cooked item is not a
-> better item — the *cook* is not what pays, the *cook's level* is. **In singleplayer there is exactly
-> one player, so this cost is zero.** It would matter on a server; this mod does not have one.
+> **⇒ `COOKING_GOURMET_MEAL` is CUT** along with it — it was the eat-time half of the same mechanic.
+> The roster below is **three** sub-skills.
 >
 > ❌ **Rejected: stamp on the way out of the output slot** (`FurnaceOutputSlot#onCrafted`, so the
 > furnace never sees the marked stack). It dodges the jam but keeps the inventory split — three
 > unmergeable piles of steak is a worse bug than no feature, and it would be reported as a dupe.
+>
+> ❌ **Rejected: roll quality at eat time from the eater's level** (the 2026-08-03 recommendation).
+> Technically sound — no component write, no jam, no stacking bug — but it is **invisible**: the item
+> is identical, so a Gourmet roll is a silent double-duration the player can only detect by watching
+> the effect timer. It would have needed its own notification to mean anything, which is plumbing for
+> a mechanic Power Cook's rank scaling already delivers legibly.
+>
+> **What this costs, stated honestly: Cooking's only genuinely new mechanic is now Power Cook.**
+> Master Chef and Kitchen Efficiency are Smelting's two passives pointed at food (D-CK3). That is a
+> defensible shape for a *processing* skill — Salvage is the same story against Repair — but it does
+> mean the skill lives or dies on the effect table being good. Budget the review time there.
 
 ### ⚠️⚠️ D-CK2 — The `FoodListener` chain returns early, and eats most of the food in the game
 
@@ -186,16 +210,21 @@ Fisherman's Diet **a third time**, and its food set overlaps both of them: `brea
 `cooked_cod` is Fisherman's. Two shipped skills already pay for +hunger on those exact items, and
 D-CK2's restructure would have all three firing on one bite.
 
-> ✅ **RECOMMENDED: CUT.** Cooking's payoff is the **effect**, not the hunger. Ship no `.Diet`
-> sub-skill and no `+nutrition` at all.
+> ✅ **RULED 2026-08-05 (user): CUT.** Cooking's payoff is the **effect**, not the hunger. Ship no
+> `.Diet` sub-skill and no `+nutrition` at all. Do not re-open.
 >
-> **If you want it anyway**, the only defensible version covers the foods **neither** existing diet
+> **The alternative that was rejected**, recorded so it is not re-proposed: cover the foods **neither** existing diet
 > claims — `cooked_beef`, `cooked_porkchop`, `cooked_chicken`, `cooked_mutton`, `cooked_rabbit`,
 > `rabbit_stew`, `beetroot_soup`, `suspicious_stew`, `dried_kelp`, `honey_bottle`, `sweet_berries`,
 > `apple`, `chorus_fruit`, `tropical_fish`, `pufferfish`, `rotten_flesh`, `spider_eye`,
 > `poisonous_potato` (18 of the 41). That set is real and non-overlapping — but it makes Cooking a
-> hunger skill, which is the least interesting thing it could be, and it collides head-on with
-> **Gourmet Meal** below. Pick one, never both.
+> hunger skill, which is the least interesting thing it could be, and it would leave the skill with
+> **two** payoffs competing for the same bite.
+>
+> ⚠️ **This ruling is now load-bearing in a way it was not on 2026-08-03.** D-CK5a proves Saturation
+> fills the hunger bar every tick, and D-CK1 cut Gourmet Meal — so "Cooking grants no hunger, ever"
+> is the single rule that keeps both the sub-skill and the effect table honest. **Any future proposal
+> that gives Cooking a hunger payoff has to re-open D-CK4, D-CK5a and D-CK1 together.**
 
 ### D-CK5 — The effect budget, or Cooking deletes Alchemy
 
@@ -208,10 +237,10 @@ wiki idea, which was that *the food you chose* is the effect you get.
 The wiki itself was far more conservative than the draft: *"potion effects only last for **2 seconds**"*
 at level 100, scaling to 1000.
 
-> ✅ **RECOMMENDED budget for Power Cook, all four clauses:**
+> ✅ **RULED budget for Power Cook, all five clauses:**
 >
 > 1. **The effect is determined by the food. Never random.** Steak is Strength. Baked potato is Haste.
->    Golden carrot is Night Vision. That is the mechanic; the randomness was noise on top of it.
+>    That is the mechanic; the randomness was noise on top of it.
 > 2. **Amplifier is always 0.** No Strength II from a sandwich.
 > 3. **Duration is measured in seconds and scales with rank: 3 s at rank 1 → 15 s at rank 5.** The
 >    wiki's shape, one notch more generous. A brewed Strength potion is 3:00 at amplifier 1 — a
@@ -219,12 +248,45 @@ at level 100, scaling to 1000.
 > 4. **No effect that trivialises a hazard for longer than it takes to cross it.** Fire Resistance and
 >    Water Breathing are **excluded from the table entirely**; 15 s of either is a lava-lake shortcut
 >    and a monument shortcut, and both are Alchemy's to sell.
+> 5. ✅ **RULED 2026-08-05 (user): the table covers COOKED and CRAFTED foods only.** A food that
+>    reaches your hand without passing through a furnace, smoker, campfire or crafting grid grants
+>    **nothing** — `apple`, `melon_slice`, `sweet_berries`, `glow_berries`, `honey_bottle` and every
+>    raw meat and fish are out. The rule is legible in one sentence ("Cooking rewards you for eating
+>    what you cooked") and it drops the table from 21 rows to 15.
 >
 > ⚠️ Vanilla already grants effects from `golden_apple`, `enchanted_golden_apple`, `golden_carrot`,
 > `chorus_fruit`, `suspicious_stew`, `poisonous_potato`, `pufferfish`, `rotten_flesh` and
 > `spider_eye`. Cooking **must not touch those nine** — stacking our effect on top of vanilla's is
 > the "does not stack, extend duration instead" clause the draft hand-waved, and it is not worth the
 > code. They are simply absent from the table.
+
+#### ⚠️⚠️ D-CK5a — the Saturation rows were a hunger cannon (found 2026-08-05, bytecode-verified)
+
+The 2026-08-03 table mapped **`bread`, `melon_slice` and `apple` → Saturation**. That is not a mild
+effect, it is the strongest entry in the table by an order of magnitude, and it walks straight through
+D-CK4's "Cooking grants no hunger" ruling by the back door:
+
+```
+SaturationStatusEffect extends InstantStatusEffect
+  applyUpdateEffect(world, entity, amplifier):
+      ((PlayerEntity) entity).getHungerManager().add(amplifier + 1, 1.0f)   // +1 food, +1 saturation
+InstantStatusEffect.canApplyUpdateEffect(duration, amplifier):
+      return duration >= 1                                                  // ⇒ EVERY TICK
+```
+
+⇒ At amplifier 0, **3 seconds = 60 ticks = +60 food points onto a 20-point bar.** Rank 1 Power Cook
+would fill the hunger bar from empty, instantly, from one slice of bread, forever. Hunger stops being
+a resource in this game.
+
+> ✅ **Saturation is struck from the table entirely.** `melon_slice` and `apple` are gone anyway under
+> clause 5 (neither is cooked); **`bread` is remapped to Speed** — the traveller's loaf, and the one
+> row that had to be re-authored rather than deleted.
+>
+> 🔑 **The reusable rule: an effect's NAME does not tell you its tick cadence.** Check
+> `canApplyUpdateEffect` before putting any status effect in a config table. `InstantStatusEffect`
+> subclasses (Saturation, Instant Health, Instant Damage) apply *per tick* for the whole duration and
+> are never safe on a duration-scaled mechanic. **Stage 0 must dump the cadence for every effect the
+> final table names**, not just the food list.
 
 ### D-CK6 — No super ability
 
@@ -284,9 +346,22 @@ Cooking has **none** of the four gates Hunter got:
 > Smelting's inputs are **ores**, which are themselves gated by having to be mined; Cooking's inputs
 > are **chickens**, which are gated by nothing. The same hole is worth an order of magnitude more here.
 
-> ✅ **RECOMMENDED, and it ships in Stage 2 with the XP — not reserved as a backstop: a rolling
-> credited-cook cap.** `experience.yml → ExploitFix.Cooking.Max_Cooks_Per_Hour`, default **1,200**
-> (two continuously-running smokers). Cooks beyond it still cook; they simply pay nothing.
+> ✅ **RULED 2026-08-05 (user), and it ships in Stage 2 with the XP — not reserved as a backstop: a
+> rolling credited-cook cap.** `experience.yml → ExploitFix.Cooking.Max_Cooks_Per_Hour`, default
+> **1,200** (two continuously-running smokers), **one flat rolling hour**. Cooks beyond it still cook;
+> they simply pay nothing.
+>
+> ⚠️ **The known cost of the flat shape, accepted deliberately:** it is bursty. A stack of 64 raw beef
+> through eight smokers spends a large slice of the hour's budget in minutes, and the player then
+> earns nothing for the rest of the hour with no on-screen explanation. The windowed alternative
+> (`Awards_Per_Window` + `_Window_Seconds`, the shipped `ExploitFix.Husbandry` shape) smooths that at
+> the same 1,200/h rate and was **considered and not taken**. If §G row CK6 makes the dead hour feel
+> like a bug rather than a limit, that is the retune — the key rename would need a
+> `ConfigRetunes`-style migration, so decide it before the first release that ships the key.
+>
+> ⚠️ **The cap must tell the player it fired**, or it is indistinguishable from the skill being
+> broken. One throttled `NotificationManager` line the first time a cook is refused in a window,
+> not one per cook.
 >
 > **Hunter's lesson, verbatim:** *the leak is worth nothing until XP makes it valuable — close it in
 > the stage that creates the value.* Hunter deferred its rolling cap and the open §G question it left
@@ -323,23 +398,70 @@ and the ~80–100 h floor every skill in this port is held to:
 > count**, or a shift-click that crafts 64 cookies pays for one. Getting this backwards in either
 > direction is an 8×–64× error and it will not look like a bug in a unit test that crafts one loaf.
 
+### ⚠️⚠️ D-CK9 — The registration surface moved under this plan. GitHub #9 and #10 shipped after it was written.
+
+This plan was authored 2026-08-03. `8a5470941` (#10, the per-skill enable/disable switch) and
+`ed5eb2f15` (#9, the anti-cheat tab) landed 2026-08-05 and **both added machinery that a new
+`PrimarySkillType` is now obliged to satisfy.** The `00-OVERVIEW.md` checklist does not mention any
+of it. All three items below are **Stage 1**, not clean-up.
+
+**1. Four completeness tests go red the moment the enum constant lands.** Stage 1 is not "nothing
+fires yet" — it is *satisfy all four before you write a mechanic*. Verified by grep, not recalled:
+
+| Test | What breaks |
+|---|---|
+| `DatatypeEnumTest.primarySkillTypeHasAllTwentySixSkills` | asserts `19 + 3 + 1 + 1 + 1 + 1`. **A hard-coded count** — re-derive it as `+ 1`, and rename the method; it already lies about "twenty-six" if you only bump the sum |
+| `SkillGatingTest.everyPrimarySkillHasAnEntryInTheShippedConfig` | `coreskills.yml` must gain a `Cooking:` block. **This is #10's; the old checklist predates the file having all 26 entries** |
+| `SkillLocaleCompletenessTest` | **five** separate loops over `values()` — XP-bar title, the title's `{0}` placeholder, `Overhaul.Name`, `SkillName`, `Commands.XPGain` |
+| `SkillStatsRendererTest.everySkillResolvesToANonNullRenderer` + `noRenderedLineLeaksARawColourCode` | the generic fallback covers the first; the second renders Cooking at levels 0 / 500 / 1000 |
+
+`FlatFileProfileStoreTest` also loops `values()` and should pass free — that is checklist item 19
+already working. **Confirm it does; do not assume it.**
+
+**2. ⚠️⚠️ Two of Cooking's three sub-skills are NOT covered by the disable switch for free.**
+[`SkillGating`](../../src/main/java/com/gmail/nossr50/util/skills/SkillGating.java) derives a
+sub-skill's parent from its **enum-name prefix**, so `COOKING_*` maps to `COOKING` automatically —
+but the gating only bites at three chokepoints: `Permissions` predicates, `RankUtils` **boolean**
+rank gates, and `ProbabilityUtil#isSkillRNGSuccessful` ([[issue-10-per-skill-toggle]]).
+
+- `COOKING_MASTER_CHEF` is an RNG proc ⇒ **covered free.**
+- `COOKING_KITCHEN_EFFICIENCY` is a **multiplier**, not a roll. Nothing gates it.
+- `COOKING_POWER_COOK` applies an effect on a deterministic condition. Nothing gates it.
+
+⇒ Both need an **explicit `SkillGating.isSkillEnabled` call**, or a player who switches Cooking off
+in `coreskills.yml` still gets boosted fuel and still gets Strength off a steak. Pin each with its
+own test — #10's lesson was that reasoning your way to "one gate covers everything" is how the
+Agility XP redirect shipped.
+⚠️ **And do not force `getRank` to 0 to shortcut this** — §F #9 landmine, 5th sighting.
+
+**3. `ExploitFix.Cooking.Max_Cooks_Per_Hour` needs its Anti-Cheat tab entry in the SAME stage.**
+#9 added `CAT_EXPLOITS` to
+[`McMMOSettings`](../../src/main/java/com/gmail/nossr50/fabric/client/modmenu/McMMOSettings.java#L35)
+plus a **converse completeness test** — a shipped `ExploitFix` key with no tab entry now fails the
+build. Use `ConfigSetting.integer(CAT_EXPLOITS, EXPERIENCE_YML, …)`, mirroring the Husbandry entries
+at [McMMOSettings.java:284-294](../../src/main/java/com/gmail/nossr50/fabric/client/modmenu/McMMOSettings.java#L284-L294).
+
+> 🔑 **#9's rule applies here in full: never put a switch on a gate without first proving the gate has
+> a live caller.** For Cooking that ordering is forced — the key, the gate and the toggle all land
+> together in Stage 2, so the tab never describes a mechanic that does not exist. **A settings screen
+> is the one place a dead mechanic becomes an active lie.**
+
 ---
 
 ## The sub-skill roster
 
-Four. Cooking is a small skill and padding it is how the port ended up with 13 dead enums on
+**Three.** Cooking is a small skill and padding it is how the port ended up with 13 dead enums on
 `/mcstats`.
 
-| `SubSkillType` | Ranks | What it does | Seam |
-|---|---|---|---|
-| `COOKING_POWER_COOK` | 5 | Eating a cooked food grants its mapped effect, amplifier 0, 3 s → 15 s by rank | eat |
-| `COOKING_MASTER_CHEF` | 5 | Chance at one bonus copy of a finished cook | `setLastRecipe` |
-| `COOKING_KITCHEN_EFFICIENCY` | 3 | Fuel burns longer when the input is a food | `getFuelTime` |
-| `COOKING_GOURMET_MEAL` | 5 | Chance on eating that the meal is *Gourmet*: extra **saturation** (never hunger — D-CK4) and **double** Power Cook duration | eat |
+| `SubSkillType` | Ranks | What it does | Seam | Disable-switch coverage |
+|---|---|---|---|---|
+| `COOKING_POWER_COOK` | 5 | Eating a cooked food grants its mapped effect, amplifier 0, 3 s → 15 s by rank | eat | ⚠️ **needs an explicit gate** (D-CK9) |
+| `COOKING_MASTER_CHEF` | 5 | Chance at one bonus copy of a finished cook | `setLastRecipe` | ✅ free (RNG proc) |
+| `COOKING_KITCHEN_EFFICIENCY` | 3 | Fuel burns longer when the input is a food | `getFuelTime` | ⚠️ **needs an explicit gate** (D-CK9) |
 
 **Cut, with the reason recorded so it is not re-litigated:** Flavor Burst (D-CK5/D-CK6), Cook's Diet
-(D-CK4), Precision Cooking + Meal Memory (both were plumbing for the dead item-quality tier, D-CK1),
-Butchery and Holy Cook (D-CK7).
+(D-CK4), **Gourmet Meal** (D-CK1 — the eat-time half of the dropped quality tier), Precision Cooking
++ Meal Memory (both were plumbing for the same dead tier), Butchery and Holy Cook (D-CK7).
 
 ⚠️ **`SubSkillType` warns in-file that a sub-skill must not collide with any `PrimarySkillType`
 name.** All four above are clear. `COOKING_SMELTING` and `COOKING_ALCHEMY` are not — do not reach for
@@ -354,9 +476,13 @@ Per the checklist item 12: author RetroMode, let the scaler produce Standard.
 | `PowerCook` | 100 / 250 / 450 / 700 / 1000 | 10 / 25 / 45 / 70 / 100 |
 | `MasterChef` | 50 / 200 / 400 / 650 / 900 | 5 / 20 / 40 / 65 / 90 |
 | `KitchenEfficiency` | 250 / 500 / 850 | 25 / 50 / 85 |
-| `GourmetMeal` | 350 / 550 / 700 / 850 / 1000 | 35 / 55 / 70 / 85 / 100 |
 
 Power Cook's rank 1 at **100** is deliberate and it is the wiki's own number.
+
+⚠️ **With Gourmet Meal cut, nothing unlocks between level 1,000 and the cap except Power Cook rank 5**
+— which also sits at 1,000. The last 300 levels of the skill are flat. That is honest for a
+three-sub-skill processing skill (Salvage is no denser) and **no filler is being added to hide it**;
+noted here so it is a known property at §G rather than a surprise.
 
 ---
 
@@ -371,35 +497,46 @@ at all.
 `javap net.minecraft.component.type.FoodComponents` reports **41** foods in 1.21.11. The nine that
 already carry a vanilla effect are excluded (D-CK5), as are pure ingredients with no sensible mapping.
 
-| Food | Effect | Note |
-|---|---|---|
-| `cooked_beef` | Strength | the wiki's own example: *"whip out a steak, get 2 strong hits in"* |
-| `cooked_porkchop` | Resistance | |
-| `cooked_mutton` | Resistance | |
-| `cooked_chicken` | Speed | |
-| `cooked_rabbit` | Jump Boost | |
-| `cooked_cod` | Dolphin's Grace | ⚠️ **not** Water Breathing — D-CK5 clause 4 |
-| `cooked_salmon` | Dolphin's Grace | |
-| `baked_potato` | Haste | the wiki's own example |
-| `bread` | Saturation | |
-| `cookie` | Speed | |
-| `pumpkin_pie` | Regeneration | |
-| `mushroom_stew` | Regeneration | |
-| `beetroot_soup` | Regeneration | |
-| `rabbit_stew` | Jump Boost | |
-| `dried_kelp` | Haste | |
-| `honey_bottle` | Regeneration | vanilla only *clears* poison; no duration to stack with |
-| `sweet_berries` | Speed | |
-| `glow_berries` | Glowing | thematic, harmless, and not Alchemy's |
-| `melon_slice` | Saturation | |
-| `apple` | Saturation | |
-| `tropical_fish` | Dolphin's Grace | ⚠️ absent from the draft entirely |
+**15 rows.** Every one is a food that came out of a furnace, smoker, campfire or crafting grid —
+D-CK5 clause 5. No `InstantStatusEffect` appears anywhere in it (D-CK5a).
 
-**Deliberately absent:** `golden_apple`, `enchanted_golden_apple`, `golden_carrot`, `chorus_fruit`,
-`suspicious_stew`, `poisonous_potato`, `pufferfish`, `rotten_flesh`, `spider_eye` (vanilla already
-grants effects — D-CK5); `beef`, `chicken`, `cod`, `salmon`, `mutton`, `porkchop`, `rabbit`, `potato`,
-`carrot`, `beetroot` (**raw** — cooking them is the point, and paying for eating them raw inverts the
-skill).
+| Food | Made by | Effect | Note |
+|---|---|---|---|
+| `cooked_beef` | cook | Strength | the wiki's own example: *"whip out a steak, get 2 strong hits in"* |
+| `cooked_porkchop` | cook | Resistance | |
+| `cooked_mutton` | cook | Resistance | |
+| `cooked_chicken` | cook | Speed | |
+| `cooked_rabbit` | cook | Jump Boost | |
+| `cooked_cod` | cook | Dolphin's Grace | ⚠️ **not** Water Breathing — D-CK5 clause 4 |
+| `cooked_salmon` | cook | Dolphin's Grace | |
+| `baked_potato` | cook | Haste | the wiki's own example |
+| `dried_kelp` | cook | Haste | |
+| `bread` | craft | Speed | ⚠️ **remapped from Saturation** — D-CK5a. The traveller's loaf |
+| `cookie` | craft | Speed | sugar rush |
+| `pumpkin_pie` | craft | Regeneration | |
+| `mushroom_stew` | craft | Regeneration | |
+| `beetroot_soup` | craft | Regeneration | |
+| `rabbit_stew` | craft | Jump Boost | |
+
+**Deliberately absent, in three groups:**
+
+1. **Vanilla already grants an effect** (D-CK5) — `golden_apple`, `enchanted_golden_apple`,
+   `golden_carrot`, `chorus_fruit`, `suspicious_stew`, `poisonous_potato`, `pufferfish`,
+   `rotten_flesh`, `spider_eye`.
+2. **Raw** — `beef`, `chicken`, `cod`, `salmon`, `mutton`, `porkchop`, `rabbit`, `potato`, `carrot`,
+   `beetroot`, `tropical_fish`. Cooking them is the point; paying for eating them raw inverts the skill.
+3. **Not cooked or crafted** (D-CK5 clause 5, the 2026-08-05 ruling) — `apple`, `melon_slice`,
+   `sweet_berries`, `glow_berries`, `honey_bottle`. Picked, not made. **Saturation and Glowing
+   therefore no longer appear in the table at all**; Saturation is banned outright (D-CK5a), Glowing
+   simply lost its only carrier.
+
+⚠️ **Cross-skill interaction the earlier draft missed — a §G row, not a blocker.** `Speed` (3 foods)
+and `Dolphin's Grace` (2) are **movement** buffs, and Agility's Parkour/Swimming domains pay
+**speed-normalised** XP whose per-tick distance is clamped at the medium's reference speed (D5,
+`[[agility-skill-build]]`). The clamp *should* make both neutral — that is exactly what it exists
+for, and Fleet Footed is named in D5 as a buff it already absorbs. **Nobody has tested a
+Cooking-granted movement buff against it.** Measure it (§G row CK7) before assuming the clamp holds;
+if it does not, Cooking is an Agility XP multiplier.
 
 The table lives in **`resources/config.yml` under `Skills.Cooking.Power_Cook_Effects`**, keyed by
 registry path, so an operator can retune or disable a row — checklist item 14, and D-CK5's
@@ -415,9 +552,11 @@ Cooking-specific entries:
 | File | Adds |
 |---|---|
 | `experience.yml` | `Experience_Values.Cooking` (the XP table above); `Experience_Bars.Cooking` (**Color: `YELLOW`** — free; `PURPLE` is Repair/Salvage/Smelting, `GREEN` Woodcutting, `PINK` Stealth); `ExploitFix.Cooking.Max_Cooks_Per_Hour: 1200` |
-| `skillranks.yml` | the four sub-skill ladders above |
-| `advanced.yml` | `Skills.Cooking.MasterChef` (`ChanceMax` / `MaxBonusLevel`), `.GourmetMeal`, `.PowerCook` (`Seconds_Per_Rank`), `.KitchenEfficiency` (`Multiplier_Per_Rank`) |
+| `skillranks.yml` | the three sub-skill ladders above |
+| `advanced.yml` | `Skills.Cooking.MasterChef` (`ChanceMax` / `MaxBonusLevel`), `.PowerCook` (`Seconds_Per_Rank`), `.KitchenEfficiency` (`Multiplier_Per_Rank`) |
 | `config.yml` | `Skills.Cooking.Level_Cap: 0`; `Skills.Cooking.Power_Cook_Effects`; `Bonus_Drops.Cooking` (the food result list Master Chef reads — **results, not inputs**, D-CK3) |
+| **`coreskills.yml`** | **`Cooking.Enabled: true`** — ⚠️ **new since this plan was written** (GitHub #10). `SkillGatingTest.everyPrimarySkillHasAnEntryInTheShippedConfig` fails the build without it. D-CK9 |
+| **`McMMOSettings.java`** | **the `CAT_EXPLOITS` entry for `Max_Cooks_Per_Hour`** — ⚠️ **new since this plan was written** (GitHub #9). The converse completeness test fails the build without it. D-CK9 |
 | `locale_en_US.properties` | `Cooking.SkillName`; per sub-skill `.Name` / `.Description` / `.Stat` |
 
 > ⚠️⚠️ **Three locale key families are built by string concatenation and are invisible to grep** —
@@ -445,18 +584,31 @@ headless boot — before the next starts. Pause and commit to memory at each gat
 Throwaway JUnit test dumps every `Registries.ITEM` entry carrying `DataComponentTypes.FOOD` to TSV,
 with nutrition / saturation / `eat_seconds` / existing effects. Reconcile against the Power Cook table
 and against `FARMERS_DIET_FOODS` (12) and `FISHERMANS_DIET_FOODS` (5) so the overlap is a known set
-before D-CK2's restructure, not after. **No production code.** Delete the test when done.
+before D-CK2's restructure, not after.
+⚠️ **Also dump, for every effect the final table names, whether `canApplyUpdateEffect` is true at
+duration 1** — the D-CK5a check. An `InstantStatusEffect` in a duration-scaled table is a hunger
+cannon and the name does not warn you.
+⚠️ **And derive the cooked/crafted set from the recipe manager, not by eye** (D-CK5 clause 5): walk
+`RecipeManager` for `AbstractCookingRecipe` and `CraftingRecipe` results that carry a `FOOD`
+component. That set *is* the Power Cook whitelist's domain; authoring it by hand is how the draft got
+11 phantom foods. **No production code.** Delete the test when done.
 
 **Stage 1 — Registration.**
-`PrimarySkillType.COOKING`, the four `SubSkillType`s, `CookingManager extends SkillManager`
+`PrimarySkillType.COOKING`, the three `SubSkillType`s, `CookingManager extends SkillManager`
 (**MC-free**), `McMMOPlayer.initManager` + typed getter, `SkillTools.MISC_SKILLS`, all five config
-files, the locale block, `SkillLocaleCompletenessTest`, the ModMenu key-validation registration, and
-the **old-profile regression test** (checklist item 19). Nothing fires yet. `/mcstats` renders the
-skill generically.
+files, the locale block, and the **old-profile regression test** (checklist item 19). Nothing fires
+yet. `/mcstats` renders the skill generically.
+
+⚠️ **Stage 1 is gated on four completeness tests going green, not on "it compiles" — see D-CK9.**
+`DatatypeEnumTest` (a **hard-coded** enum count), `SkillGatingTest.everyPrimarySkillHasAnEntryInTheShippedConfig`
+(the new `coreskills.yml` entry), `SkillLocaleCompletenessTest` (five loops), and
+`SkillStatsRendererTest` (two). Run the suite *before* writing the config, so you see all four fail
+and know each one was actually satisfied rather than never reached.
 
 **Stage 2 — Cook XP + the exploit cap.**
 The food branch of `SmeltingListener.onFurnaceSmelt`; `CraftingResultSlotMixin` for the crafted foods
-(⚠️ **× the batch count**); `Max_Cooks_Per_Hour`. Campfires are **not** in this stage — furnace,
+(⚠️ **× the batch count**); `Max_Cooks_Per_Hour` **and its `CAT_EXPLOITS` tab entry, same stage**
+(D-CK9 item 3 — #9's rule forces the ordering). Campfires are **not** in this stage — furnace,
 smoker and blast furnace all come free off the existing mixin, and shipping the free 90% first proves
 the XP model before a new mixin is written.
 
@@ -479,12 +631,28 @@ Both ride injectors that already exist. `boostFuelTime` gets an `else` branch;
 `SmeltingListener.onSmeltComplete` gets a food arm reading `Bonus_Drops.Cooking`.
 ⚠️ **`hasRoomForSecondSmelt` must be re-used, not re-derived** — it encodes the pre-merge/post-merge
 count subtlety documented at `SmeltingListener.java:176-184`.
+⚠️ **`ownerSkill(pos)` returns a `SmeltingManager`** ([SmeltingListener.java:350](../../src/main/java/com/gmail/nossr50/fabric/listeners/SmeltingListener.java#L350)).
+Cooking needs its own resolver over the **same** `FURNACE_OWNERS` map — one map, two managers. Do not
+duplicate the map, and do not make the existing method generic in a way that loses the null-owner
+fast path.
+⚠️ **Kitchen Efficiency needs an explicit `SkillGating` call** — it is a multiplier, not an RNG proc
+(D-CK9 item 2). Master Chef gets gating free.
+⚠️ **Decide the ordering when an item is in BOTH `Bonus_Drops.Smelting` and `Bonus_Drops.Cooking`.**
+Nothing prevents an operator listing one item in both, and `onSmeltComplete` gates on the **result**
+only, so the two arms are ambiguous by construction. Pick Smelting-first, write it down in the
+javadoc, and pin it with a test.
 
-**Stage 4 — Power Cook + Gourmet Meal.**
+**Stage 4 — Power Cook.**
 **D-CK2's restructure lands first, alone, with the eat-bread test**, then the effect application
 (`player.addStatusEffect` — precedent in `SecondWindListener` / `SmokeBombListener`). The
-level→duration math and the Gourmet roll are **MC-free on `CookingManager`** with the RNG draw passed
-in, so both are unit-testable with no world — the Trophy Hunter `Runnable` lesson.
+level→duration math is **MC-free on `CookingManager`**, so it is unit-testable with no world — the
+Trophy Hunter `Runnable` lesson.
+⚠️ **Power Cook needs an explicit `SkillGating` call too** (D-CK9 item 2) — it fires on a
+deterministic condition and no chokepoint covers it.
+⚠️ **Do not overwrite a longer effect the player already has.** Eating a steak mid-Strength-potion
+must not cut 3:00 down to 15 s. Compare remaining duration and amplifier before applying; a Cooking
+effect never replaces something stronger or longer. This is the "does not stack" clause the draft
+hand-waved, and here it is one comparison rather than a subsystem.
 
 **Stage 5 — Campfire + the window onto the skill.**
 `CampfireBlockEntity#litServerTick` mixin. ⚠️ **The owner is not available where the cook finishes** —
@@ -511,7 +679,17 @@ Beyond the checklist's items 20–22:
    codebase count *world ticks*, not wall-clock** (`[[husbandry-skill-build]]`).
 5. **`SkillLocaleCompletenessTest`** extended, and a `/mcstats cooking` dump diffed against a sibling
    skill's screen.
-6. **Mutation-test every gate.** Break each one, prove the specific test reddens.
+6. **⚠️ The two disable-switch tests** (D-CK9 item 2). Switch Cooking off in `coreskills.yml`, then
+   assert **fuel is not boosted** and **eating a steak grants no effect**. Both fail today's
+   `SkillGating` coverage and neither is caught by any existing test — the RNG-proc chokepoint that
+   covers Master Chef does not exist on either path.
+7. **⚠️ The no-InstantStatusEffect test** (D-CK5a). Walk every effect named in
+   `Skills.Cooking.Power_Cook_Effects` and assert none is instant. It is three lines and it stops the
+   hunger cannon coming back through a config edit rather than a code edit — the one direction no
+   other test in this list covers.
+8. **⚠️ The stronger-effect test.** Apply a 3:00 Strength II, eat a steak, assert the potion is
+   intact. The Stage-4 clause above, pinned.
+9. **Mutation-test every gate.** Break each one, prove the specific test reddens.
    ⚠️ **A mutation that does not redden is not evidence until you have proved it landed where you
    aimed** — nine sections of `advanced.yml` carry an identical `ChanceMax` block and a non-global
    `perl -0pi` silently edits the first (`[[hunter-skill-build]]`). ⚠️ **CRLF kills `perl -0pi` `$`
@@ -536,6 +714,15 @@ Cooking adds a session to `PLAYTEST_G.md`. It cannot be signed off without, at m
 - **CK6** Build an eight-smoker hopper array behind a chicken farm and AFK one hour. **Measure the XP.**
   If `Max_Cooks_Per_Hour` does not hold the line, the number is wrong — not the design. *(D-CK8, and
   this is the row that decides whether Cooking ships.)*
+  ⚠️ **Also record how the dead remainder of the hour FEELS** once the cap bites — the flat-window
+  ruling accepts burstiness, and this row is where "a limit" or "looks broken" gets decided.
+- **CK7** ⚠️ **Eat a cooked chicken (Speed) and sprint a measured distance; eat a cooked cod
+  (Dolphin's Grace) and swim one.** Compare Parkour/Swimming XP against the same run unbuffed. **They
+  must be equal** — D5's per-tick speed clamp is what makes them so. If Cooking's buffs beat the
+  clamp, Cooking is an Agility XP multiplier and the table loses five rows. *(The cross-skill
+  interaction, measured.)*
+- **CK8** Eat something with a **full hunger bar and full saturation**. Confirm the effect still
+  fires and nothing tops up hunger. *(D-CK4 + D-CK5a, the two hunger rulings, in one bite.)*
 
 ---
 
@@ -560,3 +747,16 @@ Kept because these are cheap mistakes to repeat, not to shame the draft.
 | 13 | **`perfect_timing.window_ticks: 40`** — a QTE on a block entity | There is no UI to show a window and no input to hit it with. Cut silently; noted here so it is not re-proposed |
 | 14 | **No anti-farm gate of any kind**, and `bulk_cooking` actively *rewards* volume (`cap_multiplier: 2.0`) | D-CK8. The single largest omission after #1 |
 | 15 | `spider_eye` annotated **"Not a food"** | It is one (`FoodComponents.SPIDER_EYE`). Vanilla gives it Poison, which is why it is excluded here — for the opposite reason to the one stated |
+
+### Defects found in the 2026-08-05 refinement pass — in *this* file, not the draft
+
+Kept for the same reason as the table above: a rewrite that fixes fifteen defects can still introduce
+its own, and two of these were mine.
+
+| # | Defect | Evidence |
+|---|---|---|
+| 16 | ⚠️⚠️ **Three rows mapped to Saturation, which fires EVERY TICK** — 3 s of it fills a 20-point hunger bar six times over, from one slice of bread, at rank 1 | `SaturationStatusEffect extends InstantStatusEffect`; `canApplyUpdateEffect` returns `duration >= 1`. Both disassembled. → D-CK5a |
+| 17 | ⚠️ **The registration surface was stale.** Written 2026-08-03; `8a5470941` (#10) and `ed5eb2f15` (#9) landed 2026-08-05 and added a `coreskills.yml` completeness test, a `CAT_EXPLOITS` converse test, and a per-skill disable switch that does **not** cover a multiplier or a deterministic effect | grep over `src/test`, and `SkillGating`'s own javadoc → D-CK9 |
+| 18 | **`tropical_fish` → Dolphin's Grace** was added by the rewrite as a "missing food" — but it is **raw**, and the same file's own exclusion rule bars raw foods | Cut by D-CK5 clause 5. 🔑 *Adding a row because an item was missing from a list is not the same as it belonging in the list.* |
+| 19 | **No cross-skill check against Agility.** Five of 21 rows granted movement buffs to a mod whose newest skill pays XP per unit of movement | → §G row CK7 |
+| 20 | **No "don't overwrite a stronger effect" clause.** Eating a steak mid-potion would have cut a 3:00 Strength II to 15 s of Strength I — a Cooking *downgrade* | → Stage 4 |
