@@ -532,12 +532,25 @@ public class GeneralConfig extends ConfigLoader {
         return config.getBoolean("Skills.Repair.Confirm_Required", true);
     }
 
+    /**
+     * ⚠️ <b>Deliberate divergence from legacy.</b> Upstream
+     * ({@code legacy/…/config/GeneralConfig.java:836-841}) has these two getters reading
+     * <em>each other's</em> keys, and this port copied the swap verbatim. It is invisible upstream
+     * and here because neither getter has a caller and both keys default to {@code false} — the
+     * exact shape as issue #9's {@code Damage_Limit} / {@code HP_Modifier_Limit} pair.
+     *
+     * <p>Fixed rather than kept faithful: faithfulness to a dead getter's <em>bug</em> buys nothing,
+     * and the moment either one is wired to a repair listener it silently honours the wrong switch.
+     * {@code GeneralConfigTest#vanillaRepairGettersReadTheirOwnKeys} pins both, in both directions.
+     * Do not "restore" these to match legacy.
+     */
     public boolean getAllowVanillaInventoryRepair() {
-        return config.getBoolean("Skills.Repair.Allow_Vanilla_Anvil_Repair", false);
+        return config.getBoolean("Skills.Repair.Allow_Vanilla_Inventory_Repair", false);
     }
 
+    /** @see #getAllowVanillaInventoryRepair() for why this diverges from legacy. */
     public boolean getAllowVanillaAnvilRepair() {
-        return config.getBoolean("Skills.Repair.Allow_Vanilla_Inventory_Repair", false);
+        return config.getBoolean("Skills.Repair.Allow_Vanilla_Anvil_Repair", false);
     }
 
     public boolean getAllowVanillaGrindstoneRepair() {

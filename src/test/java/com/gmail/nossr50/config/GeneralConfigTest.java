@@ -101,6 +101,37 @@ class GeneralConfigTest {
     }
 
     @Test
+    void vanillaRepairGettersReadTheirOwnKeys(@TempDir Path dataFolder) {
+        // Wiring audit 2026-08-06, item 2.2. getAllowVanillaInventoryRepair and
+        // getAllowVanillaAnvilRepair read *each other's* keys, in this port and in legacy
+        // (legacy/…/GeneralConfig.java:836-841 — the swap was ported verbatim). Latent only because
+        // neither getter has a caller and both keys default to false, so no assertion that reads a
+        // getter in isolation can see it. Wire either one to a repair listener and it silently
+        // honours the wrong switch.
+        //
+        // Neither key ships in config.yml, so the probes have to be set: give the two swapped keys
+        // OPPOSITE values, which is what makes a crossed read visible at all. A getter reading the
+        // wrong key returns the other probe; a getter reading no key at all returns the false
+        // default. Both failure modes are caught, and running it in both directions means neither
+        // getter can pass by accident.
+        final GeneralConfig config = new GeneralConfig(dataFolder);
+
+        config.config.set("Skills.Repair.Allow_Vanilla_Anvil_Repair", true);
+        config.config.set("Skills.Repair.Allow_Vanilla_Inventory_Repair", false);
+        config.config.set("Skills.Repair.Allow_Vanilla_Grindstone_Repair", true);
+        assertTrue(config.getAllowVanillaAnvilRepair());
+        assertFalse(config.getAllowVanillaInventoryRepair());
+        assertTrue(config.getAllowVanillaGrindstoneRepair());
+
+        config.config.set("Skills.Repair.Allow_Vanilla_Anvil_Repair", false);
+        config.config.set("Skills.Repair.Allow_Vanilla_Inventory_Repair", true);
+        config.config.set("Skills.Repair.Allow_Vanilla_Grindstone_Repair", false);
+        assertFalse(config.getAllowVanillaAnvilRepair());
+        assertTrue(config.getAllowVanillaInventoryRepair());
+        assertFalse(config.getAllowVanillaGrindstoneRepair());
+    }
+
+    @Test
     void superAbilityCooldownTypedOverloadDelegatesToStringKey(@TempDir Path dataFolder) {
         final GeneralConfig config = new GeneralConfig(dataFolder);
         // SuperAbilityType.toString() yields the PascalCase config key (e.g. "Super_Breaker").

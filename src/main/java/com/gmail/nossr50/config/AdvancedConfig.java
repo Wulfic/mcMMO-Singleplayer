@@ -437,10 +437,6 @@ public class AdvancedConfig extends ConfigLoader {
             reason.add("Skills.Swords.SerratedStrikes.DamageModifier should be at least 1!");
         }
 
-        if (getSerratedStrikesTicks() < 1) {
-            reason.add("Skills.Swords.SerratedStrikes.RuptureTicks should be at least 1!");
-        }
-
         /* TAMING */
 
         if (getMaximumProbability(SubSkillType.TAMING_GORE) < 1) {
@@ -1390,9 +1386,17 @@ public class AdvancedConfig extends ConfigLoader {
         return config.getDouble("Skills.Swords.SerratedStrikes.DamageModifier", 4.0D);
     }
 
-    public int getSerratedStrikesTicks() {
-        return config.getInt("Skills.Swords.SerratedStrikes.RuptureTicks", 5);
-    }
+    // getSerratedStrikesTicks() deleted (wiring audit 2026-08-06, item 2.1). It read
+    // "Skills.Swords.SerratedStrikes.RuptureTicks", a key shipped in no yml, and its only caller was
+    // the load-time validator above -- so it returned its hardcoded 5 forever and the validation
+    // could never fire. advanced.yml shipped the *differently named* "SerratedStrikes.BleedTicks: 5"
+    // with a comment promising it controlled the bleed duration.
+    //
+    // Neither key was wired, and neither should be: Serrated Strikes' bleed IS Rupture. The AoE
+    // calls SwordsManager#processRupture for every struck entity (CombatUtils#applyAbilityAoE), and
+    // that reads Skills.Swords.Rupture.Rupture_Mechanics.Duration_In_Seconds.Against_Mobs -- which
+    // is shipped, live, and already the answer. BleedTicks is a pre-Rupture vestige upstream carries
+    // too; reviving it would add a second duration knob for one bleed. Both are gone.
 
     /* TAMING */
     public double getGoreModifier() {

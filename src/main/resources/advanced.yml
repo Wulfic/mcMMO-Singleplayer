@@ -996,9 +996,9 @@ Skills:
 
         SerratedStrikes:
             # DamageModifier: Damage will get divided by this modifier
-            # BleedTicks: This determines how long the bleeding effect of SerratedStrikes lasts
+            # The bleed Serrated Strikes inflicts on the entities it cleaves is Rupture, so its
+            # duration and tick damage come from Skills.Swords.Rupture.Rupture_Mechanics above.
             DamageModifier: 4.0
-            BleedTicks: 5
     #
     #  Settings for Taming
     ###

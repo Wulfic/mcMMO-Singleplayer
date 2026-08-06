@@ -102,6 +102,38 @@ class AdvancedConfigTest {
                 0.0001D);
     }
 
+    // --- Serrated Strikes' bleed duration (wiring audit 2026-08-06, item 2.1) -------------------
+
+    @Test
+    void serratedStrikesShipsNoBleedDurationKeyOfItsOwn(@TempDir Path dataFolder) throws Exception {
+        // advanced.yml used to ship "SerratedStrikes.BleedTicks: 5" with a comment telling the player
+        // it set how long the bleed lasts. Nothing read it: the only getter in the area
+        // (getSerratedStrikesTicks) read "SerratedStrikes.RuptureTicks" — a key in no yml at all —
+        // and its only caller was a validator that therefore could never fire. Editing BleedTicks
+        // did nothing, forever, and it was invisible because the shipped value and the getter's
+        // hardcoded fallback were both 5. Identical to issue #9's Damage_Limit / HP_Modifier_Limit.
+        //
+        // Both are deleted rather than wired, because Serrated Strikes' bleed IS Rupture (see the
+        // companion assertion below). Asserting the absence is what stops a future "restore the
+        // documented knob" edit from re-creating a key with no consumer.
+        final AdvancedConfig config = new AdvancedConfig(dataFolder);
+        final String shipped = Files.readString(dataFolder.resolve("advanced.yml"));
+
+        assertFalse(shipped.contains("BleedTicks"),
+                "advanced.yml must not ship a SerratedStrikes bleed-duration knob: nothing reads it,"
+                        + " and Rupture_Mechanics already owns that duration");
+        assertFalse(shipped.contains("RuptureTicks"),
+                "the key the deleted getter read never shipped; it must not start shipping now");
+
+        // The reference point, and the reason the deletion is safe rather than a lost feature:
+        // the duration that actually governs the bleed is live, shipped, and reachable.
+        // CombatUtils#applyAbilityAoE routes every entity Serrated Strikes cleaves through
+        // SwordsManager#processRupture, which builds its RuptureTask from exactly this getter.
+        assertEquals(5, config.getRuptureDurationSeconds(false));
+        assertTrue(shipped.contains("Duration_In_Seconds"),
+                "Rupture's duration — the one Serrated Strikes actually uses — must be editable");
+    }
+
     // --- Super Breaker's bonus-drop chance boost (GitHub #5) ------------------------------------
 
     @Test
