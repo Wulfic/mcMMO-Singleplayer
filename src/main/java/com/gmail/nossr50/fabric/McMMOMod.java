@@ -25,6 +25,7 @@ import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
 import com.gmail.nossr50.fabric.listeners.SecondWindListener;
 import com.gmail.nossr50.fabric.listeners.HerdsmansCallListener;
 import com.gmail.nossr50.fabric.listeners.SmokeBombListener;
+import com.gmail.nossr50.fabric.listeners.CookingListener;
 import com.gmail.nossr50.fabric.listeners.SmeltingListener;
 import com.gmail.nossr50.fabric.listeners.SuperAbilityListener;
 import com.gmail.nossr50.platform.MetadataStore;
@@ -208,6 +209,11 @@ public class McMMOMod implements ModInitializer {
         SuperAbilityListener.register();
         // K7: Smelting XP — track furnace owners on right-click; the furnace-smelt mixin awards XP.
         SmeltingListener.register();
+        // Pass 2 (Cooking): track campfire owners on right-click; the campfire mixin awards XP and
+        // rolls Master Chef. A campfire is not an AbstractFurnaceBlockEntity, so Smelting's hook
+        // above does not see it. The crafting-grid half of Cooking needs no registration — it is
+        // driven entirely by CraftingResultSlotMixin.
+        CookingListener.register();
         // K7: Repair (and later Salvage) — right-click the anvil block with a repairable item held.
         RepairSalvageListener.register();
         // K7: Alchemy XP — track brewing-stand owners on right-click; the brewing-stand mixin drives
@@ -311,6 +317,10 @@ public class McMMOMod implements ModInitializer {
             // to the recipe set the stopping server loaded.
             SmeltingListener.clearOwners();
             AlchemyListener.clearOwners();
+            // Pass 2 (Cooking): the campfire-owner tracker is a third map of the same kind and has
+            // to be dropped for the same reason — a stale entry would pay the next world's cooks to
+            // a UUID that owns nothing there.
+            CookingListener.clearOwners();
             // F1: drop the per-player movement baselines. Keeping them would make the first tick of
             // the next world session measure the distance between two different worlds' positions —
             // which the teleport guard would reject, but only by accident.

@@ -78,6 +78,7 @@ public abstract class SkillStatsRenderer {
             case REPAIR -> new RepairStatsRenderer();
             case SALVAGE -> new SalvageStatsRenderer();
             case SMELTING -> new SmeltingStatsRenderer();
+            case COOKING -> new CookingStatsRenderer();
             case FISHING -> new FishingStatsRenderer();
             case HUNTER -> new HunterStatsRenderer();
             case HUSBANDRY -> new HusbandryStatsRenderer();

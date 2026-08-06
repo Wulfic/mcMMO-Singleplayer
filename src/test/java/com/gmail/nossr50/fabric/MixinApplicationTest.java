@@ -12,6 +12,7 @@ import net.minecraft.advancement.criterion.BredAnimalsCriterion;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.block.entity.BrewingStandBlockEntity;
+import net.minecraft.block.entity.CampfireBlockEntity;
 import net.minecraft.component.type.FoodComponent;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
@@ -197,6 +198,26 @@ class MixinApplicationTest {
         assertTrue(methods.stream().anyMatch(name -> name.contains("boostVanillaXp")),
                 "the dropExperience orb-size modifier did not apply — Understanding the Art would "
                         + "silently leave furnace XP at vanilla amounts in-game");
+    }
+
+    @Test
+    void campfireMixinApplies() {
+        // ⚠️ The headless boot proves NOTHING about this one. CampfireBlockEntity is registered
+        // through a `CampfireBlockEntity::new` method reference, whose call site links lazily, so the
+        // class is never loaded on a server that nobody plays on — the boot log contains the string
+        // "campfire" zero times. Class-loading it here is the only thing that forces the mixin to
+        // apply, which is also why this test exists rather than a note in the plan.
+        assertDoesNotThrow(() -> Class.forName(CampfireBlockEntity.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+
+        // A @ModifyArg that could not bind throws during application, so reaching this line at all is
+        // most of the proof; the handler assertion is what survives someone deleting the injector.
+        final boolean hasCampfireHook = Arrays.stream(CampfireBlockEntity.class.getDeclaredMethods())
+                .anyMatch(method -> method.getName().contains("onCampfireCook"));
+        assertTrue(hasCampfireHook,
+                "CampfireCookMixin did not apply to CampfireBlockEntity — cooking on a campfire "
+                        + "would silently pay no Cooking XP and never offer a Master Chef second "
+                        + "helping in-game, while the furnace path kept working perfectly");
     }
 
     @Test

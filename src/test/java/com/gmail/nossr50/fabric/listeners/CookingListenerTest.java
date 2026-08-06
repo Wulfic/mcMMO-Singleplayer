@@ -1,6 +1,7 @@
 package com.gmail.nossr50.fabric.listeners;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -23,6 +24,7 @@ import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
 import java.util.UUID;
+import net.minecraft.block.entity.CampfireBlockEntity;
 import net.minecraft.block.entity.FurnaceBlockEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
@@ -71,6 +73,9 @@ class CookingListenerTest {
 
     /** The furnace under test. Any position; it is only ever a key. */
     private static final BlockPos FURNACE_POS = new BlockPos(12, 64, -30);
+
+    /** The campfire under test, at a deliberately different position from the furnace. */
+    private static final BlockPos CAMPFIRE_POS = new BlockPos(-5, 70, 18);
 
     /** An arbitrary but non-zero world time, so a bug that passes 0 everywhere is visible. */
     private static final long WORLD_TICK = 4242L;
@@ -133,6 +138,7 @@ class CookingListenerTest {
         // The owner map is a process-wide static keyed on a position, so one test's claimed furnace
         // would otherwise decide the next test's owner.
         SmeltingListener.clearOwners();
+        CookingListener.clearOwners();
         McMMOMod.setExperienceConfig(null);
         McMMOMod.setGeneralConfig(null);
     }
@@ -397,19 +403,197 @@ class CookingListenerTest {
                 "a Master Chef helping must stay merge-compatible with a plain cooked steak");
     }
 
+    // --- Stage 5: the campfire seam ---------------------------------------------------------------
+
+    @Test
+    void aFinishedCampfireCookPaysCookingAndChargesTheRawInput() {
+        claimCampfire();
+
+        CookingListener.onCampfireCook(world, CAMPFIRE_POS,
+                new ItemStack(Items.BEEF), new ItemStack(Items.COOKED_BEEF));
+
+        // Same table and same key space as the furnace: Experience_Values.Cooking.Cook prices raw
+        // inputs. A campfire hook keyed on the result would find no price and pay zero forever.
+        verify(cooking).onCook("Beef", WORLD_TICK);
+        verify(cooking, never()).onCook(eq("Cooked_Beef"), anyLong());
+    }
+
+    @Test
+    void theCampfireChargesTheINPUTWhileMasterChefReadsTheRESULT() {
+        // ⚠️⚠️ The reason this test exists. The campfire is the one seam where both key spaces are
+        // live in a single method — the raw input for XP, the cooked result for Bonus_Drops — and the
+        // mixin picks both off the same stack frame. Swap them and everything still compiles, still
+        // boots, still binds: "Cooked_Beef" is simply unpriced under .Cook and "Beef" is simply not in
+        // Bonus_Drops.Cooking, so the entire feature pays nothing and drops nothing, silently. This is
+        // the assertion that turns that swap into a red test.
+        claimCampfire();
+        when(cooking.canSecondHelping("Cooked_Beef")).thenReturn(true);
+        final ItemStack result = new ItemStack(Items.COOKED_BEEF, 1);
+
+        final ItemStack scattered =
+                CookingListener.onCampfireCook(world, CAMPFIRE_POS, new ItemStack(Items.BEEF), result);
+
+        verify(cooking).onCook("Beef", WORLD_TICK);
+        verify(cooking).canSecondHelping("Cooked_Beef");
+        verify(cooking, never()).canSecondHelping("Beef");
+        assertSame(result, scattered, "the stack handed back is the one vanilla scatters");
+        assertEquals(2, scattered.getCount(), "Master Chef's second helping lands on the floor");
+    }
+
+    @Test
+    void aCampfireCookWithoutMasterChefScattersExactlyWhatVanillaWouldHave() {
+        claimCampfire();
+        when(cooking.canSecondHelping(any())).thenReturn(false);
+
+        final ItemStack scattered = CookingListener.onCampfireCook(world, CAMPFIRE_POS,
+                new ItemStack(Items.BEEF), new ItemStack(Items.COOKED_BEEF, 1));
+
+        assertEquals(1, scattered.getCount());
+    }
+
+    @Test
+    void masterChefStillFiresOnACookTheHourlyCapRefused() {
+        // The documented ruling, in executable form: the rate cap is a gate on XP and on nothing
+        // else. The furnace path behaves identically (onSmeltComplete never consults the window), and
+        // one config key quietly switching off two unrelated mechanics is how a "known limit" becomes
+        // a bug report.
+        claimCampfire();
+        when(cooking.onCook(eq("Beef"), anyLong()))
+                .thenReturn(new CookingManager.CookAward(0F, 0, true));
+        when(cooking.canSecondHelping("Cooked_Beef")).thenReturn(true);
+
+        final ItemStack scattered = CookingListener.onCampfireCook(world, CAMPFIRE_POS,
+                new ItemStack(Items.BEEF), new ItemStack(Items.COOKED_BEEF, 1));
+
+        assertEquals(2, scattered.getCount());
+        verify(mmoPlayer).getPlayer(); // and the player was still told the cap bit
+    }
+
+    @Test
+    void aCampfireNobodyHasTouchedPaysNobody() {
+        // No claim. A campfire is only reachable by a player right-click (addItem has exactly one
+        // caller and the block entity is not an Inventory), so in practice an unowned campfire that
+        // finishes a cook means the owner logged out — it must behave exactly like vanilla.
+        final ItemStack scattered = CookingListener.onCampfireCook(world, CAMPFIRE_POS,
+                new ItemStack(Items.BEEF), new ItemStack(Items.COOKED_BEEF, 1));
+
+        verify(cooking, never()).onCook(any(), anyLong());
+        verify(cooking, never()).canSecondHelping(any());
+        assertEquals(1, scattered.getCount());
+    }
+
+    @Test
+    void aRawItemSpatBackBecauseNoRecipeMatchedIsNotACook() {
+        // ⚠️ litServerTick resolves the result as getFirstMatch(...).map(craft).orElse(rawStack), and
+        // craft() returns a fresh copy — so the result is the *same object* as the input only when no
+        // campfire recipe matched and the raw item is being thrown back out. A data-pack reload that
+        // drops a recipe mid-cook is the way there, and it must pay nothing: nothing was cooked.
+        claimCampfire();
+        final ItemStack raw = new ItemStack(Items.BEEF);
+
+        final ItemStack scattered = CookingListener.onCampfireCook(world, CAMPFIRE_POS, raw, raw);
+
+        verify(cooking, never()).onCook(any(), anyLong());
+        verify(cooking, never()).canSecondHelping(any());
+        assertSame(raw, scattered);
+        assertEquals(1, raw.getCount(), "and it is certainly not doubled on the way out");
+    }
+
+    @Test
+    void anEmptyCampfireStackOnEitherSidePaysNobody() {
+        claimCampfire();
+
+        CookingListener.onCampfireCook(world, CAMPFIRE_POS,
+                ItemStack.EMPTY, new ItemStack(Items.COOKED_BEEF));
+        CookingListener.onCampfireCook(world, CAMPFIRE_POS,
+                new ItemStack(Items.BEEF), ItemStack.EMPTY);
+
+        verify(cooking, never()).onCook(any(), anyLong());
+        verify(cooking, never()).canSecondHelping(any());
+    }
+
+    @Test
+    void theCampfireAndFurnaceOwnerMapsAreDisjointAndNeitherHookClaimsTheOthersBlock() {
+        // ⚠️ Two UseBlockCallback registrations now run on every right-click in the game, and each
+        // has to ignore the other's block. Smelting's gate is `instanceof AbstractFurnaceBlockEntity`
+        // and a campfire is not one (it extends BlockEntity directly — that is the whole reason this
+        // stage needed a new mixin), so if either gate were widened to BlockEntity the two skills
+        // would start claiming each other's blocks with no symptom until a cook finished.
+        //
+        // ⚠️ Both fixtures below fire BOTH hooks, which is the only reason this test has any teeth:
+        // an earlier version claimed the furnace through Smelting's hook alone, so Cooking's gate was
+        // never asked about a furnace at all and a mutation widening it to `instanceof BlockEntity`
+        // passed clean. A gate you never point the wrong block at is not under test.
+        claimCampfire();
+        claimFurnace();
+
+        // Cooking's hook saw the furnace click. If it had claimed it, this cook would pay.
+        CookingListener.onCampfireCook(world, FURNACE_POS,
+                new ItemStack(Items.BEEF), new ItemStack(Items.COOKED_BEEF));
+        verify(cooking, never()).onCook(eq("Beef"), anyLong());
+
+        // Smelting's hook saw the campfire click. If it had claimed it, the furnace path would find
+        // an owner at a position no furnace occupies.
+        SmeltingListener.onFurnaceSmelt(world, CAMPFIRE_POS, new ItemStack(Items.KELP));
+        verify(cooking, never()).onCook(eq("Kelp"), anyLong());
+    }
+
+    @Test
+    void kelpCooksOnACampfireExactlyAsItDoesInASmoker() {
+        // The same not-a-food input the furnace test pins, on the other block: this section is keyed
+        // on the input, and kelp carries no food component at all.
+        claimCampfire();
+
+        CookingListener.onCampfireCook(world, CAMPFIRE_POS,
+                new ItemStack(Items.KELP), new ItemStack(Items.DRIED_KELP));
+
+        verify(cooking).onCook("Kelp", WORLD_TICK);
+    }
+
     // --- fixture ----------------------------------------------------------------------------------
 
-    /** Right-click the furnace, which is the only thing that makes it "yours" for XP purposes. */
+    /**
+     * Right-click the furnace, which is the only thing that makes it "yours" for XP purposes.
+     *
+     * <p>⚠️ <b>Both</b> listeners' hooks are fired, not just Smelting's. Two
+     * {@link net.fabricmc.fabric.api.event.player.UseBlockCallback} registrations are live in the
+     * running game and each one sees every click, so a fixture that told only one of them about a
+     * click is testing a game that does not exist — and it hides exactly the failure where one
+     * skill's gate is widened and starts claiming the other's blocks. A mutation that broadened
+     * Cooking's {@code instanceof} to any {@code BlockEntity} survived until this line was added.
+     */
     private void claimFurnace() {
         lenient().when(world.getBlockEntity(FURNACE_POS))
                 .thenReturn(mock(FurnaceBlockEntity.class));
 
         final BlockHitResult hit = new BlockHitResult(
                 Vec3d.ofCenter(FURNACE_POS), Direction.UP, FURNACE_POS, false);
+        final ServerPlayerEntity player = serverPlayer();
 
         assertEquals(net.minecraft.util.ActionResult.PASS,
-                SmeltingListener.onUseBlock(serverPlayer(), world, Hand.MAIN_HAND, hit),
+                SmeltingListener.onUseBlock(player, world, Hand.MAIN_HAND, hit),
                 "claiming a furnace must never swallow the click that opens it");
+        CookingListener.onUseBlock(player, world, Hand.MAIN_HAND, hit);
+    }
+
+    /**
+     * Right-click the campfire — which, unlike the furnace, is also the <em>only</em> way food ever
+     * gets into one. Both listeners' hooks are fired, because both are registered on
+     * {@link net.fabricmc.fabric.api.event.player.UseBlockCallback} and both really do see every
+     * click in the game.
+     */
+    private void claimCampfire() {
+        lenient().when(world.getBlockEntity(CAMPFIRE_POS))
+                .thenReturn(mock(CampfireBlockEntity.class));
+
+        final BlockHitResult hit = new BlockHitResult(
+                Vec3d.ofCenter(CAMPFIRE_POS), Direction.UP, CAMPFIRE_POS, false);
+        final ServerPlayerEntity player = serverPlayer();
+
+        assertEquals(net.minecraft.util.ActionResult.PASS,
+                CookingListener.onUseBlock(player, world, Hand.MAIN_HAND, hit),
+                "claiming a campfire must never swallow the click that puts the food on it");
+        SmeltingListener.onUseBlock(player, world, Hand.MAIN_HAND, hit);
     }
 
     private ServerPlayerEntity serverPlayer() {

@@ -18,6 +18,7 @@ import com.gmail.nossr50.skills.agility.AgilityManager;
 import com.gmail.nossr50.skills.alchemy.AlchemyManager;
 import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
+import com.gmail.nossr50.skills.cooking.CookingManager;
 import com.gmail.nossr50.skills.crossbows.CrossbowsManager;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.fishing.FishingManager;
@@ -119,6 +120,10 @@ class SkillStatsRendererTest {
         when(mmoPlayer.getStealthManager()).thenReturn(new StealthManager(mmoPlayer));
         when(mmoPlayer.getUnarmoredManager()).thenReturn(new UnarmoredManager(mmoPlayer));
         when(mmoPlayer.getHunterManager()).thenReturn(new HunterManager(mmoPlayer));
+        when(mmoPlayer.getCookingManager()).thenReturn(new CookingManager(mmoPlayer));
+        // ⚠️ Not optional bookkeeping: RankUtils.getRank(PlatformPlayer, ...) resolves back through
+        // UserManager, so an untracked player reads rank 0 for everything and every rank-driven stat
+        // line below would silently measure the no-op path.
         UserManager.track(mmoPlayer);
     }
 
@@ -226,11 +231,63 @@ class SkillStatsRendererTest {
         // GenericSkillStatsRenderer, so their .Stat locale keys were written but never read and the
         // screens showed a header and a sub-skill list with no effect values at all.
         for (PrimarySkillType s : List.of(PrimarySkillType.HUSBANDRY, PrimarySkillType.STEALTH,
-                PrimarySkillType.UNARMORED, PrimarySkillType.PARKOUR, PrimarySkillType.HUNTER)) {
+                PrimarySkillType.UNARMORED, PrimarySkillType.PARKOUR, PrimarySkillType.HUNTER,
+                PrimarySkillType.COOKING)) {
             when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
             assertTrue(anyLineContains(render(SkillStatsRenderer.forSkill(s)), "Stats"),
                     s.name() + " shows effect stats at max level");
         }
+    }
+
+    @Test
+    void cookingRendersAllThreePassivesAndTheHourlyCap() {
+        // ⚠️ The generic-fallback trap, pinned by label rather than by the word "Stats". A skill with
+        // no dedicated renderer still emits a header and a sub-skill list, so a screen that lost this
+        // renderer entirely would look plausible — it would just never show a single number. Four
+        // skills shipped that way, and .Stat keys are exempt from SkillLocaleCompletenessTest, so
+        // nothing else in the suite reads these three keys at all.
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.COOKING)).thenReturn(1000);
+
+        final List<String> lines = render(SkillStatsRenderer.forSkill(PrimarySkillType.COOKING));
+
+        // ⚠️⚠️ Every line is asserted to carry a NUMBER, not merely its label — and that is the whole
+        // point of this test. The first version of it checked labels only and passed while two of the
+        // three stats rendered as bare text with the value silently dropped: getStatMessage's
+        // isCustom=true path formats the vars INTO the .Stat key, so a key written as a plain label
+        // with no {0} placeholder discards them. Both the label and the value are on screen or the
+        // screen is lying about being a stats screen.
+        for (String label : List.of("Fuel Efficiency Multiplier", "Second Helping Chance",
+                "Effect Duration", "Hourly Cook Limit")) {
+            final String line = lines.stream().filter(l -> l.contains(label)).findFirst()
+                    .orElse(null);
+            assertNotNull(line, "/mcstats cooking must show " + label + " — got: " + lines);
+            assertTrue(line.matches(".*\\d.*"),
+                    label + " rendered as a bare label with no value: \"" + line + "\"");
+        }
+        // The cap is the skill's only anti-farm gate and the one number that explains a dead hour, so
+        // it is the shipped value and not a placeholder. Commas stripped: the template renders it
+        // through the locale's own number format ("1,200").
+        assertTrue(lines.stream().map(l -> l.replace(",", ""))
+                        .anyMatch(l -> l.contains(
+                                "Hourly Cook Limit: " + CookingManager.DEFAULT_MAX_COOKS_PER_HOUR)),
+                "the hourly cap must render its actual value — got: " + lines);
+    }
+
+    @Test
+    void cookingAtLevelZeroShowsNoPassiveStatsButStillShowsTheCap() {
+        // The converse. Every passive line is gated on hasUnlocked, so an unranked cook must see none
+        // of them — a "Fuel Efficiency: 1" line would advertise a bonus that does not exist. The cap
+        // is not rank-gated and is deliberately still shown: it applies from the first cook.
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.COOKING)).thenReturn(0);
+
+        final List<String> lines = render(SkillStatsRenderer.forSkill(PrimarySkillType.COOKING));
+
+        for (String label : List.of("Fuel Efficiency Multiplier", "Second Helping Chance",
+                "Effect Duration")) {
+            assertFalse(anyLineContains(lines, label),
+                    "an unranked cook must not be shown " + label + " — got: " + lines);
+        }
+        assertTrue(anyLineContains(lines, "Hourly Cook Limit"));
     }
 
     @Test

@@ -843,14 +843,40 @@ rank, the ladder and the table lookup are all unit-tested with no world.
 whoever edits the file next. ⚠️ An unresolvable effect name warns **once per distinct bad name**,
 never once per bite; this is the eat path.
 
-**Stage 5 — Campfire + the window onto the skill.**
-`CampfireBlockEntity#litServerTick` mixin. ⚠️ **The owner is not available where the cook finishes** —
-`addItem(ServerWorld, LivingEntity, ItemStack)` has it, `litServerTick` does not. A pos+slot owner map
-is needed, mirroring `FURNACE_OWNERS`. Then `CookingStatsRenderer` + the `.Stat` keys, and the
-milestone plaques: **re-run `scripts/gen-milestone-advancements.sh`** and add a Cooking icon to its
-`ICON` map. ⚠️ The generator is the source of truth for plaque presentation and
-`MilestoneAdvancementResourcesTest` asserts both directions — `[[agility-child-skill-restructure]]`
-records that the generator once **deleted a skill's json**.
+**✅ Stage 5 — Campfire + the window onto the skill. DONE 2026-08-06.**
+`CampfireCookMixin` (a `@ModifyArg` on the `ItemScatterer.spawn` call inside `litServerTick`),
+`CookingListener.onCampfireCook` + a `CAMPFIRE_OWNERS` map with its own `UseBlockCallback`, and
+`CookingStatsRenderer`. The milestone plaques needed **no work at all** — Stage 1 already added
+`ICON[cooking]=cooked_beef` and `ROLE[cooking]=Provisioner` and re-ran the generator, because
+`MilestoneAdvancementResourcesTest` was a Stage 1 hard gate (D-CK9 item 1).
+
+**Suite 1520 green (+12), `./gradlew build` exit 0, boot `Done (0.923s)` with 0 ERROR, 0 exceptions,
+0 mixin failures. 5 mutations run, 5 kills — but only after one of them exposed a hole in a test
+this stage had just written.**
+
+**What this stage measured that the plan had not:**
+
+| # | Finding |
+|---|---|
+| 1 | 🔑 **The "pos + slot owner map" this plan prescribed is unnecessary, and the reasoning behind it was half-checked.** It is true that `litServerTick` cannot see an owner and `addItem` can. What the same javap pass also shows is that **`addItem` has exactly one caller in the jar** — `CampfireBlock#onUseWithItem`, a player right-click — and that **`CampfireBlockEntity extends BlockEntity implements Clearable`, not `Inventory`**, so no hopper, dropper or minecart can feed it. ⇒ `UseBlockCallback` sees every route food takes into a campfire, which is the shape Smelting already uses, and it fires 600 ticks before the result is due. **A campfire is the only cooking block in the game that cannot be automated** — which retroactively justifies "it needs no rate gate of its own" as a fact rather than a throughput argument |
+| 2 | ⚠️⚠️ **A mutation found a hole in a test written in the same hour.** Widening Cooking's owner gate from `instanceof CampfireBlockEntity` to `instanceof BlockEntity` **survived** the disjoint-owner-maps test, because the fixture claimed the furnace through *Smelting's* hook alone — so Cooking's gate was never once asked about a furnace. Two `UseBlockCallback` registrations are live and **each sees every click in the game**; a fixture that tells only one of them about a click is testing a game that does not exist. Both fixtures now fire both hooks and the mutation dies. 🔑 *A gate you never point the wrong block at is not under test — and "no test reddened" is evidence of nothing until you have proved the mutation was reachable* |
+| 3 | ⚠️⚠️ **Two of the three `/mcstats cooking` stat lines rendered with the value silently dropped**, and the first version of the test passed anyway because it asserted labels only. `getStatMessage(…, isCustom = true, …)` formats the vars **into the `.Stat` key**, so a key written as a bare label with no `{0}` placeholder discards them: `Fuel Efficiency` and `Effect Duration` rendered as plain text while `Second Helping Chance: 33.00%` was fine. Stage 1 wrote all three as bare labels, and **`.Stat` keys are exempt from `SkillLocaleCompletenessTest`**, so nothing in the suite read them. Fixed to Smelting's shipped form for the same mechanic (`Fuel Efficiency Multiplier: &e{0}x`, `Effect Duration: &e{0}s`), and the test now asserts **every stat line carries a digit** |
+| 4 | ⚠️ **The headless boot proves nothing about this mixin.** `CampfireBlockEntity` is registered through a `CampfireBlockEntity::new` method reference whose call site links lazily, so the class never loads on a server nobody plays on — the boot log contains the string "campfire" **zero times**. `MixinApplicationTest.campfireMixinApplies` class-loads it explicitly, which is what actually forced application and proved the injector bound |
+| 5 | 🔑 **Every captured local is disambiguated by TYPE, never by a numeric LVT index — deliberately.** The two stacks the hook needs (raw input, finished result) are both `ItemStack` locals at the injection point (slots 7 and 9), and `@Local(index = …)` would have compiled, bound and booted cleanly **with them swapped**: `Cooked_Beef` is simply unpriced under `.Cook` and `Beef` is simply absent from `Bonus_Drops.Cooking`, so the whole feature would pay nothing and drop nothing. Instead the **result is the `@ModifyArg` argument itself** (no capture at all) and the **input comes off the `SingleStackRecipeInput`**, the only local of its type — MixinExtras' implicit mode requires exactly one match and **fails loudly at apply time**, so a future refactor breaks the build rather than the skill. Mutation-proven anyway: swapping the two keys in the listener reddens 4 tests |
+| 6 | **`result == input` is an identity test, and it is the precise one.** `litServerTick` resolves the result as `getFirstMatch(…).map(craft).orElse(rawStack)` and `craft()` returns a fresh copy, so the result *is* the input object only when no campfire recipe matched and the raw item is being spat back out (a data-pack reload mid-cook). It must pay nothing — nothing was cooked. Mutation-proven, one test |
+| 7 | **Master Chef fires on campfires; Kitchen Efficiency does not, and neither is an accident.** ✅ **RULED 2026-08-06 (user).** The shipped tooltip reads *"a second helping out of the heat"* and a campfire is heat, so a campfire that never procs is #9's active-lie defect; the exploit risk is provably nil (finding 1). A campfire burns **no fuel**, so Kitchen Efficiency has nothing to multiply — an absence with a reason, not a gap. ⚠️ The bonus drop is deliberately **not** gated on the rate cap, matching `onSmeltComplete`: one config key quietly switching off two unrelated mechanics is how a known limit becomes a bug report |
+| 8 | **There is no output slot** — the campfire throws the cooked item on the floor via `ItemScatterer.spawn`, so `hasRoomForSecondSmelt` has no analogue and the bonus is an `increment(1)` on the scattered stack. The floor always has room |
+
+⚠️ **Stage 5 shipped no new config keys**, so there is nothing for `copyMissingDefaults` to back-fill
+and nothing to verify in the live tree. The two changed values are **locale strings**, which are
+bundled resources and reach every player regardless.
+
+⚠️ **The stale-server trap, for whoever runs the boot next:** `Stop-Process` on the `gradlew` wrapper
+PID does **not** kill the Java server it spawned. The next `runServer` then dies on the world
+`session.lock` with `Failed to start the minecraft server`, and — worse — greps the *previous* boot's
+`latest.log` before Minecraft rotates it, so the run looks clean. Kill by command line
+(`Get-CimInstance Win32_Process … CommandLine -like "*fabric.dli.config*"`), and check the log's
+mtime before believing a `Done (` line.
 
 ---
 
