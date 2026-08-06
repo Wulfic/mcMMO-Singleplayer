@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.config.YamlConfiguration;
 import com.gmail.nossr50.datatypes.mobs.MobOrigin;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.util.skills.SkillTools;
+import com.gmail.nossr50.util.text.StringUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -198,6 +201,52 @@ class ExperienceConfigKeyAgreementTest {
                     "the bundled experience.yml does not ship " + gate.path()
                             + " — a gate nobody can configure");
         }
+    }
+
+    /**
+     * {@code Experience_Formula.Skill_Multiplier} must hold exactly the skills that can earn XP:
+     * every non-child {@link PrimarySkillType}, and <b>no child skill</b>.
+     *
+     * <p><b>Why this exists (TODO.md item 4(e)).</b> The table shipped an {@code Agility: 1.0} row,
+     * and {@code McMMOSettings} offered it a slider on the XP Multipliers tab. Agility is a
+     * <em>child</em> skill: its level is the mean of Parkour/Swimming/Flying and it earns no XP of
+     * its own, so both {@code beginXpGain} and {@code applyXpGain} split the gain to those parents
+     * and return before {@code modifyXpGain} ever consults a multiplier. The row could never be
+     * read and the slider could never do anything.
+     *
+     * <p>🔑 <b>The tell was the sibling asymmetry</b>: {@code Salvage} and {@code Smelting} are also
+     * child skills and were correctly absent from both the table and the array. When a hand-kept
+     * roster lists one member its siblings don't, the odd one out is the bug — the same tell that
+     * exposed Herbalism's Verdant Bounty (item 1.2).
+     *
+     * <p>Both directions are asserted because a one-directional guard is what let this survive:
+     * {@code McMMOSettingsTest} proves every shipped key is offered a slider, which is exactly the
+     * check a dead row passes. Nothing asked whether the row could be <em>read</em>.
+     */
+    @Test
+    void skillMultiplierHoldsEveryEarningSkillAndNoChildSkill() throws IOException {
+        final InputStream in = getClass().getResourceAsStream("/experience.yml");
+        assertNotNull(in, "bundled experience.yml missing from the test classpath");
+        final YamlConfiguration bundled = YamlConfiguration.loadConfiguration(in);
+
+        final List<String> missing = new ArrayList<>();
+        final List<String> unreadable = new ArrayList<>();
+        for (PrimarySkillType skill : PrimarySkillType.values()) {
+            final String path = "Experience_Formula.Skill_Multiplier."
+                    + StringUtils.getCapitalized(skill.name());
+            if (SkillTools.isChildSkill(skill)) {
+                if (bundled.contains(path)) {
+                    unreadable.add(path);
+                }
+            } else if (!bundled.contains(path)) {
+                missing.add(path);
+            }
+        }
+
+        assertTrue(unreadable.isEmpty(),
+                "child skills earn no XP, so these multipliers can never be read: " + unreadable);
+        assertTrue(missing.isEmpty(),
+                "these skills earn XP but have no multiplier row: " + missing);
     }
 
     /**

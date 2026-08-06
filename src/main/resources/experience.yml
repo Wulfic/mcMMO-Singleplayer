@@ -378,7 +378,10 @@ Experience_Formula:
         Tridents: 1.0
         Swords: 1.0
         Taming: 1.0
-        Agility: 1.0
+        # No CHILD skill belongs here (Agility, Salvage, Smelting). A child earns no XP of its own --
+        # its level is the mean of its parents -- so both XP paths split the gain to those parents and
+        # return before any multiplier is consulted. Agility had a row and a settings slider that
+        # could never do anything; Salvage and Smelting correctly never did.
         Parkour: 1.0
         Swimming: 1.0
         Flying: 1.0

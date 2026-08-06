@@ -334,9 +334,18 @@ cannot do anything, ever.
 This is **Tier 1, not Tier 4** — a slider is a live surface on a dead knob. `Salvage` and `Smelting`
 are correctly absent from both the table and the array, which is the asymmetry that gives it away.
 🔑 **Same tell as Herbalism 1.2: when a hand-kept table lists one member its siblings don't, the odd
-one out is the bug.** Precedent for the fix is 1.3's `Level_Up_Chat_Broadcasts` ruling — delete the
-row and the slider — but it wants an explicit ruling because it removes a visible control.
-⚠️ Needs a converse guard on `Skill_Multiplier` too, or this recurs the next time a child skill lands.
+one out is the bug.**
+
+**✅ DONE.** Row deleted from `experience.yml`, `Agility` removed from `XP_MULTIPLIER_SKILLS`, and
+`ExperienceConfigKeyAgreementTest#skillMultiplierHoldsEveryEarningSkillAndNoChildSkill` pins **both**
+directions: every non-child `PrimarySkillType` has a row, and no child skill does. Mutation-verified
+both ways (re-add `Agility` → red; drop `Taming` → red, on a different assertion).
+
+⚠️ **Verified independently rather than trusted** — `getFormulaSkillModifier` has **three** call
+sites, not the one the finding considered. `modifyXpGain` (unreachable for a child: both XP paths
+split to the parents and return first), `applyDiminishedReturns` (guards `isChildSkill` explicitly
+before reaching it), and **`SkillTools#getXpMultiplier`, which has no callers at all**. The ruling
+holds, but the finding had only checked the first.
 
 **(c) The whole `Particles.*` / sound / message toggle family — 14 dead getters.**
 `Particles.{Ability_Activation,Ability_Deactivation,Bleed,Cripple,Dodge,Greater_Impact,Flux,Call_of_the_Wild,LevelUp_Enabled}`,
@@ -376,10 +385,11 @@ Decide: wire them into `SoundManager`/`NotificationManager`, or cull the section
    worth more than the four fixes, exactly as predicted.
 3. ~~**4(b) Diminished Returns**~~ ✅ DONE — and it carried a **fourth** finding the audit missed
    (the broken `Threshold` table) plus a **fifth** it never looked at (4(e), `Skill_Multiplier.Agility`).
-4. **1.1 / 1.2 / 3.1** — ⬅️ **NEXT.** Rulings are recorded at the top of this file; do not re-open them.
-   1.1 strip the surface → 1.2 fix the renderer → 3.1 implement Limit Break for all 8 (the big one).
-5. **4(e)** the `Skill_Multiplier.Agility` slider — small, wants one ruling.
-6. **4(c)** particle/sound family as one batch; **4(a)** config cull last.
+4. ~~**1.1 / 1.2 / 3.1**~~ ✅ DONE — `a7ffb8bb6`, `46a5e08de`, `d2c9af698`.
+5. ~~**4(e)**~~ ✅ DONE — row + slider deleted, two-way converse guard added.
+6. **4(c)** particle/sound family as one batch — ⬅️ **NEXT**; **4(a)** config cull last.
+   Also still open: **3.2** (confirm the 4 placeholder super abilities have no surface) and the
+   **Tier 5** oddments (two Maces `TODO: Make configurable`, `Metrics.bstats` cull).
 
 ⚠️ **Score so far: the audit has been wrong or incomplete on every single item worked.** 2.1's
 prescribed fix was inverted, 1.3 undercounted 3→4, 4(b) undercounted a one-line wiring job into a

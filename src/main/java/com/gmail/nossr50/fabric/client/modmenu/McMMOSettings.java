@@ -35,9 +35,17 @@ public final class McMMOSettings {
     private static final String CAT_CAPS = "Skill Level Caps";
     private static final String CAT_EXPLOITS = "Anti-Cheat";
 
-    /** Skills that have an {@code Experience_Formula.Skill_Multiplier.<name>} key. */
+    /**
+     * Skills that have an {@code Experience_Formula.Skill_Multiplier.<name>} key.
+     *
+     * <p>⚠️ <b>Child skills must never appear here</b> (Agility, Salvage, Smelting). A child earns no
+     * XP of its own, so both XP paths split the gain to its parents and return before the multiplier
+     * is read — a slider for one is a control that cannot do anything. {@code Agility} was offered
+     * exactly that way; Salvage and Smelting never were, and that asymmetry is what gave it away.
+     * {@code ExperienceConfigKeyAgreementTest} now pins both directions.
+     */
     private static final String[] XP_MULTIPLIER_SKILLS = {
-        "Agility", "Alchemy", "Archery", "Axes", "Cooking", "Crossbows", "Excavation", "Fishing",
+        "Alchemy", "Archery", "Axes", "Cooking", "Crossbows", "Excavation", "Fishing",
         "Flying", "Herbalism", "Hunter", "Husbandry", "Maces", "Mining", "Parkour", "Repair",
         "Spears", "Stealth", "Swimming", "Swords", "Taming", "Tridents", "Unarmed", "Unarmored",
         "Woodcutting"
