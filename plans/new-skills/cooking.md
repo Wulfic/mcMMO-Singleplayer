@@ -818,17 +818,30 @@ Master Chef + Kitchen Efficiency together push vanilla's strongly fuel-**negativ
 roughly break-even. A trickle, not a dupe — but it is the first row to switch off if a kelp farm ever
 looks like free fuel. Documented in `config.yml` at the entry itself.
 
-**Stage 4 — Power Cook.**
-**D-CK2's restructure lands first, alone, with the eat-bread test**, then the effect application
-(`player.addStatusEffect` — precedent in `SecondWindListener` / `SmokeBombListener`). The
-level→duration math is **MC-free on `CookingManager`**, so it is unit-testable with no world — the
-Trophy Hunter `Runnable` lesson.
-⚠️ **Power Cook needs an explicit `SkillGating` call too** (D-CK9 item 2) — it fires on a
-deterministic condition and no chokepoint covers it.
-⚠️ **Do not overwrite a longer effect the player already has.** Eating a steak mid-Strength-potion
-must not cut 3:00 down to 15 s. Compare remaining duration and amplifier before applying; a Cooking
-effect never replaces something stronger or longer. This is the "does not stack" clause the draft
-hand-waved, and here it is one comparison rather than a subsystem.
+**✅ Stage 4 — Power Cook. DONE 2026-08-05.**
+D-CK2's restructure landed first and alone; then the effect application, the 15-row
+`Power_Cook_Effects` table, and `AdvancedConfig.getPowerCookSeconds` — the reader Stage 3
+deliberately withheld. The level→duration math is MC-free on `CookingManager`, so the gate, the
+rank, the ladder and the table lookup are all unit-tested with no world.
+
+**Suite 1508 green (+29), `./gradlew build` exit 0, boot `Done (1.518s)` with 0 ERROR, 0 exceptions,
+0 mixin failures. 6 mutations run, 6 kills.** Verified in the live `run/config/mcmmo` tree that all
+15 rows back-filled into the pre-existing on-disk `config.yml`.
+
+**What this stage measured that the plan had not:**
+
+| # | Finding |
+|---|---|
+| 1 | ⚠️⚠️ **The fix for the ordering trap is structural, not a comment.** The diet chain is sealed inside `applyDietBonus(...)`, so there is no longer an `else if` arm for anyone to append to — a comment would not have survived the next contributor. ⚠️ **The seam shipped with ZERO tests**: both diets' arithmetic was pinned on their managers and nothing asserted a bite ever reached them. `FoodListenerTest` is new and has 14. Mutation-proven — restoring the `else if` reddens the eat-bread test and *only* that test |
+| 2 | ⚠️⚠️ **The "do not overwrite a stronger effect" clause is ALREADY VANILLA'S.** `LivingEntity#addStatusEffect` routes an existing effect through `StatusEffectInstance#upgrade`, which takes the new instance only when **stronger, or equally strong and longer**; a weaker-but-longer one is parked as `hiddenEffect` and resumes afterwards (disassembled, not assumed). Writing our own comparison — what this plan asked for — would have duplicated it and got the hidden-effect case wrong. 🔑 *When a rule is delegated to someone else's code, the test asserts **their** behaviour, in both directions, or a future MC version changes it silently* |
+| 3 | 🔑 **The explicit `SkillGating` call D-CK9 item 2 demanded was not needed here either.** `powerCookEffect` opens on `Permissions#isSubSkillEnabled`, which **is** one of #10's three chokepoints. **Routing through a chokepoint is the gate**, and a redundant second call would be a line no test could distinguish from its own absence (#9's dead-gate rule). ⇒ **D-CK9 item 2's shape-based rule produced two false positives out of two.** Ask whether the call you are about to write passes through a chokepoint; do not ask what shape the mechanic is |
+| 4 | 🔑 **The cadence ban is enforced against the shipped config, and it carries its own reference point.** `PowerCookEffectTableTest` walks every row of the written-out `config.yml` asserting `canApplyUpdateEffect(1, 0) == false` — and separately asserts `SATURATION` and `HUNGER` still answer `true`, so an empty section or a neutered check cannot look clean. It is the **only test in the suite covering a config-edit re-entry path**. Mutation-proven: `Bread: SATURATION` reddens it |
+| 5 | **The table is keyed on the `Config_String` form, not the registry path this plan specified.** `Bonus_Drops.Cooking` and `Experience_Values.Cooking` are Config_String-keyed in the same file, and one skill reading two key styles in one file is worse than one sentence of this plan being wrong. Mutation-proven — passing the raw registry path reddens 4 tests |
+| 6 | **`Registries.STATUS_EFFECT` is a plain `Registry`, not a `DefaultedRegistry`** (unlike `ENTITY_TYPE`), so `PotionUtil.matchEffect` genuinely answers `null` on a typo rather than silently resolving to a default. Checked rather than assumed, because Hunter's unknown-id-⇒-PIG trap is the same shape |
+
+⚠️ **The amplifier is a constant, not a config key.** It is a ruling — a YAML key would hand it to
+whoever edits the file next. ⚠️ An unresolvable effect name warns **once per distinct bad name**,
+never once per bite; this is the eat path.
 
 **Stage 5 — Campfire + the window onto the skill.**
 `CampfireBlockEntity#litServerTick` mixin. ⚠️ **The owner is not available where the cook finishes** —
