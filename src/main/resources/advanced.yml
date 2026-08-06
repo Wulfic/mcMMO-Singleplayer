@@ -1075,28 +1075,13 @@ Skills:
     #  Settings for Unarmed
     ###
     Unarmed:
-        Disarm:
-            # ChanceMax: Maximum chance of disarming other players
-            # MaxBonusLevel: Level when the maximum chance to disarm is reached
-            # AntiTheft: Determines if only the disarmed player can retrieve disarmed items
-            ChanceMax: 33.0
-            MaxBonusLevel:
-                Standard: 100
-                RetroMode: 1000
-            AntiTheft: false
-
+        # Disarm and IronGrip are deliberately absent: both only ever applied to another PLAYER,
+        # which cannot happen in singleplayer, so the sub-skills were removed rather than left as
+        # knobs that can never change anything.
         ArrowDeflect:
             # ChanceMax: Maximum chance of deflecting arrows
             # MaxBonusLevel: Level when the maximum chance to deflect is reached
             ChanceMax: 50.0
-            MaxBonusLevel:
-                Standard: 100
-                RetroMode: 1000
-
-        IronGrip:
-            # ChanceMax: Maximum chance of preventing being disarmed
-            # MaxBonusLevel: Level when the maximum chance to prevent being disarmed is reached
-            ChanceMax: 100.0
             MaxBonusLevel:
                 Standard: 100
                 RetroMode: 1000

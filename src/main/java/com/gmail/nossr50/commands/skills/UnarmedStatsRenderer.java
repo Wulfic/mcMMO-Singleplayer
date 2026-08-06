@@ -9,23 +9,21 @@ import java.util.List;
 
 /**
  * {@code /mcstats unarmed} — port of legacy {@code UnarmedCommand}. Shows Arrow Deflect, Berserk
- * duration, Disarm chance, Steel Arm (Iron Arm) bonus damage, and Iron Grip chance.
+ * duration and Steel Arm (Iron Arm) bonus damage.
  *
- * <p>Limit Break is intentionally omitted — it was dropped from the port for all weapons.
+ * <p>Legacy's Disarm and Iron Grip lines are deliberately absent: both mechanics require
+ * {@code target instanceof Player} and can never fire in singleplayer, so the sub-skills were
+ * removed outright rather than rendered as chances that never apply (see {@code SubSkillType}).
  */
 public final class UnarmedStatsRenderer extends SkillStatsRenderer {
 
     private boolean canDeflect;
     private boolean canBerserk;
-    private boolean canDisarm;
     private boolean canIronArm;
-    private boolean canIronGrip;
 
     private String deflectChance;
     private String berserkLength;
-    private String disarmChance;
     private double ironArmBonus;
-    private String ironGripChance;
 
     public UnarmedStatsRenderer() {
         super(PrimarySkillType.UNARMED);
@@ -35,9 +33,7 @@ public final class UnarmedStatsRenderer extends SkillStatsRenderer {
     protected void dataCalculations(float skillValue) {
         canDeflect = hasUnlocked(SubSkillType.UNARMED_ARROW_DEFLECT);
         canBerserk = hasUnlocked(SubSkillType.UNARMED_BERSERK);
-        canDisarm = hasUnlocked(SubSkillType.UNARMED_DISARM);
         canIronArm = hasUnlocked(SubSkillType.UNARMED_STEEL_ARM_STYLE);
-        canIronGrip = hasUnlocked(SubSkillType.UNARMED_IRON_GRIP);
 
         if (canDeflect) {
             deflectChance = ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
@@ -46,16 +42,8 @@ public final class UnarmedStatsRenderer extends SkillStatsRenderer {
         if (canBerserk) {
             berserkLength = calculateLength(skillValue);
         }
-        if (canDisarm) {
-            disarmChance = ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
-                    SubSkillType.UNARMED_DISARM)[0];
-        }
         if (canIronArm) {
             ironArmBonus = mmoPlayer.getUnarmedManager().getSteelArmStyleDamage();
-        }
-        if (canIronGrip) {
-            ironGripChance = ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
-                    SubSkillType.UNARMED_IRON_GRIP)[0];
         }
     }
 
@@ -69,16 +57,10 @@ public final class UnarmedStatsRenderer extends SkillStatsRenderer {
         if (canBerserk) {
             messages.add(getStatMessage(SubSkillType.UNARMED_BERSERK, berserkLength));
         }
-        if (canDisarm) {
-            messages.add(getStatMessage(SubSkillType.UNARMED_DISARM, disarmChance));
-        }
         if (canIronArm) {
             messages.add(LocaleLoader.getString("Ability.Generic.Template",
                     LocaleLoader.getString("Unarmed.Ability.Bonus.0"),
                     LocaleLoader.getString("Unarmed.Ability.Bonus.1", ironArmBonus)));
-        }
-        if (canIronGrip) {
-            messages.add(getStatMessage(SubSkillType.UNARMED_IRON_GRIP, ironGripChance));
         }
 
         return messages;

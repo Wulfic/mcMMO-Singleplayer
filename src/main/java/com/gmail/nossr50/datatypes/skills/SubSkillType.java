@@ -218,9 +218,12 @@ public enum SubSkillType {
     UNARMED_ARROW_DEFLECT(1),
     UNARMED_BERSERK(1),
     UNARMED_BLOCK_CRACKER,
-    UNARMED_DISARM(1),
+    // Disarm and Iron Grip are deliberately absent, not merely unimplemented: both require
+    // `target instanceof Player` (Disarm drops the victim's held item; Iron Grip resists it), which
+    // is unreachable in singleplayer. Legacy's constants, ranks, plaques, locale keys and
+    // `Skills.Unarmed.Disarm.*` config block were all removed with them, because a rank plaque or a
+    // /mcstats line about a mechanic that can never fire is a lie the mod tells the player.
     UNARMED_STEEL_ARM_STYLE(20),
-    UNARMED_IRON_GRIP(1),
     UNARMED_UNARMED_LIMIT_BREAK(10),
 
     /* Unarmored */

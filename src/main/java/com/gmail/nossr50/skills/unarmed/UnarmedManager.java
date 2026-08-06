@@ -45,8 +45,12 @@ import com.gmail.nossr50.util.skills.RankUtils;
  *       {@code disarmCheck} — and defends a player against <em>being</em> disarmed. Only an mcMMO
  *       player disarms anyone; mobs never do. Dead for the same reason.</li>
  * </ul>
- * Both remain listed in {@code SubSkillType} and in the skill's command output, exactly as the
- * dropped PvP arms elsewhere do — they simply never fire.
+ * Neither has a {@code SubSkillType} constant any more. They were removed outright along with their
+ * rank plaques, {@code skillranks.yml} entries, locale keys and the whole
+ * {@code Skills.Unarmed.Disarm.*} config block: an unreachable mechanic that still ships a
+ * {@code /mcstats} line, a "You can now use Disarm." toast and a tunable knob does not read as
+ * unimplemented to the player, it reads as broken. Leaving the surface behind is the Tier-1 defect
+ * shape this port has now hit repeatedly — see {@code TODO.md} item 1.1.
  */
 public class UnarmedManager extends SkillManager {
     public static final double BERSERK_DMG_MODIFIER = 1.5;

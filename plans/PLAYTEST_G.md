@@ -151,8 +151,8 @@ these; if one never fires in ~20 hits, that's a fail worth logging.
 - [ ] **Axes → Critical Strikes** — occasional doubled damage
 - [ ] **Axes → Greater Impact** — an *unarmored* mob gets knocked back hard
 - [ ] **Axes → Armor Impact** — an *armored* mob (zombie in iron) loses armor durability, no bonus damage
-- [ ] **Unarmed → Disarm** — a mob holding an item drops it
-- [ ] **Unarmed → Iron Grip / Arrow Deflect** — arrows deflected while bare-handed
+- [ ] **Unarmed → Arrow Deflect** — arrows deflected while bare-handed
+      (Disarm and Iron Grip were removed: both only ever applied to another *player*.)
 - [ ] **Archery → Skill Shot** — increased bow damage at level
 - [ ] **Archery → Arrow Retrieval** — arrows recovered from mob corpses
 - [ ] **Crossbows → Trick Shot** — bolts ricochet off surfaces

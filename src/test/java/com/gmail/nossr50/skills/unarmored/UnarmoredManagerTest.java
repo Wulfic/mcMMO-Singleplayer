@@ -108,12 +108,15 @@ class UnarmoredManagerTest {
                 SubSkillType.UNARMORED_IRON_SKIN.getParentSkill());
         assertEquals(PrimarySkillType.UNARMORED,
                 SubSkillType.UNARMORED_THORNY_SKIN.getParentSkill());
-        assertEquals(PrimarySkillType.UNARMED, SubSkillType.UNARMED_IRON_GRIP.getParentSkill());
+        // The counterpart used to be UNARMED_IRON_GRIP — a sharper fixture, since it mirrored
+        // UNARMORED_IRON_SKIN word for word — but Iron Grip was removed with Disarm (both are
+        // PvP-only, see SubSkillType). Any UNARMED_* constant pins the same prefix rule.
+        assertEquals(PrimarySkillType.UNARMED, SubSkillType.UNARMED_ARROW_DEFLECT.getParentSkill());
         // ...and the config addresses they derive really are in different blocks.
         assertTrue(SubSkillType.UNARMORED_IRON_SKIN.getAdvConfigAddress()
                 .startsWith("Skills.Unarmored."));
         assertNotEquals(SubSkillType.UNARMORED_IRON_SKIN.getAdvConfigAddress(),
-                SubSkillType.UNARMED_IRON_GRIP.getAdvConfigAddress());
+                SubSkillType.UNARMED_ARROW_DEFLECT.getAdvConfigAddress());
     }
 
     // --- XP --------------------------------------------------------------------------------------

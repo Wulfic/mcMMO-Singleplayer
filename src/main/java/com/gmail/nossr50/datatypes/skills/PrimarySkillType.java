@@ -70,8 +70,8 @@ public enum PrimarySkillType {
     UNARMED,
     // Pass 2. One letter of difference from UNARMED, which is load-bearing rather than merely
     // unfortunate: SkillTools resolves a sub-skill's parent from the enum-name prefix up to the
-    // first '_', so UNARMORED_IRON_SKIN parents onto this constant and UNARMED_IRON_GRIP onto the
-    // one above. The match is equalsIgnoreCase on the WHOLE prefix, not startsWith, so the two
+    // first '_', so UNARMORED_IRON_SKIN parents onto this constant and UNARMED_ARROW_DEFLECT onto
+    // the one above. The match is equalsIgnoreCase on the WHOLE prefix, not startsWith, so the two
     // cannot collide — see UnarmoredManagerTest, which pins that.
     UNARMORED,
     WOODCUTTING

@@ -501,28 +501,12 @@ public class AdvancedConfig extends ConfigLoader {
         }
 
         /* UNARMED */
-        if (getMaximumProbability(SubSkillType.UNARMED_DISARM) < 1) {
-            reason.add("Skills.Unarmed.Disarm.ChanceMax should be at least 1!");
-        }
-
-        if (getMaxBonusLevel(SubSkillType.UNARMED_DISARM) < 1) {
-            reason.add("Skills.Unarmed.Disarm.MaxBonusLevel should be at least 1!");
-        }
-
         if (getMaximumProbability(SubSkillType.UNARMED_ARROW_DEFLECT) < 1) {
             reason.add("Skills.Unarmed.ArrowDeflect.ChanceMax should be at least 1!");
         }
 
         if (getMaxBonusLevel(SubSkillType.UNARMED_ARROW_DEFLECT) < 1) {
             reason.add("Skills.Unarmed.ArrowDeflect.MaxBonusLevel should be at least 1!");
-        }
-
-        if (getMaximumProbability(SubSkillType.UNARMED_IRON_GRIP) < 1) {
-            reason.add("Skills.Unarmed.IronGrip.ChanceMax should be at least 1!");
-        }
-
-        if (getMaxBonusLevel(SubSkillType.UNARMED_IRON_GRIP) < 1) {
-            reason.add("Skills.Unarmed.IronGrip.MaxBonusLevel should be at least 1!");
         }
 
         /* WOODCUTTING */
@@ -1439,10 +1423,6 @@ public class AdvancedConfig extends ConfigLoader {
     public double getSteelArmOverride(int rank, double def) {
         String key = "Rank_" + rank;
         return config.getDouble("Skills.Unarmed.SteelArmStyle.Override." + key, def);
-    }
-
-    public boolean getDisarmProtected() {
-        return config.getBoolean("Skills.Unarmed.Disarm.AntiTheft", false);
     }
 
     /* WOODCUTTING */

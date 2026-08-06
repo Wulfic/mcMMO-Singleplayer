@@ -1,13 +1,19 @@
 package com.gmail.nossr50.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.yaml.snakeyaml.Yaml;
 
 /**
  * Exercises {@link RankConfig} against the real bundled {@code skillranks.yml} on the test
@@ -101,5 +107,45 @@ class RankConfigTest {
         assertEquals(0,
                 config.getSubSkillUnlockLevel(SubSkillType.HUNTER_TROPHY_HUNTER, 5, true),
                 "there is no rank 5; if this ever answers a real level the ladder grew silently");
+    }
+
+    @Test
+    void everyShippedRankSectionMapsToALiveSubSkill() throws Exception {
+        // ⚠️ THE CONVERSE DIRECTION, and the one nothing else in the build covers.
+        //
+        // RankConfig#checkConfig walks SubSkillType.values() and asks the yml — enum → yml. That
+        // catches a sub-skill whose section is missing. It is completely blind the other way: a
+        // section for a sub-skill that no longer exists just sits there, read by nobody, and looks
+        // exactly like a live one to anyone reading the file. That is how `Unarmed.Disarm` and
+        // `Unarmed.IronGrip` outlived the mechanics they configured (TODO.md item 1.1), and it is
+        // the same one-directional-completeness trap as Herdsmans_Call and
+        // Diminished_Returns.Threshold — a hand-kept table keyed by skill name needs its converse
+        // guard the day it is written, not the day someone notices.
+        final Map<String, Object> root;
+        try (InputStream in = RankConfigTest.class.getResourceAsStream("/skillranks.yml")) {
+            assertNotNull(in, "skillranks.yml is not on the test classpath");
+            root = new Yaml().load(in);
+        }
+
+        final Set<String> live = new TreeSet<>();
+        for (SubSkillType subSkill : SubSkillType.values()) {
+            live.add(subSkill.getRankConfigAddress());
+        }
+
+        final Set<String> orphans = new TreeSet<>();
+        for (Map.Entry<String, Object> skill : root.entrySet()) {
+            if (!(skill.getValue() instanceof Map<?, ?> subSkills)) {
+                continue;
+            }
+            for (Object subSkill : subSkills.keySet()) {
+                final String address = skill.getKey() + "." + subSkill;
+                if (!live.contains(address)) {
+                    orphans.add(address);
+                }
+            }
+        }
+
+        assertTrue(orphans.isEmpty(),
+                "skillranks.yml configures sub-skills that no longer exist: " + orphans);
     }
 }

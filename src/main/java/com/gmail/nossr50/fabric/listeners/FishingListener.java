@@ -561,7 +561,8 @@ public final class FishingListener {
      * <p>Legacy's trailing {@code setFishingTarget()} is dropped for the same reason Master Angler drops
      * it — it discards the value it computes. Dropped with it: the {@code PLAYER} arm (the player-head
      * owner stamp and the {@code INVENTORY} steal), unreachable in singleplayer where the only player is
-     * the angler — an honest collapse, the same call made for Disarm and Daze.
+     * the angler — an honest collapse, the same call made for Daze and for Unarmed's Disarm/Iron
+     * Grip (which were removed outright rather than left as a dead surface; see {@code SubSkillType}).
      *
      * @param bobber the bobber being reeled in (source of the owner and the hooked entity)
      */

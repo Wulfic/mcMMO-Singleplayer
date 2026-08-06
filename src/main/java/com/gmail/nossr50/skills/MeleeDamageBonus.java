@@ -28,7 +28,8 @@ import org.jetbrains.annotations.NotNull;
  * Spears Momentum (the one that buffs the <em>attacker</em> rather than touching the target) — live
  * in {@code EntityDamageListener}, as does per-hit combat XP. Limit Break is
  * dropped across every combat skill in this port (PvP-only in singleplayer, and its {@code AllowPVE}
- * switch defaults off); Disarm is unreachable in singleplayer and deliberately unported.
+ * switch defaults off); Disarm and Iron Grip are unreachable in singleplayer and were removed
+ * outright, constants and all (see {@code SubSkillType}).
  */
 public final class MeleeDamageBonus {
 

@@ -157,8 +157,6 @@ Fighting with an empty hand. Super ability: **Berserk**. (Not to be confused wit
 | Sub-skill | Ranks | Effect |
 |---|---|---|
 | Berserk | 1 | +50 % damage, breaks weak materials. Super ability. |
-| Disarm | 1 | Knock the item out of a foe's hand. |
-| Iron Grip | 1 | Prevents *you* from being disarmed. |
 | Steel Arm Style | 20 | Hardens your arm over time — flat bonus damage. |
 | Arrow Deflect | 1 | Deflect incoming arrows. |
 | Block Cracker | 1 | Break rock with your fists. |

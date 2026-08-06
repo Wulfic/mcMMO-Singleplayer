@@ -855,11 +855,6 @@ Herbalism:
             Rank_4: 800
             Rank_5: 1000
 Fishing:
-    Mastery:
-        Standard:
-            Rank_1: 100
-        RetroMode:
-            Rank_1: 1000
     MagicHunter:
         Standard:
             Rank_1: 20
@@ -1065,16 +1060,6 @@ Unarmed:
             Rank_1: 20
         RetroMode:
             Rank_1: 200
-    Disarm:
-        Standard:
-            Rank_1: 25
-        RetroMode:
-            Rank_1: 250
-    IronGrip:
-        Standard:
-            Rank_1: 60
-        RetroMode:
-            Rank_1: 600
     SteelArmStyle:
         Standard:
             Rank_1: 1
