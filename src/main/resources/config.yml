@@ -427,6 +427,53 @@ Skills:
     # is the input -- ore pays Smelting, food pays Cooking, and neither pays both.
     Cooking:
         Level_Cap: 0
+        # POWER COOK -- the food you cooked grants its effect when you eat it.
+        #
+        # Key   = the food item (the same Config_String form used by Experience_Values and
+        #         Bonus_Drops, so the whole skill reads one way through this file).
+        # Value = the status effect it grants. Registry name, or a legacy Bukkit alias.
+        #
+        # THE AMPLIFIER IS ALWAYS 0 AND IS NOT CONFIGURABLE. The duration comes from
+        # advanced.yml -> Skills.Cooking.PowerCook.Seconds_Per_Rank (3s at rank 1, 15s at rank 5).
+        # A brewed Strength potion is 3:00 at amplifier 1 -- twelve times longer before the
+        # amplifier is counted -- and that gap is the entire reason Cooking does not delete Alchemy.
+        #
+        # ⚠️⚠️ NEVER MAP AN EFFECT THAT FIRES EVERY TICK. Saturation, Instant Health, Instant
+        # Damage, Hunger, Absorption, Bad Omen and Raid Omen all apply once PER TICK for their whole
+        # duration, so 3 seconds of Saturation is +60 food onto a 20-point bar -- one slice of bread
+        # would end hunger as a resource forever. An effect's NAME does not tell you its cadence;
+        # only StatusEffect#canApplyUpdateEffect does, and a test walks every row of this section
+        # and asserts it. Four of those seven are NOT InstantStatusEffect subclasses, so "it is not
+        # an instant potion" is not the check.
+        #
+        # ⚠️ Cooked/crafted foods only -- an apple you picked off a tree grants nothing. Foods that
+        # already carry a vanilla effect (golden apple, pufferfish, rotten flesh, spider eye,
+        # poisonous potato, chorus fruit, honey bottle, raw chicken, enchanted golden apple) are
+        # deliberately absent: stacking on top of vanilla's own effect is not worth the code.
+        #
+        # ⚠️ Fire Resistance and Water Breathing are banned outright, at any duration. 15 seconds of
+        # either is a lava-lake shortcut and a monument shortcut, and both are Alchemy's to sell.
+        #
+        # Delete a row to disable it. An unknown effect name disables the row and logs once.
+        Power_Cook_Effects:
+            Cooked_Beef: STRENGTH
+            Cooked_Porkchop: RESISTANCE
+            Cooked_Mutton: RESISTANCE
+            Cooked_Chicken: SPEED
+            Cooked_Rabbit: JUMP_BOOST
+            # ⚠️ Dolphin's Grace, NOT Water Breathing -- see the ban above.
+            Cooked_Cod: DOLPHINS_GRACE
+            Cooked_Salmon: DOLPHINS_GRACE
+            Baked_Potato: HASTE
+            Dried_Kelp: HASTE
+            # ⚠️ Bread was Saturation in an earlier draft. It is the traveller's loaf now; see the
+            # every-tick warning above for why that row could never have shipped.
+            Bread: SPEED
+            Cookie: SPEED
+            Pumpkin_Pie: REGENERATION
+            Mushroom_Stew: REGENERATION
+            Beetroot_Soup: REGENERATION
+            Rabbit_Stew: JUMP_BOOST
     Excavation:
         Level_Cap: 0
     Fishing:

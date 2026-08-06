@@ -30,8 +30,8 @@ import org.jetbrains.annotations.Nullable;
  *   <li><b>Stage 3</b> ✅ — Kitchen Efficiency ({@link #boostFuelTime}, the {@code else} of the gate
  *       {@code boostFuelTime} has enforced since the Smelting port) and Master Chef
  *       ({@link #canSecondHelping}, the food arm of {@code onSmeltComplete});</li>
- *   <li><b>Stage 4</b> — Power Cook (the eat seam, and the level → duration math, which lives here
- *       precisely so it is unit-testable with no world);</li>
+ *   <li><b>Stage 4</b> ✅ — Power Cook ({@link #powerCookEffect}, the eat seam; the level → duration
+ *       math lives here precisely so it is unit-testable with no world);</li>
  *   <li><b>Stage 5</b> — campfires and {@code CookingStatsRenderer}.</li>
  * </ul>
  *
@@ -63,9 +63,11 @@ import org.jetbrains.annotations.Nullable;
  *       which is itself one of the three chokepoints. Routing through a chokepoint is the gate; the
  *       reasoning "a multiplier is not covered" is about the shape, not about this call. Asserted by
  *       a test rather than argued, because that is the only form of this claim worth anything.</li>
- *   <li><b>Power Cook</b> (Stage 4) — a deterministic effect on the eat seam, which touches no
- *       chokepoint at all. It is the one that will need an explicit
- *       {@code SkillGating.isSkillEnabled(COOKING)}.</li>
+ *   <li><b>Power Cook</b> — a deterministic effect on the eat seam, and the plan's other headline
+ *       case for an explicit call. It resolved the same way Kitchen Efficiency did:
+ *       {@link #powerCookEffect} opens on {@link Permissions#isSubSkillEnabled}, so it is gated
+ *       without one. <b>Routing through a chokepoint is the gate</b>, and a second redundant call
+ *       would be a line no test could distinguish from its own absence.</li>
  * </ul>
  *
  * <p>The XP on this class needs no such call: every award goes through
@@ -351,6 +353,97 @@ public class CookingManager extends SkillManager {
      */
     public boolean canSecondHelping(@NotNull String resultConfigString) {
         return isMasterChefMaterial(resultConfigString) && isMasterChefSuccessful();
+    }
+
+    // --- Power Cook -------------------------------------------------------------------------------
+
+    /**
+     * What eating one Power Cook food is worth: <b>which</b> effect, and for <b>how long</b>.
+     *
+     * <p>Deliberately not a {@code StatusEffectInstance}. Resolving the name against the status
+     * effect registry is the one MC-typed step in the whole sub-skill, so it happens on the eat seam
+     * and everything up to it — the gate, the rank, the ladder, the table lookup — stays testable
+     * with no world, no registry and no player entity.
+     *
+     * @param effectName    the configured effect name, exactly as written in {@code config.yml}
+     * @param durationTicks how long it lasts, already converted from the configured seconds
+     */
+    public record PowerCookEffect(@NotNull String effectName, int durationTicks) {
+    }
+
+    /**
+     * The amplifier every Power Cook effect is granted at. <b>Zero, always, and not configurable.</b>
+     *
+     * <p>No Strength II from a sandwich: Alchemy's whole job is selling amplified effects, and the
+     * gap between 15 s of Strength I and 3:00 of Strength II is the entire reason both skills are
+     * worth levelling. Making this a config key would be handing that ruling to whoever edits the
+     * YAML next.
+     */
+    public static final int POWER_COOK_AMPLIFIER = 0;
+
+    /**
+     * Power Cook: the effect this food grants this player right now, or {@code null} for nothing.
+     *
+     * <p>Three ways to get nothing, and they are checked in this order because that is cheapest
+     * first and because the gate must come before anything that could have a side effect:
+     * <ol>
+     *   <li>Cooking is switched off — see the note below;</li>
+     *   <li>the player has no Power Cook rank yet, so the ladder pays 0 seconds;</li>
+     *   <li>the food is not in {@code Skills.Cooking.Power_Cook_Effects} — raw meat, an apple, or a
+     *       food vanilla already gives an effect to.</li>
+     * </ol>
+     *
+     * <h2>⚠️ Why there is no explicit {@code SkillGating.isSkillEnabled} call here</h2>
+     * The plan flags Power Cook as the one sub-skill needing one, on the reasoning that a
+     * <em>deterministic</em> effect reaches none of GitHub #10's three chokepoints. That is right
+     * about the shape and wrong about this call, for exactly the reason Stage 3 recorded for Kitchen
+     * Efficiency: {@link Permissions#isSubSkillEnabled} <b>is</b> one of the three, and the first
+     * line goes through it. <b>Routing through a chokepoint is the gate.</b> Adding a second,
+     * redundant call would be a line no test could ever distinguish from its own absence.
+     *
+     * <p>⚠️ <b>Do not "simplify" that first line to a rank check.</b> A rank read is deliberately
+     * never gated (forcing ranks to 0 is the landmine {@code SkillGating} documents at length), so
+     * the switch would silently stop closing this path and eating a steak would still grant Strength
+     * with the skill switched off.
+     *
+     * @param foodConfigString the config string of the food just eaten, e.g. {@code Cooked_Beef}
+     */
+    public @Nullable PowerCookEffect powerCookEffect(@NotNull String foodConfigString) {
+        if (!Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.COOKING_POWER_COOK)) {
+            return null;
+        }
+        final int seconds = getPowerCookSeconds();
+        if (seconds <= 0) {
+            return null; // Unranked. The common case, and the one the ladder guards at rank 0.
+        }
+        final String effectName = getPowerCookEffectName(foodConfigString);
+        if (effectName == null || effectName.isBlank()) {
+            return null; // Not a Power Cook food, or the row was deleted to disable it.
+        }
+        return new PowerCookEffect(effectName, seconds * Misc.TICK_CONVERSION_FACTOR);
+    }
+
+    /**
+     * How many seconds a Power Cook effect lasts at this player's current rank; {@code 0} when
+     * unranked, which means "grant nothing" rather than "grant a zero-tick effect".
+     */
+    public int getPowerCookSeconds() {
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        if (advanced == null) {
+            return 0; // No config wired ⇒ no opinion ⇒ no effect.
+        }
+        // The getter guards rank 0 itself rather than indexing a defaults array by rank - 1.
+        return advanced.getPowerCookSeconds(
+                RankUtils.getRank(getPlayer(), SubSkillType.COOKING_POWER_COOK));
+    }
+
+    /**
+     * The effect name mapped to {@code foodConfigString}, or {@code null} when the food grants
+     * nothing. The table half of Power Cook, with no rank and no gate in it.
+     */
+    public @Nullable String getPowerCookEffectName(@NotNull String foodConfigString) {
+        final GeneralConfig general = McMMOMod.getGeneralConfig();
+        return general == null ? null : general.getPowerCookEffect(foodConfigString);
     }
 
     // --- Config reads -----------------------------------------------------------------------------

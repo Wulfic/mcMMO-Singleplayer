@@ -185,6 +185,16 @@ public class AdvancedConfig extends ConfigLoader {
             }
         }
 
+        // Same shape, and the same reason to start at rank 1: a rank the player has unlocked that
+        // grants a zero-second effect is a sub-skill that reads as broken rather than as switched
+        // off. Deleting the food's row in config.yml is how you turn a mapping off.
+        for (int rank = 1; rank <= SubSkillType.COOKING_POWER_COOK.getNumRanks(); rank++) {
+            if (getPowerCookSeconds(rank) < 1) {
+                reason.add("Skills.Cooking.PowerCook.Seconds_Per_Rank.Rank_" + rank
+                        + " should be at least 1!");
+            }
+        }
+
         /* FISHING */
         /*List<Fishing.Tier> fishingTierList = Arrays.asList(Fishing.Tier.values());
 
@@ -1302,9 +1312,26 @@ public class AdvancedConfig extends ConfigLoader {
                 "Skills.Cooking.KitchenEfficiency.Multiplier_Per_Rank.Rank_" + rank, 1));
     }
 
-    // Skills.Cooking.PowerCook.Seconds_Per_Rank has no reader yet on purpose — it lands with Power
-    // Cook itself in Stage 4. A getter nobody calls is how this port has repeatedly ended up with a
-    // mechanic that is "built" and wired to nothing.
+    /**
+     * Power Cook: how long the food's mapped effect lasts, in <b>seconds</b>, at {@code rank}.
+     *
+     * <p>The whole of Cooking's effect budget is this number. The amplifier is always 0 and is not
+     * configurable, so duration is the only dial — and at rank 5 it is 15 s against a brewed
+     * Strength potion's 3:00 at amplifier 1.
+     *
+     * <p>⚠️ <b>Rank 0 answers 0 by an explicit guard, not by luck</b> — the same landmine
+     * {@link #getKitchenEfficiencyMultiplier} documents. Nothing here is indexed by {@code rank - 1}.
+     *
+     * @param rank the player's Power Cook rank; {@code 0} or less means "no effect at all"
+     * @return the effect duration in seconds, never negative; {@code 0} means grant nothing
+     */
+    public int getPowerCookSeconds(int rank) {
+        if (rank < 1) {
+            return 0; // Unranked, or the sub-skill switched off. No effect, not a zero-tick one.
+        }
+        return Math.max(0,
+                config.getInt("Skills.Cooking.PowerCook.Seconds_Per_Rank.Rank_" + rank, 0));
+    }
 
     /* SMELTING */
     public int getBurnModifierMaxLevel() {

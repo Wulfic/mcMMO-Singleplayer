@@ -6,6 +6,8 @@ import com.gmail.nossr50.util.text.StringUtils;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * mcMMO's main config ({@code config.yml}), ported onto {@link ConfigLoader} and trimmed to the
@@ -393,6 +395,26 @@ public class GeneralConfig extends ConfigLoader {
             }
         }
         return disabled;
+    }
+
+    /**
+     * Power Cook: the status effect a cooked or crafted food grants when eaten, as the raw config
+     * String (a registry name such as {@code STRENGTH}, or a legacy Bukkit alias).
+     *
+     * <p><b>Returned as a String on purpose.</b> This class is deliberately MC-free — see the class
+     * note on why item getters hand back the raw config value — and the status-effect registry is
+     * not populated when configs load. {@code PotionUtil#matchEffect} resolves it at the call site,
+     * on the eat seam, where the registry is live.
+     *
+     * <p>⚠️ Keyed on the <b>Config_String</b> form ({@code Cooked_Beef}), matching
+     * {@code Bonus_Drops.Cooking} and {@code Experience_Values.Cooking} rather than the lowercase
+     * registry path. One skill, one key style, one file.
+     *
+     * @param foodConfigString the eaten food's config string
+     * @return the configured effect name, or {@code null} when the food grants nothing
+     */
+    public @Nullable String getPowerCookEffect(@NotNull String foodConfigString) {
+        return config.getString("Skills.Cooking.Power_Cook_Effects." + foodConfigString);
     }
 
     public boolean getWoodcuttingDoubleDropsEnabled(String materialConfigString) {

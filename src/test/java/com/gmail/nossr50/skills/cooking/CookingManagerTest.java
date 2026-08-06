@@ -3,6 +3,7 @@ package com.gmail.nossr50.skills.cooking;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doReturn;
@@ -82,6 +83,13 @@ class CookingManagerTest {
 
     /** The shipped advanced.yml Kitchen Efficiency ladder, restated so a retune comes through here. */
     private static final int[] KITCHEN_EFFICIENCY_MULTIPLIERS = {2, 3, 4};
+
+    /**
+     * The shipped {@code Skills.Cooking.PowerCook.Seconds_Per_Rank} ladder — 3s at rank 1 to 15s at
+     * rank 5. This is Cooking's entire effect budget, and the gap to a brewed potion's 3:00 at
+     * amplifier 1 is what keeps Alchemy worth levelling, so a retune has to come through this test.
+     */
+    private static final int[] POWER_COOK_SECONDS = {3, 6, 9, 12, 15};
 
     /** One coal in a furnace. Any burn time works; a real one keeps the arithmetic readable. */
     private static final int VANILLA_BURN_TIME = 1600;
@@ -693,6 +701,90 @@ class CookingManagerTest {
         Files.writeString(dataFolder.resolve("coreskills.yml"), "Cooking:\n    Enabled: false\n",
                 StandardCharsets.UTF_8);
         McMMOMod.setCoreSkillsConfig(new CoreSkillsConfig(dataFolder));
+    }
+
+    // --- Stage 4: Power Cook ---------------------------------------------------------------------
+
+    @Test
+    void theEffectDurationClimbsTheShippedLadderRankByRank() {
+        // The whole effect budget is this ladder, so it is restated as a literal rather than read
+        // back out of the same YAML it is meant to be checking.
+        for (int rank = 1; rank <= POWER_COOK_RETRO.length; rank++) {
+            atCookingLevel(POWER_COOK_RETRO[rank - 1]);
+            final int expectedSeconds = POWER_COOK_SECONDS[rank - 1];
+            assertEquals(expectedSeconds, manager.getPowerCookSeconds(),
+                    "Power Cook rank " + rank + " must last " + expectedSeconds + "s");
+
+            final CookingManager.PowerCookEffect effect = manager.powerCookEffect("Cooked_Beef");
+            assertNotNull(effect, "a ranked cook must get an effect from a table food");
+            assertEquals(expectedSeconds * 20, effect.durationTicks(),
+                    "seconds must be converted to ticks -- an unconverted value is a 20x nerf");
+        }
+    }
+
+    @Test
+    void anUnrankedCookGetsNothingAtAll() {
+        // Rank 0 is the landmine. Nothing here may be indexed by rank - 1, and "no rank" has to mean
+        // no effect rather than a zero-tick one, which vanilla would still apply and announce.
+        atCookingLevel(0);
+        assertEquals(0, manager.getPowerCookSeconds());
+        assertNull(manager.powerCookEffect("Cooked_Beef"),
+                "an unranked cook must get no effect, not a zero-length one");
+    }
+
+    @Test
+    void theEffectIsChosenByTheFoodAndNeverAtRandom() {
+        atCookingLevel(1000);
+        // Two foods, two different effects, off the real shipped table. The draft's version of this
+        // sub-skill rolled a random effect from a pool of ten, which is a splash potion of anything
+        // and is Alchemy's entire job.
+        assertEquals("STRENGTH", requireEffect("Cooked_Beef").effectName());
+        assertEquals("HASTE", requireEffect("Baked_Potato").effectName());
+        assertEquals("DOLPHINS_GRACE", requireEffect("Cooked_Cod").effectName(),
+                "cooked cod is Dolphin's Grace -- Water Breathing is banned from the table");
+    }
+
+    @Test
+    void aFoodOutsideTheTableGrantsNothingEvenAtMaxRank() {
+        atCookingLevel(1000);
+        // Raw meat: cooking it is the point, and paying for eating it raw inverts the skill.
+        assertNull(manager.powerCookEffect("Beef"));
+        // Picked, not made -- the cooked/crafted ruling.
+        assertNull(manager.powerCookEffect("Apple"));
+        // Vanilla already buffs it, and stacking a second effect on one bite is not worth the code.
+        assertNull(manager.powerCookEffect("Golden_Apple"));
+    }
+
+    @Test
+    void theAmplifierIsAlwaysZero() {
+        // No Strength II from a sandwich. Pinned as a constant because it is a ruling, not a tuning
+        // knob: the gap to a brewed potion's amplifier is what keeps Alchemy worth levelling.
+        assertEquals(0, CookingManager.POWER_COOK_AMPLIFIER);
+    }
+
+    @Test
+    void switchingCookingOffStopsPowerCookToo() throws IOException {
+        // ⚠️ The plan flags Power Cook as the one sub-skill needing an explicit SkillGating call,
+        // on the reasoning that a DETERMINISTIC effect passes through none of #10's chokepoints.
+        // Permissions#isSubSkillEnabled is one of them and powerCookEffect opens on it -- but that
+        // is a claim about a call, not a shape, and this is the only form of it worth anything.
+        atCookingLevel(1000);
+        // The reference point first: a test that only asserts the "off" half passes just as well
+        // against a mechanic that never fired in the first place.
+        assertNotNull(manager.powerCookEffect("Cooked_Beef"),
+                "Power Cook must fire at all before 'it stops' means anything");
+
+        disableCooking();
+
+        assertNull(manager.powerCookEffect("Cooked_Beef"),
+                "a disabled Cooking must not still hand out Strength for eating a steak");
+    }
+
+    /** The effect for {@code food}, failing the test rather than NPEing when there is none. */
+    private CookingManager.PowerCookEffect requireEffect(String food) {
+        final CookingManager.PowerCookEffect effect = manager.powerCookEffect(food);
+        assertNotNull(effect, () -> food + " must be in the shipped Power Cook table");
+        return effect;
     }
 
     private void assertLadder(SubSkillType subSkill, int[] retroModeLevels) {
