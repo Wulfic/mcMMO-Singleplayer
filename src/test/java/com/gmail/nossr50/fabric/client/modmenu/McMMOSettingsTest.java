@@ -1,5 +1,6 @@
 package com.gmail.nossr50.fabric.client.modmenu;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -62,6 +63,24 @@ class McMMOSettingsTest {
                 case INT, DOUBLE -> assertInstanceOf(Number.class, value,
                         where + " is declared numeric but the default value is not a number");
             }
+
+            // The catalogue's declared default must BE the shipped value, not merely the same type.
+            // A widget's "reset to default" writes this number, so a stale one silently retunes the
+            // game to a balance point that has not been the default for some time — which is exactly
+            // what happened to the Agility movement baseline when experience.yml was halved to 15.0
+            // and the catalogue kept offering 30.0. Nothing in the suite could see it.
+            final double declared = switch (setting.kind()) {
+                case BOOLEAN -> setting.defBoolean() ? 1.0 : 0.0;
+                case INT -> setting.defInt();
+                case DOUBLE -> setting.defDouble();
+            };
+            final double shipped = value instanceof Boolean bool
+                    ? (bool ? 1.0 : 0.0)
+                    : ((Number) value).doubleValue();
+            assertEquals(shipped, declared, 1.0e-9,
+                    where + ": the catalogue declares default " + setting.def() + " but the shipped "
+                            + "file says " + value + ". \"Reset to default\" in the config screen "
+                            + "would write a value that is not the default.");
         }
     }
 

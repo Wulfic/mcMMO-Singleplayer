@@ -5,6 +5,7 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
+import com.gmail.nossr50.util.player.PlayerLevelUtils;
 import com.gmail.nossr50.util.text.StringUtils;
 import java.util.Locale;
 import net.minecraft.entity.boss.BossBar;
@@ -55,6 +56,12 @@ public final class ExperienceBarWrapper implements ExperienceBar {
     public void setProgress(double progress) {
         this.bossBar.setPercent((float) clamp01(progress));
 
+        // Legacy recoloured the bar on every progress update so the early-game boost is visible
+        // rather than merely configured. Unconditional because ServerBossBar#setColor is a no-op
+        // when the colour is unchanged (bytecode-verified: it compares before sending a packet), so
+        // the steady state costs nothing.
+        this.bossBar.setColor(resolveColor());
+
         // The bar title carries the level; refresh it only when the level actually changed (or when
         // the always-update knob is on), matching legacy's title-update throttle.
         final int level = mmoPlayer.getSkillLevel(primarySkillType);
@@ -89,6 +96,13 @@ public final class ExperienceBarWrapper implements ExperienceBar {
         final ExperienceConfig config = McMMOMod.getExperienceConfig();
         final int level = mmoPlayer.getSkillLevel(primarySkillType);
 
+        // Legacy's first branch, and it outranks the extra-details template: while the boost is
+        // running the bar says so instead of showing numbers. The XPBar.Template.EarlyGameBoost
+        // string has shipped in the locale file since the port began and nothing rendered it.
+        if (isEarlyGameBoosted()) {
+            return LocaleLoader.getText("XPBar.Template.EarlyGameBoost");
+        }
+
         if (config.getAddExtraDetails()) {
             // {0} = the plain skill+level string, {1}=current XP, {2}=XP to level, {3}=power level,
             // {4}=percent. Legacy nested one locale lookup inside the other; getString returns the
@@ -107,6 +121,38 @@ public final class ExperienceBarWrapper implements ExperienceBar {
 
     private int percentOfLevel() {
         return (int) (mmoPlayer.getProgressInCurrentSkillLevel(primarySkillType) * 100);
+    }
+
+    /**
+     * Whether this skill is currently earning the early-game boost — both the
+     * {@code EarlyGameBoost.Enabled} switch and the level cutoff, the same pair
+     * {@code McMMOPlayer#applySelfListenerModifiers} asks before topping the gain up. The bar must
+     * not advertise a boost that the XP pipeline is not paying.
+     */
+    private boolean isEarlyGameBoosted() {
+        final ExperienceConfig config = McMMOMod.getExperienceConfig();
+        return config != null && config.isEarlyGameBoostEnabled()
+                && PlayerLevelUtils.qualifiesForEarlyGameBoost(
+                        mmoPlayer.getSkillLevel(primarySkillType));
+    }
+
+    private BossBar.Color resolveColor() {
+        return resolveColor(isEarlyGameBoosted(),
+                McMMOMod.getExperienceConfig().getExperienceBarColorName(primarySkillType));
+    }
+
+    /**
+     * The bar's colour: legacy overrode the configured per-skill colour with {@code YELLOW} while the
+     * early-game boost applied, which is the only visual cue the mechanic has.
+     *
+     * <p>Static and package-private so both branches are testable without a live boss bar — building
+     * a real wrapper needs a bound config, a tracked player and a server.
+     */
+    static BossBar.Color resolveColor(boolean earlyGameBoosted, String configuredColorName) {
+        if (earlyGameBoosted) {
+            return BossBar.Color.YELLOW;
+        }
+        return mapColor(configuredColorName);
     }
 
     // --- Bukkit-name -> vanilla-enum mapping ---------------------------------

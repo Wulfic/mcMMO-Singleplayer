@@ -91,8 +91,19 @@ public class GeneralConfig extends ConfigLoader {
     /*
      * GENERAL SETTINGS
      */
+    /**
+     * Whether to greet the player with {@code Profile.Loading.Success} once their skill data is in
+     * memory. Read by {@code PlayerSessionListener#onJoin}.
+     *
+     * <p>⚠️ <b>The fallback is {@code false} here and {@code true} upstream, deliberately.</b> It
+     * must agree with the value {@code config.yml} actually ships ({@code Show_Profile_Loaded:
+     * false}), because a fallback that disagrees with the shipped file describes behaviour no player
+     * ever sees and quietly becomes the truth for anyone whose config predates the key. Upstream
+     * ships the same {@code false} and defaults the getter {@code true}; the disagreement is
+     * upstream's, and copying it buys nothing.
+     */
     public boolean getShowProfileLoadedMessage() {
-        return config.getBoolean("General.Show_Profile_Loaded", true);
+        return config.getBoolean("General.Show_Profile_Loaded", false);
     }
 
     public int getSaveInterval() {

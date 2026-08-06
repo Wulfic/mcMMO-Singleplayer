@@ -53,6 +53,7 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.random.Random;
+import org.jetbrains.annotations.VisibleForTesting;
 
 /**
  * The K7 Fishing XP hook: awards base Fishing XP when a player reels in a catch (CONVERSION_TODO §B).
@@ -133,6 +134,11 @@ public final class FishingListener {
             return;
         }
 
+        // Legacy replaced the vanilla catch in a HIGH-priority handler that ran before the MONITOR
+        // one holding the exploit gate and the XP award, so this sits ahead of both — and the base
+        // XP below is therefore keyed on the *replacement*, exactly as upstream.
+        overrideVanillaTreasures(caught);
+
         // Anti-exploit gating, faithful to the legacy CAUGHT_FISH handler.
         if (McMMOMod.getExperienceConfig().isFishingExploitingPrevented()) {
             if (fishingManager.isFishingTooOften()) {
@@ -157,6 +163,53 @@ public final class FishingListener {
         }
 
         maybeCatchTreasure(serverPlayer, mmoPlayer, fishingManager, caught);
+    }
+
+    /**
+     * {@code Skills.Fishing.Override_Vanilla_Treasures}: turn every non-fish item vanilla's loot table
+     * produced into a plain salmon, so mcMMO's Treasure Hunter table is the <i>only</i> source of
+     * fished treasure. Ports the arm of legacy's {@code CAUGHT_FISH} handler that did
+     * {@code fishingCatch.setItemStack(new ItemStack(Material.SALMON, 1))}.
+     *
+     * <p><b>The key shipped from the start and nothing read it</b> until the 2026-08-06 wiring audit
+     * — a ModMenu switch writing to a value no code consulted. ⚠️ It ships <b>on</b>, so wiring it is
+     * a real gameplay change: vanilla's own fishing treasure (enchanted books, name tags, saddles,
+     * bows) and its junk (leather boots, sticks, tripwire) stop appearing, and a player below the
+     * Treasure Hunter ranks that would replace them catches salmon instead. That is upstream's
+     * behaviour and what {@code config.yml} has always claimed; the switch is how a player opts out.
+     *
+     * <p>The four exempt items are legacy's exact list — the four vanilla fish. Rebuilt rather than
+     * mutated in place because an {@link ItemStack}'s item cannot be reassigned; {@code caught} is
+     * the live {@code ObjectArrayList} {@code FishingBobberEntity#use} iterates, so clearing and
+     * refilling it is what reaches the player. A catch that is already all fish is left untouched.
+     */
+    @VisibleForTesting
+    static void overrideVanillaTreasures(Collection<ItemStack> caught) {
+        if (!McMMOMod.getGeneralConfig().getFishingOverrideTreasures()) {
+            return;
+        }
+
+        final List<ItemStack> replacement = new ArrayList<>(caught.size());
+        boolean changed = false;
+        for (ItemStack stack : caught) {
+            if (stack.isEmpty() || isVanillaFish(stack)) {
+                replacement.add(stack);
+                continue;
+            }
+            replacement.add(new ItemStack(Items.SALMON, 1));
+            changed = true;
+        }
+
+        if (changed) {
+            caught.clear();
+            caught.addAll(replacement);
+        }
+    }
+
+    /** The four fish legacy's treasure override leaves alone. */
+    private static boolean isVanillaFish(ItemStack stack) {
+        return stack.isOf(Items.SALMON) || stack.isOf(Items.COD)
+                || stack.isOf(Items.TROPICAL_FISH) || stack.isOf(Items.PUFFERFISH);
     }
 
     /**

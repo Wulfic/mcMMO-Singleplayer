@@ -104,8 +104,10 @@ public final class McMMOSettings {
                 "Scales every level requirement/bonus ×10 for the classic mcMMO feel. Changing "
                         + "this on an existing world is disruptive — set it before starting a "
                         + "new world."));
-        list.add(ConfigSetting.bool(CAT_GENERAL, CONFIG_YML,
-                "General.Level_Up_Chat_Broadcasts.Enabled", true, "Level-Up Chat Broadcasts", null));
+        // A "Level-Up Chat Broadcasts" switch used to sit here, writing to
+        // General.Level_Up_Chat_Broadcasts.Enabled -- a key with no getter anywhere in the port. The
+        // whole upstream section governs which OTHER players see your level-up, so it was culled
+        // from config.yml rather than wired (see the note there). Do not re-add it.
         list.add(ConfigSetting.bool(CAT_GENERAL, CONFIG_YML, "General.LevelUp_Sounds", true,
                 "Level-Up Sounds", null));
         list.add(ConfigSetting.bool(CAT_GENERAL, CONFIG_YML, "General.Show_Profile_Loaded", false,
@@ -138,8 +140,14 @@ public final class McMMOSettings {
         list.add(ConfigSetting.decimal(CAT_XP, EXPERIENCE_YML, "Experience_Formula.Multiplier.Global",
                 1.0, 0.0, 100.0, "Global XP Multiplier",
                 "Multiplies XP gained in every skill. 2.0 = double XP, 0.5 = half."));
+        // The description states the cutoff on purpose: the boost applies only while a skill is
+        // still at level 0 (upstream's own getEarlyGameCutoff is a hard-coded 1 -- see
+        // PlayerLevelUtils). "Faster leveling at low levels" oversold a first-level-only mechanic.
         list.add(ConfigSetting.bool(CAT_XP, EXPERIENCE_YML, "EarlyGameBoost.Enabled", true,
-                "Early Game XP Boost", "Faster leveling at very low skill levels."));
+                "Early Game XP Boost",
+                "While a skill is still at level 0, every gain in it also grants 5% of a level, so "
+                        + "the first level of a brand-new skill arrives quickly. The XP bar turns "
+                        + "yellow while it applies."));
         list.add(ConfigSetting.bool(CAT_XP, EXPERIENCE_YML, "Experience_Formula.Cumulative_Curve",
                 false, "Cumulative XP Curve",
                 "Level cost scales with total power level instead of per-skill level."));

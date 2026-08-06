@@ -5,6 +5,7 @@ import com.gmail.nossr50.database.ProfileStore;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -67,8 +68,28 @@ public final class PlayerSessionListener {
             McMMOMod.getTransientEntityTracker().initPlayer(player.getUniqueId());
             McMMOMod.LOGGER.info("Loaded mcMMO data for {} ({} profile).",
                     player.getName(), isNew ? "new" : "existing");
+            announceProfileLoaded(mmoPlayer);
         } catch (Exception e) {
             McMMOMod.LOGGER.error("Failed to load mcMMO data for {} on join.", player.getName(), e);
+        }
+    }
+
+    /**
+     * Tell the player their skill data is loaded, if {@code General.Show_Profile_Loaded} is on —
+     * legacy's {@code PlayerProfileLoadingTask} tail, which sent {@code Profile.Loading.Success}
+     * from the async load callback. Here the load is synchronous, so it rides the end of the join.
+     *
+     * <p>The key shipped from the start and <b>no code read it</b> until the 2026-08-06 wiring
+     * audit: the ModMenu switch wrote a value nothing consulted. It is off by default (that is what
+     * {@code config.yml} ships), so the visible behaviour is unchanged for anyone who has not asked
+     * for the message — the switch simply now does what it says.
+     *
+     * <p>Routed through {@link NotificationManager} rather than legacy's raw {@code sendMessage} so
+     * it obeys the player's chat-notification toggle like every other mcMMO chat line.
+     */
+    private static void announceProfileLoaded(McMMOPlayer mmoPlayer) {
+        if (McMMOMod.getGeneralConfig().getShowProfileLoadedMessage()) {
+            NotificationManager.sendPlayerInformationChatOnly(mmoPlayer, "Profile.Loading.Success");
         }
     }
 

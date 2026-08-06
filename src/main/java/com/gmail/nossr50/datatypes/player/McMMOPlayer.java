@@ -43,6 +43,7 @@ import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.experience.ExperienceBarManager;
 import com.gmail.nossr50.util.player.NotificationManager;
+import com.gmail.nossr50.util.player.PlayerLevelUtils;
 import com.gmail.nossr50.util.skills.Milestones;
 import com.gmail.nossr50.util.skills.PerksUtils;
 import com.gmail.nossr50.util.skills.RankUtils;
@@ -450,8 +451,12 @@ public class McMMOPlayer {
         // McMMOPlayerXpGainEvent and, when not cancelled, ran addXp + registerXpGain. Only the event
         // firing is deferred (PORT Phase 3 — no listeners in singleplayer, so it never cancels); the
         // application itself is retained here, otherwise the gain would never reach the profile.
-        addXp(primarySkillType, xp);
-        profile.registerXpGain(primarySkillType, xp);
+        //
+        // mcMMO's own SelfListener was that event's first subscriber, so its adjustments belong
+        // between the (dropped) firing and the application — see applySelfListenerModifiers.
+        final float finalXp = applySelfListenerModifiers(primarySkillType, xp, xpGainReason);
+        addXp(primarySkillType, finalXp);
+        profile.registerXpGain(primarySkillType, finalXp);
 
         isUsingUnarmed = (primarySkillType == PrimarySkillType.UNARMED);
         checkXp(primarySkillType, xpGainReason, xpGainSource);
@@ -708,6 +713,49 @@ public class McMMOPlayer {
         // PORT Phase 6: PerksUtils.handleXpPerks(...) dropped — perks are permission-driven XP
         // multipliers with no singleplayer analogue, so the modified xp passes through unchanged.
         return xp;
+    }
+
+    /**
+     * The adjustments legacy's own {@code SelfListener#onPlayerXpGain} made to a gain, applied here
+     * because the event it listened to is not fired in this port (see {@link #applyXpGain}).
+     *
+     * <p>Ordering is legacy's and is load-bearing: these run on the <em>already multiplied</em> value
+     * — {@link #modifyXpGain} applies the per-skill and global multipliers before the point the event
+     * was fired — so the early-game bonus is a flat top-up the global XP rate does not scale.
+     *
+     * <p>An admin-granted gain ({@link XPGainReason#COMMAND}) is returned untouched, legacy's first
+     * check: {@code /addxp 500} must add 500.
+     *
+     * <p>Diminished returns is legacy's other resident here and is <b>not yet wired</b> — the rolling
+     * per-skill totals {@code registerXpGain} maintains are consulted by nobody. This method is the
+     * seam it lands in; see {@code TODO.md} 4(b).
+     *
+     * @return the XP that should actually reach the profile
+     */
+    @VisibleForTesting
+    float applySelfListenerModifiers(PrimarySkillType primarySkillType, float xp,
+            XPGainReason xpGainReason) {
+        if (xpGainReason == XPGainReason.COMMAND) {
+            return xp;
+        }
+        return xp + earlyGameBoostBonus(primarySkillType);
+    }
+
+    /**
+     * The {@code EarlyGameBoost.Enabled} top-up for a skill still at level 0 — 5% of one level, added
+     * to every qualifying gain. Zero when the boost is off, when the skill has passed
+     * {@link PlayerLevelUtils#EARLY_GAME_CUTOFF}, or when no experience config is bound (between world
+     * sessions, and in MC-free tests that drive {@link #applyXpGain} directly).
+     */
+    private int earlyGameBoostBonus(PrimarySkillType primarySkillType) {
+        final var experienceConfig = McMMOMod.getExperienceConfig();
+        if (experienceConfig == null || !experienceConfig.isEarlyGameBoostEnabled()) {
+            return 0;
+        }
+        if (!PlayerLevelUtils.qualifiesForEarlyGameBoost(getSkillLevel(primarySkillType))) {
+            return 0;
+        }
+        return PlayerLevelUtils.earlyGameBonusXp(getXpToLevel(primarySkillType));
     }
 
     /**

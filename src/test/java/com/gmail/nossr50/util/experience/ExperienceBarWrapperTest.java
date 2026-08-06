@@ -50,4 +50,17 @@ class ExperienceBarWrapperTest {
     void unknownStyleFallsBackToNotched6() {
         assertEquals(BossBar.Style.NOTCHED_6, ExperienceBarWrapper.mapStyle("zigzag"));
     }
+
+    /**
+     * The early-game boost's only visual cue: legacy painted the bar yellow while the boost applied,
+     * overriding the skill's configured colour. Both directions, because "returns the configured
+     * colour" is what an unwired override would also do.
+     */
+    @Test
+    void theEarlyGameBoostOverridesTheConfiguredBarColor() {
+        assertEquals(BossBar.Color.YELLOW, ExperienceBarWrapper.resolveColor(true, "BLUE"),
+                "while boosted the bar is yellow whatever the skill's colour is set to");
+        assertEquals(BossBar.Color.BLUE, ExperienceBarWrapper.resolveColor(false, "BLUE"),
+                "otherwise the configured colour wins");
+    }
 }

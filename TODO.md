@@ -11,6 +11,35 @@ The build was NOT re-run as part of this audit — re-establish the green baseli
 
 ---
 
+## STATUS + RULINGS (2026-08-06, updated as work lands)
+
+Green baseline re-established: `./gradlew build` exit 0 at commit `8904ea6fc`, **1522 tests green**.
+
+| Item | State |
+|---|---|
+| 2.1 `SerratedStrikes.BleedTicks` | ✅ **DONE** `8904ea6fc` — ⚠️ *the fix prescribed below was wrong*; the knob was **deleted**, not wired. Serrated Strikes' bleed **is** Rupture, already tunable via `Rupture_Mechanics`. See `memory/audit-item-2-dead-config-knobs.md` |
+| 2.2 crossed vanilla-repair getters | ✅ **DONE** `8904ea6fc` — swapped; it is **upstream's own bug**, ported verbatim, so a javadoc now says do not "restore" it |
+| 2.3 `ExploitFix.Pistons` | ✅ **NO ACTION** — already ruled deliberate in two places (`ExperienceConfigKeyAgreementTest:62`, `McMMOSettingsTest:174`). The audit re-flagged a settled question |
+| 1.3 dead ModMenu switches | 🔨 in progress — **the audit undercounted: it is four, not three** (see 1.3 below) |
+
+**Rulings given by the repo owner (2026-08-06). These are decided; do not re-open them.**
+
+1. **1.1 Unarmed Disarm / Iron Grip → STRIP THE SURFACE.** Delete the two `/mcstats` renderer lines,
+   the two rank plaques, the `Skills.Unarmed.Disarm.*` config block, its load-time validation and
+   `getDisarmProtected()`. Both mechanics require `target instanceof Player` and can never fire in
+   singleplayer, so no plaque and no knob about them can ever be honest.
+2. **1.2 Herbalism Verdant Bounty → FIX THE RENDERER.** Keep the Green Terra rider as the mechanic
+   (legacy-faithful); rewrite the `/mcstats herbalism` line to describe what actually happens and
+   retire the orphan `VerdantBounty.ChanceMax`. **No gameplay change.**
+3. **3.1 Limit Break → IMPLEMENT FOR ALL 8 WEAPONS.** Port `canUseLimitBreak` → bonus damage into
+   the port's combat damage seam for Archery/Axes/Crossbows/Maces/Swords/Tridents/Unarmed/Spears,
+   gated by `Skills.General.LimitBreak.AllowPVE`. The 8 plaques stay and start meaning something.
+   ⚠️ Resolve `SPEARS_SPEARS_LIMIT_BREAK`'s asymmetry first — issue #7 already caught one stale
+   "deliberately absent" claim about Spears.
+4. **Order → keep the sequence in "Suggested order for the next session" below.**
+
+---
+
 ## Method — what was swept, and how
 
 | Axis | Result |
@@ -78,15 +107,27 @@ a sub-skill's name. **Either** make Verdant Bounty a real rank-gated third-drop 
 siblings, **or** fix the renderer to describe the Green Terra rider it actually is.
 A `herbalism_verdant_bounty` rank plaque ships either way.
 
-### 1.3 Three ModMenu switches wired to nothing
+### 1.3 ~~Three~~ **FOUR** ModMenu switches wired to nothing
 `McMMOSettingsTest` proves every offered key exists in the yml and every yml key is offered.
-**Neither direction proves the key reaches code.** These three don't:
+**Neither direction proves the key reaches code.** These four don't:
 
 | Switch | ModMenu | Dead getter |
 |---|---|---|
 | `General.Show_Profile_Loaded` | [McMMOSettings.java:111](src/main/java/com/gmail/nossr50/fabric/client/modmenu/McMMOSettings.java#L111) | `getShowProfileLoadedMessage()` |
 | `Skills.Fishing.Override_Vanilla_Treasures` | [McMMOSettings.java:131](src/main/java/com/gmail/nossr50/fabric/client/modmenu/McMMOSettings.java#L131) | `getFishingOverrideTreasures()` |
 | `EarlyGameBoost.Enabled` | [McMMOSettings.java:141](src/main/java/com/gmail/nossr50/fabric/client/modmenu/McMMOSettings.java#L141) | `isEarlyGameBoostEnabled()` |
+| ⚠️⚠️ `General.Level_Up_Chat_Broadcasts.Enabled` | [McMMOSettings.java:108](src/main/java/com/gmail/nossr50/fabric/client/modmenu/McMMOSettings.java#L108) | **none — no getter exists at all** |
+
+⚠️⚠️ **The audit missed the fourth**, and it is the worst of them: the switch has no getter, so the
+grep for dead *getters* could never see it. It writes to a key **nothing in the port reads**.
+`Level_Up_Chat_Broadcasts` is upstream's *broadcast-to-other-players* section (party targets,
+same-world targets, distance radius) — meaningless in singleplayer, where the level-up message the
+player does see comes from `NotificationManager#sendPlayerLevelUpNotification` instead. **Ruling:
+delete the switch and cull the shipped section** — the `PreventPluginNPCInteraction` precedent
+(no toggle about other players can ever be honest here), not a wiring job.
+
+🔑 **The lesson for the next audit: sweep getter→caller *and* key→getter.** A key with no getter at
+all is invisible to the first sweep, and it is the more common half in a hand-curated catalogue.
 
 ⚠️ **`Show_Profile_Loaded` also has a default mismatch**: the ModMenu entry declares `false`,
 [GeneralConfig.java:95](src/main/java/com/gmail/nossr50/config/GeneralConfig.java#L95) defaults `true`.
@@ -98,6 +139,16 @@ unconditionally somewhere or genuinely absent.
 **The guard this needs (and `McMMOSettingsTest` does not have):** a third direction — every key in
 the catalogue must have a getter *and that getter must have a production caller*. Without it this
 recurs. It is the same one-directional-completeness trap recorded in `husbandry-wiring-audit`.
+
+⚠️ **Two traps a naive version of that guard walks straight into**, both found while prototyping it:
+- **Reachability is transitive.** `Experience_Formula.{Breeding,Eggs,Mobspawners,Nether_Portal}
+  .Multiplier` look dead — their four getters have no caller outside `config/` — but they are read
+  by `ExperienceConfig#getMobOriginXpMultiplier`, which `CombatUtils#processCombatXP` calls. A
+  direct-caller-only rule reports four false positives here.
+- **…except through a validator.** Propagating through `validate*` would have marked
+  `getSerratedStrikesTicks` live — its only caller was the load-time validator (item 2.1). So the
+  closure must run *from* callers outside `config/` but must **not** propagate out of a `validate*`
+  method. That single exclusion is what makes the guard able to see the defect it exists for.
 
 ---
 

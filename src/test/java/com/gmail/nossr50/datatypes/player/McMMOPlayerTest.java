@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -19,6 +20,7 @@ import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.Misc;
+import com.gmail.nossr50.util.player.PlayerLevelUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -107,6 +109,80 @@ class McMMOPlayerTest {
         assertTrue(mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.MINING)
                         < mmoPlayer.getXpToLevel(PrimarySkillType.MINING),
                 "leftover XP after the level-up is below the next level's cost");
+    }
+
+    /**
+     * {@code EarlyGameBoost.Enabled} — dead in this port until the 2026-08-06 wiring audit: the key,
+     * the getter, the ModMenu switch and the {@code XPBar.Template.EarlyGameBoost} locale string all
+     * shipped and no code read any of them.
+     *
+     * <p>The four cases below are the whole gate. They assert the <em>exact</em> bonus rather than
+     * "more than before", because a boost applied twice, or applied before the global multiplier
+     * instead of after, is invisible to a greater-than assertion.
+     */
+    @Test
+    void earlyGameBoostTopsUpASkillStillAtLevelZero() {
+        final float bonus = PlayerLevelUtils.earlyGameBonusXp(
+                mmoPlayer.getXpToLevel(PrimarySkillType.MINING));
+        assertTrue(bonus > 0f, "the shipped curve must cost enough for 5% to round above zero");
+
+        assertEquals(100f + bonus,
+                mmoPlayer.applySelfListenerModifiers(PrimarySkillType.MINING, 100f,
+                        XPGainReason.PVE),
+                "a level-0 skill gets a flat 5%-of-a-level top-up on every gain");
+    }
+
+    @Test
+    void earlyGameBoostStopsAtTheFirstLevel() {
+        profile.addLevels(PrimarySkillType.MINING, 1);
+
+        assertEquals(100f,
+                mmoPlayer.applySelfListenerModifiers(PrimarySkillType.MINING, 100f,
+                        XPGainReason.PVE),
+                "past the cutoff the gain is untouched");
+    }
+
+    /** Legacy's first check: {@code /addxp 500} must add 500, boost or no boost. */
+    @Test
+    void earlyGameBoostSkipsCommandGrantedXp() {
+        assertEquals(100f,
+                mmoPlayer.applySelfListenerModifiers(PrimarySkillType.MINING, 100f,
+                        XPGainReason.COMMAND),
+                "an admin-granted amount is exact by definition");
+    }
+
+    @Test
+    void earlyGameBoostRespectsItsSwitch() {
+        final ExperienceConfig disabled = spy(experienceConfig);
+        when(disabled.isEarlyGameBoostEnabled()).thenReturn(false);
+        McMMOMod.setExperienceConfig(disabled);
+
+        assertEquals(100f,
+                mmoPlayer.applySelfListenerModifiers(PrimarySkillType.MINING, 100f,
+                        XPGainReason.PVE),
+                "turning the switch off must actually reach the XP pipeline — the whole point of "
+                        + "wiring it. A spy on the real config, because Mockito hands back null for "
+                        + "the records this config returns elsewhere.");
+    }
+
+    /**
+     * The boost must ride the pipeline, not just the helper: {@code applySelfListenerModifiers} is
+     * only correct if {@code applyXpGain} actually calls it, and a seam nobody reaches is the exact
+     * defect this whole pass is closing.
+     */
+    @Test
+    void earlyGameBoostReachesTheProfileThroughBeginXpGain() {
+        final double modifier = experienceConfig.getFormulaSkillModifier(PrimarySkillType.MINING)
+                * experienceConfig.getExperienceGainsGlobalMultiplier();
+        final float bonus = PlayerLevelUtils.earlyGameBonusXp(
+                mmoPlayer.getXpToLevel(PrimarySkillType.MINING));
+
+        mmoPlayer.beginXpGain(PrimarySkillType.MINING, 100f, XPGainReason.PVE, XPGainSource.SELF);
+
+        assertEquals((float) (100f * modifier) + bonus,
+                mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.MINING), 0.001f,
+                "the profile holds the multiplied gain PLUS the flat bonus — the bonus is added "
+                        + "after the multipliers, so the global XP rate does not scale it");
     }
 
     @Test
