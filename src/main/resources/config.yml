@@ -762,6 +762,33 @@ Bonus_Drops:
         Deepslate: true
         Copper_Ingot: true
         Netherite_Scrap: true
+    # Master Chef's second helping. Keyed by what comes OUT of the furnace, not by what went in:
+    # by the time the bonus can be added, vanilla's craftRecipe has already decremented the input
+    # slot, which is EMPTY whenever the last of it was just consumed. Same constraint, same
+    # convention and same seam as Bonus_Drops.Smelting directly above.
+    #
+    # THESE NINE ARE EXACTLY THE RESULTS OF THE NINE PAID Experience_Values.Cooking.Cook INPUTS.
+    # Chorus fruit is absent because its result (popped chorus fruit) is not food and is priced 0.
+    #
+    # An item listed in BOTH this section and Bonus_Drops.Smelting pays SMELTING -- the listener
+    # decides on table membership before rolling, so it gets one roll and not two. No vanilla item
+    # is in both today, and a test asserts that so nothing quietly starts relying on the tie-break.
+    Cooking:
+        Cooked_Beef: true
+        Cooked_Porkchop: true
+        Cooked_Chicken: true
+        Cooked_Mutton: true
+        Cooked_Rabbit: true
+        Cooked_Cod: true
+        Cooked_Salmon: true
+        Baked_Potato: true
+        # NOTE for anyone tuning this: dried kelp is the one entry with a second-order effect.
+        # Dried kelp blocks are fuel, so doubling the output of a kelp smoker feeds the furnace
+        # that produced it. Vanilla's kelp-to-fuel loop is strongly fuel-NEGATIVE (9 kelp cost
+        # ~900 tick-seconds of fuel to make one 200-tick block), and Master Chef plus Kitchen
+        # Efficiency together can push it just past break-even. That is a slow trickle, not a
+        # dupe -- but it is the row to switch off first if a kelp farm ever looks like free fuel.
+        Dried_Kelp: true
 #
 #  Settings for commands
 ###

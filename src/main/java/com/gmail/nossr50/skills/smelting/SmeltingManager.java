@@ -1,5 +1,6 @@
 package com.gmail.nossr50.skills.smelting;
 
+import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
@@ -70,18 +71,42 @@ public class SmeltingManager extends SkillManager {
     }
 
     /**
-     * The config + RNG half of legacy {@code processDoubleSmelt}: whether this smelt should yield a
-     * second copy of its result. The caller still has to check {@link #hasRoomForSecondSmelt}, which
-     * needs the live output stack.
+     * Whether a smelt result is listed under {@code Bonus_Drops.Smelting} at all — the config half of
+     * legacy {@code processDoubleSmelt}, with no RNG in it.
+     *
+     * <p><b>Split out from {@link #canSecondSmelt} because the furnace is shared.</b> Cooking's
+     * Master Chef reads the same output slot on the same block, so the listener has to decide
+     * <em>which skill owns this result</em> before anybody rolls: rolling Smelting's dice and falling
+     * through to Cooking's on a miss would hand an item listed in both tables two chances at one
+     * bonus. Deciding on membership makes the branch deterministic and leaves exactly one roll.
+     *
+     * <p>This is the one place the table is read, so the listener's dispatch and the roll below can
+     * never drift apart (the Hunter lesson: where two paths derive the same key, share the function).
      *
      * @param resultMaterialConfigString the config string of the smelt <em>result</em> material —
      *                                   legacy keyed the double-drop toggle on the result, not the
      *                                   input ({@code resultItemStack.getType()})
      */
+    public static boolean isSecondSmeltMaterial(@NotNull String resultMaterialConfigString) {
+        // Null-safe, and that is newly load-bearing: this membership test now runs BEFORE the owner
+        // lookup (it is the cheaper of the two), so an unowned furnace ticking with no config wired
+        // — a headless boot, or the gap between world sessions — would reach it where the old
+        // owner-first order never could. Fails closed: no config, no bonus.
+        final GeneralConfig general = McMMOMod.getGeneralConfig();
+        return general != null
+                && general.getDoubleDropsEnabled(PrimarySkillType.SMELTING,
+                        resultMaterialConfigString);
+    }
+
+    /**
+     * The config + RNG half of legacy {@code processDoubleSmelt}: whether this smelt should yield a
+     * second copy of its result. The caller still has to check {@link #hasRoomForSecondSmelt}, which
+     * needs the live output stack.
+     *
+     * @param resultMaterialConfigString the config string of the smelt <em>result</em> material
+     */
     public boolean canSecondSmelt(@NotNull String resultMaterialConfigString) {
-        return McMMOMod.getGeneralConfig()
-                .getDoubleDropsEnabled(PrimarySkillType.SMELTING, resultMaterialConfigString)
-                && isSecondSmeltSuccessful();
+        return isSecondSmeltMaterial(resultMaterialConfigString) && isSecondSmeltSuccessful();
     }
 
     /**

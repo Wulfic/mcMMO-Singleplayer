@@ -784,21 +784,39 @@ on the tie-break.
 > applies to the half that must agree: where two paths derive the same key, give them **one shared
 > function**, not two tests (`[[hunter-skill-build]]`).
 
-**Stage 3 — Kitchen Efficiency + Master Chef.**
-Both ride injectors that already exist. `boostFuelTime` gets an `else` branch;
-`SmeltingListener.onSmeltComplete` gets a food arm reading `Bonus_Drops.Cooking`.
-⚠️ **`hasRoomForSecondSmelt` must be re-used, not re-derived** — it encodes the pre-merge/post-merge
-count subtlety documented at `SmeltingListener.java:176-184`.
-⚠️ **`ownerSkill(pos)` returns a `SmeltingManager`** ([SmeltingListener.java:350](../../src/main/java/com/gmail/nossr50/fabric/listeners/SmeltingListener.java#L350)).
-Cooking needs its own resolver over the **same** `FURNACE_OWNERS` map — one map, two managers. Do not
-duplicate the map, and do not make the existing method generic in a way that loses the null-owner
-fast path.
-⚠️ **Kitchen Efficiency needs an explicit `SkillGating` call** — it is a multiplier, not an RNG proc
-(D-CK9 item 2). Master Chef gets gating free.
-⚠️ **Decide the ordering when an item is in BOTH `Bonus_Drops.Smelting` and `Bonus_Drops.Cooking`.**
-Nothing prevents an operator listing one item in both, and `onSmeltComplete` gates on the **result**
-only, so the two arms are ambiguous by construction. Pick Smelting-first, write it down in the
-javadoc, and pin it with a test.
+**✅ Stage 3 — Kitchen Efficiency + Master Chef. DONE 2026-08-05.**
+Both ride injectors that already existed, and neither needed a new mixin. `boostFuelTime` and
+`onSmeltComplete` each grew a Cooking branch; `Bonus_Drops.Cooking` (9 results) and
+`AdvancedConfig.getKitchenEfficiencyMultiplier` landed with them. `ownerSkill(pos)` was **deleted** —
+both call sites now go through `owner(pos)`, one map and two managers, with the null-owner fast path
+intact.
+
+**Suite 1479 green (+20), `./gradlew build` exit 0, boot `Done (1.190s)` with 0 ERROR, 0 exceptions,
+0 mixin failures. 5 mutations run, 5 kills.**
+
+**What this stage measured that the plan had not:**
+
+| # | Finding |
+|---|---|
+| 1 | ⚠️⚠️ **"Kitchen Efficiency is the `else` of the smeltable gate" is a BUG taken literally.** Non-smeltable ≠ food: `sand`, `cobblestone`, `oak_log`, `clay_ball`, `cactus` and `wet_sponge` are all ordinary furnace inputs and every one would have collected Cooking's fuel bonus. The branch is an explicit `CookingManager.isCookable(input)` test, not a negation. Mutation-proven (2 tests redden) |
+| 2 | ⚠️⚠️ **The bonus-drop dispatch must be on TABLE MEMBERSHIP, not on a roll.** Rolling Smelting's dice and falling through to Cooking's on a miss reads as equivalent and is not — an item in both tables gets **two chances at one bonus**, and a miss is indistinguishable from "not eligible" in every log. One membership test, then exactly one roll. Mutation-proven (2 tests redden) |
+| 3 | 🔑 **D-CK9 item 2 was right about the shape and wrong about this call.** A multiplier does pass through none of #10's chokepoints — but `Permissions#isSubSkillEnabled` **is** one of them, and `CookingManager#boostFuelTime` opens on it, so Kitchen Efficiency is gated with no explicit `SkillGating` call. **Routing through a chokepoint is the gate.** Asserted by a test (both directions, plus Smelting's blast radius) rather than argued. Power Cook in Stage 4 still needs the explicit one |
+| 4 | ⚠️⚠️ **`SMELTING` IS A CHILD SKILL in this port** (Mining + Repair), so `PlayerProfile#modifySkill` returns **silently** for it. A test that "levels Smelting" the obvious way leaves it at 0 — and the ladder-parity test duly *passed* while both sides answered 1. 🔑 *Two derived values agreeing proves they match each other; only a literal proves they match the shipped config.* Cooking is deliberately not a child skill, so the two are levelled by different mechanisms despite identical ladders |
+| 5 | ⚠️ **`RankUtils.getRank(getPlayer(), …)` — the `PlatformPlayer` overload — resolves back through `UserManager`, and an untracked player answers rank 0 for everything.** A manager test that builds a real `McMMOPlayer` but never calls `UserManager.track` measures the no-op path for every rank-driven mechanic it thinks it is testing |
+| 6 | ⚠️ **The membership test now runs BEFORE the owner lookup** (it is the cheaper of the two), so `isSecondSmeltMaterial` had to be made null-safe: an unowned furnace ticking with no config wired now reaches it where the old owner-first order never could |
+
+⚠️ **`hasRoomForSecondSmelt` was re-used, not re-derived** — it encodes the pre-merge/post-merge
+count subtlety, and Master Chef adds its item to the same slot at the same point.
+
+⚠️ **The `Bonus_Drops` ordering ruling: Smelting wins, and it is now pinned in both directions.**
+`CookingManagerTest.theTwoBonusDropTablesShareNoItem` asserts the shipped tables are disjoint so
+nothing relies on the tie-break, and `everyPaidCookInputHasABonusDropEntryForItsResult` asserts the
+9 paid `Cook` inputs and the 9 `Bonus_Drops.Cooking` results are the same set.
+
+⚠️ **One second-order effect worth a play-test row (new §G CK9):** dried kelp blocks are fuel, so
+Master Chef + Kitchen Efficiency together push vanilla's strongly fuel-**negative** kelp loop to
+roughly break-even. A trickle, not a dupe — but it is the first row to switch off if a kelp farm ever
+looks like free fuel. Documented in `config.yml` at the entry itself.
 
 **Stage 4 — Power Cook.**
 **D-CK2's restructure lands first, alone, with the eat-bread test**, then the effect application
@@ -889,6 +907,11 @@ Cooking adds a session to `PLAYTEST_G.md`. It cannot be signed off without, at m
   interaction, measured.)*
 - **CK8** Eat something with a **full hunger bar and full saturation**. Confirm the effect still
   fires and nothing tops up hunger. *(D-CK4 + D-CK5a, the two hunger rulings, in one bite.)*
+- **CK9** ⚠️ **Run a kelp smoker for an hour with Master Chef and Kitchen Efficiency both maxed, and
+  measure whether it produces more dried kelp blocks than it burns.** Vanilla's loop is strongly fuel
+  negative; the two Stage-3 passives together push it to roughly break-even on paper. If it comes out
+  clearly positive in play, the `Bonus_Drops.Cooking.Dried_Kelp` row is the switch to flip — not the
+  ladder. *(Stage 3 finding, measured rather than argued.)*
 
 ---
 

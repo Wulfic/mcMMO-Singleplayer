@@ -1,13 +1,19 @@
 package com.gmail.nossr50.skills.cooking;
 
+import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Misc;
+import com.gmail.nossr50.util.Permissions;
+import com.gmail.nossr50.util.random.ProbabilityUtil;
+import com.gmail.nossr50.util.skills.RankUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -17,13 +23,13 @@ import org.jetbrains.annotations.Nullable;
  * existing {@code fabric.listeners.SmeltingListener} / {@code CookingListener} / {@code FoodListener}
  * seams.
  *
- * <p><b>Stage 2 (this class's XP half) is live.</b> Each remaining behaviour lands with the seam that
- * drives it:
+ * <p>Each behaviour lands with the seam that drives it:
  * <ul>
  *   <li><b>Stage 2</b> ✅ — cook XP (the food branch of {@code onFurnaceSmelt}) and crafted-food XP
  *       ({@code CraftingResultSlot}), plus the {@code Max_Cooks_Per_Hour} rolling cap;</li>
- *   <li><b>Stage 3</b> — Kitchen Efficiency ({@code boostFuelTime}'s {@code else}) and Master Chef
- *       ({@code onSmeltComplete}'s food arm);</li>
+ *   <li><b>Stage 3</b> ✅ — Kitchen Efficiency ({@link #boostFuelTime}, the {@code else} of the gate
+ *       {@code boostFuelTime} has enforced since the Smelting port) and Master Chef
+ *       ({@link #canSecondHelping}, the food arm of {@code onSmeltComplete});</li>
  *   <li><b>Stage 4</b> — Power Cook (the eat seam, and the level → duration math, which lives here
  *       precisely so it is unit-testable with no world);</li>
  *   <li><b>Stage 5</b> — campfires and {@code CookingStatsRenderer}.</li>
@@ -45,13 +51,22 @@ import org.jetbrains.annotations.Nullable;
  * <b>0</b>. The same item, two verbs, two prices — and the split is what makes that structural
  * rather than a coincidence of vanilla's recipe names.
  *
- * <h2>⚠️ Two of the three sub-skills need an explicit per-skill disable gate</h2>
+ * <h2>⚠️ The per-skill disable switch, sub-skill by sub-skill</h2>
  * {@code SkillGating} enforces the {@code coreskills.yml} master switch at three chokepoints:
  * {@code Permissions}, {@code RankUtils} booleans, and {@code ProbabilityUtil#isSkillRNGSuccessful}.
- * Master Chef is an RNG proc and is therefore covered for free. <b>Kitchen Efficiency is a
- * multiplier and Power Cook is a deterministic effect, so neither passes through any of those</b> —
- * each needs {@code SkillGating.isSkillEnabled(PrimarySkillType.COOKING)} checked at its own call
- * site, or switching Cooking off would still boost fuel and still hand out Strength.
+ * The plan's standing warning is that a <em>multiplier</em> or a <em>deterministic effect</em>
+ * reaches none of them, so each needs its own gate. Where that lands per sub-skill:
+ * <ul>
+ *   <li><b>Master Chef</b> — an RNG proc. Covered twice over, and free.</li>
+ *   <li><b>Kitchen Efficiency</b> — a multiplier, and the warning's headline case. It is covered
+ *       anyway <em>because {@link #boostFuelTime} opens on {@link Permissions#isSubSkillEnabled}</em>,
+ *       which is itself one of the three chokepoints. Routing through a chokepoint is the gate; the
+ *       reasoning "a multiplier is not covered" is about the shape, not about this call. Asserted by
+ *       a test rather than argued, because that is the only form of this claim worth anything.</li>
+ *   <li><b>Power Cook</b> (Stage 4) — a deterministic effect on the eat seam, which touches no
+ *       chokepoint at all. It is the one that will need an explicit
+ *       {@code SkillGating.isSkillEnabled(COOKING)}.</li>
+ * </ul>
  *
  * <p>The XP on this class needs no such call: every award goes through
  * {@code SkillManager#applyXpGain} → {@code McMMOPlayer#beginXpGain}, which GitHub #10 already gates.
@@ -244,6 +259,98 @@ public class CookingManager extends SkillManager {
         final int credited = Math.min(wanted, remaining);
         cookedItemsThisWindow += credited;
         return credited;
+    }
+
+    // --- Kitchen Efficiency -----------------------------------------------------------------------
+
+    /**
+     * Kitchen Efficiency: multiply the burn time of the fuel a furnace is about to consume, when what
+     * it is cooking is <b>food</b>. The exact shape of {@code SmeltingManager#boostFuelTime}, on the
+     * other side of the {@code isSmeltable(input)} gate that has always sent food down the vanilla
+     * path — <em>"so cooking food burns at vanilla speed"</em>. This is that comment's {@code else},
+     * and no player can hold both bonuses on one smelt because an input is either an ore or a food.
+     *
+     * <h2>⚠️ The per-skill disable switch, and why there is no explicit {@code SkillGating} call</h2>
+     * The Cooking plan flags this method as needing one, on the reasoning that a <em>multiplier</em>
+     * passes through none of the three chokepoints GitHub #10 gates. That reasoning is right about
+     * multipliers in general and wrong about this one: {@link Permissions#isSubSkillEnabled} <b>is</b>
+     * one of those chokepoints, and the first line goes through it. Switching Cooking off in
+     * {@code coreskills.yml} therefore returns vanilla burn time here, and a test asserts exactly
+     * that rather than trusting the reasoning either way.
+     *
+     * <p>⚠️ <b>Do not "simplify" that first line to a rank check.</b> A rank read is not gated, so
+     * the switch would silently stop closing this path.
+     *
+     * @param burnTime vanilla's own burn time for the fuel that is about to be consumed
+     * @return the boosted burn time, or {@code burnTime} unchanged when the bonus does not apply
+     */
+    public int boostFuelTime(int burnTime) {
+        if (!Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.COOKING_KITCHEN_EFFICIENCY)) {
+            return burnTime;
+        }
+        if (burnTime <= 0) {
+            return burnTime; // Nothing to multiply; leave vanilla's own answer alone.
+        }
+        // Clamped to a short exactly as Smelting's is: litTimeRemaining and litTotalTime are what
+        // this feeds, and the fuel gauge is drawn from their ratio.
+        return Math.min(Short.MAX_VALUE, Math.max(1, burnTime * getFuelEfficiencyMultiplier()));
+    }
+
+    /**
+     * The Kitchen Efficiency burn-time factor for this player's current rank; {@code 1} — no change —
+     * when unranked.
+     */
+    public int getFuelEfficiencyMultiplier() {
+        final AdvancedConfig advanced = McMMOMod.getAdvancedConfig();
+        if (advanced == null) {
+            return 1; // No config wired ⇒ no opinion ⇒ vanilla.
+        }
+        // getRank is never forced to 0 by the disable switch (see SkillGating), so this is the real
+        // rank and the getter guards rank 0 itself rather than indexing an array by rank - 1.
+        return advanced.getKitchenEfficiencyMultiplier(
+                RankUtils.getRank(getPlayer(), SubSkillType.COOKING_KITCHEN_EFFICIENCY));
+    }
+
+    // --- Master Chef ------------------------------------------------------------------------------
+
+    /**
+     * Whether a cooked result is listed under {@code Bonus_Drops.Cooking} at all — the config half of
+     * Master Chef, with no RNG in it. The mirror of
+     * {@code SmeltingManager#isSecondSmeltMaterial}, and it exists for the same reason: the furnace
+     * is shared, so the listener decides <b>which skill owns this result</b> on membership before
+     * anybody rolls. See {@link #canSecondHelping}.
+     *
+     * <p>Answers {@code false} when no config is wired, which fails <b>closed</b>: an unconfigured
+     * furnace hands out no free food.
+     *
+     * @param resultConfigString the config string of the cook's <em>result</em> — {@code Cooked_Beef},
+     *                           not {@code Beef}. {@code craftRecipe} has already decremented the
+     *                           input by the time this can be asked, and it is empty whenever the last
+     *                           of it was just consumed
+     */
+    public static boolean isMasterChefMaterial(@NotNull String resultConfigString) {
+        final GeneralConfig general = McMMOMod.getGeneralConfig();
+        return general != null
+                && general.getDoubleDropsEnabled(PrimarySkillType.COOKING, resultConfigString);
+    }
+
+    /** The RNG half of Master Chef, gated on the sub-skill being on. */
+    public boolean isMasterChefSuccessful() {
+        return Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.COOKING_MASTER_CHEF)
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.COOKING_MASTER_CHEF, mmoPlayer);
+    }
+
+    /**
+     * Master Chef: whether this finished cook should yield a second helping of its result. The
+     * caller still has to check {@code SmeltingManager#hasRoomForSecondSmelt}, which needs the live
+     * output stack — <b>re-used, not re-derived</b>: it encodes the pre-merge/post-merge count
+     * subtlety of a seam that sits on the far side of vanilla's own merge, and Master Chef adds its
+     * item to the very same slot at the very same point.
+     *
+     * @param resultConfigString the config string of the cook's result
+     */
+    public boolean canSecondHelping(@NotNull String resultConfigString) {
+        return isMasterChefMaterial(resultConfigString) && isMasterChefSuccessful();
     }
 
     // --- Config reads -----------------------------------------------------------------------------

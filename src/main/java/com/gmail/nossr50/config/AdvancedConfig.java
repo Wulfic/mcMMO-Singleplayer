@@ -166,6 +166,25 @@ public class AdvancedConfig extends ConfigLoader {
             reason.add("Skills.Axes.SkullSplitter.DamageModifier should be at least 1!");
         }
 
+        /* COOKING */
+        if (getMaximumProbability(SubSkillType.COOKING_MASTER_CHEF) < 1) {
+            reason.add("Skills.Cooking.MasterChef.ChanceMax should be at least 1!");
+        }
+
+        if (getMaxBonusLevel(SubSkillType.COOKING_MASTER_CHEF) < 1) {
+            reason.add("Skills.Cooking.MasterChef.MaxBonusLevel should be at least 1!");
+        }
+
+        // Validated from rank 1 up, never from rank 0: a multiplier below 1 would make cooking food
+        // burn fuel FASTER than vanilla, which is the opposite of what the sub-skill promises and is
+        // not a value anyone sets on purpose.
+        for (int rank = 1; rank <= SubSkillType.COOKING_KITCHEN_EFFICIENCY.getNumRanks(); rank++) {
+            if (getKitchenEfficiencyMultiplier(rank) < 1) {
+                reason.add("Skills.Cooking.KitchenEfficiency.Multiplier_Per_Rank.Rank_" + rank
+                        + " should be at least 1!");
+            }
+        }
+
         /* FISHING */
         /*List<Fishing.Tier> fishingTierList = Arrays.asList(Fishing.Tier.values());
 
@@ -1257,6 +1276,35 @@ public class AdvancedConfig extends ConfigLoader {
     public double getArcaneSalvageExtractPartialEnchantsChance(int rank) {
         return config.getDouble("Skills.Salvage.ArcaneSalvage.ExtractPartialEnchant.Rank_" + rank);
     }
+
+    /* COOKING */
+
+    /**
+     * Kitchen Efficiency: the factor vanilla's fuel burn time is multiplied by when the furnace's
+     * <b>input</b> is a food, at {@code rank}. Cooking's mirror of Smelting's Fuel Efficiency ladder,
+     * on the other side of the {@code isSmeltable(input)} gate that has always sent food down the
+     * vanilla path.
+     *
+     * <p>⚠️ <b>Rank 0 answers 1 by an explicit guard, not by luck.</b> Several getters in this class
+     * index a per-rank defaults array by {@code rank - 1} and blow up at rank 0 — the landmine this
+     * port has stepped on four times, most recently in GitHub #10, where the trigger was a
+     * high-level player switching a skill off and keeping their level. Nothing here is indexed, and
+     * nothing here is allowed to start.
+     *
+     * @param rank the player's Kitchen Efficiency rank; {@code 0} or less means "no bonus"
+     * @return the burn-time multiplier, never below 1
+     */
+    public int getKitchenEfficiencyMultiplier(int rank) {
+        if (rank < 1) {
+            return 1; // Unranked, or the sub-skill switched off. Vanilla burn time, untouched.
+        }
+        return Math.max(1, config.getInt(
+                "Skills.Cooking.KitchenEfficiency.Multiplier_Per_Rank.Rank_" + rank, 1));
+    }
+
+    // Skills.Cooking.PowerCook.Seconds_Per_Rank has no reader yet on purpose — it lands with Power
+    // Cook itself in Stage 4. A getter nobody calls is how this port has repeatedly ended up with a
+    // mechanic that is "built" and wired to nothing.
 
     /* SMELTING */
     public int getBurnModifierMaxLevel() {

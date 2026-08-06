@@ -11,6 +11,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 
 import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.config.CoreSkillsConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
@@ -21,8 +22,12 @@ import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.smelting.SmeltingManager;
+import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -75,12 +80,43 @@ class CookingManagerTest {
     private static final int DRIED_KELP_BATCH = 9;
     private static final int HONEY_BOTTLE_BATCH = 4;
 
+    /** The shipped advanced.yml Kitchen Efficiency ladder, restated so a retune comes through here. */
+    private static final int[] KITCHEN_EFFICIENCY_MULTIPLIERS = {2, 3, 4};
+
+    /** One coal in a furnace. Any burn time works; a real one keeps the arithmetic readable. */
+    private static final int VANILLA_BURN_TIME = 1600;
+
+    /**
+     * The nine paid {@code Experience_Values.Cooking.Cook} inputs and the result each produces, as
+     * vanilla's recipe JSONs define them. <b>Input → result is the whole point:</b> the XP hook is
+     * keyed on the left column and Master Chef on the right, so this is the one place the two halves
+     * of the sub-skill are written down together.
+     */
+    private static final String[][] COOK_INPUT_TO_RESULT = {
+            {"Beef", "Cooked_Beef"},
+            {"Porkchop", "Cooked_Porkchop"},
+            {"Chicken", "Cooked_Chicken"},
+            {"Mutton", "Cooked_Mutton"},
+            {"Rabbit", "Cooked_Rabbit"},
+            {"Cod", "Cooked_Cod"},
+            {"Salmon", "Cooked_Salmon"},
+            {"Potato", "Baked_Potato"},
+            {"Kelp", "Dried_Kelp"},
+    };
+
+    /** The shipped {@code Bonus_Drops.Smelting} roster — twelve ore products, and no food. */
+    private static final String[] SMELTING_BONUS_DROPS = {"Iron_Ingot", "Gold_Ingot", "Emerald",
+            "Diamond", "Lapis_Lazuli", "Coal", "Nether_Quartz", "Quartz", "Redstone", "Deepslate",
+            "Copper_Ingot", "Netherite_Scrap"};
+
+    private Path dataFolder;
     private PlayerProfile profile;
     private McMMOPlayer mmoPlayer;
     private CookingManager manager;
 
     @BeforeEach
     void setUp(@TempDir Path dataFolder) {
+        this.dataFolder = dataFolder;
         McMMOMod.setExperienceConfig(new ExperienceConfig(dataFolder));
         McMMOMod.setGeneralConfig(new GeneralConfig(dataFolder));
         McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
@@ -94,6 +130,11 @@ class CookingManagerTest {
         profile = new PlayerProfile("Cook", UID, 0);
         mmoPlayer = new McMMOPlayer(player, profile);
         manager = mmoPlayer.getCookingManager();
+        // ⚠️ Not decoration. Every rank gate inside a manager calls RankUtils.getRank(getPlayer(),…),
+        // the PlatformPlayer overload, which resolves back through UserManager — and an untracked
+        // player answers rank 0 for everything. Without this, a rank-driven mechanic reads as
+        // "unranked" and every assertion about it quietly measures the no-op path instead.
+        UserManager.track(mmoPlayer);
     }
 
     @AfterEach
@@ -102,6 +143,11 @@ class CookingManagerTest {
         McMMOMod.setGeneralConfig(null);
         McMMOMod.setAdvancedConfig(null);
         McMMOMod.setRankConfig(null);
+        // ⚠️ Not optional. The disable-switch test writes a coreskills.yml with Cooking OFF into a
+        // process-wide static; leaving it there would switch Cooking off for whatever test in this
+        // fork ran next, and the failure would point at that test instead of at this one.
+        McMMOMod.setCoreSkillsConfig(null);
+        UserManager.cleanupPlayer(mmoPlayer);
     }
 
     // --- Registration ---------------------------------------------------------------------------
@@ -436,6 +482,217 @@ class CookingManagerTest {
         // than paying twice.
         McMMOMod.setExperienceConfig(null);
         assertFalse(CookingManager.isCookable("Beef"));
+    }
+
+    // --- Stage 3: Kitchen Efficiency -------------------------------------------------------------
+
+    @Test
+    void kitchenEfficiencyMultipliesBurnTimeByRankAndIsANoOpUnranked() {
+        atCookingLevel(0);
+        assertEquals(VANILLA_BURN_TIME, manager.boostFuelTime(VANILLA_BURN_TIME),
+                "rank 0 → vanilla burn time, untouched");
+
+        for (int rank = 1; rank <= KITCHEN_EFFICIENCY_RETRO.length; rank++) {
+            atCookingLevel(KITCHEN_EFFICIENCY_RETRO[rank - 1]);
+            final int expected = KITCHEN_EFFICIENCY_MULTIPLIERS[rank - 1];
+            assertEquals(expected, manager.getFuelEfficiencyMultiplier(),
+                    "Kitchen Efficiency rank " + rank + " must read x" + expected);
+            assertEquals(VANILLA_BURN_TIME * expected, manager.boostFuelTime(VANILLA_BURN_TIME),
+                    "rank " + rank + " must actually apply x" + expected);
+        }
+    }
+
+    @Test
+    void kitchenEfficiencyMatchesSmeltingsFuelLadderRungForRung() {
+        // D-CK3, stated out loud rather than discovered in review: this IS Smelting's Fuel
+        // Efficiency on the other side of a gate that already existed, and the ladders are meant to
+        // be identical. If somebody retunes one, this is what says the other was left behind.
+        final SmeltingManager smelting = mmoPlayer.getSmeltingManager();
+        for (int rank = 1; rank <= KITCHEN_EFFICIENCY_RETRO.length; rank++) {
+            atCookingLevel(KITCHEN_EFFICIENCY_RETRO[rank - 1]);
+            atSmeltingLevel(
+                    RankUtils.getRankUnlockLevel(SubSkillType.SMELTING_FUEL_EFFICIENCY, rank));
+
+            // ⚠️ Anchored to a literal, not just to each other. Written as a bare equality this
+            // test passed while BOTH sides returned 1 — the whole ladder was reading as unranked
+            // and "they agree" agreed about nothing. Comparing two derived values proves they
+            // match; only a literal proves they match the shipped config.
+            final int expected = KITCHEN_EFFICIENCY_MULTIPLIERS[rank - 1];
+            assertEquals(expected, manager.getFuelEfficiencyMultiplier(),
+                    "Kitchen Efficiency rank " + rank);
+            assertEquals(expected, smelting.getFuelEfficiencyMultiplier(),
+                    "Smelting's Fuel Efficiency rank " + rank + " must be the same rung");
+        }
+    }
+
+    @Test
+    void kitchenEfficiencyNeverOverflowsTheFurnacesBurnTimer() {
+        // litTimeRemaining and litTotalTime are what this feeds and the fuel gauge is their ratio.
+        // Smelting clamps to a short for that reason; an unclamped multiply would wrap negative and
+        // put the furnace out instantly on a long-burning fuel.
+        atCookingLevel(KITCHEN_EFFICIENCY_RETRO[2]); // rank 3 → x4
+        assertEquals(Short.MAX_VALUE, manager.boostFuelTime(Short.MAX_VALUE));
+        assertEquals(Short.MAX_VALUE, manager.boostFuelTime(20000));
+    }
+
+    @Test
+    void kitchenEfficiencyLeavesANonPositiveBurnTimeAlone() {
+        // A non-fuel answers 0 and must keep answering 0: max(1, 0 * n) would light a furnace with
+        // an item that does not burn.
+        atCookingLevel(KITCHEN_EFFICIENCY_RETRO[2]);
+        assertEquals(0, manager.boostFuelTime(0));
+        assertEquals(-1, manager.boostFuelTime(-1));
+    }
+
+    // --- Stage 3: Master Chef --------------------------------------------------------------------
+
+    @Test
+    void masterChefRequiresTheRESULTToBeBonusDropEnabled() {
+        // Keyed on the cooked RESULT, never the raw input: craftRecipe has already decremented the
+        // input by the time the bonus can be added, and it is EMPTY whenever the last of it was just
+        // consumed. A table written against inputs would find nothing, forever, and log nothing.
+        atCookingLevel(1000); // RetroMode MaxBonusLevel → ChanceMax 33%.
+
+        int enabledWins = 0;
+        int rawWins = 0;
+        int oreWins = 0;
+        for (int roll = 0; roll < 400; roll++) {
+            if (manager.canSecondHelping("Cooked_Beef")) {
+                enabledWins++;
+            }
+            if (manager.canSecondHelping("Beef")) {
+                rawWins++;
+            }
+            if (manager.canSecondHelping("Iron_Ingot")) {
+                oreWins++;
+            }
+        }
+
+        assertTrue(enabledWins > 0, "a cooked food should win some of 400 rolls at 33%");
+        assertEquals(0, rawWins, "the raw input is not the key — it has no Bonus_Drops.Cooking entry");
+        assertEquals(0, oreWins, "a smelt result is Smelting's bonus, never Cooking's");
+    }
+
+    @Test
+    void masterChefCannotTriggerBelowTheBonusCurve() {
+        atCookingLevel(0); // 0% at level 0 (MasterChef ChanceMax 33 @ RetroMode MaxBonusLevel 1000).
+        assertFalse(manager.canSecondHelping("Cooked_Beef"), "no roll can succeed at level 0");
+    }
+
+    @Test
+    void masterChefFailsClosedWithNoConfigWired() {
+        // A furnace with no opinion available hands out no free food. The failure direction matters:
+        // the alternative is a headless boot or a half-loaded world duplicating every cook.
+        McMMOMod.setGeneralConfig(null);
+        assertFalse(CookingManager.isMasterChefMaterial("Cooked_Beef"));
+    }
+
+    @Test
+    void everyPaidCookInputHasABonusDropEntryForItsResult() {
+        // Both directions, because a one-directional completeness test is half a test. A food that
+        // pays XP but can never double is a silent hole in the sub-skill; an entry whose input pays
+        // nothing is a bonus for something Cooking does not consider cooking.
+        for (String[] pair : COOK_INPUT_TO_RESULT) {
+            assertTrue(CookingManager.isCookable(pair[0]),
+                    pair[0] + " must be a priced Cooking input");
+            assertTrue(CookingManager.isMasterChefMaterial(pair[1]),
+                    pair[1] + " must be listed under Bonus_Drops.Cooking");
+        }
+
+        // Chorus fruit is the deliberate exception at both ends: priced 0, and its result is not a
+        // food. Absent from one table and not the other would look like an oversight.
+        assertFalse(CookingManager.isCookable("Chorus_Fruit"));
+        assertFalse(CookingManager.isMasterChefMaterial("Popped_Chorus_Fruit"));
+    }
+
+    @Test
+    void theTwoBonusDropTablesShareNoItem() {
+        // ⚠️ onSmeltComplete dispatches on table MEMBERSHIP and Smelting wins, so an item in both
+        // would silently be Smelting's. Nothing in the YAML format prevents it, so the ordering is a
+        // ruling — and this says the shipped configs do not lean on it.
+        for (String[] pair : COOK_INPUT_TO_RESULT) {
+            assertFalse(SmeltingManager.isSecondSmeltMaterial(pair[1]),
+                    pair[1] + " is Cooking's bonus drop and must not also be Smelting's");
+        }
+        for (String smelted : SMELTING_BONUS_DROPS) {
+            assertFalse(CookingManager.isMasterChefMaterial(smelted),
+                    smelted + " is Smelting's bonus drop and must not also be Cooking's");
+        }
+    }
+
+    // --- Stage 3: the per-skill disable switch (D-CK9 item 2) ------------------------------------
+
+    @Test
+    void switchingCookingOffStopsBothPassivesAndLeavesSmeltingsAlone() throws IOException {
+        // ⚠️ The plan flags Kitchen Efficiency as needing an explicit SkillGating call because a
+        // MULTIPLIER passes through none of #10's three chokepoints. It is covered anyway, because
+        // boostFuelTime opens on Permissions#isSubSkillEnabled, which IS one of them — but that is a
+        // claim about a call, not about a shape, and the only version of it worth anything is this
+        // one. Master Chef is an RNG proc and is covered twice over.
+        atCookingLevel(1000);
+        atSmeltingLevel(1000);
+
+        // The reference point first: with the skill ON, both passives fire. A test that only asserts
+        // the "off" half passes just as well against a mechanic that never worked at all.
+        assertEquals(VANILLA_BURN_TIME * 4, manager.boostFuelTime(VANILLA_BURN_TIME));
+        assertTrue(anyHelpingIn(400), "Master Chef must fire at all before 'it stops' means anything");
+
+        disableCooking();
+
+        assertEquals(VANILLA_BURN_TIME, manager.boostFuelTime(VANILLA_BURN_TIME),
+                "a disabled Cooking must not still stretch the player's fuel");
+        assertFalse(anyHelpingIn(400), "a disabled Cooking must not still hand out free food");
+
+        // And the blast radius: disabling one skill must not disable the other half of the furnace.
+        assertEquals(VANILLA_BURN_TIME * 4,
+                mmoPlayer.getSmeltingManager().boostFuelTime(VANILLA_BURN_TIME),
+                "Smelting's own fuel bonus is not Cooking's to switch off");
+    }
+
+    /** Put the player at {@code level} in Cooking, which is what every rank gate reads. */
+    private void atCookingLevel(int level) {
+        profile.modifySkill(PrimarySkillType.COOKING, level);
+    }
+
+    /**
+     * Put the player at {@code level} in <b>Smelting</b>, which cannot be done directly.
+     *
+     * <p>⚠️ <b>Smelting is a CHILD skill in this port</b> — its level is derived from Mining and
+     * Repair, and {@code PlayerProfile#modifySkill} returns silently for a child skill. Setting it
+     * the obvious way leaves it at 0, every Smelting rank reads 0, and any test that compares
+     * Smelting against Cooking then compares a real number with a permanent zero. That is exactly
+     * how the ladder-parity test below first "passed" while both sides answered 1.
+     *
+     * <p>Cooking is deliberately <em>not</em> a child skill, so the two are levelled by different
+     * mechanisms even though their fuel ladders are identical.
+     */
+    private void atSmeltingLevel(int level) {
+        for (PrimarySkillType parent : SkillTools.SMELTING_PARENTS) {
+            profile.modifySkill(parent, level);
+        }
+        assertEquals(level, mmoPlayer.getSkillLevel(PrimarySkillType.SMELTING),
+                "Smelting is the mean of its parents; both must be raised to reach " + level);
+    }
+
+    /** Whether Master Chef won at least one of {@code rolls} — the RNG asserted without stubbing it. */
+    private boolean anyHelpingIn(int rolls) {
+        for (int roll = 0; roll < rolls; roll++) {
+            if (manager.canSecondHelping("Cooked_Beef")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Wire a {@code coreskills.yml} with Cooking switched off, through the real load path —
+     * {@code copyMissingDefaults} then back-fills every other skill as enabled, which is also what a
+     * returning player's part-written file looks like.
+     */
+    private void disableCooking() throws IOException {
+        Files.writeString(dataFolder.resolve("coreskills.yml"), "Cooking:\n    Enabled: false\n",
+                StandardCharsets.UTF_8);
+        McMMOMod.setCoreSkillsConfig(new CoreSkillsConfig(dataFolder));
     }
 
     private void assertLadder(SubSkillType subSkill, int[] retroModeLevels) {

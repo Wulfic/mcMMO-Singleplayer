@@ -64,6 +64,14 @@ import net.minecraft.world.World;
  *       item the furnace is about to consume.</li>
  * </ul>
  *
+ * <p><b>All three now serve two skills, not one.</b> A furnace is split by its <em>input</em>: ore is
+ * Smelting's, food is Cooking's, and never both. Each of the three checks Smelting first and treats
+ * Cooking as the alternative — the same order in all three places, because they are three answers to
+ * one question and a furnace that paid Smelting's XP while boosting Cooking's fuel would be
+ * incoherent. Cooking's halves are {@code CookingManager#boostFuelTime} (Kitchen Efficiency) and
+ * {@code CookingManager#canSecondHelping} (Master Chef). <b>One owner map, two managers</b> — see
+ * {@link #owner}.
+ *
  * <p><b>Understanding the Art</b> ({@link #beginFurnaceExtract} / {@link #boostVanillaXp}) does
  * <em>not</em> use the owner map: legacy's {@code FurnaceExtractEvent} boosted the vanilla XP of the
  * player doing the extracting, whoever that is. It rides a different pair of seams — see
@@ -214,6 +222,22 @@ public final class SmeltingListener {
      * produced only from inputs that carry Smelting XP. An operator who added, say, a cooked food to
      * {@code Bonus_Drops.Smelting} would get a Second Smelt where legacy gave none.
      *
+     * <h2>⚠️ Master Chef shares this seam, and the dispatch is on TABLE MEMBERSHIP, not on a roll</h2>
+     * Cooking's Master Chef is the same mechanic pointed at food, reading the same output slot on the
+     * same block, and nothing in the config format stops an operator listing one result under both
+     * {@code Bonus_Drops.Smelting} and {@code Bonus_Drops.Cooking}. <b>Smelting wins</b> — the same
+     * order {@link #onFurnaceSmelt} and {@link #boostFuelTime} enforce, so all three furnace
+     * behaviours agree about which skill owns a given item.
+     *
+     * <p>The tie-break is resolved by asking which table the result is <em>in</em>, before anybody
+     * rolls. Rolling Smelting's dice first and falling through to Cooking's on a miss would look
+     * equivalent and is not: an item in both tables would get <b>two chances at one bonus</b>, and
+     * the extra chance would be invisible in every log. One membership test, then exactly one roll.
+     *
+     * <p>The room check is shared, deliberately: {@link SmeltingManager#hasRoomForSecondSmelt}
+     * encodes the pre-merge/post-merge subtlety of this seam, and Master Chef adds its item to the
+     * very same slot at the very same point. It is re-used rather than re-derived.
+     *
      * @param output the furnace's output slot stack, holding the freshly smelted result
      */
     public static void onSmeltComplete(BlockPos pos, ItemStack output) {
@@ -223,20 +247,46 @@ public final class SmeltingListener {
         if (!SmeltingManager.hasRoomForSecondSmelt(output.getCount(), output.getMaxCount())) {
             return; // no room for the extra item — checked before the RNG, as legacy did.
         }
-        final SmeltingManager smelting = ownerSkill(pos);
-        if (smelting == null) {
+        final String resultConfigString = materialConfigString(output);
+        final boolean smeltingResult = SmeltingManager.isSecondSmeltMaterial(resultConfigString);
+        if (!smeltingResult && !CookingManager.isMasterChefMaterial(resultConfigString)) {
+            return; // In neither table — cheaper than resolving the owner, so it goes first.
+        }
+        final McMMOPlayer owner = owner(pos);
+        if (owner == null) {
             return;
         }
-        if (smelting.canSecondSmelt(materialConfigString(output))) {
+        final boolean bonus = smeltingResult
+                ? owner.getSmeltingManager().canSecondSmelt(resultConfigString)
+                : owner.getCookingManager().canSecondHelping(resultConfigString);
+        if (bonus) {
             output.increment(1);
         }
     }
 
     /**
-     * Fuel Efficiency: multiply the burn time of the fuel item a furnace is about to consume, for the
-     * furnace's owner. This is the legacy {@code onFurnaceBurnEvent} arm — including its gate that the
-     * furnace must actually be smelting something mcMMO counts as smeltable, so cooking food burns at
-     * vanilla speed.
+     * Fuel Efficiency <em>and</em> Kitchen Efficiency: multiply the burn time of the fuel item a
+     * furnace is about to consume, for the furnace's owner. This is the legacy
+     * {@code onFurnaceBurnEvent} arm — including its gate that the furnace must actually be smelting
+     * something mcMMO counts as smeltable.
+     *
+     * <h2>⚠️ Cooking is NOT the blanket {@code else} of the smeltable gate</h2>
+     * The Cooking plan describes Kitchen Efficiency as "the {@code else} of a gate that already
+     * exists", and taken literally that ships a bug. A furnace's input being non-smeltable does not
+     * make it food: <b>sand, cobblestone, logs, clay balls, cactus, wet sponge and raw chorus fruit
+     * are all non-smeltable furnace inputs</b>, and every one of them would have collected Cooking's
+     * fuel bonus for nothing. The branch is therefore an explicit
+     * {@link CookingManager#isCookable} test, not a negation.
+     *
+     * <p>The two are mutually exclusive by construction — an input is either priced under
+     * {@code Experience_Values.Smelting} or under {@code Experience_Values.Cooking.Cook}, and
+     * Smelting is checked first, which is the same order {@link #onFurnaceSmelt} and
+     * {@link #onSmeltComplete} use. All three furnace behaviours agree about who owns an input.
+     *
+     * <p>⚠️ {@code Chorus_Fruit} is priced at an explicit {@code 0} and so is <em>not</em> cookable:
+     * it pays no XP and it earns no fuel bonus. Those two facts come from the same config read on
+     * purpose — a chorus farm is fully automatable, and a skill that refuses to pay for something
+     * while still subsidising it is the kind of half-gate that gets found in play-test.
      *
      * @param burnTime vanilla's own burn time for the fuel
      * @param input    the furnace's input slot stack (what it is about to smelt)
@@ -246,14 +296,18 @@ public final class SmeltingListener {
         if (burnTime <= 0 || input.isEmpty()) {
             return burnTime;
         }
-        if (!SmeltingManager.isSmeltable(materialConfigString(input))) {
+        final String inputConfigString = materialConfigString(input);
+        final boolean smeltable = SmeltingManager.isSmeltable(inputConfigString);
+        if (!smeltable && !CookingManager.isCookable(inputConfigString)) {
+            return burnTime; // Neither skill's business — sand, cobblestone, a log. Vanilla speed.
+        }
+        final McMMOPlayer owner = owner(pos);
+        if (owner == null) {
             return burnTime;
         }
-        final SmeltingManager smelting = ownerSkill(pos);
-        if (smelting == null) {
-            return burnTime;
-        }
-        return smelting.boostFuelTime(burnTime);
+        return smeltable
+                ? owner.getSmeltingManager().boostFuelTime(burnTime)
+                : owner.getCookingManager().boostFuelTime(burnTime);
     }
 
     /**
@@ -390,15 +444,6 @@ public final class SmeltingListener {
             return null; // no one has interacted with this furnace this session.
         }
         return UserManager.getPlayer(ownerId); // null when owner data is not loaded.
-    }
-
-    /**
-     * The {@link SmeltingManager} of the furnace's owner, or {@code null}. The null-owner fast path
-     * is {@link #owner}'s; this only narrows it to a skill.
-     */
-    private static SmeltingManager ownerSkill(BlockPos pos) {
-        final McMMOPlayer mmoPlayer = owner(pos);
-        return mmoPlayer == null ? null : mmoPlayer.getSmeltingManager();
     }
 
     /**
