@@ -325,6 +325,29 @@ public final class McMMOSettings {
                 "Experience_Formula.Breeding.Multiplier", 1.0, 0.0, 10.0,
                 "XP From Bred Mobs (×)",
                 "Combat XP multiplier for animals born from breeding."));
+        // Diminished returns. Half-built since Phase 11 — the rolling per-skill totals were being
+        // maintained and expired every 60 ticks and NOTHING consulted them — until TODO 4(b) wired
+        // McMMOPlayer#applyDiminishedReturns. The switch is offered only now that the gate is live.
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML, "Diminished_Returns.Enabled", false,
+                "Diminishing XP Returns",
+                "Grinding one skill hard pays less and less. Past its threshold below, a skill's XP "
+                        + "is scaled down in proportion to how far over it you already are, until "
+                        + "you stop and the window clears. ⚠️ Ships OFF: continuous skills "
+                        + "(Parkour, Swimming, Flying, Stealth) pay fast enough that the default "
+                        + "thresholds will throttle ordinary long-distance travel, not just farms. "
+                        + "Raise their per-skill thresholds in experience.yml before turning it on."));
+        list.add(ConfigSetting.integer(CAT_EXPLOITS, EXPERIENCE_YML, "Diminished_Returns.Time_Interval",
+                10, 1, 120, "Diminishing Returns: Window (min)",
+                "How long a gain counts towards the threshold before it expires. A longer window "
+                        + "means the throttle bites sooner and takes longer to recover from. "
+                        + "Per-skill thresholds live in experience.yml."));
+        list.add(ConfigSetting.decimal(CAT_EXPLOITS, EXPERIENCE_YML,
+                "Diminished_Returns.Guaranteed_Minimum_Percentage", 0.05, 0.0, 1.0,
+                "Diminishing Returns: Minimum Payout (×)",
+                "The floor a throttled gain can never fall below, as a fraction of what it would "
+                        + "have paid. 0.05 = you always keep 5%. 1.0 = full XP, which disables the "
+                        + "throttle entirely. 0 removes the floor, so a hard-farmed skill can be "
+                        + "scaled all the way to nothing."));
 
         // ---- Skill level caps (config.yml) -----------------------------------------------------
         for (String skill : LEVEL_CAP_SKILLS) {

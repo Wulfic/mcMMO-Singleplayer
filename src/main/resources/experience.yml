@@ -416,9 +416,12 @@ Diminished_Returns:
     # Limit the amount of experience a player can earn:
     # Threshold (amount of experience) per Time_Interval (in minutes)
     Threshold:
+        # Only NON-CHILD skills belong here. Agility, Salvage and Smelting earn no XP of their own
+        # -- a gain is split to their parents before it reaches the throttle -- so a Threshold entry
+        # for any of them would be a knob wired to nothing. Agility had one until 2026-08-06.
+        # DiminishedReturnsThresholdCatalogueTest pins both directions.
         Swords: 20000
         Taming: 20000
-        Agility: 20000
         # 20000 per 10 minutes is 33 XP/s. The movement skills pay 15-17 XP/s flat out, so this
         # throttle sits close enough to matter if Diminished_Returns is ever switched on -- raise
         # these three before enabling it, or travel gets punished for being continuous.
@@ -453,6 +456,10 @@ Diminished_Returns:
         Repair: 20000
         Fishing: 20000
         Alchemy: 20000
+        # Cooking shipped with no entry at all until 2026-08-06 -- it was the 27th skill and the
+        # table was hand-kept. It already carries its own ExploitFix.Cooking.Max_Cooks_Per_Hour
+        # rate cap, which bites long before this throttle would.
+        Cooking: 20000
         Crossbows: 20000
         Tridents: 20000
         Maces: 20000

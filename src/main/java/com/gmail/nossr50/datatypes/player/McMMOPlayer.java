@@ -726,9 +726,8 @@ public class McMMOPlayer {
      * <p>An admin-granted gain ({@link XPGainReason#COMMAND}) is returned untouched, legacy's first
      * check: {@code /addxp 500} must add 500.
      *
-     * <p>Diminished returns is legacy's other resident here and is <b>not yet wired</b> — the rolling
-     * per-skill totals {@code registerXpGain} maintains are consulted by nobody. This method is the
-     * seam it lands in; see {@code TODO.md} 4(b).
+     * <p>Diminished returns runs <em>after</em> the early-game boost, on the boosted value, because
+     * that is the order legacy's single listener body ran them in.
      *
      * @return the XP that should actually reach the profile
      */
@@ -738,7 +737,87 @@ public class McMMOPlayer {
         if (xpGainReason == XPGainReason.COMMAND) {
             return xp;
         }
-        return xp + earlyGameBoostBonus(primarySkillType);
+        return applyDiminishedReturns(primarySkillType,
+                xp + earlyGameBoostBonus(primarySkillType));
+    }
+
+    /**
+     * The {@code Diminished_Returns} anti-grind throttle: once a skill has earned more than its
+     * configured threshold inside the rolling {@code Time_Interval} window, further gains in that
+     * skill are scaled down in proportion to how far over the threshold the window total already is,
+     * with a guaranteed-minimum floor so a farmed skill still pays <em>something</em>.
+     *
+     * <p>The rolling totals this reads have been maintained since Phase 11 —
+     * {@link PlayerProfile#registerXpGain} records every gain and {@code ClearRegisteredXPGainTask}
+     * expires them every 60 ticks — but nothing consulted them until the 2026-08-06 wiring audit
+     * (TODO 4(b)). The whole system was one call short.
+     *
+     * <p>Ships disabled ({@code Diminished_Returns.Enabled: false}, legacy's own default), so this is
+     * a no-op until the player turns it on.
+     *
+     * <p>The threshold is divided by the XP multipliers so it stays denominated in <em>pre-multiplier</em>
+     * XP: doubling the global XP rate must not halve how long you may grind before the throttle bites.
+     *
+     * <p><b>One deliberate deviation from legacy:</b> the {@code modifiedThreshold <= 0 || !finite}
+     * guard. Both multipliers it divides by are exposed as ModMenu sliders whose minimum is
+     * {@code 0.0}, so a player can drive that expression to {@code 0} or {@code Infinity} from the
+     * settings screen; legacy would then divide by it and hand a {@code NaN}/{@code -Infinity} XP
+     * value straight to the profile, which persists to disk. A zeroed multiplier means "no XP for
+     * this skill" and is not a coherent throttle input, so the throttle steps aside instead.
+     *
+     * <p>Legacy expressed "reduced to nothing" by cancelling its event, which skipped the profile
+     * write entirely; here it is a {@code 0} return. Equivalent — {@link #addXp} with {@code 0} moves
+     * no XP and {@link PlayerProfile#registerXpGain} with {@code 0} adds nothing to the rolling total.
+     *
+     * @return the throttled XP, or {@code xp} unchanged whenever the throttle does not apply
+     */
+    @VisibleForTesting
+    float applyDiminishedReturns(PrimarySkillType primarySkillType, float xp) {
+        final var experienceConfig = McMMOMod.getExperienceConfig();
+        if (experienceConfig == null || !experienceConfig.getDiminishedReturnsEnabled()) {
+            return xp;
+        }
+
+        // Legacy: "Don't calculate for XP subtraction". A negative gain scaled by a positive
+        // fraction would move *towards* zero, i.e. the throttle would soften a penalty.
+        if (xp <= 0) {
+            return xp;
+        }
+
+        // A child skill's gain is split to its parents before it ever reaches the XP path, so the
+        // parents are throttled and the child has no rolling total of its own to compare against.
+        // Unreachable via applyXpGain (the split returns early); kept because this method is
+        // package-private and legacy carried the same guard.
+        if (SkillTools.isChildSkill(primarySkillType)) {
+            return xp;
+        }
+
+        final int threshold = experienceConfig.getDiminishedReturnsThreshold(primarySkillType);
+        if (threshold <= 0) {
+            return xp;
+        }
+
+        final float modifiedThreshold = (float) (threshold
+                / experienceConfig.getFormulaSkillModifier(primarySkillType)
+                * experienceConfig.getExperienceGainsGlobalMultiplier());
+        if (modifiedThreshold <= 0f || !Float.isFinite(modifiedThreshold)) {
+            return xp;
+        }
+
+        final float overage =
+                (profile.getRegisteredXpGain(primarySkillType) - modifiedThreshold)
+                        / modifiedThreshold;
+        if (overage <= 0f) {
+            return xp;
+        }
+
+        final float guaranteedMinimum = experienceConfig.getDiminishedReturnsCap() * xp;
+        final float reduced = xp - (xp * overage);
+
+        if (guaranteedMinimum > 0f && reduced <= guaranteedMinimum) {
+            return guaranteedMinimum;
+        }
+        return Math.max(reduced, 0f);
     }
 
     /**

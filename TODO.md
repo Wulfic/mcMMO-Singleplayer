@@ -20,7 +20,8 @@ Green baseline re-established: `./gradlew build` exit 0 at commit `8904ea6fc`, *
 | 2.1 `SerratedStrikes.BleedTicks` | ✅ **DONE** `8904ea6fc` — ⚠️ *the fix prescribed below was wrong*; the knob was **deleted**, not wired. Serrated Strikes' bleed **is** Rupture, already tunable via `Rupture_Mechanics`. See `memory/audit-item-2-dead-config-knobs.md` |
 | 2.2 crossed vanilla-repair getters | ✅ **DONE** `8904ea6fc` — swapped; it is **upstream's own bug**, ported verbatim, so a javadoc now says do not "restore" it |
 | 2.3 `ExploitFix.Pistons` | ✅ **NO ACTION** — already ruled deliberate in two places (`ExperienceConfigKeyAgreementTest:62`, `McMMOSettingsTest:174`). The audit re-flagged a settled question |
-| 1.3 dead ModMenu switches | 🔨 in progress — **the audit undercounted: it is four, not three** (see 1.3 below) |
+| 1.3 dead ModMenu switches | ✅ **DONE** `e93d6603a` — **the audit undercounted: it is four, not three**. The 4th (`Level_Up_Chat_Broadcasts.Enabled`) had **no getter at all**, so a getter→caller sweep could never see it. `CatalogueKeysReachCodeTest` is the third-direction guard. See `memory/audit-item-1-3-dead-modmenu-switches.md` |
+| 4(b) Diminished Returns | ✅ **DONE** — `McMMOPlayer#applyDiminishedReturns` closes the loop; ships **OFF** (owner's ruling). ⚠️ **The audit undercounted a third time**: the `Threshold` table was wrong in *both* directions — `Cooking` had **no row** and `Agility` (a child skill) had one. Full ModMenu surface (switch + 2 sliders) per the owner's ruling. See 4(b) below |
 
 **Rulings given by the repo owner (2026-08-06). These are decided; do not re-open them.**
 
@@ -241,7 +242,7 @@ but note a shipped-key *deletion* also does not reach an existing config.
 
 | Getter | Key | Why it matters |
 |---|---|---|
-| `getDiminishedReturnsEnabled` / `…Cap` / `…Threshold` | `Diminished_Returns.*` | ⚠️⚠️ **The machinery is running and the gate is dead.** `ClearRegisteredXPGainTask` is scheduled every 60 ticks from [McMMOMod.java:297](src/main/java/com/gmail/nossr50/fabric/McMMOMod.java#L297), and `SkillXpGain` reads `getDiminishedReturnsTimeInterval()` — so per-skill rolling XP totals are being maintained and expired, and **nothing ever consults them**. A whole anti-grind system, one call short. |
+| ~~`getDiminishedReturnsEnabled` / `…Cap` / `…Threshold`~~ | `Diminished_Returns.*` | ✅ **DONE** — see 4(b) below. Was: the machinery running with a dead gate. |
 | `isMasterySystemEnabled` | `General.PowerLevel.Skill_Mastery.Enabled` | A real mcMMO feature |
 | `getTamedMobXpMultiplier` | `Experience_Formula.Player_Tamed.Multiplier` | Combat XP off tamed mobs — a farm vector |
 | `getAbilitiesGateEnabled` + `getAxesGate` / `getExcavationGate` / `getSwordsGate` / `getUnarmedGate` / `getWoodcuttingGate` | `Abilities.Activation.Level_Gate_Abilities`, `Skills.*.Ability_Activation_Level_Gate` | Whole super-ability level-gate feature dead. ⚠️ Check whether Mining/Herbalism gates exist too — a *partial* wiring would be worse |
@@ -253,6 +254,53 @@ but note a shipped-key *deletion* also does not reach an existing config.
 | `useAttackCooldown` | `Skills.General.Attack_Cooldown.Adjust_Skills_For_Attack_Cooldown` | Affects every combat skill's damage |
 | `getBlastMiningRankLevel` | `Skills.Mining.BlastMining.Rank_Levels.Rank_` | Blast Mining is otherwise built |
 | `getRuptureExplosionDamage` | `…Rupture_Mechanics.Explosion_Damage.Against_` | Sibling readers are live; this one isn't |
+
+### 4(b) — DONE. What it actually took, and what the audit missed
+
+The wiring itself was one call: `applySelfListenerModifiers` → `applyDiminishedReturns`, legacy's
+`SelfListener#onPlayerXpGain` body ported into the seam item 1.3 created. Ships **`Enabled: false`**
+(legacy's default, and the owner's ruling) — the gate is live, the mechanic is opt-in.
+
+⚠️⚠️ **The audit said "a whole anti-grind system, one call short." It was one call *and* a broken
+catalogue.** `Diminished_Returns.Threshold` is a 25-row hand-kept table read by concatenation, and
+it was wrong in **both directions at once**:
+- **`Cooking` had no row.** It was the 27th skill and nobody back-filled the table. Invisible
+  because the getter's fallback is `20000` and so is every other row — **the `Damage_Limit` shape
+  for the third time in this port.**
+- **`Agility` had a row, and it is a child skill.** A child's gain is split to its parents before
+  the throttle is reached, so that row could never be read.
+
+`DiminishedReturnsThresholdCatalogueTest` pins both directions plus the exact `getCapitalized`
+spelling the getter concatenates. 🔑 **A table keyed by skill name needs a converse guard the day it
+is written, not the day it is wired** — this is the same one-directional-completeness trap as
+`Herdsmans_Call` and the Husbandry audit.
+
+⚠️ **One deliberate deviation from legacy**: a `modifiedThreshold <= 0 || !finite` guard. Both
+multipliers the threshold divides by are ModMenu sliders with a `0.0` minimum, so a player can drive
+the divisor to zero from the settings screen; legacy divided anyway and handed a `NaN`/`Infinity` XP
+value to the profile, **which persists to disk**.
+
+Surface: `Diminished_Returns.{Enabled, Time_Interval, Guaranteed_Minimum_Percentage}` in the
+Anti-Cheat tab. The 25 per-skill thresholds stay yml-only.
+
+### 4(e) ⚠️ NEW FINDING — `Experience_Formula.Skill_Multiplier.Agility` is the same dead row, one table over
+
+Found while fixing 4(b)'s table, **not** in the original audit. `Skill_Multiplier` ships an
+`Agility: 1.0` row ([experience.yml:381](src/main/resources/experience.yml#L381)) and
+`XP_MULTIPLIER_SKILLS` offers it a **ModMenu slider**
+([McMMOSettings.java:39](src/main/java/com/gmail/nossr50/fabric/client/modmenu/McMMOSettings.java#L39)).
+
+`getFormulaSkillModifier(AGILITY)` can never be called: `modifyXpGain` is only reached via
+`beginUnsharedXpGain`, and **both** `beginXpGain` and `applyXpGain` split a child skill to its
+parents and return before that point. Agility earns no XP of its own, so an XP multiplier for it
+cannot do anything, ever.
+
+This is **Tier 1, not Tier 4** — a slider is a live surface on a dead knob. `Salvage` and `Smelting`
+are correctly absent from both the table and the array, which is the asymmetry that gives it away.
+🔑 **Same tell as Herbalism 1.2: when a hand-kept table lists one member its siblings don't, the odd
+one out is the bug.** Precedent for the fix is 1.3's `Level_Up_Chat_Broadcasts` ruling — delete the
+row and the slider — but it wants an explicit ruling because it removes a visible control.
+⚠️ Needs a converse guard on `Skill_Multiplier` too, or this recurs the next time a child skill lands.
 
 **(c) The whole `Particles.*` / sound / message toggle family — 14 dead getters.**
 `Particles.{Ability_Activation,Ability_Deactivation,Bleed,Cripple,Dodge,Greater_Impact,Flux,Call_of_the_Wild,LevelUp_Enabled}`,
@@ -287,14 +335,19 @@ Decide: wire them into `SoundManager`/`NotificationManager`, or cull the section
 
 ## Suggested order for the next session
 
-1. **2.1 + 2.2** — two tiny, provable, zero-ruling fixes. Land them with tests first to re-green the baseline.
-2. **1.3** — three switches, plus the **third-direction catalogue guard** so this class stops recurring.
-   The guard is worth more than the three fixes.
-3. **4(b) Diminished Returns** — a scheduled task feeding a dead gate is the single largest live
-   inconsistency found. Cheap to finish, and it is already half-built.
-4. **1.1 / 1.2 / 3.1** — need your ruling before any code: implement, or strip the surface.
-   Do not start these without deciding.
-5. **4(c)** particle/sound family as one batch; **4(a)** config cull last.
+1. ~~**2.1 + 2.2**~~ ✅ DONE `8904ea6fc`
+2. ~~**1.3**~~ ✅ DONE `e93d6603a` — the third-direction guard (`CatalogueKeysReachCodeTest`) was
+   worth more than the four fixes, exactly as predicted.
+3. ~~**4(b) Diminished Returns**~~ ✅ DONE — and it carried a **fourth** finding the audit missed
+   (the broken `Threshold` table) plus a **fifth** it never looked at (4(e), `Skill_Multiplier.Agility`).
+4. **1.1 / 1.2 / 3.1** — ⬅️ **NEXT.** Rulings are recorded at the top of this file; do not re-open them.
+   1.1 strip the surface → 1.2 fix the renderer → 3.1 implement Limit Break for all 8 (the big one).
+5. **4(e)** the `Skill_Multiplier.Agility` slider — small, wants one ruling.
+6. **4(c)** particle/sound family as one batch; **4(a)** config cull last.
+
+⚠️ **Score so far: the audit has been wrong or incomplete on every single item worked.** 2.1's
+prescribed fix was inverted, 1.3 undercounted 3→4, 4(b) undercounted a one-line wiring job into a
+wiring job *plus* a two-way-broken catalogue. **Treat every remaining finding as a lead, not a spec.**
 
 ⚠️ Before any of it: run `./gradlew build` and record the green count. This audit did not build,
 and every finding below Tier 1 assumes the tree is currently green.

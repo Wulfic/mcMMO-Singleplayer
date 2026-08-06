@@ -185,6 +185,181 @@ class McMMOPlayerTest {
                         + "after the multipliers, so the global XP rate does not scale it");
     }
 
+    // ---- Diminished returns (TODO 4(b)) -------------------------------------------------------
+    //
+    // Half-built since Phase 11: PlayerProfile#registerXpGain recorded every gain and
+    // ClearRegisteredXPGainTask expired them every 60 ticks, and NOTHING read the rolling totals.
+    // A whole anti-grind system, one call short.
+    //
+    // The shipped config for MINING makes the arithmetic exact and worth stating once:
+    //   threshold 20000, Skill_Multiplier 1.0, global multiplier 1.0  =>  modifiedThreshold 20000
+    //   overage = (registered - 20000) / 20000
+    //   reduced = xp - xp*overage, floored at Guaranteed_Minimum_Percentage (0.05) * xp
+    // Every case below asserts an exact value rather than "less than before", because a throttle
+    // applied twice, or applied to the wrong operand, still produces "less".
+
+    /** Enables the throttle on a spy of the real config — mock() hands back null for its records. */
+    private ExperienceConfig withDiminishedReturnsOn() {
+        final ExperienceConfig on = spy(experienceConfig);
+        when(on.getDiminishedReturnsEnabled()).thenReturn(true);
+        McMMOMod.setExperienceConfig(on);
+        return on;
+    }
+
+    /**
+     * The shipped default is {@code Enabled: false}, and this is the case that proves wiring the gate
+     * did not silently retune anyone's world. A player 40000 XP over the threshold is untouched.
+     */
+    @Test
+    void diminishedReturnsIsOffByDefaultSoAGrindedSkillIsUntouched() {
+        profile.registerXpGain(PrimarySkillType.MINING, 60_000f);
+
+        assertEquals(100f, mmoPlayer.applyDiminishedReturns(PrimarySkillType.MINING, 100f),
+                "Diminished_Returns.Enabled ships false — the throttle must be inert until the "
+                        + "player turns it on");
+    }
+
+    @Test
+    void diminishedReturnsLeavesAGainUnderTheThresholdAlone() {
+        withDiminishedReturnsOn();
+        profile.registerXpGain(PrimarySkillType.MINING, 19_999f);
+
+        assertEquals(100f, mmoPlayer.applyDiminishedReturns(PrimarySkillType.MINING, 100f),
+                "under the threshold the gain is paid in full");
+    }
+
+    @Test
+    void diminishedReturnsScalesAGainDownInProportionToTheOverage() {
+        withDiminishedReturnsOn();
+        // 30000 registered against a 20000 threshold = 50% over, so the gain pays 50%.
+        profile.registerXpGain(PrimarySkillType.MINING, 30_000f);
+
+        assertEquals(50f, mmoPlayer.applyDiminishedReturns(PrimarySkillType.MINING, 100f), 0.001f,
+                "50% over the threshold pays 50% of the gain");
+    }
+
+    /**
+     * Far enough over and the raw formula goes negative; the guaranteed minimum is what stops a
+     * farmed skill paying nothing at all. Without the floor this returns 0 — so a test that only
+     * checked "less than 100" would pass on a broken floor.
+     */
+    @Test
+    void diminishedReturnsNeverFallsBelowTheGuaranteedMinimum() {
+        withDiminishedReturnsOn();
+        // 200% over: xp - xp*2 = -100, floored to 0.05 * 100.
+        profile.registerXpGain(PrimarySkillType.MINING, 60_000f);
+
+        assertEquals(5f, mmoPlayer.applyDiminishedReturns(PrimarySkillType.MINING, 100f), 0.001f,
+                "the 5% floor holds however far over the threshold the window total is");
+    }
+
+    /** {@code Guaranteed_Minimum_Percentage: 0} removes the floor — the file says so, so prove it. */
+    @Test
+    void aZeroedGuaranteedMinimumLetsTheGainReachNothing() {
+        final ExperienceConfig on = withDiminishedReturnsOn();
+        when(on.getDiminishedReturnsCap()).thenReturn(0f);
+        profile.registerXpGain(PrimarySkillType.MINING, 60_000f);
+
+        assertEquals(0f, mmoPlayer.applyDiminishedReturns(PrimarySkillType.MINING, 100f), 0.001f,
+                "with no floor a hard-farmed skill can be throttled all the way to zero — and never "
+                        + "past it into a negative");
+    }
+
+    /** Legacy's own opt-out: a non-positive threshold turns the throttle off for that skill. */
+    @Test
+    void aNonPositiveThresholdDisablesTheThrottleForThatSkill() {
+        final ExperienceConfig on = withDiminishedReturnsOn();
+        when(on.getDiminishedReturnsThreshold(PrimarySkillType.MINING)).thenReturn(0);
+        profile.registerXpGain(PrimarySkillType.MINING, 60_000f);
+
+        assertEquals(100f, mmoPlayer.applyDiminishedReturns(PrimarySkillType.MINING, 100f),
+                "threshold 0 means unthrottled, not throttled to nothing");
+    }
+
+    /**
+     * The deliberate deviation from legacy. Both multipliers the threshold is divided by are ModMenu
+     * sliders with a {@code 0.0} minimum, so a player can drive the divisor to zero from the settings
+     * screen. Legacy divided anyway and handed the resulting {@code NaN}/{@code Infinity} to the
+     * profile — which then persists to disk. Two cases because they fail differently: a zeroed skill
+     * multiplier makes the threshold infinite, a zeroed global multiplier makes it zero.
+     */
+    @Test
+    void aZeroedXpMultiplierMakesTheThrottleStepAsideRatherThanDivideByZero() {
+        final ExperienceConfig on = withDiminishedReturnsOn();
+        when(on.getFormulaSkillModifier(PrimarySkillType.MINING)).thenReturn(0.0D);
+        profile.registerXpGain(PrimarySkillType.MINING, 60_000f);
+
+        final float infiniteThreshold =
+                mmoPlayer.applyDiminishedReturns(PrimarySkillType.MINING, 100f);
+        assertTrue(Float.isFinite(infiniteThreshold), "a zeroed skill multiplier must not yield NaN");
+        assertEquals(100f, infiniteThreshold);
+
+        when(on.getFormulaSkillModifier(PrimarySkillType.MINING)).thenReturn(1.0D);
+        when(on.getExperienceGainsGlobalMultiplier()).thenReturn(0.0D);
+
+        final float zeroThreshold = mmoPlayer.applyDiminishedReturns(PrimarySkillType.MINING, 100f);
+        assertTrue(Float.isFinite(zeroThreshold), "a zeroed global multiplier must not yield NaN");
+        assertEquals(100f, zeroThreshold);
+    }
+
+    /** A negative gain must not be scaled towards zero — that would soften a penalty. */
+    @Test
+    void diminishedReturnsIgnoresANonPositiveGain() {
+        withDiminishedReturnsOn();
+        profile.registerXpGain(PrimarySkillType.MINING, 60_000f);
+
+        assertEquals(-50f, mmoPlayer.applyDiminishedReturns(PrimarySkillType.MINING, -50f),
+                "an XP subtraction passes through untouched");
+    }
+
+    /**
+     * A child skill's gain is split to its parents before the XP path is reached, so the child has no
+     * rolling total of its own and the parents are throttled instead. Agility shipped a
+     * {@code Diminished_Returns.Threshold} row until 2026-08-06 that could never be read; this is the
+     * behaviour that made it dead.
+     */
+    @Test
+    void aChildSkillIsNeverThrottledDirectly() {
+        withDiminishedReturnsOn();
+        profile.registerXpGain(PrimarySkillType.AGILITY, 60_000f);
+
+        assertEquals(100f, mmoPlayer.applyDiminishedReturns(PrimarySkillType.AGILITY, 100f),
+                "AGILITY is a child of Parkour/Swimming/Flying — the throttle applies to them");
+    }
+
+    /** An admin grant is exact by definition, and must skip the throttle as well as the boost. */
+    @Test
+    void commandGrantedXpSkipsTheThrottleToo() {
+        withDiminishedReturnsOn();
+        profile.registerXpGain(PrimarySkillType.MINING, 60_000f);
+
+        assertEquals(100f, mmoPlayer.applySelfListenerModifiers(PrimarySkillType.MINING, 100f,
+                        XPGainReason.COMMAND),
+                "/addxp 100 must add 100 no matter how hard the skill has been ground");
+    }
+
+    /**
+     * The throttle must ride the real pipeline, not just its own helper — a seam nobody reaches is
+     * the exact defect this whole pass exists to close. MINING is put past the early-game cutoff so
+     * the boost contributes nothing and the arithmetic stays the helper's.
+     *
+     * <p>The second assertion is the one that keeps the window honest: the rolling total must grow by
+     * the <em>throttled</em> amount, so a throttled skill also fills its own window more slowly.
+     */
+    @Test
+    void diminishedReturnsReachesTheProfileThroughBeginXpGain() {
+        withDiminishedReturnsOn();
+        profile.addLevels(PrimarySkillType.MINING, 5);
+        profile.registerXpGain(PrimarySkillType.MINING, 30_000f);
+
+        mmoPlayer.beginXpGain(PrimarySkillType.MINING, 100f, XPGainReason.PVE, XPGainSource.SELF);
+
+        assertEquals(50f, mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.MINING), 0.001f,
+                "the profile holds the throttled gain, not the raw one");
+        assertEquals(30_050f, profile.getRegisteredXpGain(PrimarySkillType.MINING), 0.001f,
+                "the rolling window records what was actually paid");
+    }
+
     @Test
     void levellingAParentAlsoFiresItsChildSkillsMilestonePlaques() {
         // A child skill's level climbs without ever reaching the XP path — beginXpGain splits a child

@@ -124,6 +124,18 @@ class ExperienceConfigKeyAgreementTest {
                 ExperienceConfig::getNetherPortalXpMultiplier));
         gates.add(new Gate("Experience_Formula.Breeding.Multiplier", 0.55D,
                 ExperienceConfig::getBredMobXpMultiplier));
+        // Diminished returns. Also not under ExploitFix, also an anti-farm gate by any other name,
+        // and also dead until 2026-08-06 — the scheduled task feeding it had been running since
+        // Phase 11 with no consumer. The per-skill Threshold sub-table is built by concatenation and
+        // cannot be probed from a fixed path, so DiminishedReturnsThresholdCatalogueTest covers it.
+        gates.add(new Gate("Diminished_Returns.Enabled", true,
+                ExperienceConfig::getDiminishedReturnsEnabled));
+        gates.add(new Gate("Diminished_Returns.Time_Interval", 23,
+                ExperienceConfig::getDiminishedReturnsTimeInterval));
+        // A float probe, exactly representable, because the getter narrows to float — a Double probe
+        // would fail the equals() on the box type rather than on the value.
+        gates.add(new Gate("Diminished_Returns.Guaranteed_Minimum_Percentage", 0.375F,
+                ExperienceConfig::getDiminishedReturnsCap));
         return gates;
     }
 
