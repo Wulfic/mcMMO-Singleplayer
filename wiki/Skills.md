@@ -68,7 +68,7 @@ Earn XP by harvesting crops and plants. Super ability: **Green Terra**.
 | Green Terra | 1 | Triple drops, boosts Green Thumb. Super ability. |
 | Green Thumb | 4 | Auto-replants crops when harvesting with a hoe. |
 | Double Drops | 1 | Skilfully harvest double the loot. |
-| Verdant Bounty | 1 | Masterfully harvest triple the loot. |
+| Verdant Bounty | 1 | While **Green Terra** is active, a successful Double Drop roll yields *triple* instead of double. It is a rider on Green Terra, not a roll of its own — so its chance **is** the Double Drop chance, and you tune it with `DoubleDrops`. |
 | Farmer's Diet | 5 | Improves hunger restored from farmed foods. |
 | Hylian Luck | 1 | Sword-breaking flowers, bushes, saplings and flower pots can turn up rare treasure **instead of** the normal drop. |
 | Shroom Thumb | 1 | Spread mycelium to dirt & grass. |

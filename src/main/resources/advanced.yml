@@ -377,11 +377,11 @@ Skills:
             MaxBonusLevel:
                 Standard: 100
                 RetroMode: 1000
-        VerdantBounty:
-            ChanceMax: 50.0
-            MaxBonusLevel:
-                Standard: 1000
-                RetroMode: 10000
+        # VerdantBounty has no knobs of its own on purpose. It is not a roll -- it is a rider on
+        # Green Terra: while that super ability is active a successful DoubleDrops roll yields two
+        # extra drops instead of one. Tune it with DoubleDrops above. (The ChanceMax/MaxBonusLevel
+        # that used to sit here were read by nothing but the /mcstats line, which quoted them at
+        # players as if they governed the drop.)
 
         HylianLuck:
             # ChanceMax: Maximum chance of Hylian Luck when on <MaxBonusLevel> or higher

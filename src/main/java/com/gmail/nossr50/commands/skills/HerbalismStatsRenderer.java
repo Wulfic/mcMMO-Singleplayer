@@ -12,6 +12,19 @@ import java.util.List;
  * {@code /mcstats herbalism} — port of legacy {@code HerbalismCommand}. Shows Double/Triple (Verdant
  * Bounty) drop chances, Farmer's Diet rank, Green Terra duration, Green Thumb (chance + stage),
  * Hylian Luck, and Shroom Thumb.
+ *
+ * <p>⚠️ <b>The Triple Drop line reports the Double Drop probability on purpose.</b> Verdant Bounty
+ * is not a rank-gated roll of its own — unlike its two siblings, Mining's Mother Lode and
+ * Woodcutting's Clean Cuts, which are. It is a rider on Green Terra:
+ * {@code HerbalismManager#rollBonusDropCount} rolls at the <b>{@code HERBALISM_DOUBLE_DROPS}</b>
+ * probability and returns two extra drops instead of one whenever the Green Terra super ability is
+ * active. That is legacy's behaviour ({@code awardTriple = getAbilityMode(GREEN_TERRA)}) and it is
+ * kept.
+ *
+ * <p>What was <em>not</em> kept is this line quoting {@code Skills.Herbalism.VerdantBounty.ChanceMax}
+ * — a number no gameplay code has ever consulted, read off a different rank and a different config
+ * key than the mechanic it claimed to describe (TODO.md item 1.2). The knob is retired; the label
+ * now names the Green Terra condition that actually governs the drop.
  */
 public final class HerbalismStatsRenderer extends SkillStatsRenderer {
 
@@ -46,8 +59,10 @@ public final class HerbalismStatsRenderer extends SkillStatsRenderer {
                     SubSkillType.HERBALISM_DOUBLE_DROPS)[0];
         }
         if (canTripleDrop) {
+            // Deliberately the DOUBLE DROPS probability: that is the roll the triple actually makes.
+            // See the class javadoc — quoting VERDANT_BOUNTY's own chance here was the defect.
             tripleDropChance = ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
-                    SubSkillType.HERBALISM_VERDANT_BOUNTY)[0];
+                    SubSkillType.HERBALISM_DOUBLE_DROPS)[0];
         }
         if (hasUnlocked(SubSkillType.HERBALISM_FARMERS_DIET)) {
             farmersDietRank = RankUtils.getRank(mmoPlayer, SubSkillType.HERBALISM_FARMERS_DIET);

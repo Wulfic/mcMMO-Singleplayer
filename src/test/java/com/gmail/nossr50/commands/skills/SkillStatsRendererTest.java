@@ -1,9 +1,12 @@
 package com.gmail.nossr50.commands.skills;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
@@ -12,6 +15,7 @@ import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.agility.AgilityManager;
@@ -457,6 +461,59 @@ class SkillStatsRendererTest {
         for (PrimarySkillType s : PrimarySkillType.values()) {
             assertNotNull(SkillStatsRenderer.forSkill(s), s.name() + " must resolve to a renderer");
         }
+    }
+
+    @Test
+    void verdantBountyQuotesTheDoubleDropRollItActuallyMakes(@TempDir Path dataFolder) {
+        // ⚠️ TODO.md item 1.2. Verdant Bounty is NOT a rank-gated roll like Mining's Mother Lode or
+        // Woodcutting's Clean Cuts — it is a rider on Green Terra. rollBonusDropCount() rolls at the
+        // HERBALISM_DOUBLE_DROPS probability and returns 2 instead of 1 while the super ability is
+        // up. The /mcstats line used to print VERDANT_BOUNTY's own chance, computed from
+        // Skills.Herbalism.VerdantBounty.ChanceMax (50.0) — a config key no gameplay code has ever
+        // read, describing a roll that does not exist.
+        //
+        // 🔑 The two lines showing the SAME number is the correct outcome, which is exactly why this
+        // needs pinning: it looks like a copy-paste bug to anyone who does not know the mechanic,
+        // and "fixing" it back to VERDANT_BOUNTY would restore the defect silently.
+        //
+        // ⚠️⚠️ Comparing the two rendered numbers CANNOT catch that regression, and a first draft of
+        // this test which did was vacuous — a mutation back to VERDANT_BOUNTY left it green. Once
+        // the orphan Skills.Herbalism.VerdantBounty block was retired, getMaximumProbability falls
+        // back to 100.0 and getMaxBonusLevel to 100/1000 — numerically identical to DoubleDrops at
+        // every level. So the wrong source now produces the right number by coincidence: the
+        // Damage_Limit shape yet again, where a defect hides because the fallback happens to agree.
+        //
+        // The discriminator therefore has to be behavioural: RETUNE DoubleDrops and require the
+        // Triple line to move with it. A renderer reading VERDANT_BOUNTY stays pinned at the 100.0
+        // fallback and reddens.
+        final AdvancedConfig retuned = spy(new AdvancedConfig(dataFolder));
+        doReturn(42.0).when(retuned).getMaximumProbability(SubSkillType.HERBALISM_DOUBLE_DROPS);
+        McMMOMod.setAdvancedConfig(retuned);
+
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.HERBALISM)).thenReturn(1000);
+
+        final List<String> lines = render(new HerbalismStatsRenderer());
+
+        final String doubleLine = lines.stream()
+                .filter(l -> l.contains("Double Drop Chance"))
+                .findFirst().orElseThrow(() -> new AssertionError("no Double Drop line: " + lines));
+        final String tripleLine = lines.stream()
+                .filter(l -> l.contains("Triple Drop Chance"))
+                .findFirst().orElseThrow(() -> new AssertionError("no Triple Drop line: " + lines));
+
+        // The label must name the condition that actually governs the drop.
+        assertTrue(tripleLine.contains("Green Terra"),
+                "the Triple Drop line must say it only applies during Green Terra: " + tripleLine);
+
+        final String doubleValue = doubleLine.substring(doubleLine.indexOf("Chance") + 6);
+        final String tripleValue = tripleLine.substring(tripleLine.indexOf(')') + 1);
+        assertEquals(doubleValue.trim(), tripleValue.trim(),
+                "the triple IS the double drop roll, so it must quote the same probability");
+
+        // The load-bearing assertion: the Triple line tracks the retuned DoubleDrops ceiling.
+        assertTrue(tripleValue.contains("42"),
+                "the Triple Drop line must follow DoubleDrops (retuned to 42.0 above), not "
+                        + "VerdantBounty's own 100.0 fallback: " + tripleLine);
     }
 
     @Test
