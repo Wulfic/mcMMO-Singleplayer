@@ -66,6 +66,10 @@ public final class ConfigRetunes {
         RETUNES.add(new Retune("experience.yml",
                 "Experience_Values.Stealth.Sneak.Baseline_Xp_Per_Second", 25.0D, 50.0D, 1,
                 "sneak XP was too slow to be worth doing (GitHub #6)"));
+        // TODO.md item 3.1 deliberately does NOT add a retune. Limit Break became implemented, but
+        // its AllowPVE default stayed false, so there is no changed default to carry onto an
+        // existing file -- and an opt-in mechanic that switched itself on during an update would be
+        // precisely the surprise a retune exists to make impossible.
     }
 
     /**

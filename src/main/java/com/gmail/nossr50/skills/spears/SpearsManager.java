@@ -25,9 +25,9 @@ import com.gmail.nossr50.util.skills.RankUtils;
  * behind {@link com.gmail.nossr50.platform.PlatformPlayer#applySpeed}, keeping this class MC-free
  * and unit-testable.
  *
- * <p>{@code SPEARS_SPEARS_LIMIT_BREAK} is not driven from here: Limit Break is dropped across every
- * combat skill in this port (PvP-only in singleplayer, and its {@code AllowPVE} switch defaults
- * off), the same as the other seven weapon skills.
+ * <p>{@code SPEARS_SPEARS_LIMIT_BREAK} is not driven from here, but it <em>is</em> implemented — see
+ * {@link com.gmail.nossr50.skills.LimitBreak}, which all eight combat skills share, applied from
+ * {@code MeleeDamageBonus} rather than from any per-skill manager. It ships switched off.
  */
 public class SpearsManager extends SkillManager {
     public SpearsManager(McMMOPlayer mmoPlayer) {

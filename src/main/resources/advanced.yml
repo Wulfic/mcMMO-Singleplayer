@@ -89,6 +89,18 @@ Skills:
         Attack_Cooldown:
             Adjust_Skills_For_Attack_Cooldown: true
         LimitBreak:
+            # Limit Break adds flat bonus damage per rank to all eight combat skills -- +1 at rank 1
+            # (level 100 in Retro Mode) rising to +10 at rank 10 (level 1000). Against mobs the bonus
+            # is NOT nerfed the way it is against a lightly-armoured player in multiplayer, so this
+            # is a large power increase: +10 is more than a diamond sword's base damage of 7.
+            #
+            # OFF by default, deliberately. While it is off, Limit Break is invisible: it grants no
+            # damage, is hidden from /mcstats, and fires no rank plaques -- so nothing tells you
+            # about a mechanic you are not using.
+            #
+            # ⚠️ Turning it on: the bonus applies to every non-player entity. If you run mods that
+            # add humanoid NPCs, they are "not players" as far as this is concerned and take the
+            # full un-nerfed bonus too.
             AllowPVE: false
         StartingLevel: 0
         Ability:

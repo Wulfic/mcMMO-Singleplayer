@@ -22,6 +22,9 @@ Green baseline re-established: `./gradlew build` exit 0 at commit `8904ea6fc`, *
 | 2.3 `ExploitFix.Pistons` | ✅ **NO ACTION** — already ruled deliberate in two places (`ExperienceConfigKeyAgreementTest:62`, `McMMOSettingsTest:174`). The audit re-flagged a settled question |
 | 1.3 dead ModMenu switches | ✅ **DONE** `e93d6603a` — **the audit undercounted: it is four, not three**. The 4th (`Level_Up_Chat_Broadcasts.Enabled`) had **no getter at all**, so a getter→caller sweep could never see it. `CatalogueKeysReachCodeTest` is the third-direction guard. See `memory/audit-item-1-3-dead-modmenu-switches.md` |
 | 4(b) Diminished Returns | ✅ **DONE** — `McMMOPlayer#applyDiminishedReturns` closes the loop; ships **OFF** (owner's ruling). ⚠️ **The audit undercounted a third time**: the `Threshold` table was wrong in *both* directions — `Cooking` had **no row** and `Agility` (a child skill) had one. Full ModMenu surface (switch + 2 sliders) per the owner's ruling. See 4(b) below |
+| 1.1 Unarmed Disarm / Iron Grip | ✅ **DONE** `a7ffb8bb6` — **full removal, enum constants included** (owner's ruling). ⚠️ The recorded ruling listed files but not the constants, and the 103/103 plaque guard makes half-measures impossible — it is now **101/101 with no exemption**. 🔑 The new converse guard `RankConfigTest#everyShippedRankSectionMapsToALiveSubSkill` **reddened on its first run** over `Fishing.Mastery`, an upstream orphan nobody was hunting |
+| 1.2 Herbalism Verdant Bounty | ✅ **DONE** `46a5e08de` — renderer quotes the DoubleDrops roll it actually makes; label names the Green Terra condition; `VerdantBounty.ChanceMax` retired. ⚠️⚠️ **The first guard was VACUOUS**: retiring the orphan knob made the fallback numerically identical to DoubleDrops, so the *wrong source gave the right number*. Guard is now behavioural (retune DoubleDrops, require the line to follow) and mutation-verified |
+| 3.1 Limit Break | ✅ **DONE** — implemented for **all 8**, but ⚠️ **the ruling changed mid-work: it ships OFF, not on** (owner's call — the un-nerfed PVE bonus is too strong to impose). **Off means invisible**: no damage, no `/mcstats` entry, no rank plaques, plus a ModMenu switch carrying the NPC-conflict warning. See 3.1 below |
 
 **Rulings given by the repo owner (2026-08-06). These are decided; do not re-open them.**
 
@@ -215,8 +218,41 @@ production reference, and only a javadoc mention — confirm Spears is genuinely
 "dropped" state as the other seven rather than half-wired. Issue #7 already caught one stale
 "deliberately absent" claim about Spears that turned out to be wrong.
 
-**Ruling needed from you:** implement Limit Break for all 8, or delete the plaques + ranks + config.
-Do not leave 8 plaques on 8 no-ops.
+**✅ DONE.** Implemented for all 8 via the shared MC-free `skills/LimitBreak`, applied from
+`MeleeDamageBonus` (6 melee weapons, scaled by attack strength) and from `EntityDamageListener`'s
+three projectile arms (Archery / Crossbows / thrown Trident — **not** scaled; a shot in flight has no
+swing to charge, legacy's own asymmetry).
+
+⚠️ **The owner changed the ruling mid-implementation, and the new one is better.** The original was
+"implement for all 8 and ship `AllowPVE: true`". It now ships **`false`**: against mobs the bonus is
+never nerfed (legacy passes a sentinel armour quality of 1000 for non-players, skipping all three
+nerf tiers), so it is a large power increase that should be chosen rather than imposed.
+
+🔑 **What makes OFF honest instead of the original defect relocated:** off is *invisible*. One gate,
+`LimitBreak.isEnabled()`, is read by three surfaces — the damage, the `/mcstats` sub-skill list, and
+`McMMOPlayer#rankedSubSkillsOf` (the rank plaques). Wiring only the damage would have left eight
+plaques still toasting "You can now use Swords Limit Break." for a mechanic contributing nothing.
+**A switch that silences the mechanic but not its advertising is not a fix.**
+
+⚠️⚠️ **The armour-quality nerf table was deliberately NOT ported** — it is unreachable in
+singleplayer, and porting unreachable branches is how the §F dead-code defects were made.
+`LimitBreakTest#mobsTakeTheFullUnNerfedBonus` exists to stop someone "completing" it later.
+
+⚠️ **The `SPEARS_SPEARS_LIMIT_BREAK` asymmetry the audit said to resolve first was nothing** — its
+sole reference was a javadoc sentence claiming Limit Break was dropped. All 8 were equally unwired.
+
+⚠️ **Ladder correction worth remembering:** the port ships `General.RetroMode.Enabled: true`, so the
+ranks are the **RetroMode** column — 100, 200 … 1000, not Standard's 10 … 100. Rank 1 arrives at
+level 100 and rank 10 at level 1000. Reading the Standard column makes Limit Break look **ten times**
+stronger than it is.
+
+Settings surface: **Abilities → "Limit Break (bonus damage vs mobs)"**, the catalogue's first
+`advanced.yml` entry (`ConfigSession` already opened a document per file, so no machinery changed).
+Its tooltip carries the balance figure *and* the NPC caveat — the bonus applies to every non-player
+entity, so mods adding humanoid NPCs will have them take it too.
+
+No `ConfigRetunes` entry, deliberately: the default did not change, and an opt-in mechanic that
+switched itself on during an update is exactly the surprise retunes exist to prevent.
 
 ### 3.2 Four super abilities exist only in the `SkillTools` mapping table
 `EXPLOSIVE_SHOT`, `SUPER_SHOTGUN`, `TRIDENTS_SUPER_ABILITY`, `MACES_SUPER_ABILITY` — no activation

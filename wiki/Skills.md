@@ -14,7 +14,11 @@ Your **power level** is the sum of all skill levels.
 
 > ### ⚠️ Read this before the tables
 >
-> **The eight "Limit Break" sub-skills do nothing.** `ArcheryLimitBreak`, `AxesLimitBreak`, `CrossbowsLimitBreak`, `MacesLimitBreak`, `SpearsLimitBreak`, `SwordsLimitBreak`, `TridentsLimitBreak` and `UnarmedLimitBreak` exist as enum constants, appear on the `/mcstats` screen, and have full rank ladders in `skillranks.yml` and `advanced.yml` — and **not one line of code reads them**. They were dropped during the port. They are listed below marked ❌ so you don't waste time levelling toward them.
+> **The eight "Limit Break" sub-skills are off by default.** They are implemented — each grants a flat **+1 damage per rank**, from +1 at level 100 up to +10 at level 1000 — but they ship **disabled**, because against mobs that bonus is not nerfed the way it is against an armoured player in multiplayer, and +10 is more than a diamond sword's base damage.
+>
+> While they are off they are **completely invisible**: no damage, no `/mcstats` entry, no rank plaques. Nothing nags you about a mechanic you aren't using. Turn them on in **Settings → Abilities → Limit Break**, or set `Skills.General.LimitBreak.AllowPVE: true` in `advanced.yml`.
+>
+> ⚠️ Once enabled, the bonus applies to **every non-player entity** — so if you run mods that add humanoid NPCs, those NPCs take the full bonus too.
 
 ---
 
@@ -135,7 +139,7 @@ Super ability: **Serrated Strikes**.
 | Rupture | 4 | Damage-over-time that ends in an explosion if not reapplied within 5 s. |
 | Counter Attack | 1 | Reflect a portion of damage back when attacked. |
 | Stab | 2 | Bonus damage on hit. |
-| Swords Limit Break | ❌ | **Not implemented.** |
+| Swords Limit Break | 10 | **Off by default.** Flat +1 damage per rank (rank 1 at level 100, rising to +10 at level 1000). Enable in Settings -> Abilities. |
 
 ## Axes
 
@@ -148,7 +152,7 @@ Super ability: **Skull Splitter**.
 | Axe Mastery | 4 | Bonus damage. |
 | Armor Impact | 20 | Strike hard enough to damage the target's armour. |
 | Greater Impact | 1 | Bonus damage to **unarmoured** foes. |
-| Axes Limit Break | ❌ | **Not implemented.** |
+| Axes Limit Break | 10 | **Off by default.** Flat +1 damage per rank (rank 1 at level 100, rising to +10 at level 1000). Enable in Settings -> Abilities. |
 
 ## Unarmed
 
@@ -160,7 +164,7 @@ Fighting with an empty hand. Super ability: **Berserk**. (Not to be confused wit
 | Steel Arm Style | 20 | Hardens your arm over time — flat bonus damage. |
 | Arrow Deflect | 1 | Deflect incoming arrows. |
 | Block Cracker | 1 | Break rock with your fists. |
-| Unarmed Limit Break | ❌ | **Not implemented.** |
+| Unarmed Limit Break | 10 | **Off by default.** Flat +1 damage per rank (rank 1 at level 100, rising to +10 at level 1000). Enable in Settings -> Abilities. |
 
 ## Archery
 
@@ -169,7 +173,7 @@ Fighting with an empty hand. Super ability: **Berserk**. (Not to be confused wit
 | Skill Shot | 20 | Increases bow damage. |
 | Daze | 1 | Disorients foes and deals extra damage. |
 | Arrow Retrieval | 1 | Chance to retrieve arrows from corpses. |
-| Archery Limit Break | ❌ | **Not implemented.** |
+| Archery Limit Break | 10 | **Off by default.** Flat +1 damage per rank (rank 1 at level 100, rising to +10 at level 1000). Enable in Settings -> Abilities. |
 
 ## Crossbows
 
@@ -177,14 +181,14 @@ Fighting with an empty hand. Super ability: **Berserk**. (Not to be confused wit
 |---|---|---|
 | Powered Shot | 20 | Increases crossbow damage. |
 | Trick Shot | 3 | Ricochet arrows off steep angles. |
-| Crossbows Limit Break | ❌ | **Not implemented.** |
+| Crossbows Limit Break | 10 | **Off by default.** Flat +1 damage per rank (rank 1 at level 100, rising to +10 at level 1000). Enable in Settings -> Abilities. |
 
 ## Tridents
 
 | Sub-skill | Ranks | Effect |
 |---|---|---|
 | Impale | 10 | Increases trident damage. |
-| Tridents Limit Break | ❌ | **Not implemented.** |
+| Tridents Limit Break | 10 | **Off by default.** Flat +1 damage per rank (rank 1 at level 100, rising to +10 at level 1000). Enable in Settings -> Abilities. |
 
 ## Maces
 
@@ -192,7 +196,7 @@ Fighting with an empty hand. Super ability: **Berserk**. (Not to be confused wit
 |---|---|---|
 | Crush | 4 | Bonus damage. |
 | Cripple | 4 | Chance to cripple your target. |
-| Maces Limit Break | ❌ | **Not implemented.** |
+| Maces Limit Break | 10 | **Off by default.** Flat +1 damage per rank (rank 1 at level 100, rising to +10 at level 1000). Enable in Settings -> Abilities. |
 
 ## Spears
 
@@ -200,7 +204,7 @@ Fighting with an empty hand. Super ability: **Berserk**. (Not to be confused wit
 |---|---|---|
 | Spear Mastery | 8 | Bonus damage. |
 | Momentum | 10 | Chance of a short Speed burst on you when you land a hit. |
-| Spears Limit Break | ❌ | **Not implemented.** |
+| Spears Limit Break | 10 | **Off by default.** Flat +1 damage per rank (rank 1 at level 100, rising to +10 at level 1000). Enable in Settings -> Abilities. |
 
 Trained with any of the seven vanilla spears (wooden, stone, copper, iron, golden, diamond, netherite). XP is paid per hit on the damage that lands, like every other melee skill.
 

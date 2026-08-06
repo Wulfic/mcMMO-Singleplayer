@@ -14,6 +14,7 @@ import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.runnables.skills.AbilityDisableTask;
 import com.gmail.nossr50.runnables.skills.ToolLowerTask;
+import com.gmail.nossr50.skills.LimitBreak;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.skills.agility.AgilityManager;
 import com.gmail.nossr50.skills.alchemy.AlchemyManager;
@@ -655,13 +656,26 @@ public class McMMOPlayer {
         }
     }
 
-    /** The ranked sub-skills whose parent is {@code skill}; rank-unlock milestones only track these. */
+    /**
+     * The ranked sub-skills whose parent is {@code skill}; rank-unlock milestones only track these.
+     *
+     * <p>Limit Break is excluded while it is switched off. It ships off (see {@link LimitBreak}), and
+     * "You can now use Swords Limit Break." toasting for a mechanic that adds no damage is the same
+     * dead-mechanic-with-a-live-surface defect the eight plaques had before it was implemented at
+     * all — a switch that silences the damage but leaves the announcement has not fixed anything.
+     * The player who turns it on gets the plaques from that point, which is when they mean something.
+     */
     private static List<SubSkillType> rankedSubSkillsOf(PrimarySkillType skill) {
         final List<SubSkillType> out = new ArrayList<>();
+        final boolean limitBreakEnabled = LimitBreak.isEnabled();
         for (SubSkillType subSkill : SubSkillType.values()) {
-            if (subSkill.getParentSkill() == skill && subSkill.getNumRanks() > 0) {
-                out.add(subSkill);
+            if (subSkill.getParentSkill() != skill || subSkill.getNumRanks() <= 0) {
+                continue;
             }
+            if (LimitBreak.isLimitBreak(subSkill) && !limitBreakEnabled) {
+                continue;
+            }
+            out.add(subSkill);
         }
         return out;
     }

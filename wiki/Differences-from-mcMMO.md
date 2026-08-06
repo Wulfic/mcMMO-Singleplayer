@@ -77,7 +77,7 @@ Stored in `<world save>/mcmmo/players/`, not in a global profile or a database. 
 ### Features
 
 - **Chimaera Wing**
-- **Limit Break** — see below
+- **Limit Break** — implemented for all eight weapons, but **off by default**. Upstream gates it behind `Skills.General.LimitBreak.AllowPVE`, meaning "PVP only"; singleplayer has no PVP, so leaving that gate shut would make the mechanic unreachable. It is instead a deliberate opt-in, because against mobs the bonus is *not* nerfed the way it is against a lightly-armoured player: rank N grants a flat +N damage, from +1 at level 100 up to +10 at level 1000 — more than a diamond sword's base damage. Turn it on in **Settings → Abilities → Limit Break**, or set `AllowPVE: true` in `advanced.yml`. While it is off it is completely invisible: no damage, no `/mcstats` entry, no rank plaques. ⚠️ When on, the bonus applies to every non-player entity, so mods adding humanoid NPCs will have those NPCs take it too.
 - **Spears' super ability** — a registered placeholder, like the Tridents and Maces ones (see below)
 
 ---
@@ -85,10 +85,6 @@ Stored in `<world save>/mcmmo/players/`, not in a global profile or a database. 
 ## ⚠️ Dead enums — present but doing nothing
 
 These appear in `/mcstats` and in the config files, and have full rank ladders. **No code reads them.** They are listed here so you don't waste time levelling toward them.
-
-### The eight Limit Breaks
-
-`ArcheryLimitBreak`, `AxesLimitBreak`, `CrossbowsLimitBreak`, `MacesLimitBreak`, `SpearsLimitBreak`, `SwordsLimitBreak`, `TridentsLimitBreak`, `UnarmedLimitBreak`.
 
 ### Five unimplemented super abilities
 

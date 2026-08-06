@@ -41,11 +41,13 @@ class McMMOSettingsTest {
     void everyKeyExistsInBundledDefaultsWithMatchingType() throws IOException {
         final YamlConfiguration config = bundled(McMMOSettings.CONFIG_YML);
         final YamlConfiguration experience = bundled(McMMOSettings.EXPERIENCE_YML);
+        final YamlConfiguration advanced = bundled(McMMOSettings.ADVANCED_YML);
 
         for (ConfigSetting setting : McMMOSettings.all()) {
             final YamlConfiguration doc = switch (setting.file()) {
                 case McMMOSettings.CONFIG_YML -> config;
                 case McMMOSettings.EXPERIENCE_YML -> experience;
+                case McMMOSettings.ADVANCED_YML -> advanced;
                 default -> {
                     fail("catalogue references an unknown config file: " + setting.file());
                     yield null;

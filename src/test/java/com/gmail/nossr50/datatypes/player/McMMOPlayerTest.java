@@ -4,12 +4,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
@@ -22,6 +26,7 @@ import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.PlayerLevelUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -55,6 +60,12 @@ class McMMOPlayerTest {
         McMMOMod.setExperienceConfig(experienceConfig);
         McMMOMod.setGeneralConfig(new GeneralConfig(dataFolder));
         McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
+        // ⚠️ Was absent, and its absence was silent. checkXp computes
+        // `rankMilestones = milestonesEnabled && McMMOMod.getRankConfig() != null`, so with no
+        // RankConfig NO rank-unlock plaque could fire in this class at all -- meaning any test
+        // asserting that a particular rank plaque does NOT fire passed for free. The Limit Break
+        // suppression test below was written that way and was vacuous until this line existed.
+        McMMOMod.setRankConfig(new RankConfig(dataFolder));
 
         player = mock(PlatformPlayer.class);
         when(player.getName()).thenReturn("TestPlayer");
@@ -70,6 +81,7 @@ class McMMOPlayerTest {
         McMMOMod.setExperienceConfig(null);
         McMMOMod.setGeneralConfig(null);
         McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setRankConfig(null);
     }
 
     @Test
@@ -386,6 +398,53 @@ class McMMOPlayerTest {
         // Apprentice) rather than sharing one vague "milestone" id.
         verify(player).grantMilestoneAdvancement("level/parkour/adept", true);
         verify(player).grantMilestoneAdvancement("level/agility/apprentice", true);
+    }
+
+    @Test
+    void aDisabledLimitBreakFiresNoRankPlaque(@TempDir Path dataFolder) throws Exception {
+        // ⚠️ TODO.md item 3.1. The eight Limit Break plaques were the original defect: they toasted
+        // "You can now use Swords Limit Break." for a mechanic with no implementation at all. Now
+        // there is an implementation, but it ships OFF -- so the plaque would still be announcing
+        // something that does nothing, and the fix would have moved the lie rather than removed it.
+        //
+        // Swords 99 -> 100 crosses SwordsLimitBreak's rank 1 (RetroMode ladder: 100, 200, ... 1000).
+        profile.addLevels(PrimarySkillType.SWORDS, 99);
+
+        final int levelCost = mmoPlayer.getXpToLevel(PrimarySkillType.SWORDS);
+        final double modifier = experienceConfig.getFormulaSkillModifier(PrimarySkillType.SWORDS)
+                * experienceConfig.getExperienceGainsGlobalMultiplier();
+        mmoPlayer.beginXpGain(PrimarySkillType.SWORDS, (float) (levelCost / modifier) + 1f,
+                XPGainReason.PVE, XPGainSource.SELF);
+
+        assertEquals(100, mmoPlayer.getSkillLevel(PrimarySkillType.SWORDS));
+        // The level itself still plaques -- only the Limit Break rank is suppressed, so this is not
+        // passing merely because no plaque fired at all.
+        verify(player).grantMilestoneAdvancement("level/swords/apprentice", true);
+        verify(player, never())
+                .grantMilestoneAdvancement(eq("rank/swords_swords_limit_break/unlocked"),
+                        anyBoolean());
+    }
+
+    @Test
+    void anEnabledLimitBreakDoesFireItsRankPlaque(@TempDir Path dataFolder) throws Exception {
+        // The converse, so the suppression above cannot be satisfied by a plaque that never fires.
+        Files.writeString(dataFolder.resolve("advanced.yml"),
+                "Skills:\n    General:\n        LimitBreak:\n            AllowPVE: true\n");
+        McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
+
+        profile.addLevels(PrimarySkillType.SWORDS, 99);
+
+        final int levelCost = mmoPlayer.getXpToLevel(PrimarySkillType.SWORDS);
+        final double modifier = experienceConfig.getFormulaSkillModifier(PrimarySkillType.SWORDS)
+                * experienceConfig.getExperienceGainsGlobalMultiplier();
+        mmoPlayer.beginXpGain(PrimarySkillType.SWORDS, (float) (levelCost / modifier) + 1f,
+                XPGainReason.PVE, XPGainSource.SELF);
+
+        assertEquals(100, mmoPlayer.getSkillLevel(PrimarySkillType.SWORDS));
+        // anyBoolean() because a rank plaque's announce flag differs from a level plaque's; the id
+        // firing at all is what this pins.
+        verify(player).grantMilestoneAdvancement(eq("rank/swords_swords_limit_break/unlocked"),
+                anyBoolean());
     }
 
     @Test

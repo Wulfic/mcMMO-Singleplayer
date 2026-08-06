@@ -517,13 +517,43 @@ class SkillStatsRendererTest {
     }
 
     @Test
+    void limitBreakIsHiddenFromMcstatsUntilItIsEnabled(@TempDir Path dataFolder) throws Exception {
+        // ⚠️ TODO.md item 3.1, and the half that stops the fix from merely relocating the defect.
+        // Limit Break ships OFF and adds no damage. Listing it in /mcstats anyway -- with an unlock
+        // level and a rank, looking exactly like the sub-skills that do work -- would leave the mod
+        // advertising a mechanic the player cannot benefit from, which is the same Tier-1 shape the
+        // eight dead plaques had. Both directions are asserted: hidden while off, shown once on, so
+        // this cannot be satisfied by a renderer that simply dropped the line forever.
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.SWORDS)).thenReturn(1000);
+
+        assertFalse(anyLineContains(render(new SwordsStatsRenderer()), "Limit Break"),
+                "Limit Break must not be listed while it is switched off");
+
+        java.nio.file.Files.writeString(dataFolder.resolve("advanced.yml"),
+                "Skills:\n    General:\n        LimitBreak:\n            AllowPVE: true\n");
+        McMMOMod.setAdvancedConfig(new AdvancedConfig(dataFolder));
+
+        assertTrue(anyLineContains(render(new SwordsStatsRenderer()), "Limit Break"),
+                "Limit Break must appear once the player enables it");
+    }
+
+    @Test
     void genericRendererShowsHeaderAndSubSkillsForAnySkill() {
         when(mmoPlayer.getSkillLevel(PrimarySkillType.SWORDS)).thenReturn(500);
 
         final List<String> lines =
                 render(new GenericSkillStatsRenderer(PrimarySkillType.SWORDS));
 
-        assertTrue(anyLineContains(lines, "Swords"), "generic header still names the skill");
+        // ⚠️ This asserted `contains("Swords")` and claimed to be checking the header. It was not:
+        // Swords.SkillName is "SWORDS", so the header never contained mixed-case "Swords". The only
+        // line that did was the sub-skill entry "Swords Limit Break" -- so a header assertion was
+        // being satisfied by a sub-skill name, and it went red the moment Limit Break was hidden
+        // from the list (TODO.md item 3.1) rather than when any header broke.
+        // 🔑 A substring assertion that does not name which line it expects can pass on the wrong
+        // one for years. Both halves are now pinned explicitly.
+        assertTrue(anyLineContains(lines, "SWORDS"), "generic header names the skill");
+        assertTrue(anyLineContains(lines, "Counter Attack"),
+                "generic renderer lists the skill's sub-skills");
         assertFalse(lines.isEmpty(), "generic renderer still emits the header + sub-skill list");
     }
 }

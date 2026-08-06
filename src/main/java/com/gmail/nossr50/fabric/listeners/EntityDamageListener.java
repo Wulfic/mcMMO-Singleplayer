@@ -4,12 +4,14 @@ import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.subskills.agility.DodgeResult;
 import com.gmail.nossr50.datatypes.skills.subskills.agility.RollResult;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
+import com.gmail.nossr50.skills.LimitBreak;
 import com.gmail.nossr50.skills.MeleeDamageBonus;
 import com.gmail.nossr50.skills.MeleeDamageBonus.MeleeWeapon;
 import com.gmail.nossr50.skills.agility.AgilityManager;
@@ -921,6 +923,12 @@ public final class EntityDamageListener {
         if (archery.canSkillShot()) {
             boostedDamage = (float) archery.skillShot(amount); // not additive — Skill Shot replaces it.
         }
+        // Limit Break is added AFTER Skill Shot, because Skill Shot replaces the damage rather than
+        // adding to it — ahead of it the bonus would simply be discarded. Legacy's ordering, and
+        // unlike the melee arms this one is NOT scaled by attack strength: an arrow already in
+        // flight has no swing left to charge. Same asymmetry the ranged Impale arm below preserves.
+        boostedDamage += LimitBreak.bonusDamage(mmoPlayer,
+                SubSkillType.ARCHERY_ARCHERY_LIMIT_BREAK);
         // Legacy pays `forceMultiplier * distanceMultiplier`. Bow force was stamped at launch by
         // `BowShootMixin`; an arrow that skipped that hook (or whose mark aged out) reads back the flat
         // 1.0 legacy defaulted it to, so the product degrades to distance-only rather than to zero.
@@ -967,6 +975,9 @@ public final class EntityDamageListener {
         if (crossbows.canPoweredShot()) {
             boostedDamage = (float) crossbows.poweredShot(amount); // not additive — it replaces it.
         }
+        // After Powered Shot for the same reason as Archery's, and unscaled for the same reason.
+        boostedDamage += LimitBreak.bonusDamage(mmoPlayer,
+                SubSkillType.CROSSBOWS_CROSSBOWS_LIMIT_BREAK);
         CombatUtils.processCombatXP(mmoPlayer, target, PrimarySkillType.CROSSBOWS, boostedDamage,
                 distanceXpMultiplier(target, projectile));
         return boostedDamage;
@@ -991,6 +1002,11 @@ public final class EntityDamageListener {
         if (tridents.canImpale()) {
             boostedDamage = amount + (float) tridents.impaleDamageBonus();
         }
+        // Unscaled here but attack-strength-scaled on the melee path — that split is legacy's own
+        // (processTridentCombatRanged vs processTridentCombatMelee) and is the same reason Impale
+        // itself is scaled in MeleeDamageBonus and flat here.
+        boostedDamage += LimitBreak.bonusDamage(mmoPlayer,
+                SubSkillType.TRIDENTS_TRIDENTS_LIMIT_BREAK);
         CombatUtils.processCombatXP(mmoPlayer, target, PrimarySkillType.TRIDENTS, boostedDamage);
         return boostedDamage;
     }

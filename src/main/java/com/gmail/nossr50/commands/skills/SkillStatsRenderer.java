@@ -6,6 +6,7 @@ import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
+import com.gmail.nossr50.skills.LimitBreak;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
 import com.gmail.nossr50.util.text.StringUtils;
@@ -153,6 +154,11 @@ public abstract class SkillStatsRenderer {
     private void sendSubSkillList(Consumer<Text> out) {
         final List<SubSkillType> subSkills =
                 new ArrayList<>(McMMOMod.getSkillTools().getSubSkills(skill));
+        // Limit Break is opt-in and ships off. While it is off it adds no damage, so listing it here
+        // — with an unlock level and a rank, as though it were doing something — would be the exact
+        // defect TODO.md item 3.1 exists to close, just relocated from "never implemented" to
+        // "implemented but switched off". Nothing advertises a mechanic the player has not enabled.
+        subSkills.removeIf(subSkill -> LimitBreak.isLimitBreak(subSkill) && !LimitBreak.isEnabled());
         if (subSkills.isEmpty()) {
             return;
         }

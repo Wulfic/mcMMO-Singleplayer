@@ -25,6 +25,7 @@ public final class McMMOSettings {
 
     public static final String CONFIG_YML = "config.yml";
     public static final String EXPERIENCE_YML = "experience.yml";
+    public static final String ADVANCED_YML = "advanced.yml";
 
     // Category (Cloth tab) display names.
     private static final String CAT_GENERAL = "General";
@@ -187,6 +188,23 @@ public final class McMMOSettings {
         // ---- Abilities (config.yml) ------------------------------------------------------------
         list.add(ConfigSetting.bool(CAT_ABILITIES, CONFIG_YML, "Abilities.Enabled", true,
                 "Super Abilities Enabled", null));
+        // The one advanced.yml key in the catalogue, and the first entry from a third file -- the
+        // session opens a document per distinct file name, so nothing else had to change.
+        //
+        // Ships OFF, and off means invisible: no damage, no /mcstats line, no rank plaques. The
+        // tooltip is doing real work here rather than decorating -- this is a large, un-nerfed
+        // damage increase and the NPC caveat is a genuine consequence of how the mechanic decides
+        // who counts as a player, so a switch offering it without saying so would be its own kind
+        // of dishonest surface.
+        list.add(ConfigSetting.bool(CAT_ABILITIES, ADVANCED_YML,
+                "Skills.General.LimitBreak.AllowPVE", false,
+                "Limit Break (bonus damage vs mobs)",
+                "Adds flat bonus damage to all 8 combat skills — +1 at rank 1 (level 100) rising "
+                        + "to +10 at rank 10 (level 1000). That is more than a diamond sword's "
+                        + "base damage, so it is a big power increase; it is off by default and "
+                        + "hidden from /mcstats while off. ⚠ The bonus applies to every "
+                        + "non-player entity, so mods that add humanoid NPCs will have those NPCs "
+                        + "take the full bonus too."));
         list.add(ConfigSetting.bool(CAT_ABILITIES, CONFIG_YML, "Abilities.Messages", true,
                 "Ability Messages", null));
         list.add(ConfigSetting.bool(CAT_ABILITIES, CONFIG_YML,
