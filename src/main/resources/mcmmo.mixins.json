@@ -21,6 +21,7 @@
     "EndermanEndermiteLureMixin",
     "EntityTypeSpawnOriginMixin",
     "ExplosionDropsMixin",
+    "FireworkRocketEntityMixin",
     "FishingBobberUseMixin",
     "FishingWaitTimeMixin",
     "FluidBlockFormationMixin",

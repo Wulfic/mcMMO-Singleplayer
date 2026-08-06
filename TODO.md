@@ -24,6 +24,10 @@ Green baseline re-established: `./gradlew build` exit 0 at commit `8904ea6fc`, *
 | 4(b) Diminished Returns | ✅ **DONE** — `McMMOPlayer#applyDiminishedReturns` closes the loop; ships **OFF** (owner's ruling). ⚠️ **The audit undercounted a third time**: the `Threshold` table was wrong in *both* directions — `Cooking` had **no row** and `Agility` (a child skill) had one. Full ModMenu surface (switch + 2 sliders) per the owner's ruling. See 4(b) below |
 | 1.1 Unarmed Disarm / Iron Grip | ✅ **DONE** `a7ffb8bb6` — **full removal, enum constants included** (owner's ruling). ⚠️ The recorded ruling listed files but not the constants, and the 103/103 plaque guard makes half-measures impossible — it is now **101/101 with no exemption**. 🔑 The new converse guard `RankConfigTest#everyShippedRankSectionMapsToALiveSubSkill` **reddened on its first run** over `Fishing.Mastery`, an upstream orphan nobody was hunting |
 | 1.2 Herbalism Verdant Bounty | ✅ **DONE** `46a5e08de` — renderer quotes the DoubleDrops roll it actually makes; label names the Green Terra condition; `VerdantBounty.ChanceMax` retired. ⚠️⚠️ **The first guard was VACUOUS**: retiring the orphan knob made the fallback numerically identical to DoubleDrops, so the *wrong source gave the right number*. Guard is now behavioural (retune DoubleDrops, require the line to follow) and mutation-verified |
+| 4(c) particles / sounds / messages | ✅ **DONE** — all wired (owner's ruling: "wire all 11 incl. fireworks"). ⚠️ **The audit said 14 keys; it is 16** — it missed `Particles.LevelUp_Tier` (getter live but only a validator called it) and `Particles.LargeFireworks` (**no getter at all**, the 1.3 shape again). ⚠️⚠️ **One of the 11 was not wireable**: `Particles.Flux` gates Flux Mining, a Smelting sub-skill **this port never implemented** — no `SubSkillType`, no manager, no listener. Culled with `getFluxEffectEnabled` and `Items.Flux_Pickaxe.Sound_Enabled`. See 4(c) below |
+| 3.2 placeholder super abilities | ✅ **DONE — no-op close, now guarded.** Confirmed none reaches a `/mcstats` line, a plaque or a cooldown slider. ⚠️ **The audit said four; there are five** — it missed `SPEARS_SUPER_ABILITY`. `PlaceholderSuperAbilityTest` derives the set from the enum instead of hand-keeping it, and pins both directions |
+| Tier 5 | ✅ **DONE** — `Metrics.bstats` culled; both Maces `TODO: Make configurable` closed with real `advanced.yml` keys. ⚠️ **One was a Tier-1 item in disguise**: `getCrippleTickDuration(true)` fed a `/mcstats maces` line reading "Cripple Duration: 1.0s vs Players, 1.5s vs Mobs" — a PvP number in a singleplayer mod. Player arm removed under the 1.1 precedent |
+| 4(a) config cull | ✅ **DONE** — nine sections (~255 lines) culled from the shipped `config.yml`: Scoreboard, Mob_Healthbar, Database_Purging, Backups, MySQL, Hardcore, Mods, Items, Party; plus the Hardcore/Chimaera getters, their **4 setters**, their 4 load-time validators and 2 `SkillTools` delegates. Owner's ruling: **shipped file only, no migration** |
 | 3.1 Limit Break | ✅ **DONE** — implemented for **all 8**, but ⚠️ **the ruling changed mid-work: it ships OFF, not on** (owner's call — the un-nerfed PVE bonus is too strong to impose). **Off means invisible**: no damage, no `/mcstats` entry, no rank plaques, plus a ModMenu switch carrying the NPC-conflict warning. See 3.1 below |
 
 **Rulings given by the repo owner (2026-08-06). These are decided; do not re-open them.**
@@ -387,13 +391,56 @@ Decide: wire them into `SoundManager`/`NotificationManager`, or cull the section
    (the broken `Threshold` table) plus a **fifth** it never looked at (4(e), `Skill_Multiplier.Agility`).
 4. ~~**1.1 / 1.2 / 3.1**~~ ✅ DONE — `a7ffb8bb6`, `46a5e08de`, `d2c9af698`.
 5. ~~**4(e)**~~ ✅ DONE — row + slider deleted, two-way converse guard added.
-6. **4(c)** particle/sound family as one batch — ⬅️ **NEXT**; **4(a)** config cull last.
-   Also still open: **3.2** (confirm the 4 placeholder super abilities have no surface) and the
-   **Tier 5** oddments (two Maces `TODO: Make configurable`, `Metrics.bstats` cull).
+6. ~~**4(c)** particle/sound family, **4(a)** config cull, **3.2**, **Tier 5**~~ ✅ ALL DONE.
 
-⚠️ **Score so far: the audit has been wrong or incomplete on every single item worked.** 2.1's
-prescribed fix was inverted, 1.3 undercounted 3→4, 4(b) undercounted a one-line wiring job into a
-wiring job *plus* a two-way-broken catalogue. **Treat every remaining finding as a lead, not a spec.**
+## 🎉 THE AUDIT IS CLOSED. Every tier is complete.
 
-⚠️ Before any of it: run `./gradlew build` and record the green count. This audit did not build,
-and every finding below Tier 1 assumes the tree is currently green.
+Final state: `./gradlew build` exit 0, **1587 tests green**, boot `Done (1.300s)` with 0 ERROR,
+0 exceptions, 0 mixin failures.
+
+⚠️ **Final score: the audit was wrong or incomplete on EVERY SINGLE ITEM WORKED — 9 for 9.**
+2.1's prescribed fix was inverted (delete, not wire); 1.3 undercounted 3→4; 4(b) was a one-line
+wiring job *plus* a two-way-broken 25-row catalogue; 3.1's "resolve the Spears asymmetry first" was
+nothing; 4(e) checked 1 of 3 call sites; **4(c) undercounted 14→16 and one of its keys could not be
+wired at all**; **3.2 undercounted 4→5**; **Tier 5's "small stuff" hid a Tier-1 PvP `/mcstats`
+line**. The lesson held from the first item to the last: *a finding is a lead, not a spec.*
+
+### 4(c) — what it actually took
+
+The port had **no particle system at all**; legacy's `ParticleEffectUtils` was never carried over,
+and five call sites carried "deferred until a particle adapter exists" comments. The new
+`util/skills/ParticleEffectUtils` takes platform wrappers only (its callers — `RuptureTask`,
+`MacesManager` — are deliberately MC-free), and is wired at Rupture's bleed tick, Maces' Cripple,
+Agility's Dodge, Axes' Greater Impact, Taming's Pummel, and Call of the Wild.
+
+⚠️⚠️ **A firework is not a cosmetic entity.** `FireworkRocketEntity#explode` deals
+`5 + 2×explosions` damage to everything within five blocks, and mcMMO spawns fireworks at the
+player's feet — so "celebrate a level-up" would have dealt 7 damage to the player it congratulated.
+`FireworkRocketEntityMixin` cancels `explode` for tagged rockets; the seam works because
+`explodeAndRemove` sends the client its burst (entity status 17) *before* calling `explode`, which is
+100% damage. **Legacy intended exactly this** — its commented-out `fireworkParticleShower` tags the
+firework with a `funfettiMetadataKey` for the same reason. That key no longer exists on upstream's
+`mcMMO` class, so **all five firework knobs have been dead upstream for years, in non-compiling code.**
+
+⚠️⚠️ **An MC-typed constructor in an argument list breaks every MC-free unit test downstream.**
+`spawnAtEyes(entity, new BlockStateParticleEffect(...), 20)` evaluates the effect *before* the method
+can check for a server world, initialising `Blocks` → `Registries` → "Not bootstrapped". It reddened
+`MacesManagerTest` the moment `MacesManager` started calling it. The parameter is now a `Supplier`.
+
+⚠️⚠️ **`CatalogueKeysReachCodeTest` had a blind spot in the dangerous direction.** Its `INVOCATION`
+regex only matched `name(`, so a getter used *only* through a method reference
+(`GeneralConfig::getBleedEffectEnabled`) looked dead — eight live switches failed it at once. The
+tell: `LevelUp_Tier` and `LargeFireworks` passed from the same class, being the two called with
+parentheses. Fixed, with `aKeyReadOnlyThroughAMethodReferenceIsSeenAsLive` pinning it.
+
+⚠️⚠️ **`ConfigBootstrapTest`'s "Runs MC-free" comment had expired**, and the cost was not one red
+test. `loadAll` → `RepairConfig` → `Materials.item()` touches registries; with no `@BeforeAll`
+bootstrap it left `Registries` permanently broken **for its whole fork**, taking ~30 unrelated tests
+with it. It had passed for a long time purely on how Gradle happened to distribute classes across the
+two forks — adding two new test classes was enough to change that. *A test with no bootstrap that
+touches registries is a landmine for every other test in its fork, not just itself.*
+
+The five anvil/Tree-Feller toggles were the same "known gap comment expires" shape as issue #9:
+`placedAnvilCheck` was recorded as blocked on notification/sound adapters that had shipped phases
+earlier. ⚠️ Salvage's body is **not** a copy of Repair's — different locale key *and* different sound
+routing; writing it from its sibling got both wrong, and a test now pins the difference.

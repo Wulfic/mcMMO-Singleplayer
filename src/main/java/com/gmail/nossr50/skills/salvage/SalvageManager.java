@@ -12,6 +12,8 @@ import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
+import com.gmail.nossr50.util.sounds.SoundManager;
+import com.gmail.nossr50.util.sounds.SoundType;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -33,7 +35,7 @@ import org.jetbrains.annotations.NotNull;
  *   <li>{@code arcaneSalvageCheck} — <b>DONE</b>: its per-enchantment decision is
  *       {@link #resolveEnchantOutcome} here, and the enchanted-book build lives in
  *       {@code RepairSalvageListener} (the only MC-typed part left);</li>
- *   <li>{@code placedAnvilCheck} — needs notification/sound adapters (anvil-placed state is ported);</li>
+ *   <li>{@code placedAnvilCheck} — <b>DONE</b>: {@link #placedAnvilCheck()};</li>
  *   <li>{@code checkConfirmation} — the anvil-use hook (K7) + notification; {@link
  *       com.gmail.nossr50.util.skills.SkillUtils#cooldownExpired} it depends on is now ported.</li>
  * </ul>
@@ -204,6 +206,33 @@ public class SalvageManager extends SkillManager {
 
     public void togglePlacedAnvil() {
         placedAnvil = !placedAnvil;
+    }
+
+    /**
+     * The Salvage twin of {@link com.gmail.nossr50.skills.repair.RepairManager#placedAnvilCheck()},
+     * gated by {@code Skills.Salvage.Anvil_Messages} / {@code Skills.Salvage.Anvil_Placed_Sounds}.
+     *
+     * <p>⚠️ <b>Not a copy of Repair's body.</b> The two differ in both details that look like
+     * boilerplate: the locale key is {@code Salvage.Listener.Anvil}, and the sound goes through
+     * {@code sendSound} (MASTER) rather than Repair's {@code sendCategorizedSound(…, BLOCKS)}. Both
+     * are legacy's, transcribed from {@code SalvageManager#placedAnvilCheck} rather than inferred
+     * from its sibling.
+     */
+    public void placedAnvilCheck() {
+        if (getPlacedAnvil()) {
+            return;
+        }
+
+        if (McMMOMod.getGeneralConfig().getSalvageAnvilMessagesEnabled()) {
+            NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                    "Salvage.Listener.Anvil");
+        }
+
+        if (McMMOMod.getGeneralConfig().getSalvageAnvilPlaceSoundsEnabled()) {
+            SoundManager.sendSound(getPlayer(), SoundType.ANVIL);
+        }
+
+        togglePlacedAnvil();
     }
 
     /*

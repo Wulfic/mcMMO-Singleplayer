@@ -2,8 +2,12 @@ package com.gmail.nossr50.skills.salvage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.config.AdvancedConfig;
@@ -12,6 +16,7 @@ import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
@@ -153,5 +158,49 @@ class SalvageManagerTest {
 
         salvageManager.setLastAnvilUse(99);
         assertEquals(99, salvageManager.getLastAnvilUse());
+    }
+
+    /** The Salvage twin of {@code RepairManagerTest#theAnvilHintFiresOnceThenLatches}. */
+    @Test
+    void theAnvilHintFiresOnceThenLatches() {
+        assertFalse(salvageManager.getPlacedAnvil(), "no anvil placed yet");
+
+        salvageManager.placedAnvilCheck();
+        assertTrue(salvageManager.getPlacedAnvil(), "placing the first anvil latches the flag");
+
+        salvageManager.placedAnvilCheck();
+        assertTrue(salvageManager.getPlacedAnvil(),
+                "a later anvil neither re-notifies nor un-latches");
+    }
+
+    /** As Repair's: the latch sits outside both gates, so silencing the hint still marks it shown. */
+    @Test
+    void theLatchStillSetsWhenBothFeedbackSwitchesAreOff() {
+        final GeneralConfig silenced = spy(McMMOMod.getGeneralConfig());
+        doReturn(false).when(silenced).getSalvageAnvilMessagesEnabled();
+        doReturn(false).when(silenced).getSalvageAnvilPlaceSoundsEnabled();
+        McMMOMod.setGeneralConfig(silenced);
+        assertFalse(McMMOMod.getGeneralConfig().getSalvageAnvilMessagesEnabled(),
+                "fixture failed to disable the anvil message — the rest of this test proves nothing");
+
+        salvageManager.placedAnvilCheck();
+
+        assertTrue(salvageManager.getPlacedAnvil(),
+                "the placed-anvil latch must set even with all feedback disabled");
+    }
+
+    /**
+     * ⚠️ Salvage's hint is <b>not</b> a copy of Repair's, and both differences look like the kind of
+     * boilerplate a transcription would smooth over. This pins the locale key; the sound differs too
+     * (Salvage uses {@code sendSound}/MASTER where Repair uses {@code sendCategorizedSound}/BLOCKS).
+     * Writing this body from Repair's rather than from legacy's produced both mistakes at once.
+     */
+    @Test
+    void salvageUsesItsOwnLocaleKeyNotRepairs() {
+        assertNotNull(LocaleLoader.getString("Salvage.Listener.Anvil"),
+                "Salvage.Listener.Anvil must exist — it is the key placedAnvilCheck sends");
+        assertNotEquals(LocaleLoader.getString("Salvage.Listener.Anvil"),
+                LocaleLoader.getString("Repair.Listener.Anvil"),
+                "the two anvil hints describe different blocks and must not share a message");
     }
 }

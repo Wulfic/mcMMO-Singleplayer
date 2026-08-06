@@ -13,9 +13,10 @@
 #
 #  Settings for the Skills
 ###
-# Enables anonymous statistics
-Metrics:
-    bstats: true
+# NOTE: upstream's Metrics.bstats key was removed here (2026-08-06). It switched off the bStats
+# telemetry a Bukkit plugin sent to bstats.org. This port has no bStats dependency and sends no
+# telemetry of any kind, so the key had no reader and, worse, implied there was something to opt out
+# of. Nothing to wire; the honest form of "we do not phone home" is not shipping the switch.
 Feedback:
     PlayerTips: true
     SkillCommand:
@@ -1155,6 +1156,12 @@ Skills:
                 Rank_2: 15
                 Rank_3: 20
                 Rank_4: 33
+            # How long the target stays slowed, in ticks (20 ticks = 1 second), and how strong the
+            # Slowness is (2 = Slowness III). Upstream hardcoded both behind a "TODO: Make
+            # configurable"; these are its mob-target values. Upstream's separate, weaker
+            # player-target pair is not shipped -- Cripple can only ever hit a mob in singleplayer.
+            Duration_Ticks: 30
+            Slowness_Level: 2
     Spears:
         SpearMastery:
             Rank_Damage_Multiplier: 0.4

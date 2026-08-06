@@ -85,6 +85,19 @@ class CatalogueKeysReachCodeTest {
     /** Any method invocation, used both for intra-config edges and for outside callers. */
     private static final Pattern INVOCATION = Pattern.compile("\\b(\\w+)\\s*\\(");
 
+    /**
+     * A method <em>reference</em> — {@code GeneralConfig::getBleedEffectEnabled}.
+     *
+     * <p>⚠️ Without this the scan is blind to an entire calling convention, and blind in the
+     * dangerous direction: a getter used only through a method reference has no {@code (} after its
+     * name, so {@link #INVOCATION} never sees it and the key it reads is reported dead. Wiring the
+     * {@code Particles.*} family produced exactly that — eight live switches failing this test
+     * because {@code ParticleEffectUtils} gates them with {@code GeneralConfig::getXxxEnabled}. The
+     * tell was that {@code Particles.LevelUp_Tier} and {@code Particles.LargeFireworks} passed from
+     * the same file, being the two the same class calls with parentheses.
+     */
+    private static final Pattern METHOD_REFERENCE = Pattern.compile("::\\s*(\\w+)");
+
     @Test
     void everyCatalogueKeyReachesProductionCode() throws IOException {
         final ConfigIndex index = ConfigIndex.build();
@@ -140,6 +153,28 @@ class CatalogueKeysReachCodeTest {
                         + "through getMobOriginXpMultiplier — the transitive step is broken");
     }
 
+    /**
+     * The second scanner self-check, and the reason {@link #METHOD_REFERENCE} exists.
+     *
+     * <p>{@code Particles.Bleed} is read by {@code GeneralConfig#getBleedEffectEnabled}, whose only
+     * caller — {@code ParticleEffectUtils#playBleedEffect} — names it as a method reference rather
+     * than calling it. Drop {@code METHOD_REFERENCE} from the scan and this key looks dead, which is
+     * how eight live {@code Particles.*} switches first failed the test above. Without this check the
+     * blind spot returns silently the next time someone tidies the regexes.
+     */
+    @Test
+    void aKeyReadOnlyThroughAMethodReferenceIsSeenAsLive() throws IOException {
+        final ConfigIndex index = ConfigIndex.build();
+        final Set<String> reachable = index.reachableFromGameplay();
+
+        final Set<String> readers = index.readersOf("Particles.Bleed");
+        assertFalse(readers.isEmpty(), "no getter found for the Rupture bleed particle switch");
+        assertTrue(reachable.stream().anyMatch(readers::contains),
+                "the scanner reports the bleed particle switch as dead, but ParticleEffectUtils "
+                        + "gates on it via GeneralConfig::getBleedEffectEnabled — the scan no "
+                        + "longer understands method references");
+    }
+
     /** A parsed view of the config package: who reads which key, and who calls whom. */
     private record ConfigIndex(Map<String, Set<String>> keyToReaders,
             Map<String, Set<String>> concatPrefixToReaders,
@@ -174,11 +209,14 @@ class CatalogueKeysReachCodeTest {
                     }
                 }
 
-                final Matcher calls = INVOCATION.matcher(text);
-                while (calls.find()) {
-                    final String owner = enclosing(starts, names, calls.start());
-                    if (owner != null) {
-                        callGraph.computeIfAbsent(owner, k -> new HashSet<>()).add(calls.group(1));
+                for (Pattern shape : List.of(INVOCATION, METHOD_REFERENCE)) {
+                    final Matcher calls = shape.matcher(text);
+                    while (calls.find()) {
+                        final String owner = enclosing(starts, names, calls.start());
+                        if (owner != null) {
+                            callGraph.computeIfAbsent(owner, k -> new HashSet<>())
+                                    .add(calls.group(1));
+                        }
                     }
                 }
             }
@@ -189,9 +227,12 @@ class CatalogueKeysReachCodeTest {
                         || source.getFileName().toString().equals("McMMOSettings.java")) {
                     continue; // the catalogue naming a getter would be circular.
                 }
-                final Matcher calls = INVOCATION.matcher(Files.readString(source));
-                while (calls.find()) {
-                    outside.add(calls.group(1));
+                final String text = Files.readString(source);
+                for (Pattern shape : List.of(INVOCATION, METHOD_REFERENCE)) {
+                    final Matcher calls = shape.matcher(text);
+                    while (calls.find()) {
+                        outside.add(calls.group(1));
+                    }
                 }
             }
 

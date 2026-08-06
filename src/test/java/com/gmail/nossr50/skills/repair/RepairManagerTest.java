@@ -3,7 +3,9 @@ package com.gmail.nossr50.skills.repair;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -202,5 +204,44 @@ class RepairManagerTest {
 
         repairManager.setLastAnvilUse(42);
         assertEquals(42, repairManager.getLastAnvilUse());
+    }
+
+    /**
+     * The anvil hint is one-shot: the first placement latches the flag, and every later placement is
+     * a no-op. Ports legacy's early {@code if (getPlacedAnvil()) return;}.
+     */
+    @Test
+    void theAnvilHintFiresOnceThenLatches() {
+        assertFalse(repairManager.getPlacedAnvil(), "no anvil placed yet");
+
+        repairManager.placedAnvilCheck();
+        assertTrue(repairManager.getPlacedAnvil(), "placing the first anvil latches the flag");
+
+        // A second placement must not un-latch it — togglePlacedAnvil() flips, so an unguarded
+        // second call would flip it back to false and re-arm the hint on every other anvil.
+        repairManager.placedAnvilCheck();
+        assertTrue(repairManager.getPlacedAnvil(), "a later anvil neither re-notifies nor un-latches");
+    }
+
+    /**
+     * ⚠️ The latch is deliberately <em>outside</em> both config gates, as in legacy: turning the
+     * message and the sound off silences the hint but must still mark it as shown. Moving
+     * {@code togglePlacedAnvil()} inside a gate — the tidy-looking refactor — would leave the flag
+     * false forever with both switches off, which matters because the same flag is what a future
+     * caller would read to know whether the player has been told.
+     */
+    @Test
+    void theLatchStillSetsWhenBothFeedbackSwitchesAreOff() {
+        final GeneralConfig silenced = spy(McMMOMod.getGeneralConfig());
+        doReturn(false).when(silenced).getRepairAnvilMessagesEnabled();
+        doReturn(false).when(silenced).getRepairAnvilPlaceSoundsEnabled();
+        McMMOMod.setGeneralConfig(silenced);
+        assertFalse(McMMOMod.getGeneralConfig().getRepairAnvilMessagesEnabled(),
+                "fixture failed to disable the anvil message — the rest of this test proves nothing");
+
+        repairManager.placedAnvilCheck();
+
+        assertTrue(repairManager.getPlacedAnvil(),
+                "the placed-anvil latch must set even with all feedback disabled");
     }
 }

@@ -33,6 +33,7 @@ import com.gmail.nossr50.util.MobTiers;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.CombatUtils;
+import com.gmail.nossr50.util.skills.ParticleEffectUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import com.gmail.nossr50.util.text.TextUtils;
@@ -1800,10 +1801,10 @@ public final class EntityDamageListener {
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
                     "Agility.Combat.Proc");
         }
-        // PORT: legacy also spawned ParticleEffectUtils.playDodgeEffect + scheduled MobDodgeMetaCleanup
-        // to expire the tracker after a minute. Particles need a PlatformPlayer particle adapter; the
-        // cleanup task is a refinement (without it the transient tracker just persists for the mob's
-        // session lifetime, which is a stricter — still correct — anti-farm cap). Both deferred.
+        ParticleEffectUtils.playDodgeEffect(mmoPlayer.getPlayer());
+        // PORT: legacy also scheduled MobDodgeMetaCleanup to expire the tracker after a minute. That
+        // is a refinement — without it the transient tracker just persists for the mob's session
+        // lifetime, which is a stricter (still correct) anti-farm cap. Deferred.
         return (float) result.getModifiedDamage();
     }
 

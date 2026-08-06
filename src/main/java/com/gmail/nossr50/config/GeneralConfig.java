@@ -51,24 +51,10 @@ public class GeneralConfig extends ConfigLoader {
             reason.add("General.Save_Interval should be greater than 0!");
         }
 
-        if (getHardcoreDeathStatPenaltyPercentage() < 0.01
-                || getHardcoreDeathStatPenaltyPercentage() > 100) {
-            reason.add(
-                    "Hardcore.Death_Stat_Loss.Penalty_Percentage only accepts values from 0.01 to 100!");
-        }
-
-        if (getHardcoreVampirismStatLeechPercentage() < 0.01
-                || getHardcoreVampirismStatLeechPercentage() > 100) {
-            reason.add("Hardcore.Vampirism.Leech_Percentage only accepts values from 0.01 to 100!");
-        }
-
-        if (getChimaeraUseCost() < 1 || getChimaeraUseCost() > 64) {
-            reason.add("Items.Chimaera_Wing.Use_Cost only accepts values from 1 to 64!");
-        }
-
-        if (getChimaeraRecipeCost() < 1 || getChimaeraRecipeCost() > 9) {
-            reason.add("Items.Chimaera_Wing.Recipe_Cost only accepts values from 1 to 9!");
-        }
+        // The four Hardcore / Chimaera Wing range checks that stood here went with their getters
+        // and their config.yml sections (2026-08-06). Validating a key nobody ships and nobody
+        // reads is how SerratedStrikes.BleedTicks stayed alive for so long: a load-time validator
+        // is the one caller that makes a dead getter look reachable.
 
         if (getLevelUpEffectsTier() < 1) {
             reason.add("Particles.LevelUp_Tier should be at least 1!");
@@ -185,109 +171,33 @@ public class GeneralConfig extends ConfigLoader {
                 "Skills." + StringUtils.getCapitalized(skill.toString()) + ".Enabled_For_PVE", true);
     }
 
-    /* Hardcore Mode */
-    public boolean getHardcoreStatLossEnabled(PrimarySkillType primarySkillType) {
-        return config.getBoolean("Hardcore.Death_Stat_Loss.Enabled."
-                + StringUtils.getCapitalized(primarySkillType.toString()), false);
-    }
-
-    public void setHardcoreStatLossEnabled(PrimarySkillType primarySkillType, boolean enabled) {
-        config.set("Hardcore.Death_Stat_Loss.Enabled."
-                + StringUtils.getCapitalized(primarySkillType.toString()), enabled);
-    }
-
-    public double getHardcoreDeathStatPenaltyPercentage() {
-        return config.getDouble("Hardcore.Death_Stat_Loss.Penalty_Percentage", 75.0D);
-    }
-
-    public void setHardcoreDeathStatPenaltyPercentage(double value) {
-        config.set("Hardcore.Death_Stat_Loss.Penalty_Percentage", value);
-    }
-
-    public int getHardcoreDeathStatPenaltyLevelThreshold() {
-        return config.getInt("Hardcore.Death_Stat_Loss.Level_Threshold", 0);
-    }
-
-    public boolean getHardcoreVampirismEnabled(PrimarySkillType primarySkillType) {
-        return config.getBoolean("Hardcore.Vampirism.Enabled."
-                + StringUtils.getCapitalized(primarySkillType.toString()), false);
-    }
-
-    public void setHardcoreVampirismEnabled(PrimarySkillType primarySkillType, boolean enabled) {
-        config.set("Hardcore.Vampirism.Enabled."
-                + StringUtils.getCapitalized(primarySkillType.toString()), enabled);
-    }
-
-    public double getHardcoreVampirismStatLeechPercentage() {
-        return config.getDouble("Hardcore.Vampirism.Leech_Percentage", 5.0D);
-    }
-
-    public void setHardcoreVampirismStatLeechPercentage(double value) {
-        config.set("Hardcore.Vampirism.Leech_Percentage", value);
-    }
-
-    public int getHardcoreVampirismLevelThreshold() {
-        return config.getInt("Hardcore.Vampirism.Level_Threshold", 0);
-    }
-
     /*
-     * ITEMS
+     * REMOVED (2026-08-06): the Hardcore-mode and Items (Chimaera Wing / Flux Pickaxe) getters.
      *
-     * Material getters return the raw config name (registry path); resolve via platform/Materials.
+     * Hardcore stat-loss and vampirism take skill levels from a player when ANOTHER PLAYER kills
+     * them -- unreachable with one player. The Chimaera Wing is a multiplayer teleport-to-spawn
+     * item. The Flux Pickaxe sound belonged to Flux Mining, a Smelting sub-skill this port never
+     * implemented (no SubSkillType, no manager, no listener -- so Particles.Flux went with it).
+     *
+     * None had a production caller, and their config.yml sections are culled with them. The four
+     * Hardcore setters went too: a setter whose getter is dead is dead in both directions.
      */
-    public int getChimaeraUseCost() {
-        return config.getInt("Items.Chimaera_Wing.Use_Cost", 1);
-    }
-
-    public int getChimaeraRecipeCost() {
-        return config.getInt("Items.Chimaera_Wing.Recipe_Cost", 5);
-    }
-
-    public String getChimaeraItemName() {
-        return config.getString("Items.Chimaera_Wing.Item_Name", "Feather");
-    }
-
-    public boolean getChimaeraEnabled() {
-        return config.getBoolean("Items.Chimaera_Wing.Enabled", true);
-    }
-
-    public boolean getChimaeraPreventUseUnderground() {
-        return config.getBoolean("Items.Chimaera_Wing.Prevent_Use_Underground", true);
-    }
-
-    public boolean getChimaeraUseBedSpawn() {
-        return config.getBoolean("Items.Chimaera_Wing.Use_Bed_Spawn", true);
-    }
-
-    public int getChimaeraCooldown() {
-        return config.getInt("Items.Chimaera_Wing.Cooldown", 240);
-    }
-
-    public int getChimaeraWarmup() {
-        return config.getInt("Items.Chimaera_Wing.Warmup", 5);
-    }
-
-    public int getChimaeraRecentlyHurtCooldown() {
-        return config.getInt("Items.Chimaera_Wing.RecentlyHurt_Cooldown", 60);
-    }
-
-    public boolean getChimaeraSoundEnabled() {
-        return config.getBoolean("Items.Chimaera_Wing.Sound_Enabled", true);
-    }
-
-    public boolean getFluxPickaxeSoundEnabled() {
-        return config.getBoolean("Items.Flux_Pickaxe.Sound_Enabled", true);
-    }
 
     /*
      * PARTICLES
      */
+    /**
+     * ⚠️ Defaults to {@code false} to match the shipped {@code config.yml}, which has always shipped
+     * these two off. Upstream's getter defaults to {@code true} and its file to {@code false} — an
+     * invisible disagreement while nothing read the key, and a live one now that something does.
+     */
     public boolean getAbilityActivationEffectEnabled() {
-        return config.getBoolean("Particles.Ability_Activation", true);
+        return config.getBoolean("Particles.Ability_Activation", false);
     }
 
+    /** @see #getAbilityActivationEffectEnabled() for why this defaults {@code false}. */
     public boolean getAbilityDeactivationEffectEnabled() {
-        return config.getBoolean("Particles.Ability_Deactivation", true);
+        return config.getBoolean("Particles.Ability_Deactivation", false);
     }
 
     public boolean getBleedEffectEnabled() {
@@ -300,10 +210,6 @@ public class GeneralConfig extends ConfigLoader {
 
     public boolean getDodgeEffectEnabled() {
         return config.getBoolean("Particles.Dodge", true);
-    }
-
-    public boolean getFluxEffectEnabled() {
-        return config.getBoolean("Particles.Flux", true);
     }
 
     public boolean getGreaterImpactEffectEnabled() {
@@ -320,6 +226,20 @@ public class GeneralConfig extends ConfigLoader {
 
     public int getLevelUpEffectsTier() {
         return config.getInt("Particles.LevelUp_Tier", 100);
+    }
+
+    /**
+     * Whether mcMMO's celebratory fireworks burst as a large ball or a small one.
+     *
+     * <p>⚠️ This getter is <b>new in the port</b>. {@code Particles.LargeFireworks} has shipped in
+     * {@code config.yml} since forever with no getter anywhere in the codebase — upstream reads it
+     * only from inside {@code ParticleEffectUtils#fireworkParticleShower}, which is commented out.
+     * The 2026-08-06 audit's getter→caller sweep could not see it, exactly like
+     * {@code Level_Up_Chat_Broadcasts.Enabled} in item 1.3: <b>a shipped key with no getter at all is
+     * invisible to a sweep that starts from getters.</b>
+     */
+    public boolean getLargeFireworks() {
+        return config.getBoolean("Particles.LargeFireworks", true);
     }
 
     /*

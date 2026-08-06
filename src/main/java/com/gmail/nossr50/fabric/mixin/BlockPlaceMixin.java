@@ -1,5 +1,6 @@
 package com.gmail.nossr50.fabric.mixin;
 
+import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
 import com.gmail.nossr50.util.BlockUtils;
 import net.minecraft.block.BlockState;
 import net.minecraft.item.BlockItem;
@@ -46,6 +47,9 @@ public abstract class BlockPlaceMixin {
         final World world = context.getWorld();
         if (world instanceof ServerWorld serverWorld) {
             BlockUtils.markPlaced(serverWorld, context.getBlockPos());
+            // Legacy fired both of these from the same BlockPlaceEvent handler.
+            RepairSalvageListener.onAnvilPlaced(serverWorld, context.getBlockPos(),
+                    context.getPlayer());
         }
     }
 }

@@ -4,6 +4,7 @@ import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.util.CancellableRunnable;
 import com.gmail.nossr50.util.LogUtils;
+import com.gmail.nossr50.util.skills.ParticleEffectUtils;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -26,9 +27,7 @@ import org.jetbrains.annotations.NotNull;
  *
  * <p>DROPPED from legacy: {@code McMMOEntityDamageByRuptureEvent} (a K5 plugin-veto event; there are
  * no other listeners in singleplayer, so the tick damage is applied directly), {@code
- * MobHealthbarUtils} (a multiplayer feature, cut in Phase 1.5), and {@code
- * ParticleEffectUtils.playBleedEffect} (deferred with the rest of the particle surface — no
- * adapter yet, same as Agility' dodge effect).
+ * MobHealthbarUtils} (a multiplayer feature, cut in Phase 1.5).
  *
  * <p>Legacy's {@code ruptureSource} field goes with them: it fed only the dropped event, the debug
  * messages, and an {@code equals}/{@code hashCode} pair used for nothing (the marker, not equality,
@@ -141,6 +140,7 @@ public class RuptureTask extends CancellableRunnable {
         }
 
         targetEntity.setHealth((float) damagedHealth);
+        ParticleEffectUtils.playBleedEffect(targetEntity);
         return false;
     }
 

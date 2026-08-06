@@ -13,6 +13,7 @@ import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
+import com.gmail.nossr50.util.skills.ParticleEffectUtils;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
 import org.jetbrains.annotations.NotNull;
@@ -31,8 +32,7 @@ import org.jetbrains.annotations.NotNull;
  * <p>Dropped: the PvP arms of {@code criticalHit} / {@code greaterImpact} (the
  * {@code target instanceof Player} defender notifications and the {@code criticalHitPVPModifier}
  * branch) — the attacking player is the only player in singleplayer, so the target is never one, and
- * the PVE modifier always applies. Also dropped: {@code ParticleEffectUtils.playGreaterImpactEffect}
- * (no particle adapter yet — the same deferral as Dodge and Rupture's bleed particles).
+ * the PVE modifier always applies.
  */
 public class AxesManager extends SkillManager {
     public AxesManager(McMMOPlayer mmoPlayer) {
@@ -213,6 +213,7 @@ public class AxesManager extends SkillManager {
 
         target.setVelocityAlongLookDirection(getPlayer(),
                 McMMOMod.getAdvancedConfig().getGreaterImpactModifier());
+        ParticleEffectUtils.playGreaterImpactEffect(target);
 
         if (mmoPlayer.useChatNotifications()) {
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,

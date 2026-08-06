@@ -52,22 +52,16 @@ class GeneralConfigTest {
         assertTrue(generalConfig.getMilestoneLevelInterval() >= 1);
     }
 
+    /**
+     * ⚠️ This used to read three Chimaera Wing values alongside the Tree Feller threshold, and a
+     * {@code hardcoreSettersRoundTrip} test sat next to it. Both went with the Hardcore and Items
+     * getters in the 2026-08-06 config cull — <b>they were round-tripping features the port does not
+     * have</b>, which is how a dead getter earns a passing test and looks maintained.
+     */
     @Test
-    void readsItemAndAbilitySettings(@TempDir Path dataFolder) {
+    void readsAbilitySettings(@TempDir Path dataFolder) {
         final GeneralConfig config = new GeneralConfig(dataFolder);
-        assertEquals("FEATHER", config.getChimaeraItemName());
-        assertEquals(1, config.getChimaeraUseCost());
-        assertTrue(config.getChimaeraEnabled());
         assertEquals(1000, config.getTreeFellerThreshold());
-    }
-
-    @Test
-    void hardcoreSettersRoundTrip(@TempDir Path dataFolder) {
-        final GeneralConfig config = new GeneralConfig(dataFolder);
-        config.setHardcoreVampirismEnabled(PrimarySkillType.SWORDS, true);
-        assertTrue(config.getHardcoreVampirismEnabled(PrimarySkillType.SWORDS));
-        config.setHardcoreDeathStatPenaltyPercentage(42.0D);
-        assertEquals(42.0D, config.getHardcoreDeathStatPenaltyPercentage());
     }
 
     @Test

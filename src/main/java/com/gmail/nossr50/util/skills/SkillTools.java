@@ -419,13 +419,9 @@ public class SkillTools {
         return McMMOMod.getGeneralConfig().getPVEEnabled(primarySkillType);
     }
 
-    public boolean getHardcoreStatLossEnabled(PrimarySkillType primarySkillType) {
-        return McMMOMod.getGeneralConfig().getHardcoreStatLossEnabled(primarySkillType);
-    }
-
-    public boolean getHardcoreVampirismEnabled(PrimarySkillType primarySkillType) {
-        return McMMOMod.getGeneralConfig().getHardcoreVampirismEnabled(primarySkillType);
-    }
+    // getHardcoreStatLossEnabled / getHardcoreVampirismEnabled were removed here (2026-08-06)
+    // along with the GeneralConfig getters they delegated to and the Hardcore config.yml section.
+    // Both features only trigger when another PLAYER kills you.
 
     public ToolType getPrimarySkillToolType(PrimarySkillType primarySkillType) {
         return primarySkillToolMap.get(primarySkillType);

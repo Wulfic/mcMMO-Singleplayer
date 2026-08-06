@@ -304,6 +304,13 @@ public final class BlockBreakListener {
         if (!BlockUtils.hasWoodcuttingXP(state) || !ItemUtils.isAxe(breaker.getMainHandStack())) {
             return;
         }
+        // Skills.Woodcutting.Tree_Feller_Sounds. Legacy played this from its BlockDamage handler --
+        // once each time the player STARTED breaking a log with Tree Feller up. The port has no
+        // block-damage hook, so it fires here instead: once per tree actually felled, which is the
+        // same "Tree Feller just did something" signal with less repetition.
+        if (McMMOMod.getGeneralConfig().getTreeFellerSoundsEnabled()) {
+            SoundManager.sendSound(mmoPlayer.getPlayer(), SoundType.FIZZ);
+        }
         TreeFellerProcessor.process(world, pos, breaker, mmoPlayer);
     }
 

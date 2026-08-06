@@ -16,6 +16,9 @@ import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
+import com.gmail.nossr50.util.sounds.SoundManager;
+import com.gmail.nossr50.util.sounds.SoundType;
+import net.minecraft.sound.SoundCategory;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -41,8 +44,7 @@ import org.jetbrains.annotations.NotNull;
  *   <li>{@code addEnchants} — <b>DONE</b>: its per-enchantment decision is
  *       {@link #resolveEnchantOutcome} here, and the enchant mutation lives in
  *       {@code RepairSalvageListener} (the only MC-typed part left);</li>
- *   <li>{@code placedAnvilCheck} — needs notification/sound adapters (the anvil-placed state itself
- *       is ported below);</li>
+ *   <li>{@code placedAnvilCheck} — <b>DONE</b>: {@link #placedAnvilCheck()};</li>
  *   <li>{@code checkConfirmation} — the anvil-use hook (K7) + notification; {@link
  *       com.gmail.nossr50.util.skills.SkillUtils#cooldownExpired} it depends on is now ported;</li>
  *   <li>{@code checkPlayerProcRepair} — the Super Repair RNG roll + notification; its decision is
@@ -247,6 +249,37 @@ public class RepairManager extends SkillManager {
 
     public void togglePlacedAnvil() {
         placedAnvil = !placedAnvil;
+    }
+
+    /**
+     * Tells the player, once per session, what the anvil they just placed is for. Ports legacy
+     * {@code RepairManager#placedAnvilCheck}, gated by {@code Skills.Repair.Anvil_Messages} and
+     * {@code Skills.Repair.Anvil_Placed_Sounds}.
+     *
+     * <p>⚠️ <b>This was recorded as blocked on "notification/sound adapters" that have existed for
+     * several phases.</b> {@link NotificationManager} and {@link SoundManager} are both live and used
+     * throughout the port, so the only thing still missing was the call. Its two config switches were
+     * therefore dead keys with a live-looking surface — item 4(c) of the 2026-08-06 wiring audit, and
+     * the same expired-"known gap"-comment shape recorded in issue #9.
+     *
+     * <p>The one-shot behaviour is legacy's: the flag latches on the first anvil placed and is never
+     * reset, so the hint appears once per login rather than on every anvil.
+     */
+    public void placedAnvilCheck() {
+        if (getPlacedAnvil()) {
+            return;
+        }
+
+        if (McMMOMod.getGeneralConfig().getRepairAnvilMessagesEnabled()) {
+            NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
+                    "Repair.Listener.Anvil");
+        }
+
+        if (McMMOMod.getGeneralConfig().getRepairAnvilPlaceSoundsEnabled()) {
+            SoundManager.sendCategorizedSound(getPlayer(), SoundType.ANVIL, SoundCategory.BLOCKS);
+        }
+
+        togglePlacedAnvil();
     }
 
     /*

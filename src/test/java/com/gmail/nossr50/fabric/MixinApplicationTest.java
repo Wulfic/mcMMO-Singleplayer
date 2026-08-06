@@ -24,6 +24,7 @@ import net.minecraft.entity.passive.GoatEntity;
 import net.minecraft.entity.passive.MooshroomEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.passive.SheepEntity;
+import net.minecraft.entity.projectile.FireworkRocketEntity;
 import net.minecraft.entity.passive.SnowGolemEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.FishingBobberEntity;
@@ -108,6 +109,25 @@ class MixinApplicationTest {
         // defaultRequire=1, a place signature that has drifted fails the injection and throws here
         // rather than silently letting placed-block XP farming back in-game.
         assertDoesNotThrow(() -> Class.forName(BlockItem.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+    }
+
+    /**
+     * ⚠️ The mixin whose failure is a <em>gameplay</em> failure, not a missing cosmetic.
+     *
+     * <p>{@code FireworkRocketEntityMixin} cancels the private {@code explode(ServerWorld)} for
+     * mcMMO's own fireworks. That method deals {@code 5 + 2 × explosions} damage to everything within
+     * five blocks, and mcMMO spawns its fireworks at the player's feet — so if this injection ever
+     * stops binding, levelling up starts hurting the player instead of congratulating them, and the
+     * fireworks still look exactly right while doing it.
+     *
+     * <p>With {@code defaultRequire=1} an unbound injector throws at class-load, so loading
+     * {@code FireworkRocketEntity} is the whole test: a renamed or refactored {@code explode} fails
+     * here rather than in someone's world.
+     */
+    @Test
+    void fireworkRocketMixinApplies() {
+        assertDoesNotThrow(() -> Class.forName(FireworkRocketEntity.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
     }
 

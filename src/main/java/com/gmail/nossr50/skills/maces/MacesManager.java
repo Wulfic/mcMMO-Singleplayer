@@ -10,7 +10,11 @@ import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
+import com.gmail.nossr50.util.skills.ParticleEffectUtils;
 import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.sounds.SoundManager;
+import com.gmail.nossr50.util.sounds.SoundType;
+import net.minecraft.sound.SoundCategory;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -93,22 +97,33 @@ public class MacesManager extends SkillManager {
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
                     "Maces.SubSkill.Cripple.Activated");
         }
-        target.applySlowness(getCrippleTickDuration(false), getCrippleStrength(false));
-        // PORT: legacy also played ParticleEffectUtils.playCrippleEffect(target) — deferred with the
-        // other combat particles until a particle adapter exists.
+        target.applySlowness(getCrippleTickDuration(), getCrippleStrength());
+        ParticleEffectUtils.playCrippleEffect(target);
+        // Legacy played this at the target's location; in singleplayer the only listener is the
+        // attacker, so it routes through SoundManager like every other mcMMO sound and stays
+        // governed by sounds.yml. 0.2F is legacy's pitch modifier.
+        SoundManager.sendCategorizedSound(getPlayer(), SoundType.CRIPPLE, SoundCategory.PLAYERS,
+                0.2F);
     }
 
-    public static int getCrippleTickDuration(boolean isPlayerTarget) {
-        // TODO: Make configurable
-        if (isPlayerTarget) {
-            return 20;
-        } else {
-            return 30;
-        }
+    /**
+     * How long a crippled target stays slowed, in ticks — now {@code Skills.Maces.Cripple
+     * .Duration_Ticks}, closing upstream's {@code TODO: Make configurable}.
+     *
+     * <p>⚠️ <b>The {@code isPlayerTarget} parameter is gone, not defaulted.</b> Legacy returned a
+     * weaker value (20 ticks / Slowness II) against players, and both call sites here passed
+     * {@code false} — except {@code MacesStatsRenderer}, which passed {@code true} to print
+     * "Cripple Duration: 1.0s vs Players, 1.5s vs Mobs" on {@code /mcstats maces}. There are no
+     * other players in singleplayer, so half that line was a number describing something that
+     * cannot happen. Same ruling as Unarmed's Disarm (audit item 1.1): strip the surface rather
+     * than leave a knob that can never be honest.
+     */
+    public static int getCrippleTickDuration() {
+        return McMMOMod.getAdvancedConfig().getCrippleDurationTicks();
     }
 
-    public static int getCrippleStrength(boolean isPlayerTarget) {
-        // TODO: Make configurable
-        return isPlayerTarget ? 1 : 2;
+    /** The Slowness amplifier Cripple applies. @see #getCrippleTickDuration() */
+    public static int getCrippleStrength() {
+        return McMMOMod.getAdvancedConfig().getCrippleSlownessLevel();
     }
 }

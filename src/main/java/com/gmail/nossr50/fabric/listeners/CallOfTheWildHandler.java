@@ -9,6 +9,8 @@ import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.util.TransientEntityTracker;
 import com.gmail.nossr50.util.player.NotificationManager;
+import com.gmail.nossr50.platform.PlatformLivingEntity;
+import com.gmail.nossr50.util.skills.ParticleEffectUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import com.gmail.nossr50.util.text.TextUtils;
@@ -135,6 +137,7 @@ public final class CallOfTheWildHandler {
                 player.getName().getString(), type.getDisplayName())));
 
         world.spawnEntity(entity);
+        ParticleEffectUtils.playCallOfTheWildEffect(new PlatformLivingEntity(entity));
 
         final CotwSummon tracked = new CotwSummon(entity, type, player.getUuid(),
                 McMMOMod.getTransientEntityTracker(), summon.getSummonLifespan());

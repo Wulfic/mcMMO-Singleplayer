@@ -1437,6 +1437,25 @@ public class AdvancedConfig extends ConfigLoader {
                 defaultCrippleValues[rank - 1]);
     }
 
+    /**
+     * How long a crippled mob stays slowed, in ticks. Defaults to legacy's hardcoded mob value (30).
+     *
+     * <p>Closes one of the two {@code // TODO: Make configurable} markers upstream left in
+     * {@code MacesManager}. Legacy also had a 20-tick <em>player</em> duration; that arm is gone with
+     * the rest of the PvP surface, since Cripple can only ever land on a mob here.
+     */
+    public int getCrippleDurationTicks() {
+        return config.getInt("Skills.Maces.Cripple.Duration_Ticks", 30);
+    }
+
+    /**
+     * The Slowness amplifier applied by Cripple. Defaults to legacy's hardcoded mob value (2, i.e.
+     * Slowness III). @see #getCrippleDurationTicks()
+     */
+    public int getCrippleSlownessLevel() {
+        return config.getInt("Skills.Maces.Cripple.Slowness_Level", 2);
+    }
+
     /* SPEARS */
     public double getMomentumChanceToApplyOnHit(int rank) {
         return config.getDouble("Skills.Spears.Momentum.Chance_To_Apply_On_Hit.Rank_" + rank,

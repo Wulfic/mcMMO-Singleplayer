@@ -18,6 +18,7 @@ import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
+import com.gmail.nossr50.util.skills.SkillGating;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import com.gmail.nossr50.util.text.StringUtils;
@@ -43,6 +44,7 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -128,6 +130,46 @@ public final class RepairSalvageListener {
             case REPAIR -> handleRepairInteraction(serverPlayer);
             case SALVAGE -> handleSalvageInteraction(serverPlayer, world, pos);
         };
+    }
+
+    /**
+     * "You have placed an anvil" — the one-shot hint fired when a player places one of mcMMO's two
+     * anvil blocks. Ports legacy {@code BlockListener#onBlockPlace}'s Repair/Salvage arms
+     * ({@code BlockListener:329-335}), and is called from {@code BlockPlaceMixin}.
+     *
+     * <p>⚠️ Both this and the two {@code placedAnvilCheck} bodies it calls were recorded as deferred
+     * "cosmetic, Pass 2" work blocked on adapters that already existed. The visible symptom was four
+     * live-looking {@code config.yml} switches — {@code Skills.{Repair,Salvage}.Anvil_Messages} and
+     * {@code …Anvil_Placed_Sounds} — that no code read (2026-08-06 wiring audit, item 4(c)).
+     *
+     * <p>Unlike the click path there is no held-item test: legacy notifies on placement regardless of
+     * what the player is carrying, because the whole point is to explain the block they just put down.
+     */
+    public static void onAnvilPlaced(@NotNull World world, @NotNull BlockPos pos,
+            @Nullable PlayerEntity player) {
+        if (!(player instanceof ServerPlayerEntity serverPlayer)) {
+            return;
+        }
+        final AnvilKind kind = anvilKindAt(world, pos);
+        if (kind == null) {
+            return;
+        }
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        if (mmoPlayer == null) {
+            return;
+        }
+        switch (kind) {
+            case REPAIR -> {
+                if (SkillGating.isSkillEnabled(PrimarySkillType.REPAIR)) {
+                    mmoPlayer.getRepairManager().placedAnvilCheck();
+                }
+            }
+            case SALVAGE -> {
+                if (SkillGating.isSkillEnabled(PrimarySkillType.SALVAGE)) {
+                    mmoPlayer.getSalvageManager().placedAnvilCheck();
+                }
+            }
+        }
     }
 
     /** The mcMMO anvil at {@code pos}, or {@code null} when that block is neither anvil. */

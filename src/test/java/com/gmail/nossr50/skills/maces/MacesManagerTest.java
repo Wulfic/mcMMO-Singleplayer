@@ -2,8 +2,10 @@ package com.gmail.nossr50.skills.maces;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -78,12 +80,34 @@ class MacesManagerTest {
         assertEquals(2.5D, macesManager.getCrushDamage(), 1e-9, "rank 2 → 2.5");
     }
 
+    /**
+     * The Cripple slowness now comes from {@code advanced.yml} rather than two hardcoded constants
+     * (upstream's {@code TODO: Make configurable}). The shipped values are legacy's mob-target pair;
+     * its weaker player-target pair went with the rest of the unreachable PvP surface.
+     */
     @Test
-    void crippleConstantsDependOnTargetType() {
-        assertEquals(20, MacesManager.getCrippleTickDuration(true), "player target → 20 ticks");
-        assertEquals(30, MacesManager.getCrippleTickDuration(false), "mob target → 30 ticks");
-        assertEquals(1, MacesManager.getCrippleStrength(true), "player target → strength 1");
-        assertEquals(2, MacesManager.getCrippleStrength(false), "mob target → strength 2");
+    void crippleSlownessComesFromConfig() {
+        assertEquals(30, MacesManager.getCrippleTickDuration(), "shipped Duration_Ticks");
+        assertEquals(2, MacesManager.getCrippleStrength(), "shipped Slowness_Level");
+    }
+
+    /**
+     * ⚠️ The assertion that makes the one above mean something. Both shipped values happen to equal
+     * the constants they replaced, so a test pinning 30/2 passes just as happily against code that
+     * still ignores the config entirely — the vacuous shape this project keeps re-finding. Retuning
+     * the key must move the number.
+     */
+    @Test
+    void retuningTheConfigMovesTheCrippleSlowness() {
+        final AdvancedConfig retuned = spy(McMMOMod.getAdvancedConfig());
+        doReturn(77).when(retuned).getCrippleDurationTicks();
+        doReturn(4).when(retuned).getCrippleSlownessLevel();
+        McMMOMod.setAdvancedConfig(retuned);
+
+        assertEquals(77, MacesManager.getCrippleTickDuration(),
+                "duration must track Skills.Maces.Cripple.Duration_Ticks, not a constant");
+        assertEquals(4, MacesManager.getCrippleStrength(),
+                "amplifier must track Skills.Maces.Cripple.Slowness_Level, not a constant");
     }
 
     // --- Cripple ------------------------------------------------------------

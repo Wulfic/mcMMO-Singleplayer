@@ -12,6 +12,7 @@ import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
+import com.gmail.nossr50.util.skills.ParticleEffectUtils;
 import com.gmail.nossr50.util.skills.RankUtils;
 import org.jetbrains.annotations.NotNull;
 
@@ -238,9 +239,8 @@ public class TamingManager extends SkillManager {
      * total (mirroring legacy, where {@code pummel} sits inside {@code processTamingCombat} but never
      * touches {@code boostedDamage}).
      *
-     * <p>Dropped: the {@code ParticleEffectUtils.playGreaterImpactEffect} call (no particle adapter,
-     * the same deferral as Dodge/Rupture/Greater Impact) and the {@code target instanceof Player}
-     * knocked-back notification (dead in singleplayer — the only player is the wolf's owner).
+     * <p>Dropped: the {@code target instanceof Player} knocked-back notification (dead in
+     * singleplayer — the only player is the wolf's owner).
      *
      * @param target the entity the wolf hit, flung back on a successful roll
      * @param wolf   the owner's wolf, whose look direction sets the knockback vector
@@ -254,6 +254,7 @@ public class TamingManager extends SkillManager {
             return;
         }
         target.setVelocityAlongLookDirection(wolf, PUMMEL_KNOCKBACK);
+        ParticleEffectUtils.playGreaterImpactEffect(target);
     }
 
     /**

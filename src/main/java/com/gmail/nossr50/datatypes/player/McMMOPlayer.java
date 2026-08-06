@@ -46,6 +46,7 @@ import com.gmail.nossr50.util.experience.ExperienceBarManager;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.PlayerLevelUtils;
 import com.gmail.nossr50.util.skills.Milestones;
+import com.gmail.nossr50.util.skills.ParticleEffectUtils;
 import com.gmail.nossr50.util.skills.PerksUtils;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillGating;
@@ -563,6 +564,11 @@ public class McMMOPlayer {
 
             NotificationManager.sendPlayerLevelUpNotification(this, primarySkillType, levelsGained,
                     profile.getSkillLevel(primarySkillType));
+
+            // The milestone firework, every Particles.LevelUp_Tier levels of this skill. Fed the
+            // NEW level rather than levelsGained: a single XP award can cross several levels at
+            // once, and it is the level reached that decides whether a tier boundary was hit.
+            ParticleEffectUtils.playLevelUpEffect(player, profile.getSkillLevel(primarySkillType));
 
             if (milestonesEnabled) {
                 awardMilestoneAdvancements(milestoneSnapshots, oldPowerLevel);
@@ -1224,6 +1230,7 @@ public class McMMOPlayer {
         }
 
         SoundManager.worldSendSound(player, SoundType.ABILITY_ACTIVATED_GENERIC);
+        ParticleEffectUtils.playAbilityEnabledEffect(player);
 
         // If the held tool is still buffed from a prior activation, clear it so Efficiency doesn't stack.
         if (superAbilityType == SuperAbilityType.SUPER_BREAKER

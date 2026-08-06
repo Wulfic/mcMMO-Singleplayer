@@ -34,6 +34,7 @@ public final class McMMOSettings {
     private static final String CAT_ABILITIES = "Abilities";
     private static final String CAT_CAPS = "Skill Level Caps";
     private static final String CAT_EXPLOITS = "Anti-Cheat";
+    private static final String CAT_EFFECTS = "Effects";
 
     /**
      * Skills that have an {@code Experience_Formula.Skill_Multiplier.<name>} key.
@@ -144,6 +145,55 @@ public final class McMMOSettings {
         list.add(ConfigSetting.bool(CAT_GENERAL, CONFIG_YML, "Skills.Herbalism.Prevent_AFK_Leveling",
                 true, "Herbalism: Prevent AFK Leveling",
                 "Blocks Herbalism XP from crops harvested while riding (anti-AFK-farm)."));
+
+        // ---- Effects: particles, fireworks and the anvil/Tree-Feller feedback (config.yml) ------
+        // GitHub-audit item 4(c). Every switch on this tab was a DEAD KEY until it was wired: the
+        // port had no particle system at all (legacy's ParticleEffectUtils was never carried over),
+        // and the two anvil hints plus the Tree Feller sound were each recorded as "deferred, needs
+        // a notification/sound adapter" long after both adapters shipped.
+        //
+        // ⚠️ The five firework knobs were dead in UPSTREAM too, not just here — legacy's
+        // fireworkParticleShower is commented out and names a metadata key that no longer exists on
+        // its own mcMMO class, so the fragment would not even compile. They are wired here for the
+        // first time; see ParticleEffectUtils#spawnFirework for why a firework needs a mixin to stop
+        // it damaging the player it is congratulating.
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Bleed", true,
+                "Rupture Bleed Particles", "Blood puff on each tick of a Swords Rupture bleed."));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Cripple", true,
+                "Cripple Particles", "Anvil-shard burst when Maces' Cripple procs."));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Dodge", true,
+                "Dodge Particles", "Smoke puff when Agility dodges a hit."));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Greater_Impact", true,
+                "Greater Impact Particles",
+                "Explosion puff when Axes' Greater Impact or a wolf's Pummel sends a mob flying."));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Call_of_the_Wild", true,
+                "Call of the Wild Particles", "Flame burst around a freshly summoned Taming pet."));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Ability_Activation", false,
+                "Super Ability Firework (on)",
+                "Launch a green firework when a super ability activates. Harmless — mcMMO's own "
+                        + "fireworks deal no damage."));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Ability_Deactivation", false,
+                "Super Ability Firework (off)",
+                "Launch a red firework when a super ability expires."));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.LevelUp_Enabled", true,
+                "Milestone Firework", "Launch a blue firework on milestone skill levels."));
+        list.add(ConfigSetting.integer(CAT_EFFECTS, CONFIG_YML, "Particles.LevelUp_Tier", 100, 1,
+                1000, "Milestone Firework Interval",
+                "A firework fires each time a skill crosses a multiple of this many levels."));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.LargeFireworks", true,
+                "Large Firework Bursts", "Off = small bursts instead of large ones."));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Skills.Repair.Anvil_Messages", true,
+                "Repair: Anvil Placed Message",
+                "One-shot hint the first time you place a Repair anvil (an iron block)."));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Skills.Repair.Anvil_Placed_Sounds",
+                true, "Repair: Anvil Placed Sound", null));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Skills.Salvage.Anvil_Messages", true,
+                "Salvage: Anvil Placed Message",
+                "One-shot hint the first time you place a Salvage anvil (a gold block)."));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Skills.Salvage.Anvil_Placed_Sounds",
+                true, "Salvage: Anvil Placed Sound", null));
+        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Skills.Woodcutting.Tree_Feller_Sounds",
+                true, "Tree Feller Sound", "Hiss each time Tree Feller drops a tree."));
 
         // ---- Experience (experience.yml) -------------------------------------------------------
         list.add(ConfigSetting.decimal(CAT_XP, EXPERIENCE_YML, "Experience_Formula.Multiplier.Global",

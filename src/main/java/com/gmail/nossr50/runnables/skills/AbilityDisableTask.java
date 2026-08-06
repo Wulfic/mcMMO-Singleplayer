@@ -7,6 +7,7 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.CancellableRunnable;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.NotificationManager;
+import com.gmail.nossr50.util.skills.ParticleEffectUtils;
 import com.gmail.nossr50.util.skills.PerksUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
 
@@ -54,6 +55,8 @@ public class AbilityDisableTask extends CancellableRunnable {
 
         mmoPlayer.setAbilityMode(ability, false);
         mmoPlayer.setAbilityInformed(ability, false);
+        // Legacy's own call sat right here, commented out (AbilityDisableTask:56 upstream).
+        ParticleEffectUtils.playAbilityDisabledEffect(mmoPlayer.getPlayer());
 
         // Clear the Super/Giga Breaker dig-speed boost from any tool it was applied to.
         if (ability == SuperAbilityType.SUPER_BREAKER
