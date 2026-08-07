@@ -261,6 +261,28 @@ public class GeneralConfig extends ConfigLoader {
         return config.getBoolean("Abilities.Activation.Only_Activate_When_Sneaking", false);
     }
 
+    /**
+     * Whether an item in the <b>off hand</b> suppresses super-ability readying — legacy
+     * {@code PlayerListener} L872-875 ({@code RIGHT_CLICK_BLOCK}) and L952-955
+     * ({@code RIGHT_CLICK_AIR}), whose rule is "off hand not empty, not in a vehicle, not sneaking
+     * ⇒ skip the whole arm".
+     *
+     * <p>⚠️ <b>Ships {@code false}, deliberately diverging from upstream.</b> Readying is step 1 of
+     * 2 and {@code checkAbilityActivation} is only reachable through
+     * {@code getToolPreparationMode(tool)}, so this one condition switches off <em>every</em> super
+     * ability in the mod at once — with no message and no sound. A torch in the off hand is the
+     * canonical mining loadout, so upstream's rule silently disables the feature for precisely the
+     * player who uses it most (found live 2026-08-06: 33 torches in the off hand, zero super-ability
+     * activations for four days).
+     *
+     * <p>{@code false} is safe as a getter default as well as a shipped one: this key is new, so a
+     * config file written before it existed has no entry and must behave the new way rather than
+     * inherit the old rule by omission.
+     */
+    public boolean getOffhandBlocksReadying() {
+        return config.getBoolean("Abilities.Activation.Offhand_Blocks_Readying", false);
+    }
+
     public boolean getAbilitiesGateEnabled() {
         return config.getBoolean("Abilities.Activation.Level_Gate_Abilities");
     }

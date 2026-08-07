@@ -1,5 +1,6 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
@@ -133,6 +134,7 @@ public final class SuperAbilityListener {
         // The off-hand rule gates the whole RIGHT_CLICK_BLOCK arm — both the tool-skill activation
         // below and the Herbalism interactions after it (legacy's break at the top of the case).
         if (offhandBlocksActivation(serverPlayer)) {
+            hintOffhandBlockedTheReady(mmoPlayer, serverPlayer);
             return ActionResult.PASS;
         }
 
@@ -324,7 +326,11 @@ public final class SuperAbilityListener {
             return ActionResult.PASS;
         }
         final McMMOPlayer mmoPlayer = resolve(player);
-        if (mmoPlayer == null || offhandBlocksActivation((ServerPlayerEntity) player)) {
+        if (mmoPlayer == null) {
+            return ActionResult.PASS;
+        }
+        if (offhandBlocksActivation((ServerPlayerEntity) player)) {
+            hintOffhandBlockedTheReady(mmoPlayer, (ServerPlayerEntity) player);
             return ActionResult.PASS;
         }
 
@@ -642,10 +648,77 @@ public final class SuperAbilityListener {
 
     /**
      * Legacy off-hand rule: holding an item in the off hand suppresses activation unless the player is
-     * mounted or sneaking (so shield-raising / off-hand food use doesn't fire abilities).
+     * mounted or sneaking (so shield-raising / off-hand food use doesn't fire abilities). Ports
+     * legacy {@code PlayerListener} L872-875 / L952-955 verbatim — <b>behind a config switch that
+     * ships off</b> ({@code Abilities.Activation.Offhand_Blocks_Readying}).
+     *
+     * <p>⚠️ <b>Why this one is switchable when the rest of the activation chain is not.</b> Readying
+     * is step 1 of 2 and {@link McMMOPlayer#checkAbilityActivation} is only ever reached through
+     * {@link McMMOPlayer#getToolPreparationMode}, so a {@code true} here does not suppress "a" super
+     * ability — it suppresses <em>all</em> of them, in both the block and the air arm, with no
+     * message and no sound. Found live on 2026-08-06: a player with 33 torches in the off hand had
+     * had every super ability in the mod switched off for four days and there was nothing in any log
+     * to say so. Upstream's rule exists to stop an off-hand shield-raise or food-eat from arming a
+     * tool; the cost of enforcing it is losing the feature for anyone who mines with a torch in the
+     * off hand, which is how mining is normally done.
+     *
+     * <p>Note this is a gate on the <em>right-click</em>, never a widening of what may be readied:
+     * readying still reads the main hand only ({@code PlatformPlayer#isHoldingTool}), so an mcMMO
+     * tool sitting in the off-hand slot readies nothing whether this switch is on or off.
+     *
+     * <p>Package-private for {@code SuperAbilityListenerOffhandTest}.
      */
-    private static boolean offhandBlocksActivation(ServerPlayerEntity player) {
+    static boolean offhandBlocksActivation(ServerPlayerEntity player) {
+        final GeneralConfig config = McMMOMod.getGeneralConfig();
+        if (config == null || !config.getOffhandBlocksReadying()) {
+            return false;
+        }
         return !player.getOffHandStack().isEmpty() && !player.hasVehicle() && !player.isSneaking();
+    }
+
+    /**
+     * The tool types {@link #readyToolSkills} plus the Herbalism arm can arm — i.e. every main-hand
+     * stack for which a blocked right-click actually costs the player something.
+     */
+    private static final ToolType[] READYABLE_TOOLS = {ToolType.AXE, ToolType.FISTS, ToolType.HOE,
+            ToolType.PICKAXE, ToolType.SHOVEL, ToolType.SWORD};
+
+    /**
+     * Tell the player their off hand just ate a tool-ready, so the rule above can never be silent for
+     * whoever switches it on. The mechanic is opt-in; being unable to work out why every super
+     * ability stopped existing must not be.
+     *
+     * <p>Two filters, both load-bearing. It fires only when the main hand actually holds something
+     * {@link #readyToolSkills} would have armed — a right-click with a block or food in hand was
+     * never going to ready anything, so calling it blocked would be a lie — and it is throttled on
+     * {@link McMMOPlayer#claimOffhandBlockedHint}, because this path runs on <em>every</em>
+     * right-click and an un-throttled hint would be one message per torch placed.
+     */
+    private static void hintOffhandBlockedTheReady(McMMOPlayer mmoPlayer,
+            ServerPlayerEntity player) {
+        if (!McMMOMod.getGeneralConfig().getAbilityMessagesEnabled()
+                || !wouldHaveReadiedATool(player)
+                || !mmoPlayer.claimOffhandBlockedHint(System.currentTimeMillis())) {
+            return;
+        }
+        NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.REQUIREMENTS_NOT_MET,
+                "Skills.OffhandBlocksReady");
+    }
+
+    /**
+     * Whether the main-hand stack is one the ready would have armed. Reads the <b>main</b> hand, as
+     * every readying decision in this class does.
+     *
+     * <p>Package-private for {@code SuperAbilityListenerOffhandTest}.
+     */
+    static boolean wouldHaveReadiedATool(ServerPlayerEntity player) {
+        final ItemStack mainHand = player.getMainHandStack();
+        for (ToolType tool : READYABLE_TOOLS) {
+            if (tool.inHand(mainHand)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static McMMOPlayer resolve(PlayerEntity player) {

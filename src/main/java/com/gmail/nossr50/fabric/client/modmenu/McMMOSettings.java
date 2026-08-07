@@ -268,6 +268,17 @@ public final class McMMOSettings {
         list.add(ConfigSetting.bool(CAT_ABILITIES, CONFIG_YML,
                 "Abilities.Activation.Only_Activate_When_Sneaking", false,
                 "Only Activate When Sneaking", null));
+        // Ships OFF, unlike upstream. The tooltip has to explain the whole mechanic because turning
+        // this on does not restrict one ability -- it switches every super ability in the mod off
+        // for anyone who mines with a torch in the off hand, which is how mining is normally done.
+        list.add(ConfigSetting.bool(CAT_ABILITIES, CONFIG_YML,
+                "Abilities.Activation.Offhand_Blocks_Readying", false,
+                "Off-Hand Item Blocks Readying",
+                "Upstream mcMMO refuses to ready a tool while you hold anything in your OFF hand, "
+                        + "unless you are sneaking or riding something. Readying is the first half "
+                        + "of every super ability, so turning this on switches them ALL off "
+                        + "whenever your off hand is occupied - a torch included. Off by default; "
+                        + "turn it on only if you want upstream's behaviour."));
         list.add(ConfigSetting.integer(CAT_ABILITIES, CONFIG_YML,
                 "Abilities.Limits.Tree_Feller_Threshold", 1000, 1, 100000,
                 "Tree Feller Block Limit", null));

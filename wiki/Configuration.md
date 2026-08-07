@@ -120,6 +120,22 @@ Abilities:
         Only_Activate_When_Sneaking: true
 ```
 
+### Restore upstream's off-hand rule
+
+Upstream mcMMO won't ready a tool while your off hand is occupied (unless you're sneaking or riding
+something). Readying is the first half of every super ability, so that rule turns **all** of them off
+whenever you carry, say, a torch in your off hand. This port ships it disabled:
+
+```yaml
+Abilities:
+    Activation:
+        Offhand_Blocks_Readying: true   # false by default
+```
+
+With it on you get a throttled reminder whenever your off hand swallows a ready, so it never fails
+silently. Note this is only about which *right-click* arms a tool — mcMMO reads your **main hand**
+only, so an off-hand pickaxe readies nothing either way.
+
 ### Change the ability trigger items
 
 ```yaml

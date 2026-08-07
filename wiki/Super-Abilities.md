@@ -23,6 +23,18 @@ Most abilities use mcMMO's traditional **ready → activate** gesture:
 
 The three **combat** abilities (Serrated Strikes, Skull Splitter, Berserk) also arm on a right-click, then fire on your **next hit** rather than on a block.
 
+> **Your off hand does not stop you (a deliberate difference from upstream).**
+> Upstream mcMMO refuses to ready a tool while you're holding *anything* in your off hand, unless
+> you're sneaking or riding something. Because readying is step 1 of 2, that one rule switches off
+> **every** super ability at once — and a torch in the off hand is simply how people mine, so the
+> feature silently vanishes for the players most likely to want it. This port ships that rule
+> **disabled**. Set `Abilities.Activation.Offhand_Blocks_Readying: true` in `config.yml` (or the
+> Abilities tab in the settings screen) if you want upstream's behaviour; with it on, mcMMO tells you
+> once every five minutes when your off hand eats a ready, so it can't be silent.
+>
+> Either way the off-hand slot is **never** a tool slot: a pickaxe there readies nothing. mcMMO only
+> ever looks at your main hand.
+
 ### Super Breaker and bonus drops
 
 Super Breaker does **two** things to your loot, and until recently only the second one existed:
@@ -128,6 +140,7 @@ Abilities:
 | `Cooldowns.<Ability>` | Seconds before you can use it again. |
 | `Max_Seconds.<Ability>` | Caps how long it can run. **0 = uncapped**, duration scales with skill level. |
 | `Only_Activate_When_Sneaking` | Require sneaking to ready an ability. Handy if you keep firing Super Breaker while building. |
+| `Offhand_Blocks_Readying` | Upstream's rule: an occupied off hand blocks readying (so it blocks **every** super ability). **Ships `false`** — see the note above. |
 | `Tree_Feller_Threshold` | Maximum logs a single Tree Feller will drop. |
 | `Tools.Durability_Loss` | Extra durability consumed while an ability is active. |
 

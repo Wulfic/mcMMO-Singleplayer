@@ -87,6 +87,11 @@ Abilities:
     Messages: true
     Activation:
         Only_Activate_When_Sneaking: false
+        # Upstream mcMMO refuses to ready a tool while you are holding anything in your OFF hand
+        # (unless you are sneaking or riding something). Readying is step 1 of 2, so that one rule
+        # switches off every super ability at once, silently -- and a torch in the off hand is the
+        # normal way to mine. This port therefore ships it OFF. Set it to true for upstream behaviour.
+        Offhand_Blocks_Readying: false
     Cooldowns:
         Berserk: 240
         Blast_Mining: 60

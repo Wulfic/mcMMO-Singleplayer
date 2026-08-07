@@ -108,6 +108,16 @@ public class McMMOPlayer {
 
     private final Map<ToolType, Boolean> toolMode = new EnumMap<>(ToolType.class);
 
+    /** How long the off-hand hint stays quiet after being shown. See {@link #claimOffhandBlockedHint}. */
+    private static final long OFFHAND_HINT_INTERVAL_MILLIS = 300_000L;
+
+    /**
+     * Wall-clock millis before which the "your off hand blocked the ready" hint stays silent.
+     * {@code 0} — the initial value — means it has never been shown, so the first blocked ready
+     * always speaks.
+     */
+    private long nextOffhandBlockedHintMillis;
+
     private boolean isUsingUnarmed;
 
     /**
@@ -918,6 +928,29 @@ public class McMMOPlayer {
 
     public boolean getAbilityUse() {
         return abilityUse;
+    }
+
+    /**
+     * Whether the "an off-hand item is blocking super-ability readying" hint may be shown now,
+     * claiming the slot for {@value #OFFHAND_HINT_INTERVAL_MILLIS} ms if so.
+     *
+     * <p>⚠️ The throttle is the whole point. {@code SuperAbilityListener}'s off-hand rule is
+     * evaluated on <em>every</em> right-click, so a player mining with a torch in the off hand would
+     * otherwise get one message per torch placed — turning a warning about a silent mechanic into
+     * spam, which players mute, which makes it silent again.
+     *
+     * <p>Transient, like {@link #getAbilityUse()} and the ability/tool modes beside it: a fresh
+     * session should say it once more rather than inherit a stale timer from the last one.
+     *
+     * @param nowMillis current wall-clock time in millis
+     * @return whether the caller may show the hint
+     */
+    public boolean claimOffhandBlockedHint(long nowMillis) {
+        if (nowMillis < nextOffhandBlockedHintMillis) {
+            return false;
+        }
+        nextOffhandBlockedHintMillis = nowMillis + OFFHAND_HINT_INTERVAL_MILLIS;
+        return true;
     }
 
     public void toggleAbilityUse() {
