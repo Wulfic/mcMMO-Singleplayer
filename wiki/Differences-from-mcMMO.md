@@ -6,7 +6,7 @@ This is a **port**, not a fork that tracks upstream. It targets single-player, a
 
 ## Added
 
-Six skills upstream doesn't have, plus a restructure.
+**Eight primary skills upstream doesn't have**, plus a restructure.
 
 ### The movement group
 
@@ -30,6 +30,18 @@ Trained by sneaking. **Padfoot**, **Assassin** (backstab), **Smoke Bomb** super 
 
 Trained by taking damage with every armour slot empty. **Iron Skin** (real armour points at four tiers) and **Thorny Skin**. Full details: [Unarmored](Unarmored).
 
+### Husbandry
+
+The livestock lifecycle — six XP verbs (breed, raise, feed a baby, shear, harvest a hive, milk or brush), eight passives and the **Herdsman's Call** super ability. Its boundary against Taming is **the verb, never the species**: Taming pays once for making an animal yours, Husbandry pays repeatedly for what you do with it afterwards. Full details: [Husbandry](Husbandry).
+
+### Hunter
+
+A combat skill that is **not a weapon skill** — it cares only what died, never what you swung. It is the only skill in the mod that progresses on two independent axes: an ordinary XP level, and a per-creature kill counter that grants permanent bonus damage against *that* creature. It is also the only combat skill paid **per kill** rather than per hit. Full details: [Hunter](Hunter).
+
+### Cooking
+
+**Smelting's other half.** The two skills share the furnace and split it by input — ore pays Smelting, food pays Cooking, never both. Three passives (**Master Chef**, **Power Cook**, **Kitchen Efficiency**), no super ability, and a single anti-farm gate (`Max_Cooks_Per_Hour`) because an item carries no record of where it came from. Full details: [Cooking](Cooking).
+
 ### The speed-normalised XP model
 
 Movement and sneak XP are paid **per second** of travel with distance clamped at a reference speed, rather than per block. This is a genuinely new XP model, and it exists so that speed buffs aren't XP multipliers and so a movement skill can't accelerate its own levelling. [Explanation](Movement-Skills#how-movement-xp-works).
@@ -41,6 +53,16 @@ Movement and sneak XP are paid **per second** of travel with distance clamped at
 ### Combat XP is per hit, not per kill
 
 A deliberate ruling that shifts the whole combat XP rate. A tanky mob you hit fifteen times pays fifteen times.
+
+### Limit Break ships off, and off is invisible
+
+All eight Limit Break sub-skills **are** implemented here. They ship **disabled**.
+
+Upstream gates the mechanic behind `Skills.General.LimitBreak.AllowPVE`, which effectively means "PVP only". Single-player has no PVP, so leaving that gate shut would make it unreachable and opening it by default would be a large unannounced buff: against mobs the bonus is *not* nerfed the way it is against a lightly-armoured player. Rank N grants a flat **+N damage**, from +1 at level 100 up to **+10 at level 1000** — more than a diamond sword's base damage.
+
+So it is a deliberate opt-in. **While it is off it is completely invisible**: no damage, no `/mcstats` entry, no rank plaques, nothing nagging you about a mechanic you aren't using. Turn it on in **Settings → Abilities → Limit Break**, or set `AllowPVE: true` in `advanced.yml`.
+
+> ⚠️ Once on, the bonus applies to **every non-player entity**. If you run mods that add humanoid NPCs, those NPCs take the full bonus too.
 
 ### `/mcstats <skill>` replaced the per-skill commands
 
@@ -79,18 +101,16 @@ Stored in `<world save>/mcmmo/players/`, not in a global profile or a database. 
 ### Features
 
 - **Chimaera Wing**
-- **Limit Break** — implemented for all eight weapons, but **off by default**. Upstream gates it behind `Skills.General.LimitBreak.AllowPVE`, meaning "PVP only"; singleplayer has no PVP, so leaving that gate shut would make the mechanic unreachable. It is instead a deliberate opt-in, because against mobs the bonus is *not* nerfed the way it is against a lightly-armoured player: rank N grants a flat +N damage, from +1 at level 100 up to +10 at level 1000 — more than a diamond sword's base damage. Turn it on in **Settings → Abilities → Limit Break**, or set `AllowPVE: true` in `advanced.yml`. While it is off it is completely invisible: no damage, no `/mcstats` entry, no rank plaques. ⚠️ When on, the bonus applies to every non-player entity, so mods adding humanoid NPCs will have those NPCs take it too.
-- **Spears' super ability** — a registered placeholder, like the Tridents and Maces ones (see below)
+- **Flux Mining** — never ported. Its config knobs were culled rather than left as switches over nothing.
+- **Five super abilities** — see below.
 
 ---
 
-## ⚠️ Dead enums — present but doing nothing
+## The five unimplemented super abilities
 
-These appear in `/mcstats` and in the config files, and have full rank ladders. **No code reads them.** They are listed here so you don't waste time levelling toward them.
+**Explosive Shot** (Archery), **Super Shotgun** (Crossbows), and the **Tridents**, **Maces** and **Spears** abilities are registered `SuperAbilityType` constants with **no behaviour**. Upstream never shipped any of them either — this is not a Fabric limitation.
 
-### Five unimplemented super abilities
-
-**Explosive Shot** (Archery), **Super Shotgun** (Crossbows), and the **Tridents**, **Maces** and **Spears** abilities. All are registered placeholders with no behaviour.
+They are listed here for completeness rather than as a warning, because **there is nothing to level toward and nothing to see**: they have no rank ladders in `skillranks.yml`, no tuning block in `advanced.yml`, and no `/mcstats` line. Apart from their locale strings, the constants are invisible from inside the game.
 
 ---
 

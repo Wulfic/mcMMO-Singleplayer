@@ -20,7 +20,7 @@ RPG skills, levelling, sub-skills and active super abilities for vanilla Minecra
 |---|---|
 | **[Installation](Installation)** | Getting the mod running, and where files land. |
 | **[Commands](Commands)** | Every command the port actually has (it is a short list). |
-| **[Skills](Skills)** | All 26 skills and every sub-skill, with what is and isn't implemented. |
+| **[Skills](Skills)** | All 27 skills and every sub-skill, with what is and isn't implemented. |
 | **[Super Abilities](Super-Abilities)** | The two-step gesture, and the item-triggered actives. |
 | **[XP and Levelling](XP-and-Levelling)** | RetroMode, the XP curve, XP bars, and the speed-normalised movement model. |
 | **[Configuration](Configuration)** | Every config file and the knobs that matter. |
@@ -33,7 +33,7 @@ RPG skills, levelling, sub-skills and active super abilities for vanilla Minecra
 
 ## What's different in one paragraph
 
-Everything multiplayer was **removed**, not disabled — parties, party chat, teleport, XP sharing, scoreboards, admin broadcasts, MySQL and the database conversion tooling are all gone, along with most of the command tree. What's left is the skill system itself, plus **eight skills upstream mcMMO does not have**: Acrobatics was renamed **Agility** and restructured into a derived child skill of three new movement skills (**Parkour**, **Swimming**, **Flying**), and four brand-new skills were added — **Stealth**, **Unarmored**, **[Husbandry](Husbandry)** (the livestock lifecycle) and **[Hunter](Hunter)** (a weapon-agnostic skill that cares only what died).
+Everything multiplayer was **removed**, not disabled — parties, party chat, teleport, XP sharing, scoreboards, admin broadcasts, MySQL and the database conversion tooling are all gone, along with most of the command tree. What's left is the skill system itself, plus **eight primary skills upstream mcMMO does not have**: Acrobatics was renamed **Agility** and restructured into a derived child skill of three new movement skills (**Parkour**, **Swimming**, **Flying**), and five brand-new skills were added — **Stealth**, **Unarmored**, **[Husbandry](Husbandry)** (the livestock lifecycle), **[Hunter](Hunter)** (a weapon-agnostic skill that cares only what died) and **[Cooking](Cooking)** (Smelting's other half — the food side of the furnace).
 
 The mod runs on both sides (`"environment": "*"`) and works in single-player, on LAN, and on a dedicated Fabric server — but with the multiplayer layer gone, a server install is just "everyone has their own skills."
 
@@ -41,12 +41,12 @@ The mod runs on both sides (`"environment": "*"`) and works in single-player, on
 
 ## Status, honestly
 
-The port is **feature-complete** against upstream mcMMO's single-player-relevant surface, boots clean, and carries a ~1,300-case JUnit suite that runs as part of `./gradlew build`.
+The port is **feature-complete** against upstream mcMMO's single-player-relevant surface, boots clean, and carries a ~1,600-case JUnit suite that runs as part of `./gradlew build`.
 
 It is also **young**:
 
-- The eight new skills are **code-complete but barely play-tested** — [Husbandry](Husbandry) and [Hunter](Hunter) have not been played at all. Their XP rates, reference speeds and drop chances are starting estimates, not measured numbers — the tuning comments in `experience.yml` say so in as many words.
-- The eight **Limit Break** sub-skills are **dead enums**. They show up in `/mcstats` and in the config files, they have ranks, and they do nothing at all. See [Differences from mcMMO](Differences-from-mcMMO#not-ported).
+- The new skills are **code-complete but lightly play-tested**. Live play has started and has already produced a dozen fixed bug reports, but [Cooking](Cooking) in particular has not been played at all. XP rates, reference speeds and drop chances are starting estimates, not measured numbers — the tuning comments in `experience.yml` say so in as many words.
+- The eight **Limit Break** sub-skills are implemented but ship **off**, and off is completely invisible: no damage, no `/mcstats` entry, no rank plaques. Against mobs the bonus is not nerfed the way upstream nerfs it against an armoured player, and +10 is more than a diamond sword's base damage. Turn it on in **Settings → Abilities → Limit Break**. See [Differences from mcMMO](Differences-from-mcMMO#features).
 - Balance feedback and bug reports are genuinely useful right now. Please file issues.
 
 ---

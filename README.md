@@ -67,7 +67,7 @@ every non‑child skill.
 
 ## Skills
 
-**26 skills** — **23 primary** skills that earn XP directly, plus **3 child skills** whose level is
+**27 skills** — **24 primary** skills that earn XP directly, plus **3 child skills** whose level is
 the average of their parents and which earn no XP of their own.
 
 | Category | Skills |
@@ -75,14 +75,14 @@ the average of their parents and which earn no XP of their own.
 | **Gathering** | Mining, Woodcutting, Herbalism, Excavation, Fishing, **Husbandry** |
 | **Combat** | Swords, Axes, Unarmed, Archery, Crossbows, Tridents, Maces, Spears, Taming, **Hunter** |
 | **Movement** | **Parkour**, **Swimming**, **Flying** |
-| **Misc** | **Stealth**, **Unarmored**, Repair, Alchemy |
+| **Misc** | **Stealth**, **Unarmored**, Repair, Alchemy, **Cooking** |
 | **Child skills** | **Agility** (avg. of Parkour + Swimming + Flying), **Salvage** (avg. of Repair + Fishing), **Smelting** (avg. of Mining + Repair) |
 
 ### New in this port
 
-Eight skills that upstream mcMMO does not have. **Acrobatics was renamed to Agility** and
-restructured: it now owns ten movement sub-skills but earns no XP itself — instead it is the mean of
-three new primary skills, one per medium you travel through.
+Eight primary skills that upstream mcMMO does not have. **Acrobatics was renamed to Agility** and
+restructured: it earns no XP itself and is instead the mean of three new primary skills, one per
+medium you travel through, keeping only the two perks that work in all three.
 
 | Skill | How you train it | What it gives you |
 |---|---|---|
@@ -94,6 +94,7 @@ three new primary skills, one per medium you travel through.
 | **Unarmored** | Taking damage with **every armour slot empty** | **Iron Skin** (real armour points at four tiers — leather/gold/iron/diamond) and **Thorny Skin** (reflect a sting at melee attackers). |
 | **Husbandry** | Breeding, taming, shearing, milking, feeding and robbing hives | Nine sub-skills across six XP verbs — **Multi-Breed**, **Twins**, **Selective Breeding**, **Accelerated Growth**, **Brood**, **Bountiful Harvest**, **Hidden Bounty**, **Beekeeper** and the **Herdsman's Call** super ability. |
 | **Hunter** | Killing creatures — **not** a weapon skill | Two independent axes. **Mob Mastery**: kill 500 / 2,500 / 10,000 of *one* creature for +1.0 / +2.0 / +3.0 damage against **that creature only**, forever. **Trophy Hunter**: a second roll of a kill's own loot table, unlocked one mob tier per rank. **Quarry Sense**: crouch and hit a creature with a bone to read your hunt log against it. Farmed creatures — spawner, bred, player-placed — count for nothing. |
+| **Cooking** | Cooking food in a furnace, smoker, blast furnace or campfire, and crafting food at a bench | **Smelting's other half** — the two share the furnace and split it by input, ore paying Smelting and food paying Cooking, never both. **Master Chef** (a second helping out of a finished cook), **Power Cook** (cooked food carries a lingering effect when eaten, always amplifier 0), **Kitchen Efficiency** (fuel burns up to 4× longer on food). An item has no spawn origin, so its only anti-farm gate is a cap of 1,200 paid items per hour. |
 
 Movement and sneak XP are **speed-normalised**: you are paid per *second* of travel, with each tick's
 distance clamped at that medium's reference speed. Travelling faster than the reference pays no more,
@@ -300,9 +301,17 @@ Deliberately **not** ported (and not coming back):
 - Parties, party chat, teleport, XP sharing
 - Admin chat, scoreboards, MOTD/broadcast systems
 - MySQL and database conversion tooling
-- Chimaera Wing, Limit Break, permission‑node integrations
-- The **Spears**, **Maces**, **Tridents** and **Crossbows** super abilities — registered placeholders
-  with no behaviour, upstream included. The skills themselves are fully playable.
+- Chimaera Wing, Flux Mining, permission‑node integrations
+- The **Archery**, **Crossbows**, **Tridents**, **Maces** and **Spears** super abilities — five
+  registered placeholders with no behaviour, upstream included. They have no rank ladders, no config
+  and no `/mcstats` line, so there is nothing to level toward. The skills themselves are fully
+  playable.
+
+**Limit Break** *is* implemented, for all eight weapons, but ships **off** — and off is invisible: no
+damage, no `/mcstats` entry, no rank plaques. Upstream's `AllowPVE` gate means "PVP only", which
+single-player cannot reach, and against mobs the bonus is not nerfed the way it is against an
+armoured player (+10 at level 1000 is more than a diamond sword's base damage). Enable it in
+**Settings → Abilities → Limit Break**.
 
 ---
 

@@ -96,9 +96,11 @@ Vanilla Invisibility **does not hide armour or held items**. That's vanilla beha
 
 Working as intended. Placed blocks are tracked so you can't farm XP by placing and re-breaking — and the record **survives restarts** (`placed_blocks.dat` in your world folder). Place → quit → reopen → mine still pays nothing.
 
-## "Levelling Limit Break does nothing"
+## "I can't find Limit Break anywhere"
 
-Correct — **it does nothing**. All eight Limit Break sub-skills are dead enums: they show in `/mcstats`, they have rank ladders in the configs, and no code reads them. See [Differences from mcMMO](Differences-from-mcMMO#-dead-enums--present-but-doing-nothing).
+Working as intended — **it ships off, and off is invisible.** All eight Limit Break sub-skills are implemented, but while the mechanic is disabled it grants no damage, shows no `/mcstats` entry and fires no rank plaques, so nothing nags you about a mechanic you aren't using.
+
+Turn it on in **Settings → Abilities → Limit Break**, or set `Skills.General.LimitBreak.AllowPVE: true` in `advanced.yml`. It then grants a flat **+1 damage per rank**, from +1 at level 100 up to +10 at level 1000. ⚠️ That applies to **every non-player entity**, so mods adding humanoid NPCs will have those NPCs take it too. [Why it's opt-in](Differences-from-mcMMO#limit-break-ships-off-and-off-is-invisible).
 
 ## "Harvesting crops from my horse gives no XP"
 

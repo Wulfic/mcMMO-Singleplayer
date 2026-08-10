@@ -14,6 +14,7 @@
 - [Unarmored](Unarmored)
 - [Husbandry](Husbandry)
 - [Hunter](Hunter)
+- [Cooking](Cooking)
 - [Super Abilities](Super-Abilities)
 - [XP and Levelling](XP-and-Levelling)
 

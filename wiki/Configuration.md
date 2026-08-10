@@ -28,7 +28,7 @@ Some releases retune a value that already exists in your config — sneak XP wen
 - **If you changed it to anything else**, it is left alone. The log notes that it kept your value and what the default moved to, so "the docs say 50 but mine says 30" has a visible answer.
 - **Each retune runs once, ever.** Setting a value back to the old default afterwards keeps it — the file records which retunes have already been applied, in a `Config_Version` key at its root. Don't delete that key unless you want the retunes reconsidered.
 
-Only files that have actually been retuned carry a `Config_Version`. Today that is `experience.yml` alone.
+Only files that have actually been retuned carry a `Config_Version`. Today that is **`experience.yml`** (sneak XP, 25 → 50/s) and **`config.yml`** (the pet follow radius, 32 → 128).
 
 ---
 
@@ -172,6 +172,24 @@ On by default. `false` restores vanilla behaviour exactly — pets left outside 
 
 The radius was **32** before, and was raised to 128 because a pet pathing after a sprinting or flying owner is routinely further back than 32 blocks at the moment the teleport lands — so it simply wasn't collected. If your `config.yml` still says 32, it is updated for you on the next load; a value you typed yourself is left alone.
 
+### Change what cooked food does when you eat it
+
+```yaml
+Skills:
+    Cooking:
+        Power_Cook_Effects:
+            Cooked_Beef: STRENGTH
+            Bread: SPEED
+```
+
+Delete a row to disable it; an unknown effect name disables that row and logs once. The amplifier is
+always 0 and is not configurable.
+
+⚠️ **Never map an effect that fires every tick** — Saturation, Instant Health, Instant Damage,
+Hunger, Absorption, Bad Omen and Raid Omen all apply once *per tick* for their whole duration, so
+three seconds of Saturation is +60 food onto a 20-point bar. Fire Resistance and Water Breathing are
+banned for balance rather than cadence. [The reasoning](Cooking#power-cook--5-ranks).
+
 ### Cap a skill
 
 ```yaml
@@ -212,6 +230,7 @@ unattended.
 | `Stealth.Require_Movement_Input` | Sneak XP while you are being *carried* — a taped-down shift key on a boat. |
 | `Unarmored.*` | Environmental damage, and one mob paying you forever. |
 | `Husbandry.*` | Milking the same cow on a loop, and one handful of feed paying for a whole pen. |
+| `Cooking.Max_Cooks_Per_Hour` | An unattended smoker array. **Cooking's only gate**, because an item has no spawn origin — see [Cooking](Cooking#the-hourly-cook-cap) before raising it. |
 
 Separately, `Experience_Formula` scales combat XP by **where a mob came from**:
 
@@ -245,11 +264,23 @@ A few things (`/mcability`, `/mcrefresh`) are runtime toggles and apply immediat
 
 ---
 
-## Renamed sections
+## Renamed and moved sections
 
-If mcMMO renames a skill between releases, your config section is **not** silently rewritten — you get a **log warning** naming the old and new spelling instead. Your config file is yours, and a rewriter that quietly moves your tuning around is a worse failure mode than a line in the log.
+Two different things can happen to a key between releases, and they are handled differently on purpose.
+
+### A renamed *skill* — warned, never rewritten
+
+If mcMMO renames a whole skill, your config section is **not** silently rewritten — you get a **log warning** naming the old and new spelling instead. Your config file is yours, and a rewriter that quietly moves your tuning around is a worse failure mode than a line in the log.
 
 Currently: `Acrobatics:` → `Agility:`.
+
+### A *sub-skill* that changed parent — migrated for you
+
+When a sub-skill is re-parented, its config path moves with it, and the values you tuned would otherwise be stranded at a path nothing reads. Those **are** carried across, and the dead keys are deleted, with an INFO line per path saying so.
+
+Seven sub-skills moved out of Agility on 2026-08-10 — Dodge, Athlete and Smash to **Parkour**, Lead Lungs and Lake Raider to **Swimming**, Glide and Solar Wings to **Flying** ([why](Movement-Skills)). Your `advanced.yml`, `skillranks.yml` and `config.yml` are migrated on the next load.
+
+If you had tuned **both** the old and the new path, the value the game was already using wins and the old one is discarded — with a `WARN` naming both numbers, so the choice is never silent. The scan is driven by what your file actually contains rather than by a version stamp, so a migration that fails to save is simply retried next boot.
 
 ---
 

@@ -1,13 +1,13 @@
 # Skills
 
-**26 skills** — **23 primary** skills that earn XP directly, and **3 child skills** whose level is the average of their parents and which earn no XP of their own.
+**27 skills** — **24 primary** skills that earn XP directly, and **3 child skills** whose level is the average of their parents and which earn no XP of their own.
 
 | Category | Skills |
 |---|---|
 | **Gathering** | [Mining](#mining), [Woodcutting](#woodcutting), [Herbalism](#herbalism), [Excavation](#excavation), [Fishing](#fishing), [Husbandry](#husbandry) |
 | **Combat** | [Swords](#swords), [Axes](#axes), [Unarmed](#unarmed), [Archery](#archery), [Crossbows](#crossbows), [Tridents](#tridents), [Maces](#maces), [Spears](#spears), [Taming](#taming), [Hunter](#hunter) |
 | **Movement** | [Parkour](#parkour), [Swimming](#swimming), [Flying](#flying) |
-| **Misc** | [Stealth](#stealth), [Unarmored](#unarmored), [Repair](#repair), [Alchemy](#alchemy) |
+| **Misc** | [Stealth](#stealth), [Unarmored](#unarmored), [Repair](#repair), [Alchemy](#alchemy), [Cooking](#cooking) |
 | **Child** | [Agility](#agility-child), [Salvage](#salvage-child), [Smelting](#smelting-child) |
 
 Your **power level** is the sum of all skill levels.
@@ -340,6 +340,20 @@ Earn XP by brewing potions.
 | Concoctions | 8 | Brew potions with more ingredients. |
 
 > **Concoctions tier gating is not implemented.** The custom-ingredient tree in `potions.yml` loads, but the level gate that should restrict which tier you can brew has no seam in 1.21.11 to hook.
+
+## Cooking
+
+**New in this port.** Earn XP by cooking food in a furnace, smoker, blast furnace or campfire, and by crafting food at a bench. No super ability. Full page: **[Cooking](Cooking)**.
+
+| Sub-skill | Ranks | Effect |
+|---|---|---|
+| Master Chef | 5 | Chance to pull a second helping out of a finished cook — up to 33 % at Cooking 1000. Unlocks at 50. |
+| Power Cook | 5 | Cooked and crafted food carries a lingering status effect when you eat it — 3 s at rank 1, 15 s at rank 5, always amplifier 0. Unlocks at 100. |
+| Kitchen Efficiency | 3 | Fuel burns 2× / 3× / 4× longer when the furnace's input is a food. Unlocks at 250. |
+
+> **Cooking is [Smelting](#smelting-child)'s other half.** The two share the furnace and split it by **input** — ore pays Smelting, food pays Cooking, and never both.
+
+> ⚠️ **Cooking has one anti-farm gate and only one: `ExploitFix.Cooking.Max_Cooks_Per_Hour`, default 1200 items.** An item has no spawn origin, so a hopper-fed smoker array pays exactly like a hand-fed one and none of the checks other skills use apply. 1200 is roughly two continuously-running smokers. Cooks past the cap still cook; they pay nothing, and you are told once per hour when that starts. [Details](Cooking#the-hourly-cook-cap).
 
 ---
 

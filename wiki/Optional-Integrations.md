@@ -37,6 +37,7 @@ Versions targeting MC 1.21.11:
 | **XP Multipliers** | A per-skill XP multiplier for all 24 earning skills. |
 | **Abilities** | Super-ability master switch, activation rules, tool durability, a cooldown slider per ability. |
 | **Anti-Cheat** | Every anti-farm gate — see [Configuration](Configuration#anti-cheat-the-exploit-gates). |
+| **Effects** | Particle and firework switches, per effect. |
 | **Skill Level Caps** | A cap per skill; 0 means no cap. |
 
 ### When edits take effect

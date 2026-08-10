@@ -159,8 +159,12 @@ Abilities:
 
 ## Not implemented
 
-Four `SuperAbilityType` constants are registered placeholders with no behaviour: **Super Shotgun** (Crossbows), and the Tridents, Maces and Spears abilities. **Explosive Shot** (Archery) is also not wired as a triggerable ability.
+**Five** `SuperAbilityType` constants are registered placeholders with no behaviour: **Explosive Shot** (Archery), **Super Shotgun** (Crossbows), and the Tridents, Maces and Spears abilities.
 
-Upstream mcMMO never shipped a behaviour for any of the four — they are named slots waiting on a design, not ports that were dropped. Spears, Maces and Tridents are all fully playable without one; so are Swords and Axes' *sub-skills*, which is most of what a super ability adds.
+Upstream mcMMO never shipped a behaviour for any of the five — they are named slots waiting on a design, not ports that were dropped. Spears, Maces and Tridents are all fully playable without one; so are Swords and Axes' *sub-skills*, which is most of what a super ability adds.
+
+**There is nothing to level toward and nothing to see.** None of the five has a rank ladder in `skillranks.yml`, a tuning block in `advanced.yml`, or a `/mcstats` line. Apart from their locale strings they are invisible from inside the game.
+
+Separately, **any skill not named in the tables above has no super ability at all**, by design rather than by omission — the ranged skills, the processing skills (Repair, Alchemy, [Cooking](Cooking), Salvage, Smelting), Fishing, Taming, [Hunter](Hunter), [Unarmored](Unarmored), and the three movement skills, whose burst is Agility's shared [Second Wind](#second-wind). None is planned.
 
 > **Correction (GitHub #7).** This page used to say Spears' super ability "is not coming" because it depended on a custom item and a `spear` damage type that didn't exist in 1.21.11. That was wrong, and the same belief had been written into the combat code, where it kept the entire Spears skill from paying anything. All seven spears (`minecraft:wooden_spear` … `minecraft:netherite_spear`), the `minecraft:spears` item tag and the `minecraft:spear` damage type are vanilla in 1.21.11. Spears is now a working skill — see [Skills](Skills#spears).

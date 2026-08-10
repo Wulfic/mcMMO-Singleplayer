@@ -110,6 +110,7 @@ This is the most unusual XP model in the mod, and it exists so speed buffs aren'
 | `Unarmored.Require_Living_Attacker` | Cactus/fire/drowning damage farms. [Details](Unarmored#the-two-exploit-gates). |
 | `Unarmored.Max_Awards_Per_Attacker` | One zombie hitting you through a slab forever. |
 | `Husbandry.Harvest_Cooldown_Seconds` | Milking the same cow, or brushing the same armadillo, on a loop. [Details](Husbandry#the-anti-exploit-gates). |
+| `Cooking.Max_Cooks_Per_Hour` | An unattended hopper-fed smoker array. **Cooking's only gate** — default 1,200 *items* per hour. [Details](Cooking#the-hourly-cook-cap). |
 
 Two more gates are structural rather than config keys:
 
@@ -118,7 +119,7 @@ Two more gates are structural rather than config keys:
 
 There is also a **diminishing-returns** system, and `Skills.Herbalism.Prevent_AFK_Leveling` (shipped on), which stops crops harvested **from horseback** paying XP.
 
-> **`Diminished_Returns.Threshold.Hunter` is the one entry in that table that isn't decorative.** Every other skill sits far out of the throttle's reach; a T4 boss at ~1,500 XP means fourteen kills in ten minutes trips the 20,000 threshold. Unreachable by hand, trivial for a farm. Don't tidy it to match its neighbours.
+> **Two entries in the `Diminished_Returns.Threshold` table aren't decorative.** Most skills sit far out of the throttle's reach, but a T4 boss at ~1,500 XP means fourteen [Hunter](Hunter) kills in ten minutes trips the 20,000 threshold — unreachable by hand, trivial for a farm. [Cooking](Cooking) reaches it the same way, off a smoker array. Both are at the same 20,000 as their neighbours; don't tidy them on the assumption they're inert.
 
 ---
 
