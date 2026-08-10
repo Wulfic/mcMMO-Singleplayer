@@ -147,6 +147,17 @@ public class MiningManager extends SkillManager {
                 && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.MINING_DOUBLE_DROPS);
     }
 
+    /**
+     * Whether Mining's mastery sub-skill may roll: the skill is on and the player has actually
+     * unlocked Mother Lode (Mining 1000 in RetroMode, 100 otherwise).
+     *
+     * <p>⚠️ <b>GitHub #11.</b> This is the only gate in front of the triple-drop roll, and until the
+     * unlock half was restored to {@link Permissions#canUseSubSkill} it was unconditionally
+     * {@code true} — so a player at Mining 300 got triple drops on 1.5% of blocks, with no super
+     * ability involved and no {@code /mcstats} line explaining them (the renderer gates on
+     * {@link RankUtils#hasUnlockedSubskill}, so it was telling the truth while the mechanic was not).
+     * Keep the two asking the same question.
+     */
     public boolean canMotherLode() {
         return Permissions.canUseSubSkill(getPlayer(), SubSkillType.MINING_MOTHER_LODE);
     }

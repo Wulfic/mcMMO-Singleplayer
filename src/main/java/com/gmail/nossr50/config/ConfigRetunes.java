@@ -66,6 +66,20 @@ public final class ConfigRetunes {
         RETUNES.add(new Retune("experience.yml",
                 "Experience_Values.Stealth.Sneak.Baseline_Xp_Per_Second", 25.0D, 50.0D, 1,
                 "sneak XP was too slow to be worth doing (GitHub #6)"));
+        // 2026-08-10 (GitHub #12): pets kept being left behind by a teleport even with the #2 follow
+        // feature switched on. The gate was never the feature, it was this radius -- a pet trailing a
+        // sprinting or flying owner sits well beyond 32 blocks when the jump lands, so it was not in
+        // the box and was never collected. 32 -> 128, which is roughly the band in which the pet
+        // could still have been ticking at all.
+        //
+        // 🔑 THIS IS WHY ConfigRetunes EXISTS, THE SECOND TIME. The reporter has run the mod, so
+        // their config.yml already holds `Pets_Follow_Teleport_Radius: 32` and copyMissingDefaults
+        // would never touch it: editing the bundled yml alone would have shipped this fix to
+        // everyone EXCEPT the person who reported it. (Note the on-disk value is the integer 32
+        // while the default is the double 32.0 -- ConfigLoader compares numbers by value for exactly
+        // this reason.) config.yml becomes the second file to carry a Config_Version stamp.
+        RETUNES.add(new Retune("config.yml", "Skills.Taming.Pets_Follow_Teleport_Radius", 32.0D,
+                128.0D, 1, "pets trailing further than 32 blocks were left behind (GitHub #12)"));
         // TODO.md item 3.1 deliberately does NOT add a retune. Limit Break became implemented, but
         // its AllowPVE default stayed false, so there is no changed default to carry onto an
         // existing file -- and an opt-in mechanic that switched itself on during an update would be

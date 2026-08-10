@@ -63,10 +63,18 @@ public class MacesManager extends SkillManager {
      * imply a rank. At rank 0 the odds lookup {@code getCrippleChanceToApplyOnHit(0)} indexes
      * {@code defaultCrippleValues[-1]} — evaluated eagerly as the {@code getDouble} default argument —
      * and throws {@link ArrayIndexOutOfBoundsException}. The vendored {@code AdvancedConfig} carries the
-     * identical pattern, and this port's permission check is unconditionally {@code true}, so a
-     * mace-swinging player below the Cripple unlock would crash on hit. Gated here on
-     * {@link RankUtils#hasUnlockedSubskill} (rank &ge; 1) instead — both crash-safe and the check the
-     * permission node was standing in for (you cannot Cripple without having unlocked Cripple).
+     * identical pattern, so a mace-swinging player below the Cripple unlock would crash on hit. Gated
+     * here on {@link RankUtils#hasUnlockedSubskill} (rank &ge; 1) instead — both crash-safe and the
+     * check the permission node was standing in for (you cannot Cripple without having unlocked
+     * Cripple).
+     *
+     * <p>⚠️ <b>This note used to add "and this port's permission check is unconditionally
+     * {@code true}", which was correct and was the actual bug.</b> {@code canUseSubSkill} had dropped
+     * legacy's {@code hasUnlockedSubskill} conjunct; it was diagnosed here, worked around locally, and
+     * left broken for every other caller — where it went on to ship Mining's Mother Lode from level 1
+     * (GitHub #11). 🔑 <em>A helper found lying is a defect in the helper, not a hazard to route
+     * around.</em> The conjunct is restored, so this gate is now belt-and-braces rather than the only
+     * thing standing between a rank-0 player and the exception.
      *
      * <p>The player-target branch of {@link #getCrippleTickDuration}/{@link #getCrippleStrength} is
      * dead in singleplayer (the only player is the attacker), so the mob values are used unconditionally

@@ -3,6 +3,7 @@ package com.gmail.nossr50.util;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillGating;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -56,18 +57,35 @@ public final class Permissions {
     }
 
     /**
-     * Whether a player may use a given sub-skill. The Bukkit plugin gated this on the
-     * {@code mcmmo.ability.<skill>.<subskill>} node; singleplayer has no permission backend, so it
-     * answers to the parent skill's master switch (GitHub #10). Distinct from
-     * {@link #isSubSkillEnabled} only in the legacy node it mirrored (Maces/Spears used this variant).
+     * Whether a player may use a given sub-skill <em>right now</em>: the parent skill is switched on
+     * <b>and</b> they have actually unlocked the sub-skill.
      *
-     * @param player the player (unused — retained to mirror the legacy call sites)
+     * <h2>⚠️ GitHub #11 — this method used to be {@link #isSubSkillEnabled} with a different name</h2>
+     * Legacy is {@code isSubSkillEnabled(player, sub) && RankUtils.hasUnlockedSubskill(player, sub)},
+     * and the port kept only the first half — while its javadoc asserted the two variants differed
+     * only in the legacy permission node, which was never true. The permission node was doing
+     * <em>two</em> jobs and only one of them was replaced.
+     *
+     * <p>The visible symptom was Mining's Mother Lode: it is gated on this and nothing else, so triple
+     * drops rolled from Mining level 1 at {@code (level / MaxBonusLevel) × ChanceMax} — with no super
+     * ability involved and no {@code /mcstats} line to explain them, because
+     * {@code MiningStatsRenderer} correctly gates its display on {@link RankUtils#hasUnlockedSubskill}.
+     * The mechanic and its own display disagreed about whether the player had the sub-skill.
+     *
+     * <p>🔑 <b>Not a permission question, so do not "simplify" it back.</b> The unlock half is a level
+     * check that survives the loss of the permission backend intact; only the node half collapsed.
+     * {@link #isSubSkillEnabled} is the one that legitimately reduces to the master switch.
+     *
+     * @param player the player (resolved to their profile for the rank lookup; untracked → nothing
+     *     unlocked)
      * @param subSkillType the sub-skill being checked
-     * @return {@code true} unless the parent skill is switched off in {@code coreskills.yml}
+     * @return {@code true} only if the parent skill is on in {@code coreskills.yml} and the player is
+     *     at rank 1 or higher (or the sub-skill has no ranks at all)
      */
     public static boolean canUseSubSkill(@Nullable PlatformPlayer player,
             @NotNull SubSkillType subSkillType) {
-        return SkillGating.isSubSkillEnabled(subSkillType);
+        return SkillGating.isSubSkillEnabled(subSkillType)
+                && RankUtils.hasUnlockedSubskill(player, subSkillType);
     }
 
     /**

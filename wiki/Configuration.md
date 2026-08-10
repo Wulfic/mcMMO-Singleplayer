@@ -165,10 +165,12 @@ Skills:
 Skills:
     Taming:
         Pets_Follow_Teleport: true
-        Pets_Follow_Teleport_Radius: 32
+        Pets_Follow_Teleport_Radius: 128
 ```
 
 On by default. `false` restores vanilla behaviour exactly — pets left outside your simulation distance stop being ticked and never catch up. The radius is measured from where you *left*, not where you arrived. A sitting, leashed or ridden pet is never moved either way, and cross-world moves are not covered.
+
+The radius was **32** before, and was raised to 128 because a pet pathing after a sprinting or flying owner is routinely further back than 32 blocks at the moment the teleport lands — so it simply wasn't collected. If your `config.yml` still says 32, it is updated for you on the next load; a value you typed yourself is left alone.
 
 ### Cap a skill
 

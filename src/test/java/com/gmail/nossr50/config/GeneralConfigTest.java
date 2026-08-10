@@ -85,13 +85,45 @@ class GeneralConfigTest {
         // invisible: the feature would work and the config knob would silently do nothing.
         final GeneralConfig config = new GeneralConfig(dataFolder);
         assertTrue(config.arePetsFollowingTeleports());
-        assertEquals(32.0D, config.getPetFollowTeleportRadius());
+        assertEquals(128.0D, config.getPetFollowTeleportRadius());
 
         // Assert off the reference point: the getter must read the file, not return its default.
         config.config.set("Skills.Taming.Pets_Follow_Teleport", false);
         config.config.set("Skills.Taming.Pets_Follow_Teleport_Radius", 8.0D);
         assertFalse(config.arePetsFollowingTeleports());
         assertEquals(8.0D, config.getPetFollowTeleportRadius());
+    }
+
+    @Test
+    void anExistingConfigStillHoldingTheOldPetRadiusIsMigrated(@TempDir Path dataFolder)
+            throws Exception {
+        // ⚠️ GitHub #12 IS A CHANGED DEFAULT, WHICH IS THE ONE KIND OF FIX THAT REACHES NOBODY.
+        // copyMissingDefaults back-fills only ABSENT keys, so the reporter — who has run the mod and
+        // therefore has `Pets_Follow_Teleport_Radius: 32` on disk — would have been the one player
+        // the fix did not reach. This is ConfigRetunes' second customer ever, and config.yml's first,
+        // so it is also the first exercise of the version stamp on this file.
+        final Path file = dataFolder.resolve("config.yml");
+        new GeneralConfig(dataFolder);
+        Files.writeString(file, Files.readString(file)
+                .replace("Pets_Follow_Teleport_Radius: 128", "Pets_Follow_Teleport_Radius: 32")
+                .replace(ConfigRetunes.VERSION_KEY + ": 1", ConfigRetunes.VERSION_KEY + ": 0"));
+
+        assertEquals(128.0D, new GeneralConfig(dataFolder).getPetFollowTeleportRadius(), 0.0001D,
+                "an untouched old default must be carried forward");
+    }
+
+    @Test
+    void aHandTunedPetRadiusSurvivesTheMigration(@TempDir Path dataFolder) throws Exception {
+        // The other half of the promise: 64 is neither the old default nor the new one, so somebody
+        // typed it on purpose and the file belongs to them.
+        final Path file = dataFolder.resolve("config.yml");
+        new GeneralConfig(dataFolder);
+        Files.writeString(file, Files.readString(file)
+                .replace("Pets_Follow_Teleport_Radius: 128", "Pets_Follow_Teleport_Radius: 64")
+                .replace(ConfigRetunes.VERSION_KEY + ": 1", ConfigRetunes.VERSION_KEY + ": 0"));
+
+        assertEquals(64.0D, new GeneralConfig(dataFolder).getPetFollowTeleportRadius(), 0.0001D,
+                "a deliberately tuned value must never be reverted by a shipped-default change");
     }
 
     @Test

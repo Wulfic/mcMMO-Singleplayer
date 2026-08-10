@@ -59,8 +59,23 @@ public final class PetFollowTeleport {
     /** {@code Skills.Taming.Pets_Follow_Teleport} default, mirrored for a missing config. */
     static final boolean DEFAULT_ENABLED = true;
 
-    /** {@code Skills.Taming.Pets_Follow_Teleport_Radius} default, mirrored for a missing config. */
-    static final double DEFAULT_RADIUS = 32.0;
+    /**
+     * {@code Skills.Taming.Pets_Follow_Teleport_Radius} default, mirrored for a missing config.
+     *
+     * <p>Raised from 32 to 128 for GitHub #12. 32 assumed the pet was at the owner's heels, which is
+     * only true when the owner is walking: a wolf pathing after a sprinting or elytra-borne player is
+     * routinely further back than that when the teleport lands, and it was then simply not collected.
+     * 128 covers the whole band in which a pet could still have been ticking (vanilla's default
+     * simulation distance is 10 chunks), which is the real boundary — beyond it the pet stopped being
+     * ticked, which is the very condition this class exists to work around.
+     *
+     * <p>It is deliberately still bounded. Distance is not what keeps a pet you parked at your base
+     * from being yanked across the world — {@code cannotFollowOwner()} is, because such a pet is sat.
+     * The bound is about predictability: past the loaded region the answer would depend on which
+     * chunks happen to be resident, and a feature that works intermittently is worse than one with a
+     * limit a player can learn.
+     */
+    static final double DEFAULT_RADIUS = 128.0;
 
     /**
      * Detect a teleport and bring this player's pets along.

@@ -315,9 +315,13 @@ Skills:
         # pet is never moved -- "sit" is an explicit order to stay, and honouring it is the point.
         Pets_Follow_Teleport: true
         # How far from where you left a pet may be and still be brought along, in blocks. Not
-        # unbounded on purpose: pets you left behind at a base should stay there, and whether a distant
-        # chunk happens to be loaded is not something a player can see or predict.
-        Pets_Follow_Teleport_Radius: 32
+        # unbounded on purpose: whether a distant chunk happens to be loaded is not something a player
+        # can see or predict, so a huge radius would make the feature work intermittently rather than
+        # more often. A pet you deliberately left at a base is excluded by being SAT, not by distance.
+        # Raised from 32 to 128 (GitHub #12): a pet trailing its owner during a sprint or an elytra
+        # flight is routinely further than 32 blocks back at the moment the owner teleports, and 128
+        # covers the whole band in which a pet was still being ticked (vanilla simulation distance).
+        Pets_Follow_Teleport_Radius: 128
         Call_Of_The_Wild:
             # Item_Material: Material of the item needed to summon the pet
             # Item_Amount: Amount of items required to summon the pet

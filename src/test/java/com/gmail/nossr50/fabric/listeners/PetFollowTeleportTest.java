@@ -30,6 +30,7 @@ import net.minecraft.world.World;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * {@link PetFollowTeleport} — GitHub #2, tamed pets following their owner through a long same-world
@@ -281,6 +282,53 @@ class PetFollowTeleportTest {
         PlayerMovementTracker.tickPlayer(owner);
 
         verify(wolf, never()).tryTeleportToOwner();
+    }
+
+    // --- the radius default, written down in four places ------------------------------------------
+
+    @Test
+    void everyPlaceThePetRadiusDefaultIsWrittenDownAgrees(@TempDir java.nio.file.Path dataFolder) {
+        // ⚠️ GitHub #12 MOVED THIS NUMBER, AND IT IS SPELLED OUT FOUR TIMES: the bundled config.yml,
+        // GeneralConfig's getDouble fallback, DEFAULT_RADIUS here (used when no config is loaded at
+        // all) and the ConfigRetunes newDefault that carries it onto an existing file. Nothing makes
+        // them agree and every disagreement is SILENT — the retune one worst of all, because it would
+        // strand returning players on a value the code calls the default while every other test
+        // passed.
+        //
+        // 🔑 This exact drift already happened once: Stealth's ModMenu "reset to default" offered
+        // 30.0 long after the YAML had been halved to 15.0, and nothing noticed because each side was
+        // self-consistent. Agreement between sources needs its own assertion.
+        final double shipped = new GeneralConfig(dataFolder).getPetFollowTeleportRadius();
+
+        assertEquals(128.0D, shipped, 1.0E-9, "the value the bundled config.yml actually ships");
+        assertEquals(shipped, PetFollowTeleport.DEFAULT_RADIUS, 1.0E-9,
+                "the no-config fallback must be the shipped value, not a stale copy of it");
+
+        final List<com.gmail.nossr50.config.ConfigRetunes.Retune> retunes =
+                com.gmail.nossr50.config.ConfigRetunes.forFile("config.yml").stream()
+                        .filter(r -> r.path().equals("Skills.Taming.Pets_Follow_Teleport_Radius"))
+                        .toList();
+        assertEquals(1, retunes.size(), "exactly one retune moves this key");
+        assertEquals(shipped, ((Number) retunes.get(0).newDefault()).doubleValue(), 1.0E-9,
+                "the retune must carry existing configs to the value the mod now ships");
+        assertEquals(32.0D, ((Number) retunes.get(0).oldDefault()).doubleValue(), 1.0E-9,
+                "…from the value it used to ship, or files still holding 32 are never migrated");
+    }
+
+    @Test
+    void theRadiusActuallySizesTheSearchBox() {
+        // The reference point for the constants above: they would be four agreeing numbers that
+        // nothing reads if the sweep ignored the configured radius. 96 is deliberately none of the
+        // values named anywhere else.
+        final ServerPlayerEntity owner = player(UUID.randomUUID());
+        final ServerWorld world = worldContaining(owner);
+
+        PetFollowTeleport.bringPetsFrom(owner, new Vec3d(0, 64, 0), 96.0);
+
+        final org.mockito.ArgumentCaptor<Box> box = org.mockito.ArgumentCaptor.forClass(Box.class);
+        verify(world).getEntitiesByClass(any(), box.capture(), any());
+        assertEquals(192.0, box.getValue().getLengthX(), 1.0E-6,
+                "a 96-block radius must be a 192-wide box — the radius is not ignored or halved");
     }
 
     // --- fixtures --------------------------------------------------------------------------------

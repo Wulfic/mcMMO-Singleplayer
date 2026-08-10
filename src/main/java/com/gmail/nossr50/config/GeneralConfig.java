@@ -587,9 +587,13 @@ public class GeneralConfig extends ConfigLoader {
      * How far from the departure point a pet may be and still be brought along, in blocks. See
      * {@code fabric.listeners.PetFollowTeleport} for why this is a radius rather than "every pet you
      * own".
+     *
+     * <p>⚠️ <b>32 → 128 (GitHub #12).</b> Changing this literal alone reaches nobody: it is
+     * {@code ConfigRetunes} that carries the new value onto a {@code config.yml} that already exists,
+     * and the two must be edited together or returning players keep 32 forever.
      */
     public double getPetFollowTeleportRadius() {
-        return config.getDouble("Skills.Taming.Pets_Follow_Teleport_Radius", 32.0D);
+        return config.getDouble("Skills.Taming.Pets_Follow_Teleport_Radius", 128.0D);
     }
 
     /* Woodcutting */

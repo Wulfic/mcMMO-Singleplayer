@@ -88,6 +88,24 @@ public final class RankUtils {
     }
 
     /**
+     * Returns whether the player has unlocked the first rank in the target subskill, resolving the
+     * {@link McMMOPlayer} from a {@link PlatformPlayer} via {@link UserManager}. An untracked player
+     * has nothing unlocked (legacy parity, and the same "no data → rank 0" guard
+     * {@link #getRank(PlatformPlayer, SubSkillType)} applies).
+     *
+     * <p>Exists so {@link com.gmail.nossr50.util.Permissions#canUseSubSkill} can ask this question —
+     * legacy's {@code canUseSubSkill} is {@code isSubSkillEnabled && hasUnlockedSubskill}, and the
+     * unlock half was dropped in the port (GitHub #11).
+     *
+     * @param player the player
+     * @param subSkillType the target subskill
+     * @return true if the player has at least one rank in the skill (or the skill has no ranks)
+     */
+    public static boolean hasUnlockedSubskill(PlatformPlayer player, SubSkillType subSkillType) {
+        return hasUnlockedSubskill(UserManager.getPlayer(player), subSkillType);
+    }
+
+    /**
      * Returns whether the player has reached the specified rank in the target subskill.
      *
      * @param rank the target rank

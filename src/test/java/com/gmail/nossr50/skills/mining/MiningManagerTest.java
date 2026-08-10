@@ -2,6 +2,7 @@ package com.gmail.nossr50.skills.mining;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -148,12 +149,21 @@ class MiningManagerTest {
         atMiningLevel(500);
         assertTrue(miningManager.canUseDemolitionsExpertise(), "demo unlocked at 500");
 
-        // Double drops unlocks at mining level 1; MotherLode is permission-only (always allowed).
+        // Double drops unlocks at mining level 1; Mother Lode at 1000 (RetroMode skillranks.yml).
         atMiningLevel(0);
         assertFalse(miningManager.canDoubleDrop(), "double drops needs level 1");
         atMiningLevel(1);
         assertTrue(miningManager.canDoubleDrop(), "double drops unlocked at 1");
-        assertTrue(miningManager.canMotherLode(), "mother lode is always permitted");
+
+        // ⚠️ THIS PAIR USED TO READ `assertTrue(canMotherLode(), "mother lode is always permitted")`
+        // AT LEVEL 0 — GitHub #11's bug, written down as the expected behaviour and passing for
+        // months. 🔑 A test that documents a gate as "always allowed" is claiming a gate is not a
+        // gate; that claim needs a source, and the source here (legacy's canUseSubSkill) said the
+        // opposite.
+        atMiningLevel(999);
+        assertFalse(miningManager.canMotherLode(), "one short of the unlock → still locked");
+        atMiningLevel(1000);
+        assertTrue(miningManager.canMotherLode(), "Mother Lode unlocks at Mining 1000 in RetroMode");
     }
 
     // --- Remote detonation stance gate ---------------------------------------------------------
@@ -349,5 +359,51 @@ class MiningManagerTest {
         }
         assertTrue(sawAFailedRoll,
                 "unboosted, a 50% roll must sometimes fail — the boost is not unconditional");
+    }
+
+    // --- GitHub #11: triple drops with no super ability ----------------------------------------
+
+    @Test
+    void belowTheMotherLodeUnlockNoBreakCanEverTriple() {
+        // ⚠️ THE REPORTED SYMPTOM, AT THE REPORTER'S EXACT LEVEL (their save reads MINING: 300).
+        // With the unlock gate missing, Mother Lode rolled at 300/10000 × 50% = 1.5% per eligible
+        // block — so over 2000 breaks a broken gate yields a triple with probability
+        // 1 − 0.985^2000 ≈ 1 − 1e-13. This assertion is decisive, not a coin flip.
+        atMiningLevel(300);
+        withSuperBreaker(false);
+
+        boolean sawADouble = false;
+        for (int i = 0; i < 2000; i++) {
+            final int extra = miningManager.rollBonusDropCount();
+            assertNotEquals(2, extra,
+                    "no ability running and Mother Lode locked — a triple is impossible (iteration "
+                            + i + ")");
+            sawADouble |= extra == 1;
+        }
+
+        // Reference point. Without it this passes just as well against a rollBonusDropCount() that
+        // returns 0 for everything — i.e. against a "fix" that broke bonus drops outright.
+        assertTrue(sawADouble, "Double Drops still rolls at Mining 300 (30% per break)");
+    }
+
+    @Test
+    void onceUnlockedMotherLodeTriplesWithNoAbilityRunning() {
+        // The owner's ruling on #11: restore the gate, do not change what the sub-skill does once it
+        // is earned. Mother Lode is Mining's mastery and legitimately triples without Super Breaker —
+        // so this is the half of the fix that must NOT be "fixed" further, and it is asserted
+        // separately because "locked below 1000" is satisfied by deleting the sub-skill.
+        //
+        // At Mining 10000 (Mother Lode's RetroMode MaxBonusLevel) the roll sits at its 50% ceiling.
+        // Super Breaker is off, so a 2 here can only have come from Mother Lode — the AllowTripleDrops
+        // branch requires the ability mode.
+        atMiningLevel(10000);
+        withSuperBreaker(false);
+
+        boolean sawATriple = false;
+        for (int i = 0; i < 200 && !sawATriple; i++) {
+            sawATriple = miningManager.rollBonusDropCount() == 2;
+        }
+        assertTrue(sawATriple,
+                "unlocked Mother Lode must still triple without any super ability (legacy parity)");
     }
 }

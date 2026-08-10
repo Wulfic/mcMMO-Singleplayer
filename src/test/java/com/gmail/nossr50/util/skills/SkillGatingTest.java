@@ -315,6 +315,16 @@ class SkillGatingTest {
 
     @Test
     void permissionPredicatesFollowTheSwitch() throws IOException {
+        // ⚠️ GitHub #11 MADE THIS TEST'S canUseSubSkill LINE VACUOUS, AND ONLY THE FIX EXPOSED IT.
+        // That predicate is now `enabled AND unlocked`, and this fixture's player is level 0 — so
+        // the assertion below would have gone on passing at rank 0 with the switch deleted entirely.
+        // Levelling Mining first is what makes it an assertion about the switch again. 🔑 A gate
+        // gaining a second conjunct silently re-points every test that only asserted its negative.
+        profile.addLevels(PrimarySkillType.MINING, 1000);
+        UserManager.track(mmoPlayer);
+        assertTrue(Permissions.canUseSubSkill(player, SubSkillType.MINING_DOUBLE_DROPS),
+                "reference point: levelled and enabled, the sub-skill is usable");
+
         disable(PrimarySkillType.MINING, PrimarySkillType.UNARMED);
 
         assertFalse(Permissions.isSubSkillEnabled(player, SubSkillType.MINING_DOUBLE_DROPS));
@@ -329,6 +339,27 @@ class SkillGatingTest {
         assertTrue(Permissions.greenTerra(player));
         assertTrue(Permissions.serratedStrikes(player));
         assertTrue(Permissions.skullSplitter(player));
+    }
+
+    @Test
+    void canUseSubSkillAlsoRequiresTheUnlock() {
+        // ⚠️ GitHub #11. The port replaced legacy's
+        // `isSubSkillEnabled(player, sub) && RankUtils.hasUnlockedSubskill(player, sub)` with only
+        // the first conjunct — the permission node was doing two jobs and one of them was dropped.
+        // The three assertions below are the three states that distinguishes; the middle one is the
+        // state that shipped Mining's Mother Lode from level 1.
+        UserManager.track(mmoPlayer);
+
+        assertTrue(Permissions.isSubSkillEnabled(player, SubSkillType.MINING_MOTHER_LODE),
+                "the parent skill is switched on");
+        assertFalse(Permissions.canUseSubSkill(player, SubSkillType.MINING_MOTHER_LODE),
+                "…but at level 0 Mother Lode is not unlocked, so it may not be used");
+
+        profile.addLevels(PrimarySkillType.MINING, 1000); // Mother Lode rank 1 (RetroMode).
+
+        assertTrue(Permissions.canUseSubSkill(player, SubSkillType.MINING_MOTHER_LODE),
+                "reference point: at the unlock level it IS usable — the gate is not simply always "
+                        + "false, which is how the fix could 'pass' by breaking the sub-skill");
     }
 
     @Test

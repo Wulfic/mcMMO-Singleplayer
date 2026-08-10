@@ -45,8 +45,8 @@ Earn XP by mining ore and stone. Super ability: **Super Breaker**.
 | Sub-skill | Ranks | Effect |
 |---|---|---|
 | Super Breaker | 1 | Speed boost, doubles your Double Drops chance, and turns each one into a triple. Super ability. |
-| Double Drops | 1 | Skilfully mine double the loot. |
-| Mother Lode | 1 | Masterfully mine triple the loot. |
+| Double Drops | 1 | Skilfully mine double the loot. Unlocks at Mining 1. |
+| Mother Lode | 1 | Masterfully mine triple the loot. **Unlocks at Mining 1000**, and then triples with or without Super Breaker — it is Mining's mastery, not part of the ability. |
 | Blast Mining | 8 | Bonuses to mining with TNT. Detonate with flint & steel. |
 | Bigger Bombs | 1 | Increases TNT explosion radius. |
 | Demolitions Expertise | 1 | Decreases damage taken from TNT explosions. |
@@ -233,7 +233,7 @@ Earn XP by taming animals and fighting alongside your wolves.
 >
 > This is a deliberate override of vanilla, not a port fix. Vanilla *means* to do this — a wolf's follow goal teleports it to you from any distance once you're 12+ blocks away — but a pet outside your simulation distance stops being ticked, so it never runs the goal and is simply left behind. Turn it off with `Skills.Taming.Pets_Follow_Teleport: false` in `config.yml` to get vanilla behaviour back exactly.
 >
-> Three deliberate limits: **a sitting pet never moves** (so is a leashed or ridden one — "sit" is an order to stay, and posting a guard still works); only pets within `Pets_Follow_Teleport_Radius` (default **32** blocks) of where you left come along, so pets you left at a base stay there; and **cross-world moves are not covered** — a nether portal leaves your wolves in the overworld, same as vanilla.
+> Three deliberate limits: **a sitting pet never moves** (so is a leashed or ridden one — "sit" is an order to stay, so posting a guard still works, and that, not distance, is what keeps the pets at your base at your base); only pets within `Pets_Follow_Teleport_Radius` (default **128** blocks) of where you left come along, which is roughly the band in which a pet could still have been ticking at all; and **cross-world moves are not covered** — a nether portal leaves your wolves in the overworld, same as vanilla.
 
 ## Hunter
 
