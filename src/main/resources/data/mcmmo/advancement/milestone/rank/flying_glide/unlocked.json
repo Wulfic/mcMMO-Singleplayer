@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/skill/agility",
+  "parent": "mcmmo:milestone/skill/flying",
   "display": {
     "icon": {
-      "id": "minecraft:feather"
+      "id": "minecraft:elytra"
     },
     "title": {
-      "text": "Solar Wings Unlocked",
+      "text": "Glide Unlocked",
       "color": "aqua",
       "bold": true
     },
     "description": {
-      "text": "You can now use Solar Wings.",
+      "text": "You can now use Glide.",
       "color": "yellow"
     },
     "frame": "goal",

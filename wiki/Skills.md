@@ -253,7 +253,7 @@ Earn XP by taming animals and fighting alongside your wolves.
 
 # Movement
 
-Three skills, one per medium you travel through. They exist to feed **[Agility](#agility-child)** and carry almost no perks of their own — the perks all live on Agility.
+Three skills, one per medium you travel through. Each feeds **[Agility](#agility-child)** and owns the perks specific to its own medium.
 
 Movement XP is **speed-normalised**: you're paid per *second* of travel with each tick's distance clamped at the medium's reference speed. Going faster than the reference pays nothing extra. Full explanation on **[Movement Skills](Movement-Skills)**.
 
@@ -263,20 +263,35 @@ Earn XP by **sprinting on land**. Falling, rolling and dodging pay into Parkour 
 
 | Sub-skill | Ranks | Effect |
 |---|---|---|
+| Dodge | 1 | Halve incoming attack damage. Available from level 1. |
 | Roll | — | Land strategically to avoid fall damage. Hold **sneak** as you land for a **Graceful Roll**: twice the odds and twice the damage negated. |
+| Athlete | 1 | Sprinting costs less hunger. Unlocks at Parkour 50 (RetroMode). |
+| Smash | 1 | Sprint attacks hit harder and send targets flying. Unlocks at Parkour 150. |
 | Snow Walker | 1 | Cross **powder snow** without sinking into it. Unlocks at Parkour 100 (RetroMode). |
 
-Both are deliberately parented to Parkour rather than Agility, so you earn them by running, jumping and landing — not by a swimmer and a flier dragging the three-skill average up. Roll matters most: falling pays its XP into Parkour, so gating it on Agility's mean meant the falls that earn it levelled its own unlock at a third rate.
+All five are deliberately parented to Parkour rather than Agility, so you earn them by running, jumping and landing — not by a swimmer and a flier dragging the three-skill average up. Roll and Dodge matter most: falling and dodging pay their XP into Parkour, so gating them on Agility's mean meant the very hits that earn them levelled their own unlock at a third rate.
 
 Roll has no rank ladder — it is available from level 1 and its odds scale linearly with Parkour, reaching the configured maximum at Parkour 1000 (RetroMode). `/mcstats parkour` shows both the plain and the Graceful figure.
 
 ## Swimming
 
-Earn XP by **swimming**. No sub-skills of its own.
+Earn XP by **swimming**.
+
+| Sub-skill | Ranks | Effect |
+|---|---|---|
+| Lead Lungs | 1 | Hold your breath far longer underwater. Unlocks at Swimming 250 (RetroMode). |
+| Lake Raider | 1 | Underwater digging turns up treasure. Unlocks at Swimming 500. |
 
 ## Flying
 
-Earn XP by **elytra gliding**. No sub-skills of its own.
+Earn XP by **elytra gliding**.
+
+| Sub-skill | Ranks | Effect |
+|---|---|---|
+| Glide | 1 | Descend more slowly while gliding. Unlocks at Flying 350 (RetroMode). |
+| Solar Wings | 1 | A worn elytra slowly mends in daylight. Unlocks at Flying 750. |
+
+Both were Agility sub-skills until 2026-08-10. Read against Agility's three-skill mean their unlocks needed Flying **1050** and **2250** from a player who only flew — past the level cap, so a specialist could never reach them at all.
 
 ---
 
@@ -332,20 +347,15 @@ Earn XP by brewing potions.
 
 ## Agility (child)
 
-Level = mean of **Parkour + Swimming + Flying**. Earns no XP itself, but owns **nine sub-skills** — the largest sub-skill set in the mod. Super ability: **Second Wind**.
+Level = mean of **Parkour + Swimming + Flying**. Earns no XP itself. Super ability: **Second Wind**.
+
+It keeps exactly the two perks that work in **all three** mediums — both carry one rank per medium, so no single parent's level could gate them. Everything single-medium moved to its own parent on 2026-08-10.
 
 Full page: **[Movement Skills](Movement-Skills)**.
 
 | Sub-skill | Ranks | Effect |
 |---|---|---|
-| Dodge | 1 | Halve incoming attack damage. |
 | Fleet Footed | 3 | Move faster through whatever you're travelling through. Rank 1 = land, 2 = water, 3 = air. |
-| Athlete | 1 | Sprinting costs less hunger. |
-| Smash | 1 | Sprint attacks hit harder and send targets flying. |
-| Lead Lungs | 1 | Hold your breath far longer underwater. |
-| Glide | 1 | Descend more slowly while gliding. |
-| Lake Raider | 1 | Underwater digging turns up treasure. |
-| Solar Wings | 1 | A worn elytra slowly mends in daylight. |
 | Second Wind | 3 | Lunge, surge or soar. Super ability, triggered by holding a **feather** and right-clicking. Rank 1 = land, 2 = water, 3 = air. |
 
 ## Salvage (child)

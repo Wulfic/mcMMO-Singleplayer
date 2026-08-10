@@ -241,8 +241,8 @@ public class AgilityManager extends SkillManager {
         if (getPlayer().isBlocking()) {
             return false;
         }
-        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_DODGE)
-                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_DODGE);
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.PARKOUR_DODGE)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.PARKOUR_DODGE);
     }
 
     /**
@@ -270,7 +270,7 @@ public class AgilityManager extends SkillManager {
             return null;
         }
         final boolean rngSuccess = ProbabilityUtil.isSkillRNGSuccessful(
-                SubSkillType.AGILITY_DODGE, mmoPlayer);
+                SubSkillType.PARKOUR_DODGE, mmoPlayer);
         final DodgeResult result = dodgeCheck(baseDamage, rngSuccess,
                 attackerXpEligible && isRespawnGracePeriodOver());
         if (result != null && result.getXpGain() > 0) {
@@ -467,8 +467,8 @@ public class AgilityManager extends SkillManager {
     // --- Sub-skill 4: Athlete -----------------------------------------------------------------
 
     public boolean canAthlete() {
-        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_ATHLETE)
-                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_ATHLETE);
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.PARKOUR_ATHLETE)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.PARKOUR_ATHLETE);
     }
 
     /**
@@ -496,14 +496,14 @@ public class AgilityManager extends SkillManager {
     // --- Sub-skill 5: Smash -------------------------------------------------------------------
 
     public boolean canSmash() {
-        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_SMASH)
-                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_SMASH);
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.PARKOUR_SMASH)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.PARKOUR_SMASH);
     }
 
     /** Rolls Smash for a sprint-attack. The caller has already checked the player is sprinting. */
     public boolean rollSmash() {
         return canSmash()
-                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.AGILITY_SMASH, mmoPlayer);
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.PARKOUR_SMASH, mmoPlayer);
     }
 
     /** Bonus damage a successful Smash adds to a sprint-attack. */
@@ -521,8 +521,8 @@ public class AgilityManager extends SkillManager {
     // --- Sub-skill 6: Lead Lungs --------------------------------------------------------------
 
     public boolean canLeadLungs() {
-        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_LEAD_LUNGS)
-                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_LEAD_LUNGS);
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.SWIMMING_LEAD_LUNGS)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.SWIMMING_LEAD_LUNGS);
     }
 
     /**
@@ -619,8 +619,8 @@ public class AgilityManager extends SkillManager {
     // --- Sub-skill 8: Glide -------------------------------------------------------------------
 
     public boolean canGlide() {
-        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_GLIDE)
-                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_GLIDE);
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.FLYING_GLIDE)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.FLYING_GLIDE);
     }
 
     /**
@@ -646,8 +646,8 @@ public class AgilityManager extends SkillManager {
     // --- Sub-skill 9: Lake Raider -------------------------------------------------------------
 
     public boolean canLakeRaider() {
-        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_LAKE_RAIDER)
-                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_LAKE_RAIDER);
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.SWIMMING_LAKE_RAIDER)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.SWIMMING_LAKE_RAIDER);
     }
 
     /**
@@ -656,7 +656,7 @@ public class AgilityManager extends SkillManager {
      */
     public boolean rollLakeRaiderSuccess() {
         return canLakeRaider()
-                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.AGILITY_LAKE_RAIDER, mmoPlayer);
+                && ProbabilityUtil.isSkillRNGSuccessful(SubSkillType.SWIMMING_LAKE_RAIDER, mmoPlayer);
     }
 
     /**
@@ -672,7 +672,7 @@ public class AgilityManager extends SkillManager {
      * Excavation-level requirement, because it is an Agility perk being paid for Agility levels.
      *
      * @param candidates  the broken block's excavation treasures, in config order
-     * @param mainRollWon whether the {@code AGILITY_LAKE_RAIDER} sub-skill roll succeeded
+     * @param mainRollWon whether the {@code SWIMMING_LAKE_RAIDER} sub-skill roll succeeded
      * @param staticRoll  given a treasure's {@code Drop_Chance} (0–100), whether its static roll wins
      * @return the treasure to drop, or empty if none was won
      */
@@ -693,8 +693,8 @@ public class AgilityManager extends SkillManager {
     // --- Sub-skill 10: Solar Wings ------------------------------------------------------------
 
     public boolean canSolarWings() {
-        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.AGILITY_SOLAR_WINGS)
-                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_SOLAR_WINGS);
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.FLYING_SOLAR_WINGS)
+                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.FLYING_SOLAR_WINGS);
     }
 
     /**

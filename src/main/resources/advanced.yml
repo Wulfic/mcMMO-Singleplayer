@@ -119,21 +119,20 @@ Skills:
 
     #
     #  Settings for Agility
+    #
+    #  Agility is a CHILD skill -- its level is the mean of Parkour, Swimming and Flying -- so only
+    #  the two sub-skills that work in ALL THREE mediums are still tuned here. Each carries one rank
+    #  per medium (land, water, air), which is precisely why neither could be re-parented: no single
+    #  parent's level could honestly gate all three ranks.
+    #
+    #  MOVED OUT 2026-08-10: Dodge, Athlete and Smash -> `Skills.Parkour`; LeadLungs and LakeRaider
+    #  -> `Skills.Swimming`; Glide and SolarWings -> `Skills.Flying`. The VALUES are unchanged, but
+    #  each is now read against one skill instead of the average of three, so a specialist reaches
+    #  them roughly three times sooner (and Glide/SolarWings become reachable at all -- gated on the
+    #  mean they needed Flying 1050 and 2250, both past the level cap). If you had tuned any of those
+    #  blocks, mcMMO moves your values to the new paths on first boot and tells you it did so.
     ###
     Agility:
-        Dodge:
-            # ChanceMax: Maximum chance of dodging when on <MaxBonusLevel> or higher
-            # MaxBonusLevel: On this level or higher, the dodge chance will not go higher than <ChanceMax>
-            # DamageModifier: Dodge damage will be divided by this modifier
-            ChanceMax: 20.0
-            MaxBonusLevel:
-                Standard: 100
-                RetroMode: 1000
-            DamageModifier: 2.0
-
-        # Roll moved to `Skills.Parkour.Roll` on 2026-08-03 (GitHub #4) -- it is gated on the Parkour
-        # level now, not on Agility's three-skill mean. See the Parkour section below.
-
         FleetFooted:
             # Move faster in whichever medium you are travelling through. One sub-skill, three ranks:
             # rank 1 unlocks Land, rank 2 Water, rank 3 Air. The bonus scales linearly with your
@@ -153,30 +152,6 @@ Skills:
             Water_MaxBonus: 0.50
             Air_MaxBonus: 0.15
 
-        Athlete:
-            # Sprinting costs less hunger. Capped below 1.0 so sprinting is never free.
-            MaxBonusLevel:
-                Standard: 100
-                RetroMode: 1000
-            MaxExhaustionReduction: 0.5
-
-        Smash:
-            # Chance for a sprint-attack to deal bonus damage and extra knockback.
-            ChanceMax: 25.0
-            MaxBonusLevel:
-                Standard: 100
-                RetroMode: 1000
-            BonusDamage: 2.0
-            KnockbackStrength: 0.8
-
-        LeadLungs:
-            # Extra air ticks restored per tick while submerged. Vanilla drains 1 per tick, so a value
-            # of 1.0 would make breath infinite - the cap is deliberately below that.
-            MaxBonusLevel:
-                Standard: 100
-                RetroMode: 1000
-            MaxAirTopUpPerTick: 0.75
-
         SecondWind:
             # Agility's super ability. One ability, three bodies, dispatched on how you are moving:
             # sprinting = a forward lunge, in water = a buff, gliding = a speed burst.
@@ -186,27 +161,6 @@ Skills:
             DartKnockback: 1.5
             AquamanAmplifier: 1
             LimitlessBoost: 1.2
-
-        Glide:
-            # Descend more slowly while gliding. Capped well below 1.0 so you can still land.
-            MaxBonusLevel:
-                Standard: 100
-                RetroMode: 1000
-            MaxDescentReduction: 0.5
-
-        LakeRaider:
-            # Chance for an underwater block break to turn up treasure.
-            ChanceMax: 15.0
-            MaxBonusLevel:
-                Standard: 100
-                RetroMode: 1000
-
-        SolarWings:
-            # A worn, damaged elytra slowly repairs in daylight. Deliberately a trickle: make this
-            # generous and elytra durability stops being a resource at all.
-            RepairPerInterval: 1
-            IntervalTicks: 100
-            GroundedMultiplier: 2
     #
     #  Settings for Alchemy
     ###
@@ -370,6 +324,28 @@ Skills:
                 # Don't modify these two unless you fully understand what you are doing
                 Min_Wait: 40
                 Max_Wait: 100
+    #
+    #  Settings for Flying
+    #
+    #  One of Agility's three parents. Both blocks below moved here from `Skills.Agility` on
+    #  2026-08-10, and this is the pair the move mattered most for: read against Agility's mean of
+    #  three, Glide's unlock (350) needed Flying 1050 and SolarWings' (750) needed Flying 2250 from a
+    #  player who only ever flew -- both past the 1000 cap, so a specialist could never unlock either.
+    ###
+    Flying:
+        Glide:
+            # Descend more slowly while gliding. Capped well below 1.0 so you can still land.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            MaxDescentReduction: 0.5
+
+        SolarWings:
+            # A worn, damaged elytra slowly repairs in daylight. Deliberately a trickle: make this
+            # generous and elytra durability stops being a resource at all.
+            RepairPerInterval: 1
+            IntervalTicks: 100
+            GroundedMultiplier: 2
     #
     #  Settings for Herbalism
     ###
@@ -803,6 +779,41 @@ Skills:
                 RetroMode: 1000
             DamageThreshold: 7.0
 
+        # Moved here from `Skills.Agility.Dodge` on 2026-08-10. Dodge is a combat reaction rather than
+        # a way of travelling, so it was the one sub-skill whose home was arguable -- it lives here
+        # because it has always PAID its XP to Parkour, and a gate that levels off the very hits it
+        # pays for is the arrangement GitHub #4 restored for Roll.
+        Dodge:
+            # ChanceMax: Maximum chance of dodging when on <MaxBonusLevel> or higher
+            # MaxBonusLevel: On this level or higher, the dodge chance will not go higher than <ChanceMax>
+            # DamageModifier: Dodge damage will be divided by this modifier
+            ChanceMax: 20.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            DamageModifier: 2.0
+
+        # Moved here from `Skills.Agility.Athlete` on 2026-08-10.
+        Athlete:
+            # Sprinting costs less hunger. Capped below 1.0 so sprinting is never free.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            MaxExhaustionReduction: 0.5
+
+        # Moved here from `Skills.Agility.Smash` on 2026-08-10.
+        Smash:
+            # Chance for a sprint-attack to deal bonus damage and extra knockback.
+            ChanceMax: 25.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            BonusDamage: 2.0
+            KnockbackStrength: 0.8
+
+        # SnowWalker has no advanced.yml block: the effect is binary (you walk on powder snow or you
+        # do not), so there is nothing to tune. Its unlock level lives in skillranks.yml.
+
     #
     #  Settings for Repair
     ###
@@ -953,6 +964,28 @@ Skills:
             # armoured player using this is still very visible. That is vanilla behaviour, not a bug.
             DurationTicks: 100
 
+    #
+    #  Settings for Swimming
+    #
+    #  One of Agility's three parents. Both blocks moved here from `Skills.Agility` on 2026-08-10:
+    #  holding your breath and finding treasure in silt are earned by swimming, and under the
+    #  three-skill mean they were partly gated on how much the player also ran and flew.
+    ###
+    Swimming:
+        LeadLungs:
+            # Extra air ticks restored per tick while submerged. Vanilla drains 1 per tick, so a value
+            # of 1.0 would make breath infinite - the cap is deliberately below that.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            MaxAirTopUpPerTick: 0.75
+
+        LakeRaider:
+            # Chance for an underwater block break to turn up treasure.
+            ChanceMax: 15.0
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
     #
     #  Settings for Swords
     ###

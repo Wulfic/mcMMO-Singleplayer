@@ -49,8 +49,8 @@ class AdvancedConfigTest {
     void readsPerSubSkillTuning(@TempDir Path dataFolder) {
         final AdvancedConfig config = new AdvancedConfig(dataFolder);
         // Agility.Dodge: ChanceMax 20.0, MaxBonusLevel.Standard 100, DamageModifier 2.0.
-        assertEquals(20.0D, config.getMaximumProbability(SubSkillType.AGILITY_DODGE), 0.0001D);
-        assertEquals(100, config.getMaxBonusLevel(SubSkillType.AGILITY_DODGE));
+        assertEquals(20.0D, config.getMaximumProbability(SubSkillType.PARKOUR_DODGE), 0.0001D);
+        assertEquals(100, config.getMaxBonusLevel(SubSkillType.PARKOUR_DODGE));
         assertEquals(2.0D, config.getDodgeDamageModifier(), 0.0001D);
     }
 

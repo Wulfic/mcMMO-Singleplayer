@@ -95,9 +95,30 @@ class AgilityMovementTest {
         McMMOMod.setRankConfig(null);
     }
 
-    /** A manager for a player at {@code level}, with the movement tuning pinned to the defaults. */
+    /**
+     * A manager for an <b>all-rounder</b> at {@code level}: equal in Parkour, Swimming and Flying,
+     * which makes Agility (their mean) exactly {@code level} too.
+     *
+     * <p>All four are stubbed because the 2026-08-10 re-parenting split which level each sub-skill
+     * reads — Fleet Footed and Second Wind still gate on Agility, while Athlete/Smash/Dodge gate on
+     * Parkour, Lead Lungs/Lake Raider on Swimming and Glide/Solar Wings on Flying. Stubbing them to
+     * one number keeps every scaling and clamp assertion in this class meaning exactly what it did
+     * before the move: those tests are about the ladder, not about which skill feeds it.
+     *
+     * <p>Which level each sub-skill actually reads is proved by
+     * {@link #reParentedSubSkillsFollowTheirOwnParentNotTheAverage()}, where the three parents
+     * deliberately disagree.
+     */
     private AgilityManager managerAtLevel(int level) {
-        when(mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY)).thenReturn(level);
+        return managerAtLevels(level, level, level, level);
+    }
+
+    /** A manager whose four movement levels are set independently. */
+    private AgilityManager managerAtLevels(int agility, int parkour, int swimming, int flying) {
+        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY)).thenReturn(agility);
+        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR)).thenReturn(parkour);
+        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.SWIMMING)).thenReturn(swimming);
+        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.FLYING)).thenReturn(flying);
         final AgilityManager manager = new AgilityManager(mmoPlayer);
         manager.setMovementXpSettings(defaultSettings());
         return manager;
@@ -362,12 +383,12 @@ class AgilityMovementTest {
     void smashRollsAtTheConfiguredCeiling() {
         // Pin the RNG: a maxBonusLevel of 0 short-circuits ProbabilityUtil to the ceiling, so a
         // ceiling of 100 always succeeds and 0 never does. Same lever the Dodge tests use.
-        when(advancedConfig.getMaxBonusLevel(SubSkillType.AGILITY_SMASH)).thenReturn(0);
+        when(advancedConfig.getMaxBonusLevel(SubSkillType.PARKOUR_SMASH)).thenReturn(0);
 
-        when(advancedConfig.getMaximumProbability(SubSkillType.AGILITY_SMASH)).thenReturn(100.0);
+        when(advancedConfig.getMaximumProbability(SubSkillType.PARKOUR_SMASH)).thenReturn(100.0);
         assertTrue(managerAtLevel(1000).rollSmash());
 
-        when(advancedConfig.getMaximumProbability(SubSkillType.AGILITY_SMASH)).thenReturn(0.0);
+        when(advancedConfig.getMaximumProbability(SubSkillType.PARKOUR_SMASH)).thenReturn(0.0);
         assertFalse(managerAtLevel(1000).rollSmash());
     }
 
@@ -406,6 +427,60 @@ class AgilityMovementTest {
         assertFalse(fresh.canSmash());
         assertFalse(fresh.canLakeRaider());
         assertNull(fresh.computeSecondWind(Medium.LAND, 100));
+    }
+
+    // --- re-parenting (2026-08-10): which LEVEL each sub-skill reads ----------------------------
+
+    /**
+     * The load-bearing guard for the 2026-08-10 move, and the reason it is worth having: a sub-skill's
+     * parent is derived from its enum name prefix and <b>nothing reports getting it wrong</b> — a
+     * constant renamed back to {@code AGILITY_*} silently re-gates onto the average with no error
+     * anywhere, which is exactly how GitHub #4 shipped.
+     *
+     * <p>So the three parents are set to deliberately disagree. This player is a pure runner:
+     * Parkour 1000, Swimming 0, Flying 0, hence Agility 333. Every Parkour sub-skill must be live and
+     * every Swimming and Flying one must be dead — an assertion that is only satisfiable if each
+     * reads its own parent, and that a mean-of-three gate fails in both directions at once.
+     */
+    @Test
+    void reParentedSubSkillsFollowTheirOwnParentNotTheAverage() {
+        final AgilityManager runner = managerAtLevels(333, 1000, 0, 0);
+
+        // Parkour's own: unlocked by running, despite Agility sitting at 333.
+        assertTrue(runner.canDodge(), "Dodge is gated on Parkour 1 and this player has Parkour 1000");
+        assertTrue(runner.canAthlete(), "Athlete unlocks at Parkour 50");
+        assertTrue(runner.canSmash(), "Smash unlocks at Parkour 150");
+        assertTrue(runner.canSnowWalk(), "Snow Walker unlocks at Parkour 100");
+
+        // Swimming's and Flying's: dead, because this player has never swum or flown. Under the old
+        // Agility gate, Agility 333 would have switched Lead Lungs (250) on for a player who has
+        // never been underwater.
+        assertFalse(runner.canLeadLungs(), "Lead Lungs is gated on Swimming, which is 0");
+        assertFalse(runner.canLakeRaider(), "Lake Raider is gated on Swimming, which is 0");
+        assertFalse(runner.canGlide(), "Glide is gated on Flying, which is 0");
+        assertFalse(runner.canSolarWings(), "Solar Wings is gated on Flying, which is 0");
+    }
+
+    /**
+     * The converse, and the half that is easy to leave out: the two sub-skills that did <em>not</em>
+     * move must still read the average, or "re-parent everything" would have been the quieter bug.
+     *
+     * <p>A pure flier is the sharpest case. Flying 1000 with nothing else is Agility 333, so Fleet
+     * Footed's water rank (200) is unlocked and its air rank (400) is not — even though the player's
+     * flying is maxed. That is the deliberate all-rounder design, and it is also proof the gate is
+     * the mean rather than any single parent: Flying alone would have unlocked the air rank, and
+     * Swimming alone would have denied the water one.
+     */
+    @Test
+    void agilitysOwnSubSkillsStillGateOnTheThreeSkillMean() {
+        final AgilityManager flier = managerAtLevels(333, 0, 0, 1000);
+
+        assertTrue(flier.canFleetFoot(Medium.LAND), "rank 1 at Agility 1");
+        assertTrue(flier.canFleetFoot(Medium.WATER), "rank 2 at Agility 200, and the mean is 333");
+        assertFalse(flier.canFleetFoot(Medium.AIR),
+                "rank 3 needs Agility 400; maxed Flying alone only reaches 333");
+        assertNull(flier.computeSecondWind(Medium.AIR, 100),
+                "Second Wind's air body needs Agility 750 — unreachable without swimming and running");
     }
 
     // --- XP routing: each medium pays its own skill, never Agility -------------------------------

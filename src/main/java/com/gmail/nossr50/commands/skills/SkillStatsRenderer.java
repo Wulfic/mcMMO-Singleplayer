@@ -86,12 +86,11 @@ public abstract class SkillStatsRenderer {
             case STEALTH -> new StealthStatsRenderer();
             case UNARMORED -> new UnarmoredStatsRenderer();
             case PARKOUR -> new ParkourStatsRenderer();
-            // SWIMMING and FLYING fall through deliberately, not for want of a renderer: they own no
-            // sub-skills of their own at all. Both are parents of the child skill AGILITY, and every
-            // movement effect is an AGILITY_* sub-skill gated on that averaged level, so it renders
-            // under /mcstats agility. PARKOUR is the exception above only because SNOW_WALKER's enum
-            // name parents it onto Parkour directly. A dedicated renderer here would emit an empty
-            // stats section — the generic header + level line is the honest whole of these two.
+            // All three of Agility's parents render their own effects as of 2026-08-10, when the
+            // single-medium sub-skills were re-parented off the averaged child level onto the skill
+            // that earns them. Before that, SWIMMING and FLYING owned nothing and fell through here.
+            case SWIMMING -> new SwimmingStatsRenderer();
+            case FLYING -> new FlyingStatsRenderer();
             default -> new GenericSkillStatsRenderer(skill);
         };
     }

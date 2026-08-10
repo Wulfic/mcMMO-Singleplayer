@@ -383,11 +383,25 @@ public class GeneralConfig extends ConfigLoader {
         return config.getInt("Skills.Axes.Ability_Activation_Level_Gate", 10);
     }
 
-    /* Agility */
+    /* Agility (and its three parents) */
+
+    /**
+     * Whether Dodge is forbidden from firing against a lightning strike.
+     *
+     * <p>Lives under {@code Skills.Parkour} rather than {@code Skills.Agility} because Dodge itself
+     * was re-parented to Parkour on 2026-08-10; a knob tuning a sub-skill should sit under the skill
+     * that gates it, or the next person to look for it will not find it.
+     */
     public boolean getDodgeLightningDisabled() {
-        return config.getBoolean("Skills.Agility.Prevent_Dodge_Lightning", false);
+        return config.getBoolean("Skills.Parkour.Prevent_Dodge_Lightning", false);
     }
 
+    /**
+     * The grace period, in seconds, during which a freshly teleported player earns no movement XP.
+     *
+     * <p>Stays under {@code Skills.Agility}: it guards the movement-XP pipeline as a whole, which is
+     * Agility's umbrella, and applies identically to Parkour, Swimming and Flying.
+     */
     public int getXPAfterTeleportCooldown() {
         return config.getInt("Skills.Agility.XP_After_Teleport_Cooldown", 5);
     }

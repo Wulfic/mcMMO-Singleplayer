@@ -256,8 +256,17 @@ write_adv() {
 
 # The whole locale file, read once into key -> value. Re-grepping it per sub-skill was ~93 process
 # spawns for data that never changes.
+#
+# ⚠️ The trailing-CR strip is load-bearing, not defensive tidiness. locale_en_US.properties is stored
+# with CRLF endings, so on a Windows checkout every value read here ends in a literal carriage
+# return -- which this script then embeds INSIDE a JSON string, producing titles like
+# "Skull Splitter\r Unlocked". Nothing catches that: the JSON stays valid, the drift-guard test only
+# compares advancement *ids*, and the damage is only visible on a toast in game. Every one of the
+# 340 generated files is affected, so running the generator on Windows silently rewrites the whole
+# datapack. Strip it at the single point where the file is read.
 declare -A LOCALE_STRINGS=()
 while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
     [[ "$line" == *=* ]] || continue
     [[ "$line" == \#* ]] && continue
     LOCALE_STRINGS["${line%%=*}"]="${line#*=}"

@@ -130,19 +130,25 @@ Skills:
     Agility:
         Enabled_For_PVP: true
         Enabled_For_PVE: true
-        Prevent_Dodge_Lightning: false
-        # Prevent earning Agility XP a few seconds after teleporting
+        # Prevent earning movement XP a few seconds after teleporting. Applies to all three domains.
         XP_After_Teleport_Cooldown: 5
-        # Agility is a CHILD skill: it owns all ten movement sub-skills but earns no XP itself. Its
-        # level is the mean of Parkour, Swimming and Flying, so Agility 1000 needs 1000 in all three
-        # (1000 Flying on its own is Agility 333). Capping it here caps what the sub-skills can reach.
+        # Agility is a CHILD skill: it earns no XP itself, and its level is the mean of Parkour,
+        # Swimming and Flying -- so Agility 1000 needs 1000 in all three (1000 Flying on its own is
+        # Agility 333). Capping it here caps what its sub-skills can reach.
+        #
+        # It keeps exactly the two sub-skills that span more than one medium, Fleet Footed and Second
+        # Wind, because the mean of three is only an honest gate for a perk that works in all three.
+        # Everything single-medium moved to that medium's own skill on 2026-08-10.
         Level_Cap: 0
         # Item that triggers the Second Wind super ability on right-click. Never consumed.
         Second_Wind_Item: FEATHER
-    # The three movement domains that feed Agility. They carry no sub-skills of their own -- the
-    # perks all live on Agility -- so these sections only tune the XP ladder itself.
+    # The three movement domains that feed Agility. Each one now owns the perks specific to it:
+    # Parkour has Dodge, Roll, Athlete, Smash and Snow Walker; Swimming has Lead Lungs and Lake
+    # Raider; Flying has Glide and Solar Wings. Their tuning lives in advanced.yml and skillranks.yml.
     Parkour:
         Level_Cap: 0
+        # Dodge is a Parkour sub-skill as of 2026-08-10 (it was Skills.Agility.Prevent_Dodge_Lightning).
+        Prevent_Dodge_Lightning: false
     Swimming:
         Level_Cap: 0
     Flying:

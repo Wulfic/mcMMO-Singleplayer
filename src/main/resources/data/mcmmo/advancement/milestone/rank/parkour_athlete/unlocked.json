@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/skill/agility",
+  "parent": "mcmmo:milestone/skill/parkour",
   "display": {
     "icon": {
-      "id": "minecraft:feather"
+      "id": "minecraft:leather_boots"
     },
     "title": {
-      "text": "Lead Lungs Unlocked",
+      "text": "Athlete Unlocked",
       "color": "aqua",
       "bold": true
     },
     "description": {
-      "text": "You can now use Lead Lungs.",
+      "text": "You can now use Athlete.",
       "color": "yellow"
     },
     "frame": "goal",

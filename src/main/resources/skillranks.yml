@@ -102,12 +102,15 @@ Archery:
             Rank_18: 900
             Rank_19: 950
             Rank_20: 1000
+# Agility is a CHILD skill: its level is the mean of Parkour, Swimming and Flying. Only the two
+# sub-skills that work in ALL THREE mediums are still ranked here, because the mean is only an
+# honest gate for a perk that spans all three -- and each of these carries one rank PER medium, so
+# no single parent's level could gate all three ranks.
+#
+# MOVED OUT 2026-08-10: Dodge/Athlete/Smash -> Parkour, LeadLungs/LakeRaider -> Swimming,
+# Glide/SolarWings -> Flying. The numbers below and there are unchanged; what changed is which
+# level they are read against.
 Agility:
-    Dodge:
-        Standard:
-            Rank_1: 1
-        RetroMode:
-            Rank_1: 1
     # Fleet Footed and Second Wind carry one rank per movement medium, in the same order:
     # rank 1 = Land, rank 2 = Water, rank 3 = Air.
     FleetFooted:
@@ -119,6 +122,32 @@ Agility:
             Rank_1: 1
             Rank_2: 200
             Rank_3: 400
+    SecondWind:
+        Standard:
+            Rank_1: 25
+            Rank_2: 50
+            Rank_3: 75
+        RetroMode:
+            Rank_1: 250
+            Rank_2: 500
+            Rank_3: 750
+# Parkour, Swimming and Flying are Agility's three parent skills: their XP is what Agility's level
+# is averaged from. Every sub-skill below is gated on that parent's OWN level rather than on the
+# average, so it is earned by doing the thing it is a perk for.
+Parkour:
+    SnowWalker:
+        Standard:
+            Rank_1: 10
+        RetroMode:
+            Rank_1: 100
+    # Dodge, Athlete and Smash moved here from Agility on 2026-08-10 with their numbers untouched.
+    # Read against Parkour instead of the mean of three, they unlock roughly 3x sooner for a player
+    # who runs rather than swims and flies -- which is the point of the move.
+    Dodge:
+        Standard:
+            Rank_1: 1
+        RetroMode:
+            Rank_1: 1
     Athlete:
         Standard:
             Rank_1: 5
@@ -129,45 +158,32 @@ Agility:
             Rank_1: 15
         RetroMode:
             Rank_1: 150
+Swimming:
+    # Moved here from Agility on 2026-08-10, numbers unchanged.
     LeadLungs:
         Standard:
             Rank_1: 25
         RetroMode:
             Rank_1: 250
-    SecondWind:
-        Standard:
-            Rank_1: 25
-            Rank_2: 50
-            Rank_3: 75
-        RetroMode:
-            Rank_1: 250
-            Rank_2: 500
-            Rank_3: 750
-    Glide:
-        Standard:
-            Rank_1: 35
-        RetroMode:
-            Rank_1: 350
     LakeRaider:
         Standard:
             Rank_1: 50
         RetroMode:
             Rank_1: 500
+Flying:
+    # Moved here from Agility on 2026-08-10, numbers unchanged -- and for these two the move is what
+    # makes them reachable at all. Against Agility's mean, Glide's 350 needed Flying 1050 and
+    # SolarWings' 750 needed Flying 2250 from a player who only flew: both past the 1000 level cap.
+    Glide:
+        Standard:
+            Rank_1: 35
+        RetroMode:
+            Rank_1: 350
     SolarWings:
         Standard:
             Rank_1: 75
         RetroMode:
             Rank_1: 750
-# Parkour is one of Agility's three parent skills and normally has no sub-skills of its own — its
-# XP is what Agility's level is averaged from. Snow Walker is the exception, and deliberately so:
-# it is gated on Parkour itself rather than on Agility, so it is earned by running and jumping
-# rather than by a swimmer and a flier dragging the average up.
-Parkour:
-    SnowWalker:
-        Standard:
-            Rank_1: 10
-        RetroMode:
-            Rank_1: 100
 Axes:
     AxesLimitBreak:
         Standard:

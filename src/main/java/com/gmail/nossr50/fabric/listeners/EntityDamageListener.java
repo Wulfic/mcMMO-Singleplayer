@@ -1295,7 +1295,7 @@ public final class EntityDamageListener {
                     attacker.getX() - target.getX(), attacker.getZ() - target.getZ());
         }
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
-                "Agility.SubSkill.Smash.Proc");
+                "Parkour.SubSkill.Smash.Proc");
         return amount + (float) agility.getSmashBonusDamage();
     }
 
@@ -1799,7 +1799,7 @@ public final class EntityDamageListener {
         }
         if (mmoPlayer.useChatNotifications()) {
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
-                    "Agility.Combat.Proc");
+                    "Parkour.Combat.Proc");
         }
         ParticleEffectUtils.playDodgeEffect(mmoPlayer.getPlayer());
         // PORT: legacy also scheduled MobDodgeMetaCleanup to expire the tracker after a minute. That

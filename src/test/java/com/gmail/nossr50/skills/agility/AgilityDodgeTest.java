@@ -52,9 +52,9 @@ class AgilityDodgeTest {
         lenient().when(player.getHealth()).thenReturn(20.0F);
         // Force the Dodge skill RNG to a certainty so processDodge is deterministic: a maxBonusLevel
         // of 0 short-circuits ProbabilityUtil to the ceiling, and the ceiling is 100%.
-        lenient().when(advancedConfig.getMaximumProbability(SubSkillType.AGILITY_DODGE))
+        lenient().when(advancedConfig.getMaximumProbability(SubSkillType.PARKOUR_DODGE))
                 .thenReturn(100.0);
-        lenient().when(advancedConfig.getMaxBonusLevel(SubSkillType.AGILITY_DODGE))
+        lenient().when(advancedConfig.getMaxBonusLevel(SubSkillType.PARKOUR_DODGE))
                 .thenReturn(0);
 
         McMMOMod.setExperienceConfig(experienceConfig);
@@ -65,7 +65,9 @@ class AgilityDodgeTest {
 
         mmoPlayer = mock(McMMOPlayer.class);
         when(mmoPlayer.getPlayer()).thenReturn(player);
-        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY)).thenReturn(1000);
+        // PARKOUR, not AGILITY: Dodge was re-parented on 2026-08-10, so the level its rank gate and
+        // its odds both read is Parkour's own rather than the mean of the three movement skills.
+        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR)).thenReturn(1000);
         manager = new AgilityManager(mmoPlayer);
     }
 

@@ -53,16 +53,16 @@ public class AdvancedConfig extends ConfigLoader {
         }
 
         /* AGILITY */
-        if (getMaximumProbability(SubSkillType.AGILITY_DODGE) < 1) {
-            reason.add("Skills.Agility.Dodge.ChanceMax should be at least 1!");
+        if (getMaximumProbability(SubSkillType.PARKOUR_DODGE) < 1) {
+            reason.add("Skills.Parkour.Dodge.ChanceMax should be at least 1!");
         }
 
-        if (getMaxBonusLevel(SubSkillType.AGILITY_DODGE) < 1) {
-            reason.add("Skills.Agility.Dodge.MaxBonusLevel should be at least 1!");
+        if (getMaxBonusLevel(SubSkillType.PARKOUR_DODGE) < 1) {
+            reason.add("Skills.Parkour.Dodge.MaxBonusLevel should be at least 1!");
         }
 
         if (getDodgeDamageModifier() <= 1) {
-            reason.add("Skills.Agility.Dodge.DamageModifier should be greater than 1!");
+            reason.add("Skills.Parkour.Dodge.DamageModifier should be greater than 1!");
         }
 
         // Roll moved from Skills.Agility.* to Skills.Parkour.* on 2026-08-03 (GitHub #4) — see
@@ -651,7 +651,7 @@ public class AdvancedConfig extends ConfigLoader {
 
     /* AGILITY */
     public double getDodgeDamageModifier() {
-        return config.getDouble("Skills.Agility.Dodge.DamageModifier", 2.0D);
+        return config.getDouble("Skills.Parkour.Dodge.DamageModifier", 2.0D);
     }
 
     /**
@@ -702,27 +702,27 @@ public class AdvancedConfig extends ConfigLoader {
     }
 
     public int getAthleteMaxBonusLevel() {
-        return maxBonusLevel("Skills.Agility.Athlete.MaxBonusLevel");
+        return maxBonusLevel("Skills.Parkour.Athlete.MaxBonusLevel");
     }
 
     public double getAthleteMaxExhaustionReduction() {
-        return config.getDouble("Skills.Agility.Athlete.MaxExhaustionReduction", 0.5D);
+        return config.getDouble("Skills.Parkour.Athlete.MaxExhaustionReduction", 0.5D);
     }
 
     public double getSmashBonusDamage() {
-        return config.getDouble("Skills.Agility.Smash.BonusDamage", 2.0D);
+        return config.getDouble("Skills.Parkour.Smash.BonusDamage", 2.0D);
     }
 
     public double getSmashKnockbackStrength() {
-        return config.getDouble("Skills.Agility.Smash.KnockbackStrength", 0.8D);
+        return config.getDouble("Skills.Parkour.Smash.KnockbackStrength", 0.8D);
     }
 
     public int getLeadLungsMaxBonusLevel() {
-        return maxBonusLevel("Skills.Agility.LeadLungs.MaxBonusLevel");
+        return maxBonusLevel("Skills.Swimming.LeadLungs.MaxBonusLevel");
     }
 
     public double getLeadLungsMaxAirTopUpPerTick() {
-        return config.getDouble("Skills.Agility.LeadLungs.MaxAirTopUpPerTick", 0.75D);
+        return config.getDouble("Skills.Swimming.LeadLungs.MaxAirTopUpPerTick", 0.75D);
     }
 
     public double getSecondWindDartRange() {
@@ -746,23 +746,23 @@ public class AdvancedConfig extends ConfigLoader {
     }
 
     public int getGlideMaxBonusLevel() {
-        return maxBonusLevel("Skills.Agility.Glide.MaxBonusLevel");
+        return maxBonusLevel("Skills.Flying.Glide.MaxBonusLevel");
     }
 
     public double getGlideMaxDescentReduction() {
-        return config.getDouble("Skills.Agility.Glide.MaxDescentReduction", 0.5D);
+        return config.getDouble("Skills.Flying.Glide.MaxDescentReduction", 0.5D);
     }
 
     public int getSolarWingsRepairPerInterval() {
-        return config.getInt("Skills.Agility.SolarWings.RepairPerInterval", 1);
+        return config.getInt("Skills.Flying.SolarWings.RepairPerInterval", 1);
     }
 
     public int getSolarWingsIntervalTicks() {
-        return config.getInt("Skills.Agility.SolarWings.IntervalTicks", 100);
+        return config.getInt("Skills.Flying.SolarWings.IntervalTicks", 100);
     }
 
     public int getSolarWingsGroundedMultiplier() {
-        return config.getInt("Skills.Agility.SolarWings.GroundedMultiplier", 2);
+        return config.getInt("Skills.Flying.SolarWings.GroundedMultiplier", 2);
     }
 
     // --- Stealth (Pass 2) ----------------------------------------------------------------------

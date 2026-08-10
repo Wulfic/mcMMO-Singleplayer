@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/skill/agility",
+  "parent": "mcmmo:milestone/skill/swimming",
   "display": {
     "icon": {
-      "id": "minecraft:feather"
+      "id": "minecraft:heart_of_the_sea"
     },
     "title": {
-      "text": "Athlete Unlocked",
+      "text": "Lead Lungs Unlocked",
       "color": "aqua",
       "bold": true
     },
     "description": {
-      "text": "You can now use Athlete.",
+      "text": "You can now use Lead Lungs.",
       "color": "yellow"
     },
     "frame": "goal",

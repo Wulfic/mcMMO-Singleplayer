@@ -2,25 +2,35 @@ package com.gmail.nossr50.commands.skills;
 
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.skills.agility.AgilityManager;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * {@code /mcstats parkour} — a thin screen, but no longer an almost-empty one.
+ * {@code /mcstats parkour} — the land-movement screen, and as of 2026-08-10 the largest of Agility's
+ * three parents.
  *
  * <h2>What lives here, and why</h2>
- * Parkour is one of the three parents of the child skill <b>Agility</b>, and most movement effects a
- * player associates with it — Fleet Footed, Second Wind, Dodge, Smash — are {@code AGILITY_*}
- * sub-skills gated on that averaged child level, so they render under {@code /mcstats agility}. The
- * two rendered here are gated on the Parkour level <em>directly</em>, because a sub-skill's parent is
- * resolved from its enum name prefix:
+ * Parkour is one of the three parents of the child skill <b>Agility</b>, and a sub-skill's parent is
+ * resolved from its enum name prefix — so everything below is gated on the Parkour level
+ * <em>directly</em> rather than on Agility's mean of Parkour, Swimming and Flying:
  * <ul>
- *   <li>{@link SubSkillType#PARKOUR_SNOW_WALKER} — not falling through powder snow is a
- *       running-and-jumping perk, and a strong swimmer should not be handed it by the average.</li>
+ *   <li>{@link SubSkillType#PARKOUR_DODGE}, {@link SubSkillType#PARKOUR_ATHLETE} and
+ *       {@link SubSkillType#PARKOUR_SMASH} — moved off Agility on 2026-08-10. All three are things
+ *       you earn by running: a sprint-attack perk gated partly on how much the player swims was the
+ *       same defect #4 fixed for Roll. Dodge is the one whose home was arguable (it is a combat
+ *       reaction, not a way of travelling) and it is here because it has always <em>paid</em> its XP
+ *       to Parkour.</li>
  *   <li>{@link SubSkillType#PARKOUR_ROLL} — moved off Agility on 2026-08-03 (GitHub #4). Fall XP is
  *       paid to Parkour, so the odds now sit next to the level that actually moves them.</li>
+ *   <li>{@link SubSkillType#PARKOUR_SNOW_WALKER} — not falling through powder snow is a
+ *       running-and-jumping perk, and a strong swimmer should not be handed it by the average.</li>
  * </ul>
+ *
+ * <p>What is <em>not</em> here is Fleet Footed and Second Wind: they work in all three mediums and
+ * carry one rank per medium, so no single parent's level could gate them and they remain
+ * Agility-gated ({@link AgilityStatsRenderer}).
  *
  * <h2>Why a binary sub-skill still gets a stats line</h2>
  * Snow Walker has no magnitude — it is on or it is off — so the line pairs its {@code .Stat} label
@@ -39,6 +49,7 @@ import java.util.List;
  */
 public final class ParkourStatsRenderer extends SkillStatsRenderer {
 
+    private AgilityManager agility;
     private String rollChance;
     private String gracefulRollChance;
 
@@ -48,7 +59,10 @@ public final class ParkourStatsRenderer extends SkillStatsRenderer {
 
     @Override
     protected void dataCalculations(float skillValue) {
-        // Snow Walker is a binary unlock; there is nothing to pre-compute for it.
+        // Athlete's number comes off the manager, which reads the live config; Snow Walker is a
+        // binary unlock and Smash's odds are resolved at render time like every other RNG line.
+        agility = mmoPlayer.getAgilityManager();
+
         if (!hasUnlocked(SubSkillType.PARKOUR_ROLL)) {
             return;
         }
@@ -64,10 +78,27 @@ public final class ParkourStatsRenderer extends SkillStatsRenderer {
     protected List<String> statsDisplay(float skillValue) {
         final List<String> messages = new ArrayList<>();
 
+        if (hasUnlocked(SubSkillType.PARKOUR_DODGE)) {
+            messages.add(getStatMessage(SubSkillType.PARKOUR_DODGE,
+                    ProbabilityUtil.getRNGDisplayValues(mmoPlayer, SubSkillType.PARKOUR_DODGE)[0]));
+        }
+
         if (hasUnlocked(SubSkillType.PARKOUR_ROLL)) {
             messages.add(getStatMessage(SubSkillType.PARKOUR_ROLL, rollChance));
             messages.add(getStatMessage(true, false, SubSkillType.PARKOUR_ROLL,
                     gracefulRollChance));
+        }
+
+        if (hasUnlocked(SubSkillType.PARKOUR_ATHLETE) && agility != null) {
+            // Shown as hunger *saved*, which is what the player feels; the manager returns the
+            // multiplier that remains.
+            messages.add(getStatMessage(SubSkillType.PARKOUR_ATHLETE,
+                    percent.format(1.0 - agility.getAthleteExhaustionMultiplier())));
+        }
+
+        if (hasUnlocked(SubSkillType.PARKOUR_SMASH)) {
+            messages.add(getStatMessage(SubSkillType.PARKOUR_SMASH,
+                    ProbabilityUtil.getRNGDisplayValues(mmoPlayer, SubSkillType.PARKOUR_SMASH)[0]));
         }
 
         if (hasUnlocked(SubSkillType.PARKOUR_SNOW_WALKER)) {

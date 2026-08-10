@@ -1,8 +1,8 @@
 {
-  "parent": "mcmmo:milestone/skill/agility",
+  "parent": "mcmmo:milestone/skill/parkour",
   "display": {
     "icon": {
-      "id": "minecraft:feather"
+      "id": "minecraft:leather_boots"
     },
     "title": {
       "text": "Dodge Unlocked",

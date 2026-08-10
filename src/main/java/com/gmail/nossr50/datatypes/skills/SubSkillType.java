@@ -8,19 +8,21 @@ import java.util.Locale;
 public enum SubSkillType {
     /* !! Warning -- Do not let subskills share a name with any existing PrimarySkillType as it will clash with the static import !! */
 
-    /* AGILITY */
-    // Fall domain (shipped since the Bukkit port). Roll used to live here too; see PARKOUR_ROLL.
-    AGILITY_DODGE(1),
-    // Land / Water / Air domains (Pass 2). Fleet Footed and Second Wind each carry one rank per
-    // medium — land, then water, then air — rather than being three sub-skills apiece.
+    /*
+     * AGILITY
+     *
+     * ⚠️ AGILITY IS A CHILD SKILL, and after 2026-08-10 that is the entire membership rule for this
+     * block: a sub-skill belongs here if and only if it spans more than one movement medium, so that
+     * the mean of Parkour/Swimming/Flying is the honest gate for it. Everything single-medium was
+     * re-parented to the medium's own primary skill — see the PARKOUR, SWIMMING and FLYING blocks.
+     *
+     * Both survivors carry one rank per medium (land, then water, then air) rather than being three
+     * sub-skills apiece, which is exactly why neither could be re-parented: there is no single parent
+     * whose level could gate all three of their ranks. They are the all-rounder's reward, and a pure
+     * flier capping Agility at 333 can never reach the air ranks. That is the design, not a bug.
+     */
     AGILITY_FLEET_FOOTED(3),
-    AGILITY_ATHLETE(1),
-    AGILITY_SMASH(1),
-    AGILITY_LEAD_LUNGS(1),
     AGILITY_SECOND_WIND(3),
-    AGILITY_GLIDE(1),
-    AGILITY_LAKE_RAIDER(1),
-    AGILITY_SOLAR_WINGS(1),
 
     /* ALCHEMY */
     ALCHEMY_CATALYSIS(1),
@@ -78,6 +80,19 @@ public enum SubSkillType {
     FISHING_MASTER_ANGLER(8),
     FISHING_TREASURE_HUNTER(8),
     FISHING_SHAKE(8),
+
+    /*
+     * FLYING
+     *
+     * One of Agility's three parents. Both constants MOVED HERE FROM AGILITY_* on 2026-08-10, and
+     * this is the pair the move mattered most for: gated on the mean of three, Glide (350) needed
+     * Flying 1050 and Solar Wings (750) needed Flying 2250 from a player who only ever flew -- both
+     * past the level cap of 1000, so a specialist could NEVER unlock either one. They were
+     * unreachable, not merely slow. Same numbers, read against Flying itself, are now earnable by
+     * flying.
+     */
+    FLYING_GLIDE(1),
+    FLYING_SOLAR_WINGS(1),
 
     /* Herbalism */
     HERBALISM_DOUBLE_DROPS(1),
@@ -141,11 +156,25 @@ public enum SubSkillType {
      *
      * Parkour is one of Agility's three parent skills, so a sub-skill parked here is gated on the
      * Parkour level itself (the parent map keys off the enum name's prefix) rather than on the mean
-     * of Parkour, Swimming and Flying that AGILITY_* sub-skills read. Both constants below are here
-     * for the same reason: a swimmer and a flier should not drag the average that gates a
+     * of Parkour, Swimming and Flying that AGILITY_* sub-skills read. Everything below is here for
+     * the same reason: a swimmer and a flier should not drag the average that gates a
      * running-and-jumping perk.
+     *
+     * ⚠️ DODGE, ATHLETE and SMASH MOVED HERE FROM AGILITY_* on 2026-08-10, and the rank NUMBERS were
+     * deliberately left unchanged (owner's ruling). Read against one parent instead of the mean of
+     * three, the same threshold unlocks roughly 3x sooner for a specialist -- Smash at 150 now wants
+     * Parkour 150, where it used to want Parkour 450 from a player who neither swims nor flies. That
+     * is the correction, not a side effect: gating a sprint-attack perk on a player's swimming was
+     * the same defect GitHub #4 fixed for Roll.
+     *
+     * Dodge is the one whose home was arguable -- it is a combat reaction, not a medium -- and it is
+     * here because it always paid its XP here (AgilityManager#EPISODIC_XP_SKILL). Its gate now
+     * levels off the very hits it pays for, closing the asymmetry the Roll move left behind.
      */
     PARKOUR_SNOW_WALKER(1),
+    PARKOUR_DODGE(1),
+    PARKOUR_ATHLETE(1),
+    PARKOUR_SMASH(1),
     /*
      * ⚠️ MOVED FROM AGILITY_ROLL, 2026-08-03 — GitHub #4 ("rolling never procs"), and the move IS
      * the fix.
@@ -190,6 +219,16 @@ public enum SubSkillType {
     STEALTH_PADFOOT(1),
     STEALTH_ASSASSIN(1),
     STEALTH_SMOKE_BOMB(1),
+
+    /*
+     * SWIMMING
+     *
+     * One of Agility's three parents. Both constants MOVED HERE FROM AGILITY_* on 2026-08-10. Holding
+     * your breath and finding treasure in silt are things a swimmer earns by swimming; under the
+     * three-skill mean they were gated on how much the player also ran and flew.
+     */
+    SWIMMING_LEAD_LUNGS(1),
+    SWIMMING_LAKE_RAIDER(1),
 
     /* Swords */
     SWORDS_COUNTER_ATTACK(1),

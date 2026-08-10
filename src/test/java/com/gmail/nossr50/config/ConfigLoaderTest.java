@@ -2,13 +2,20 @@ package com.gmail.nossr50.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.gmail.nossr50.util.skills.SkillRenames;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
@@ -17,14 +24,24 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class ConfigLoaderTest {
 
+    /**
+     * The path moves the fixture pretends to carry. The real table is scoped per file (see
+     * {@link SkillRenames.MovedPath}), so {@code test-config.yml} matches nothing in it — these are
+     * injected instead, which is the point: they exercise the <em>mechanism</em> rather than one
+     * file's happenstance contents.
+     */
+    private static final List<SkillRenames.MovedPath> ROLL_MOVED = List.of(
+            new SkillRenames.MovedPath("test-config.yml",
+                    "Skills.Agility.Roll", "Skills.Parkour.Roll"));
+
     /** Minimal concrete loader over the test fixture resource. */
     private static final class TestConfig extends ConfigLoader {
         TestConfig(Path dataFolder) {
-            super("test-config.yml", dataFolder);
+            super("test-config.yml", dataFolder, List.of(), ROLL_MOVED);
         }
 
         TestConfig(Path dataFolder, List<ConfigRetunes.Retune> retunes) {
-            super("test-config.yml", dataFolder, retunes);
+            super("test-config.yml", dataFolder, retunes, ROLL_MOVED);
         }
 
         @Override
@@ -93,14 +110,14 @@ class ConfigLoaderTest {
         assertEquals(999, reloaded.config().getInt("General.MaxLevel"));
     }
 
-    // --- The re-parented sub-skill warning (GitHub #4) -------------------------------------------
+    // --- Re-parented sub-skills: the automatic path migration ------------------------------------
 
     @Test
-    void detectsTuningStrandedAtAPathThatMoved(@TempDir Path dataFolder) throws IOException {
-        // Roll moved from Skills.Agility.Roll to Skills.Parkour.Roll on 2026-08-03. Because
-        // copyMissingDefaults back-fills only ABSENT keys, a user who had tuned the old block ends up
-        // with BOTH: shipped defaults at the new path (which the code reads) and their own values at
-        // the old one, silently ignored. That is the failure this warning exists to name.
+    void movesTuningFromAPathThatWasReParented(@TempDir Path dataFolder) throws IOException {
+        // Roll moved from Skills.Agility.Roll to Skills.Parkour.Roll on 2026-08-03, and seven more
+        // sub-skills followed on 2026-08-10. Because copyMissingDefaults back-fills only ABSENT keys,
+        // a user who had tuned the old block would end up with BOTH: shipped defaults at the new path
+        // (which the code reads) and their own values at the old one, silently ignored.
         Files.writeString(dataFolder.resolve("test-config.yml"), """
                 Skills:
                   Agility:
@@ -110,19 +127,196 @@ class ConfigLoaderTest {
 
         final TestConfig loader = new TestConfig(dataFolder);
 
-        assertEquals("Skills.Parkour.Roll",
-                loader.strandedLegacyPaths().get("Skills.Agility.Roll"),
-                "the stranded block must be reported, pointing at where it moved to");
+        assertEquals(42.0, loader.config().getDouble("Skills.Parkour.Roll.ChanceMax"),
+                "the player's tuning must arrive at the path the code actually reads");
+        assertFalse(loader.config().contains("Skills.Agility.Roll"),
+                "the dead path must be removed, or the file keeps lying about what is in effect");
+
+        // ...and it is on DISK, not merely in the loaded object. A migration that is not persisted
+        // re-runs every boot and, worse, would be undone the first time anything else saves.
+        final YamlConfiguration onDisk =
+                YamlConfiguration.loadConfiguration(dataFolder.resolve("test-config.yml"));
+        assertEquals(42.0, onDisk.getDouble("Skills.Parkour.Roll.ChanceMax"));
+        assertFalse(onDisk.contains("Skills.Agility.Roll"));
     }
 
     @Test
-    void staysSilentForAConfigThatNeverHadTheOldPath(@TempDir Path dataFolder) {
-        // The common case, and every freshly generated config. A warning here would cry wolf on every
-        // boot for every user, which is how warnings stop being read.
+    void migratesEveryLeafOfAMovedSubTreeNotJustTheFirst(@TempDir Path dataFolder)
+            throws IOException {
+        // The blocks that moved are multi-leaf and nested (MaxBonusLevel is itself a section), so a
+        // migrator that copied only top-level leaves would silently drop the RetroMode ladder --
+        // which is the value that matters on this server, and the one nobody would notice missing
+        // until a rank gate behaved oddly months later.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                Skills:
+                  Agility:
+                    Roll:
+                      ChanceMax: 42.0
+                      DamageThreshold: 9.0
+                      MaxBonusLevel:
+                        Standard: 55
+                        RetroMode: 555
+                """);
+
+        final TestConfig loader = new TestConfig(dataFolder);
+
+        assertEquals(42.0, loader.config().getDouble("Skills.Parkour.Roll.ChanceMax"));
+        assertEquals(9.0, loader.config().getDouble("Skills.Parkour.Roll.DamageThreshold"));
+        assertEquals(55, loader.config().getInt("Skills.Parkour.Roll.MaxBonusLevel.Standard"));
+        assertEquals(555, loader.config().getInt("Skills.Parkour.Roll.MaxBonusLevel.RetroMode"),
+                "a nested leaf must move too, not just the shallow ones");
+        assertFalse(loader.config().contains("Skills.Agility.Roll"));
+    }
+
+    @Test
+    void keepsTheNewPathWhenThePlayerHasTunedBoth(@TempDir Path dataFolder) throws IOException {
+        // The case a migrator must not guess at. If both spellings are customised, the value at the
+        // NEW path is the one the game has actually been using, so it wins -- silently preferring the
+        // old one would change behaviour on upgrade, which is the opposite of a migration's job.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                Skills:
+                  Agility:
+                    Roll:
+                      ChanceMax: 42.0
+                  Parkour:
+                    Roll:
+                      ChanceMax: 77.0
+                """);
+
+        final TestConfig loader = new TestConfig(dataFolder);
+
+        assertEquals(77.0, loader.config().getDouble("Skills.Parkour.Roll.ChanceMax"),
+                "the live value must survive a migration of the dead one");
+        assertFalse(loader.config().contains("Skills.Agility.Roll"),
+                "the dead path still goes, whichever value won");
+    }
+
+    @Test
+    void leavesAFileWithoutLegacyPathsCompletelyUntouched(@TempDir Path dataFolder)
+            throws IOException {
+        // The common case, and every freshly generated config: the migrator must not rewrite a file
+        // it has nothing to do to. Asserted on the file's modification time rather than its content,
+        // because a rewrite that happens to round-trip identically is still a rewrite -- it reorders
+        // keys and discards comments on a file the player owns.
+        new TestConfig(dataFolder);
+        final Path file = dataFolder.resolve("test-config.yml");
+        final String before = Files.readString(file);
+
         final TestConfig loader = new TestConfig(dataFolder);
 
         assertTrue(loader.strandedLegacyPaths().isEmpty(),
                 "nothing is stranded in a config written from current defaults");
+        assertEquals(before, Files.readString(file),
+                "a config with no legacy paths must not be rewritten at all");
+    }
+
+    @Test
+    void theShippedConfigsCarryNoPathThisWouldMigrate(@TempDir Path dataFolder) {
+        // ⚠️ The converse guard, and the one that actually bites. If a shipped YAML still defined a
+        // legacy path, copyMissingDefaults would write it into every user's file and the migrator
+        // would then "migrate" a block mcMMO itself had just authored -- every boot, forever.
+        //
+        // Driven off the real table and the real files, and it must cover EVERY file the table names
+        // rather than a hand-picked couple: the first draft of this change registered the advanced.yml
+        // paths and forgot skillranks.yml entirely, which a two-file guard would have happily passed.
+        final Map<String, YamlConfiguration> shipped = Map.of(
+                "advanced.yml", new AdvancedConfig(dataFolder).config,
+                "config.yml", new GeneralConfig(dataFolder).config,
+                "skillranks.yml", new RankConfig(dataFolder).config);
+
+        for (SkillRenames.MovedPath move : SkillRenames.allMovedConfigPaths()) {
+            final YamlConfiguration file = shipped.get(move.fileName());
+            assertNotNull(file, "no shipped config loaded for " + move.fileName()
+                    + " — this guard must cover every file the move table names");
+            assertFalse(file.contains(move.legacyPath()),
+                    move.fileName() + " still defines the moved path " + move.legacyPath());
+            assertTrue(file.contains(move.newPath()),
+                    move.fileName() + " does not define the destination " + move.newPath()
+                            + " — a move whose target does not exist migrates tuning into a void");
+        }
+    }
+
+    /**
+     * Every re-parented sub-skill, and the two files that address it at <em>different depths</em>:
+     * advanced.yml nests tuning under a {@code Skills} root, skillranks.yml puts the unlock ladder at
+     * the top level. Both must migrate.
+     */
+    private static Stream<Arguments> reParentedSubSkills() {
+        return Stream.of(
+                Arguments.of("Dodge", "Parkour"),
+                Arguments.of("Athlete", "Parkour"),
+                Arguments.of("Smash", "Parkour"),
+                Arguments.of("LeadLungs", "Swimming"),
+                Arguments.of("LakeRaider", "Swimming"),
+                Arguments.of("Glide", "Flying"),
+                Arguments.of("SolarWings", "Flying"));
+    }
+
+    /**
+     * ⚠️ The guard that had to be rewritten because a mutant walked straight through the first one.
+     *
+     * <p>The original version iterated {@link SkillRenames#allMovedConfigPaths()} and asserted things
+     * about each entry — which is vacuous against the failure that actually happened: <b>deleting the
+     * skillranks.yml half of every move made it pass</b>, because a table with nothing in it satisfies
+     * every statement about its contents. A guard driven by the table cannot detect a missing table
+     * entry.
+     *
+     * <p>So this is driven by the <em>sub-skill list</em> instead and asserts the observable
+     * behaviour end-to-end, through the real config classes against a real file on disk: seed the
+     * legacy spelling, load, and require the value to have arrived under the new parent with the old
+     * key gone. Delete a move and the corresponding case fails.
+     */
+    @ParameterizedTest(name = "{0} -> {1}")
+    @MethodSource("reParentedSubSkills")
+    void everyReParentedSubSkillMigratesInBothOfItsFiles(String subSkill, String newParent,
+            @TempDir Path dataFolder) throws IOException {
+        // advanced.yml: tuning, nested under `Skills`. MaxBonusLevel is a section, so this also
+        // covers the nested-leaf path for every sub-skill rather than just for Roll.
+        Files.writeString(dataFolder.resolve("advanced.yml"), """
+                Skills:
+                  Agility:
+                    %s:
+                      MaxBonusLevel:
+                        RetroMode: 321
+                """.formatted(subSkill));
+        // skillranks.yml: the unlock ladder, at the TOP level -- the depth difference that the
+        // file-blind first draft got wrong.
+        Files.writeString(dataFolder.resolve("skillranks.yml"), """
+                Agility:
+                  %s:
+                    RetroMode:
+                      Rank_1: 321
+                """.formatted(subSkill));
+
+        final YamlConfiguration advanced = new AdvancedConfig(dataFolder).config;
+        assertEquals(321, advanced.getInt(
+                        "Skills." + newParent + "." + subSkill + ".MaxBonusLevel.RetroMode"),
+                "advanced.yml did not migrate " + subSkill + " to " + newParent);
+        assertFalse(advanced.contains("Skills.Agility." + subSkill),
+                "advanced.yml kept the dead Skills.Agility." + subSkill);
+
+        final YamlConfiguration ranks = new RankConfig(dataFolder).config;
+        assertEquals(321, ranks.getInt(newParent + "." + subSkill + ".RetroMode.Rank_1"),
+                "skillranks.yml did not migrate " + subSkill + " to " + newParent);
+        assertFalse(ranks.contains("Agility." + subSkill),
+                "skillranks.yml kept the dead Agility." + subSkill);
+    }
+
+    @Test
+    void everyMovedPathIsScopedToAFileThatActuallyDeclaresIt() {
+        // ⚠️ The safety property of MovedPath, asserted directly. A move registered without its file
+        // -- or against the wrong one -- silently applies to every config with a matching path, and
+        // the concrete hazard is coreskills.yml: its dev copies still carry a root-level
+        // `Agility.Roll` block from the pre-#10 per-sub-skill-switch schema. A bare, file-blind
+        // `Agility.Roll` entry would "migrate" that dead key into a live-looking Parkour.Roll.
+        for (SkillRenames.MovedPath move : SkillRenames.allMovedConfigPaths()) {
+            assertFalse(move.fileName().isBlank(), "a move must name its file: " + move);
+            assertTrue(SkillRenames.movedConfigPaths(move.fileName()).contains(move),
+                    move + " is not returned when filtering by its own file name");
+            assertTrue(SkillRenames.movedConfigPaths("coreskills.yml").isEmpty(),
+                    "coreskills.yml must never be migrated: it carries a dead Agility.Roll key that "
+                            + "a file-blind table would resurrect");
+        }
     }
 
     @Test

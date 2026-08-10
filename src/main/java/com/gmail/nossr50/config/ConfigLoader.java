@@ -35,7 +35,8 @@ public abstract class ConfigLoader {
     protected @NotNull YamlConfiguration config;
 
     protected ConfigLoader(@NotNull String fileName, @NotNull Path dataFolder) {
-        this(fileName, dataFolder, ConfigRetunes.forFile(fileName));
+        this(fileName, dataFolder, ConfigRetunes.forFile(fileName),
+                SkillRenames.movedConfigPaths(fileName));
     }
 
     /**
@@ -45,6 +46,18 @@ public abstract class ConfigLoader {
      */
     protected ConfigLoader(@NotNull String fileName, @NotNull Path dataFolder,
             @NotNull List<ConfigRetunes.Retune> retunes) {
+        this(fileName, dataFolder, retunes, SkillRenames.movedConfigPaths(fileName));
+    }
+
+    /**
+     * @param movedPaths the re-parented config paths for this file, injected for the same reason as
+     *        {@code retunes}: the real table is scoped per file, so a fixture config would otherwise
+     *        match nothing and the whole migrator would be untestable except through the three real
+     *        files it currently happens to name.
+     */
+    protected ConfigLoader(@NotNull String fileName, @NotNull Path dataFolder,
+            @NotNull List<ConfigRetunes.Retune> retunes,
+            @NotNull List<SkillRenames.MovedPath> movedPaths) {
         this.fileName = fileName;
         this.dataFolder = dataFolder;
         this.defaultConfig = loadDefaults();
@@ -54,6 +67,11 @@ public abstract class ConfigLoader {
         final boolean writtenFresh = !Files.exists(getFile());
         this.config = initConfig();
         applyRetunedDefaults(retunes, writtenFresh);
+        // ⚠️ Before copyMissingDefaults, deliberately. Run after it, and every destination path
+        // already holds a freshly written shipped default, so "is the new path untouched?" can no
+        // longer be answered by asking whether it exists. Running first keeps the common case
+        // unambiguous: the destination is absent, so the move cannot possibly clobber anything.
+        migrateMovedPaths(movedPaths, writtenFresh);
         copyMissingDefaults();
         warnOnRenamedSections();
         warnOnRenamedPaths();
@@ -199,6 +217,122 @@ public abstract class ConfigLoader {
             return Double.compare(a.doubleValue(), b.doubleValue()) == 0;
         }
         return onDisk.equals(declared);
+    }
+
+    /**
+     * Move a player's tuning from paths that have been re-parented to where the code now reads it,
+     * then delete the dead originals.
+     *
+     * <p>{@link #copyMissingDefaults()} back-fills only <em>absent</em> keys, so after a sub-skill is
+     * re-parented an existing config ends up carrying both spellings: freshly written defaults at
+     * the new path (which is what the game reads) and the player's own values still sitting at the
+     * old one, silently ignored. The file looks edited, the game ignores it, and nothing says why.
+     *
+     * <p>This <b>rewrites the user's file</b>, which the sibling {@link #warnOnRenamedPaths()}
+     * deliberately refuses to do. The distinction is not inconsistency, it is the entry condition on
+     * {@link SkillRenames#movedConfigPaths()}: every move in that table is a straight sub-tree
+     * relocation within one file, leaf-for-leaf, so there is nothing to guess about where a value
+     * belongs. Where a move is not that simple — a different file, a changed unit, an outright
+     * retirement — it stays in the warn-only table and the player is asked to move it by hand.
+     *
+     * <p>Conflicts are still not guessed at. If the player has tuned <em>both</em> the old path and
+     * the new one, the value already at the new path wins (it is the one the game has been reading)
+     * and the discarded one is logged in full, so the decision is visible rather than silent.
+     *
+     * @param movedPaths the moves declared for this file, already filtered by
+     *        {@link SkillRenames#movedConfigPaths(String)}
+     * @param writtenFresh whether this file was just created from the shipped defaults, in which
+     *        case it cannot contain a legacy path and the whole scan is skipped
+     */
+    private void migrateMovedPaths(@NotNull List<SkillRenames.MovedPath> movedPaths,
+            boolean writtenFresh) {
+        if (writtenFresh || movedPaths.isEmpty()) {
+            return;
+        }
+        boolean moved = false;
+        for (SkillRenames.MovedPath move : movedPaths) {
+            moved |= migrateOnePath(move.legacyPath(), move.newPath());
+        }
+        if (!moved) {
+            return; // The overwhelmingly common case: nothing stranded, so the file is not touched.
+        }
+        try {
+            config.save(getFile());
+        } catch (IOException e) {
+            // Left on disk unmigrated. The next boot retries (the scan is driven by what the file
+            // actually contains, not by a version stamp), but a silent failure here would mean the
+            // player's tuning stays ignored with no trace of why.
+            LOGGER.error("Failed to save config after migrating moved paths: {}", fileName, e);
+        }
+    }
+
+    /**
+     * Relocate one legacy path's values, returning whether anything actually changed.
+     *
+     * <p>Split out and package-private so the decision is assertable without a
+     * {@code LOGGER}-scraping test.
+     *
+     * @param legacy the dotted path values may be stranded at
+     * @param target where the code reads them from now
+     * @return {@code true} if the config was modified
+     */
+    boolean migrateOnePath(@NotNull String legacy, @NotNull String target) {
+        if (!config.contains(legacy)) {
+            return false;
+        }
+
+        // Snapshot first: the leaves are read out of the sub-tree before anything is written, so a
+        // move can never read back a value this same loop has already written. Overlapping legacy
+        // and target paths are not expected, but a migrator that corrupts data if they ever overlap
+        // is a landmine rather than a constraint.
+        final Map<String, Object> leaves = new LinkedHashMap<>();
+        collectLeaves(legacy, leaves);
+
+        for (Map.Entry<String, Object> leaf : leaves.entrySet()) {
+            final String targetKey = leaf.getKey().isEmpty()
+                    ? target
+                    : target + "." + leaf.getKey();
+            final Object existing = config.get(targetKey);
+            if (existing != null && !valuesMatch(existing, defaultConfig.get(targetKey))) {
+                LOGGER.warn("{}: '{}' moved to '{}', but you have tuned BOTH. Keeping {} (the value "
+                                + "the game has been using) and discarding {} from the old path.",
+                        fileName, legacy, target, existing, leaf.getValue());
+                continue;
+            }
+            config.set(targetKey, leaf.getValue());
+        }
+
+        config.set(legacy, null);
+        LOGGER.info("{}: moved your '{}' settings to '{}' and removed the old keys, which the game "
+                        + "no longer reads.",
+                fileName, legacy, target);
+        return true;
+    }
+
+    /**
+     * Collect every leaf value at or under {@code path}, keyed by its suffix relative to
+     * {@code path} (the empty string when {@code path} is itself a leaf).
+     *
+     * <p>Leaves only: a section node carries no value of its own, and copying one across would alias
+     * the legacy sub-tree's live map into the new location so that the subsequent delete of the old
+     * path takes the migrated values with it.
+     */
+    private void collectLeaves(@NotNull String path, @NotNull Map<String, Object> out) {
+        final Object value = config.get(path);
+        if (!(value instanceof Map<?, ?>)) {
+            out.put("", value);
+            return;
+        }
+        final YamlConfiguration section = config.getConfigurationSection(path);
+        if (section == null) {
+            return;
+        }
+        for (String key : section.getKeys(true)) {
+            final Object leaf = section.get(key);
+            if (!(leaf instanceof Map<?, ?>)) {
+                out.put(key, leaf);
+            }
+        }
     }
 
     /**

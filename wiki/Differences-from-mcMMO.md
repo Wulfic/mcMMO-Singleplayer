@@ -10,7 +10,7 @@ Six skills upstream doesn't have, plus a restructure.
 
 ### The movement group
 
-**Acrobatics was renamed Agility** and turned into a **child skill** — it owns ten sub-skills but earns no XP of its own. Its level is the mean of three brand-new primary skills:
+**Acrobatics was renamed Agility** and turned into a **child skill** — it earns no XP of its own, and its level is the mean of three brand-new primary skills:
 
 | New skill | Trained by |
 |---|---|
@@ -18,7 +18,9 @@ Six skills upstream doesn't have, plus a restructure.
 | **Swimming** | Swimming |
 | **Flying** | Elytra gliding |
 
-Six of Agility's ten sub-skills are new: **Fleet Footed, Athlete, Smash, Lead Lungs, Glide, Lake Raider, Solar Wings**, plus the **Second Wind** super ability. Full details: [Movement Skills](Movement-Skills).
+Seven sub-skills are new: **Fleet Footed, Athlete, Smash, Lead Lungs, Glide, Lake Raider, Solar Wings**, plus the **Second Wind** super ability.
+
+Agility itself keeps only **Fleet Footed** and **Second Wind** — the two that work in all three mediums. Every single-medium perk is gated on its own parent, so you earn it by doing that one thing rather than by dragging up a three-skill average. Full details: [Movement Skills](Movement-Skills).
 
 ### Stealth
 

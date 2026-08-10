@@ -1,8 +1,11 @@
 package com.gmail.nossr50.util.skills;
 
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -51,16 +54,55 @@ public final class SkillRenames {
     private static final Map<String, String> LEGACY_CONFIG_SECTIONS = new LinkedHashMap<>();
 
     /**
-     * Legacy dotted YAML <em>path</em> → the path it lives at today. Insertion-ordered, same as
-     * above.
+     * Legacy dotted YAML <em>path</em> → where its value went, for paths this loader <b>cannot</b>
+     * move automatically. Warn-only; insertion-ordered.
      *
      * <p>Distinct from {@link #LEGACY_CONFIG_SECTIONS} because that table matches a whole path
      * <em>segment</em> anywhere in a key, which can only express "this skill was renamed". A
      * sub-skill that moves from one parent to another moves a sub-tree while both parents keep
      * existing — {@code Skills.Agility.Roll} → {@code Skills.Parkour.Roll} — and a segment match on
      * "Agility" would fire for Dodge, Fleet Footed and eight others that did not move.
+     *
+     * <p>⚠️ The values here are <b>human-readable destinations, not writable paths</b>: an entry
+     * lands in this table precisely because the value cannot simply be copied across — it changed
+     * file, changed meaning, or was retired outright. Anything that IS a straight move belongs in
+     * {@link #MOVED_CONFIG_PATHS}, which is machine-consumed. Never feed this table to a setter.
      */
     private static final Map<String, String> LEGACY_CONFIG_PATHS = new LinkedHashMap<>();
+
+    /**
+     * One straight within-file relocation of a config sub-tree, applied automatically on load.
+     *
+     * <p>⚠️ {@code fileName} is <b>not</b> bookkeeping — it is the safety property, and omitting it
+     * is an actual bug this port shipped for about ten minutes. mcMMO spells the same skill at
+     * different depths in different files: {@code Skills.Agility.Dodge} in advanced.yml but bare
+     * {@code Agility.Dodge} in skillranks.yml. Registering the short form globally makes it match in
+     * <em>every</em> file with a root-level {@code Agility} section — including coreskills.yml, whose
+     * dev copies still carry an {@code Agility.Roll} block from the pre-GitHub-#10 schema that had
+     * per-sub-skill switches. A file-blind migrator would have dutifully "moved" that dead key to
+     * {@code Parkour.Roll}, resurrecting a switch the code stopped reading a schema ago.
+     *
+     * <p>So a move is scoped to the one file it was written for, and a path that means something
+     * different elsewhere is simply not that file's problem.
+     *
+     * @param fileName   the config file this move applies to, and only this one
+     * @param legacyPath where the value may still be stranded
+     * @param newPath    where the code reads it from now
+     */
+    public record MovedPath(@NotNull String fileName, @NotNull String legacyPath,
+                            @NotNull String newPath) {
+    }
+
+    /**
+     * Straight relocations that {@code ConfigLoader} migrates automatically, in declaration order.
+     *
+     * <p>Both paths are real, writable and rooted in the same file, and the sub-trees under them are
+     * shape-identical — every leaf under the old path has exactly one destination under the new one.
+     * That is the entry condition. A move that reshapes, renames leaves, changes units or crosses
+     * files does not belong here: it goes in {@link #LEGACY_CONFIG_PATHS} and the player is told to
+     * move it by hand.
+     */
+    private static final List<MovedPath> MOVED_CONFIG_PATHS = new ArrayList<>();
 
     static {
         // Pass 2 / D5 (2026-07-25): ACROBATICS was renamed AGILITY when it absorbed the Land, Water
@@ -82,8 +124,52 @@ public final class SkillRenames {
         // a user who had tuned the old block would otherwise find it silently ignored, because
         // copyMissingDefaults back-fills only ABSENT keys and would happily write shipped defaults
         // to the new path alongside their edits at the old one.
-        LEGACY_CONFIG_PATHS.put("Skills.Agility.Roll", "Skills.Parkour.Roll");
-        LEGACY_CONFIG_PATHS.put("Skills.Agility.GracefulRoll", "Skills.Parkour.GracefulRoll");
+        //
+        // These two shipped as warn-only and were PROMOTED to automatic migration on 2026-08-10,
+        // when the entries below made warn-only untenable: leaving Roll to be hand-moved while its
+        // siblings migrate themselves is an inconsistency nobody can be expected to reason about.
+        MOVED_CONFIG_PATHS.add(new MovedPath("advanced.yml",
+                "Skills.Agility.Roll", "Skills.Parkour.Roll"));
+
+        // ⚠️ GracefulRoll is warn-only, NOT migrated, and the difference is not an oversight.
+        // `Skills.Parkour.GracefulRoll.DamageThreshold` has a getter but is deliberately absent from
+        // the shipped advanced.yml: AdvancedConfig#getGracefulRollDamageThreshold is read by nothing
+        // except its own validator, because AgilityManager hardcodes the graceful threshold as
+        // getRollDamageThreshold() * 2 exactly as legacy did. Migrating a value into a key nothing
+        // reads would move a player's tuning somewhere it is just as ignored, while implying it now
+        // works. Tell them the truth instead.
+        LEGACY_CONFIG_PATHS.put("Skills.Agility.GracefulRoll",
+                "nothing — a graceful roll negates twice Skills.Parkour.Roll.DamageThreshold, and "
+                        + "has no threshold of its own");
+
+        // 2026-08-10: Agility keeps only the two sub-skills that span every movement medium (Fleet
+        // Footed, Second Wind). The seven single-medium ones were re-parented onto the medium's own
+        // primary skill, so that each is gated on the level you earn by doing the thing it is a perk
+        // for -- the same argument #4 made for Roll, applied to the rest of the roster.
+        //
+        // ⚠️ Each sub-skill needs TWO entries, because its tuning and its unlock ladder live in
+        // different files at different DEPTHS: advanced.yml nests everything under a `Skills` root,
+        // skillranks.yml does not. Registering only the advanced.yml form is exactly the gap that
+        // shipped in the first draft of this change -- the tuning moved, the rank ladder did not, and
+        // the file was left carrying both spellings with only one of them read.
+        for (String[] move : new String[][] {
+                {"Dodge", "Parkour"}, {"Athlete", "Parkour"}, {"Smash", "Parkour"},
+                {"LeadLungs", "Swimming"}, {"LakeRaider", "Swimming"},
+                {"Glide", "Flying"}, {"SolarWings", "Flying"},
+        }) {
+            final String subSkill = move[0];
+            final String newParent = move[1];
+            MOVED_CONFIG_PATHS.add(new MovedPath("advanced.yml",
+                    "Skills.Agility." + subSkill, "Skills." + newParent + "." + subSkill));
+            MOVED_CONFIG_PATHS.add(new MovedPath("skillranks.yml",
+                    "Agility." + subSkill, newParent + "." + subSkill));
+        }
+
+        // config.yml, same date and the same reason: Dodge's anti-lightning switch follows Dodge.
+        // A leaf rather than a sub-tree, which the migrator handles identically.
+        MOVED_CONFIG_PATHS.add(new MovedPath("config.yml",
+                "Skills.Agility.Prevent_Dodge_Lightning",
+                "Skills.Parkour.Prevent_Dodge_Lightning"));
 
         // 2026-08-04 (GitHub #3): Husbandry's anti-exploit gate moved off the BREEDING and onto the
         // XP PAYOUT, which also moved it out of advanced.yml and into experience.yml. The old key is
@@ -118,11 +204,42 @@ public final class SkillRenames {
     }
 
     /**
-     * Legacy dotted config paths mapped to where they live now, for the config-orphan warning.
+     * Legacy dotted config paths mapped to a <em>description</em> of where they live now, for the
+     * config-orphan warning. Not writable paths — see {@link #LEGACY_CONFIG_PATHS}.
      *
      * @return an unmodifiable view; never {@code null}
      */
     public static @NotNull Map<String, String> legacyConfigPaths() {
         return Map.copyOf(LEGACY_CONFIG_PATHS);
+    }
+
+    /**
+     * The straight path moves declared for {@code fileName}, in declaration order.
+     *
+     * <p>Filtered by file rather than handing back the whole table, so a caller cannot accidentally
+     * apply another file's paths to this one — see {@link MovedPath} for the dead {@code
+     * Agility.Roll} key in coreskills.yml that makes that a real hazard rather than a hypothetical.
+     *
+     * @param fileName the config file being loaded
+     * @return an unmodifiable list, empty for the many files that have never had a path move
+     */
+    public static @NotNull List<MovedPath> movedConfigPaths(@NotNull String fileName) {
+        final List<MovedPath> forFile = new ArrayList<>();
+        for (MovedPath move : MOVED_CONFIG_PATHS) {
+            if (move.fileName().equals(fileName)) {
+                forFile.add(move);
+            }
+        }
+        return Collections.unmodifiableList(forFile);
+    }
+
+    /**
+     * Every declared path move, across all files, in declaration order. For drift guards that need
+     * to assert something about the table as a whole; the loader itself always filters by file.
+     *
+     * @return an unmodifiable view; never {@code null}
+     */
+    public static @NotNull List<MovedPath> allMovedConfigPaths() {
+        return Collections.unmodifiableList(new ArrayList<>(MOVED_CONFIG_PATHS));
     }
 }

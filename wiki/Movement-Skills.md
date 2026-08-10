@@ -5,13 +5,18 @@
 ```
    Parkour        Swimming        Flying          ← you earn XP in these
   (sprinting)     (swimming)   (elytra gliding)
+   Dodge, Roll,   Lead Lungs,    Glide,           ← each owns the perks
+   Athlete,       Lake Raider    Solar Wings         specific to its medium
+   Smash,
+   Snow Walker
       └───────────────┼───────────────┘
                       ▼
                    Agility                        ← level = the mean of the three
-            (owns all ten sub-skills)             ← earns no XP of its own
+        Fleet Footed, Second Wind                 ← earns no XP of its own;
+      (the two that work in all three)               keeps only cross-medium perks
 ```
 
-**Agility 1000 needs 1000 in all three parents.** 1000 Flying on its own is Agility **333**. The perks are an all-rounder's reward, not a specialist's.
+**Agility 1000 needs 1000 in all three parents.** 1000 Flying on its own is Agility **333**. Fleet Footed and Second Wind are an all-rounder's reward, not a specialist's — but everything single-medium is earned by doing that one thing.
 
 > ⚠️ **Old Acrobatics progress does not carry over.** Child skills have no save key — their level is recomputed from their parents on every load — so there is nothing for old progress to migrate *to*. It is deliberately allowed to zero out. Train the three parents instead.
 
@@ -79,39 +84,34 @@ Wearing boots with **Feather Falling** multiplies these by **2.0**.
 
 ## Agility's sub-skills
 
-Nine perks live on Agility and are gated on Agility's *derived* level. RetroMode unlock levels shown.
+**Agility keeps exactly two perks: Fleet Footed and Second Wind.** Both work in all three mediums and carry **one rank per medium**, which is why they stay on the derived level — no single parent could honestly gate all three of their ranks. They are the all-rounder's reward.
 
-**Roll is the exception and is documented under [Parkour](Skills#parkour).** It moved there on 2026-08-03: fall XP is paid to Parkour, so gating Roll on the three-skill mean meant the falls that earn it levelled its own unlock at a third rate, and only for players who also swam and flew.
+| Sub-skill | Land | Water | Air | Effect |
+|---|---|---|---|---|
+| **Fleet Footed** | 1 | 200 | 400 | Move faster through whatever you're travelling through. |
+| **Second Wind** | 250 | 500 | 750 | The super ability — see below. |
 
-### Fall domain
+> ⚠️ **Everything single-medium moved to the skill that earns it on 2026-08-10.** Gating a perk on the mean of three meant you levelled it partly by doing things it has nothing to do with — a sprint-attack bonus earned by swimming. That's the same defect [GitHub #4](Skills#parkour) fixed for Roll, applied to the rest of the roster.
+>
+> **The unlock numbers did not change; the level they're read against did.** For a specialist that makes them roughly **3× faster** to reach. For two of them it's the difference between slow and *impossible*: Glide (350) and Solar Wings (750) were read against the mean, so a player who only ever flew needed Flying 1050 and Flying 2250 — both past the level cap of 1000. They could never be unlocked by flying at all.
+>
+> **Your existing config is migrated automatically** on first boot. Values you tuned move to the new paths and the dead keys are removed; the log names every move it makes.
 
-| Sub-skill | Unlocks | Effect |
-|---|---|---|
-| **Dodge** | 1 | Chance to halve incoming attack damage. |
+### Where each one went
 
-### Land domain
+| Sub-skill | Now gated on | Unlocks | Effect |
+|---|---|---|---|
+| **Dodge** | Parkour | 1 | Chance to halve incoming attack damage. |
+| **Roll** / Graceful Roll | Parkour | — | Negate fall damage. Moved 2026-08-03. |
+| **Athlete** | Parkour | 50 | Sprinting costs less hunger — up to **50 % less**, capped so sprinting is never free. |
+| **Smash** | Parkour | 150 | Sprint attacks deal up to **+2 damage** and **0.8 extra knockback**, up to a 25 % chance. |
+| **Snow Walker** | Parkour | 100 | Cross powder snow without sinking. Always was Parkour's. |
+| **Lead Lungs** | Swimming | 250 | Restores up to **0.75 air ticks per tick** while submerged. Vanilla drains 1/tick, so breath gets very long but never infinite — the cap is deliberately below 1.0. |
+| **Lake Raider** | Swimming | 500 | Up to a **15 % chance** for an underwater block break to turn up treasure. |
+| **Glide** | Flying | 350 | Descend up to **50 % more slowly** while gliding. Capped well below 1.0 so you can still land. |
+| **Solar Wings** | Flying | 750 | A worn elytra repairs **1 durability per 100 ticks** in daylight, **×2 while grounded**. Deliberately a trickle — make it generous and elytra durability stops being a resource. |
 
-| Sub-skill | Unlocks | Effect |
-|---|---|---|
-| **Fleet Footed** (rank 1) | 1 | Move faster on land. |
-| **Athlete** | 50 | Sprinting costs less hunger — up to **50 % less**, capped so sprinting is never free. |
-| **Smash** | 150 | Sprint attacks deal up to **+2 damage** and **0.8 extra knockback**, up to a 25 % chance. |
-
-### Water domain
-
-| Sub-skill | Unlocks | Effect |
-|---|---|---|
-| **Fleet Footed** (rank 2) | 200 | Move faster in water. |
-| **Lead Lungs** | 250 | Restores up to **0.75 air ticks per tick** while submerged. Vanilla drains 1/tick, so breath gets very long but never becomes infinite — the cap is deliberately below 1.0. |
-| **Lake Raider** | — | Up to a **15 % chance** for an underwater block break to turn up treasure. |
-
-### Air domain
-
-| Sub-skill | Unlocks | Effect |
-|---|---|---|
-| **Fleet Footed** (rank 3) | 400 | Move faster while gliding. |
-| **Glide** | 350 | Descend up to **50 % more slowly** while gliding. Capped well below 1.0 so you can still land. |
-| **Solar Wings** | — | A worn, damaged elytra repairs **1 durability per 100 ticks** in daylight, **×2 while grounded**. Deliberately a trickle — make it generous and elytra durability stops being a resource. |
+**Dodge is the one whose home was arguable** — it's a combat reaction, not a way of travelling. It's on Parkour because it has always *paid* its XP there, so its gate now levels off the very hits it pays for.
 
 ### Second Wind — the super ability
 
@@ -127,15 +127,14 @@ Cooldown **240 s**, shared across all three forms — it's one ability and one c
 
 ---
 
-## Parkour's own sub-skill
+## The three parents
 
-**Snow Walker** — cross **powder snow** without sinking into it. Unlocks at **Parkour 100** (RetroMode).
+Each parent now owns the perks specific to it, and each has its own `/mcstats` screen:
 
-It's parented to Parkour rather than Agility on purpose: gating it on Parkour itself means you earn it by running and jumping, rather than by a swimmer and a flier dragging the three-skill average up.
-
-## Swimming and Flying
-
-Neither has sub-skills of its own. They exist to feed Agility, and their `Level_Cap` and XP settings are the only things to tune.
+- **`/mcstats parkour`** — Dodge, Roll, Graceful Roll, Athlete, Smash, Snow Walker
+- **`/mcstats swimming`** — Lead Lungs, Lake Raider
+- **`/mcstats flying`** — Glide, Solar Wings
+- **`/mcstats agility`** — Fleet Footed and Second Wind, grouped by medium
 
 ---
 
@@ -144,10 +143,13 @@ Neither has sub-skills of its own. They exist to feed Agility, and their `Level_
 | File | Section |
 |---|---|
 | `experience.yml` | `Experience_Values.Agility.Movement` — baseline, reference speeds, multipliers |
-| `experience.yml` | `Experience_Values.Agility.{Dodge,Roll,Fall,FeatherFall_Multiplier}` |
-| `advanced.yml` | `Skills.Agility.*` — every sub-skill's numbers except Roll |
-| `advanced.yml` | `Skills.Parkour.Roll` — Roll's odds and damage threshold (moved here 2026-08-03) |
-| `skillranks.yml` | `Agility.*` / `Parkour.*` — unlock levels |
+| `experience.yml` | `Experience_Values.Agility.{Dodge,Roll,Fall,FeatherFall_Multiplier}` — the XP *values* stay under Agility, which is the movement family's umbrella |
+| `advanced.yml` | `Skills.Agility.{FleetFooted,SecondWind}` |
+| `advanced.yml` | `Skills.Parkour.*` — Dodge, Roll, Athlete, Smash |
+| `advanced.yml` | `Skills.Swimming.*` — Lead Lungs, Lake Raider |
+| `advanced.yml` | `Skills.Flying.*` — Glide, Solar Wings |
+| `skillranks.yml` | `Agility.*` / `Parkour.*` / `Swimming.*` / `Flying.*` — unlock levels |
 | `config.yml` | `Skills.Agility` — level cap, PVP/PVE gates, Second Wind item, `XP_After_Teleport_Cooldown` |
+| `config.yml` | `Skills.Parkour.Prevent_Dodge_Lightning` — follows Dodge |
 
-Capping `Skills.Agility.Level_Cap` caps what the sub-skills can reach, since they gate on the derived level.
+Capping `Skills.Agility.Level_Cap` caps what Fleet Footed and Second Wind can reach, since those gate on the derived level. The re-parented perks answer to their own parent's cap instead.

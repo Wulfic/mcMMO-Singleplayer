@@ -1,8 +1,8 @@
 package com.gmail.nossr50.util.random;
 
-import static com.gmail.nossr50.datatypes.skills.PrimarySkillType.AGILITY;
+import static com.gmail.nossr50.datatypes.skills.PrimarySkillType.PARKOUR;
 import static com.gmail.nossr50.datatypes.skills.PrimarySkillType.MINING;
-import static com.gmail.nossr50.datatypes.skills.SubSkillType.AGILITY_DODGE;
+import static com.gmail.nossr50.datatypes.skills.SubSkillType.PARKOUR_DODGE;
 import static com.gmail.nossr50.datatypes.skills.SubSkillType.AXES_ARMOR_IMPACT;
 import static com.gmail.nossr50.datatypes.skills.SubSkillType.AXES_GREATER_IMPACT;
 import static com.gmail.nossr50.datatypes.skills.SubSkillType.MINING_DOUBLE_DROPS;
@@ -158,39 +158,39 @@ class ProbabilityUtilTest {
     @Test
     void getRNGDisplayValuesShouldReturn10PercentForDodge() {
         // Given
-        when(advancedConfig.getMaximumProbability(AGILITY_DODGE)).thenReturn(20D);
-        when(advancedConfig.getMaxBonusLevel(AGILITY_DODGE)).thenReturn(1000);
-        atSkillLevel(AGILITY, 500);
+        when(advancedConfig.getMaximumProbability(PARKOUR_DODGE)).thenReturn(20D);
+        when(advancedConfig.getMaxBonusLevel(PARKOUR_DODGE)).thenReturn(1000);
+        atSkillLevel(PARKOUR, 500);
 
         // When & Then
         final String[] rngDisplayValues = ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
-                AGILITY_DODGE);
+                PARKOUR_DODGE);
         assertEquals("10.00%", rngDisplayValues[0]);
     }
 
     @Test
     void getRNGDisplayValuesShouldReturn20PercentForDodge() {
         // Given
-        when(advancedConfig.getMaximumProbability(AGILITY_DODGE)).thenReturn(20D);
-        when(advancedConfig.getMaxBonusLevel(AGILITY_DODGE)).thenReturn(1000);
-        atSkillLevel(AGILITY, 1000);
+        when(advancedConfig.getMaximumProbability(PARKOUR_DODGE)).thenReturn(20D);
+        when(advancedConfig.getMaxBonusLevel(PARKOUR_DODGE)).thenReturn(1000);
+        atSkillLevel(PARKOUR, 1000);
 
         // When & then
         final String[] rngDisplayValues = ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
-                AGILITY_DODGE);
+                PARKOUR_DODGE);
         assertEquals("20.00%", rngDisplayValues[0]);
     }
 
     @Test
     void getRNGDisplayValuesShouldReturn0PercentForDodge() {
         // Given
-        when(advancedConfig.getMaximumProbability(AGILITY_DODGE)).thenReturn(20D);
-        when(advancedConfig.getMaxBonusLevel(AGILITY_DODGE)).thenReturn(1000);
-        atSkillLevel(AGILITY, 0);
+        when(advancedConfig.getMaximumProbability(PARKOUR_DODGE)).thenReturn(20D);
+        when(advancedConfig.getMaxBonusLevel(PARKOUR_DODGE)).thenReturn(1000);
+        atSkillLevel(PARKOUR, 0);
 
         // When & then
         final String[] rngDisplayValues = ProbabilityUtil.getRNGDisplayValues(mmoPlayer,
-                AGILITY_DODGE);
+                PARKOUR_DODGE);
         assertEquals("0.00%", rngDisplayValues[0]);
     }
 

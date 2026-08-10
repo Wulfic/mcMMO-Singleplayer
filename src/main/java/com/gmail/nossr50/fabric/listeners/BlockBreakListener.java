@@ -836,7 +836,7 @@ public final class BlockBreakListener {
         ItemSpecBuilder.build(won.get().getDrop()).ifPresent(stack -> {
             Block.dropStack(world, pos, stack);
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
-                    "Agility.SubSkill.LakeRaider.Proc");
+                    "Swimming.SubSkill.LakeRaider.Proc");
         });
     }
 }

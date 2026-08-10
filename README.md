@@ -86,10 +86,10 @@ three new primary skills, one per medium you travel through.
 
 | Skill | How you train it | What it gives you |
 |---|---|---|
-| **Parkour** | Sprinting and falling on land | Feeds Agility. Owns **Roll** (negate fall damage; hold sneak on landing for a Graceful Roll at double odds) and **Snow Walker** (cross powder snow without sinking). |
-| **Swimming** | Swimming | Feeds Agility. |
-| **Flying** | Elytra gliding | Feeds Agility. |
-| **Agility** *(child)* | — derived — | Dodge, Fleet Footed, Athlete, Smash, Lead Lungs, Glide, Lake Raider, Solar Wings, and the **Second Wind** super ability. |
+| **Parkour** | Sprinting and falling on land | Feeds Agility. Owns **Dodge**, **Roll** (hold sneak on landing for a Graceful Roll at double odds), **Athlete** (sprinting costs less hunger), **Smash** (harder sprint attacks) and **Snow Walker**. |
+| **Swimming** | Swimming | Feeds Agility. Owns **Lead Lungs** (far longer breath) and **Lake Raider** (underwater digging turns up treasure). |
+| **Flying** | Elytra gliding | Feeds Agility. Owns **Glide** (descend more slowly) and **Solar Wings** (a worn elytra mends in daylight). |
+| **Agility** *(child)* | — derived — | The two perks that work in every medium: **Fleet Footed** and the **Second Wind** super ability. Each carries one rank per medium, so the three-skill mean is what unlocks them. |
 | **Stealth** | Sneaking under your own power | **Padfoot** (sneak nearly at walking speed), **Assassin** (backstab damage), **Smoke Bomb** super ability. |
 | **Unarmored** | Taking damage with **every armour slot empty** | **Iron Skin** (real armour points at four tiers — leather/gold/iron/diamond) and **Thorny Skin** (reflect a sting at melee attackers). |
 | **Husbandry** | Breeding, taming, shearing, milking, feeding and robbing hives | Nine sub-skills across six XP verbs — **Multi-Breed**, **Twins**, **Selective Breeding**, **Accelerated Growth**, **Brood**, **Bountiful Harvest**, **Hidden Bounty**, **Beekeeper** and the **Herdsman's Call** super ability. |

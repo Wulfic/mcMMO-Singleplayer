@@ -408,32 +408,65 @@ class SkillStatsRendererTest {
     }
 
     @Test
-    void agilityNoLongerRendersRoll() {
-        // The other half of the move: Roll must not appear on both screens. Dodge stays, because it
-        // is still gated on Agility's mean.
-        when(mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY)).thenReturn(1000);
+    void agilityRendersOnlyItsTwoCrossMediumSubSkills() {
+        // After the 2026-08-10 re-parenting, /mcstats agility is Fleet Footed and Second Wind and
+        // nothing else. Every single-medium perk moved to the screen for the skill that gates it.
+        //
+        // This player is a maxed all-rounder, so every one of the seven moved sub-skills is unlocked
+        // and WOULD render if it were still Agility's -- without that, "absent" would be satisfied by
+        // the sub-skill merely being locked and the assertion would prove nothing.
+        for (PrimarySkillType s : List.of(PrimarySkillType.AGILITY, PrimarySkillType.PARKOUR,
+                PrimarySkillType.SWIMMING, PrimarySkillType.FLYING)) {
+            when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
+        }
 
         final List<String> lines = render(new AgilityStatsRenderer());
 
-        assertTrue(anyLineContains(lines, "Dodge"), "Dodge is still Agility's; lines=" + lines);
-        assertFalse(anyLineContains(lines, "Roll Chance"),
-                "Roll belongs to /mcstats parkour now; lines=" + lines);
+        assertTrue(anyLineContains(lines, "Fleet Footed"), "lines=" + lines);
+        assertTrue(anyLineContains(lines, "Second Wind"), "lines=" + lines);
+        for (String moved : List.of("Dodge", "Roll Chance", "Sprint Hunger", "Smash",
+                "Breath Extension", "Lake Raider", "Descent Slowed", "Elytra Mending")) {
+            assertFalse(anyLineContains(lines, moved),
+                    moved + " belongs to a parent skill's screen now; lines=" + lines);
+        }
     }
 
     @Test
-    void swimmingAndFlyingDeliberatelyFallBackToTheGenericRenderer() {
-        // NOT an oversight, and pinned so it is not "fixed" into an empty stats section later:
-        // Swimming and Flying own no sub-skills of their own. They are parents of the child skill
-        // Agility, and every movement effect is an AGILITY_* sub-skill gated on that averaged level,
-        // so it renders under /mcstats agility instead.
-        for (PrimarySkillType s : List.of(PrimarySkillType.SWIMMING, PrimarySkillType.FLYING)) {
-            assertTrue(SkillStatsRenderer.forSkill(s) instanceof GenericSkillStatsRenderer,
-                    s.name() + " has no sub-skills of its own, so the generic renderer is correct");
-
+    void eachMovedSubSkillRendersOnItsNewParentsScreen() {
+        // The converse, and the half that matters most: a sub-skill can be removed from one screen
+        // and simply vanish. Assert it ARRIVED, per skill, at a level that unlocks all of them.
+        for (PrimarySkillType s : List.of(PrimarySkillType.AGILITY, PrimarySkillType.PARKOUR,
+                PrimarySkillType.SWIMMING, PrimarySkillType.FLYING)) {
             when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
-            final List<String> lines = render(SkillStatsRenderer.forSkill(s));
-            assertFalse(lines.isEmpty(), s.name() + " still renders a header");
         }
+
+        final List<String> parkour = render(SkillStatsRenderer.forSkill(PrimarySkillType.PARKOUR));
+        for (String expected : List.of("Dodge", "Roll Chance", "Sprint Hunger", "Smash",
+                "Snow Walker")) {
+            assertTrue(anyLineContains(parkour, expected),
+                    expected + " must render on /mcstats parkour; lines=" + parkour);
+        }
+
+        final List<String> swimming = render(SkillStatsRenderer.forSkill(PrimarySkillType.SWIMMING));
+        assertTrue(anyLineContains(swimming, "Breath Extension"), "lines=" + swimming);
+        assertTrue(anyLineContains(swimming, "Lake Raider"), "lines=" + swimming);
+
+        final List<String> flying = render(SkillStatsRenderer.forSkill(PrimarySkillType.FLYING));
+        assertTrue(anyLineContains(flying, "Descent Slowed"), "lines=" + flying);
+        assertTrue(anyLineContains(flying, "Elytra Mending"), "lines=" + flying);
+    }
+
+    @Test
+    void everyAgilityParentHasItsOwnRendererRatherThanTheGenericOne() {
+        // Swimming and Flying fell through to GenericSkillStatsRenderer until 2026-08-10, correctly:
+        // they owned no sub-skills at all. Re-parenting gave each of them two, so a generic renderer
+        // here would now silently drop real effect lines rather than honestly render nothing.
+        assertTrue(SkillStatsRenderer.forSkill(PrimarySkillType.SWIMMING)
+                instanceof SwimmingStatsRenderer);
+        assertTrue(SkillStatsRenderer.forSkill(PrimarySkillType.FLYING)
+                instanceof FlyingStatsRenderer);
+        assertTrue(SkillStatsRenderer.forSkill(PrimarySkillType.PARKOUR)
+                instanceof ParkourStatsRenderer);
     }
 
     @Test
