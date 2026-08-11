@@ -630,7 +630,6 @@ Experience_Values:
         Short_Dry_Grass: 6
         Tall_Dry_Grass: 12
         Wildflowers: 15
-        Eyeblossom: 66
         Open_Eyeblossom: 66
         Closed_Eyeblossom: 66
         Pitcher_Plant: 160
@@ -699,7 +698,6 @@ Experience_Values:
         Cocoa: 30
         Potatoes: 50
         Wheat: 50
-        Beetroot: 50
         Beetroots: 50
         Nether_Wart: 50
         Dead_Bush: 30
@@ -715,7 +713,6 @@ Experience_Values:
         Red_Tulip: 150
         Rose_Bush: 50
         Fern: 10
-        Grass: 10
         Short_Grass: 10
         Sugar_Cane: 30
         Sunflower: 50
@@ -840,6 +837,7 @@ Experience_Values:
         Bone_Block: 500
         Crying_Obsidian: 3000
         Chain: 100
+        Iron_Chain: 100
         Blackstone: 55
         Warped_Nylium: 5
         Crimson_Nylium: 5
@@ -857,7 +855,7 @@ Experience_Values:
         Deepslate_Diamond_Ore: 3600
         Emerald_Ore: 1000
         Deepslate_Emerald_Ore: 1700
-        End_Bricks: 50
+        End_Stone_Bricks: 50
         Chiseled_Nether_Bricks: 50
         Cracked_Nether_Bricks: 50
         Nether_Bricks: 50
@@ -872,7 +870,6 @@ Experience_Values:
         Iron_Ore: 900
         Deepslate_Iron_Ore: 1300
         Lapis_Ore: 800
-        Lapis_Lazuli_Ore: 800
         Deepslate_Lapis_Ore: 1400
         Mossy_Cobblestone: 30
         Netherrack: 15
@@ -941,7 +938,7 @@ Experience_Values:
         Deepslate_Emerald_Ore: 110
         Deepslate_Iron_Ore: 40
         Deepslate_Gold_Ore: 50
-        Deepslate_Lapis_Lazuli_Ore: 60
+        Deepslate_Lapis_Ore: 60
         Copper_Ore: 75
         Ancient_Debris: 200
         Coal_Ore: 10
@@ -951,7 +948,6 @@ Experience_Values:
         Raw_Gold: 35
         Iron_Ore: 25
         Raw_Iron: 25
-        Lapis_Lazuli_Ore: 40
         Lapis_Ore: 40
         Nether_Quartz_Ore: 25
         Redstone_Ore: 15
