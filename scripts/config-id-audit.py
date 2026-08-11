@@ -1,0 +1,577 @@
+#!/usr/bin/env python3
+"""Resolve every Minecraft item/block id in mcMMO's shipped configs against every cached MC jar.
+
+This is TODO 5.5 (risk R5): ~4,200 lines of item-keyed YAML ship in the jar, and an id that does
+not exist on an older band is a config row that silently does nothing. The runtime half of 5.5 is
+`ConfigItemIdResolutionTest`, which asks the *real registry* inside each band's own build. This
+script is the other half -- it answers "what will break when I cut mc/1.21.5?" BEFORE the branch
+exists, from jars already in the Loom cache, in seconds.
+
+Two questions, deliberately kept apart, because they have different fixes:
+
+  ABSENT-ON-BAND    resolves on the pinned version but not on some older one. Expected drift.
+                    The loaders prune these at load and log a summary (see ConfigIdSkips); the
+                    row stays in the shipped YAML because it is correct on the newer bands.
+
+  DEAD-EVERYWHERE   resolves on NO supported version. This is a bug, not drift -- a typo, or a
+                    pre-flattening Bukkit name that was never updated. Nothing prunes it usefully
+                    because there is no version where it works.
+
+  🔑 That split is the entire point of the script. A per-band test cannot make it: on any single
+  version both categories look identical (an id that does not resolve), and the "expected drift"
+  reading is the one a reviewer reaches for. Only comparing across versions separates them.
+
+  It immediately earned itself: `Mining.Chain: 100` had been paying ZERO XP on the shipping build.
+  `minecraft:chain` was renamed `minecraft:iron_chain` in the Copper Age drop -- so the row is
+  correct on 1.21.5/1.21.8 and dead on 1.21.10/1.21.11, i.e. ABSENT-ON-BAND *pointing backwards*.
+  The fix is the both-names pattern the file already uses elsewhere (Grass/Short_Grass,
+  Lapis_Ore/Lapis_Lazuli_Ore): one row is live per version, and no band needs a different file.
+
+WHERE THE ID SETS COME FROM, and why not the obvious places:
+
+  blocks -> assets/minecraft/blockstates/<id>.json      items -> assets/minecraft/items/<id>.json
+
+  Both are generated per *registered* object, so they are exactly the registry contents.
+
+  ⚠️⚠️ The two obvious alternatives are both WRONG, and each was tried first:
+
+  1. `javap net.minecraft.block.Blocks` -- a YARN FIELD NAME IS NOT A REGISTRY ID. Yarn renamed the
+     field to `IRON_CHAIN`, which happens to match here, but `Blocks.COPPER_CHAINS` is a
+     `CopperBlockSet` holding several ids under one field and a type-matching regex misses it
+     entirely. Field names under-report and mis-report.
+  2. `assets/minecraft/lang/en_us.json` -- STALE KEYS SURVIVE RENAMES. On 1.21.11 that file still
+     carries `block.minecraft.chain = "Chain"` alongside `block.minecraft.iron_chain`, so the very
+     bug this script found reads as clean. Lang files over-report.
+
+  Neither error is visible in its own output, which is why the control below is mandatory.
+
+  ⚠️ `assets/minecraft/items/` only exists from 1.21.4. Below that the script REFUSES to report
+  (exit 4) rather than resolving nothing and calling every item absent -- "found nothing" and
+  "there is nothing to find" render identically. The R-b floor is 1.21.5, so this costs us nothing.
+
+THE CONTROL (--control, on by default at the version gradle.properties pins):
+  Every extracted id must resolve on the version this tree compiles and boots against. One that
+  does not is an extractor bug or a genuinely dead row -- never a fact about Minecraft. Without
+  it, a broken extractor and a clean config produce the same output. Same argument as
+  probe-bands.py's `--control`, and that one caught 6 false ABSENTs on its first run.
+
+Usage:
+    python scripts/config-id-audit.py                  # audit every cached version
+    python scripts/config-id-audit.py --mc 1.21.5      # one version
+    python scripts/config-id-audit.py --check          # exit 1 if any DEAD-EVERYWHERE id exists
+    python scripts/config-id-audit.py --self-test      # prove the extractor and both detectors fire
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+import zipfile
+from collections import defaultdict
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+RESOURCES = REPO / "src" / "main" / "resources"
+LOOM = (Path.home() / ".gradle" / "caches" / "fabric-loom" / "minecraftMaven"
+        / "net" / "minecraft" / "minecraft-merged")
+
+# Mirrors platform/Materials.LEGACY_NAME_ALIASES. Kept in sync by ConfigItemIdResolutionTest,
+# which reads the real map -- this copy exists only so the script can run without a JVM.
+LEGACY_NAME_ALIASES = {"water_lily": "lily_pad"}
+
+# See the anti-vacuity floor in run(). 0.95 is comfortably above the handful of deliberate
+# older-band rows (1 of 689 today) and far below any plausible parser breakage.
+MIN_CONTROL_RESOLVE_RATE = 0.95
+
+ITEM, BLOCK = "item", "block"
+
+# experience.yml's XP tables all share one map keyed on "the config-material-string a caller derived
+# from a vanilla registry path" (ExperienceConfig#getXp) -- but WHICH registry that path came from
+# depends on the skill's seam, not on the file. Traced, not assumed:
+#   Mining/Herbalism/Excavation/Woodcutting -> the BROKEN BLOCK (HerbalismManager:401 and siblings)
+#   Smelting                                -> the FURNACE INPUT ITEM (SmeltingManager#awardSmeltingXP)
+# which is why `Raw_Iron` and `Copper_Nugget` are correct Smelting rows rather than typos.
+#
+# ⚠️⚠️ Both blunter rules are wrong, and each was tried:
+#   whole file as BLOCK  -> reported 6 correct Smelting rows as dead (false positives)
+#   whole file as EITHER -> hides `Herbalism.Beetroot`, which is a real item but NOT the block the
+#                           Herbalism seam looks up (that is `beetroots`), so the row pays nothing.
+# The per-section map is the only one with zero false positives AND no false negatives here.
+XP_SECTION_KIND = {
+    "Mining": BLOCK,
+    "Woodcutting": BLOCK,
+    "Herbalism": BLOCK,
+    "Excavation": BLOCK,
+    "Smelting": ITEM,
+}
+
+
+# --------------------------------------------------------------------------- config extraction
+#
+# Each rule mirrors how the corresponding LOADER reads the file. Where a loader reads a key as an
+# item id, so does this; where it reads a free-form name (a rarity, a material category, a skill),
+# this must not, or the control drowns in false positives. The section allow-lists below are the
+# load-bearing part and are asserted by --self-test.
+
+def _keys_at(text: str, indent: int, section: str) -> list[str]:
+    """Mapping keys at exactly `indent` spaces inside top-level `section`."""
+    out, inside = [], False
+    for line in text.splitlines():
+        if re.match(r"^[A-Za-z_]", line):
+            inside = line.split(":")[0] == section
+            continue
+        if not inside:
+            continue
+        m = re.match(r"^ {%d}([A-Za-z0-9_|]+):" % indent, line)
+        if m and not re.match(r"^ {%d}\s" % indent, line):
+            out.append(m.group(1))
+    return out
+
+
+def _list_items(text: str, section: str) -> list[str]:
+    out, inside = [], False
+    for line in text.splitlines():
+        if re.match(r"^[A-Za-z_]", line):
+            inside = line.split(":")[0] == section
+            continue
+        if inside:
+            m = re.match(r"^\s*-\s*([A-Za-z0-9_:]+)\s*$", line)
+            if m:
+                out.append(m.group(1))
+    return out
+
+
+def _read(name: str, root: Path) -> str:
+    return (root / name).read_text(encoding="utf-8")
+
+
+def extract(root: Path = RESOURCES) -> dict[str, set[tuple[str, str]]]:
+    """-> {"<file>:<section>": {(kind, raw_token), ...}}"""
+    found: dict[str, set[tuple[str, str]]] = defaultdict(set)
+
+    def add(src: str, kind: str, tok: str) -> None:
+        found[src].add((kind, tok.split("|")[0]))  # legacy "MATERIAL|data" form: keep the material
+
+    # --- treasures.yml: entry keys are items; Excavation's Drops_From are BLOCK ids (the other
+    #     two sections list group names / harvest verbs, which are not ids at all).
+    t = _read("treasures.yml", root)
+    for sec in ("Excavation", "Hylian_Luck", "Husbandry"):
+        for k in _keys_at(t, 4, sec):
+            add(f"treasures.yml:{sec}", ITEM, k)
+    inside = False
+    for line in t.splitlines():
+        if re.match(r"^[A-Za-z_]", line):
+            inside = line.split(":")[0] == "Excavation"
+            continue
+        if inside:
+            m = re.search(r"Drops_From:\s*\[([^\]]*)\]", line)
+            if m:
+                for b in (x.strip() for x in m.group(1).split(",")):
+                    if b:
+                        add("treasures.yml:Excavation.Drops_From", BLOCK, b)
+
+    # --- fishing_treasures.yml: Fishing entry keys, and Shake drops keyed under each entity.
+    t = _read("fishing_treasures.yml", root)
+    for k in _keys_at(t, 4, "Fishing"):
+        add("fishing_treasures.yml:Fishing", ITEM, k)
+    for k in _keys_at(t, 8, "Shake"):
+        # INVENTORY is a pseudo-entry meaning "steal from the mob's inventory", not an item id.
+        # FishingTreasureConfig skips it explicitly; so must this, or the control reports it.
+        if k.upper() != "INVENTORY":
+            add("fishing_treasures.yml:Shake", ITEM, k)
+
+    # --- repair / salvage: the entry key is the repaired item, the *Material value is the input.
+    for fname, sec, matkey in (("repair.vanilla.yml", "Repairables", "RepairMaterial"),
+                               ("salvage.vanilla.yml", "Salvageables", "SalvageMaterial")):
+        t = _read(fname, root)
+        for k in _keys_at(t, 4, sec):
+            add(f"{fname}:{sec}", ITEM, k)
+        for m in re.finditer(r"^\s*%s:\s*([A-Za-z0-9_:]+)" % matkey, t, re.M):
+            add(f"{fname}:{matkey}", ITEM, m.group(1))
+
+    # --- potions.yml: Concoctions tiers, each potion's Material, and Children ingredient KEYS
+    #     (the child's *value* is another potion identifier, not an item).
+    t = _read("potions.yml", root)
+    for i in _list_items(t, "Concoctions"):
+        add("potions.yml:Concoctions", ITEM, i)
+    for m in re.finditer(r"^\s*Material:\s*([A-Za-z0-9_:]+)", t, re.M):
+        add("potions.yml:Material", ITEM, m.group(1))
+    in_children, child_indent = False, 0
+    for line in t.splitlines():
+        if re.match(r"^\s*Children:\s*$", line):
+            in_children = True
+            child_indent = len(line) - len(line.lstrip()) + 4
+            continue
+        if in_children:
+            m = re.match(r"^ {%d}([A-Za-z0-9_]+):\s*\S" % child_indent, line)
+            if m:
+                add("potions.yml:Children", ITEM, m.group(1))
+            elif line.strip() and not line.lstrip().startswith("#"):
+                in_children = False
+
+    # --- experience.yml: the per-block XP tables. NOT in TODO 5.5's list of five files, and that
+    #     was a hole -- it is the largest id-keyed file in the jar (~340 rows). Only these five
+    #     sections are id-keyed; the rest of the file (Repair material categories, Skill_Multiplier,
+    #     Threshold, the curve knobs) is keyed by names that are not ids and must be excluded, or
+    #     the control reports ~60 false positives.
+    t = _read("experience.yml", root)
+    for sec, kind in XP_SECTION_KIND.items():
+        for row in _xp_rows(t, sec):
+            add(f"experience.yml:{sec}", kind, row)
+    return found
+
+
+def _xp_rows(text: str, section: str) -> list[str]:
+    """`Name: <number>` rows at 8 spaces inside `Experience_Values.<section>`.
+
+    ⚠️ The `Experience_Values` scoping is load-bearing, not decoration. experience.yml carries a
+    SECOND block of sections with these exact names -- the XP-bar config at ~line 249, where
+    `Mining:` holds `Enable/Color/BarStyle`. Matching `Mining:` anywhere in the file merges the two.
+    Requiring a numeric value happens to exclude `Color: YELLOW` today, but that is an accident of
+    the current values, not a rule anything enforces; the parent check is the rule.
+    """
+    out, cur, in_values = [], None, False
+    for line in text.splitlines():
+        top = re.match(r"^([A-Za-z_]+):", line)
+        if top:
+            in_values = top.group(1) == "Experience_Values"
+            cur = None
+            continue
+        if not in_values:
+            continue
+        m = re.match(r"^ {4}([A-Za-z_]+):\s*$", line)
+        if m:
+            cur = m.group(1)
+            continue
+        if cur == section:
+            m2 = re.match(r"^ {8}([A-Za-z][A-Za-z0-9_]*):\s*-?\d", line)
+            if m2:
+                out.append(m2.group(1))
+    return out
+
+
+def normalise(token: str) -> str | None:
+    """Config token -> vanilla registry path, or None if it cannot name a vanilla object."""
+    t = token.strip().lower()
+    if not t:
+        return None
+    if ":" in t:
+        ns, _, path = t.partition(":")
+        return path if ns == "minecraft" else None  # another mod's id is not ours to resolve
+    return LEGACY_NAME_ALIASES.get(t, t)
+
+
+# --------------------------------------------------------------------------- jar id sets
+
+def cached_versions() -> list[str]:
+    if not LOOM.is_dir():
+        return []
+    out = set()
+    for d in LOOM.iterdir():
+        m = re.match(r"^(.+?)-net\.fabricmc\.yarn\.", d.name)
+        if m:
+            out.add(m.group(1))
+    return sorted(out, key=lambda v: [int(x) for x in re.findall(r"\d+", v)])
+
+
+def jar_for(version: str) -> Path | None:
+    # The trailing '-' is load-bearing: without it 1.21.1 also matches the 1.21.11 directory.
+    for d in LOOM.glob(f"{version}-net.fabricmc.yarn.*"):
+        for j in d.glob(f"minecraft-merged-{version}-*-v2.jar"):
+            if j.name.startswith(f"minecraft-merged-{version}-"):
+                return j
+    return None
+
+
+def id_sets(version: str) -> dict[str, set[str]]:
+    """{"item": {...}, "block": {...}} straight out of the version's generated data."""
+    jar = jar_for(version)
+    if jar is None:
+        raise SystemExit(f"no cached jar for {version} -- run scripts/javap-mc.sh --list-versions")
+    with zipfile.ZipFile(jar) as z:
+        names = z.namelist()
+    blocks = {n.split("/")[-1][:-5] for n in names
+              if n.startswith("assets/minecraft/blockstates/") and n.endswith(".json")}
+    items = {n.split("/")[-1][:-5] for n in names
+             if n.startswith("assets/minecraft/items/") and n.endswith(".json")}
+    if not blocks:
+        raise SystemExit(f"{version}: no blockstates in the jar -- id source is wrong, refusing")
+    if not items:
+        # assets/minecraft/items/ appeared in 1.21.4. Refusing beats reporting every item absent.
+        raise SystemExit(
+            f"ERROR: {version} has no assets/minecraft/items/ (added in 1.21.4), so item ids "
+            f"cannot be resolved. Refusing to report rather than calling every item absent. "
+            f"The R-b support floor is 1.21.5, so this version is out of scope anyway.")
+    return {ITEM: items, BLOCK: blocks}
+
+
+def pinned_version() -> str:
+    for line in (REPO / "gradle.properties").read_text(encoding="utf-8").splitlines():
+        if line.strip().startswith("minecraft_version"):
+            return line.split("=", 1)[1].strip()
+    raise SystemExit("no minecraft_version in gradle.properties")
+
+
+# --------------------------------------------------------------------------- reporting
+
+def resolve_all(found, sets):
+    """-> {(src, kind, token): bool resolved}"""
+    out = {}
+    for src, entries in found.items():
+        for kind, tok in entries:
+            n = normalise(tok)
+            out[(src, kind, tok)] = bool(n) and n in sets[kind]
+    return out
+
+
+def run(versions: list[str], control: str, check: bool) -> int:
+    found = extract()
+    total = sum(len(v) for v in found.values())
+    print(f"Extracted {total} id references from {len(found)} config sections "
+          f"in {len({s.split(':')[0] for s in found})} files.\n")
+
+    ctl_sets = id_sets(control)
+    ctl = resolve_all(found, ctl_sets)
+    ctl_bad = sorted(k for k, ok in ctl.items() if not ok)
+
+    per_version = {}
+    for v in versions:
+        per_version[v] = resolve_all(found, id_sets(v))
+
+    # DEAD-EVERYWHERE: resolves on no version we can see, control included.
+    dead = []
+    for key in ctl:
+        if not ctl[key] and not any(per_version[v][key] for v in versions):
+            dead.append(key)
+
+    # Anti-vacuity floor. The control's real job is catching a BROKEN EXTRACTOR, and a broken one
+    # fails wholesale, not by ones. A handful of unresolved ids on the pinned version is normal in a
+    # multi-version config (see `Chain` below); 30% of them unresolved means the id source moved or
+    # the parser stopped parsing, and every "clean" answer after that is worthless.
+    resolved_here = sum(1 for ok in ctl.values() if ok)
+    rate = resolved_here / len(ctl) if ctl else 0.0
+    print(f"=== CONTROL ({control}) ===")
+    print(f"  {resolved_here}/{len(ctl)} ids resolve on the version this tree builds against "
+          f"({rate:.1%}).")
+    if rate < MIN_CONTROL_RESOLVE_RATE:
+        print(f"  FAIL -- below the {MIN_CONTROL_RESOLVE_RATE:.0%} floor. That is an extractor or "
+              f"id-source failure, not a fact about Minecraft. Every result below is unreliable.")
+        return 2
+    if not ctl_bad:
+        print("  PASS -- every extracted id resolves.\n")
+    else:
+        # ⚠️ Unresolved-on-pinned is NOT automatically a defect, and treating it as one was the
+        # first draft's bug. A row can be deliberately absent here and live on an older band --
+        # `Mining.Chain` is exactly that, and failing on it would punish the both-names pattern
+        # that makes one config correct on every band. Only DEAD-EVERYWHERE is a defect.
+        print(f"  {len(ctl_bad)} unresolved here, each classified below:\n")
+        for src, kind, tok in ctl_bad:
+            tag = ("DEAD-EVERYWHERE -- defect" if (src, kind, tok) in dead
+                   else "ok: live on an older band")
+            print(f"      {src:38} {kind:5} {tok:28} [{tag}]")
+        print()
+
+    print("=== DEAD ON EVERY SUPPORTED VERSION (a bug, not drift) ===")
+    if not dead:
+        print("  none\n")
+    else:
+        for src, kind, tok in sorted(dead):
+            print(f"      {src:38} {kind:5} {tok}")
+        print()
+
+    print("=== ABSENT PER VERSION (expected drift; loaders prune and log these) ===")
+    for v in versions:
+        rows = sorted(k for k, ok in per_version[v].items()
+                      if not ok and k not in dead)
+        print(f"\n  {v} -- {len(rows)} id(s) absent")
+        for src, kind, tok in rows:
+            print(f"      {src:38} {kind:5} {tok}")
+
+    if check and dead:
+        print(f"\nFAIL: {len(dead)} config id(s) resolve on NO supported version.")
+        return 1
+    return 0
+
+
+# --------------------------------------------------------------------------- self-test
+#
+# Why this exists: "no dead ids" is also exactly what a completely broken extractor prints. The
+# self-test builds throwaway configs whose answers are known and asserts the extractor finds the
+# ids it must AND stays quiet on the tokens it must not. Both directions, because an extractor that
+# returns nothing passes every positive-only check, and one that returns every token passes every
+# negative-only check.
+
+SELF_TEST_FILES = {
+    "treasures.yml": (
+        "Excavation:\n"
+        "    DIAMOND:\n"
+        "        Amount: 1\n"
+        "        Drops_From: [Dirt, Mud]\n"
+        "Hylian_Luck:\n"
+        "    MELON_SLICE:\n"
+        "        Amount: 1\n"
+        "        Drops_From: [Bushes]\n"          # a GROUP name -- must not be read as a block
+        "Husbandry:\n"
+        "    LEATHER:\n"
+        "        Drops_From: [Shear]\n"           # a VERB -- must not be read as a block
+    ),
+    "fishing_treasures.yml": (
+        "Fishing:\n"
+        "    COD:\n"
+        "        Rarity: COMMON\n"
+        "Shake:\n"
+        "    minecraft|cow:\n"
+        "        LEATHER:\n"
+        "            Drop_Chance: 1.0\n"
+        "        INVENTORY:\n"                    # pseudo-entry -- must be ignored
+        "            Drop_Chance: 1.0\n"
+    ),
+    "repair.vanilla.yml": (
+        "Repairables:\n"
+        "    IRON_SWORD:\n"
+        "        RepairMaterial: IRON_INGOT\n"
+        "        ItemType: TOOL\n"                # a category -- must not be read as an item
+    ),
+    "salvage.vanilla.yml": (
+        "Salvageables:\n"
+        "    GOLDEN_HELMET:\n"
+        "        SalvageMaterial: GOLD_INGOT\n"
+        "        MaterialType: GOLD\n"            # a category -- must not be read as an item
+    ),
+    "potions.yml": (
+        "Concoctions:\n"
+        "    Tier_One_Ingredients:\n"
+        "        - SUGAR\n"
+        "        - WATER_LILY\n"                  # legacy alias -> lily_pad
+        "Potions:\n"
+        "    POTION_OF_SWIFTNESS:\n"              # a potion IDENTIFIER -- must not be read as item
+        "        Material: POTION\n"
+        "        Children:\n"
+        "            REDSTONE: POTION_OF_SWIFTNESS_EXTENDED\n"
+    ),
+    "experience.yml": (
+        # A DECOY block first, mirroring the real file: the XP-bar config carries sections named
+        # Mining/Excavation too. If _xp_rows does not scope to Experience_Values, SEGMENTED_6 and
+        # BarStyle leak in as block ids. This is the negative case that matters.
+        "Experience_Bars:\n"
+        "    Mining:\n"
+        "        Enable: true\n"
+        "        Color: YELLOW\n"
+        "        BarStyle: SEGMENTED_6\n"
+        "        Decoy_Row: 42\n"                 # numeric, so only the parent check excludes it
+        "Experience_Values:\n"
+        "    Mining:\n"
+        "        Stone: 15\n"
+        "        Iron_Ore: 90\n"
+        "    Excavation:\n"
+        "        Dirt: 40\n"
+        "    Repair:\n"
+        "        Base: 1000.0\n"                  # a curve knob -- section is not scanned
+        "        Copper: 2.0\n"                   # a material CATEGORY -- section is not scanned
+        "    Skill_Multiplier:\n"
+        "        mining: 1.0\n"                   # a skill name -- section is not scanned
+    ),
+}
+
+SELF_TEST_MUST_FIND = {
+    ("treasures.yml:Excavation", ITEM, "DIAMOND"),
+    ("treasures.yml:Excavation.Drops_From", BLOCK, "Dirt"),
+    ("treasures.yml:Hylian_Luck", ITEM, "MELON_SLICE"),
+    ("treasures.yml:Husbandry", ITEM, "LEATHER"),
+    ("fishing_treasures.yml:Fishing", ITEM, "COD"),
+    ("fishing_treasures.yml:Shake", ITEM, "LEATHER"),
+    ("repair.vanilla.yml:Repairables", ITEM, "IRON_SWORD"),
+    ("repair.vanilla.yml:RepairMaterial", ITEM, "IRON_INGOT"),
+    ("salvage.vanilla.yml:Salvageables", ITEM, "GOLDEN_HELMET"),
+    ("salvage.vanilla.yml:SalvageMaterial", ITEM, "GOLD_INGOT"),
+    ("potions.yml:Concoctions", ITEM, "SUGAR"),
+    ("potions.yml:Concoctions", ITEM, "WATER_LILY"),
+    ("potions.yml:Material", ITEM, "POTION"),
+    ("potions.yml:Children", ITEM, "REDSTONE"),
+    ("experience.yml:Mining", BLOCK, "Stone"),
+    ("experience.yml:Mining", BLOCK, "Iron_Ore"),
+    ("experience.yml:Excavation", BLOCK, "Dirt"),
+}
+
+# Tokens that appear in the fixture but are NOT ids. If any shows up, the control on the real
+# configs fills with false positives and stops being a signal.
+SELF_TEST_MUST_NOT_FIND = {
+    "Bushes", "Shear", "INVENTORY", "TOOL", "GOLD", "POTION_OF_SWIFTNESS",
+    "POTION_OF_SWIFTNESS_EXTENDED", "Base", "mining", "COMMON",
+    "Decoy_Row", "BarStyle", "Color", "Enable",  # the Experience_Bars decoy block
+}
+
+
+def self_test() -> int:
+    import tempfile
+
+    failures: list[str] = []
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        for name, body in SELF_TEST_FILES.items():
+            (root / name).write_text(body, encoding="utf-8")
+        found = extract(root)
+
+    flat = {(src, kind, tok) for src, entries in found.items() for kind, tok in entries}
+    tokens = {tok for _, _, tok in flat}
+
+    for want in sorted(SELF_TEST_MUST_FIND):
+        if want not in flat:
+            failures.append(f"MISSED  {want[0]:38} {want[1]:5} {want[2]}")
+    for bad in sorted(SELF_TEST_MUST_NOT_FIND):
+        if bad in tokens:
+            where = sorted(s for s, _, t in flat if t == bad)
+            failures.append(f"FALSE+  {bad!r} extracted from {where}")
+
+    # normalise(): the alias table and the foreign-namespace rule are both load-bearing.
+    checks = [("WATER_LILY", "lily_pad"), ("Iron_Ore", "iron_ore"),
+              ("minecraft:stone", "stone"), ("somemod:stone", None), ("  ", None)]
+    for raw, want in checks:
+        got = normalise(raw)
+        if got != want:
+            failures.append(f"NORM    normalise({raw!r}) = {got!r}, want {want!r}")
+
+    print("=== SELF-TEST ===")
+    print(f"  fixture produced {len(flat)} references across {len(found)} sections")
+    if failures:
+        print(f"  FAIL -- {len(failures)} problem(s):")
+        for f in failures:
+            print(f"      {f}")
+        return 1
+    print(f"  PASS -- {len(SELF_TEST_MUST_FIND)} required refs found, "
+          f"{len(SELF_TEST_MUST_NOT_FIND)} non-id tokens correctly ignored, "
+          f"{len(checks)} normalisation cases correct.")
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--mc", action="append", metavar="VERSION",
+                    help="audit only this version (repeatable); default is every cached version")
+    ap.add_argument("--control", metavar="VERSION",
+                    help="version every id must resolve on (default: gradle.properties pin)")
+    ap.add_argument("--check", action="store_true",
+                    help="exit 1 if any id is dead on every version or fails the control")
+    ap.add_argument("--self-test", action="store_true",
+                    help="prove the extractor fires and stays quiet on non-ids, then exit")
+    args = ap.parse_args()
+
+    if args.self_test:
+        return self_test()
+
+    control = args.control or pinned_version()
+    versions = args.mc or [v for v in cached_versions() if _at_least_1_21_4(v)]
+    if not versions:
+        raise SystemExit("no cached jars at 1.21.4+ -- nothing to audit")
+    return run(versions, control, args.check)
+
+
+def _at_least_1_21_4(v: str) -> bool:
+    parts = [int(x) for x in re.findall(r"\d+", v)]
+    return parts >= [1, 21, 4]
+
+
+if __name__ == "__main__":
+    sys.exit(main())
