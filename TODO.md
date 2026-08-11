@@ -3,8 +3,10 @@
 **Scope:** Fabric only. Targets: all stable `1.21.x` (12 releases) and the `26.x` line (4 stable
 today, growing). NeoForge/Forge are explicitly **out of scope** — see "Deferred" at the bottom.
 
-**Status:** Phases 0, 1 and 2 done. Phase 3 is closed by ruling R-a, so the next live item is
-**Phase 4′** — cut the first band branch (`mc/1.21.10`, 2 changed records) per Phase 5.
+**Status:** Phases 0, 1, 2 and 3 are closed. **Phase 4 (Stonecutter) is struck** — R-a chose
+branches, so there is no preprocessor to adopt; it is replaced by **Phase 4′**, below. The
+cherry-pick discipline and risk R4 are both **done and landed on `master` first**, so all three band
+branches inherit them. The next live item is **Phase 5 — cut `mc/1.21.10`** (2 changed records).
 
 **Rule for this document:** a task is not checked off until its stated *acceptance criteria* pass.
 "It compiles" is not acceptance criteria. Neither is "it looked right in game."
@@ -71,14 +73,39 @@ Two live problems, found 2026-08-10:
 
 The doc's core objection to branches stands and is not answered by tooling: **11 of the last 12
 issue fixes were version-agnostic logic bugs**, and under branch-per-band each becomes N
-applications whose failure mode is silent. Mitigations, all mandatory:
+applications whose failure mode is silent. Mitigations, all mandatory — **✅ all four DONE**,
+commit `0560054dc`, landed before the first branch was cut:
 
-- [ ] Fixes land on `master` **first**, always. A fix authored directly on a band branch is a defect.
-- [ ] Every band-propagation commit carries a `Backport-of: <sha>` trailer, making
+- [x] Fixes land on `master` **first**, always. A fix authored directly on a band branch is a defect.
+      → written into `AGENTS.md`, so it binds every future session rather than living only here.
+- [x] Every band-propagation commit carries a `Backport-of: <sha>` trailer, making
       `git log --grep='Backport-of: <sha>'` the mechanical answer to *"did this reach every band?"*
-- [ ] A drift audit script that, for each `master` fix commit, reports which band branches lack a
+      → plus `Backport-not-needed: <reason>` for a `master` commit that genuinely must not
+      propagate. **An opt-out, not an allowlist**: it lives in the commit that made the decision and
+      cannot be applied retroactively to one somebody merely forgot.
+- [x] A drift audit script that, for each `master` fix commit, reports which band branches lack a
       matching `Backport-of` trailer. **Without this, R-a has no drift detection at all.**
-- [ ] Run the drift audit in CI on a schedule, not by memory.
+      → `scripts/drift-audit.py`. Also flags a `Backport-of` naming no real `master` commit — a
+      typo'd sha otherwise buys silent credit for nothing. `gradle.properties` is excluded by
+      construction: a band pins its own `minecraft_version`, so toolchain bumps must not read as
+      missing there.
+- [x] Run the drift audit in CI on a schedule, not by memory.
+      → `.github/workflows/drift-audit.yml`, weekly. Deliberately **not** per-push: drift is
+      slow-moving, and a per-push run would fail every PR between "fix lands" and "fix is
+      back-ported" until everyone learned to ignore it.
+
+🔑🔑 **The converse check is the load-bearing part, and it had to be synthetic.** With zero band
+branches a live run has nothing to compare — and *"no drift"* is exactly what a completely broken
+auditor also prints. So `--self-test` builds a throwaway repo containing known drift and asserts the
+auditor detects the forgotten fix, **clears the back-ported one** (without that, a script reporting
+everything as drift also passes), ignores docs-only and waived commits, and flags a typo'd trailer.
+CI runs the self-test *before* the real audit. For the same reason the live run **refuses to report
+success** when it finds zero band branches, and `--require-bands N` makes that a hard failure once
+bands exist — so a renamed branch or a shallow fetch cannot degrade the scheduled run into a green
+no-op.
+
+- [ ] **Raise `--require-bands` to the live band count** in `drift-audit.yml` as each branch is cut
+      (1 after `mc/1.21.10`, 2 after `mc/1.21.8`, 3 after `mc/1.21.5`).
 
 ---
 
@@ -602,46 +629,89 @@ Phases 4–6 below assume the recommended path. If branches are chosen, Phase 4 
 
 ---
 
-## Phase 4 — Adopt Stonecutter
+## ~~Phase 4 — Adopt Stonecutter~~ — ❌ **STRUCK by ruling R-a**
 
-`dev.kikugie.stonecutter`, 0.9.7 as of 2026-07-19. Already used in the wild against `26.2-fabric`
-targets, so the new version scheme is supported.
+Kept as a record of what was decided against, not as work. R-a chose branch-per-band, so there is no
+single tree and nothing for a preprocessor to do. The `26.x` finding is what settled it: a
+yarn-named tree and a Mojang-named tree differ on essentially every MC-touching line, and **no
+directive can bridge an identifier rename of that size** (see the `26.x` section above).
 
-- [ ] 4.1 Read the current Stonecutter docs before writing any build script. Do not copy a template
-      from a blog post.
-- [ ] 4.2 Add `stonecutter.gradle.kts` / settings wiring with `1.21.11` as the **only** active
-      version. Nothing else changes yet.
-- [ ] 4.3 Verify parity: build `1.21.11`, diff the jar against the Phase 0 archived artifact.
-      **Acceptance:** functionally identical jar, full suite still green. If this step is not clean,
-      stop — do not add a second version on top of a broken single-version build.
-- [ ] 4.4 Split the test suite by cost
-      - [ ] 101 MC-free tests → run **once**, version-independent
-      - [ ] 39 MC-typed tests → full run on the primary version, smoke subset elsewhere
-      - **Why:** `Bootstrap.initialize()` costs ~53s per JVM fork and is classload-bound, not
-        GC-bound. Per `gradle-build-tuning`, 2 forks is optimal — more is *slower*. Five bands ×
-        39 MC tests at default settings turns every commit into a coffee break.
-      - [ ] Re-measure `maxParallelForks` after the split; the current `4` was tuned for one version
-- [ ] 4.5 Template `fabric.mod.json` so `depends.minecraft` emits the correct range per band
-- [ ] 4.6 Confirm the configuration cache still holds (`org.gradle.configuration-cache=true`) — if
-      Stonecutter breaks it, decide explicitly whether to keep it, don't let it silently regress
+What was in it, and where each item went:
+
+| Was | Now |
+|---|---|
+| 4.1–4.3 adopt + parity-check Stonecutter | dropped entirely |
+| 4.4 split the test suite by cost | **deferred** — see below |
+| 4.5 template `fabric.mod.json` per band | absorbed into **Phase 4′.3**; under branches it is a literal edit, not a template |
+| 4.6 keep the configuration cache | moot; nothing is changing the build plugin set |
+
+**4.4 (test split) is deferred, not dropped.** Under one tree it was load-bearing: five bands × 39
+MC-typed tests × ~53s of `Bootstrap.initialize()` per fork, in *one* build. Under branches each band
+builds independently, so the multiplication never happens in a single run and the split buys much
+less. **Trigger to revisit:** the existing hard cap — *if any band's CI exceeds ~30 min wall clock*.
+Re-measure `maxParallelForks` then; the current `4` was tuned for one version, and per
+`gradle-build-tuning` **more forks is slower** (2 is optimal) because the bootstrap is classload-
+bound, not GC-bound.
+
+---
+
+## Phase 4′ — Cut a band branch (replaces Phase 4)
+
+The per-branch recipe. Mostly *configuration*: `.github/workflows/release.yml` already builds and
+releases from `mc/**` and predates this document.
+
+⚠️ **The invariant, stated in `release.yml` itself: NO TWO BRANCHES MAY RESOLVE TO THE SAME
+`minecraft_version`.** `master` and a band branch that both read `1.21.11` would both tag
+`mc1.21.11-v*` and both run the "delete previous release on this Minecraft line" sweep — **whichever
+pushes last deletes the other's release.** That is not hypothetical; it is what the deleted
+auto-created `mc/1.21.11` branch had armed. So:
+
+- [ ] 4′.1 `git switch -c mc/<band>` off `master`. **Never** off another band branch.
+- [ ] 4′.2 **First commit on the branch pins the band's own toolchain** in `gradle.properties`:
+      `minecraft_version`, `yarn_mappings` (look the build number up — it is **not** derivable from
+      the version), `loader_version`, `fabric_version`, and the ModMenu / Cloth Config versions for
+      that MC. Nothing else in the same commit.
+- [ ] 4′.3 Set `depends.minecraft` in `fabric.mod.json` to the band's **range**, not its newest
+      version — band `1.21.10` covers `1.21.9` too, and the release is tagged for only one of them.
+- [ ] 4′.4 Raise `--require-bands` in `.github/workflows/drift-audit.yml` to the new band count.
+- [ ] 4′.5 Do **not** push the branch until 5.2–5.7 pass locally. A push builds and releases.
 
 ---
 
 ## Phase 5 — First back-port (one band only)
 
-Prove the loop before committing to the matrix. Pick the band **adjacent** to `1.21.11`.
+Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 changed records) →
+`mc/1.21.8` (8) → `mc/1.21.5` (10)**.
 
-- [ ] 5.1 Add the band's newest version as a second Stonecutter target
+- [ ] 5.1 Cut the branch per Phase 4′.
 - [ ] 5.2 Compile. Work the errors against `BAND_TABLE.md` — every error should already be a known
       row. An error that is *not* in the table means the probe has a hole; fix the probe.
-- [ ] 5.3 Apply directives. **Confine them to `fabric/` and `platform/`.** A directive in a skill
-      manager is a Phase 2 regression — fix the boundary instead.
-- [ ] 5.4 Mixins are the tax. For each of the 42:
-      - [ ] Verify the target still resolves on the new version
-      - [ ] **Every mixin gets `allow = N`** before it multiplies across versions. Per
-        `mixin-slice-allow-guard`, an unresolvable `@Slice` is *silently dropped* and the injector
-        then binds everywhere; `defaultRequire=1` does not catch it. On one version that is a bug.
-        Across five it is five silent bugs.
+- [ ] 5.3 Fix the errors **inside `fabric/` and `platform/` only.** A band-specific change in a skill
+      manager is a Phase 2 regression — `PlatformBoundaryGuardTest` will red it; fix the boundary
+      rather than the test. This is the whole return on Phase 2: only ~107 files *can* differ.
+- [x] 5.4 ~~Mixins are the tax~~ — **DONE on `master`, commit `62788874e`**, so every band inherits
+      it instead of paying it three times.
+      - [x] **All 61 injectors carry `allow = N`** (38 had none). Per `mixin-slice-allow-guard` an
+            unresolvable `@Slice` is *silently dropped* and the injector then binds everywhere;
+            `defaultRequire = 1` cannot catch that, because `require` is a **minimum**.
+      - [x] The values are **measured, not chosen**: `scripts/mixin-allow-audit.py` disassembles each
+            `@Mixin` target from the Loom jar and counts what each `@At` actually selects. Its
+            `--check` control asserts it reproduces every already-shipped, boot-proven value first —
+            it reproduced all 22 on the first run.
+      - [x] `MixinApplicationTest` loads all **37 distinct target classes** so Mixin actually applies
+            to them. 🔑🔑 **This closes the hole `BAND_TABLE.md` names explicitly**: a javap probe
+            sees only that a callee still *exists*, never that the injected method still *calls* it.
+            It also covers what `boot-check.sh` structurally cannot — a headless flat world never
+            loads `SheepEntity`, `BoggedEntity` or `ArmadilloEntity`.
+      - [ ] **Per band: re-run `scripts/mixin-allow-audit.py --mc <version> --check`.** The counts
+            legitimately differ per version (a new guard clause upstream changes a `RETURN` count),
+            so a `MISMATCH` on a band is a fact to record, not a bug to suppress. `MixinApplicationTest`
+            is the runtime backstop and runs in that band's own build.
+      - 🔑 `allow` is **per target class**, not a cross-target total — `InjectionInfo` is built from a
+        single `MixinTargetContext`. `ShearableInteractMixin`'s four targets get `allow = 1`, not 4.
+      - ⚠️ A guard test must **not** live in `com.gmail.nossr50.fabric.mixin`: that is the package
+        `mcmmo.mixins.json` declares, so under Knot the transformer claims the *test* and it fails to
+        load before a single assertion runs.
 - [ ] 5.5 Item-ID config drift check. ~3,868 lines of item-keyed data ship in the jar:
       `potions.yml` (1,902), `fishing_treasures.yml` (843), `repair.vanilla.yml` (377),
       `salvage.vanilla.yml` (371), `treasures.yml` (375). Items present in `26.2` may not exist in
@@ -651,19 +721,31 @@ Prove the loop before committing to the matrix. Pick the band **adjacent** to `1
         Hunter (`Registries.ENTITY_TYPE` unknown id ⇒ PIG).
       - [ ] Add a per-band test asserting every id in those five files either resolves **or** is
             skipped cleanly, with a log line. Silent skips are not acceptable.
-- [ ] 5.6 Boot the band's version. Smoke-test: block break XP, a combat kill, a repair, a brew,
-      a cook, `/mcstats`, and one super ability.
-- [ ] 5.7 Write the band's port notes to memory — what broke, what the directive was, what the
-      probe missed. Band 3 will be much cheaper if band 2 is written down.
+- [ ] 5.6 Boot the band's version: `scripts/boot-check.sh <jar> <mcversion>` — it already takes the
+      version, loader and fabric-api as arguments, so no new harness is needed. Then smoke-test:
+      block break XP, a combat kill, a repair, a brew (`scripts/brew-smoke.sh`), a cook, `/mcstats`,
+      and one super ability.
+      - ⚠️⚠️ **A gameplay assertion vanilla also satisfies is indistinguishable from the mod being
+        uninstalled.** `brew-smoke.sh` runs its scenario twice, with and without the mod, and fails
+        if the control also brews. Water+sugar and water+breeze_rod are *vanilla* brews and both
+        passed with mcMMO absent. Any new per-band smoke check needs the same control.
+- [ ] 5.7 Write the band's port notes to memory — what broke, what the fix was, what the probe
+      missed. Band 3 will be much cheaper if band 2 is written down.
+- [ ] 5.8 Only now push the branch, and confirm the release tagged `mc<band>-v*` and did **not**
+      touch master's `mc1.21.11-v*` release.
 
-**Acceptance:** both versions build from one tree, both suites green, both boot and pass smoke.
+**Acceptance:** both branches build, both suites green, both boot and pass smoke, `drift-audit.py`
+reports the new band clean, and each branch released to its own Minecraft line.
 
 ---
 
 ## Phase 6 — Remaining bands
 
-- [ ] 6.1 Order bands cheapest-first, using the changed-symbol count from Phase 1.4
-- [ ] 6.2 Per band, repeat 5.1–5.7
+- [ ] 6.1 Order bands cheapest-first, using the changed-symbol count from Phase 1.4:
+      **`mc/1.21.10` (2) → `mc/1.21.8` (8) → `mc/1.21.5` (10)**
+- [ ] 6.2 Per band, repeat 4′.1–5.8. **Each branch is cut from `master`**, never from the previous
+      band — otherwise band N inherits band N−1's back-compat fixes and the diffs stop being
+      independent.
 - [ ] 6.3 Re-evaluate at the suspected component-API cliff (1.5). If the eating seam needs a full
       reimplementation, that band is its own mini-project — **size it separately, do not absorb it
       into a sweep.**
@@ -674,10 +756,13 @@ Prove the loop before committing to the matrix. Pick the band **adjacent** to `1
 
 ## Phase 7 — CI, release, docs
 
-- [ ] 7.1 Extend the GH Actions workflow (see `release-workflow` memory) to matrix over bands
-      - [ ] `gradlew` is not `+x` in git — the existing workaround must survive the matrix change
-      - [ ] Version the artifacts per band; run-number versioning still applies
-- [ ] 7.2 Enforce the CI split from 4.4 — MC-free suite once, MC suite per band
+- [x] 7.1 ~~Extend the GH Actions workflow to matrix over bands~~ — **already satisfied.**
+      `release.yml` triggers on `mc/**`, so each band branch runs its own build and release; there is
+      no matrix to add. The `gradlew` `+x` workaround is per-run and unaffected, and run-number
+      versioning already applies per branch.
+- [ ] 7.2 ~~Enforce the CI split from 4.4~~ — **deferred with 4.4.** Each branch's build is
+      independent, so the cross-band multiplication never occurs in one run. Revisit only at the
+      ~30 min-per-band cap.
 - [ ] 7.3 Update `README.md` + the 17-page `wiki/` with the supported-version matrix
       - Per `readme-and-github-wiki`: audit the wiki against the *roster*, not the diff. A
         per-commit doc pass cannot catch a page that was never created.
@@ -690,13 +775,14 @@ Prove the loop before committing to the matrix. Pick the band **adjacent** to `1
 
 | # | Risk | Mitigation | Owner phase |
 |---|---|---|---|
-| R1 | Band count comes out 12+, making "all versions" unviable | Phase 1 escalation gate at 1.4 | 1 |
-| R2 | CI time explodes (53s bootstrap × forks × bands) | Test split at 4.4; re-tune forks | 4 |
+| R1 | Band count comes out 12+, making "all versions" unviable | ✅ **CLOSED** — 6 bands, 3 branches to cut (Phase 1.4) | 1 |
+| R2 | CI time explodes (53s bootstrap × forks × bands) | **Downgraded.** Branches build independently, so the multiplication never happens in one run. Test split deferred; trigger is the ~30 min-per-band cap | 4′ |
 | R3 | Directives leak into skill logic, destroying readability + MC-free tests | ✅ **CLOSED** — 26 → 0 leak sites; `PlatformBoundaryGuardTest` (zero allowlist, converse-checked, catches inline FQNs as well as imports) | 2 |
-| R4 | Silent mixin misbinding across versions via dropped `@Slice` | `allow = N` on all 42 mixins | 5 |
+| R4 | Silent mixin misbinding across versions via dropped `@Slice` | ✅ **CLOSED** — `allow = N` on all **61 injectors**, measured from bytecode by `scripts/mixin-allow-audit.py` (control-checked against 22 shipped values); `MixinAllowCoverageTest` holds coverage, `MixinApplicationTest` loads all 37 targets so Mixin really applies. Both mutation-killed | 5 |
 | R5 | Item-ID drift silently disables config rows on older versions | Per-band resolution test at 5.5 | 5 |
-| R6 | Component API cliff needs reimplementation, not a directive | Identified early at 1.5, sized separately | 1, 6 |
+| R6 | Component API cliff needs reimplementation, not a directive | Identified early at 1.5, sized separately — and it sits at `1.21.2`, below the `1.21.5` floor, so it is out of scope | 1, 6 |
 | R7 | Live playtest disrupted mid-refactor | Phase 0 tag + instance backup | 0 |
+| **R8** | **A fix lands on `master` and is silently never back-ported** — the one risk R-a *creates*, and the likeliest of all: 11 of the last 12 issue fixes were version-agnostic | ✅ **CLOSED** — `Backport-of:` convention in `AGENTS.md`, `scripts/drift-audit.py` (self-tested against synthetic drift), weekly CI | 3 |
 
 ---
 
