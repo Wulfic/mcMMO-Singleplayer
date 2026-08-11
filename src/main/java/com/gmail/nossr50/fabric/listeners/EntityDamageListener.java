@@ -49,7 +49,6 @@ import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.decoration.ArmorStandEntity;
-import net.minecraft.entity.decoration.MannequinEntity;
 import net.minecraft.entity.mob.CreeperEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.passive.AbstractHorseEntity;
@@ -60,9 +59,11 @@ import net.minecraft.entity.projectile.PersistentProjectileEntity;
 import net.minecraft.entity.projectile.TridentEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
 import net.minecraft.registry.tag.DamageTypeTags;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 import com.gmail.nossr50.platform.PlatformSoundCategory;
@@ -821,9 +822,18 @@ public final class EntityDamageListener {
      *
      * <p>Both are {@link LivingEntity}s that stand still and never fight back, so without this every
      * combat skill would train on one: an armour stand in a hole is an XP source that needs no food,
-     * no armour and no attention. <b>A mannequin is the newer and worse of the two</b> — it arrived in
-     * 1.21.11, this port had no handling for it at all, and it is a {@code PlayerLikeEntity}, so it
-     * reaches the combat paths looking far more like a real opponent than an armour stand does.
+     * no armour and no attention. <b>A mannequin is the newer and worse of the two</b> — this port had
+     * no handling for it at all, and it is a {@code PlayerLikeEntity}, so it reaches the combat paths
+     * looking far more like a real opponent than an armour stand does.
+     *
+     * <h2>🔑 The mannequin is matched by registry id, the armour stand by {@code instanceof}</h2>
+     * Not an inconsistency. The mannequin does not exist in every Minecraft version this mod
+     * supports, so {@code net.minecraft.entity.decoration.MannequinEntity} is not always a class that
+     * can be named — and where it cannot, {@code instanceof MannequinEntity} is a <b>compile error</b>
+     * that takes the build down rather than a check that quietly answers false. An id keeps the
+     * question answerable everywhere: on a version with no mannequin nothing is registered under that
+     * id, so nothing matches, which is the right answer. The armour stand has shipped for a decade
+     * and needs no such care. Same reasoning as {@code HunterListener}'s golem exclusion.
      *
      * <p>Replaces five hard-coded {@code instanceof ArmorStandEntity} checks that were spread across
      * the damage paths. The mechanic was right and the <em>config key was never read</em> — turning
@@ -838,11 +848,22 @@ public final class EntityDamageListener {
         if (target instanceof ArmorStandEntity) {
             return config == null || config.isArmorStandInteractionPrevented();
         }
-        if (target instanceof MannequinEntity) {
+        if (MANNEQUIN_ID.equals(Registries.ENTITY_TYPE.getId(target.getType()))) {
             return config == null || config.isMannequinInteractionPrevented();
         }
         return false;
     }
+
+    /**
+     * The mannequin's registry id — see {@link #isTargetDummy} for why this is an id and not a class.
+     *
+     * <p>Compared as an {@link Identifier} rather than as a bare path string: {@code "mannequin"} on
+     * its own would also match another mod's {@code othermod:mannequin}, which is not the vanilla
+     * decoration this rule is about. Resolved the safe direction — entity to id, never id to entity —
+     * so the defaulted-registry trap that once turned every unknown mob into a {@code PIG} cannot
+     * apply here.
+     */
+    private static final Identifier MANNEQUIN_ID = Identifier.ofVanilla("mannequin");
 
     private static float applyProjectileAttackBonus(LivingEntity target, DamageSource source,
             float amount) {
