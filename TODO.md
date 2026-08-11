@@ -20,9 +20,23 @@ previously-invisible port work (`EntityType#COPPER_GOLEM`, `SoundCategory#UI`). 
 cutting either. Also fixed: **three comments that pinned the build to `1.21.11`**, two of which were
 already false on `mc/1.21.10`.
 
-⚠️ **These `master` commits have NOT been back-ported to `mc/1.21.10` yet**, so `drift-audit.py`
-will now report them MISSING on that band — correctly. Two of the comment fixes are false *on that
-branch specifically*, so the back-port is the next action, not an optional tidy-up.
+✅ **2026-08-11 — the back-port sweep is DONE and `mc/1.21.10` is green again.** All three
+outstanding `master` commits (probe holes, entity-by-id, the Spears gate) carry `Backport-of:`
+trailers on the band; `drift-audit.py --master master` reports **4 propagated, 0 waived, 0 MISSING**
+(after `--self-test` passed, so the auditor is known to still detect drift). Band: `./gradlew build`
+exit 0, **1698 tests / 0 failures / 0 skipped**, `boot-check.sh … 1.21.10` PASSED,
+`mixin-allow-audit --mc 1.21.10 --check` PASSED (61/61).
+
+🎉 **The Spears ruling is IMPLEMENTED** (`dbd72590a` on master, `89402fb84` on the band) — see
+Phase 5's ruling entry below. It is a **capability probe, not a version pin**: mcMMO asks the item
+registry whether any of the seven spear ids exist, so one expression is correct on every band and
+nothing has to be remembered at the next cut. **Observed firing in both directions on a real
+server**, which is the part that matters:
+
+| Band | boot log |
+|---|---|
+| `1.21.11` (master) | *"Version support: this Minecraft version has spear items, so the Spears skill is available."* |
+| `1.21.10` (band) | *"… has none of the spear items (…), so the Spears skill is disabled — it gains no XP, procs nothing, and is not listed by /mcstats."* |
 
 **Rule for this document:** a task is not checked off until its stated *acceptance criteria* pass.
 "It compiles" is not acceptance criteria. Neither is "it looked right in game."
@@ -810,6 +824,11 @@ Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 change
       shutdown). `mixin-allow-audit.py --mc 1.21.10 --check` PASSED — **all 61 `allow` values are
       identical on 1.21.10**, and `MixinApplicationTest` loaded all 37 targets on the older jar, so
       every mixin is proven to apply there too.
+      - 🔁 **Re-verified 2026-08-11 after the three-commit back-port sweep**: `./gradlew build` exit 0,
+        **1698 / 0 / 0** (still the same count as master), `boot-check.sh … 1.21.10` PASSED,
+        `mixin-allow-audit --mc 1.21.10 --check` PASSED 61/61, `drift-audit.py --master master`
+        clean. The band's own build is the only thing that proves a back-port landed intact — the
+        cherry-pick exiting 0 does not.
 - [ ] 5.6b Boot the band's version: `scripts/boot-check.sh <jar> <mcversion>` — it already takes the
       version, loader and fabric-api as arguments, so no new harness is needed. Then smoke-test:
       block break XP, a combat kill, a repair, a brew (`scripts/brew-smoke.sh`), a cook, `/mcstats`,
@@ -826,8 +845,9 @@ Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 change
 
 ### The two decisions the `mc/1.21.10` cut surfaced
 
-- [ ] **RULED (owner, 2026-08-11): SPEARS is DISABLED on every band below `1.21.11`** — the version
+- [x] **RULED (owner, 2026-08-11): SPEARS is DISABLED on every band below `1.21.11`** — the version
       that added spear items. Not left inert, not dropped from `PrimarySkillType`.
+      **✅ IMPLEMENTED**: master `dbd72590a`, band `89402fb84` (`Backport-of:`).
       Verified from code, not recalled: `ItemUtils.isSpear` → `MaterialMapStore#isSpear`, a fixed
       `HashSet<String>` of seven id paths (`wooden_spear` … `netherite_spear`), and
       `SpearsManager`'s constructor touches no item. So the skill is *inert* on such a band, not
@@ -838,9 +858,36 @@ Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 change
         `ConfigRetunes`, `copyMissingDefaults` back-fills only *absent* keys, so a changed default
         reaches **nobody who has already run the mod once on that band**. The gate has to hold
         regardless of what is already on disk.
-      - **Not implemented yet** — deliberately out of scope for the session that took the ruling.
-        Whatever form it takes must land on `master` first with a `Backport-of` to each band, per
-        the discipline; a band-authored fix is a defect even though the *symptom* is band-specific.
+      - **The shape it took: a capability probe, not a version pin.** `SkillAvailability#probe()`
+        runs from `onServerStarting` and asks the item registry whether **any of the seven spear ids
+        `MaterialMapStore` already classifies** exists; the answer is ANDed into
+        `SkillGating#isSkillEnabled`, which is the GitHub #10 funnel, so all six meanings of
+        "disabled" (no XP, no procs, no super ability, no XP bar, no `/mcstats` line, no plaques)
+        close at once. `/mcstats <skill>` now distinguishes the two reasons — pointing a player at
+        `coreskills.yml` for a skill the *version* cannot furnish sends them to edit a key that will
+        not help.
+      - 🔑🔑 **One expression, correct on every band, with nothing to remember at the next cut.** A
+        per-band flag or a version constant would be a claim no compiler and no test can check —
+        `AGENTS.md`'s standing rule — *and* a step somebody must repeat when `mc/1.21.8` and
+        `mc/1.21.5` are cut. Asking the registry needs neither.
+      - ⚠️⚠️ **Probed ONCE at server start, never lazily on first use.** A lazy probe must read an
+        empty registry as *"cannot tell yet"*, and in the test suite whether the registry is
+        populated depends on **which Gradle fork a test class landed in** — one sharing a fork with a
+        `McTestRegistries.bootstrap()` sees a live registry, one that does not sees an empty one. On a
+        band without spears that turns every Spears assertion in the suite into a coin flip decided by
+        test scheduling. This was built the lazy way first and changed for exactly that reason.
+      - ⚠️⚠️ **The first wiring test was VACUOUS and was caught before commit.** It asserted
+        `isSkillEnabled(SPEARS) == true` on master — which a completely absent gate satisfies just as
+        well. Every band above the spear boundary *has* spears, so the disabling half is unreachable
+        from the branch the code is written on. Fixed by taking `decide`'s inputs as arguments and
+        adding a `setSupportedForTesting` seam, so both directions are provable on **every** band.
+        *(Fifth vacuous-guard sighting in this project.)*
+      - **Converse-checked in production, not only in tests:** the decision is logged **in both
+        directions**, so a boot log tells a probe that decided *"on"* apart from a probe that never
+        ran. Observed firing correctly on both bands — see the table at the top of this document.
+      - **3 mutations, 3 kills**: gate removed from `SkillGating` (2 tests red), `decide` never
+        disabling (1 red), the empty-registry guard dropped (1 red — this is the one that would have
+        disabled Spears on *every* version and looked just as confident in the log).
 - [x] **Stale version-pinned comments — FIXED on `master` (three of them).**
       `McMMOPlayer.java:205` read `// 1.21.11 always has Spears (pinned)`, and
       `SkillTools#buildCombatSkills` justified its fixed list with *"the port pins MC 1.21.11 …
