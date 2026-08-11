@@ -106,6 +106,26 @@ public final class Materials {
         return id != null && Registries.ITEM.containsId(id);
     }
 
+    /**
+     * Whether the item registry has actually populated yet.
+     *
+     * <p>⚠️⚠️ <b>This is the converse check that makes a negative answer from {@link #isItem}
+     * meaningful.</b> "This Minecraft version does not have that item" and "Minecraft's bootstrap has
+     * not run" are the same observation from the outside — both make {@code containsId} answer
+     * {@code false} for everything. Any caller that concludes something from an <em>absence</em>
+     * (see {@code SkillAvailability}) has to rule the second one out first, or an empty registry
+     * reads as "this version is missing every item" on every version.
+     *
+     * <p>{@code iron_sword} and {@code stone} are chosen because they predate every supported version
+     * by roughly a decade, so neither can be missing for an honest reason. Mirrors
+     * {@code McTestRegistries#itemRegistryIsPopulated}, which exists for the same argument on the
+     * test side.
+     */
+    public static boolean itemRegistryIsPopulated() {
+        return Registries.ITEM.containsId(Identifier.ofVanilla("iron_sword"))
+                && Registries.ITEM.containsId(Identifier.ofVanilla("stone"));
+    }
+
     /** Whether a vanilla block exists for the given name. Does not log on miss. */
     public static boolean isBlock(@NotNull String name) {
         final Identifier id = idOf(name);

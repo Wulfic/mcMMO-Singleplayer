@@ -40,6 +40,7 @@ import com.gmail.nossr50.util.MaterialMapStore;
 import com.gmail.nossr50.util.PlacedBlockTracker;
 import com.gmail.nossr50.util.TransientEntityTracker;
 import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.skills.SkillAvailability;
 import com.gmail.nossr50.util.skills.SkillTools;
 import java.nio.file.Path;
 import net.fabricmc.api.ModInitializer;
@@ -272,6 +273,11 @@ public class McMMOMod implements ModInitializer {
             // Phase 8: load config files from <configDir>/mcmmo. Resolved via FabricLoader so the
             // configs live alongside every other mod's config, not inside the world save.
             ConfigBootstrap.loadAll(FabricLoader.getInstance().getConfigDir().resolve(MOD_ID));
+            // Ask this Minecraft version which skills it can actually furnish, now that the item
+            // registry is certainly populated. Deliberately probed once here rather than lazily on
+            // the first XP award -- see SkillAvailability, which explains why an absence read at the
+            // wrong moment is indistinguishable from a version that genuinely lacks the items.
+            SkillAvailability.probe();
             // Phase 5: bind the per-world profile store under <worldRoot>/mcmmo/players/. Player
             // profiles load lazily on join (PlayerSessionListener), not eagerly here.
             final Path modDataDir = startingServer.getSavePath(WorldSavePath.ROOT).resolve(MOD_ID);

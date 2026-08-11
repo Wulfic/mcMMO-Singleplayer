@@ -12,6 +12,7 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.text.TextUtils;
 import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.skills.SkillAvailability;
 import com.gmail.nossr50.util.skills.SkillGating;
 import com.gmail.nossr50.util.skills.SkillTools;
 import com.mojang.brigadier.CommandDispatcher;
@@ -228,11 +229,16 @@ public final class McMMOCommands {
         if (!SkillGating.isSkillEnabled(skill)) {
             final String name = McMMOMod.getSkillTools().getLocalizedSkillName(skill);
             final int level = mmoPlayer.getSkillLevel(skill);
+            // Two different reasons, and pointing at coreskills.yml for the wrong one sends the
+            // player to edit a key that will not help: a skill this Minecraft version cannot furnish
+            // (no spear items exist here) stays off however that file is set.
+            final String why = SkillAvailability.isSkillSupported(skill)
+                    ? " Your level (" + level + ") is saved and will come back untouched — re-enable "
+                            + "it under '" + CoreSkillsConfig.enabledPath(skill) + "' in coreskills.yml."
+                    : " This version of Minecraft does not have the items this skill works on, so it "
+                            + "cannot be switched on here. Your level (" + level + ") is saved.";
             source.sendFeedback(() -> Text.literal(name + " is disabled.").formatted(Formatting.RED)
-                    .append(Text.literal(" Your level (" + level + ") is saved and will come back "
-                                    + "untouched — re-enable it under '"
-                                    + CoreSkillsConfig.enabledPath(skill) + "' in coreskills.yml.")
-                            .formatted(Formatting.GRAY)), false);
+                    .append(Text.literal(why).formatted(Formatting.GRAY)), false);
             return 1;
         }
 

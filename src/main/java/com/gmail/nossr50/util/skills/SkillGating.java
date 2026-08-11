@@ -64,14 +64,24 @@ public final class SkillGating {
     }
 
     /**
-     * Whether {@code skill} is switched on in {@code coreskills.yml}.
+     * Whether {@code skill} is switched on: the player has not disabled it in {@code coreskills.yml}
+     * <em>and</em> this Minecraft version can furnish it at all.
+     *
+     * <p>The second half is {@link SkillAvailability}, and it is deliberately ANDed here rather than
+     * expressed as a config default — {@code copyMissingDefaults} back-fills only absent keys, so a
+     * changed default reaches nobody who has already run the mod once. Every one of the six things
+     * "disabled" has to close already funnels through this method, so gating here closes all six for
+     * an unavailable skill too.
      *
      * @param skill the skill to check; {@code null} is treated as enabled
-     * @return {@code true} unless the player has explicitly disabled this skill
+     * @return {@code true} unless the player disabled this skill, or this version cannot furnish it
      */
     public static boolean isSkillEnabled(@Nullable PrimarySkillType skill) {
         if (skill == null) {
             return true;
+        }
+        if (!SkillAvailability.isSkillSupported(skill)) {
+            return false;
         }
         final CoreSkillsConfig config = McMMOMod.getCoreSkillsConfig();
         // No config ⇒ no opinion ⇒ on. See the failure-direction note on the class.
