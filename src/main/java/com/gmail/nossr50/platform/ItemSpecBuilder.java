@@ -1,7 +1,6 @@
 package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
-import com.gmail.nossr50.util.PotionUtil;
 import com.gmail.nossr50.platform.text.TextUtils;
 import java.util.ArrayList;
 import java.util.List;
@@ -67,16 +66,16 @@ public final class ItemSpecBuilder {
 
         final ItemSpec.PotionSpec potion = spec.getPotion();
         if (potion != null) {
-            final RegistryEntry<Potion> base = PotionUtil.matchPotion(
+            final Optional<RegistryEntry<Potion>> base = Potions.matchPotion(
                     potion.potionType(), potion.upgraded(), potion.extended());
-            if (base == null) {
+            if (base.isEmpty()) {
                 LOGGER.warn("Could not resolve potion type '{}' (upgraded={}, extended={}) for"
                                 + " treasure '{}'; dropping nothing.",
                         potion.potionType(), potion.upgraded(), potion.extended(),
                         spec.getMaterialId());
                 return Optional.empty();
             }
-            stack.set(DataComponentTypes.POTION_CONTENTS, new PotionContentsComponent(base));
+            stack.set(DataComponentTypes.POTION_CONTENTS, new PotionContentsComponent(base.get()));
         }
 
         if (spec.getCustomName() != null) {

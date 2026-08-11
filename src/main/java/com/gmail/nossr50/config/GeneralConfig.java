@@ -356,7 +356,7 @@ public class GeneralConfig extends ConfigLoader {
      *
      * <p><b>Returned as a String on purpose.</b> This class is deliberately MC-free — see the class
      * note on why item getters hand back the raw config value — and the status-effect registry is
-     * not populated when configs load. {@code PotionUtil#matchEffect} resolves it at the call site,
+     * not populated when configs load. {@code platform/Potions#matchEffect} resolves it at the call site,
      * on the eat seam, where the registry is live.
      *
      * <p>⚠️ Keyed on the <b>Config_String</b> form ({@code Cooked_Beef}), matching

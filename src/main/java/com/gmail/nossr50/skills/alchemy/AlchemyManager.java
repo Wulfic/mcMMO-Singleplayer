@@ -8,12 +8,11 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.List;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -58,7 +57,7 @@ public class AlchemyManager extends SkillManager {
      * The Concoctions ingredients unlocked at this player's tier (K8 {@code PotionConfig}). Empty
      * when the config is not loaded (outside a world session).
      */
-    public @NotNull List<ItemStack> getIngredients() {
+    public @NotNull List<PlatformItem> getIngredients() {
         final var potionConfig = McMMOMod.getPotionConfig();
         return potionConfig == null ? List.of() : potionConfig.getIngredients(getTier());
     }
@@ -66,9 +65,9 @@ public class AlchemyManager extends SkillManager {
     /** A comma-separated, config-string list of this player's unlocked Concoctions ingredients. */
     public @NotNull String getIngredientList() {
         final StringBuilder list = new StringBuilder();
-        for (ItemStack ingredient : getIngredients()) {
-            final String name = ConfigStringUtils.getMaterialConfigString(
-                    Registries.ITEM.getId(ingredient.getItem()).getPath());
+        for (PlatformItem ingredient : getIngredients()) {
+            final String name =
+                    ConfigStringUtils.getMaterialConfigString(ingredient.getTypePath());
             list.append(", ").append(name);
         }
         return list.length() >= 2 ? list.substring(2) : "";

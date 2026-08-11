@@ -1,10 +1,10 @@
 package com.gmail.nossr50.fabric.listeners;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.platform.Potions;
 import com.gmail.nossr50.skills.cooking.CookingManager;
 import com.gmail.nossr50.skills.fishing.FishingManager;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
-import com.gmail.nossr50.util.PotionUtil;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.Set;
@@ -155,7 +155,7 @@ public final class FoodListener {
         if (effect == null) {
             return; // Skill off, unranked, or a food that grants nothing. All three are normal.
         }
-        final RegistryEntry<StatusEffect> type = PotionUtil.matchEffect(effect.effectName());
+        final RegistryEntry<StatusEffect> type = Potions.matchEffect(effect.effectName());
         if (type == null) {
             // An operator typo in config.yml. Warn once per bad name rather than once per bite:
             // this is on the eat path, and a player with a full smoker eats a lot.

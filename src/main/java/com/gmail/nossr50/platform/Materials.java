@@ -81,6 +81,15 @@ public final class Materials {
         return Optional.of(Registries.ITEM.get(id));
     }
 
+    /**
+     * Resolve a Bukkit-style name / namespaced id into a single-item stack, empty if unknown — the
+     * {@link PlatformItem} form of {@link #item(String)}, for Minecraft-free config code that needs
+     * to hold an item rather than just test for one.
+     */
+    public static @NotNull Optional<PlatformItem> stack(@NotNull String name) {
+        return item(name).map(item -> new PlatformItem(new ItemStack(item)));
+    }
+
     /** Resolve a block by Bukkit-style name / namespaced id, empty if unknown. */
     public static @NotNull Optional<Block> block(@NotNull String name) {
         final Identifier id = idOf(name);

@@ -3,8 +3,11 @@ package com.gmail.nossr50.config.skills.alchemy;
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.config.YamlConfiguration;
 import com.gmail.nossr50.datatypes.skills.alchemy.AlchemyPotion;
+import com.gmail.nossr50.datatypes.skills.alchemy.EffectSpec;
+import com.gmail.nossr50.datatypes.skills.alchemy.PotionSpec;
 import com.gmail.nossr50.platform.Materials;
-import com.gmail.nossr50.util.PotionUtil;
+import com.gmail.nossr50.platform.PlatformItem;
+import com.gmail.nossr50.platform.Potions;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -12,28 +15,24 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.PotionContentsComponent;
-import net.minecraft.entity.effect.StatusEffect;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.potion.Potion;
-import net.minecraft.registry.entry.RegistryEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * {@code potions.yml} — the Alchemy Concoctions ingredient tiers and the potion brewing tree.
- * Ported onto {@link ConfigLoader}, retargeted from Bukkit {@code PotionMeta} onto the vanilla
- * {@link PotionContentsComponent}.
+ * Ported onto {@link ConfigLoader}, retargeted from Bukkit {@code PotionMeta} onto vanilla potion
+ * contents.
  *
- * <p>Like {@link com.gmail.nossr50.config.skills.repair.RepairConfig}, this config is MC-typed at
- * load time: every ingredient resolves against the live item registry ({@link Materials}) and every
- * potion's base type / effects resolve against {@code Registries.POTION} / {@code STATUS_EFFECT}.
- * Those calls are only valid once Minecraft's registries are populated (server start); the unit test
- * drives it under the {@code fabric-loader-junit} registry harness. When registries are absent an
- * ingredient/potion simply fails to resolve and is skipped — no crash.
+ * <p>Like {@link com.gmail.nossr50.config.skills.repair.RepairConfig}, this config resolves against
+ * the live registries at load time: every ingredient through {@link Materials} and every potion's
+ * base type / effects through {@link Potions}. Those calls are only valid once Minecraft's registries
+ * are populated (server start); the unit test drives it under the {@code fabric-loader-junit}
+ * registry harness. When registries are absent an ingredient/potion simply fails to resolve and is
+ * skipped — no crash.
+ *
+ * <p>Phase 2 slice 5 sealed this file: the registry and data-component work moved behind
+ * {@link Potions} / {@link Materials} and the parsed model is {@link PlatformItem} +
+ * {@link com.gmail.nossr50.datatypes.skills.alchemy.PotionSpec}, so no Minecraft type appears here.
  *
  * <p>Deliberately deferred vs legacy (cosmetic, no effect on brew resolution or XP — breadcrumbs):
  * custom potion display name, lore, and colour. mcMMO's shipped {@code potions.yml} pre-1.21
@@ -46,7 +45,7 @@ public class PotionConfig extends ConfigLoader {
     public static final String FILENAME = "potions.yml";
 
     /** Cumulative Concoctions ingredient lists, indexed 1..8 (index 0 unused). */
-    private final List<List<ItemStack>> concoctionTiers = new ArrayList<>();
+    private final List<List<PlatformItem>> concoctionTiers = new ArrayList<>();
     private final Map<String, AlchemyPotion> alchemyPotions = new LinkedHashMap<>();
 
     public PotionConfig(Path dataFolder) {
@@ -81,7 +80,7 @@ public class PotionConfig extends ConfigLoader {
 
         for (int tier = 1; tier <= 8; tier++) {
             for (String ingredientString : section.getStringList(tierKeys[tier])) {
-                final ItemStack ingredient = loadIngredient(ingredientString);
+                final PlatformItem ingredient = loadIngredient(ingredientString);
                 if (ingredient != null) {
                     concoctionTiers.get(tier).add(ingredient);
                 }
@@ -95,12 +94,11 @@ public class PotionConfig extends ConfigLoader {
     }
 
     /** Parse an ingredient material name into a single-item stack, or {@code null} if unknown. */
-    private ItemStack loadIngredient(String ingredient) {
+    private PlatformItem loadIngredient(String ingredient) {
         if (ingredient == null || ingredient.isEmpty()) {
             return null;
         }
-        final Optional<Item> item = Materials.item(ingredient);
-        return item.map(ItemStack::new).orElse(null);
+        return Materials.stack(ingredient).orElse(null);
     }
 
     // --------------------------------------------------------------------- Potions
@@ -137,10 +135,10 @@ public class PotionConfig extends ConfigLoader {
         try {
             // Material: defaults to a plain potion if missing/unresolvable (legacy behaviour).
             final String materialString = potion.getString("Material", "POTION");
-            final Item item = Materials.item(materialString)
-                    .or(() -> Materials.item("POTION"))
+            final PlatformItem itemStack = Materials.stack(materialString)
+                    .or(() -> Materials.stack("POTION"))
                     .orElse(null);
-            if (item == null) {
+            if (itemStack == null) {
                 LOGGER.warn("PotionConfig: could not resolve item for potion {}", key);
                 return null;
             }
@@ -158,27 +156,31 @@ public class PotionConfig extends ConfigLoader {
                 return null;
             }
 
-            final RegistryEntry<Potion> basePotion =
-                    PotionUtil.matchPotion(potionTypeStr, upgraded, extended);
-            if (basePotion == null) {
+            final Optional<String> basePotionId =
+                    Potions.resolvePotionId(potionTypeStr, upgraded, extended);
+            if (basePotionId.isEmpty()) {
                 LOGGER.warn("PotionConfig: could not resolve potion type '{}' for {}", potionTypeStr,
                         key);
                 return null;
             }
 
-            final List<StatusEffectInstance> customEffects = new ArrayList<>();
+            final List<EffectSpec> customEffects = new ArrayList<>();
             for (String effect : potion.getStringList("Effects")) {
-                final StatusEffectInstance instance = parseEffect(key, effect);
+                final EffectSpec instance = parseEffect(key, effect);
                 if (instance != null) {
                     customEffects.add(instance);
                 }
             }
 
-            final ItemStack itemStack = new ItemStack(item);
-            itemStack.set(DataComponentTypes.POTION_CONTENTS, new PotionContentsComponent(
-                    Optional.of(basePotion), Optional.empty(), customEffects, Optional.empty()));
+            if (!Potions.applyContents(itemStack, basePotionId.get(), customEffects)) {
+                // Cannot happen for an id this class just resolved, but a silent half-built potion
+                // would resolve as a *different* potion at brew time, so it is a hard skip.
+                LOGGER.warn("PotionConfig: could not apply potion contents '{}' to {}",
+                        basePotionId.get(), key);
+                return null;
+            }
 
-            final Map<ItemStack, String> children = loadChildren(key, potion);
+            final Map<PlatformItem, String> children = loadChildren(key, potion);
 
             return new AlchemyPotion(key, itemStack, children);
         } catch (Exception e) {
@@ -187,18 +189,18 @@ public class PotionConfig extends ConfigLoader {
         }
     }
 
-    private StatusEffectInstance parseEffect(String key, String effect) {
+    private EffectSpec parseEffect(String key, String effect) {
         final String[] parts = effect.split(" ");
-        final RegistryEntry<StatusEffect> type = parts.length > 0
-                ? PotionUtil.matchEffect(parts[0])
-                : null;
-        if (type == null) {
+        final Optional<String> effectId = parts.length > 0
+                ? Potions.resolveEffectId(parts[0])
+                : Optional.empty();
+        if (effectId.isEmpty()) {
             LOGGER.warn("PotionConfig: failed to parse effect '{}' for potion {}", effect, key);
             return null;
         }
         final int amplifier = parts.length > 1 ? parseIntSafe(parts[1]) : 0;
         final int duration = parts.length > 2 ? parseIntSafe(parts[2]) : 0;
-        return new StatusEffectInstance(type, duration, amplifier);
+        return new EffectSpec(effectId.get(), amplifier, duration);
     }
 
     private static int parseIntSafe(String s) {
@@ -209,14 +211,14 @@ public class PotionConfig extends ConfigLoader {
         }
     }
 
-    private Map<ItemStack, String> loadChildren(String key, YamlConfiguration potion) {
-        final Map<ItemStack, String> children = new HashMap<>();
+    private Map<PlatformItem, String> loadChildren(String key, YamlConfiguration potion) {
+        final Map<PlatformItem, String> children = new HashMap<>();
         final YamlConfiguration childSection = potion.getConfigurationSection("Children");
         if (childSection == null) {
             return children;
         }
         for (String childIngredient : childSection.getKeys(false)) {
-            final ItemStack ingredient = loadIngredient(childIngredient);
+            final PlatformItem ingredient = loadIngredient(childIngredient);
             if (ingredient != null) {
                 children.put(ingredient, childSection.getString(childIngredient));
             } else {
@@ -230,7 +232,7 @@ public class PotionConfig extends ConfigLoader {
     // --------------------------------------------------------------------- API
 
     /** The cumulative Concoctions ingredient list for the given tier (1..8; out-of-range → tier 1). */
-    public List<ItemStack> getIngredients(int tier) {
+    public List<PlatformItem> getIngredients(int tier) {
         if (tier < 1 || tier > 8) {
             return concoctionTiers.isEmpty() ? new ArrayList<>() : concoctionTiers.get(1);
         }
@@ -242,18 +244,25 @@ public class PotionConfig extends ConfigLoader {
         return alchemyPotions.get(name);
     }
 
-    /** The configured potion functionally matching the given item stack, or {@code null}. */
-    public AlchemyPotion getPotion(ItemStack item) {
+    /**
+     * The configured potion functionally matching the given item, or {@code null}.
+     *
+     * <p>The item's own spec is read once and reused across the whole scan: this runs on the brewing
+     * stand's per-tick {@code canCraft} path, so a registry lookup per configured potion would be
+     * paid every tick a brew is in progress.
+     */
+    public AlchemyPotion getPotion(PlatformItem item) {
+        final PotionSpec spec = Potions.specOf(item);
         for (AlchemyPotion potion : alchemyPotions.values()) {
-            if (potion.isSimilarPotion(item)) {
+            if (potion.isSimilarPotion(item, spec)) {
                 return potion;
             }
         }
         return null;
     }
 
-    /** Whether the given item stack is a recognised Alchemy potion. */
-    public boolean isValidPotion(ItemStack item) {
+    /** Whether the given item is a recognised Alchemy potion. */
+    public boolean isValidPotion(PlatformItem item) {
         return getPotion(item) != null;
     }
 

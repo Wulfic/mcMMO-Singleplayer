@@ -4,6 +4,7 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.mixin.BrewingStandBrewTimeAccessor;
+import com.gmail.nossr50.platform.PlatformInventory;
 import com.gmail.nossr50.skills.alchemy.AlchemyPotionBrewer;
 import com.gmail.nossr50.skills.alchemy.CatalysisTimer;
 import com.gmail.nossr50.util.Permissions;
@@ -88,7 +89,7 @@ public final class AlchemyListener {
      * mixin to force vanilla to start/continue a brew for recipes it does not itself recognise.
      */
     public static boolean isValidBrew(DefaultedList<ItemStack> slots) {
-        return AlchemyPotionBrewer.isValidBrew(slots);
+        return AlchemyPotionBrewer.isValidBrew(new PlatformInventory(slots));
     }
 
     /**
@@ -106,7 +107,7 @@ public final class AlchemyListener {
         if (ownerId != null) {
             owner = UserManager.getPlayer(ownerId);
         }
-        AlchemyPotionBrewer.finishBrewing(slots, owner);
+        AlchemyPotionBrewer.finishBrewing(new PlatformInventory(slots), owner);
     }
 
     /**

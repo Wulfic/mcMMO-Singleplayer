@@ -65,7 +65,7 @@ class ItemSpecBuilderTest {
 
     @Test
     void translatesLegacyBukkitPotionNames() {
-        // The shipped config still uses the pre-1.20.5 Bukkit spellings; PotionUtil maps them.
+        // The shipped config still uses the pre-1.20.5 Bukkit spellings; platform/Potions maps them.
         assertTrue(contentsOf(build("splash_potion", "INSTANT_HEAL", false, false))
                 .matches(Potions.HEALING), "INSTANT_HEAL must resolve to healing");
         assertTrue(contentsOf(build("splash_potion", "SPEED", false, false))

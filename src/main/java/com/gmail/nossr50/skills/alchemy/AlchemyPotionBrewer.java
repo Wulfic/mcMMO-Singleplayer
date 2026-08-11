@@ -5,9 +5,9 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.alchemy.AlchemyPotion;
 import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
 import com.gmail.nossr50.fabric.McMMOMod;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.util.collection.DefaultedList;
+import com.gmail.nossr50.platform.PlatformInventory;
+import com.gmail.nossr50.platform.PlatformItem;
+import com.gmail.nossr50.platform.Potions;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -28,9 +28,10 @@ import org.jetbrains.annotations.Nullable;
  * ({@link CatalysisTimer}) — between them, that is the whole of the legacy {@code AlchemyBrewTask}.
  *
  * <p>The five brewing-stand slots follow vanilla's layout: three potion bottles (0–2), the ingredient
- * ({@link #INGREDIENT_SLOT} = 3), and the blaze-powder fuel (4). All logic here operates directly on
- * the block entity's {@link DefaultedList} (the same list vanilla mutates), so it is unit-testable
- * with a hand-built inventory under the registry harness.
+ * ({@link #INGREDIENT_SLOT} = 3), and the blaze-powder fuel (4). All logic here operates on a
+ * {@link PlatformInventory} <em>view</em> of the block entity's own slot list — the same list vanilla
+ * mutates — so a transformation here is the brew, exactly as before Phase 2 slice 5 sealed this file
+ * off the raw {@code DefaultedList<ItemStack>}.
  *
  * <p><b>Deferred vs legacy</b> (breadcrumbs — the numeric cores are ported + tested, only the
  * MC-typed wiring is deferred):
@@ -54,8 +55,8 @@ public final class AlchemyPotionBrewer {
     private AlchemyPotionBrewer() {
     }
 
-    /** Whether the stack is absent (null / empty). */
-    public static boolean isEmpty(@Nullable ItemStack item) {
+    /** Whether the item is absent (null / empty). */
+    public static boolean isEmpty(@Nullable PlatformItem item) {
         return item == null || item.isEmpty();
     }
 
@@ -64,7 +65,7 @@ public final class AlchemyPotionBrewer {
      * (every ingredient) — see the class doc on the deferred tier gating. A no-op ({@code false})
      * when {@link PotionConfig} is not loaded (no world session), so vanilla brewing is untouched.
      */
-    public static boolean isValidIngredient(@Nullable ItemStack ingredient) {
+    public static boolean isValidIngredient(@Nullable PlatformItem ingredient) {
         if (isEmpty(ingredient)) {
             return false;
         }
@@ -72,8 +73,8 @@ public final class AlchemyPotionBrewer {
         if (config == null) {
             return false;
         }
-        for (ItemStack candidate : config.getIngredients(8)) {
-            if (ItemStack.areItemsAndComponentsEqual(ingredient, candidate)) {
+        for (PlatformItem candidate : config.getIngredients(8)) {
+            if (ingredient.matchesItemAndComponents(candidate)) {
                 return true;
             }
         }
@@ -89,18 +90,18 @@ public final class AlchemyPotionBrewer {
      *
      * @param slots the brewing-stand inventory (vanilla's 5-slot list)
      */
-    public static boolean isValidBrew(@NotNull DefaultedList<ItemStack> slots) {
+    public static boolean isValidBrew(@NotNull PlatformInventory slots) {
         final PotionConfig config = McMMOMod.getPotionConfig();
         if (config == null) {
             return false;
         }
-        final ItemStack ingredient = slots.get(INGREDIENT_SLOT);
+        final PlatformItem ingredient = slots.get(INGREDIENT_SLOT);
         if (!isValidIngredient(ingredient)) {
             return false; // fast path: no valid ingredient → not our brew, skip the potion scan.
         }
         for (int slot : BOTTLE_SLOTS) {
-            final ItemStack bottle = slots.get(slot);
-            if (isEmpty(bottle) || bottle.isOf(Items.GLASS_BOTTLE)) {
+            final PlatformItem bottle = slots.get(slot);
+            if (isEmpty(bottle) || Potions.isGlassBottle(bottle)) {
                 continue;
             }
             final AlchemyPotion potion = config.getPotion(bottle);
@@ -125,21 +126,21 @@ public final class AlchemyPotionBrewer {
      * @param slots     the brewing-stand inventory to mutate in place
      * @param mmoPlayer the brewing player for the XP award, or {@code null} for an unattended brew
      */
-    public static void finishBrewing(@NotNull DefaultedList<ItemStack> slots,
+    public static void finishBrewing(@NotNull PlatformInventory slots,
             @Nullable McMMOPlayer mmoPlayer) {
         final PotionConfig config = McMMOMod.getPotionConfig();
         if (config == null) {
             return;
         }
-        final ItemStack ingredient = slots.get(INGREDIENT_SLOT);
+        final PlatformItem ingredient = slots.get(INGREDIENT_SLOT);
         if (!isValidIngredient(ingredient)) {
             return;
         }
 
         boolean brewedAny = false;
         for (int slot : BOTTLE_SLOTS) {
-            final ItemStack bottle = slots.get(slot);
-            if (isEmpty(bottle) || bottle.isOf(Items.GLASS_BOTTLE)
+            final PlatformItem bottle = slots.get(slot);
+            if (isEmpty(bottle) || Potions.isGlassBottle(bottle)
                     || !config.isValidPotion(bottle)) {
                 continue;
             }
@@ -150,7 +151,7 @@ public final class AlchemyPotionBrewer {
                 continue;
             }
 
-            slots.set(slot, output.toItemStack(bottle.getCount()));
+            slots.set(slot, output.toItem(bottle.getAmount()));
             brewedAny = true;
 
             if (mmoPlayer != null) {
@@ -169,13 +170,13 @@ public final class AlchemyPotionBrewer {
     }
 
     /** Remove one ingredient from the ingredient slot (legacy {@code removeIngredient}). */
-    private static void consumeIngredient(@NotNull DefaultedList<ItemStack> slots) {
-        final ItemStack ingredient = slots.get(INGREDIENT_SLOT);
+    private static void consumeIngredient(@NotNull PlatformInventory slots) {
+        final PlatformItem ingredient = slots.get(INGREDIENT_SLOT);
         if (isEmpty(ingredient)) {
             return;
         }
-        if (ingredient.getCount() <= 1) {
-            slots.set(INGREDIENT_SLOT, ItemStack.EMPTY);
+        if (ingredient.getAmount() <= 1) {
+            slots.clear(INGREDIENT_SLOT);
         } else {
             ingredient.decrement(1);
         }

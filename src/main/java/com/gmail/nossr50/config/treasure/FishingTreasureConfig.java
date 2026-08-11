@@ -33,7 +33,7 @@ import org.slf4j.LoggerFactory;
  * material name contains {@code POTION} carries its {@code PotionData} block ({@code PotionType} plus
  * the {@code Upgraded}/{@code Extended} flags) onto the blueprint as an {@link ItemSpec.PotionSpec},
  * verbatim; {@code ItemSpecBuilder} resolves it against {@code Registries.POTION} at spawn time via
- * {@code PotionUtil#matchPotion}, which also translates the legacy Bukkit type names the shipped
+ * {@code platform/Potions#matchPotion}, which also translates the legacy Bukkit type names the shipped
  * config still uses ({@code INSTANT_HEAL} → {@code healing}, {@code SPEED} → {@code swiftness}). That
  * keeps this config MC-free, at the cost of reporting an unresolvable type at drop time rather than
  * rejecting the treasure at load as legacy did. The shipped {@code Fishing} section has no potion

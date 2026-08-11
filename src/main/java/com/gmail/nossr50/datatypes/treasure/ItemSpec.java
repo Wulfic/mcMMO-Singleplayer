@@ -41,7 +41,7 @@ public final class ItemSpec {
      *
      * <p>In modern Minecraft "upgraded" and "extended" are not flags but distinct registry entries
      * with {@code strong_} / {@code long_} id prefixes, so these three fields collapse into a single
-     * lookup at build time; see {@code PotionUtil#matchPotion}, which also translates the legacy
+     * lookup at build time; see {@code platform/Potions#matchPotion}, which also translates the legacy
      * Bukkit type names the shipped config still uses ({@code INSTANT_HEAL}, {@code SPEED}, …).
      *
      * @param potionType the {@code PotionData.PotionType} string ({@code "WATER"} when unset, as legacy)

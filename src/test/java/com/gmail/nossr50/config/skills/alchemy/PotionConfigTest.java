@@ -10,8 +10,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.skills.alchemy.AlchemyPotion;
+import com.gmail.nossr50.datatypes.skills.alchemy.PotionSpec;
 import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.nio.file.Path;
 import java.util.List;
@@ -70,22 +72,22 @@ class PotionConfigTest {
 
     @Test
     void concoctionTiersLoadAndCascade() {
-        final List<ItemStack> tier1 = potionConfig.getIngredients(1);
-        final List<ItemStack> tier2 = potionConfig.getIngredients(2);
+        final List<PlatformItem> tier1 = potionConfig.getIngredients(1);
+        final List<PlatformItem> tier2 = potionConfig.getIngredients(2);
         assertFalse(tier1.isEmpty(), "tier 1 ingredients load");
-        assertTrue(tier1.stream().anyMatch(s -> s.isOf(Items.BLAZE_POWDER)),
+        assertTrue(tier1.stream().anyMatch(s -> s.unwrap().isOf(Items.BLAZE_POWDER)),
                 "tier 1 includes Blaze Powder");
         // Each tier includes every lower tier's ingredients, so tier 2 is strictly larger.
         assertTrue(tier2.size() > tier1.size(), "tier 2 cascades tier 1's ingredients plus its own");
-        assertTrue(tier2.stream().anyMatch(s -> s.isOf(Items.BLAZE_POWDER)),
+        assertTrue(tier2.stream().anyMatch(s -> s.unwrap().isOf(Items.BLAZE_POWDER)),
                 "the cascade carries tier 1 ingredients into tier 2");
     }
 
     @Test
     void resolvesAWaterPotionByItemStack() {
         // A vanilla water bottle must be recognised as the config's POTION_OF_WATER.
-        final ItemStack waterBottle =
-                PotionContentsComponent.createStack(Items.POTION, Potions.WATER);
+        final PlatformItem waterBottle = new PlatformItem(
+                PotionContentsComponent.createStack(Items.POTION, Potions.WATER));
         final AlchemyPotion potion = potionConfig.getPotion(waterBottle);
         assertNotNull(potion, "a vanilla water bottle resolves to a config potion");
         assertEquals("POTION_OF_WATER", potion.getPotionConfigName());
@@ -97,11 +99,11 @@ class PotionConfigTest {
         // AWKWARD + SUGAR brews into POTION_OF_SWIFTNESS (shipped tree).
         final AlchemyPotion awkward = potionConfig.getPotion("POTION_OF_AWKWARD");
         assertNotNull(awkward, "POTION_OF_AWKWARD is in the tree");
-        final AlchemyPotion child = awkward.getChild(new ItemStack(Items.SUGAR));
+        final AlchemyPotion child = awkward.getChild(new PlatformItem(new ItemStack(Items.SUGAR)));
         assertNotNull(child, "SUGAR is a valid ingredient on an Awkward potion");
         assertEquals("POTION_OF_SWIFTNESS", child.getPotionConfigName());
         // A non-ingredient returns no child.
-        assertNull(awkward.getChild(new ItemStack(Items.DIRT)),
+        assertNull(awkward.getChild(new PlatformItem(new ItemStack(Items.DIRT))),
                 "dirt is not a valid brewing ingredient");
     }
 
@@ -130,12 +132,15 @@ class PotionConfigTest {
 
     @Test
     void everyLoadedPotionCarriesPotionContents() {
-        // Invariant: nothing garbage leaks past the load skips — every parsed potion has a base
-        // potion component (which is what stage/child resolution reads).
+        // Invariant: nothing garbage leaks past the load skips — every parsed potion has a resolved
+        // base potion (which is what stage/child resolution reads).
         final AlchemyPotion water = potionConfig.getPotion("POTION_OF_WATER");
-        final PotionContentsComponent contents = water.getPotionContents();
-        assertNotNull(contents, "a loaded potion always carries a PotionContentsComponent");
-        assertTrue(contents.potion().isPresent(), "and a resolved base potion");
+        final PotionSpec spec = water.getSpec();
+        assertNotNull(spec, "a loaded potion always carries potion contents");
+        assertNotNull(spec.basePotionId(), "and a resolved base potion");
+        // The id is namespaced, not a bare path — bare-path equality would match another mod's
+        // "swiftness" against vanilla's during brew matching.
+        assertEquals("minecraft:water", spec.basePotionId());
     }
 
     @Test
@@ -146,18 +151,21 @@ class PotionConfigTest {
         assertNotNull(absorption, "POTION_OF_ABSORPTION is in the tree");
         assertEquals(PotionStage.TWO, PotionStage.getPotionStage(absorption));
 
-        final AlchemyPotion splash = absorption.getChild(new ItemStack(Items.GUNPOWDER));
+        final AlchemyPotion splash =
+                absorption.getChild(new PlatformItem(new ItemStack(Items.GUNPOWDER)));
         assertNotNull(splash, "gunpowder converts Absorption to its splash variant");
         assertTrue(splash.isSplash(), "the child is a splash potion");
         assertEquals(PotionStage.THREE, PotionStage.getPotionStage(splash));
     }
 
     @Test
-    void toItemStackClonesWithRequestedCount() {
+    void toItemClonesWithRequestedCount() {
         final AlchemyPotion water = potionConfig.getPotion("POTION_OF_WATER");
-        final ItemStack three = water.toItemStack(3);
-        assertEquals(3, three.getCount());
+        final PlatformItem three = water.toItem(3);
+        assertEquals(3, three.getAmount());
         // A separate copy each call (not aliasing the template stack).
-        assertEquals(1, water.toItemStack(0).getCount(), "count is floored at 1");
+        assertEquals(1, water.toItem(0).getAmount(), "count is floored at 1");
+        // The template itself is untouched by either call.
+        assertEquals(1, water.toItem(1).getAmount());
     }
 }

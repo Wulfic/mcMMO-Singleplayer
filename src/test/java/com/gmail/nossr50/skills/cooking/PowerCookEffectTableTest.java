@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.YamlConfiguration;
 import com.gmail.nossr50.util.McTestRegistries;
-import com.gmail.nossr50.util.PotionUtil;
+import com.gmail.nossr50.platform.Potions;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
@@ -234,7 +234,7 @@ class PowerCookEffectTableTest {
     /** Resolve a row's configured effect name the same way the eat seam does. */
     private RegistryEntry<StatusEffect> resolve(String foodConfigString) {
         final String name = table.getString(foodConfigString);
-        final RegistryEntry<StatusEffect> effect = PotionUtil.matchEffect(name);
+        final RegistryEntry<StatusEffect> effect = Potions.matchEffect(name);
         // A name that does not resolve disables its row silently -- the failure mode a typo has.
         assertNotNull(effect,
                 () -> foodConfigString + " maps to '" + name + "', which is not a status effect");

@@ -77,6 +77,11 @@ public final class PlatformItem {
         return handle.getMaxCount();
     }
 
+    /** Remove {@code amount} items from this stack, in place (vanilla {@code decrement}). */
+    public void decrement(int amount) {
+        handle.decrement(amount);
+    }
+
     // --- Durability (Bukkit durability == vanilla damage) -------------------
 
     public boolean isDamageable() {
@@ -140,7 +145,36 @@ public final class PlatformItem {
         return ItemStack.areItemsEqual(handle, other.handle);
     }
 
+    /**
+     * Same item <em>and</em> same data components, ignoring stack count (vanilla
+     * {@code areItemsAndComponentsEqual}). Stricter than {@link #isSimilar}: this is the comparison
+     * that decides whether a brewing-stand ingredient is a configured one, where "sugar" and
+     * "sugar with a custom name" must not be conflated.
+     */
+    public boolean matchesItemAndComponents(@NotNull PlatformItem other) {
+        return ItemStack.areItemsAndComponentsEqual(handle, other.handle);
+    }
+
+    /** Full equality including stack count (vanilla {@code ItemStack.areEqual}). */
+    public boolean matchesExactly(@NotNull PlatformItem other) {
+        return ItemStack.areEqual(handle, other.handle);
+    }
+
     public @NotNull PlatformItem copy() {
         return new PlatformItem(handle.copy());
+    }
+
+    /** A fresh copy of this stack carrying {@code count} items. */
+    public @NotNull PlatformItem copyWithCount(int count) {
+        return new PlatformItem(handle.copyWithCount(count));
+    }
+
+    /**
+     * Delegates to the wrapped stack, so a {@code PlatformItem} in a log line or a collection dump
+     * reads like the item it is rather than {@code PlatformItem@1a2b3c}.
+     */
+    @Override
+    public String toString() {
+        return handle.toString();
     }
 }
