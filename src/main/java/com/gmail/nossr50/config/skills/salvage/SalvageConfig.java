@@ -1,20 +1,17 @@
 package com.gmail.nossr50.config.skills.salvage;
 
+import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.datatypes.skills.ItemType;
 import com.gmail.nossr50.datatypes.skills.MaterialType;
 import com.gmail.nossr50.platform.Materials;
 import com.gmail.nossr50.skills.salvage.salvageables.Salvageable;
 import com.gmail.nossr50.skills.salvage.salvageables.SalvageableFactory;
-import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,14 +54,12 @@ public class SalvageConfig extends ConfigLoader {
         for (String key : config.getConfigurationSection("Salvageables").getKeys(false)) {
             final String base = "Salvageables." + key;
 
-            final java.util.Optional<Item> itemOpt = Materials.item(key);
-            if (itemOpt.isEmpty()) {
+            final java.util.Optional<String> pathOpt = Materials.itemPath(key);
+            if (pathOpt.isEmpty()) {
                 notSupported.add(key);
                 continue;
             }
-            final Item item = itemOpt.get();
-            final String itemPath = Registries.ITEM.getId(item).getPath();
-            final ItemStack probe = new ItemStack(item);
+            final String itemPath = pathOpt.get();
 
             final List<String> reasons = new ArrayList<>();
 
@@ -79,7 +74,7 @@ public class SalvageConfig extends ConfigLoader {
                     reasons.add(key + " has an invalid MaterialType of " + name);
                 }
             } else {
-                salvageMaterialType = classifyMaterialType(probe);
+                salvageMaterialType = classifyMaterialType(itemPath);
             }
 
             // Salvage material: explicit name, else the family default.
@@ -93,7 +88,7 @@ public class SalvageConfig extends ConfigLoader {
             }
             final String salvageMaterialPath = Materials.idOf(resolvedName).getPath();
 
-            final short maximumDurability = (short) probe.getMaxDamage();
+            final short maximumDurability = (short) Materials.maxDamage(key);
 
             // Item type: explicit override, else auto-classify the probe.
             ItemType salvageItemType = ItemType.OTHER;
@@ -105,9 +100,9 @@ public class SalvageConfig extends ConfigLoader {
                 } catch (IllegalArgumentException ex) {
                     reasons.add(key + " has an invalid ItemType of " + name);
                 }
-            } else if (ItemUtils.isMinecraftTool(probe)) {
+            } else if (store().isTool(itemPath)) {
                 salvageItemType = ItemType.TOOL;
-            } else if (ItemUtils.isArmor(probe)) {
+            } else if (store().isArmor(itemPath)) {
                 salvageItemType = ItemType.ARMOR;
             }
 
@@ -148,26 +143,35 @@ public class SalvageConfig extends ConfigLoader {
     }
 
     /** Auto-classify an item probe into its {@link MaterialType} (legacy SalvageConfig fallback). */
-    private static MaterialType classifyMaterialType(ItemStack probe) {
-        if (ItemUtils.isWoodTool(probe)) {
+    /**
+     * The MC-free material classifier. It is keyed on the vanilla registry-id <em>path</em>
+     * ({@code diamond_axe}), which is exactly what this loader already resolves each config key to,
+     * so the auto-classification below needs no {@code ItemStack} probe and no Minecraft types at all.
+     */
+    private static com.gmail.nossr50.util.MaterialMapStore store() {
+        return McMMOMod.getMaterialMapStore();
+    }
+
+    private static MaterialType classifyMaterialType(String itemPath) {
+        if (store().isWoodTool(itemPath)) {
             return MaterialType.WOOD;
-        } else if (ItemUtils.isStoneTool(probe)) {
+        } else if (store().isStoneTool(itemPath)) {
             return MaterialType.STONE;
-        } else if (ItemUtils.isStringTool(probe)) {
+        } else if (store().isStringTool(itemPath)) {
             return MaterialType.STRING;
-        } else if (ItemUtils.isPrismarineTool(probe)) {
+        } else if (store().isPrismarineTool(itemPath)) {
             return MaterialType.PRISMARINE;
-        } else if (ItemUtils.isLeatherArmor(probe)) {
+        } else if (store().isLeatherArmor(itemPath)) {
             return MaterialType.LEATHER;
-        } else if (ItemUtils.isIronArmor(probe) || ItemUtils.isIronTool(probe)) {
+        } else if (store().isIronArmor(itemPath) || store().isIronTool(itemPath)) {
             return MaterialType.IRON;
-        } else if (ItemUtils.isGoldArmor(probe) || ItemUtils.isGoldTool(probe)) {
+        } else if (store().isGoldArmor(itemPath) || store().isGoldTool(itemPath)) {
             return MaterialType.GOLD;
-        } else if (ItemUtils.isDiamondArmor(probe) || ItemUtils.isDiamondTool(probe)) {
+        } else if (store().isDiamondArmor(itemPath) || store().isDiamondTool(itemPath)) {
             return MaterialType.DIAMOND;
-        } else if (ItemUtils.isNetheriteTool(probe) || ItemUtils.isNetheriteArmor(probe)) {
+        } else if (store().isNetheriteTool(itemPath) || store().isNetheriteArmor(itemPath)) {
             return MaterialType.NETHERITE;
-        } else if (ItemUtils.isCopperTool(probe) || ItemUtils.isCopperArmor(probe)) {
+        } else if (store().isCopperTool(itemPath) || store().isCopperArmor(itemPath)) {
             return MaterialType.COPPER;
         }
         return MaterialType.OTHER;

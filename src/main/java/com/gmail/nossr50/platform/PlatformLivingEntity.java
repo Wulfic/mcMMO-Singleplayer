@@ -1,6 +1,6 @@
 package com.gmail.nossr50.platform;
 
-import com.gmail.nossr50.util.ItemUtils;
+import com.gmail.nossr50.platform.ItemUtils;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;

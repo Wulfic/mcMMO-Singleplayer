@@ -24,7 +24,7 @@ import com.gmail.nossr50.skills.mining.MiningManager;
 import com.gmail.nossr50.skills.woodcutting.TreeFellerProcessor;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.BlockUtils;
-import com.gmail.nossr50.util.ItemUtils;
+import com.gmail.nossr50.platform.ItemUtils;
 import com.gmail.nossr50.util.MaterialMapStore;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.NotificationManager;

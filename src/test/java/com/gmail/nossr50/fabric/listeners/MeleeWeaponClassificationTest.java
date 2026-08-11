@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.skills.MeleeDamageBonus.MeleeWeapon;
-import com.gmail.nossr50.util.ItemUtils;
+import com.gmail.nossr50.platform.ItemUtils;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.ArrayList;
 import java.util.List;

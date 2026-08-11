@@ -1,6 +1,7 @@
-package com.gmail.nossr50.util;
+package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.config.GeneralConfig;
+import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
@@ -10,10 +11,10 @@ import org.jetbrains.annotations.NotNull;
  * Item classification helpers — the singleplayer port of the legacy Bukkit {@code ItemUtils}.
  *
  * <p>Every check here is a thin, MC-typed wrapper over the already-unit-tested, MC-free
- * {@link MaterialMapStore} (see memory {@code phase-10-9} keystone): it extracts the item's vanilla
+ * {@link com.gmail.nossr50.util.MaterialMapStore} (see memory {@code phase-10-9} keystone): it extracts the item's vanilla
  * registry-id path (e.g. {@code diamond_axe}) via {@link Registries#ITEM} and delegates the actual
  * set membership to the store. So the classification <em>logic</em> is proven MC-free in
- * {@link MaterialMapStoreTest}; this layer only bridges a live {@link ItemStack} to that logic. The
+ * {@code MaterialMapStoreTest}; this layer only bridges a live {@link ItemStack} to that logic. The
  * id-path extraction needs live registries, so these are exercised in {@code ItemUtilsTest} under the
  * {@code fabric-loader-junit} harness ({@code Bootstrap.initialize()} in a {@code @BeforeAll}).
  *
@@ -32,7 +33,7 @@ public final class ItemUtils {
 
     /**
      * The vanilla registry-id <em>path</em> of an item stack's item (e.g. {@code diamond_axe} for
-     * {@code minecraft:diamond_axe}) — the key {@link MaterialMapStore} is keyed on. An empty stack
+     * {@code minecraft:diamond_axe}) — the key {@link com.gmail.nossr50.util.MaterialMapStore} is keyed on. An empty stack
      * is {@code minecraft:air}, i.e. path {@code air}, which is in none of the tool/armor sets.
      */
     private static @NotNull String idPath(@NotNull ItemStack item) {
@@ -176,5 +177,36 @@ public final class ItemUtils {
 
     public static boolean isEnchantable(@NotNull ItemStack item) {
         return McMMOMod.getMaterialMapStore().isEnchantable(idPath(item));
+    }
+
+    // --- Super-ability tool prep --------------------------------------------
+
+    /**
+     * Whether {@code itemStack} is the tool that {@code toolType}'s super-ability prep expects — step
+     * 1 of the 2-step super-ability activation (raise the right tool, then interact).
+     *
+     * <p>Lives here rather than on {@link ToolType} itself (Phase 2): the enum is otherwise pure data
+     * — a pair of locale keys per constant — and this was the single method dragging
+     * {@code net.minecraft} into {@code datatypes/}. The classification it performs is exactly what
+     * this class exists to do.
+     *
+     * <p>Faithful to upstream mcMMO: {@link ToolType#FISTS} is a bare empty hand
+     * ({@link ItemStack#isEmpty()}, upstream's {@code Material.AIR} check), and {@link ToolType#BOW}
+     * has no tool-raise (upstream's switch had no BOW case, so it fell to {@code false}) because
+     * Archery has no super ability to prime this way.
+     */
+    public static boolean isToolInHand(@NotNull ToolType toolType, @NotNull ItemStack itemStack) {
+        return switch (toolType) {
+            case AXE -> isAxe(itemStack);
+            case FISTS -> itemStack.isEmpty();
+            case HOE -> isHoe(itemStack);
+            case PICKAXE -> isPickaxe(itemStack);
+            case SHOVEL -> isShovel(itemStack);
+            case SWORD -> isSword(itemStack);
+            case CROSSBOW -> isCrossbow(itemStack);
+            case TRIDENTS -> isTrident(itemStack);
+            case MACES -> isMace(itemStack);
+            case BOW -> false;
+        };
     }
 }

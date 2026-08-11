@@ -4,7 +4,7 @@ import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.text.TextUtils;
 import com.gmail.nossr50.util.BlockUtils;
-import com.gmail.nossr50.util.ItemUtils;
+import com.gmail.nossr50.platform.ItemUtils;
 import java.util.UUID;
 import net.minecraft.advancement.AdvancementEntry;
 import net.minecraft.advancement.PlayerAdvancementTracker;
@@ -370,7 +370,7 @@ public final class PlatformPlayer {
      * {@link ToolType}.
      */
     public boolean isHoldingTool(@NotNull ToolType toolType) {
-        return toolType.inHand(handle.getMainHandStack());
+        return ItemUtils.isToolInHand(toolType, handle.getMainHandStack());
     }
 
     /**

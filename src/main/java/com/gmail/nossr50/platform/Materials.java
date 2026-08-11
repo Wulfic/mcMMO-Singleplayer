@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.NotNull;
@@ -100,5 +101,30 @@ public final class Materials {
     public static boolean isBlock(@NotNull String name) {
         final Identifier id = idOf(name);
         return id != null && Registries.BLOCK.containsId(id);
+    }
+
+    /**
+     * The vanilla registry-id <em>path</em> of an item resolved by name (e.g. {@code diamond_axe}),
+     * empty if the name resolves to no vanilla item.
+     *
+     * <p>Deliberately the round-trip name → {@code Item} → registry path, not just
+     * {@code idOf(name).getPath()}: it is the resolved item's own canonical path that keys
+     * {@link com.gmail.nossr50.util.MaterialMapStore} and the repair/salvage tables, and the input
+     * name may be a pre-1.13 alias ({@link #LEGACY_NAME_ALIASES}) that differs from it.
+     */
+    public static @NotNull Optional<String> itemPath(@NotNull String name) {
+        return item(name).map(item -> Registries.ITEM.getId(item).getPath());
+    }
+
+    /**
+     * The vanilla maximum durability of the item resolved by {@code name}, or {@code 0} when the item
+     * is unknown or not damageable.
+     *
+     * <p>Reads it off a probe {@code ItemStack} rather than the {@code Item}, because since the
+     * component rewrite max damage is a stack component — {@code Item#getMaxDamage()} is not the same
+     * question. Callers treat {@code <= 0} as "not damageable, fall back to the configured value".
+     */
+    public static int maxDamage(@NotNull String name) {
+        return item(name).map(item -> new ItemStack(item).getMaxDamage()).orElse(0);
     }
 }

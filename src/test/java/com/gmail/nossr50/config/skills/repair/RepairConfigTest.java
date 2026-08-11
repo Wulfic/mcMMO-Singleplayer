@@ -24,7 +24,7 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Exercises {@link RepairConfig} end-to-end against the real bundled {@code repair.vanilla.yml}. The
  * config is MC-typed at load time — it resolves each entry against the live item registry, reads the
- * item's vanilla max-durability, and auto-classifies an item probe via {@link com.gmail.nossr50.util.ItemUtils}
+ * item's vanilla max-durability, and auto-classifies an item probe via {@link com.gmail.nossr50.platform.ItemUtils}
  * — so it only loads meaningfully once Minecraft's registries are populated. Runs under the
  * {@code fabric-loader-junit} ("Knot") harness (see {@link McTestRegistries}), which the config's own
  * javadoc promises it is tested by. The construction copies the bundled default to a {@code @TempDir}

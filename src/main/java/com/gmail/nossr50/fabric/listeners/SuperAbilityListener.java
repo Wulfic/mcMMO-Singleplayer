@@ -15,7 +15,7 @@ import com.gmail.nossr50.skills.herbalism.Herbalism;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
 import com.gmail.nossr50.skills.unarmed.Unarmed;
 import com.gmail.nossr50.util.BlockUtils;
-import com.gmail.nossr50.util.ItemUtils;
+import com.gmail.nossr50.platform.ItemUtils;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
@@ -714,7 +714,7 @@ public final class SuperAbilityListener {
     static boolean wouldHaveReadiedATool(ServerPlayerEntity player) {
         final ItemStack mainHand = player.getMainHandStack();
         for (ToolType tool : READYABLE_TOOLS) {
-            if (tool.inHand(mainHand)) {
+            if (ItemUtils.isToolInHand(tool, mainHand)) {
                 return true;
             }
         }

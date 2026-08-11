@@ -3,14 +3,13 @@ package com.gmail.nossr50.commands.skills;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.locale.LocaleLoader;
+import com.gmail.nossr50.platform.Entities;
 import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import com.gmail.nossr50.util.skills.RankUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
 
 /**
  * {@code /mcstats hunter} — D-HU7's answer to the skill's central usability problem: <b>three mastery
@@ -133,28 +132,11 @@ public final class HunterStatsRenderer extends SkillStatsRenderer {
     /**
      * A stored kill-counter key rendered as a creature name, falling back to the raw id.
      *
-     * <h2>⚠️ {@code Registries.ENTITY_TYPE} is a {@code DefaultedRegistry} and its {@code get} LIES</h2>
-     * {@code SimpleDefaultedRegistry#get(Identifier)} answers an unknown id with the registry's
-     * <em>default entry</em> — {@code minecraft:pig} — rather than {@code null} (bytecode: it calls
-     * {@code SimpleRegistry.get}, tests the result for null, and substitutes {@code defaultEntry}).
-     * That is not a hypothetical here: stage 2 deliberately stores these keys as raw strings and
-     * resolves them only at use, precisely so that a creature from an uninstalled mod does not cost
-     * the player their profile — which means this screen is the one place those unresolvable keys
-     * surface. Reading them through {@code get} would file somebody's 4,000 modded kills under
-     * <b>"Pig"</b>, silently and plausibly.
-     *
-     * <p>{@code getOptionalValue} is the honest read: its body calls the same
-     * {@code SimpleRegistry.get} and wraps it in {@code Optional.ofNullable}, skipping the default
-     * substitution entirely. An id that no longer parses at all (a corrupted profile) falls back the
-     * same way.
+     * <p>The registry lookup — and the {@code DefaultedRegistry} trap that makes an unknown id render
+     * as "Pig" unless it is handled — lives in {@link Entities#displayName}, on the Minecraft side of
+     * the platform boundary. See that method before changing anything here.
      */
     private static String creatureName(String mobId) {
-        final Identifier id = Identifier.tryParse(mobId);
-        if (id == null) {
-            return mobId;
-        }
-        return Registries.ENTITY_TYPE.getOptionalValue(id)
-                .map(type -> type.getName().getString())
-                .orElse(mobId);
+        return Entities.displayName(mobId);
     }
 }

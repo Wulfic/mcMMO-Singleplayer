@@ -1,9 +1,10 @@
-package com.gmail.nossr50.util;
+package com.gmail.nossr50.platform;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.datatypes.skills.ToolType;
+import com.gmail.nossr50.util.McTestRegistries;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import org.junit.jupiter.api.BeforeAll;
@@ -14,7 +15,7 @@ import org.junit.jupiter.api.Test;
  * this proves the id-path extraction ({@code Registries.ITEM.getId(item).getPath()}) lines up with the
  * keys the MC-free {@link MaterialMapStore} is tested on ({@link MaterialMapStoreTest}), so the two
  * layers actually connect. Runs under the {@code fabric-loader-junit} harness (see {@link
- * McTestRegistries}). Also covers {@link ToolType#inHand(ItemStack)}, the super-ability tool-raise gate.
+ * McTestRegistries}). Also covers {@link ItemUtils#isToolInHand}, the super-ability tool-raise gate.
  */
 class ItemUtilsTest {
 
@@ -87,18 +88,18 @@ class ItemUtilsTest {
 
     @Test
     void toolTypeInHandMatchesHeldTool() {
-        assertTrue(ToolType.AXE.inHand(new ItemStack(Items.DIAMOND_AXE)));
-        assertFalse(ToolType.AXE.inHand(new ItemStack(Items.DIAMOND_PICKAXE)));
+        assertTrue(ItemUtils.isToolInHand(ToolType.AXE, new ItemStack(Items.DIAMOND_AXE)));
+        assertFalse(ItemUtils.isToolInHand(ToolType.AXE, new ItemStack(Items.DIAMOND_PICKAXE)));
 
-        assertTrue(ToolType.PICKAXE.inHand(new ItemStack(Items.STONE_PICKAXE)));
-        assertTrue(ToolType.SHOVEL.inHand(new ItemStack(Items.IRON_SHOVEL)));
-        assertTrue(ToolType.SWORD.inHand(new ItemStack(Items.NETHERITE_SWORD)));
-        assertTrue(ToolType.HOE.inHand(new ItemStack(Items.GOLDEN_HOE)));
-        assertTrue(ToolType.MACES.inHand(new ItemStack(Items.MACE)));
+        assertTrue(ItemUtils.isToolInHand(ToolType.PICKAXE, new ItemStack(Items.STONE_PICKAXE)));
+        assertTrue(ItemUtils.isToolInHand(ToolType.SHOVEL, new ItemStack(Items.IRON_SHOVEL)));
+        assertTrue(ItemUtils.isToolInHand(ToolType.SWORD, new ItemStack(Items.NETHERITE_SWORD)));
+        assertTrue(ItemUtils.isToolInHand(ToolType.HOE, new ItemStack(Items.GOLDEN_HOE)));
+        assertTrue(ItemUtils.isToolInHand(ToolType.MACES, new ItemStack(Items.MACE)));
 
         // FISTS = bare empty hand (upstream Material.AIR check); BOW has no tool-raise (always false).
-        assertTrue(ToolType.FISTS.inHand(ItemStack.EMPTY));
-        assertFalse(ToolType.FISTS.inHand(new ItemStack(Items.DIAMOND_AXE)));
-        assertFalse(ToolType.BOW.inHand(new ItemStack(Items.BOW)));
+        assertTrue(ItemUtils.isToolInHand(ToolType.FISTS, ItemStack.EMPTY));
+        assertFalse(ItemUtils.isToolInHand(ToolType.FISTS, new ItemStack(Items.DIAMOND_AXE)));
+        assertFalse(ItemUtils.isToolInHand(ToolType.BOW, new ItemStack(Items.BOW)));
     }
 }

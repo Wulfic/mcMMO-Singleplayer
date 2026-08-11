@@ -24,7 +24,7 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Exercises {@link SalvageConfig} end-to-end against the real bundled {@code salvage.vanilla.yml},
  * under the {@code fabric-loader-junit} ("Knot") harness — mirror of {@link com.gmail.nossr50.config.skills.repair.RepairConfig}'s
- * test. MC-typed at load (live registry existence + path, vanilla max-durability, {@link com.gmail.nossr50.util.ItemUtils}
+ * test. MC-typed at load (live registry existence + path, vanilla max-durability, {@link com.gmail.nossr50.platform.ItemUtils}
  * classification), so it needs {@link McTestRegistries}. Note Salvage grants no XP — the parsed
  * {@code XpMultiplier} is retained for fidelity but unused by the skill.
  */

@@ -9,7 +9,7 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.CombatXp;
-import com.gmail.nossr50.util.ItemUtils;
+import com.gmail.nossr50.platform.ItemUtils;
 import com.gmail.nossr50.util.MobOrigins;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
