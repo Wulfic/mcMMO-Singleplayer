@@ -21,7 +21,7 @@ import net.minecraft.entity.passive.IronGolemEntity;
 import net.minecraft.entity.passive.SnowGolemEntity;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.sound.SoundCategory;
+import com.gmail.nossr50.platform.PlatformSoundCategory;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -349,7 +349,7 @@ public final class HunterListener {
                 victim.getType().getName().getString(), String.valueOf(tier),
                 String.valueOf(kills));
         SoundManager.sendCategorizedSound(mmoPlayer.getPlayer(), SoundType.SKILL_UNLOCKED,
-                SoundCategory.MASTER);
+                PlatformSoundCategory.MASTER);
     }
 
     /** See {@link #LOGGED_FIRST_KILL}. */

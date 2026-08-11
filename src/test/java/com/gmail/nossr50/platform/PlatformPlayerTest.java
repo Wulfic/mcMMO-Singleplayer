@@ -1,11 +1,13 @@
 package com.gmail.nossr50.platform;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.UUID;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.sound.SoundCategory;
 import net.minecraft.text.Text;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,46 @@ class PlatformPlayerTest {
         when(handle.getUuid()).thenReturn(uuid);
         when(handle.getName()).thenReturn(Text.literal(name));
         return handle;
+    }
+
+    /**
+     * Pins {@link PlatformPlayer#toVanilla} — the single seam where mcMMO's Minecraft-free
+     * {@link PlatformSoundCategory} meets vanilla's enum (Phase 2 of multi-version support).
+     *
+     * <p>The mapping is eleven hand-written switch arms, and a copy-paste slip in any one of them
+     * (say {@code case VOICE -> SoundCategory.AMBIENT}) is completely silent: the sound still plays,
+     * just on the wrong volume slider, which no other test and no boot check would notice.
+     *
+     * <p>So this asserts the <em>property</em> rather than re-listing the table: every platform
+     * constant must map to the vanilla constant of the <b>same name</b>. Driving it from
+     * {@code values()} — never a hard-coded list — is what makes it catch a newly added constant
+     * too, and keeps it from going vacuous the way a table-driven guard does.
+     */
+    @Test
+    void everyPlatformSoundCategoryMapsToTheVanillaConstantOfTheSameName() {
+        for (final PlatformSoundCategory category : PlatformSoundCategory.values()) {
+            assertSame(SoundCategory.valueOf(category.name()), PlatformPlayer.toVanilla(category),
+                    "PlatformSoundCategory." + category.name()
+                            + " must map to vanilla SoundCategory." + category.name()
+                            + " — a mis-mapped arm silently plays mcMMO's sounds on the wrong "
+                            + "volume slider");
+        }
+    }
+
+    /**
+     * The converse of the test above, and the reason it is not vacuous: it only proves the mapping
+     * is <em>total</em> if the two enums have the same constants in the first place. A vanilla
+     * category that mcMMO never mirrored (as {@code UI} nearly was — it is easy to forget and
+     * {@code javap} is the only reliable way to enumerate them) would leave a category unreachable
+     * from skill code without anything failing.
+     */
+    @Test
+    void theMirrorEnumCoversEveryVanillaSoundCategory() {
+        for (final SoundCategory vanilla : SoundCategory.values()) {
+            assertDoesNotThrow(() -> PlatformSoundCategory.valueOf(vanilla.name()),
+                    "vanilla SoundCategory." + vanilla.name()
+                            + " has no PlatformSoundCategory mirror — skill code cannot name it");
+        }
     }
 
     @Test

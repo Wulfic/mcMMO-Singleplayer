@@ -18,7 +18,7 @@ import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
-import net.minecraft.sound.SoundCategory;
+import com.gmail.nossr50.platform.PlatformSoundCategory;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -276,7 +276,7 @@ public class RepairManager extends SkillManager {
         }
 
         if (McMMOMod.getGeneralConfig().getRepairAnvilPlaceSoundsEnabled()) {
-            SoundManager.sendCategorizedSound(getPlayer(), SoundType.ANVIL, SoundCategory.BLOCKS);
+            SoundManager.sendCategorizedSound(getPlayer(), SoundType.ANVIL, PlatformSoundCategory.BLOCKS);
         }
 
         togglePlacedAnvil();

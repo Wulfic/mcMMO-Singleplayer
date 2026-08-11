@@ -14,7 +14,7 @@ import com.gmail.nossr50.util.skills.ParticleEffectUtils;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
-import net.minecraft.sound.SoundCategory;
+import com.gmail.nossr50.platform.PlatformSoundCategory;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -110,7 +110,7 @@ public class MacesManager extends SkillManager {
         // Legacy played this at the target's location; in singleplayer the only listener is the
         // attacker, so it routes through SoundManager like every other mcMMO sound and stays
         // governed by sounds.yml. 0.2F is legacy's pitch modifier.
-        SoundManager.sendCategorizedSound(getPlayer(), SoundType.CRIPPLE, SoundCategory.PLAYERS,
+        SoundManager.sendCategorizedSound(getPlayer(), SoundType.CRIPPLE, PlatformSoundCategory.PLAYERS,
                 0.2F);
     }
 

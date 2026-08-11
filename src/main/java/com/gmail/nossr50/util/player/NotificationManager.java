@@ -12,7 +12,7 @@ import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import com.gmail.nossr50.util.text.McMMOMessageType;
 import com.gmail.nossr50.util.text.StringUtils;
-import net.minecraft.sound.SoundCategory;
+import com.gmail.nossr50.platform.PlatformSoundCategory;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -186,6 +186,6 @@ public final class NotificationManager {
         mmoPlayer.getPlayer().sendMessage(message);
 
         SoundManager.sendCategorizedSound(mmoPlayer.getPlayer(), SoundType.SKILL_UNLOCKED,
-                SoundCategory.MASTER);
+                PlatformSoundCategory.MASTER);
     }
 }

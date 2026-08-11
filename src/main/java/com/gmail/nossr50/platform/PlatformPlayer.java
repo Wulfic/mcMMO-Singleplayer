@@ -34,6 +34,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.VisibleForTesting;
 
 /**
  * Adapter over a vanilla {@link ServerPlayerEntity}, replacing {@code org.bukkit.entity.Player}
@@ -211,7 +212,7 @@ public final class PlatformPlayer {
      * @param volume final volume (already master-scaled by the caller)
      * @param pitch final pitch
      */
-    public void playSound(@NotNull String soundRegistryId, @NotNull SoundCategory category,
+    public void playSound(@NotNull String soundRegistryId, @NotNull PlatformSoundCategory category,
             float volume, float pitch) {
         Identifier id = Identifier.tryParse(soundRegistryId);
         if (id == null || !Registries.SOUND_EVENT.containsId(id)) {
@@ -221,7 +222,35 @@ public final class PlatformPlayer {
         SoundEvent soundEvent = Registries.SOUND_EVENT.get(id);
         Vec3d pos = getPos();
         // except = null → all players in range hear it (the one player, in singleplayer).
-        getWorld().playSound(null, pos.x, pos.y, pos.z, soundEvent, category, volume, pitch);
+        getWorld().playSound(null, pos.x, pos.y, pos.z, soundEvent, toVanilla(category), volume,
+                pitch);
+    }
+
+    /**
+     * Maps mcMMO's platform-neutral {@link PlatformSoundCategory} onto the vanilla enum. This is the
+     * <em>only</em> place the two schemes meet, which is what keeps {@code SoundManager} and its
+     * callers free of {@code net.minecraft}.
+     *
+     * <p>Deliberately a <b>total switch with no {@code default} arm</b>: if a future Minecraft band
+     * renames or drops a category, this fails to compile here in {@code platform/} — the tree that is
+     * allowed to diverge per band — instead of silently falling back to {@code MASTER} and shipping
+     * every mcMMO sound on the wrong volume slider.
+     */
+    @VisibleForTesting
+    static @NotNull SoundCategory toVanilla(@NotNull PlatformSoundCategory category) {
+        return switch (category) {
+            case MASTER -> SoundCategory.MASTER;
+            case MUSIC -> SoundCategory.MUSIC;
+            case RECORDS -> SoundCategory.RECORDS;
+            case WEATHER -> SoundCategory.WEATHER;
+            case BLOCKS -> SoundCategory.BLOCKS;
+            case HOSTILE -> SoundCategory.HOSTILE;
+            case NEUTRAL -> SoundCategory.NEUTRAL;
+            case PLAYERS -> SoundCategory.PLAYERS;
+            case AMBIENT -> SoundCategory.AMBIENT;
+            case VOICE -> SoundCategory.VOICE;
+            case UI -> SoundCategory.UI;
+        };
     }
 
     // --- Milestone advancements (Advancement Plaques support) ----------------

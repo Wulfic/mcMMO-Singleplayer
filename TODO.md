@@ -19,6 +19,9 @@ today, growing). NeoForge/Forge are explicitly **out of scope** — see "Deferre
 | R-e | `26.x` handling | **Own mini-project, gated behind Phases 1–2 and one completed ordinary back-port.** Not band 2, not absorbed into a sweep (Phase 6.3). |
 | R-f | Release topology | **master = newest band.** `mc/**` is for OLDER bands only, cut by hand. `mc/1.21.11` deleted (local + remote); the workflow's auto-branch step is removed and replaced by a collision warning. |
 | R-c | Phase 2 depth | **Full seal to zero, then the guard.** Work all 26 leak sites down before the guard lands. |
+| P2-a | Phase 2 — the 6 core-logic leak sites | **Extend the `platform/` adapters until they are MC-free.** Explicitly NOT a bodily move into `fabric/`: that relabels the boundary instead of sealing it, and leaves skill logic band-fragile. |
+| P2-b | Phase 2 — the alchemy cluster | **Seal it like the rest.** Build the potion adapter surface; all 6 go MC-free. No relocation, no waiver. |
+| P2-c | Phase 2 — guard allowlist | **Zero exceptions, hard fail.** No escape hatch, no exempt list. *An allowlist is where sealed boundaries go to rot.* |
 | R-d | Playtest | **Keeps running on master builds.** Master stays green + bootable at every commit; no forensic gap in `advancements/<uuid>.json`. |
 
 Because R-a was decided up front, **Phase 3 is closed** and Phase 4 is replaced (see Phase 4′).
@@ -51,7 +54,11 @@ Two live problems, found 2026-08-10:
    fight over one release slot: **whichever pushes last deletes the other's release.** Dormant only
    because `mc/**` is never pushed today. R-a arms it.
 
-- [ ] **OPEN — release topology.** Pick one before cutting any band branch:
+- [x] **RESOLVED — release topology → (A), per R-f.** `mc/1.21.11` deleted local + remote (only
+      `master` exists now); the auto-creating *"Ensure Minecraft release branch"* step is **removed**
+      from `release.yml` and replaced by a collision warning (line ~197–215) that fires if a
+      `mc/<newest>` branch ever reappears claiming master's own Minecraft line.
+      The original options, for the record:
       - **(A) master = newest band.** `mc/1.21.11` is deleted; `mc/**` exists only for *older* bands.
         Master keeps releasing exactly as today. Requires disabling the "ensure branch" step, or it
         recreates `mc/1.21.11` on the next push.

@@ -4,7 +4,7 @@ import com.gmail.nossr50.config.SoundConfig;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import java.util.concurrent.ThreadLocalRandom;
-import net.minecraft.sound.SoundCategory;
+import com.gmail.nossr50.platform.PlatformSoundCategory;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -42,22 +42,22 @@ public final class SoundManager {
     }
 
     /**
-     * Plays {@code soundType} to {@code player} under the {@link SoundCategory#MASTER} category.
+     * Plays {@code soundType} to {@code player} under the {@link PlatformSoundCategory#MASTER} category.
      * Replaces legacy {@code sendSound(Player, Location, SoundType)}.
      */
     public static void sendSound(@Nullable PlatformPlayer player, @NotNull SoundType soundType) {
         SoundConfig soundConfig = readyConfig(player, soundType);
         if (soundConfig != null) {
-            emit(player, soundConfig, soundType, SoundCategory.MASTER, getPitch(soundConfig, soundType));
+            emit(player, soundConfig, soundType, PlatformSoundCategory.MASTER, getPitch(soundConfig, soundType));
         }
     }
 
     /**
-     * Plays {@code soundType} to {@code player} under an explicit {@link SoundCategory}. Replaces
+     * Plays {@code soundType} to {@code player} under an explicit {@link PlatformSoundCategory}. Replaces
      * legacy {@code sendCategorizedSound(Player, Location, SoundType, SoundCategory)}.
      */
     public static void sendCategorizedSound(@Nullable PlatformPlayer player,
-            @NotNull SoundType soundType, @NotNull SoundCategory soundCategory) {
+            @NotNull SoundType soundType, @NotNull PlatformSoundCategory soundCategory) {
         SoundConfig soundConfig = readyConfig(player, soundType);
         if (soundConfig != null) {
             emit(player, soundConfig, soundType, soundCategory, getPitch(soundConfig, soundType));
@@ -65,11 +65,11 @@ public final class SoundManager {
     }
 
     /**
-     * As {@link #sendCategorizedSound(PlatformPlayer, SoundType, SoundCategory)} but shifts the pitch
+     * As {@link #sendCategorizedSound(PlatformPlayer, SoundType, PlatformSoundCategory)} but shifts the pitch
      * by {@code pitchModifier} (clamped to a max of {@code 2.0}), matching legacy.
      */
     public static void sendCategorizedSound(@Nullable PlatformPlayer player,
-            @NotNull SoundType soundType, @NotNull SoundCategory soundCategory,
+            @NotNull SoundType soundType, @NotNull PlatformSoundCategory soundCategory,
             float pitchModifier) {
         SoundConfig soundConfig = readyConfig(player, soundType);
         if (soundConfig != null) {
@@ -80,7 +80,7 @@ public final class SoundManager {
 
     /**
      * Legacy {@code worldSendSound(World, Location, SoundType)}: a world-audible sound with no
-     * explicit category (Bukkit defaulted to {@link SoundCategory#MASTER}). In singleplayer this is
+     * explicit category (Bukkit defaulted to {@code SoundCategory.MASTER}). In singleplayer this is
      * equivalent to {@link #sendSound}.
      */
     public static void worldSendSound(@Nullable PlatformPlayer player, @NotNull SoundType soundType) {
@@ -95,7 +95,7 @@ public final class SoundManager {
             @NotNull SoundType soundType) {
         SoundConfig soundConfig = readyConfig(player, soundType);
         if (soundConfig != null) {
-            emit(player, soundConfig, soundType, SoundCategory.MASTER, 2.0F);
+            emit(player, soundConfig, soundType, PlatformSoundCategory.MASTER, 2.0F);
         }
     }
 
@@ -118,7 +118,7 @@ public final class SoundManager {
      * default — computes the master-scaled volume, and hands it to the platform for playback.
      */
     private static void emit(@NotNull PlatformPlayer player, @NotNull SoundConfig soundConfig,
-            @NotNull SoundType soundType, @NotNull SoundCategory soundCategory, float pitch) {
+            @NotNull SoundType soundType, @NotNull PlatformSoundCategory soundCategory, float pitch) {
         float volume = soundConfig.getVolume(soundType) * soundConfig.getMasterVolume();
         String customId = soundConfig.getSound(soundType);
         String soundId = (customId != null && !customId.isEmpty()) ? customId : soundType.id();

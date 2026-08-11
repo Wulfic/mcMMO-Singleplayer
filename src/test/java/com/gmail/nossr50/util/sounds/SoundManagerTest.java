@@ -8,8 +8,8 @@ import static org.mockito.Mockito.when;
 import com.gmail.nossr50.config.SoundConfig;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.platform.PlatformSoundCategory;
 import java.nio.file.Path;
-import net.minecraft.sound.SoundCategory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,24 +43,24 @@ class SoundManagerTest {
         // LEVEL_UP in sounds.yml: Volume 0.3, Pitch 0.5, MasterVolume 1.0.
         SoundManager.sendSound(player, SoundType.LEVEL_UP);
 
-        verify(player).playSound("minecraft:entity.player.levelup", SoundCategory.MASTER, 0.3F, 0.5F);
+        verify(player).playSound("minecraft:entity.player.levelup", PlatformSoundCategory.MASTER, 0.3F, 0.5F);
     }
 
     @Test
     void sendCategorizedSoundUsesGivenCategory() {
         // ANVIL in sounds.yml: Volume 1.0, Pitch 0.3.
-        SoundManager.sendCategorizedSound(player, SoundType.ANVIL, SoundCategory.BLOCKS);
+        SoundManager.sendCategorizedSound(player, SoundType.ANVIL, PlatformSoundCategory.BLOCKS);
 
-        verify(player).playSound("minecraft:block.anvil.place", SoundCategory.BLOCKS, 1.0F, 0.3F);
+        verify(player).playSound("minecraft:block.anvil.place", PlatformSoundCategory.BLOCKS, 1.0F, 0.3F);
     }
 
     @Test
     void pitchModifierIsClampedToTwo() {
         // DEFLECT_ARROWS base pitch is 2.0; +1.0 must clamp to 2.0, not 3.0.
-        SoundManager.sendCategorizedSound(player, SoundType.DEFLECT_ARROWS, SoundCategory.PLAYERS,
+        SoundManager.sendCategorizedSound(player, SoundType.DEFLECT_ARROWS, PlatformSoundCategory.PLAYERS,
                 1.0F);
 
-        verify(player).playSound("minecraft:entity.ender_eye.death", SoundCategory.PLAYERS, 1.0F,
+        verify(player).playSound("minecraft:entity.ender_eye.death", PlatformSoundCategory.PLAYERS, 1.0F,
                 2.0F);
     }
 
@@ -69,7 +69,7 @@ class SoundManagerTest {
         // LEVEL_UP volume 0.3 kept, pitch forced to 2.0.
         SoundManager.worldSendSoundMaxPitch(player, SoundType.LEVEL_UP);
 
-        verify(player).playSound("minecraft:entity.player.levelup", SoundCategory.MASTER, 0.3F, 2.0F);
+        verify(player).playSound("minecraft:entity.player.levelup", PlatformSoundCategory.MASTER, 0.3F, 2.0F);
     }
 
     @Test
@@ -111,6 +111,6 @@ class SoundManagerTest {
         SoundManager.sendSound(player, SoundType.LEVEL_UP);
 
         // 0.5 (volume) * 0.5 (master) = 0.25, and the custom id replaces the SoundType default.
-        verify(player).playSound("minecraft:ui.button.click", SoundCategory.MASTER, 0.25F, 1.0F);
+        verify(player).playSound("minecraft:ui.button.click", PlatformSoundCategory.MASTER, 0.25F, 1.0F);
     }
 }

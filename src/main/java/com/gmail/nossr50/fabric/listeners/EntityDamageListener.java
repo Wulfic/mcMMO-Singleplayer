@@ -65,7 +65,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
-import net.minecraft.sound.SoundCategory;
+import com.gmail.nossr50.platform.PlatformSoundCategory;
 
 /**
  * The K1/K2 damage hook: mcMMO's window into the vanilla damage pipeline. Driven by a mixin on
@@ -1754,7 +1754,7 @@ public final class EntityDamageListener {
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
                 result.isGraceful() ? "Agility.Ability.Proc" : "Agility.Roll.Text");
         SoundManager.sendCategorizedSound(mmoPlayer.getPlayer(), SoundType.ROLL_ACTIVATED,
-                SoundCategory.PLAYERS, 0.5F);
+                PlatformSoundCategory.PLAYERS, 0.5F);
         return (float) result.getModifiedDamage();
     }
 
