@@ -7,7 +7,7 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.CancellableRunnable;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.NotificationManager;
-import com.gmail.nossr50.util.skills.ParticleEffectUtils;
+import com.gmail.nossr50.platform.ParticleEffectUtils;
 import com.gmail.nossr50.util.skills.PerksUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
 

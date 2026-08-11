@@ -3,7 +3,7 @@ package com.gmail.nossr50.fabric.mixin;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.MetadataStore;
-import com.gmail.nossr50.util.skills.CombatUtils;
+import com.gmail.nossr50.platform.CombatUtils;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.EndermanEntity;
 import net.minecraft.entity.mob.EndermiteEntity;

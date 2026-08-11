@@ -457,7 +457,7 @@ public class SkillTools {
     // Bukkit Player + Permissions; permission model is reworked for singleplayer in Phase 6.
 
     // PORT §C: canCombatSkillsTrigger(PrimarySkillType, Entity) now lives on the MC-typed
-    // util/skills/CombatUtils — deciding "player or tamed" needs the entity types, which this
+    // platform/CombatUtils — deciding "player or tamed" needs the entity types, which this
     // MC-free class cannot hold. It still reads the switches through getPVPEnabled/getPVEEnabled
     // below.
 

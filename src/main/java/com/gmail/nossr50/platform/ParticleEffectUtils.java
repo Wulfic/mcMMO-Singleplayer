@@ -1,4 +1,4 @@
-package com.gmail.nossr50.util.skills;
+package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.fabric.McMMOMod;

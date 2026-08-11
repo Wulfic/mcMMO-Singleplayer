@@ -1,4 +1,4 @@
-package com.gmail.nossr50.util;
+package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.util.text.ConfigStringUtils;

@@ -1,4 +1,4 @@
-package com.gmail.nossr50.util;
+package com.gmail.nossr50.platform;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.gmail.nossr50.datatypes.mobs.MobOrigin;
 import com.gmail.nossr50.fabric.McMMOAttachments;
+import com.gmail.nossr50.util.McTestRegistries;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.SpawnReason;
 import net.minecraft.entity.decoration.ArmorStandEntity;

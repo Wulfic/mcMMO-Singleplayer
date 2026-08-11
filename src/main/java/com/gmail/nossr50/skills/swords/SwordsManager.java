@@ -149,7 +149,7 @@ public class SwordsManager extends SkillManager {
      * Ports the arithmetic half of legacy {@code SwordsManager#serratedStrikes}, which passed
      * {@code damage / Swords.serratedStrikesModifier} to {@code CombatUtils#applyAbilityAoE}; the
      * MC-typed half — finding the nearby entities and dealing the damage — lives in
-     * {@link com.gmail.nossr50.util.skills.CombatUtils#applyAbilityAoE}.
+     * {@link com.gmail.nossr50.platform.CombatUtils#applyAbilityAoE}.
      *
      * <p>Unlike Skull Splitter, this is <em>not</em> scaled by attack strength: legacy scales only
      * the Axes one. Deliberate asymmetry, preserved.

@@ -1,4 +1,4 @@
-package com.gmail.nossr50.util;
+package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.datatypes.mobs.MobOrigin;
 import com.gmail.nossr50.fabric.McMMOAttachments;

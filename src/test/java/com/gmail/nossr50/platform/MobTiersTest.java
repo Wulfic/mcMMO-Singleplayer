@@ -1,4 +1,4 @@
-package com.gmail.nossr50.util;
+package com.gmail.nossr50.platform;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.hunter.HunterManager;
+import com.gmail.nossr50.util.McTestRegistries;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;

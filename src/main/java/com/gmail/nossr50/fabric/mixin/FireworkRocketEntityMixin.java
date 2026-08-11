@@ -1,7 +1,7 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.platform.MetadataStore;
-import com.gmail.nossr50.util.skills.ParticleEffectUtils;
+import com.gmail.nossr50.platform.ParticleEffectUtils;
 import net.minecraft.entity.projectile.FireworkRocketEntity;
 import net.minecraft.server.world.ServerWorld;
 import org.spongepowered.asm.mixin.Mixin;

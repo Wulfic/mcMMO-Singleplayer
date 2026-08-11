@@ -35,7 +35,7 @@ import org.jetbrains.annotations.Nullable;
  *
  * <p>The <b>fired-from distance bonus</b> now lives here too (see {@link #markFiredFrom} /
  * {@link #distanceXpBonusMultiplier}), unblocked by the move to per-hit combat XP (see
- * {@link com.gmail.nossr50.util.skills.CombatUtils#processCombatXP}) — it is a per-hit XP multiplier
+ * {@link com.gmail.nossr50.platform.CombatUtils#processCombatXP}) — it is a per-hit XP multiplier
  * and had nothing to multiply while the port paid per kill. Legacy stamped a Bukkit {@code Location}
  * on the arrow's metadata; the MC-free equivalent is {@link FiredFrom}, which carries exactly the two
  * things the multiplier asks of that Location — its world, and its coordinates. Keeping it MC-free is

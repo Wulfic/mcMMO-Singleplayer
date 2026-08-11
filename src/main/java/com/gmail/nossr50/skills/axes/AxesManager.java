@@ -13,7 +13,7 @@ import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
-import com.gmail.nossr50.util.skills.ParticleEffectUtils;
+import com.gmail.nossr50.platform.ParticleEffectUtils;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
 import org.jetbrains.annotations.NotNull;
@@ -89,7 +89,7 @@ public class AxesManager extends SkillManager {
      * {@code (damage / Axes.skullSplitterModifier) * attackStrength} to
      * {@code CombatUtils#applyAbilityAoE}; the MC-typed half — finding the nearby entities and
      * dealing the damage — lives in
-     * {@link com.gmail.nossr50.util.skills.CombatUtils#applyAbilityAoE}.
+     * {@link com.gmail.nossr50.platform.CombatUtils#applyAbilityAoE}.
      *
      * <p>Legacy scales this by the attack-cooldown charge but does <em>not</em> scale the Swords
      * (Serrated Strikes) equivalent. Deliberate asymmetry, preserved.

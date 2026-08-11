@@ -10,7 +10,7 @@ import org.jetbrains.annotations.NotNull;
  * {@code CombatUtils#processCombatXP} and {@code runnables/skills/AwardCombatXpTask} so it is
  * server-free and unit-testable against the real bundled {@code experience.yml}. The MC-typed half —
  * resolving the victim's type, category and remaining health — is
- * {@link com.gmail.nossr50.util.skills.CombatUtils#processCombatXP}.
+ * {@link com.gmail.nossr50.platform.CombatUtils#processCombatXP}.
  *
  * <h2>Per-hit, not per-kill</h2>
  * mcMMO pays combat XP on <em>every hit</em>, proportional to the damage that hit actually lands:

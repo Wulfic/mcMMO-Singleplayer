@@ -35,7 +35,7 @@ import net.minecraft.server.world.ServerWorld;
  * <ul>
  *   <li>{@code METADATA_KEY_ARROW_DISTANCE} / {@code METADATA_KEY_BOW_FORCE} — both feed
  *       <em>per-hit</em> Archery XP multipliers. Both are now ported onto the per-hit XP model (see
- *       {@link com.gmail.nossr50.util.skills.CombatUtils#processCombatXP}): the distance stamp is set
+ *       {@link com.gmail.nossr50.platform.CombatUtils#processCombatXP}): the distance stamp is set
  *       above, and the draw-force stamp rides {@code BowShootMixin} (vanilla fires no shoot event).</li>
  *   <li>{@code METADATA_KEY_MULTI_SHOT_ARROW} — write-only <em>upstream too</em>: legacy sets it here
  *       and nothing anywhere reads it (see the §F note in CONVERSION_TODO).</li>

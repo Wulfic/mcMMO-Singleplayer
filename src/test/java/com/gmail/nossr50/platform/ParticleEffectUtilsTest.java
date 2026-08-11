@@ -1,4 +1,4 @@
-package com.gmail.nossr50.util.skills;
+package com.gmail.nossr50.platform;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

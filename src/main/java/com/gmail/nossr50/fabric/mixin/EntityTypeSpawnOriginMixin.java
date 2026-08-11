@@ -1,6 +1,6 @@
 package com.gmail.nossr50.fabric.mixin;
 
-import com.gmail.nossr50.util.MobOrigins;
+import com.gmail.nossr50.platform.MobOrigins;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.SpawnReason;

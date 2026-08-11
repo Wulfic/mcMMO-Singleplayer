@@ -4,7 +4,7 @@ import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.util.CancellableRunnable;
 import com.gmail.nossr50.util.LogUtils;
-import com.gmail.nossr50.util.skills.ParticleEffectUtils;
+import com.gmail.nossr50.platform.ParticleEffectUtils;
 import org.jetbrains.annotations.NotNull;
 
 /**

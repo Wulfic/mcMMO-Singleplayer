@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.woodcutting;
+package com.gmail.nossr50.platform.skills;
 
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
@@ -9,8 +9,10 @@ import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.BlockDrops;
 import com.gmail.nossr50.platform.PlatformItem;
+import com.gmail.nossr50.skills.woodcutting.TreeFellerTraversal;
 import com.gmail.nossr50.skills.woodcutting.TreeFellerTraversal.FelledBlock;
 import com.gmail.nossr50.skills.woodcutting.TreeFellerTraversal.TreeBlockType;
+import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.random.ProbabilityUtil;

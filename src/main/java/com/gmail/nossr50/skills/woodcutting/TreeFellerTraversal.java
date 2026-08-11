@@ -14,12 +14,15 @@ import org.jetbrains.annotations.NotNull;
  * Bukkit {@code Block}/{@code BlockFace} world into integer space so the (fiddly, load-bearing)
  * trunk-vs-branch search + threshold cutoff can be unit-tested without a live world. The MC-typed
  * half — reading block states, breaking blocks, spawning drops/XP — lives in
- * {@link TreeFellerProcessor}, which supplies the {@link BlockClassifier} over a real world.
+ * {@code platform.skills.TreeFellerProcessor}, which supplies the {@link BlockClassifier} over a
+ * real world. That name is deliberately {@code @code} rather than {@code @link}: Phase 2 sealed the
+ * {@code net.minecraft} boundary, and an MC-free class must not acquire an import of a
+ * {@code platform/} one just to satisfy a javadoc reference.
  *
  * <p>Legacy {@code processTreeFellerTargetBlock} excludes blocks the {@code UserBlockTracker} marks
  * ineligible (player-placed, to stop XP farming) by returning false for them — neither felling nor
- * rewarding them. That is now honoured through the classifier: {@link TreeFellerProcessor}'s classify
- * returns {@code OTHER} for a hand-placed block, so this traversal skips it and never recurses through
+ * rewarding them. That is now honoured through the classifier: the processor's classify returns
+ * {@code OTHER} for a hand-placed block, so this traversal skips it and never recurses through
  * it, exactly as legacy's {@code return false} did.
  */
 public final class TreeFellerTraversal {

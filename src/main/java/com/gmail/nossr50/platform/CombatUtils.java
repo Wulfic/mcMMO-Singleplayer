@@ -1,4 +1,4 @@
-package com.gmail.nossr50.util.skills;
+package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
@@ -10,7 +10,7 @@ import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.CombatXp;
 import com.gmail.nossr50.platform.ItemUtils;
-import com.gmail.nossr50.util.MobOrigins;
+import com.gmail.nossr50.platform.MobOrigins;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.Tameable;
@@ -115,7 +115,7 @@ public final class CombatUtils {
      * Whether a combat skill is allowed to act on {@code target} at all, per the operator's
      * {@code Enabled_For_PVP} / {@code Enabled_For_PVE} switches. Restores legacy
      * {@code SkillTools#canCombatSkillsTrigger}, which was dropped at Phase 10 for want of an entity
-     * adapter (see the breadcrumb in {@link SkillTools}); it lives here rather than back on the
+     * adapter (see the breadcrumb in {@code SkillTools}); it lives here rather than back on the
      * MC-free {@code SkillTools} because deciding "player or tamed" needs the MC types.
      *
      * <p>{@code target} is the entity the skill <em>acts upon</em> — the victim of the player's swing

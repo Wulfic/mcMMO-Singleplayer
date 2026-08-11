@@ -147,11 +147,17 @@ public class WoodcuttingManager extends SkillManager {
      * already processed this Tree Feller, but only when the {@code TreeFellerReducedXP} exploit toggle
      * is on, and never below 1 (unless the log's raw XP is already 0).
      *
+     * <p>Public rather than package-private because Phase 2 moved its only production caller,
+     * {@code platform.skills.TreeFellerProcessor}, out of this package when the {@code net.minecraft}
+     * boundary was sealed. Widening the visibility is the honest cost of that move: the alternative
+     * — keeping an MC-typed class in an otherwise MC-free package to preserve an access modifier —
+     * is the trade Phase 2 exists to refuse.
+     *
      * @param materialConfigString the log's config-material string (e.g. {@code "Oak_Log"})
      * @param woodCount how many logs have already given out XP for this Tree Feller
      * @return amount of experience
      */
-    static int processTreeFellerXPGains(@NotNull String materialConfigString, int woodCount) {
+    public static int processTreeFellerXPGains(@NotNull String materialConfigString, int woodCount) {
         final int rawXP = getExperienceFromLog(materialConfigString);
 
         if (rawXP <= 0) {
