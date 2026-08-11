@@ -12,13 +12,12 @@ import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.platform.CombatUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.passive.CopperGolemEntity;
 import net.minecraft.entity.passive.IronGolemEntity;
-import net.minecraft.entity.passive.SnowGolemEntity;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import com.gmail.nossr50.platform.PlatformSoundCategory;
@@ -278,8 +277,8 @@ public final class HunterListener {
      * Whether this creature only exists because a player made it — the third half of gate 3.
      *
      * <h2>⚠️ The three constructed golems all reach this listener as ordinary kills</h2>
-     * {@code CarvedPumpkinBlock#trySpawnEntity} builds the snow golem, the iron golem and (new in
-     * 1.21.11) the copper golem, and it creates all three with {@code SpawnReason.TRIGGERED}. Stage 1
+     * {@code CarvedPumpkinBlock#trySpawnEntity} builds the snow golem, the iron golem and the copper
+     * golem, and it creates all three with {@code SpawnReason.TRIGGERED}. Stage 1
      * maps {@code TRIGGERED} to {@link com.gmail.nossr50.datatypes.mobs.MobOrigin#NATURAL}, so the
      * spawn-origin gate lets every one of them through — and that mapping is <b>correct and must not
      * change</b>, because {@code TRIGGERED} is also how a warden emerges from a sculk shrieker, how
@@ -305,8 +304,35 @@ public final class HunterListener {
         if (victim instanceof IronGolemEntity golem) {
             return golem.isPlayerCreated();
         }
-        return victim instanceof SnowGolemEntity || victim instanceof CopperGolemEntity;
+        return MANUFACTURED_SPECIES.contains(masteryKeyOf(victim));
     }
+
+    /**
+     * The species a player <em>builds</em> rather than finds, keyed by exactly the registry id
+     * {@link #masteryKeyOf} files a kill under.
+     *
+     * <h2>🔑 Keyed by id, not by {@code instanceof} — a multi-version requirement, not a style call</h2>
+     * The copper golem is not in every Minecraft version this mod supports, so
+     * {@code net.minecraft.entity.passive.CopperGolemEntity} is not always a class that exists to be
+     * named. Where it does not, {@code victim instanceof CopperGolemEntity} is a <b>compile error</b>
+     * that takes the whole build down — not a check that quietly answers false. That single class
+     * reference was the only reason this file could not build on the older bands.
+     *
+     * <p>An id keeps the question answerable on every version without asking the compiler for a type
+     * that may not be there: on a version with no copper golem, nothing is registered under that id,
+     * so nothing ever matches — which is the correct answer, arrived at by the same code path.
+     *
+     * <p>⚠️ <b>Full namespaced ids, never bare paths.</b> Another mod's {@code othermod:snow_golem}
+     * is its own creature and must not be swept up by mcMMO's dispenser-loop rule. This is the same
+     * reason {@link #masteryKeyOf} keys on the full id, and using literally that function here is
+     * what keeps the exclusion and the counter from ever disagreeing about what a species is.
+     *
+     * <p>The iron golem deliberately stays an {@code instanceof} above: that arm tests
+     * {@code isPlayerCreated()}, a <em>behaviour</em> of the individual rather than an identity of
+     * the species, and {@code IronGolemEntity} exists on every supported version anyway.
+     */
+    private static final Set<String> MANUFACTURED_SPECIES =
+            Set.of("minecraft:snow_golem", "minecraft:copper_golem");
 
     /**
      * The key one creature's mastery is filed under: its <b>full</b> registry id, namespace included

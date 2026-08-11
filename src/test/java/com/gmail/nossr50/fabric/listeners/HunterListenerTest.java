@@ -39,7 +39,6 @@ import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.mob.CreeperEntity;
 import net.minecraft.entity.mob.ZombieEntity;
 import net.minecraft.entity.passive.ChickenEntity;
-import net.minecraft.entity.passive.CopperGolemEntity;
 import net.minecraft.entity.passive.IronGolemEntity;
 import net.minecraft.entity.passive.SnowGolemEntity;
 import net.minecraft.entity.passive.WolfEntity;
@@ -479,11 +478,31 @@ class HunterListenerTest {
         //
         // Before stage 5 the leak was worth nothing (bonus damage against a mob you manufacture).
         // Paying skill XP is what makes a dispenser loop an exploit.
+        //
+        // The snow golem half runs on every supported Minecraft version, and since the exclusion is
+        // keyed by registry id both golems now take the identical code path -- so this half is
+        // permanent proof that the id-keyed rule works, and the coverage does not lapse on a band
+        // that has no copper golem.
         HunterListener.onDeath(snowGolem(), killedBy(killer));
-        HunterListener.onDeath(copperGolem(), killedBy(killer));
-
         assertEquals(0, killsOf("minecraft:snow_golem"));
-        assertEquals(0, killsOf("minecraft:copper_golem"));
+
+        // The copper golem is resolved through the registry rather than named as
+        // EntityType.COPPER_GOLEM / CopperGolemEntity. It does not exist on every supported version,
+        // and there naming either one fails the BUILD rather than the assertion -- the whole test
+        // tree stops compiling, exactly as Items.IRON_SPEAR did on mc/1.21.10.
+        final LivingEntity copperGolem = copperGolem();
+        if (copperGolem == null) {
+            // Absence is ASSERTED, never skipped. The one way this observation lies is a bootstrap
+            // that never populated anything, in which case "no copper golem" is not a fact about
+            // Minecraft at all -- so that is the thing ruled out.
+            assertTrue(McTestRegistries.entityTypeRegistryIsPopulated(),
+                    "copper_golem does not resolve AND the entity registry looks empty — that is a "
+                            + "broken bootstrap, not a Minecraft version without copper golems");
+        } else {
+            HunterListener.onDeath(copperGolem, killedBy(killer));
+            assertEquals(0, killsOf("minecraft:copper_golem"));
+        }
+
         verify(mmoPlayer, never()).beginXpGain(any(), anyFloat(), any(), any());
     }
 
@@ -511,11 +530,28 @@ class HunterListenerTest {
         return golem;
     }
 
-    private CopperGolemEntity copperGolem() {
-        final CopperGolemEntity golem = mock(CopperGolemEntity.class);
-        Mockito.doReturn(EntityType.COPPER_GOLEM).when(golem).getType();
-        lenient().when(golem.getUuid()).thenReturn(UUID.randomUUID());
-        return golem;
+    /**
+     * A stand-in copper golem, or {@code null} on a Minecraft version that has none.
+     *
+     * <p>Mocks the plain {@link LivingEntity} rather than {@code CopperGolemEntity}, because naming
+     * that class is a compile error below the version it arrives in. Nothing is lost by it: since the
+     * exclusion is keyed by {@code getType()}'s registry id and no longer by {@code instanceof}, the
+     * concrete Java class was never what the rule read.
+     *
+     * <p>⚠️ The type comes from {@code containsId}-guarded lookup, never a bare {@code get}.
+     * {@code Registries.ENTITY_TYPE} defaults to {@code PIG}, so an unguarded lookup on a version
+     * without copper golems would hand back a pig and this test would pass while proving that pigs
+     * earn no Hunter XP — which is false. See {@code McTestRegistries#optionalVanillaEntityType}.
+     */
+    private LivingEntity copperGolem() {
+        return McTestRegistries.optionalVanillaEntityType("copper_golem")
+                .map(type -> {
+                    final LivingEntity golem = mock(LivingEntity.class);
+                    Mockito.doReturn(type).when(golem).getType();
+                    lenient().when(golem.getUuid()).thenReturn(UUID.randomUUID());
+                    return golem;
+                })
+                .orElse(null);
     }
 
     /** Put the counter one below a threshold without going through the listener's gates. */

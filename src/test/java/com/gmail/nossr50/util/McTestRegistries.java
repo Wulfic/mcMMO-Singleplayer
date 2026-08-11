@@ -3,6 +3,7 @@ package com.gmail.nossr50.util;
 import java.util.Optional;
 import net.minecraft.Bootstrap;
 import net.minecraft.SharedConstants;
+import net.minecraft.entity.EntityType;
 import net.minecraft.item.Item;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
@@ -65,5 +66,43 @@ public final class McTestRegistries {
     public static boolean itemRegistryIsPopulated() {
         return Registries.ITEM.containsId(Identifier.ofVanilla("iron_sword"))
                 && Registries.ITEM.containsId(Identifier.ofVanilla("stone"));
+    }
+
+    /**
+     * The vanilla entity type with this id path, or empty if <em>this</em> Minecraft version does not
+     * have it — {@link #optionalVanillaItem} for creatures.
+     *
+     * <p>The live case is the copper golem, which arrives part-way through the supported range. Below
+     * that, {@code EntityType.COPPER_GOLEM} and {@code CopperGolemEntity} are both a compile error
+     * rather than a failing assertion, so a test that names either cannot be built from one source
+     * tree across bands.
+     *
+     * <p>⚠️⚠️ <b>{@code containsId} first — and here that is not merely good practice, it is the
+     * exact trap this mod already shipped once.</b> {@code Registries.ENTITY_TYPE} is a
+     * <em>defaulted</em> registry whose default is {@code PIG}, so {@code get} on an unknown id
+     * hands back a perfectly valid pig. A test resolving {@code copper_golem} on a version without
+     * one would therefore receive a pig, stub it as the victim, and assert happily that mcMMO
+     * excluded a "copper golem" from Hunter XP — while actually proving that <b>pigs pay nothing</b>,
+     * which is false and would have gone green. That is the same defaulted-registry bug that made
+     * every unrecognised mob id a pig in Hunter's own first cut.
+     */
+    public static Optional<EntityType<?>> optionalVanillaEntityType(String path) {
+        final Identifier id = Identifier.ofVanilla(path);
+        return Registries.ENTITY_TYPE.containsId(id)
+                ? Optional.of(Registries.ENTITY_TYPE.get(id))
+                : Optional.empty();
+    }
+
+    /**
+     * True if the entity-type registry actually populated.
+     *
+     * <p>The {@link #itemRegistryIsPopulated} argument, for the other registry: "this version has no
+     * copper golem" and "the bootstrap never ran" are the same observation from the outside, so a
+     * test concluding anything from an absence has to rule the second out first. {@code zombie} and
+     * {@code cow} are chosen because they predate every version in scope by roughly a decade.
+     */
+    public static boolean entityTypeRegistryIsPopulated() {
+        return Registries.ENTITY_TYPE.containsId(Identifier.ofVanilla("zombie"))
+                && Registries.ENTITY_TYPE.containsId(Identifier.ofVanilla("cow"));
     }
 }

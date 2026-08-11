@@ -349,6 +349,42 @@ class EntityDamageListenerHunterTest {
                 mock(ArmorStandEntity.class), melee(), 10F), EPSILON);
     }
 
+    /**
+     * The mannequin half of the same rule, and the only test that covers it at all.
+     *
+     * <p>It exists because the check was rewritten from {@code instanceof MannequinEntity} to a
+     * registry-id comparison so that this file still compiles on a Minecraft version without
+     * mannequins — and that rewrite was, until this test, changing behaviour nothing asserted. A
+     * silent behaviour change to an untested exclusion is how a target dummy quietly becomes an
+     * infinite XP source.
+     *
+     * <p>Resolved through the registry rather than named as {@code MannequinEntity}: naming the class
+     * is a compile error on the versions this whole change is about, which would defeat the point.
+     *
+     * <p>Its converse — that the rule still lets an ordinary creature through, so an
+     * {@code isTargetDummy} stuck at {@code true} could not pass this — is already carried by
+     * {@link #aMasteredCreatureTakesTheFlatBonus}, which asserts a zombie's full payout through this
+     * same method. Not duplicated here.
+     */
+    @Test
+    void aMannequinIsNotAHuntEither() {
+        seedKills("minecraft:mannequin", TOP_TIER_KILLS);
+
+        final var mannequinType = McTestRegistries.optionalVanillaEntityType("mannequin");
+        if (mannequinType.isEmpty()) {
+            // Absence asserted, never skipped — and the one alternative explanation ruled out.
+            assertTrue(McTestRegistries.entityTypeRegistryIsPopulated(),
+                    "mannequin does not resolve AND the entity registry looks empty — that is a "
+                            + "broken bootstrap, not a Minecraft version without mannequins");
+            return;
+        }
+        final LivingEntity mannequin = mock(LivingEntity.class);
+        Mockito.doReturn(mannequinType.get()).when(mannequin).getType();
+
+        assertEquals(10F, EntityDamageListener.applyHunterMastery(mannequin, melee(), 10F), EPSILON,
+                "a mannequin is a decoration, not quarry — mastery must not pay out against one");
+    }
+
     @Test
     void theEnabledForPveSwitchMutesTheBonusToo() {
         // The switch has to reach both halves of the skill. Muting only the counter would leave an

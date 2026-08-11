@@ -81,7 +81,6 @@ CLASS	net.minecraft.entity.damage.DamageSource
 CLASS	net.minecraft.entity.damage.DamageSources
 CLASS	net.minecraft.entity.damage.DamageTypes
 CLASS	net.minecraft.entity.decoration.ArmorStandEntity
-CLASS	net.minecraft.entity.decoration.MannequinEntity
 CLASS	net.minecraft.entity.effect.StatusEffect
 CLASS	net.minecraft.entity.effect.StatusEffectInstance
 CLASS	net.minecraft.entity.effect.StatusEffects
@@ -98,7 +97,6 @@ CLASS	net.minecraft.entity.passive.AnimalEntity
 CLASS	net.minecraft.entity.passive.ArmadilloEntity
 CLASS	net.minecraft.entity.passive.CatEntity
 CLASS	net.minecraft.entity.passive.ChickenEntity
-CLASS	net.minecraft.entity.passive.CopperGolemEntity
 CLASS	net.minecraft.entity.passive.CowEntity
 CLASS	net.minecraft.entity.passive.GoatEntity
 CLASS	net.minecraft.entity.passive.HorseEntity
@@ -330,7 +328,6 @@ STATICFIELD	net.minecraft.enchantment.Enchantments#UNBREAKING
 STATICFIELD	net.minecraft.entity.EntityType#BLAZE
 STATICFIELD	net.minecraft.entity.EntityType#CAT
 STATICFIELD	net.minecraft.entity.EntityType#CHICKEN
-STATICFIELD	net.minecraft.entity.EntityType#COPPER_GOLEM
 STATICFIELD	net.minecraft.entity.EntityType#COW
 STATICFIELD	net.minecraft.entity.EntityType#CREEPER
 STATICFIELD	net.minecraft.entity.EntityType#ENDER_DRAGON
