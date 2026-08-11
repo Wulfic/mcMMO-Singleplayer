@@ -151,8 +151,6 @@ CLASS	net.minecraft.screen.slot.CraftingResultSlot
 CLASS	net.minecraft.screen.slot.FurnaceOutputSlot
 CLASS	net.minecraft.server.MinecraftServer
 CLASS	net.minecraft.server.command.CommandManager
-CLASS	net.minecraft.server.command.CommandManager.argument
-CLASS	net.minecraft.server.command.CommandManager.literal
 CLASS	net.minecraft.server.command.ServerCommandSource
 CLASS	net.minecraft.server.network.ServerPlayerEntity
 CLASS	net.minecraft.server.world.ServerWorld
@@ -267,3 +265,5 @@ MIXINCLASS	net.minecraft.item.HoeItem
 MIXINCLASS	net.minecraft.screen.slot.CraftingResultSlot
 MIXINCLASS	net.minecraft.screen.slot.FurnaceOutputSlot
 MIXINCLASS	net.minecraft.world.explosion.ExplosionImpl
+STATICMEMBER	net.minecraft.server.command.CommandManager#argument
+STATICMEMBER	net.minecraft.server.command.CommandManager#literal

@@ -338,8 +338,12 @@ The touched surface is finite and already counted:
 - [x] 1.1 Extract the symbol surface into a machine-readable manifest
       → `scripts/extract-mc-surface.py` (regeneratable; `--check` enforces the acceptance criteria).
       - [x] 1.1a the `import net.minecraft.*` symbols out of `src/main/java`
-            → **164 distinct, not 162.** The doc's count was already stale; the script recounts on
-            every run so it cannot drift again.
+            → **162 `CLASS` + 2 `STATICMEMBER` = 164 import lines.** ⚠️ I first reported "164, the
+            doc's 162 is stale" — **the doc was right and I was wrong.** Two of the 164 are
+            `import static …CommandManager.{literal,argument}`, which are *method* imports, not
+            types. Filing them as classes made the probe report them ABSENT on **every** version
+            including the one the mod compiles against. 🔑 *A static import is not a class; counting
+            import lines is not counting types.*
       - [x] 1.1b Every mixin `@Mixin` target, `method =` value, `@At target =` constant, plus
             `@Accessor`/`@Invoker` bindings (not required by the doc, same fragility, free to collect)
       - [x] 1.1c Emit `scripts/mc-surface.txt` — `TYPE<TAB>VALUE`, one record per line
@@ -388,29 +392,63 @@ The touched surface is finite and already counted:
             | `1.21.4` | `1.21.4+build.8` | `1.21.10` | `1.21.10+build.3` |
             | `1.21.5` | `1.21.5+build.1` | `1.21.11` | `1.21.11+build.6` |
             | | | `26.1`–`26.2` | **none exist** |
-      - [ ] Write `scripts/probe-bands.sh`: for each version, force Loom to resolve the jar, then
-            resolve every line of `mc-surface.txt` against it; record PRESENT / ABSENT / SIGNATURE
-      - [ ] Emit `plans/BAND_TABLE.md` — a 16-row matrix of the ~215 symbols
-      - **Acceptance:** zero UNKNOWN rows. Every symbol resolves to a definite state on every
-        version, or the probe is broken and must be fixed before proceeding.
+      - [x] `scripts/probe-bands.py` (Python, not `.sh` — the javap parsing and hierarchy walk are
+            not shell work). All 12 resolved via a throwaway Loom project, **12 OK / 0 FAILED**.
+      - [x] Emit `plans/BAND_TABLE.md` + `plans/BAND_TABLE.json` (raw cache, so re-analysis is
+            instant instead of a 20-minute re-probe)
+      - **Acceptance: PASS — zero UNKNOWN rows.** All 266 records resolve to a definite state on
+        all 12 versions.
 
-- [ ] 1.4 Collapse into bands and publish the ruling
-      - [ ] Group versions with identical resolution; name each band by its newest member
-      - [ ] For each band boundary, record **which specific symbols changed** — that list *is* the
-            port work for that band
-      - [ ] Expected 4–6 bands. If it comes out 12+, escalate: the scope is not viable as stated
-            and the target list must be cut before any more work happens.
+      🔑🔑 **The probe carries its own converse check and it is the reason to trust the output.**
+      `--control 1.21.11` asserts that the version the mod demonstrably compiles and boots against
+      resolves **100% of records**; any ABSENT there is a bug in the probe, not a fact about
+      Minecraft, and the run exits 3. **The first draft failed it with 6 false ABSENTs**, all real
+      defects: static member imports filed as classes, nested types written `Outer.Inner` instead
+      of `Outer$Inner`, and — the subtle one — **`javap` never lists inherited members**, so
+      `BlockState#onExploded` (declared on `AbstractBlock.AbstractBlockState`) and
+      `WorldAccess#setBlockState` (from `ModifiableWorld`) read as absent until the probe walked
+      the supertype closure. Without the control check those 6 would have shipped as "port work"
+      on every band. *A probe with no known-good baseline is indistinguishable from a broken one.*
 
-- [ ] 1.5 Sanity-check the two suspected cliffs
-      - [ ] **Component API churn** — the mod uses `ConsumableComponent`, `FoodComponent`,
-            `PotionContentsComponent`, `FireworksComponent`, `ItemEnchantmentsComponent`,
-            `NbtComponent`, `LoreComponent`, `DataComponentTypes`. Early `1.21.x` predates much of
-            this. Find the exact version where the eating seam (`FoodComponentMixin`, behind
-            Farmer's/Fisherman's Diet) stops resolving. Expect a **reimplementation**, not a directive.
-      - [ ] **`1.21.11` → `26.1`** — the first cross-scheme hop. Verify it is an ordinary bump.
+- [x] 1.4 Collapse into bands and publish the ruling
+      - [x] **6 bands** — inside the expected 4–6, nowhere near the 12+ escalation trigger (R1 clear)
 
-**Phase 1 output is the deliverable that makes the rest of this document estimable. Do not start
-Phase 3 without `BAND_TABLE.md`.**
+      | Band | Versions | Records differing from `1.21.11` | In scope under R-b? |
+      |---|---|---|---|
+      | `1.21.1` | `1.21`, `1.21.1` | **35** | ❌ below floor |
+      | `1.21.4` | `1.21.2`, `1.21.3`, `1.21.4` | **15** | ❌ below floor |
+      | `1.21.5` | `1.21.5` | **10** | ✅ |
+      | `1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | **8** | ✅ |
+      | `1.21.10` | `1.21.9`, `1.21.10` | **2** | ✅ |
+      | `1.21.11` | `1.21.11` | 0 — this is `master` | ✅ |
+
+      🎉 **Consequence: only THREE band branches to cut** — `mc/1.21.10`, `mc/1.21.8`, `mc/1.21.5`
+      — and the largest carries **10 changed records out of 266**. Under R-a that is three
+      back-ports of single-digit symbol counts, not the sprawl the risk register feared.
+      - [x] Per-boundary changed symbols are enumerated per band in `BAND_TABLE.md` §"Phase 1.4",
+            split into **absent** vs **signature-changed**. The signature-changed rows are the
+            dangerous ones: they compile-break rather than resolve-fail, and a present/absent-only
+            probe passes them silently.
+      - [x] Order for Phase 6.1, cheapest first: **`1.21.10` (2) → `1.21.8` (8) → `1.21.5` (10)**
+
+- [x] 1.5 Sanity-check the suspected cliffs
+      - [x] **Component API cliff FOUND, and it is at `1.21.2` — not `1.21.5`.**
+            `ConsumableComponent` and, decisively, **`FoodComponent#onConsume`** — the exact eating
+            seam behind Farmer's/Fisherman's Diet that this item predicted — are **ABSENT on `1.21`
+            and `1.21.1`, PRESENT from `1.21.2` onward.** The prediction was correct in kind and
+            wrong in location.
+            - ⇒ **R-b's `1.21.5` floor is safe but more conservative than the data requires.** The
+              reimplementation risk lives entirely in the `1.21`/`1.21.1` band, which is already
+              out of scope. `1.21.2`–`1.21.4` would cost 15 records and need **no** eating-seam
+              rewrite — a floor of `1.21.2` is defensible if wider support is ever wanted.
+            - Same boundary also gates `LivingEntity#travelGliding`, `#forEachShearedItem`,
+              `ExplosionImpl`, `PlayerInput`, `AbstractBoatEntity`, `EntityConversionContext`.
+      - [x] **`1.21.11` → `26.1` is NOT an ordinary bump** — it is the unobfuscation/rename
+            boundary. See the `26.x` section above. This item's own phrasing ("verify it is an
+            ordinary bump") was the assumption that hid it.
+
+**Phase 1 output is the deliverable that makes the rest of this document estimable.**
+✅ **Delivered:** `plans/BAND_TABLE.md`.
 
 ---
 

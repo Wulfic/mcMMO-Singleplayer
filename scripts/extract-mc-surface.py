@@ -51,8 +51,12 @@ REPO = Path(__file__).resolve().parent.parent
 SRC = REPO / "src" / "main" / "java"
 MIXIN_DIR = SRC / "com" / "gmail" / "nossr50" / "fabric" / "mixin"
 
-# `import net.minecraft.x.Y;` / `import static net.minecraft.x.Y.Z;`
-IMPORT_RE = re.compile(r"^import\s+(?:static\s+)?(net\.minecraft\.[A-Za-z0-9_.]+)\s*;", re.M)
+# `import net.minecraft.x.Y;`  -- a type.
+IMPORT_RE = re.compile(r"^import\s+(net\.minecraft\.[A-Za-z0-9_.]+)\s*;", re.M)
+# `import static net.minecraft.x.Y.member;` -- NOT a type. Filing these as CLASS records makes the
+# probe report them ABSENT on every version, including the one the mod demonstrably compiles
+# against, because no such class exists anywhere.
+STATIC_IMPORT_RE = re.compile(r"^import\s+static\s+(net\.minecraft\.[A-Za-z0-9_.]+)\s*;", re.M)
 # Any import at all, so simple names inside @Mixin(...) can be resolved to an FQN.
 ANY_IMPORT_RE = re.compile(r"^import\s+(?:static\s+)?([A-Za-z0-9_.]+)\s*;", re.M)
 
@@ -152,10 +156,14 @@ def main() -> int:
 
     records: set[tuple[str, str]] = set()
 
-    # --- CLASS: every net.minecraft import across the whole main source tree ----------------
+    # --- CLASS / STATICMEMBER: every net.minecraft import across the main source tree --------
     for path in sorted(SRC.rglob("*.java")):
-        for sym in IMPORT_RE.findall(strip_comments(path.read_text(encoding="utf-8"))):
+        text = strip_comments(path.read_text(encoding="utf-8"))
+        for sym in IMPORT_RE.findall(text):
             records.add(("CLASS", sym))
+        for sym in STATIC_IMPORT_RE.findall(text):
+            owner, _, member = sym.rpartition(".")
+            records.add(("STATICMEMBER", f"{owner}#{member}"))
 
     # --- Mixin-only records, tracked per file so coverage can be asserted --------------------
     mixin_files = sorted(MIXIN_DIR.glob("*.java"))
