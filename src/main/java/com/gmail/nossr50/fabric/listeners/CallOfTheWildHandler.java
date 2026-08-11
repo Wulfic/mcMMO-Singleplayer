@@ -13,7 +13,7 @@ import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.util.skills.ParticleEffectUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
-import com.gmail.nossr50.util.text.TextUtils;
+import com.gmail.nossr50.platform.text.TextUtils;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.entity.EntityType;

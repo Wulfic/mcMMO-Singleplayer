@@ -10,7 +10,6 @@ import com.gmail.nossr50.skills.LimitBreak;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.skills.SkillTools;
 import com.gmail.nossr50.util.text.StringUtils;
-import com.gmail.nossr50.util.text.TextUtils;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
@@ -18,7 +17,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
-import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -33,10 +31,11 @@ import org.jetbrains.annotations.NotNull;
  * are always {@code false}). What remains is the informative core: the header (skill name, XP-gain
  * method, level/XP), the sub-skill list with ranks, and the bespoke per-skill effect stats.
  *
- * <p>Rendering is to a {@code Consumer<Text>} sink rather than straight to a player, so the output can
- * be captured and asserted in unit tests. Effect lines are built as legacy §-coded strings (a near
- * verbatim port of each skill's {@code statsDisplay}) and converted to vanilla {@link Text} by
- * {@link #toLine} on the way out, which normalises simplified {@code &} codes first.
+ * <p>Rendering is to a {@code Consumer<String>} sink rather than straight to a player, so the output
+ * can be captured and asserted in unit tests. Every line leaves here as a legacy section-coded
+ * ({@code §}) string — a near verbatim port of each skill's {@code statsDisplay} — and is rendered
+ * to a vanilla {@code Text} by whoever owns the sink, on the Minecraft side of the platform
+ * boundary. That keeps this class and all 28 of its subclasses Minecraft-free.
  */
 public abstract class SkillStatsRenderer {
 
@@ -98,7 +97,7 @@ public abstract class SkillStatsRenderer {
     /**
      * Render the whole screen for {@code mmoPlayer} into {@code out}, one message per line.
      */
-    public final void render(@NotNull McMMOPlayer mmoPlayer, @NotNull Consumer<Text> out) {
+    public final void render(@NotNull McMMOPlayer mmoPlayer, @NotNull Consumer<String> out) {
         this.mmoPlayer = mmoPlayer;
         final float skillValue = mmoPlayer.getSkillLevel(skill);
 
@@ -111,14 +110,14 @@ public abstract class SkillStatsRenderer {
 
     // --- shared header ------------------------------------------------------
 
-    private void sendHeader(Consumer<Text> out, float skillValue) {
+    private void sendHeader(Consumer<String> out, float skillValue) {
         final String skillName = McMMOMod.getSkillTools().getLocalizedSkillName(skill);
-        out.accept(LocaleLoader.getText("Skills.Overhaul.Header", skillName));
+        out.accept(LocaleLoader.getString("Skills.Overhaul.Header", skillName));
 
         if (!SkillTools.isChildSkill(skill)) {
-            out.accept(LocaleLoader.getText("Commands.XPGain.Overhaul", LocaleLoader.getString(
+            out.accept(LocaleLoader.getString("Commands.XPGain.Overhaul", LocaleLoader.getString(
                     "Commands.XPGain." + StringUtils.getCapitalized(skill.toString()))));
-            out.accept(LocaleLoader.getText("Effects.Level.Overhaul", (int) skillValue,
+            out.accept(LocaleLoader.getString("Effects.Level.Overhaul", (int) skillValue,
                     mmoPlayer.getProfile().getSkillXpLevel(skill),
                     mmoPlayer.getProfile().getXpToLevel(skill)));
             return;
@@ -137,9 +136,9 @@ public abstract class SkillStatsRenderer {
                 parents.append("&7, ");
             }
         }
-        out.accept(LocaleLoader.getText("Commands.XPGain.Overhaul",
+        out.accept(LocaleLoader.getString("Commands.XPGain.Overhaul",
                 LocaleLoader.getString("Commands.XPGain.Child")));
-        out.accept(LocaleLoader.getText("Effects.Child.Overhaul", (int) skillValue,
+        out.accept(LocaleLoader.getString("Effects.Child.Overhaul", (int) skillValue,
                 parents.toString()));
     }
 
@@ -150,7 +149,7 @@ public abstract class SkillStatsRenderer {
      * guide list here; singleplayer has no guide links, so this shows the more useful rank info
      * instead (the effect values follow in the stats section).
      */
-    private void sendSubSkillList(Consumer<Text> out) {
+    private void sendSubSkillList(Consumer<String> out) {
         final List<SubSkillType> subSkills =
                 new ArrayList<>(McMMOMod.getSkillTools().getSubSkills(skill));
         // Limit Break is opt-in and ships off. While it is off it adds no damage, so listing it here
@@ -163,7 +162,7 @@ public abstract class SkillStatsRenderer {
         }
         subSkills.sort(Comparator.comparing(SubSkillType::getLocaleName, String.CASE_INSENSITIVE_ORDER));
 
-        out.accept(LocaleLoader.getText("Skills.Overhaul.Header",
+        out.accept(LocaleLoader.getString("Skills.Overhaul.Header",
                 LocaleLoader.getString("Effects.SubSkills.Overhaul")));
 
         for (SubSkillType subSkill : subSkills) {
@@ -172,17 +171,18 @@ public abstract class SkillStatsRenderer {
     }
 
     /**
-     * Converts one rendered line into {@link Text}.
+     * Normalises one renderer-built line to section-sign ({@code §}) codes.
      *
-     * <p>{@link TextUtils#toText} only understands section-sign ({@code §}) codes, but renderer-built
-     * lines are written with the simplified {@code &} codes the locale files use, so they are
-     * normalised here first — without this they render as literal "{@code &8Clean Cuts}" text. Lines
-     * that came from the locale bundle have already been normalised by {@link LocaleLoader#getString},
-     * and {@link LocaleLoader#addColors} is idempotent over them (it rewrites {@code &} codes and
-     * {@code [[TOKEN]]}s, never {@code §}), so a second pass is a no-op.
+     * <p>Load-bearing, and easy to mistake for a no-op: the {@code Text} parser at the platform
+     * boundary understands <em>only</em> {@code §} codes, but renderer-built lines are written with
+     * the simplified {@code &} codes the locale files use. Without this pass they reach the player as
+     * the literal text "{@code &8Clean Cuts}". Lines that came from the locale bundle were already
+     * normalised by {@link LocaleLoader#getString}, and {@link LocaleLoader#addColors} is idempotent
+     * over them (it rewrites {@code &} codes and {@code [[TOKEN]]}s, never {@code §}), so the second
+     * pass costs nothing and covers both sources.
      */
-    private static @NotNull Text toLine(@NotNull String legacy) {
-        return TextUtils.toText(LocaleLoader.addColors(legacy));
+    private static @NotNull String toLine(@NotNull String legacy) {
+        return LocaleLoader.addColors(legacy);
     }
 
     private String subSkillLine(SubSkillType subSkill) {
@@ -200,12 +200,12 @@ public abstract class SkillStatsRenderer {
 
     // --- shared stats section -----------------------------------------------
 
-    private void sendStats(Consumer<Text> out, float skillValue) {
+    private void sendStats(Consumer<String> out, float skillValue) {
         final List<String> statsMessages = statsDisplay(skillValue);
         if (statsMessages.isEmpty()) {
             return;
         }
-        out.accept(LocaleLoader.getText("Skills.Overhaul.Header",
+        out.accept(LocaleLoader.getString("Skills.Overhaul.Header",
                 LocaleLoader.getString("Commands.Stats.Self.Overhaul")));
         for (String message : statsMessages) {
             out.accept(toLine(message));

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gmail.nossr50.platform.text.TextUtils;
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
@@ -323,9 +324,9 @@ class HunterListenerTest {
 
         HunterListener.onDeath(zombie(), killedBy(killer));
 
-        final ArgumentCaptor<Text> sent = ArgumentCaptor.forClass(Text.class);
+        final ArgumentCaptor<String> sent = ArgumentCaptor.forClass(String.class);
         verify(platformPlayer).sendMessage(sent.capture());
-        final String message = sent.getValue().getString();
+        final String message = TextUtils.toText(sent.getValue()).getString();
 
         // ⚠️ Asserted against the rendered wording ("Mastery 1"), not against a bare "1". The three
         // substitutions are a mob name, a tier and a kill count, and a bare digit search is satisfied
@@ -369,9 +370,9 @@ class HunterListenerTest {
 
             HunterListener.onDeath(creeper(), killedBy(killer));
 
-            final ArgumentCaptor<Text> sent = ArgumentCaptor.forClass(Text.class);
+            final ArgumentCaptor<String> sent = ArgumentCaptor.forClass(String.class);
             verify(platformPlayer).sendMessage(sent.capture());
-            final String message = sent.getValue().getString();
+            final String message = TextUtils.toText(sent.getValue()).getString();
             assertTrue(message.contains("Mastery " + expectedTier),
                     () -> "tier " + expectedTier + " missing from: " + message);
             assertTrue(message.contains(String.valueOf(HunterManager.MASTERY_THRESHOLDS[i])),

@@ -10,6 +10,7 @@ import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.text.TextUtils;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillGating;
 import com.gmail.nossr50.util.skills.SkillTools;
@@ -220,8 +221,10 @@ public final class McMMOCommands {
             return 1;
         }
 
+        // The renderer emits §-coded strings (it is Minecraft-free); this is the boundary where they
+        // become vanilla Text.
         SkillStatsRenderer.forSkill(skill)
-                .render(mmoPlayer, line -> source.sendFeedback(() -> line, false));
+                .render(mmoPlayer, line -> source.sendFeedback(() -> TextUtils.toText(line), false));
         return 1;
     }
 

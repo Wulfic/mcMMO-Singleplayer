@@ -36,7 +36,7 @@ import com.gmail.nossr50.util.skills.CombatUtils;
 import com.gmail.nossr50.util.skills.ParticleEffectUtils;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
-import com.gmail.nossr50.util.text.TextUtils;
+import com.gmail.nossr50.platform.text.TextUtils;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;

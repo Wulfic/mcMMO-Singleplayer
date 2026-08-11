@@ -2,6 +2,7 @@ package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.platform.text.TextUtils;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.ItemUtils;
 import java.util.UUID;
@@ -186,14 +187,23 @@ public final class PlatformPlayer {
 
     // --- Messaging (Text = locked target type) ------------------------------
 
-    /** Bukkit {@code sendMessage} (127 refs). Chat message. */
-    public void sendMessage(@NotNull Text message) {
-        handle.sendMessage(message);
+    /**
+     * Chat message (Bukkit {@code sendMessage}).
+     *
+     * <p>Takes mcMMO's own message representation — a legacy section-code ({@code §}) string — and
+     * renders it to vanilla {@link Text} here. That direction is deliberate (Phase 2): the
+     * section-code string is what every locale file, renderer and skill manager actually produces,
+     * so {@link Text} is a <em>presentation</em> detail belonging on the Minecraft side of the
+     * boundary. Keeping the conversion here is what lets {@code NotificationManager} and the 29
+     * stats renderers stay Minecraft-free and band-independent.
+     */
+    public void sendMessage(@NotNull String message) {
+        handle.sendMessage(TextUtils.toText(message));
     }
 
-    /** Action-bar / overlay message (Bukkit {@code sendActionBar}). */
-    public void sendActionBar(@NotNull Text message) {
-        handle.sendMessage(message, true);
+    /** Action-bar / overlay message (Bukkit {@code sendActionBar}). See {@link #sendMessage}. */
+    public void sendActionBar(@NotNull String message) {
+        handle.sendMessage(TextUtils.toText(message), true);
     }
 
     // --- Sound (Bukkit Player#playSound / World#playSound) -------------------

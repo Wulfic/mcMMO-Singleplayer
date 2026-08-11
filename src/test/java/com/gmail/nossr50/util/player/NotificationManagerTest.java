@@ -63,7 +63,7 @@ class NotificationManagerTest {
 
     @Test
     void actionBarTypeWithoutCopyGoesToActionBarOnly() {
-        Text expected = LocaleLoader.getText("Skills.TooTired", "5");
+        String expected = LocaleLoader.getString("Skills.TooTired", "5");
 
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.ABILITY_COOLDOWN,
                 "Skills.TooTired", "5");
@@ -74,7 +74,7 @@ class NotificationManagerTest {
 
     @Test
     void actionBarTypeWithCopyAlsoGoesToChat() {
-        Text expected = LocaleLoader.getText("Skills.TooTired", "3");
+        String expected = LocaleLoader.getString("Skills.TooTired", "3");
 
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_UNLOCKED,
                 "Skills.TooTired", "3");
@@ -85,7 +85,7 @@ class NotificationManagerTest {
 
     @Test
     void systemTypeGoesToChatOnly() {
-        Text expected = LocaleLoader.getText("Skills.TooTired", "9");
+        String expected = LocaleLoader.getString("Skills.TooTired", "9");
 
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE_FAILED,
                 "Skills.TooTired", "9");
@@ -113,7 +113,7 @@ class NotificationManagerTest {
 
     @Test
     void chatOnlyBypassesActionBarRouting() {
-        Text expected = LocaleLoader.getText("Skills.TooTired", "2");
+        String expected = LocaleLoader.getString("Skills.TooTired", "2");
 
         NotificationManager.sendPlayerInformationChatOnly(mmoPlayer, "Skills.TooTired", "2");
 
@@ -126,7 +126,7 @@ class NotificationManagerTest {
         SubSkillType subSkillType = SubSkillType.PARKOUR_DODGE;
         // Build the expectation from the same inputs the manager uses, so the assertion is robust to
         // the concrete rank the (unstubbed) player resolves to.
-        Text expected = LocaleLoader.getText("JSON.SkillUnlockMessage",
+        String expected = LocaleLoader.getString("JSON.SkillUnlockMessage",
                 subSkillType.getLocaleName(), RankUtils.getRank(mmoPlayer, subSkillType));
 
         NotificationManager.sendPlayerUnlockNotification(mmoPlayer, subSkillType);
@@ -158,7 +158,7 @@ class NotificationManagerTest {
         PrimarySkillType skill = PrimarySkillType.MINING;
         String skillName =
                 LocaleLoader.getString("Overhaul.Name." + StringUtils.getCapitalized(skill.toString()));
-        Text expected = LocaleLoader.getText("Overhaul.Levelup", skillName, 1, 2);
+        String expected = LocaleLoader.getString("Overhaul.Levelup", skillName, 1, 2);
 
         NotificationManager.sendPlayerLevelUpNotification(mmoPlayer, skill, 1, 2);
 

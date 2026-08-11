@@ -1,6 +1,5 @@
 package com.gmail.nossr50.locale;
 
-import com.gmail.nossr50.util.text.TextUtils;
 import java.text.MessageFormat;
 import java.util.Locale;
 import java.util.Map;
@@ -9,7 +8,6 @@ import java.util.ResourceBundle;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,9 +23,14 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>Colour pipeline:</b> raw strings still carry legacy colour markup — simplified codes
  * ({@code &a}), mcMMO's own {@code [[COLOR]]} tokens, and {@code &#RRGGBB} hex. {@link #addColors}
- * normalises all of these to section-sign ({@code §}) codes. {@link #getString} returns that
- * {@code §} string (useful for logs/legacy call sites); {@link #getText} parses it into a vanilla
- * {@link Text} via {@link TextUtils} for anything shown to the player.
+ * normalises all of these to section-sign ({@code §}) codes, and {@link #getString} returns that
+ * {@code §} string.
+ *
+ * <p>That string <em>is</em> mcMMO's message representation, all the way to the platform boundary:
+ * rendering it into a vanilla {@code Text} happens inside {@code platform/} (see
+ * {@code PlatformPlayer#sendMessage} and {@code platform.text.TextUtils}). Keeping the conversion
+ * out of here is what makes this class — and every renderer and skill manager feeding it —
+ * Minecraft-free, so none of them can carry a version-specific bug across Minecraft bands.
  */
 public final class LocaleLoader {
 
@@ -60,21 +63,6 @@ public final class LocaleLoader {
         }
         final String rawMessage = rawCache.computeIfAbsent(key, LocaleLoader::getRawString);
         return formatString(rawMessage, messageArguments);
-    }
-
-    public static @NotNull Text getText(@NotNull String key) {
-        return getText(key, (Object[]) null);
-    }
-
-    /**
-     * Gets a locale string as a vanilla {@link Text}, ready to send to a player.
-     *
-     * @param key the locale key
-     * @param messageArguments {@link MessageFormat} arguments, or {@code null} for none
-     * @return the message as styled {@link Text}
-     */
-    public static @NotNull Text getText(@NotNull String key, Object... messageArguments) {
-        return TextUtils.toText(getString(key, messageArguments));
     }
 
     /** Drops the cached, parsed strings; the bundle itself is immutable so it is kept. */
@@ -152,7 +140,7 @@ public final class LocaleLoader {
 
     /**
      * Translates {@code &#RRGGBB} hex codes into the {@code §x§R§R§G§G§B§B} section form that
-     * {@link TextUtils} understands.
+     * {@code platform.text.TextUtils} understands.
      */
     public static @NotNull String translateHexColorCodes(@NotNull String messageWithHex) {
         final Matcher matcher = HEX_PATTERN.matcher(messageWithHex);

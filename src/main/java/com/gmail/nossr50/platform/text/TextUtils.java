@@ -1,4 +1,4 @@
-package com.gmail.nossr50.util.text;
+package com.gmail.nossr50.platform.text;
 
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Style;

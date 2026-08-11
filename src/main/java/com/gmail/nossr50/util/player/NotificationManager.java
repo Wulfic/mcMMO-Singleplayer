@@ -13,7 +13,6 @@ import com.gmail.nossr50.util.sounds.SoundType;
 import com.gmail.nossr50.util.text.McMMOMessageType;
 import com.gmail.nossr50.util.text.StringUtils;
 import com.gmail.nossr50.platform.PlatformSoundCategory;
-import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -32,8 +31,10 @@ import org.jetbrains.annotations.Nullable;
  *       (Phase 1.5 scope cut). "Nearby players" collapses to "the player" in singleplayer.</li>
  * </ul>
  *
- * <p>Message text is built via {@link LocaleLoader#getText} (the ported {@code §}-string → vanilla
- * {@link Text} parser), and routing (action bar vs. chat, plus the optional chat copy) is read from
+ * <p>Message text is built via {@link LocaleLoader#getString} as a legacy section-coded
+ * ({@code §}) string — rendering it to a vanilla {@code Text} happens at the platform boundary in
+ * {@code PlatformPlayer#sendMessage}, which is what keeps this class Minecraft-free — and routing
+ * (action bar vs. chat, plus the optional chat copy) is read from
  * the real {@code advanced.yml} {@code Feedback.ActionBarNotifications} section via
  * {@link McMMOMod#getAdvancedConfig()} — verbatim with legacy. All entry points take an
  * {@link McMMOPlayer} (the trigger/skill call sites already hold it) and are no-ops when the player
@@ -66,7 +67,7 @@ public final class NotificationManager {
                 McMMOMod.getAdvancedConfig().doesNotificationUseActionBar(notificationType)
                         ? McMMOMessageType.ACTION_BAR : McMMOMessageType.SYSTEM;
 
-        Text message = LocaleLoader.getText(key, (Object[]) values);
+        String message = LocaleLoader.getString(key, (Object[]) values);
 
         PlatformPlayer player = mmoPlayer.getPlayer();
         if (destination == McMMOMessageType.ACTION_BAR) {
@@ -98,7 +99,7 @@ public final class NotificationManager {
             return;
         }
 
-        mmoPlayer.getPlayer().sendMessage(LocaleLoader.getText(key, (Object[]) values));
+        mmoPlayer.getPlayer().sendMessage(LocaleLoader.getString(key, (Object[]) values));
     }
 
     /**
@@ -112,7 +113,7 @@ public final class NotificationManager {
         }
 
         String preColored = LocaleLoader.getString(key, (Object[]) values);
-        mmoPlayer.getPlayer().sendMessage(LocaleLoader.getText("mcMMO.Template.Prefix", preColored));
+        mmoPlayer.getPlayer().sendMessage(LocaleLoader.getString("mcMMO.Template.Prefix", preColored));
     }
 
     /**
@@ -145,7 +146,7 @@ public final class NotificationManager {
 
         String skillName =
                 LocaleLoader.getString("Overhaul.Name." + StringUtils.getCapitalized(skill.toString()));
-        Text message = LocaleLoader.getText("Overhaul.Levelup", skillName, levelsGained, newLevel);
+        String message = LocaleLoader.getString("Overhaul.Levelup", skillName, levelsGained, newLevel);
 
         PlatformPlayer player = mmoPlayer.getPlayer();
         if (destination == McMMOMessageType.ACTION_BAR) {
@@ -181,7 +182,7 @@ public final class NotificationManager {
             return;
         }
 
-        Text message = LocaleLoader.getText("JSON.SkillUnlockMessage",
+        String message = LocaleLoader.getString("JSON.SkillUnlockMessage",
                 subSkillType.getLocaleName(), RankUtils.getRank(mmoPlayer, subSkillType));
         mmoPlayer.getPlayer().sendMessage(message);
 

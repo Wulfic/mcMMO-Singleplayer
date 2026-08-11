@@ -2,7 +2,7 @@ package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
 import com.gmail.nossr50.util.PotionUtil;
-import com.gmail.nossr50.util.text.TextUtils;
+import com.gmail.nossr50.platform.text.TextUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

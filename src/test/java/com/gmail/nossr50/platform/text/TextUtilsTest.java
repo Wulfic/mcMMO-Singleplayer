@@ -1,4 +1,4 @@
-package com.gmail.nossr50.util.text;
+package com.gmail.nossr50.platform.text;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.gmail.nossr50.platform.text.TextUtils;
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
@@ -413,6 +414,8 @@ class EntityDamageListenerHunterTest {
 
     private Inspection inspect(LivingEntity target) {
         final boolean allowed = EntityDamageListener.onAllowDamage(target, melee(), 1F);
+        // attacker is a raw ServerPlayerEntity here, so this is vanilla's own sendMessage(Text) --
+        // not PlatformPlayer's §-string overload.
         final ArgumentCaptor<Text> sent = ArgumentCaptor.forClass(Text.class);
         Mockito.verify(attacker, Mockito.atMost(1)).sendMessage(sent.capture());
         return new Inspection(!allowed,

@@ -7,8 +7,10 @@ import org.junit.jupiter.api.Test;
 
 /**
  * MC-free coverage of the English-only {@link LocaleLoader} string + colour pipeline.
- * The {@code Text}-producing side ({@link LocaleLoader#getText}) is exercised via
- * {@code TextUtils} in its own test.
+ *
+ * <p>{@link LocaleLoader} is Minecraft-free by design (Phase 2): it produces legacy section-coded
+ * ({@code §}) strings and stops there. Rendering those to a vanilla {@code Text} belongs to
+ * {@code platform.text.TextUtils}, which is covered by its own test.
  */
 class LocaleLoaderTest {
 

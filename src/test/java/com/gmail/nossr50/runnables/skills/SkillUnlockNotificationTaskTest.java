@@ -53,7 +53,7 @@ class SkillUnlockNotificationTaskTest {
     void runSendsUnlockMessageWhenNotificationsEnabled() {
         when(mmoPlayer.useChatNotifications()).thenReturn(true);
         SubSkillType subSkillType = SubSkillType.PARKOUR_DODGE;
-        Text expected = LocaleLoader.getText("JSON.SkillUnlockMessage",
+        String expected = LocaleLoader.getString("JSON.SkillUnlockMessage",
                 subSkillType.getLocaleName(), RankUtils.getRank(mmoPlayer, subSkillType));
 
         new SkillUnlockNotificationTask(mmoPlayer, subSkillType, 1).run();

@@ -5,6 +5,7 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
+import com.gmail.nossr50.platform.text.TextUtils;
 import com.gmail.nossr50.util.player.PlayerLevelUtils;
 import com.gmail.nossr50.util.text.StringUtils;
 import java.util.Locale;
@@ -93,6 +94,16 @@ public final class ExperienceBarWrapper implements ExperienceBar {
     // --- title ---------------------------------------------------------------
 
     private Text renderTitle() {
+        return TextUtils.toText(renderTitleText());
+    }
+
+    /**
+     * The bar's title as a legacy section-coded ({@code §}) string — mcMMO's own message
+     * representation. Split out from {@link #renderTitle} so the title-selection logic (early-game
+     * boost outranking the extra-details template, the nested complex template) carries no Minecraft
+     * type; only the one-line wrapper above does.
+     */
+    private String renderTitleText() {
         final ExperienceConfig config = McMMOMod.getExperienceConfig();
         final int level = mmoPlayer.getSkillLevel(primarySkillType);
 
@@ -100,7 +111,7 @@ public final class ExperienceBarWrapper implements ExperienceBar {
         // running the bar says so instead of showing numbers. The XPBar.Template.EarlyGameBoost
         // string has shipped in the locale file since the port began and nothing rendered it.
         if (isEarlyGameBoosted()) {
-            return LocaleLoader.getText("XPBar.Template.EarlyGameBoost");
+            return LocaleLoader.getString("XPBar.Template.EarlyGameBoost");
         }
 
         if (config.getAddExtraDetails()) {
@@ -108,7 +119,7 @@ public final class ExperienceBarWrapper implements ExperienceBar {
             // {4}=percent. Legacy nested one locale lookup inside the other; getString returns the
             // raw §-coded string so it drops straight into the {0} slot of the complex template.
             final String skillTitle = LocaleLoader.getString("XPBar." + niceSkillName, level);
-            return LocaleLoader.getText("XPBar.Complex.Template",
+            return LocaleLoader.getString("XPBar.Complex.Template",
                     skillTitle,
                     mmoPlayer.getProfile().getSkillXpLevel(primarySkillType),
                     mmoPlayer.getProfile().getXpToLevel(primarySkillType),
@@ -116,7 +127,7 @@ public final class ExperienceBarWrapper implements ExperienceBar {
                     percentOfLevel());
         }
 
-        return LocaleLoader.getText("XPBar." + niceSkillName, level);
+        return LocaleLoader.getString("XPBar." + niceSkillName, level);
     }
 
     private int percentOfLevel() {

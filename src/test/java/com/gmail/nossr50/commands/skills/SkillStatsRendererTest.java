@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import com.gmail.nossr50.platform.text.TextUtils;
 import net.minecraft.text.Text;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -141,7 +142,7 @@ class SkillStatsRendererTest {
 
     private List<String> render(SkillStatsRenderer renderer) {
         final List<String> lines = new ArrayList<>();
-        renderer.render(mmoPlayer, (Text t) -> lines.add(t.getString()));
+        renderer.render(mmoPlayer, line -> lines.add(TextUtils.toText(line).getString()));
         return lines;
     }
 
