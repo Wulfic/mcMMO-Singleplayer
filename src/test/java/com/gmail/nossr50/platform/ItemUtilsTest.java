@@ -41,13 +41,20 @@ class ItemUtilsTest {
         assertTrue(ItemUtils.isTrident(new ItemStack(Items.TRIDENT)));
         assertTrue(ItemUtils.isMace(new ItemStack(Items.MACE)));
 
-        // Spears are real vanilla items in 1.21.11 (Items.WOODEN_SPEAR … NETHERITE_SPEAR, the
+        // Spears are real vanilla items from 1.21.11 (Items.WOODEN_SPEAR … NETHERITE_SPEAR, the
         // minecraft:spears tag, data/minecraft/damage_type/spear.json). The port believed otherwise
         // until GitHub #7 and left the whole skill unreachable — see MeleeWeaponClassificationTest,
         // which pins all seven against the registry rather than a list.
-        assertTrue(ItemUtils.isSpear(new ItemStack(Items.IRON_SPEAR)));
+        //
+        // Resolved through the registry, not as Items.IRON_SPEAR: the constant does not exist on the
+        // mc/1.21.10 band, where naming it fails the BUILD rather than the assertion. A trident is
+        // asserted not-a-spear either way — it exists on every supported version, so that half of
+        // the check never lapses.
         assertFalse(ItemUtils.isSpear(new ItemStack(Items.TRIDENT)));
-        assertFalse(ItemUtils.isSword(new ItemStack(Items.IRON_SPEAR)));
+        McTestRegistries.optionalVanillaItem("iron_spear").ifPresent(spear -> {
+            assertTrue(ItemUtils.isSpear(new ItemStack(spear)));
+            assertFalse(ItemUtils.isSword(new ItemStack(spear)));
+        });
     }
 
     @Test

@@ -1,7 +1,11 @@
 package com.gmail.nossr50.util;
 
+import java.util.Optional;
 import net.minecraft.Bootstrap;
 import net.minecraft.SharedConstants;
+import net.minecraft.item.Item;
+import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 
 /**
  * Shared one-time Minecraft bootstrap for unit tests that touch live vanilla registries (item/block
@@ -26,5 +30,40 @@ public final class McTestRegistries {
         SharedConstants.createGameVersion();
         Bootstrap.initialize();
         bootstrapped = true;
+    }
+
+    /**
+     * The vanilla item with this id path, or empty if <em>this</em> Minecraft version does not have
+     * it.
+     *
+     * <p>Exists for items that arrive part-way through the supported range, so a test can assert the
+     * right thing on every band from one source tree. The spears
+     * ({@code wooden_spear} … {@code netherite_spear}) are the live case: they ship from
+     * {@code 1.21.11} and do not exist on the {@code mc/1.21.10} band at all, where naming
+     * {@code Items.IRON_SPEAR} is a compile error rather than a failing assertion.
+     *
+     * <p>⚠️⚠️ <b>{@code containsId} first — never {@code get} alone.</b> {@code Registries.ITEM} is a
+     * <em>defaulted</em> registry: {@code get} on an unknown id returns {@code AIR}, not
+     * {@code null}. A caller that null-checks the result of {@code get} therefore sees a perfectly
+     * valid item and carries on with the wrong one. That exact trap shipped once already — the Hunter
+     * skill read {@code Registries.ENTITY_TYPE} the same way and every unrecognised id silently
+     * became a {@code PIG}. {@code platform/Materials} guards the same way for the same reason.
+     */
+    public static Optional<Item> optionalVanillaItem(String path) {
+        final Identifier id = Identifier.ofVanilla(path);
+        return Registries.ITEM.containsId(id) ? Optional.of(Registries.ITEM.get(id)) : Optional.empty();
+    }
+
+    /**
+     * True if the item registry actually populated.
+     *
+     * <p>The point of this is negative assertions. "This band has no spears" and "the registry is
+     * empty" are the same observation, so any test that concludes something from an <em>absence</em>
+     * has to rule the second one out first — otherwise a broken bootstrap reads as a clean pass on
+     * every band.
+     */
+    public static boolean itemRegistryIsPopulated() {
+        return Registries.ITEM.containsId(Identifier.ofVanilla("iron_sword"))
+                && Registries.ITEM.containsId(Identifier.ofVanilla("stone"));
     }
 }

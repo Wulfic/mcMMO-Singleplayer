@@ -54,6 +54,20 @@ class MeleeWeaponClassificationTest {
     @Test
     void everyVanillaSpearIsClassifiedAsASpear() {
         final List<Item> spears = registeredSpears();
+
+        // Spears arrive in 1.21.11. On the mc/1.21.10 band there are none, and the honest assertion
+        // there is a different one — not a skip, which would quietly delete this coverage on every
+        // older band at once.
+        if (spears.isEmpty()) {
+            assertTrue(McTestRegistries.itemRegistryIsPopulated(),
+                    "no spears found AND the registry looks empty — that is a broken bootstrap, not "
+                            + "a Minecraft version without spears");
+            assertTrue(McTestRegistries.optionalVanillaItem("iron_spear").isEmpty(),
+                    "registeredSpears() found nothing but iron_spear resolves — the id-path scan is "
+                            + "broken, which is exactly how GitHub #7 stayed hidden");
+            return;
+        }
+
         assertEquals(7, spears.size(),
                 "1.21.11 ships seven spears (wooden/stone/copper/iron/golden/diamond/netherite) — "
                         + "if this count moved, MaterialMapStore#fillSpears needs the new id too");
@@ -75,8 +89,20 @@ class MeleeWeaponClassificationTest {
      */
     @Test
     void aSpearIsNotAnUnrecognisedItem() {
+        // Resolved through the registry rather than named as Items.IRON_SPEAR: the constant does not
+        // exist below 1.21.11, so naming it makes the whole TEST TREE fail to compile on the
+        // mc/1.21.10 band -- a build break, not a red test, and one the Phase 1 probe could not
+        // predict because it never indexed static constants or src/test/java.
+        final Item ironSpear = McTestRegistries.optionalVanillaItem("iron_spear").orElse(null);
+        if (ironSpear == null) {
+            assertTrue(McTestRegistries.itemRegistryIsPopulated(),
+                    "iron_spear absent AND the registry looks empty — broken bootstrap");
+            assertTrue(registeredSpears().isEmpty(),
+                    "iron_spear does not resolve but other spears do — inconsistent registry view");
+            return;
+        }
         assertNotEquals(MeleeWeapon.OTHER,
-                EntityDamageListener.classifyMainHand(new ItemStack(Items.IRON_SPEAR)),
+                EntityDamageListener.classifyMainHand(new ItemStack(ironSpear)),
                 "a spear must not fall through to OTHER — that pays no bonus and no XP");
     }
 
