@@ -467,27 +467,68 @@ diverges per branch. Both are bad.
 
 **The 175 MC-free files, the 357 resources, and the 101 MC-free tests must stay clean, permanently.**
 
-- [ ] 2.1 Triage the 26 leak sites — for each, decide *adapter method* vs *move into `fabric/`*
+- [x] 2.1 Triage the 26 leak sites — for each, decide *adapter method* vs *move into `fabric/`*
+      → Triaged into **5 slices** in the `phase2-platform-boundary-seal` memory. The owner's rulings
+      P2-a…P2-e scope it; **P2-d is the operative one: extract the logic, THEN relocate the
+      remainder.**
 
-      commands/McMMOCommands.java                    skills/alchemy/AlchemyManager.java
-      commands/skills/HunterStatsRenderer.java       skills/alchemy/AlchemyPotionBrewer.java
-      commands/skills/SkillStatsRenderer.java        skills/maces/MacesManager.java
-      config/skills/alchemy/PotionConfig.java        skills/repair/RepairManager.java
-      config/skills/repair/RepairConfig.java         skills/woodcutting/TreeFellerProcessor.java
-      config/skills/salvage/SalvageConfig.java       util/BlockUtils.java
-      datatypes/skills/ToolType.java                 util/ItemUtils.java
-      datatypes/skills/alchemy/AlchemyPotion.java    util/MobOrigins.java
-      datatypes/skills/alchemy/PotionStage.java      util/MobTiers.java
-      locale/LocaleLoader.java                       util/PotionUtil.java
-      util/experience/ExperienceBarWrapper.java      util/player/NotificationManager.java
-      util/skills/CombatUtils.java                   util/skills/ParticleEffectUtils.java
-      util/sounds/SoundManager.java                  util/text/TextUtils.java
+      ⚠️⚠️ **P2-a's premise did not survive tracing.** It was written believing the six "core logic"
+      files had MC-typed callers in the skill managers. **Not one did** — every apparent call in
+      `HerbalismManager`, `MiningManager`, `WoodcuttingManager`, `TreasureConfig`, `HunterManager`,
+      `HusbandryListener` and `SmeltingListener` is a `{@code …}` **javadoc mention**.
+      🔑🔑 *`grep -rl '<Symbol>\.'` counts comments as usage.* Four of the five load-bearing claims
+      behind a ruling were comments.
 
 - [ ] 2.2 Work the list to zero. Order: `util/` first (widest blast radius), `alchemy` last (biggest
       cluster — `PotionConfig` + `AlchemyPotion` + `PotionStage` + `PotionUtil` + the two managers
       move together or not at all)
+
+      **26 → 6 leak sites.** Every commit green + bootable, per R-d.
+
+      | Slice | Commit | Sites | Suite |
+      |---|---|---|---|
+      | 1 — `SoundCategory` (a pure enum leak: 5 files imported MC to name a volume slider) | `f14a20711` | 26 → 21 | 1621 |
+      | 2 — `Text` | `35dad2003` | 21 → 16 | 1621 |
+      | 3 — `ItemStack`/`Registries` | `04c4d0f88` | 16 → 14 | 1621 |
+      | 4a — the two MC-plumbing files (`McMMOCommands` → `fabric/commands/`, `ExperienceBarWrapper` → `platform/`) | `9dc2140c1` | 14 → 12 | 1621 |
+      | 4b-1 — the five thin adapters, relocated | `1e1f7bc3f` | 12 → 7 | 1621 |
+      | 4b-2 — `BlockRules` extracted, bridge relocated | `47a4910c5` | 7 → 6 | **1637** |
+      | **5 — the alchemy cluster** | ⬜ **NEXT** | 6 → 0 | |
+
+      🔑 **Relocation does not shrink a band-fragile surface — only extraction does.** Growing
+      `PlatformBlock`/`PlatformLivingEntity` until a file compiles MC-free *in place* moves the same
+      divergent lines into wrapper methods; the count is unchanged. That argument is what decided
+      P2-d, and it is the reason 4b-2 pulled 14 predicates plus the whole placed-block policy out of
+      `BlockUtils` into the MC-free `util/BlockRules` rather than just moving the file.
+      Measurable payoff: **11 assertions left the `fabric-loader-junit` harness**, which Phase 4.4
+      pays at ~53s of `Bootstrap.initialize()` per fork **per band**.
+
+      ⚠️⚠️ **Two things a seal must never do to semantics**, both hit in 4b-2:
+      1. **Do not convert a block *identity* check into an id-path comparison.**
+         `isOf(Blocks.SNOW)` / `== Blocks.OBSIDIAN` would silently broaden across namespaces as
+         `"snow".equals(idPath)`. Both stayed MC-typed, one line each. (The surrounding
+         `MaterialMapStore` whitelists are already path-keyed — that existing design was deliberately
+         not relitigated. The rule is about *changing* an exact check, not about paths.)
+      2. **Do not let an argument be evaluated eagerly across the new boundary.**
+         `isIn(TagKey)` **throws** while tags are unbound, and the Hylian flower/bush arms return
+         before touching it — so two plain `boolean`s would have crashed every Hylian Luck break.
+         They cross as `BooleanSupplier`s. **Second occurrence of this exact trap**
+         (cf. `ParticleEffectUtils#spawnAtEyes`).
+
+      ⚠️ Moving a class out of its package widens access modifiers:
+      `WoodcuttingManager#processTreeFellerXPGains` had to go `public`. Documented at the
+      declaration — keeping an MC-typed class in an MC-free package to preserve an access modifier is
+      the trade this phase exists to refuse.
+
+      **Slice 5 is scoped per file** (`PotionSpec`/`EffectSpec` records + a `platform/Potions`
+      lookup; `PotionStage` is already pure logic and just needs retyping) in the
+      `phase2-platform-boundary-seal` memory.
 - [ ] 2.3 **Add the build guard.** A test or Gradle check that fails the build on any
       `net.minecraft` / `net.fabricmc` import outside `fabric/` and `platform/`.
+      - **Scope: `src/main/java` only** (ruling P2-e), matching this section's own acceptance
+        criterion. Test-side MC imports stay legal — `McTestRegistries` and
+        `McRegistryBootstrapProbeTest` are registry-bootstrap harnesses and *cannot* be MC-free, so
+        policing `src/test/java` would immediately require the exempt list P2-c forbids.
       - Guard must be **converse-checked**: add a deliberate violating import, confirm it reddens,
         revert. A guard that has never failed is not known to work.
 
