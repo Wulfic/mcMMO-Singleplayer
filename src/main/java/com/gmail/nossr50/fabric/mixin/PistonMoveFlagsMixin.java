@@ -38,7 +38,7 @@ public abstract class PistonMoveFlagsMixin {
 
     @Inject(
             method = "move(Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;"
-                    + "Lnet/minecraft/util/math/Direction;Z)Z",
+                    + "Lnet/minecraft/util/math/Direction;Z)Z", allow = 2,
             at = @At("RETURN"))
     private void mcmmo$onPistonMoved(World world, BlockPos pos, Direction dir, boolean retract,
             CallbackInfoReturnable<Boolean> cir, @Local PistonHandler handler) {

@@ -40,7 +40,7 @@ public abstract class FluidBlockFormationMixin {
 
     @Inject(
             method = "receiveNeighborFluids(Lnet/minecraft/world/World;"
-                    + "Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)Z",
+                    + "Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)Z", allow = 3,
             at = @At("RETURN"))
     private void mcmmo$onFluidFormedBlock(World world, BlockPos pos, BlockState state,
             CallbackInfoReturnable<Boolean> cir) {

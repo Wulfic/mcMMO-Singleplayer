@@ -36,14 +36,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class PlayerEntityInteractMixin {
 
     @Inject(method = "interact(Lnet/minecraft/entity/Entity;Lnet/minecraft/util/Hand;)"
-            + "Lnet/minecraft/util/ActionResult;", at = @At("HEAD"))
+            + "Lnet/minecraft/util/ActionResult;", allow = 1, at = @At("HEAD"))
     private void mcmmo$beginInteraction(Entity target, Hand hand,
             CallbackInfoReturnable<ActionResult> cir) {
         HusbandryListener.beginPlayerInteraction((PlayerEntity) (Object) this, target);
     }
 
     @Inject(method = "interact(Lnet/minecraft/entity/Entity;Lnet/minecraft/util/Hand;)"
-            + "Lnet/minecraft/util/ActionResult;", at = @At("RETURN"))
+            + "Lnet/minecraft/util/ActionResult;", allow = 4, at = @At("RETURN"))
     private void mcmmo$endInteraction(Entity target, Hand hand,
             CallbackInfoReturnable<ActionResult> cir) {
         HusbandryListener.endPlayerInteraction();

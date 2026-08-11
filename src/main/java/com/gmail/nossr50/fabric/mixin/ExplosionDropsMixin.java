@@ -44,14 +44,14 @@ public abstract class ExplosionDropsMixin {
     @Unique
     private boolean mcmmo$blastMiningHandled;
 
-    @Inject(method = "destroyBlocks", at = @At("HEAD"))
+    @Inject(method = "destroyBlocks", allow = 1, at = @At("HEAD"))
     private void mcmmo$processBlastMiningDrops(List<BlockPos> blocks, CallbackInfo ci) {
         mcmmo$blastMiningHandled =
                 BlastMiningListener.processBlastDrops((Explosion) (Object) this, blocks);
     }
 
     @ModifyArg(
-            method = "destroyBlocks",
+            method = "destroyBlocks", allow = 1,
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/block/BlockState;onExploded("

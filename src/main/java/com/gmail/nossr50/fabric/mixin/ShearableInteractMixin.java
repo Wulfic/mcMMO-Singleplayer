@@ -48,7 +48,7 @@ public abstract class ShearableInteractMixin {
      */
     @ModifyArg(
             method = "interactMob(Lnet/minecraft/entity/player/PlayerEntity;"
-                    + "Lnet/minecraft/util/Hand;)Lnet/minecraft/util/ActionResult;",
+                    + "Lnet/minecraft/util/Hand;)Lnet/minecraft/util/ActionResult;", allow = 1,
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/item/ItemStack;damage(ILnet/minecraft/entity/"
                             + "LivingEntity;Lnet/minecraft/entity/EquipmentSlot;)V"),

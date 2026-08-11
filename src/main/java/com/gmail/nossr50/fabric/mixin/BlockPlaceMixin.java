@@ -37,7 +37,7 @@ public abstract class BlockPlaceMixin {
 
     @Inject(
             method = "place(Lnet/minecraft/item/ItemPlacementContext;"
-                    + "Lnet/minecraft/block/BlockState;)Z",
+                    + "Lnet/minecraft/block/BlockState;)Z", allow = 1,
             at = @At("RETURN"))
     private void mcmmo$onBlockPlaced(ItemPlacementContext context, BlockState state,
             CallbackInfoReturnable<Boolean> cir) {

@@ -40,12 +40,12 @@ public abstract class FurnaceOutputSlotMixin {
     @Final
     private PlayerEntity player;
 
-    @Inject(method = "onCrafted(Lnet/minecraft/item/ItemStack;)V", at = @At("HEAD"))
+    @Inject(method = "onCrafted(Lnet/minecraft/item/ItemStack;)V", allow = 1, at = @At("HEAD"))
     private void mcmmo$beginFurnaceExtract(ItemStack stack, CallbackInfo ci) {
         SmeltingListener.beginFurnaceExtract(player, stack);
     }
 
-    @Inject(method = "onCrafted(Lnet/minecraft/item/ItemStack;)V", at = @At("RETURN"))
+    @Inject(method = "onCrafted(Lnet/minecraft/item/ItemStack;)V", allow = 1, at = @At("RETURN"))
     private void mcmmo$endFurnaceExtract(ItemStack stack, CallbackInfo ci) {
         SmeltingListener.endFurnaceExtract();
     }

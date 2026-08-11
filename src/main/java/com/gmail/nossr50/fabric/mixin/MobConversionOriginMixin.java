@@ -34,8 +34,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * verified: {@code getstatic SpawnReason.CONVERSION} then {@code invokevirtual convertTo}). Injecting
  * into the four-argument overload therefore covers both, and injecting into both would double-write.
  *
- * <p>{@code RETURN} rather than {@code TAIL} because the method has a single exit but can return
- * {@code null} on a failed conversion; {@link MobOrigins#carryThroughConversion} handles that.
+ * <p>{@code RETURN} rather than {@code TAIL} because the method can return {@code null} on a failed
+ * conversion; {@link MobOrigins#carryThroughConversion} handles that.
+ *
+ * <p>{@code allow = 3} is measured, not chosen: the compiled method has <b>three</b> return
+ * instructions, so {@code RETURN} binds three times. That is one bind per exit path, not three
+ * executions — a single call takes one path — which is exactly why {@code RETURN} is right here and
+ * {@code TAIL} would silently miss the early exits. Re-measure per band with
+ * {@code scripts/mixin-allow-audit.py}; a new guard clause upstream changes this number.
  */
 @Mixin(MobEntity.class)
 public abstract class MobConversionOriginMixin {
@@ -45,7 +51,7 @@ public abstract class MobConversionOriginMixin {
                     + "Lnet/minecraft/entity/conversion/EntityConversionContext;"
                     + "Lnet/minecraft/entity/SpawnReason;"
                     + "Lnet/minecraft/entity/conversion/EntityConversionContext$Finalizer;)"
-                    + "Lnet/minecraft/entity/mob/MobEntity;",
+                    + "Lnet/minecraft/entity/mob/MobEntity;", allow = 3,
             at = @At("RETURN"))
     private void mcmmo$carryOriginThroughConversion(EntityType<?> type,
             EntityConversionContext context, SpawnReason reason,

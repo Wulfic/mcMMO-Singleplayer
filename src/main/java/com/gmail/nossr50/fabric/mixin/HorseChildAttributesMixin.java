@@ -80,7 +80,7 @@ public abstract class HorseChildAttributesMixin {
      * in-range path and silently leave extreme rolls untouched.
      */
     @ModifyReturnValue(method = "calculateAttributeBaseValue(DDDDLnet/minecraft/util/math/random/"
-            + "Random;)D", at = @At("RETURN"))
+            + "Random;)D", allow = 3, at = @At("RETURN"))
     private static double mcmmo$biasChildAttribute(double rolled, double parentA, double parentB,
             double min, double max, Random random) {
         return HusbandryListener.applySelectiveBreedingBias(rolled, min, max);

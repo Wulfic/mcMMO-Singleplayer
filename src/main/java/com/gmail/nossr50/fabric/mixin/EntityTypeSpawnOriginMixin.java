@@ -49,7 +49,7 @@ public abstract class EntityTypeSpawnOriginMixin {
 
     @Inject(
             method = "create(Lnet/minecraft/world/World;Lnet/minecraft/entity/SpawnReason;)"
-                    + "Lnet/minecraft/entity/Entity;",
+                    + "Lnet/minecraft/entity/Entity;", allow = 2,
             at = @At("RETURN"))
     private void mcmmo$stampSpawnOrigin(World world, SpawnReason reason,
             CallbackInfoReturnable<Entity> cir) {

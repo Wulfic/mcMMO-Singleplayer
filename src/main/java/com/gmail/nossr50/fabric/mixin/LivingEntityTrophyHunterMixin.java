@@ -72,7 +72,8 @@ public abstract class LivingEntityTrophyHunterMixin {
      * public API on {@code LivingEntity}/{@code Entity}, so an ordinary call on the cast reference does
      * the same job with one less thing to drift.
      */
-    @Inject(method = "dropLoot(Lnet/minecraft/server/world/ServerWorld;Lnet/minecraft/entity/damage/DamageSource;Z)V",
+    @Inject(method = "dropLoot(Lnet/minecraft/server/world/ServerWorld;"
+                    + "Lnet/minecraft/entity/damage/DamageSource;Z)V", allow = 1,
             at = @At("TAIL"))
     private void mcmmo$trophyHunterBonusRoll(ServerWorld world, DamageSource source,
             boolean causedByPlayer, CallbackInfo ci) {

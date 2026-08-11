@@ -34,7 +34,7 @@ public abstract class BowShootMixin {
 
     @Inject(
             method = "onStoppedUsing(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;"
-                    + "Lnet/minecraft/entity/LivingEntity;I)Z",
+                    + "Lnet/minecraft/entity/LivingEntity;I)Z", allow = 1,
             at = @At("HEAD"))
     private void mcmmo$captureBowForce(ItemStack stack, World world, LivingEntity user,
             int remainingUseTicks, CallbackInfoReturnable<Boolean> cir) {
@@ -48,7 +48,7 @@ public abstract class BowShootMixin {
 
     @Inject(
             method = "onStoppedUsing(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;"
-                    + "Lnet/minecraft/entity/LivingEntity;I)Z",
+                    + "Lnet/minecraft/entity/LivingEntity;I)Z", allow = 4,
             at = @At("RETURN"))
     private void mcmmo$clearBowForce(ItemStack stack, World world, LivingEntity user,
             int remainingUseTicks, CallbackInfoReturnable<Boolean> cir) {

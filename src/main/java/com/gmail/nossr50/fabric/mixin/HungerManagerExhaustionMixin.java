@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 @Mixin(HungerManager.class)
 public abstract class HungerManagerExhaustionMixin {
 
-    @ModifyVariable(method = "addExhaustion", at = @At("HEAD"), argsOnly = true)
+    @ModifyVariable(method = "addExhaustion", allow = 1, at = @At("HEAD"), argsOnly = true)
     private float mcmmo$applyAthlete(float exhaustion) {
         return AthleteListener.scaleExhaustion((HungerManager) (Object) this, exhaustion);
     }

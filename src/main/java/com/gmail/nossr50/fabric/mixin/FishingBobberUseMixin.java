@@ -40,7 +40,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class FishingBobberUseMixin {
 
     @ModifyArg(
-            method = "use",
+            method = "use", allow = 2,
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/advancement/criterion/FishingRodHookedCriterion;trigger("
@@ -74,7 +74,7 @@ public abstract class FishingBobberUseMixin {
      * the reel proceeds and discards the bobber as normal; the only side effect is melting the ice sheet
      * the player is looking at into a fishing hole. See {@link FishingListener#tryIceFishing}.
      */
-    @Inject(method = "use", at = @At("HEAD"))
+    @Inject(method = "use", allow = 1, at = @At("HEAD"))
     private void mcmmo$tryIceFishing(ItemStack usedItem, CallbackInfoReturnable<Integer> cir) {
         FishingListener.tryIceFishing((FishingBobberEntity) (Object) this);
     }

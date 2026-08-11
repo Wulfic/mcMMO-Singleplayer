@@ -38,7 +38,7 @@ public abstract class ProjectileSpawnMixin {
                     + "Lnet/minecraft/server/world/ServerWorld;"
                     + "Lnet/minecraft/item/ItemStack;"
                     + "Ljava/util/function/Consumer;)"
-                    + "Lnet/minecraft/entity/projectile/ProjectileEntity;",
+                    + "Lnet/minecraft/entity/projectile/ProjectileEntity;", allow = 1,
             at = @At("TAIL"))
     private static void mcmmo$onProjectileSpawn(ProjectileEntity projectile, ServerWorld world,
             ItemStack projectileStack, Consumer<ProjectileEntity> beforeSpawn,

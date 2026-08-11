@@ -23,7 +23,7 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 public abstract class TntExplodeMixin {
 
     @ModifyArg(
-            method = "explode",
+            method = "explode", allow = 1,
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/world/World;createExplosion("

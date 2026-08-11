@@ -40,7 +40,7 @@ public abstract class BredAnimalsCriterionMixin {
             method = "trigger(Lnet/minecraft/server/network/ServerPlayerEntity;"
                     + "Lnet/minecraft/entity/passive/AnimalEntity;"
                     + "Lnet/minecraft/entity/passive/AnimalEntity;"
-                    + "Lnet/minecraft/entity/passive/PassiveEntity;)V",
+                    + "Lnet/minecraft/entity/passive/PassiveEntity;)V", allow = 1,
             at = @At("HEAD"))
     private void mcmmo$onAnimalsBred(ServerPlayerEntity breeder, AnimalEntity parent,
             AnimalEntity mate, PassiveEntity child, CallbackInfo ci) {

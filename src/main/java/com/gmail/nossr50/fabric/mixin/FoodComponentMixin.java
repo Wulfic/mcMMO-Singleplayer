@@ -30,7 +30,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(FoodComponent.class)
 public abstract class FoodComponentMixin {
 
-    @Inject(method = "onConsume", at = @At("TAIL"))
+    @Inject(method = "onConsume", allow = 1, at = @At("TAIL"))
     private void mcmmo$onFoodConsumed(World world, LivingEntity user, ItemStack stack,
             ConsumableComponent consumable, CallbackInfo ci) {
         FoodListener.onFoodConsumed(world, user, stack, (FoodComponent) (Object) this);

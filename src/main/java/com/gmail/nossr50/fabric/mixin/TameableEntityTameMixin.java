@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(TameableEntity.class)
 public abstract class TameableEntityTameMixin {
 
-    @Inject(method = "setTamedBy", at = @At("TAIL"))
+    @Inject(method = "setTamedBy", allow = 1, at = @At("TAIL"))
     private void mcmmo$onTamed(PlayerEntity player, CallbackInfo ci) {
         TamingListener.onEntityTamed(player, (TameableEntity) (Object) this);
     }
