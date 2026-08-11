@@ -23,8 +23,8 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Predicate;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.minecraft.command.permission.PermissionSourcePredicate;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -74,9 +74,24 @@ public final class McMMOCommands {
      * vanilla puts {@code /gamemode} and {@code /give} behind (GitHub #8).
      *
      * <p>Package-private so {@code McMMOCommandsTest} can assert <em>which</em> commands carry it.
-     * The class is a record implementing {@code Predicate}, so it compares by value.
+     * Brigadier stores the predicate instance it is handed, so that test compares the same object.
+     *
+     * <p>⚠️ <b>Declared as a plain {@link java.util.function.Predicate}, deliberately.</b> Minecraft
+     * reworked the command permission API at the <code>1.21.10 → 1.21.11</code> boundary and the
+     * concrete return type is version-specific:
+     *
+     * <ul>
+     *   <li>{@code 1.21.11+}: {@code requirePermissionLevel(PermissionCheck)} returns a
+     *       {@code PermissionSourcePredicate} <i>record</i>;</li>
+     *   <li>{@code ≤1.21.10}: {@code requirePermissionLevel(int)} returns a
+     *       {@code PermissionLevelPredicate} <i>interface</i>.</li>
+     * </ul>
+     *
+     * Both implement {@code Predicate<T>}, so widening the declaration confines the entire band
+     * difference to the <em>argument</em> on the next line — one token instead of an import, a type
+     * and a call. Naming the concrete type here bought nothing and made this file diverge per band.
      */
-    static final PermissionSourcePredicate<ServerCommandSource> CHEAT_COMMAND =
+    static final Predicate<ServerCommandSource> CHEAT_COMMAND =
             CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK);
 
     @VisibleForTesting
