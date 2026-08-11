@@ -36,7 +36,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Deliberately deferred vs legacy (cosmetic, no effect on brew resolution or XP — breadcrumbs):
  * custom potion display name, lore, and colour. mcMMO's shipped {@code potions.yml} pre-1.21
- * compatibility skips are also unnecessary on this 1.21.11 target.
+ * compatibility skips are also unnecessary on every supported band — the support floor is
+ * {@code 1.21.5}, so no target this port ships to is old enough to need them.
  */
 public class PotionConfig extends ConfigLoader {
 

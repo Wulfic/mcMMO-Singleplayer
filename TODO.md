@@ -13,6 +13,17 @@ branches inherit them.
 `drift-audit.py` reports the band clean.** ⬜ **It is NOT pushed** — a push builds and releases
 (Phase 4′.5). Remaining before that: 5.5, the gameplay half of 5.6, and the two follow-ups below.
 
+🔬 **2026-08-11 — the probe holes 5.2 found are CLOSED, and the manifest more than doubled:
+266 → 566 records** (static constants were never indexed; `src/test/java` was never scanned).
+**The 6 bands and their membership are unchanged** — but `1.21.8` and `1.21.5` each gained real,
+previously-invisible port work (`EntityType#COPPER_GOLEM`, `SoundCategory#UI`). Fix that before
+cutting either. Also fixed: **three comments that pinned the build to `1.21.11`**, two of which were
+already false on `mc/1.21.10`.
+
+⚠️ **These `master` commits have NOT been back-ported to `mc/1.21.10` yet**, so `drift-audit.py`
+will now report them MISSING on that band — correctly. Two of the comment fixes are false *on that
+branch specifically*, so the back-port is the next action, not an optional tidy-up.
+
 **Rule for this document:** a task is not checked off until its stated *acceptance criteria* pass.
 "It compiles" is not acceptance criteria. Neither is "it looked right in game."
 
@@ -389,6 +400,10 @@ The touched surface is finite and already counted:
       - [x] 1.1c Emit `scripts/mc-surface.txt` — `TYPE<TAB>VALUE`, one record per line
       - **Acceptance: PASS — 266 records** (≥215 required), all 42 mixin files contribute a target.
         `CLASS 164 · METHOD 44 · MIXINCLASS 37 · ATTARGET 19 · ACCESSOR 2`.
+        🔁 **Superseded 2026-08-11 — now 566 records**, after 5.2 found the manifest was blind to
+        static constants and to `src/test/java` entirely:
+        `CLASS 175 · STATICFIELD 287 · METHOD 44 · MIXINCLASS 37 · ATTARGET 19 · ACCESSOR 2 ·
+        STATICMEMBER 2`.
         *37 < 42 is correct, not a miss: four `LivingEntity*Mixin` files share one target class.*
       - ⚠️ Two parsing traps the extractor has to handle, both present in this codebase:
         **(a)** `@Mixin` appears in both simple-name and fully-qualified form
@@ -437,7 +452,7 @@ The touched surface is finite and already counted:
       - [x] Emit `plans/BAND_TABLE.md` + `plans/BAND_TABLE.json` (raw cache, so re-analysis is
             instant instead of a 20-minute re-probe)
       - **Acceptance: PASS — zero UNKNOWN rows.** All 266 records resolve to a definite state on
-        all 12 versions.
+        all 12 versions. 🔁 Re-run 2026-08-11 against the repaired manifest: **all 566** do.
 
       🔑🔑 **The probe carries its own converse check and it is the reason to trust the output.**
       `--control 1.21.11` asserts that the version the mod demonstrably compiles and boots against
@@ -455,21 +470,26 @@ The touched surface is finite and already counted:
 
       | Band | Versions | Records differing from `1.21.11` | In scope under R-b? |
       |---|---|---|---|
-      | `1.21.1` | `1.21`, `1.21.1` | **35** | ❌ below floor |
-      | `1.21.4` | `1.21.2`, `1.21.3`, `1.21.4` | **15** | ❌ below floor |
-      | `1.21.5` | `1.21.5` | **10** | ✅ |
-      | `1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | **8** | ✅ |
-      | `1.21.10` | `1.21.9`, `1.21.10` | **2** | ✅ |
+      | `1.21.1` | `1.21`, `1.21.1` | **54** (was 35) | ❌ below floor |
+      | `1.21.4` | `1.21.2`, `1.21.3`, `1.21.4` | **18** (was 15) | ❌ below floor |
+      | `1.21.5` | `1.21.5` | **12** (was 10) | ✅ |
+      | `1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | **9** (was 8) | ✅ |
+      | `1.21.10` | `1.21.9`, `1.21.10` | **2** (unchanged) | ✅ |
       | `1.21.11` | `1.21.11` | 0 — this is `master` | ✅ |
 
+      🔁 **Re-cut 2026-08-11 against the repaired 566-record manifest** (see 5.2 — the probe was
+      missing static constants and the whole test tree). **The 6 bands and their membership did not
+      change**; only the per-band cost rose. The boundaries were right, the counts were low.
+
       🎉 **Consequence: only THREE band branches to cut** — `mc/1.21.10`, `mc/1.21.8`, `mc/1.21.5`
-      — and the largest carries **10 changed records out of 266**. Under R-a that is three
-      back-ports of single-digit symbol counts, not the sprawl the risk register feared.
+      — and the largest carries **12 changed records out of 566** (was 10 of 266). Under R-a that is
+      three back-ports of low-double-digit symbol counts, not the sprawl the risk register feared.
       - [x] Per-boundary changed symbols are enumerated per band in `BAND_TABLE.md` §"Phase 1.4",
             split into **absent** vs **signature-changed**. The signature-changed rows are the
             dangerous ones: they compile-break rather than resolve-fail, and a present/absent-only
             probe passes them silently.
-      - [x] Order for Phase 6.1, cheapest first: **`1.21.10` (2) → `1.21.8` (8) → `1.21.5` (10)**
+      - [x] Order for Phase 6.1, cheapest first: **`1.21.10` (2) → `1.21.8` (9) → `1.21.5` (12)**
+            — the ordering is unchanged by the re-cut.
 
 - [x] 1.5 Sanity-check the suspected cliffs
       - [x] **Component API cliff FOUND, and it is at `1.21.2` — not `1.21.5`.**
@@ -698,20 +718,53 @@ Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 change
         `TntExplodeMixin` targets the **9-arg** overload, byte-identical on both, and nothing in
         `src/` names either `Pool` type. 🔑 *Read the bytecode, not the table's summary of it.*
 
-      - [ ] ⚠️⚠️ **THE PROBE HAS TWO HOLES, found by compiling.** `src/test/java` failed on
-            `Items.IRON_SPEAR`, which is **not one of the 266 records**:
-            1. **Static constants are not indexed.** The records cover CLASS / METHOD / MIXINCLASS /
-               ATTARGET / ACCESSOR. `Items.IRON_SPEAR` is a *field* on a class that exists on every
-               version, so the import resolves and the probe sees nothing. **There are 20 distinct
-               `Items.<CONST>` references in `src/main/java` alone that have never been
-               version-checked** — fine on `1.21.10`, *unaudited* for `1.21.8` and `1.21.5`, which
-               are 8 and 10 records away rather than 2.
-            2. **`extract-mc-surface.py` scans `src/main/java` only.** A test that will not compile
-               fails the build exactly as hard as main code.
-            - [ ] Extend the extractor to index `<Class>.<CONSTANT>` references and to walk
-                  `src/test/java`, then re-run `probe-bands.py --control 1.21.11` and re-cut
-                  `BAND_TABLE.md`. **Do this before `mc/1.21.8`** — the cheapest band is exactly
-                  where a probe hole is least likely to hurt, and it still found two.
+      - [x] ⚠️⚠️ **THE PROBE HAD TWO HOLES, found by compiling — both CLOSED 2026-08-11.**
+            `src/test/java` failed on `Items.IRON_SPEAR`, which was **not one of the 266 records**:
+            1. **Static constants were not indexed.** The records covered CLASS / METHOD /
+               MIXINCLASS / ATTARGET / ACCESSOR. `Items.IRON_SPEAR` is a *field* on a class that
+               exists on every version, so the import resolved and the probe saw a clean row.
+               🔑 **A class-granular manifest cannot see a field that vanished from a class that
+               survived.**
+            2. **`extract-mc-surface.py` scanned `src/main/java` only.** A test that will not
+               compile fails the build exactly as hard as main code.
+            - [x] Extended the extractor: a new **`STATICFIELD`** record type indexing
+                  `<McClass>.<CONSTANT>` references, and **both** source trees are walked.
+                  `probe-bands.py` learned the type; `AGENTS.md`'s tooling table updated.
+            - **The holes were much bigger than the estimate.** The doc predicted "20 unaudited
+              `Items.<CONST>` in main". Actual: **287 `STATICFIELD` records** across both trees
+              (21 `Items.*` in main, **67 more in test**), plus **11 CLASS records that exist only
+              in `src/test/java`** and had never been probed at all.
+              **266 → 566 records; 184 distinct classes; 290 main + 146 test files scanned.**
+            - **Control check PASSED on the first run: all 566 records resolve on `1.21.11`.**
+              Zero false positives — the constant detector invented nothing. That is the only
+              evidence that makes the 287 new records believable.
+            - 🎉 **The band STRUCTURE survived intact: still exactly 6 bands, same membership**,
+              with the record set more than doubled. The Phase 1.4 boundaries were right; they were
+              just *under-counted*. Per-band cost rose to **54 / 18 / 12 / 9 / 2 / 0**
+              (was 35 / 15 / 10 / 8 / 2 / 0). Varying records: 35 → **54 of 566**.
+            - 🔑🔑 **It immediately found real, unpredicted port work on the two bands not yet
+              cut** — each would have been a compile error discovered the hard way:
+
+              | New record | ABSENT on | Why it was invisible before |
+              |---|---|---|
+              | `STATICFIELD EntityType#COPPER_GOLEM` | `1.21.5`, `1.21.8` | `EntityType` exists on every version |
+              | `STATICFIELD SoundCategory#UI` | `1.21.5` (added in `1.21.6`) | `SoundCategory` exists on every version |
+
+              `mc/1.21.10` is **unchanged at 2 records**, which independently corroborates that the
+              band already cut was correctly sized.
+            - Below the R-b floor the effect is far larger and worth knowing if the floor ever
+              moves: the **entire `EntityAttributes#*` family (8 records)** plus four
+              `SpawnReason` constants and `EquipmentSlot#VALUES` are absent on `1.21`/`1.21.1`,
+              which is most of why that band went 35 → 54.
+            - 🔑 **The detector carries `--self-test` and it was mutation-killed in both
+              directions**: a detector stubbed to find nothing fails the 3 positive cases, and one
+              that ignores comments/strings fails the 3 negative ones (`Items.IRON_SPEAR` named in
+              a line comment, a block comment and a string literal). Written because *"found
+              nothing"* and *"there is nothing to find"* render identically in a manifest.
+            - ⚠️ Resolution is **per referring file**, through that file's own import list, and the
+              inline fully-qualified form (`net.minecraft.item.Items.STICK`) is handled explicitly —
+              it needs no import and is invisible to an import-driven scan. Same hole
+              `PlatformBoundaryGuardTest` found the same way (2.3).
 - [x] 5.3 Fix the errors **inside `fabric/` and `platform/` only.** Held: the one main-source change
       is in `fabric/commands/`. `PlatformBoundaryGuardTest` stayed green.
       - 🔑 **The band diff was shrunk on `master` before the branch was cut, not patched after.**
@@ -771,23 +824,37 @@ Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 change
       touch master's `mc1.21.11-v*` release. Then raise `--require-bands` to 1 (Phase 4′.4) — not
       before, or the scheduled audit fails looking for a branch that is not on the remote.
 
-### ⬜ OPEN — two decisions the `mc/1.21.10` cut surfaced
+### The two decisions the `mc/1.21.10` cut surfaced
 
-- [ ] **OWNER: what should Spears do on a band with no spears?** Spears ship from `1.21.11`;
-      `1.21.10` has **zero** spear items. Nothing breaks — `ItemUtils.isSpear` is id-path-based, so
-      no item ever classifies as a spear and the skill is simply inert — but it is still listed by
-      `/mcstats`, still in the configs, and can never leave level 0. Options: **(a)** leave it inert
-      (zero work, a dead entry in the skill list); **(b)** disable `SPEARS` on the band via the
-      existing per-skill toggle from issue #10 (small, uses shipped machinery, but a config default
-      only reaches players who have never run the mod — see `ConfigRetunes`); **(c)** drop it from
-      `PrimarySkillType` on the band (largest diff, worst for drift). Same question returns for
-      `1.21.8` and `1.21.5`, so it is worth answering once.
-- [ ] **Stale comment on the band.** `McMMOPlayer.java:205` reads
-      `case SPEARS -> new SpearsManager(this);   // 1.21.11 always has Spears (pinned)`. That is
-      false on `mc/1.21.10`. Deliberately **not** fixed in this pass rather than leaving the branches
-      out of step at the end of a session — it needs a `master`-first wording that is true on every
-      band, then a `Backport-of`. ⚠️ This is the *exact* comment shape behind GitHub #7: an MC fact
-      recorded as the reason for code, which stopped being true and was never re-checked.
+- [ ] **RULED (owner, 2026-08-11): SPEARS is DISABLED on every band below `1.21.11`** — the version
+      that added spear items. Not left inert, not dropped from `PrimarySkillType`.
+      Verified from code, not recalled: `ItemUtils.isSpear` → `MaterialMapStore#isSpear`, a fixed
+      `HashSet<String>` of seven id paths (`wooden_spear` … `netherite_spear`), and
+      `SpearsManager`'s constructor touches no item. So the skill is *inert* on such a band, not
+      broken — but it is still listed by `/mcstats`, still in the configs, and can never leave
+      level 0, which is what the ruling removes.
+      - ⚠️⚠️ **Implementation constraint, and it is the whole difficulty:** flipping the shipped
+        config default for the issue-#10 per-skill toggle is **not sufficient**. Per
+        `ConfigRetunes`, `copyMissingDefaults` back-fills only *absent* keys, so a changed default
+        reaches **nobody who has already run the mod once on that band**. The gate has to hold
+        regardless of what is already on disk.
+      - **Not implemented yet** — deliberately out of scope for the session that took the ruling.
+        Whatever form it takes must land on `master` first with a `Backport-of` to each band, per
+        the discipline; a band-authored fix is a defect even though the *symptom* is band-specific.
+- [x] **Stale version-pinned comments — FIXED on `master` (three of them).**
+      `McMMOPlayer.java:205` read `// 1.21.11 always has Spears (pinned)`, and
+      `SkillTools#buildCombatSkills` justified its fixed list with *"the port pins MC 1.21.11 …
+      which has both Spears and Maces"*. **Both were already false on `mc/1.21.10`.** A sweep for
+      the same shape found a third (`PotionConfig`'s *"this 1.21.11 target"*). All three now state
+      the code fact that holds on every band and **name no version at all**.
+      - 🔑🔑 **The defect was not the wrong number — it was pinning a comment to the build's MC
+        version at all.** A comment is read by no compiler and no test, so it goes false in silence.
+        Written into `AGENTS.md` as a standing rule so it binds future sessions rather than living
+        only here. ⚠️ This is the *exact* shape behind GitHub #7: an MC fact recorded as the reason
+        for code, which stopped being true and was never re-checked.
+      - The sweep deliberately left alone the ~20 *dated observations* (*"`isShotFromCrossbow()` was
+        removed in 1.21.11"*, *"verified against the 1.21.11 merged jar"*). Those stay true; only a
+        claim about what the current build targets rots.
 
 **Acceptance:** both branches build, both suites green, both boot and pass smoke, `drift-audit.py`
 reports the new band clean, and each branch released to its own Minecraft line.

@@ -272,8 +272,12 @@ public class SkillTools {
     @VisibleForTesting
     @NotNull
     ImmutableList<PrimarySkillType> buildCombatSkills() {
-        // The port pins MC 1.21.11 (see gradle.properties), which has both Spears and Maces,
-        // so the legacy game-version branching collapses to this single list.
+        // Legacy branched this list on the running game version. Here it is a fixed list on every
+        // band: membership is what wires the combat config keys and the /mcstats grouping, and a
+        // skill whose weapon does not exist on a given Minecraft version is inert, not absent --
+        // ItemUtils matches id paths, so nothing classifies and the skill simply never fires.
+        // Deliberately names no version: the wording this replaced ("the port pins MC 1.21.11 ...
+        // which has both Spears and Maces") went false the moment mc/1.21.10 was cut.
         return ImmutableList.of(
                 PrimarySkillType.ARCHERY,
                 PrimarySkillType.AXES,

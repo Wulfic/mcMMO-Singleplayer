@@ -53,13 +53,24 @@ own — `release.yml` states the invariant outright: *no two branches may resolv
 `minecraft_version`*, because both would then tag `mc<MCVER>-v*` and each would delete the other's
 release.
 
+**Never pin a comment to the build's Minecraft version.** A comment that asserts what version *this
+build is* (`// 1.21.11 always has Spears (pinned)`, `the port pins MC 1.21.11, which has both Spears
+and Maces`) is false on every band branch the moment one is cut, and it is false *silently* — no
+compiler and no test reads a comment. Both of those examples were already wrong on `mc/1.21.10`.
+State the code fact that holds on every band instead. This is the exact shape behind GitHub #7: an MC
+fact recorded as the *reason* for code, which stopped being true and was never re-checked.
+A dated observation about a specific version (*"`isShotFromCrossbow()` was removed in 1.21.11"*,
+*"verified against the 1.21.11 merged jar"*) is fine — it stays true. The claim about what the
+current build targets is what rots.
+
 Tooling (all converse-checked; run them, don't trust them because they printed something green):
 
 | Script | Answers |
 |---|---|
 | `scripts/drift-audit.py` | which `master` fixes have not reached each band. `--self-test` proves it can still detect drift — **run that first**, because "no drift" is also what a broken auditor prints |
 | `scripts/mixin-allow-audit.py` | the true per-band injection-point count for every mixin injector, from bytecode. `--check` must pass before a band ships |
-| `scripts/probe-bands.py` | which of the 266 MC symbols differ on a version (`--control` guards it) |
+| `scripts/extract-mc-surface.py` | regenerates the MC contact-surface manifest from **both** source trees, including `<McClass>.<CONSTANT>` field references. `--self-test` proves the constant detector can still fire *and* still stay quiet |
+| `scripts/probe-bands.py` | which of the 566 MC symbols differ on a version (`--control` guards it) |
 | `scripts/boot-check.sh` | that a **built jar** boots a real server on a given version |
 
 ---

@@ -202,7 +202,13 @@ public class McMMOPlayer {
             case REPAIR -> new RepairManager(this);
             case SALVAGE -> new SalvageManager(this);
             case SMELTING -> new SmeltingManager(this);
-            case SPEARS -> new SpearsManager(this);   // 1.21.11 always has Spears (pinned)
+            // Constructed on every band. Nothing here touches an item, and ItemUtils.isSpear
+            // matches id paths against a fixed set (MaterialMapStore), so on a Minecraft version
+            // that ships no spear items nothing ever classifies as one and the skill is inert
+            // rather than broken. Deliberately states no version number: the comment this replaced
+            // read "1.21.11 always has Spears (pinned)", which went false the moment mc/1.21.10
+            // was cut. See AGENTS.md — a comment pinned to the build's MC version is a defect.
+            case SPEARS -> new SpearsManager(this);
             case STEALTH -> new StealthManager(this);
             case SWORDS -> new SwordsManager(this);
             case TAMING -> new TamingManager(this);
