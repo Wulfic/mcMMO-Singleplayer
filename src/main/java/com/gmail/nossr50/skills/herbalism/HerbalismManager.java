@@ -267,7 +267,7 @@ public class HerbalismManager extends SkillManager {
     /**
      * The rank+enable half of legacy {@code canGreenThumbBlock} — whether the player has unlocked
      * Green Thumb and has the sub-skill enabled. The MC-typed half (a {@code wheat_seeds} main hand
-     * on a {@link com.gmail.nossr50.util.BlockUtils#canMakeMossy mossify-able} block) lives on
+     * on a {@link com.gmail.nossr50.platform.BlockUtils#canMakeMossy mossify-able} block) lives on
      * {@link com.gmail.nossr50.fabric.listeners.SuperAbilityListener}, as the MC-free/MC-typed split
      * requires; the {@link #rollGreenThumbBlockSuccess()} RNG then decides whether the block converts.
      */
@@ -279,7 +279,7 @@ public class HerbalismManager extends SkillManager {
     /**
      * The rank+enable half of legacy {@code canUseShroomThumb}. The MC-typed half (a mushroom in the
      * main hand, one brown + one red mushroom in the pack, and a
-     * {@link com.gmail.nossr50.util.BlockUtils#canMakeShroomy shroomy-able} block) lives on
+     * {@link com.gmail.nossr50.platform.BlockUtils#canMakeShroomy shroomy-able} block) lives on
      * {@link com.gmail.nossr50.fabric.listeners.SuperAbilityListener}. Like Hylian Luck,
      * {@code HERBALISM_SHROOM_THUMB} declares no ranks, so the unlock is always satisfied and the
      * scaling {@link #rollShroomThumbSuccess()} RNG is the real gate.

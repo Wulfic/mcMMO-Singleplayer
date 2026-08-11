@@ -388,7 +388,7 @@ public class McMMOMod implements ModInitializer {
     /**
      * The hand-placed-block registry (§A anti-exploit). Never {@code null} — created at mod load and
      * lives for the JVM; its per-world flags are cleared at world close. Replaces legacy
-     * {@code mcMMO.getUserBlockTracker()}. The MC-typed bridge is {@link com.gmail.nossr50.util.BlockUtils}.
+     * {@code mcMMO.getUserBlockTracker()}. The MC-typed bridge is {@link com.gmail.nossr50.platform.BlockUtils}.
      */
     public static @NotNull PlacedBlockTracker getPlacedBlockTracker() {
         return placedBlockTracker;

@@ -23,7 +23,7 @@ import com.gmail.nossr50.skills.herbalism.MultiBlockPlantTraversal;
 import com.gmail.nossr50.skills.mining.MiningManager;
 import com.gmail.nossr50.platform.skills.TreeFellerProcessor;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
-import com.gmail.nossr50.util.BlockUtils;
+import com.gmail.nossr50.platform.BlockUtils;
 import com.gmail.nossr50.platform.ItemUtils;
 import com.gmail.nossr50.util.MaterialMapStore;
 import com.gmail.nossr50.util.Misc;

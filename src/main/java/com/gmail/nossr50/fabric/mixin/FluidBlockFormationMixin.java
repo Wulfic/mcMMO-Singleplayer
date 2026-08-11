@@ -1,6 +1,6 @@
 package com.gmail.nossr50.fabric.mixin;
 
-import com.gmail.nossr50.util.BlockUtils;
+import com.gmail.nossr50.platform.BlockUtils;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.FluidBlock;
 import net.minecraft.server.world.ServerWorld;

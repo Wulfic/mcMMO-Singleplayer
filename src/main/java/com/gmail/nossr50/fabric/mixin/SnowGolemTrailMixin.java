@@ -1,6 +1,6 @@
 package com.gmail.nossr50.fabric.mixin;
 
-import com.gmail.nossr50.util.BlockUtils;
+import com.gmail.nossr50.platform.BlockUtils;
 import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.passive.SnowGolemEntity;

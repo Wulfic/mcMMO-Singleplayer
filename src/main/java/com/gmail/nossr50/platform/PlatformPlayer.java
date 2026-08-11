@@ -3,7 +3,6 @@ package com.gmail.nossr50.platform;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.text.TextUtils;
-import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.platform.ItemUtils;
 import java.util.UUID;
 import net.minecraft.advancement.AdvancementEntry;

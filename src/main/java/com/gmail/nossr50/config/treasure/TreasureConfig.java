@@ -35,7 +35,7 @@ import org.slf4j.LoggerFactory;
  *       (plus a hardcoded flower/bush list) into a material-keyed map; but block tags are only bound
  *       once datapacks load, not necessarily at this {@code SERVER_STARTING} config load, so the port
  *       resolves a broken block's group live at break time instead (see
- *       {@link com.gmail.nossr50.util.BlockUtils#getHylianTreasureGroup}). The result is identical —
+ *       {@link com.gmail.nossr50.platform.BlockUtils#getHylianTreasureGroup}). The result is identical —
  *       {@link #getHylianTreasures(String)} returns the same treasures the expanded map would have.</li>
  *   <li><b>Legacy {@code Drop_Level} key auto-conversion</b> (the {@code LEGACY}/{@code WRONG_KEY_*}
  *       migration that rewrote old users' files) is dropped — a fresh singleplayer install ships the
@@ -91,7 +91,7 @@ public class TreasureConfig extends ConfigLoader {
      * rolls). Empty for an unknown group.
      *
      * @param group the group name resolved from the broken block by
-     *     {@link com.gmail.nossr50.util.BlockUtils#getHylianTreasureGroup}
+     *     {@link com.gmail.nossr50.platform.BlockUtils#getHylianTreasureGroup}
      * @return the group's treasures (never {@code null})
      */
     public @NotNull List<HylianTreasure> getHylianTreasures(@NotNull String group) {

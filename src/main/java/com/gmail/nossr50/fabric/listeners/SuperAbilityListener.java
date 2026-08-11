@@ -14,7 +14,7 @@ import com.gmail.nossr50.platform.Materials;
 import com.gmail.nossr50.skills.herbalism.Herbalism;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
 import com.gmail.nossr50.skills.unarmed.Unarmed;
-import com.gmail.nossr50.util.BlockUtils;
+import com.gmail.nossr50.platform.BlockUtils;
 import com.gmail.nossr50.platform.ItemUtils;
 import com.gmail.nossr50.util.LogUtils;
 import com.gmail.nossr50.util.player.NotificationManager;

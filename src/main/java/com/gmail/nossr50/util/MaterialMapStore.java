@@ -188,7 +188,7 @@ public class MaterialMapStore {
      * Whether the block is one of the nine small flowers that make up the Hylian Luck "Flowers" group.
      * Legacy {@code TreasureConfig.registerHylianDrops} lists these nine explicitly (it does <em>not</em>
      * use the vanilla {@code small_flowers} tag, which is a superset), so they are hardcoded here to
-     * match. See {@link com.gmail.nossr50.util.BlockUtils#getHylianTreasureGroup}.
+     * match. See {@link BlockRules#hylianTreasureGroup}.
      */
     public boolean isHylianLuckFlower(@NotNull String id) {
         return hylianLuckFlowers.contains(id);
@@ -198,7 +198,7 @@ public class MaterialMapStore {
      * Whether the block is one of the non-tag members of the Hylian Luck "Bushes" group ({@code fern},
      * {@code short_grass}, {@code dead_bush}). The saplings that also belong to that group are matched
      * live against the {@code saplings} block tag (as legacy does) rather than hardcoded here — see
-     * {@link com.gmail.nossr50.util.BlockUtils#getHylianTreasureGroup}.
+     * {@link BlockRules#hylianTreasureGroup}.
      */
     public boolean isHylianLuckBushBlock(@NotNull String id) {
         return hylianLuckBushBlocks.contains(id);

@@ -1,7 +1,7 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
-import com.gmail.nossr50.util.BlockUtils;
+import com.gmail.nossr50.platform.BlockUtils;
 import net.minecraft.block.BlockState;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemPlacementContext;

@@ -9,7 +9,7 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.skills.mining.BlastMining;
 import com.gmail.nossr50.skills.mining.MiningManager;
-import com.gmail.nossr50.util.BlockUtils;
+import com.gmail.nossr50.platform.BlockUtils;
 import com.gmail.nossr50.platform.ItemUtils;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
