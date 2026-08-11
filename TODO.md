@@ -3,7 +3,8 @@
 **Scope:** Fabric only. Targets: all stable `1.21.x` (12 releases) and the `26.x` line (4 stable
 today, growing). NeoForge/Forge are explicitly **out of scope** — see "Deferred" at the bottom.
 
-**Status:** Phase 0 done. Phase 1 in progress.
+**Status:** Phases 0, 1 and 2 done. Phase 3 is closed by ruling R-a, so the next live item is
+**Phase 4′** — cut the first band branch (`mc/1.21.10`, 2 changed records) per Phase 5.
 
 **Rule for this document:** a task is not checked off until its stated *acceptance criteria* pass.
 "It compiles" is not acceptance criteria. Neither is "it looked right in game."
@@ -459,11 +460,18 @@ The touched surface is finite and already counted:
 
 ---
 
-## Phase 2 — Seal the platform boundary (strategy-independent)
+## Phase 2 — Seal the platform boundary (strategy-independent) — ✅ **COMPLETE**
 
-26 files leak `net.minecraft` outside `fabric/` and `platform/`. Under a single tree, each leak is a
+26 files leaked `net.minecraft` outside `fabric/` and `platform/`. Under a single tree, each leak is a
 place a preprocessor directive would end up inside skill logic. Under branches, each is a file that
-diverges per branch. Both are bad.
+diverges per branch. Both are bad. **All 26 are sealed and `PlatformBoundaryGuardTest` holds the
+line at zero.**
+
+🔑 **The rule that decided how the whole phase was worked: relocation does not shrink a band-fragile
+surface — only extraction does.** Growing `PlatformBlock`/`PlatformLivingEntity` until a file
+compiles MC-free *in place* just moves the same divergent lines into wrapper methods; the count is
+unchanged. That is what ruling P2-d encodes, and it is why 4b-2 pulled 14 predicates out into
+`util/BlockRules` and why slice 5 built `PotionSpec` instead of wrapping `ItemStack`.
 
 **The 175 MC-free files, the 357 resources, and the 101 MC-free tests must stay clean, permanently.**
 
@@ -479,11 +487,11 @@ diverges per branch. Both are bad.
       🔑🔑 *`grep -rl '<Symbol>\.'` counts comments as usage.* Four of the five load-bearing claims
       behind a ruling were comments.
 
-- [ ] 2.2 Work the list to zero. Order: `util/` first (widest blast radius), `alchemy` last (biggest
+- [x] 2.2 Work the list to zero. Order: `util/` first (widest blast radius), `alchemy` last (biggest
       cluster — `PotionConfig` + `AlchemyPotion` + `PotionStage` + `PotionUtil` + the two managers
       move together or not at all)
 
-      **26 → 6 leak sites.** Every commit green + bootable, per R-d.
+      **26 → 0 leak sites.** Every commit green + bootable, per R-d.
 
       | Slice | Commit | Sites | Suite |
       |---|---|---|---|
@@ -493,7 +501,7 @@ diverges per branch. Both are bad.
       | 4a — the two MC-plumbing files (`McMMOCommands` → `fabric/commands/`, `ExperienceBarWrapper` → `platform/`) | `9dc2140c1` | 14 → 12 | 1621 |
       | 4b-1 — the five thin adapters, relocated | `1e1f7bc3f` | 12 → 7 | 1621 |
       | 4b-2 — `BlockRules` extracted, bridge relocated | `47a4910c5` | 7 → 6 | **1637** |
-      | **5 — the alchemy cluster** | ⬜ **NEXT** | 6 → 0 | |
+      | 5 — the alchemy cluster | `1d951ac41` | **6 → 0** | **1664** |
 
       🔑 **Relocation does not shrink a band-fragile surface — only extraction does.** Growing
       `PlatformBlock`/`PlatformLivingEntity` until a file compiles MC-free *in place* moves the same
@@ -520,38 +528,74 @@ diverges per branch. Both are bad.
       declaration — keeping an MC-typed class in an MC-free package to preserve an access modifier is
       the trade this phase exists to refuse.
 
-      **Slice 5 is scoped per file** (`PotionSpec`/`EffectSpec` records + a `platform/Potions`
-      lookup; `PotionStage` is already pure logic and just needs retyping) in the
-      `phase2-platform-boundary-seal` memory.
-- [ ] 2.3 **Add the build guard.** A test or Gradle check that fails the build on any
-      `net.minecraft` / `net.fabricmc` import outside `fabric/` and `platform/`.
+      **Slice 5 shipped as scoped**: MC-free `PotionSpec`/`EffectSpec`/`PotionForm` records, the old
+      `util/PotionUtil` split into MC-free `util/PotionNames` (legacy Bukkit names + the
+      `strong_`/`long_`/`water` prefix predicates) and `platform/Potions` (registry lookups,
+      `specOf`, `applyContents`), plus a new `platform/PlatformInventory` view so the brewer still
+      mutates the brewing stand's own `DefaultedList`. `PotionStage` is now pure arithmetic over
+      `PotionSpec`.
+      - 🔑 **`PotionSpec` carries the NAMESPACED base potion id, not the bare path.** The comparison
+        it replaced was `RegistryEntry` identity; bare-path equality would let another mod's
+        `swiftness` match vanilla's. The prefix predicates still read the path, as before.
+      - 🔑 **The queried item's spec is read once per `getPotion`, not once per candidate.** Vanilla
+        calls `BrewingStandBlockEntity#canCraft` from `tick`, which is what `isValidBrew` hangs off —
+        a per-candidate registry lookup would be paid every tick of every brew.
+      - Payoff: **+27 MC-free assertions** (`PotionNamesTest`, `PotionSpecStageTest`) that need no
+        `McTestRegistries.bootstrap()`, covering stage combinations the shipped `potions.yml` does
+        not contain and the config-driven test could never reach. Feeds Phase 4.4's test split.
+- [x] 2.3 **Add the build guard.** → `PlatformBoundaryGuardTest`, commit `40dd525c0`.
       - **Scope: `src/main/java` only** (ruling P2-e), matching this section's own acceptance
         criterion. Test-side MC imports stay legal — `McTestRegistries` and
         `McRegistryBootstrapProbeTest` are registry-bootstrap harnesses and *cannot* be MC-free, so
         policing `src/test/java` would immediately require the exempt list P2-c forbids.
-      - Guard must be **converse-checked**: add a deliberate violating import, confirm it reddens,
-        revert. A guard that has never failed is not known to work.
+      - ⚠️⚠️ **It polices TWO forms, because the import is only the obvious one.** A
+        fully-qualified `net.minecraft.Foo` written inline needs no import at all. Mutation-tested:
+        `static final net.minecraft.item.ItemStack SNEAKY` in `PotionStage` **compiles and passes an
+        import-only guard.** Zero such references exist today, so closing it cost nothing.
+      - **Converse-checked both ways.** By real mutation (a deliberate MC import, then the FQN
+        variant — each reddened and named the file; reverted from a `cp` backup, never
+        `git checkout --`), *and* permanently inside the test: the detector is run over fabricated
+        sources and must fire on a plain import, a **static** import and an inline FQN while staying
+        quiet on the same names in javadoc, a line comment and a string literal.
+      - Anti-vacuity: the walk must find >250 sources, both boundary packages must be non-empty, and
+        `fabric/`+`platform/` must still contain MC imports — so a mis-resolved working directory
+        cannot pass as "no violations".
 
       > Prior burns: `agility-subskill-reparenting` shipped a **vacuous** guard driven by the same
       > table it validated; `audit-item-1-2` shipped one where the wrong source produced the right
       > number. Assert the property, then prove the assertion can fail.
 
-- [ ] 2.4 Re-run the count from 2.1 — must be **0 files**
-- [ ] 2.5 Full suite green; boot the mod; smoke-test one skill per affected area (alchemy brew,
-      repair on anvil, tree feller, a combat kill, `/mcstats`)
+- [x] 2.4 Re-run the count from 2.1 — **0 files.**
+- [x] 2.5 Full suite green (**1671**); `scripts/boot-check.sh` **PASSED** (0 ERROR, 0 mixin
+      failures, clean shutdown); alchemy brew smoke-tested **in a live world** via the new
+      `scripts/brew-smoke.sh`.
+      - 🔑🔑 **That script runs the scenario twice, with and without the mod, and fails if the
+        control also brews.** The obvious smoke test — water + sugar → mundane — passes with mcMMO
+        *uninstalled*; so does water + breeze_rod. Both were tried and only the control run revealed
+        it. **A gameplay assertion vanilla also satisfies is indistinguishable from the mod being
+        absent.** The discriminating scenario is `AWKWARD + GOLDEN_APPLE → POTION_OF_RESISTANCE`
+        (vanilla: no recipe, no potion), which also exercises an `UNCRAFTABLE` base, a custom effect
+        and the legacy `DAMAGE_RESISTANCE → minecraft:resistance` mapping at once.
+      - Repair on anvil / tree feller / a combat kill are **untouched by slice 5** (their seal
+        shipped in 4b-1/4b-2 and is already in the live playtest); per R-d gameplay smoke for those
+        stays with the owner's PrismLauncher instance. `/mcstats` dispatch is covered by
+        `boot-check.sh` — it cannot execute headlessly (`getPlayerOrThrow`), as Phase 0 established.
 
-**Acceptance:** `grep -rl "^import net\.minecraft" src/main/java | grep -v '/fabric/' |
+**Acceptance: ✅ MET.** `grep -rl "^import net\.minecraft" src/main/java | grep -v '/fabric/' |
 grep -v '/platform/'` returns nothing, the guard is proven to fail on a violation, and the suite is
 green.
 
 ---
 
-## Phase 3 — STRATEGY GATE
+## Phase 3 — STRATEGY GATE — ✅ **CLOSED by ruling R-a, decided up front**
 
-- [ ] 3.1 Review `BAND_TABLE.md` against the recommendation above
-- [ ] 3.2 Choose: **single tree + Stonecutter** (recommended) or **branch-per-band**
-- [ ] 3.3 Record the decision + rationale in memory. If branches were chosen, also record the
-      cherry-pick discipline that will keep them from drifting, because nothing else will.
+- [x] 3.1 Review `BAND_TABLE.md` against the recommendation above
+- [x] 3.2 Choose: **branch-per-band** (R-a). The `26.x` finding vindicated it — a yarn-named tree and
+      a Mojang-named tree cannot be reconciled by preprocessor directives.
+- [x] 3.3 Decision + rationale recorded in the `multiversion-strategy-decision` memory. The
+      cherry-pick discipline is written up above ("The cherry-pick discipline R-a requires") and its
+      four items are **still open** — the drift-audit script in particular. Nothing else prevents
+      drift.
 
 Phases 4–6 below assume the recommended path. If branches are chosen, Phase 4 is replaced by
 "cut one branch per band off `master`" and Phases 5–6 stand as written, executed per branch.
@@ -648,7 +692,7 @@ Prove the loop before committing to the matrix. Pick the band **adjacent** to `1
 |---|---|---|---|
 | R1 | Band count comes out 12+, making "all versions" unviable | Phase 1 escalation gate at 1.4 | 1 |
 | R2 | CI time explodes (53s bootstrap × forks × bands) | Test split at 4.4; re-tune forks | 4 |
-| R3 | Directives leak into skill logic, destroying readability + MC-free tests | Phase 2 build guard, converse-checked | 2 |
+| R3 | Directives leak into skill logic, destroying readability + MC-free tests | ✅ **CLOSED** — 26 → 0 leak sites; `PlatformBoundaryGuardTest` (zero allowlist, converse-checked, catches inline FQNs as well as imports) | 2 |
 | R4 | Silent mixin misbinding across versions via dropped `@Slice` | `allow = N` on all 42 mixins | 5 |
 | R5 | Item-ID drift silently disables config rows on older versions | Per-band resolution test at 5.5 | 5 |
 | R6 | Component API cliff needs reimplementation, not a directive | Identified early at 1.5, sized separately | 1, 6 |
