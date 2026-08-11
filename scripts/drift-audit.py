@@ -256,6 +256,23 @@ def self_test() -> int:
         if r.unmatched_trailers:
             failures.append(f"unexpected unmatched trailers: {r.unmatched_trailers}")
 
+        # ⚠️⚠️ The REPORTING path, which is the only output an operator ever acts on and the only
+        # one that never runs in a green build. It shipped broken: the missing-commit line carried
+        # a U+2717 and died with UnicodeEncodeError on a cp1252 Windows console the first time
+        # drift was real, while every green run printed pure ASCII and looked fine for months.
+        # Detection that cannot report is indistinguishable from no detection.
+        rendered = format_reports(reports)
+        blob = "\n".join(rendered)
+        try:
+            blob.encode("cp1252", errors="strict")
+        except UnicodeEncodeError as e:
+            failures.append(f"drift report is not encodable on a cp1252 console: {e}")
+        if forgotten[:9] not in blob:
+            failures.append("the rendered drift report does not name the forgotten commit; "
+                            f"detection found it but the operator would never see it:\n{blob}")
+        if "MISSING" not in blob:
+            failures.append(f"the rendered drift report does not say MISSING:\n{blob}")
+
         # The converse: once the missing fix IS back-ported, the audit must go clean. Without
         # this, a script that reports EVERYTHING as drift also passes the checks above.
         g("checkout", "-q", "mc/1.21.5")
@@ -285,11 +302,46 @@ def self_test() -> int:
                 print(f"  - {f}", file=sys.stderr)
             return 1
         print("SELF-TEST PASSED: the auditor detects a forgotten fix, clears a back-ported one, "
-              "ignores docs-only and explicitly-waived commits, and flags a typo'd trailer.")
+              "ignores docs-only and explicitly-waived commits, flags a typo'd trailer, and "
+              "RENDERS the drift report readably (names the commit, encodable on a cp1252 console).")
         return 0
 
 
+def format_reports(reports: list[BandReport]) -> list[str]:
+    """Render the audit result as lines.
+
+    Split out from main() so --self-test can exercise it. The drift-REPORTING path is the only
+    output that matters and it is the one that never runs in a green build, so it needs a test of
+    its own; detection working while reporting crashes is indistinguishable, to the operator, from
+    the auditor being broken.
+
+    Deliberately ASCII-only. See the note in main(): a Windows cp1252 console cannot encode a
+    U+2717, and this is the exact text that only ever prints when something is wrong.
+    """
+    lines: list[str] = []
+    for r in reports:
+        lines.append(f"=== {r.branch}  (diverged at {r.base[:9]})")
+        lines.append(f"    {r.covered} propagated, {r.waived} waived, {len(r.missing)} MISSING")
+        for c in r.missing:
+            lines.append(f"    [MISSING] {c.short}  {c.subject}")
+        for sha, why in r.unmatched_trailers:
+            lines.append(f"    [?] Backport-of: {sha} -- {why}")
+        lines.append("")
+    return lines
+
+
 def main() -> int:
+    # ⚠️⚠️ Windows consoles default to cp1252, which cannot encode the report glyphs. Every
+    # non-ASCII character in this script lives on the DRIFT-REPORTING path, so the happy path
+    # ("No drift", pure ASCII) printed fine for months while the only output that matters died
+    # with UnicodeEncodeError the first time drift was real. A detector that crashes instead of
+    # naming the missing commit has not detected anything the operator can act on.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass  # already-wrapped or non-reconfigurable stream; ASCII output still works
+
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--master", default="origin/master", help="the trunk ref (default origin/master)")
     ap.add_argument("--branch", action="append", help="audit only this band branch (repeatable)")
@@ -314,6 +366,25 @@ def main() -> int:
         master = "master"
         git("rev-parse", "--verify", master)
 
+    # ⚠️⚠️ The default trunk ref is `origin/master`, which is right for CI and WRONG for a human
+    # running this before pushing: commits that exist only locally are invisible, so the audit
+    # prints "No drift" while the drift is sitting in the working checkout. That is precisely the
+    # false-clean this whole apparatus exists to prevent -- "no drift" is also what a broken
+    # auditor prints -- so say so out loud rather than letting the operator infer it.
+    if master.startswith("origin/"):
+        local = master.split("/", 1)[1]
+        try:
+            ahead = git("rev-list", "--count", f"{master}..{local}").strip()
+        except SystemExit:
+            ahead = "0"
+        if ahead not in ("", "0"):
+            print(
+                f"warning: auditing {master}, but local {local} is {ahead} commit(s) ahead. "
+                f"Those commits are NOT audited here -- a clean result below says nothing about "
+                f"them. Re-run with `--master {local}` to include them.",
+                file=sys.stderr,
+            )
+
     branches = args.branch or band_branches()
     if len(branches) < args.require_bands:
         print(
@@ -333,18 +404,9 @@ def main() -> int:
         return 0
 
     reports = run_audit(master, branches)
-    drift = False
-    for r in reports:
-        header = f"=== {r.branch}  (diverged at {r.base[:9]})"
-        print(header)
-        print(f"    {r.covered} propagated, {r.waived} waived, {len(r.missing)} MISSING")
-        for c in r.missing:
-            print(f"    ✗ {c.short}  {c.subject}")
-        for sha, why in r.unmatched_trailers:
-            print(f"    ? Backport-of: {sha} -- {why}")
-        if r.missing:
-            drift = True
-        print()
+    drift = any(r.missing for r in reports)
+    for line in format_reports(reports):
+        print(line)
 
     if args.json:
         Path(args.json).write_text(
