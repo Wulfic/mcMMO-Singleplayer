@@ -6,7 +6,12 @@ today, growing). NeoForge/Forge are explicitly **out of scope** — see "Deferre
 **Status:** Phases 0, 1, 2 and 3 are closed. **Phase 4 (Stonecutter) is struck** — R-a chose
 branches, so there is no preprocessor to adopt; it is replaced by **Phase 4′**, below. The
 cherry-pick discipline and risk R4 are both **done and landed on `master` first**, so all three band
-branches inherit them. The next live item is **Phase 5 — cut `mc/1.21.10`** (2 changed records).
+branches inherit them.
+
+🎉 **`mc/1.21.10` is cut and green, locally: 1682 tests / 0 failures / 0 skipped on 1.21.10,
+`./gradlew build` exit 0, `boot-check.sh` PASSED, `mixin-allow-audit --mc 1.21.10 --check` PASSED,
+`drift-audit.py` reports the band clean.** ⬜ **It is NOT pushed** — a push builds and releases
+(Phase 4′.5). Remaining before that: 5.5, the gameplay half of 5.6, and the two follow-ups below.
 
 **Rule for this document:** a task is not checked off until its stated *acceptance criteria* pass.
 "It compiles" is not acceptance criteria. Neither is "it looked right in game."
@@ -683,12 +688,37 @@ auto-created `mc/1.21.11` branch had armed. So:
 Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 changed records) →
 `mc/1.21.8` (8) → `mc/1.21.5` (10)**.
 
-- [ ] 5.1 Cut the branch per Phase 4′.
-- [ ] 5.2 Compile. Work the errors against `BAND_TABLE.md` — every error should already be a known
-      row. An error that is *not* in the table means the probe has a hole; fix the probe.
-- [ ] 5.3 Fix the errors **inside `fabric/` and `platform/` only.** A band-specific change in a skill
-      manager is a Phase 2 regression — `PlatformBoundaryGuardTest` will red it; fix the boundary
-      rather than the test. This is the whole return on Phase 2: only ~107 files *can* differ.
+- [x] 5.1 Cut the branch per Phase 4′. → `mc/1.21.10`, commit `24a70dbf5` (toolchain pin only).
+- [x] 5.2 Compile. Work the errors against `BAND_TABLE.md`. **Main source produced exactly ONE error,
+      exactly the predicted record** (`CommandManager.GAMEMASTERS_CHECK`).
+      - The band's *other* differing record needed **no work at all**. `BAND_TABLE.md` flags
+        `World#createExplosion` as signature-changed, but it printed both signatures truncated at the
+        same column so the actual difference was invisible: it is the **13-arg abstract** overload,
+        where `Pool<BlockParticleEffect>` became `WeightedPool<BlockParticleEffect>`.
+        `TntExplodeMixin` targets the **9-arg** overload, byte-identical on both, and nothing in
+        `src/` names either `Pool` type. 🔑 *Read the bytecode, not the table's summary of it.*
+
+      - [ ] ⚠️⚠️ **THE PROBE HAS TWO HOLES, found by compiling.** `src/test/java` failed on
+            `Items.IRON_SPEAR`, which is **not one of the 266 records**:
+            1. **Static constants are not indexed.** The records cover CLASS / METHOD / MIXINCLASS /
+               ATTARGET / ACCESSOR. `Items.IRON_SPEAR` is a *field* on a class that exists on every
+               version, so the import resolves and the probe sees nothing. **There are 20 distinct
+               `Items.<CONST>` references in `src/main/java` alone that have never been
+               version-checked** — fine on `1.21.10`, *unaudited* for `1.21.8` and `1.21.5`, which
+               are 8 and 10 records away rather than 2.
+            2. **`extract-mc-surface.py` scans `src/main/java` only.** A test that will not compile
+               fails the build exactly as hard as main code.
+            - [ ] Extend the extractor to index `<Class>.<CONSTANT>` references and to walk
+                  `src/test/java`, then re-run `probe-bands.py --control 1.21.11` and re-cut
+                  `BAND_TABLE.md`. **Do this before `mc/1.21.8`** — the cheapest band is exactly
+                  where a probe hole is least likely to hurt, and it still found two.
+- [x] 5.3 Fix the errors **inside `fabric/` and `platform/` only.** Held: the one main-source change
+      is in `fabric/commands/`. `PlatformBoundaryGuardTest` stayed green.
+      - 🔑 **The band diff was shrunk on `master` before the branch was cut, not patched after.**
+        `CHEAT_COMMAND` was declared as the version-specific `PermissionSourcePredicate`; widening it
+        to `java.util.function.Predicate` (`8177bf35f`) — which both versions' return types implement
+        — cut the band's main-source difference from *an import + a field type + a call* down to
+        **one token**. Ask this first on every band: *can master absorb the difference instead?*
 - [x] 5.4 ~~Mixins are the tax~~ — **DONE on `master`, commit `62788874e`**, so every band inherits
       it instead of paying it three times.
       - [x] **All 61 injectors carry `allow = N`** (38 had none). Per `mixin-slice-allow-guard` an
@@ -721,7 +751,13 @@ Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 change
         Hunter (`Registries.ENTITY_TYPE` unknown id ⇒ PIG).
       - [ ] Add a per-band test asserting every id in those five files either resolves **or** is
             skipped cleanly, with a log line. Silent skips are not acceptable.
-- [ ] 5.6 Boot the band's version: `scripts/boot-check.sh <jar> <mcversion>` — it already takes the
+- [x] 5.6a **Suite + boot on 1.21.10: PASSED.** `./gradlew build` exit 0, **1682 tests / 0 failures /
+      0 skipped** — the same count as master, because the spear tests assert absence rather than
+      skipping. `scripts/boot-check.sh <jar> 1.21.10` PASSED (0 ERROR, 0 mixin failures, clean
+      shutdown). `mixin-allow-audit.py --mc 1.21.10 --check` PASSED — **all 61 `allow` values are
+      identical on 1.21.10**, and `MixinApplicationTest` loaded all 37 targets on the older jar, so
+      every mixin is proven to apply there too.
+- [ ] 5.6b Boot the band's version: `scripts/boot-check.sh <jar> <mcversion>` — it already takes the
       version, loader and fabric-api as arguments, so no new harness is needed. Then smoke-test:
       block break XP, a combat kill, a repair, a brew (`scripts/brew-smoke.sh`), a cook, `/mcstats`,
       and one super ability.
@@ -732,7 +768,26 @@ Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 change
 - [ ] 5.7 Write the band's port notes to memory — what broke, what the fix was, what the probe
       missed. Band 3 will be much cheaper if band 2 is written down.
 - [ ] 5.8 Only now push the branch, and confirm the release tagged `mc<band>-v*` and did **not**
-      touch master's `mc1.21.11-v*` release.
+      touch master's `mc1.21.11-v*` release. Then raise `--require-bands` to 1 (Phase 4′.4) — not
+      before, or the scheduled audit fails looking for a branch that is not on the remote.
+
+### ⬜ OPEN — two decisions the `mc/1.21.10` cut surfaced
+
+- [ ] **OWNER: what should Spears do on a band with no spears?** Spears ship from `1.21.11`;
+      `1.21.10` has **zero** spear items. Nothing breaks — `ItemUtils.isSpear` is id-path-based, so
+      no item ever classifies as a spear and the skill is simply inert — but it is still listed by
+      `/mcstats`, still in the configs, and can never leave level 0. Options: **(a)** leave it inert
+      (zero work, a dead entry in the skill list); **(b)** disable `SPEARS` on the band via the
+      existing per-skill toggle from issue #10 (small, uses shipped machinery, but a config default
+      only reaches players who have never run the mod — see `ConfigRetunes`); **(c)** drop it from
+      `PrimarySkillType` on the band (largest diff, worst for drift). Same question returns for
+      `1.21.8` and `1.21.5`, so it is worth answering once.
+- [ ] **Stale comment on the band.** `McMMOPlayer.java:205` reads
+      `case SPEARS -> new SpearsManager(this);   // 1.21.11 always has Spears (pinned)`. That is
+      false on `mc/1.21.10`. Deliberately **not** fixed in this pass rather than leaving the branches
+      out of step at the end of a session — it needs a `master`-first wording that is true on every
+      band, then a `Backport-of`. ⚠️ This is the *exact* comment shape behind GitHub #7: an MC fact
+      recorded as the reason for code, which stopped being true and was never re-checked.
 
 **Acceptance:** both branches build, both suites green, both boot and pass smoke, `drift-audit.py`
 reports the new band clean, and each branch released to its own Minecraft line.
