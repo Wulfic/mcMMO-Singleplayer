@@ -8,7 +8,7 @@ import com.gmail.nossr50.config.CoreSkillsConfig;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.RankConfig;
 import com.gmail.nossr50.config.SoundConfig;
-import com.gmail.nossr50.commands.McMMOCommands;
+import com.gmail.nossr50.fabric.commands.McMMOCommands;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.database.FlatFileProfileStore;
 import com.gmail.nossr50.database.PlacedBlockStore;

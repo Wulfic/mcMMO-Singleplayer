@@ -1,4 +1,4 @@
-package com.gmail.nossr50.commands;
+package com.gmail.nossr50.fabric.commands;
 
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;

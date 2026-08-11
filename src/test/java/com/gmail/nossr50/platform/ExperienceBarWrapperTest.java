@@ -1,4 +1,4 @@
-package com.gmail.nossr50.util.experience;
+package com.gmail.nossr50.platform;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

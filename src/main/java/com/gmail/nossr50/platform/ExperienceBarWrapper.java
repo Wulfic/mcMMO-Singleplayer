@@ -1,9 +1,10 @@
-package com.gmail.nossr50.util.experience;
+package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.util.experience.ExperienceBar;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.text.TextUtils;
 import com.gmail.nossr50.util.player.PlayerLevelUtils;

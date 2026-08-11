@@ -1,4 +1,4 @@
-package com.gmail.nossr50.commands;
+package com.gmail.nossr50.fabric.commands;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
