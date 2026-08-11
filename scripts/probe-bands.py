@@ -26,6 +26,11 @@ and still fails at runtime. That residual is exactly risk R4, and the mitigation
 `allow = N` on every injector, plus an actual boot per band. Do not read a green ATTARGET row as
 "the injection point is safe".
 
+⚠️ STATICFIELD records (added 2026-08-11) exist because a class-granular manifest cannot see a
+FIELD that vanished from a class that survived. `Items` exists on every version, so `Items.IRON_SPEAR`
+resolved as a clean CLASS row while the band build failed on it. Field lookups reuse the member
+search below unchanged -- javap prints a field as `... TYPE NAME;`, which the same pattern matches.
+
 Requires: javap on PATH, and each version's yarn-mapped merged jar already in the Loom cache
 (scripts/javap-mc.sh --list-versions).
 """
@@ -78,7 +83,7 @@ def owner_of(kind: str, val: str) -> str | None:
     """The class whose members must be inspected for this record."""
     if kind in ("CLASS", "MIXINCLASS"):
         return val
-    if kind in ("METHOD", "ACCESSOR", "STATICMEMBER"):
+    if kind in ("METHOD", "ACCESSOR", "STATICMEMBER", "STATICFIELD"):
         return val.split("#", 1)[0]
     if kind == "ATTARGET":
         m = re.match(r"^L([^;]+);", val)
@@ -105,7 +110,7 @@ def name_candidates(fqn: str) -> list[str]:
 
 def member_of(kind: str, val: str) -> str | None:
     """The member name that must exist on the owner, if any."""
-    if kind in ("METHOD", "ACCESSOR", "STATICMEMBER"):
+    if kind in ("METHOD", "ACCESSOR", "STATICMEMBER", "STATICFIELD"):
         raw = val.split("#", 1)[1]
         return re.split(r"[(<\s]", raw)[0] or None
     if kind == "ATTARGET":
