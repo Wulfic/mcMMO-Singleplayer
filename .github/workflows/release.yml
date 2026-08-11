@@ -15,15 +15,32 @@
 #   5. On SUCCESS -> publishes a GitHub Release with the jar(s), then deletes the
 #      PREVIOUS release + tag on the SAME Minecraft line (mc<MCVER>-v...),
 #      keeping exactly one "latest" per Minecraft version.
-#   6. Ensures a per-Minecraft-version release branch  mc/<MCVER>  exists. A new
-#      Minecraft version (bump minecraft_version in gradle.properties) therefore
-#      spawns its own branch the first time it is built; existing branches are
-#      never overwritten, so back-port commits on old lines are safe. Pushing to
-#      any mc/** branch builds + releases that line.
+#   6. Pushing to any mc/** branch builds + releases that Minecraft line.
 #
-# Why the branch push does not cause an infinite loop: pushes made with the
-# built-in GITHUB_TOKEN do NOT trigger further workflow runs (GitHub's
-# anti-recursion rule), and the run-number versioning never writes to the repo.
+# RELEASE TOPOLOGY (ruled 2026-08-10, see TODO.md "OPEN - release topology"):
+# "master = newest band". master IS the release branch for the newest supported
+# Minecraft version. mc/** branches exist ONLY for OLDER bands, and are cut by
+# hand when a band is back-ported - never automatically.
+#
+# ⚠️⚠️ This workflow used to auto-create mc/<minecraft_version> on first build of
+# a new version. That step is REMOVED, and must not come back, because under
+# "master = newest band" it is actively harmful:
+#
+#   master and mc/<newest> both read the SAME minecraft_version out of
+#   gradle.properties, so both tag mc<MCVER>-v* and both run the "delete previous
+#   release on this Minecraft line" sweep below. They fight over one release slot
+#   and whichever pushes last DELETES THE OTHER'S RELEASE.
+#
+# That is not hypothetical: the auto-created mc/1.21.11 sat 90 commits stale from
+# 2026-07-23 until it was deleted on 2026-08-10. Had anything pushed to it, it
+# would have built July-23 code and destroyed master's current release.
+#
+# The invariant to preserve: NO TWO BRANCHES MAY RESOLVE TO THE SAME
+# minecraft_version. A band branch must pin its own version in gradle.properties
+# as the first commit after it is cut.
+#
+# Why the run-number versioning cannot cause an infinite loop: GITHUB_RUN_NUMBER
+# means nothing is ever committed back to the repo.
 #
 # To release on EVERY push (even docs-only), delete the `paths:` block below.
 # ---------------------------------------------------------------------------
@@ -176,19 +193,28 @@ jobs:
             esac
           done
 
-      # --- Ensure this Minecraft version has its own release branch -----------
-      - name: Ensure Minecraft release branch
+      # --- Guard the "one branch per Minecraft line" invariant ----------------
+      # Replaces the old "Ensure Minecraft release branch" step, which auto-created
+      # mc/<minecraft_version> and thereby manufactured the exact collision described
+      # in the header. Band branches are now cut by hand; this step only *detects*
+      # a second branch releasing the same line, and warns rather than failing so it
+      # can never take down a legitimate release.
+      - name: Check no other branch claims this Minecraft line
         env:
           MC_BRANCH: ${{ steps.meta.outputs.mc_branch }}
           MC_VERSION: ${{ steps.meta.outputs.mc_version }}
         run: |
-          set -euo pipefail
-          if git ls-remote --exit-code --heads origin "refs/heads/${MC_BRANCH}" >/dev/null 2>&1; then
-            echo "Release branch ${MC_BRANCH} already exists — leaving it untouched."
-          else
-            echo "New Minecraft version ${MC_VERSION} — creating release branch ${MC_BRANCH}."
-            git push origin "${GITHUB_SHA}:refs/heads/${MC_BRANCH}"
+          set -uo pipefail
+          if [ "${GITHUB_REF_NAME}" != "master" ] \
+             && git ls-remote --exit-code --heads origin "refs/heads/${MC_BRANCH}" >/dev/null 2>&1 \
+             && [ "${GITHUB_REF_NAME}" != "${MC_BRANCH}" ]; then
+            echo "::warning::Both '${GITHUB_REF_NAME}' and '${MC_BRANCH}' target Minecraft ${MC_VERSION}. They share the mc${MC_VERSION}-v* tag prefix, so each release run deletes the other's release. Pin a distinct minecraft_version per band branch."
           fi
+          if [ "${GITHUB_REF_NAME}" = "master" ] \
+             && git ls-remote --exit-code --heads origin "refs/heads/${MC_BRANCH}" >/dev/null 2>&1; then
+            echo "::warning::master releases Minecraft ${MC_VERSION}, but branch ${MC_BRANCH} also exists and claims the same line. Under the 'master = newest band' topology mc/** is for OLDER bands only — delete ${MC_BRANCH} or repoint it."
+          fi
+          echo "Release line mc${MC_VERSION}-v* claimed by '${GITHUB_REF_NAME}'."
 
       # --- On build failure: delete the tag (and any partial release) ---------
       # Scoped to the tag/build/publish steps only, so successful releases whose

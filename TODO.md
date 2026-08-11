@@ -15,7 +15,9 @@ today, growing). NeoForge/Forge are explicitly **out of scope** — see "Deferre
 | # | Question | Ruling |
 |---|---|---|
 | R-a | Strategy | **Branch-per-band.** Overrides the single-tree recommendation below. The doc's own fallback clause applies: branch **per band, not per version**, and Phases 0–2 happen regardless. |
-| R-b | Ship targets | **Floor at `1.21.5`.** Ship `1.21.5`–`1.21.11` + `26.1`, `26.1.1`, `26.1.2`, `26.2` = **11 targets**. Pre-`1.21.5` is dropped to dodge the component-API cliff (1.5). Still **probe all 16** so the cut is on record with data, not a hunch. <br>🛑 **Partly overtaken by events** — the four `26.x` targets are unbuildable upstream (no mappings exist; see the blocker under Target matrix). Effective ship list is **7**: `1.21.5`–`1.21.11`. The `1.21.5` floor itself stands and is unaffected. |
+| R-b | Ship targets | **Floor at `1.21.5`.** Ship `1.21.5`–`1.21.11` + `26.1`, `26.1.1`, `26.1.2`, `26.2` = **11 targets**. Pre-`1.21.5` is dropped to dodge the component-API cliff (1.5). Still **probe all 16** so the cut is on record with data, not a hunch. <br>🧱 **Re-sequenced, not reduced** — `26.x` is unobfuscated and uses Mojang names, so those four collapse into **one band whose cost is a full yarn→official rename**. Near-term ship list is **7** (`1.21.5`–`1.21.11`); `26.x` is a separate later project. The `1.21.5` floor is unaffected. |
+| R-e | `26.x` handling | **Own mini-project, gated behind Phases 1–2 and one completed ordinary back-port.** Not band 2, not absorbed into a sweep (Phase 6.3). |
+| R-f | Release topology | **master = newest band.** `mc/**` is for OLDER bands only, cut by hand. `mc/1.21.11` deleted (local + remote); the workflow's auto-branch step is removed and replaced by a collision warning. |
 | R-c | Phase 2 depth | **Full seal to zero, then the guard.** Work all 26 leak sites down before the guard lands. |
 | R-d | Playtest | **Keeps running on master builds.** Master stays green + bootable at every commit; no forensic gap in `advancements/<uuid>.json`. |
 
@@ -85,9 +87,53 @@ predicates need no special-casing. Current shipping target is `1.21.11`.
 
 All 16 version strings were re-confirmed present and `stable` in `/v2/versions/game` on 2026-08-10.
 
-### 🛑🛑 BLOCKER — the entire `26.x` line is unbuildable. It is not a mcMMO problem.
+### 🧱 `26.x` IS THE HARD BAND BOUNDARY — Minecraft is unobfuscated from `26.1`
 
-**There are no deobfuscation mappings for `26.x`, from any source.** Measured 2026-08-10:
+⚠️ **Correction (2026-08-11).** An earlier revision of this section concluded `26.x` was
+"unbuildable by anyone". **That was wrong.** Every measurement below is accurate; the *inference*
+was not. Mappings are absent because from `26.1` Minecraft **ships unobfuscated** and mappings are
+no longer needed — not because tooling is missing. Recording the error deliberately: the raw data
+was right and the conclusion drawn from it was still false, which is this project's most persistent
+failure mode.
+
+**Verified against the real artifact** (`26.2` server jar, `piston-data`, 2026-08-11): the inner
+`META-INF/versions/26.2/server-26.2.jar` holds **7,434 `net/minecraft/*` classes and zero
+obfuscated-looking names.** Mojang's own names ship in the jar.
+
+**But they are Mojang names, not yarn names — and the two schemes differ structurally:**
+
+| | official (`26.x`) | yarn (what this mod is written in) |
+|---|---|---|
+| item stack | `net.minecraft.world.item.ItemStack` | `net.minecraft.item.ItemStack` |
+| server player | `net.minecraft.server.level.ServerPlayer` | `net.minecraft.server.network.ServerPlayerEntity` |
+| food | `net.minecraft.world.food.FoodProperties` | `net.minecraft.component.type.FoodComponent` |
+| consumable | `net.minecraft.world.item.component.Consumable` | `…type.ConsumableComponent` |
+
+So the `26.x` port is a **wholesale rename of the entire MC-facing surface** — all 164 imports, all
+42 mixins, all 44 method selectors and 19 `@At` descriptors, plus every MC type named in a method
+body. It is not a directive and not a back-port; it is its own project, and Phase 6.3's rule
+applies with force: **size it separately, never absorb it into a sweep.**
+
+🔑🔑 **This vindicates R-a.** A yarn-named tree and a Mojang-named tree cannot be reconciled by
+preprocessor directives — the identifiers differ on essentially every MC-touching line. Stonecutter
+could not have bridged this; a branch is the only honest representation. The single-tree
+recommendation this document opens with was written without knowing that, and R-a is right.
+
+- [ ] `scripts/mc-surface.txt` is **yarn-named and therefore does not apply to the `26.x` band.**
+      A translation table is needed before that band can be probed at all.
+      - 🔑 Likely cheapest route: yarn's `v2` mappings carry `official → intermediary → named`
+        columns, so a yarn→official table can be *derived* for `1.21.11` and largely reused, rather
+        than hand-written. Confirm before budgeting the rename as manual.
+- [ ] Toolchain: `26.x` needs a newer Loom than our **1.17.13**. Stable is **1.17.19**; the
+      **`1.18.0-alpha.*`** line is the active track (alpha.15, updated 2026-08-10 — it moves daily).
+      **Confirm exact plugin coordinates when the band is actually attempted; do not pin from this
+      note, it will be stale.**
+- [ ] Treat `26.x` as a **separate, later mini-project**, gated behind Phases 1–2 and at least one
+      completed ordinary back-port. Do not start it as band 2.
+
+### The measurements (all correct; only the old conclusion was wrong)
+
+Measured 2026-08-10:
 
 | Probe | `1.21.x` | `26.1` – `26.2` |
 |---|---|---|
@@ -97,31 +143,24 @@ All 16 version strings were re-confirmed present and `stable` in `/v2/versions/g
 | `/v2/versions/intermediary/<v>` | real (`intermediary:1.21.11`) | **`0.0.0` sentinel** |
 | Mojang `version_manifest_v2` → `downloads` keys | `client`, **`client_mappings`**, `server`, **`server_mappings`** | **`client`, `server` only** |
 
-**Mojang stopped publishing obfuscation maps at the `26.x` boundary.** Yarn is derived from those
-maps, so yarn stopped too, and Fabric's intermediary degenerated to a `0.0.0` placeholder. Loader
-`0.19.3` lists `26.2` as supported, but *supported by the loader* is not *mappable*: this mod is
-written entirely in yarn names and `build.gradle:30` pins `net.fabricmc:yarn:${yarn_mappings}:v2`,
-which 404s for every `26.x`.
+**Why:** from `26.1` Minecraft is unobfuscated, so Mojang no longer needs to publish obfuscation
+maps, Fabric has dropped yarn, and yarn/intermediary stopped updating after `1.21.11`. The absence
+above is a *consequence of deobfuscation*, not a gap in tooling.
 
-⚠️ **The claim in Phase 4 that Stonecutter "is already used in the wild against `26.2-fabric`
-targets, so the new version scheme is supported" is false in the way that matters.** A build tool
-accepting the *version string* is irrelevant when there are no *mappings* to compile against.
-This is the second time a confidently-written premise in this document has failed verification
-(cf. the 162-vs-164 import count) — and exactly the `issue-7` failure mode: a plausible MC fact,
-written down, never resolved against a real artifact.
+⚠️ Note `fabric-loader 0.19.3` lists `26.2` as supported, and that listing is **correct** — with an
+unobfuscated jar there is nothing to remap. What does *not* work is our specific build:
+`build.gradle:30` pins `net.fabricmc:yarn:${yarn_mappings}:v2`, which 404s for every `26.x`, and
+Loom `1.17.13` predates the no-remap path.
 
-**Consequence for R-b:** its `26.1`, `26.1.1`, `26.1.2`, `26.2` targets are **not achievable by
-anyone today**. Ship targets drop from 11 to **7** (`1.21.5` – `1.21.11`) until mappings appear.
+⚠️ The Phase 4 claim that Stonecutter "is already used in the wild against `26.2-fabric` targets, so
+the new version scheme is supported" is **true but misleading**: the version scheme is supported and
+irrelevant. The obstacle was never the version *string*, it is that `26.x` uses a different
+*naming* scheme for every Minecraft identifier. Second premise in this document to survive as
+written but fail on meaning (cf. the 162-vs-164 import count).
 
-- [ ] **OPEN — `26.x` ruling.** Options, in the order I'd rank them:
-      - **(1) Ship `1.21.5`–`1.21.11` now; treat `26.x` as blocked-upstream.** Re-probe periodically;
-        the moment yarn publishes a `26.x` build, it becomes an ordinary band. Costs nothing, loses
-        nothing, and the Phase 1 probe machinery is already version-parameterised for it.
-      - **(2) Migrate the mod off yarn.** Not viable regardless of appetite — mojmap is *also*
-        unavailable for `26.x` (no `client_mappings`). There is nothing to migrate *to*.
-      - **(3) Drop `26.x` from scope permanently.** Premature; the block is upstream and temporary.
-- [ ] Add a periodic re-probe (`scripts/probe-bands.sh --check-mappings`) so "are 26.x mappings out
-      yet?" is a command, not somebody's memory.
+**Consequence for R-b:** the `1.21.5` floor stands unchanged. The four `26.x` targets are real and
+reachable, but they are **one band with a rename-sized cost**, not four cheap tail entries. Near-term
+ship list is **7** (`1.21.5` – `1.21.11`); `26.x` follows as its own project.
 
 ---
 
