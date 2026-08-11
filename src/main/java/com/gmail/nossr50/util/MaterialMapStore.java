@@ -1,5 +1,6 @@
 package com.gmail.nossr50.util;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
@@ -888,6 +889,18 @@ public class MaterialMapStore {
 
     public boolean isSpear(@NotNull String id) {
         return spears.contains(id);
+    }
+
+    /**
+     * The registry-id paths of every spear, as an unmodifiable view.
+     *
+     * <p>Exposed so {@link com.gmail.nossr50.util.skills.SkillAvailability} can ask the item registry
+     * whether <em>this</em> Minecraft version has any of them, without keeping a second copy of the
+     * list. A second copy is how two answers to the same question start disagreeing: {@link #isSpear}
+     * would classify an item the availability probe never looked for.
+     */
+    public @NotNull Set<String> getSpears() {
+        return Collections.unmodifiableSet(spears);
     }
 
     public boolean isLeatherArmor(@NotNull String id) {
