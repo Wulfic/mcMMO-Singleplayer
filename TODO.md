@@ -1548,6 +1548,40 @@ reports the new band clean, and each branch released to its own Minecraft line.
               the slug. **Nothing links to any of them today** — all 7 of the README's internal
               anchors resolve, including the 4 new ones — so this is a trap waiting for the next
               person who adds a link, not a live break.
+      - [x] **Back-ported to all three bands and pushed.** `master` `3009f6fad` · `mc/1.21.5`
+            `fbbb45209` · `mc/1.21.8` `6739ce71e` · `mc/1.21.10` `e2bd779c0`, each band commit
+            carrying `Backport-of: 3009f6fad`. `README.md` + `wiki/` verified **0 files differing**
+            from `master` on all three afterwards, which is R-j's actual acceptance criterion.
+            - The back-port was **scoped to `README.md` + `wiki/`**, not a whole-commit cherry-pick:
+              `TODO.md` and `AGENTS.md` diverge heavily on the bands (they predate `master`'s
+              rewrites) and would have conflicted. Those two are `master`-side planning documents;
+              the docs are what every band ships.
+            - **No release fired**, and this was checked by reading the band's own
+              `release.yml` rather than trusting last session's summary of it: the `paths:` filter is
+              `src/**`, `build.gradle`, `settings.gradle`, `gradle.properties`, `gradle/**`,
+              `gradlew`, `gradlew.bat` and `.github/workflows/release.yml`. `README.md` and `wiki/**`
+              are in none of them.
+            - `drift-audit.py --self-test` **PASSED**, then `--master master` against the *pushed*
+              state: **0 MISSING on all three bands** (`mc/1.21.10` 7 propagated, `mc/1.21.8` 1,
+              `mc/1.21.5` 0).
+
+      - [ ] 🔴 **FINDING — `drift-audit.py` is BLIND to docs drift, and R-j just made that matter.**
+            The auditor classifies a `README.md`/`wiki/`-only commit as *"master-only, not
+            propagatable"* and **ignores it** — its own self-test asserts that behaviour deliberately.
+            So the clean audit above did **not** credit this back-port; it never looked at it.
+            🔑🔑 **That assumption was safe only while docs were master-side notes. They are not
+            any more.** One GitHub wiki serves all four bands, R-j makes the docs part of what each
+            band ships, and this very session found **two wiki pages that were actively wrong for
+            three of the four bands**. A docs fix that lands on `master` and is forgotten on a band
+            now produces exactly R8's failure: no error anywhere, and the wrong page keeps being
+            served to that band's players.
+            ⚠️ Not fixed here — deliberately. Teaching the auditor to require propagation of `wiki/`
+            and `README.md` is a real behaviour change to the one drift mechanism left standing after
+            R-g, and it needs its own commit, its own self-test case, and a decision about whether
+            `TODO.md`/`AGENTS.md` (which are legitimately `master`-only) get excluded by path.
+            **The mechanical check available today** is the one used above, and it should run
+            whenever docs change:
+            `git diff --name-only master <band> -- README.md wiki/` must print nothing.
 - [ ] 7.4 Publish per-band jars to Modrinth/CurseForge with correct version ranges
       ⚠️ **Rewritten under R-g: this is now a fully manual release.** It previously rode on
       `release.yml` producing a tagged jar per branch on push. Each band's jar must be built locally
