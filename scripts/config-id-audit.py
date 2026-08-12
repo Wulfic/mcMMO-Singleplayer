@@ -81,9 +81,17 @@ LOOM = (Path.home() / ".gradle" / "caches" / "fabric-loom" / "minecraftMaven"
 # which reads the real map -- this copy exists only so the script can run without a JVM.
 LEGACY_NAME_ALIASES = {"water_lily": "lily_pad"}
 
-# See the anti-vacuity floor in run(). 0.95 is comfortably above the handful of deliberate
-# older-band rows (1 of 689 today) and far below any plausible parser breakage.
-MIN_CONTROL_RESOLVE_RATE = 0.95
+# See the anti-vacuity floor in run(). It exists to catch a BROKEN EXTRACTOR or a moved id source,
+# which fail wholesale (~0% resolve) — not to bound legitimate band drift.
+#
+# ⚠️⚠️ Sized from the WORST supported band, not from master. On master exactly 1 of 689 ids is
+# deliberately absent (99.9%), and a floor picked from that number is a trap: run this on a band
+# branch, where `control` is that band's own pinned version, and the legitimate absent count is 15
+# on 1.21.10 (97.8%) and 43 on 1.21.5 (93.8%). A 0.95 floor was the first value here and it would
+# have failed the mc/1.21.5 cut for rows that are all correct — at exactly the moment the script is
+# most useful. 0.80 leaves ~3x headroom over the worst real band and still catches any wholesale
+# failure, which is the only thing this can honestly detect.
+MIN_CONTROL_RESOLVE_RATE = 0.80
 
 ITEM, BLOCK = "item", "block"
 
@@ -340,11 +348,17 @@ def run(versions: list[str], control: str, check: bool) -> int:
     for v in versions:
         per_version[v] = resolve_all(found, id_sets(v))
 
-    # DEAD-EVERYWHERE: resolves on no version we can see, control included.
-    dead = []
-    for key in ctl:
-        if not ctl[key] and not any(per_version[v][key] for v in versions):
-            dead.append(key)
+    # ⚠️⚠️ DEAD-EVERYWHERE is judged against EVERY supported version, never against `--mc`.
+    # This is the script's own headline warning turned on itself, and it shipped broken for one
+    # commit: `--mc 1.21.10 --check` restricted the comparison set to a single version, so the 15
+    # ids that are merely ABSENT-ON-BAND there had nowhere else to resolve and were reported as
+    # dead everywhere — a FAIL naming rows that are correct. "Only comparing across versions
+    # separates the two categories" is exactly why the set here must not be the filtered one.
+    # `--mc` filters the per-version REPORT below; it must not narrow this judgement.
+    judged = sorted(set(supported_versions()) | {control})
+    everywhere = {v: (per_version[v] if v in per_version else resolve_all(found, id_sets(v)))
+                  for v in judged}
+    dead = [key for key in ctl if not any(everywhere[v][key] for v in judged)]
 
     # Anti-vacuity floor. The control's real job is catching a BROKEN EXTRACTOR, and a broken one
     # fails wholesale, not by ones. A handful of unresolved ids on the pinned version is normal in a
@@ -562,7 +576,7 @@ def main() -> int:
         return self_test()
 
     control = args.control or pinned_version()
-    versions = args.mc or [v for v in cached_versions() if _at_least_1_21_4(v)]
+    versions = args.mc or supported_versions()
     if not versions:
         raise SystemExit("no cached jars at 1.21.4+ -- nothing to audit")
     return run(versions, control, args.check)
@@ -571,6 +585,11 @@ def main() -> int:
 def _at_least_1_21_4(v: str) -> bool:
     parts = [int(x) for x in re.findall(r"\d+", v)]
     return parts >= [1, 21, 4]
+
+
+def supported_versions() -> list[str]:
+    """Every cached version the id sets can be read for — the DEAD-EVERYWHERE comparison set."""
+    return [v for v in cached_versions() if _at_least_1_21_4(v)]
 
 
 if __name__ == "__main__":
