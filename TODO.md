@@ -8,10 +8,17 @@ branches, so there is no preprocessor to adopt; it is replaced by **Phase 4′**
 cherry-pick discipline and risk R4 are both **done and landed on `master` first**, so all three band
 branches inherit them.
 
-🎉 **`mc/1.21.10` is cut and green, locally: 1682 tests / 0 failures / 0 skipped on 1.21.10,
+🎉 **`mc/1.21.10` is cut and green, locally: 1704 tests / 0 failures / 0 skipped on 1.21.10,
 `./gradlew build` exit 0, `boot-check.sh` PASSED, `mixin-allow-audit --mc 1.21.10 --check` PASSED,
 `drift-audit.py` reports the band clean.** ⬜ **It is NOT pushed** — a push builds and releases
-(Phase 4′.5). Remaining before that: 5.5, the gameplay half of 5.6, and the two follow-ups below.
+(Phase 4′.5).
+
+✅ **2026-08-12 — 5.6b and 5.7 are DONE; Phase 5 is complete except the push (5.8).** The gameplay
+half needed a harness that did not exist, because **every earning path needs a player**:
+`scripts/gameplay-smoke.sh` drives a real `ServerPlayerEntity` (fabric-carpet `/player`) through
+nine scenarios and scores them from `/mcstats` + the profile YAML. **29/29 on `1.21.11` AND on
+`1.21.10`**, with the mod-less control run failing as it must. It also closes Phase 0's stated gap:
+`/mcstats` is now proven to *render real data*, not merely to dispatch.
 
 🔬 **2026-08-11 — the probe holes 5.2 found are CLOSED, and the manifest more than doubled:
 266 → 566 records** (static constants were never indexed; `src/test/java` was never scanned).
@@ -872,16 +879,54 @@ Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 change
         `mixin-allow-audit --mc 1.21.10 --check` PASSED 61/61, `drift-audit.py --master master`
         clean. The band's own build is the only thing that proves a back-port landed intact — the
         cherry-pick exiting 0 does not.
-- [ ] 5.6b Boot the band's version: `scripts/boot-check.sh <jar> <mcversion>` — it already takes the
-      version, loader and fabric-api as arguments, so no new harness is needed. Then smoke-test:
-      block break XP, a combat kill, a repair, a brew (`scripts/brew-smoke.sh`), a cook, `/mcstats`,
-      and one super ability.
+- [x] 5.6b **DONE — all three harnesses pass on `1.21.10`.** `boot-check.sh … 1.21.10` PASSED,
+      `brew-smoke.sh` PASSED (with its discriminating vanilla control), and the new
+      **`scripts/gameplay-smoke.sh` PASSED 29/29 on both bands** — it covers the whole rest of the
+      list (block break XP, a combat kill, a repair, a cook, `/mcstats`, one super ability), which
+      had no harness at all because **every one of those needs a player**.
+      Commits: master `03c313db2`, band `5d4f04e9a` (`Backport-of:`).
+      - **The "no new harness is needed" clause above was wrong**, and it is why this item sat open.
+        `boot-check.sh` proves the jar boots; the seven gameplay items each need a *player*, and a
+        headless server has none. That is the same wall Phase 0 hit (`/mcstats` dies on
+        `getPlayerOrThrow` from the console) and the reason `brew-smoke.sh` explicitly leaves the XP
+        award to the live playtest — an unattended brewing stand is the one path that completes with
+        nobody present. **fabric-carpet's `/player` spawns a real `ServerPlayerEntity`**, which
+        mcMMO's listeners cannot tell from a human. Carpet is fetched per MC version into the
+        harness work directory only, never a build dependency; `boot-check.sh` keeps the hard
+        zero-ERROR gate on a mod list of mcMMO + fabric-api alone.
       - ⚠️⚠️ **A gameplay assertion vanilla also satisfies is indistinguishable from the mod being
         uninstalled.** `brew-smoke.sh` runs its scenario twice, with and without the mod, and fails
         if the control also brews. Water+sugar and water+breeze_rod are *vanilla* brews and both
-        passed with mcMMO absent. Any new per-band smoke check needs the same control.
-- [ ] 5.7 Write the band's port notes to memory — what broke, what the fix was, what the probe
-      missed. Band 3 will be much cheaper if band 2 is written down.
+        passed with mcMMO absent.
+      - 🔑🔑 **That exact device does not transfer, and copying it would have been wrong.** Every
+        number `gameplay-smoke.sh` reads comes from `/mcstats` and mcMMO's own profile YAML, neither
+        of which exists without the mod — so a mod-less run earns nothing *trivially* and proves
+        nothing about the scenario. The discriminator is a **per-phase delta with a NEGATIVE
+        co-assertion**: the skill that must move, and at least one that must not. Three phases are
+        pure negatives, each asserting a behaviour vanilla has no notion of — a **player-placed**
+        block pays nothing (K9), a **`/summon`-ed** mob pays nothing (the egg-farm guard), and the
+        same double-click on a **non-anvil** block pays nothing.
+      - ⚠️⚠️ **A negative phase is vacuous when its ACTION never happened** — *"I mined a placed
+        block and got no XP"* and *"I never placed the block"* read identically. Each carries an
+        `/execute if` probe that must fire first, or the phase scores **INCONCLUSIVE, never PASS**.
+      - **Both converse checks are wired and were run.** The scorer's `--self-test` runs *before the
+        server boots* (the `drift-audit.py` pattern) and kills 8 mutations plus an anti-vacuity floor
+        on the assertion count; `GAMEPLAY_SMOKE_CONTROL=1` re-runs the whole scenario with **mcMMO
+        removed** and inverts the verdict — it must fail, and it does.
+      - 🔑 **The Spears gate is now verified through gameplay, version-agnostically.** The harness
+        does not know which band it is on: it reads the capability decision the probe logged at boot
+        and asserts `/mcstats` agrees. **1.21.11 → 24 skills listed, Spears present; 1.21.10 → 23
+        listed, Spears correctly omitted.** Same script, opposite expectations, nothing to remember
+        at the next cut.
+- [x] 5.7 Band port notes written to memory → `gameplay-smoke-harness`, alongside the existing
+      `band-branch-first-cut`, `probe-holes-staticfield-and-test-tree`,
+      `skill-version-capability-gate` and `config-id-audit-and-dead-xp-rows`. Four assumptions in the
+      harness's first draft were wrong and **every one was silent**: Carpet has no `mine` action
+      (breaking a block is `attack`); **`attack continuous` mines blocks but never hits a mob**
+      (it models a held button, exactly as vanilla does — a NoAI cow sat at 10.0/10.0 health through
+      25 s with the aim provably correct); a **`/summon`-ed mob pays zero combat XP by design**
+      (`COMMAND → PLAYER_PLACED → Eggs.Multiplier: 0`); and **Repair needs two clicks** within a 3 s
+      confirmation window.
 - [ ] 5.8 Only now push the branch, and confirm the release tagged `mc<band>-v*` and did **not**
       touch master's `mc1.21.11-v*` release. Then raise `--require-bands` to 1 (Phase 4′.4) — not
       before, or the scheduled audit fails looking for a branch that is not on the remote.
