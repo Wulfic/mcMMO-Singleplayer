@@ -809,15 +809,58 @@ Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 change
       - ⚠️ A guard test must **not** live in `com.gmail.nossr50.fabric.mixin`: that is the package
         `mcmmo.mixins.json` declares, so under Knot the transformer claims the *test* and it fails to
         load before a single assertion runs.
-- [ ] 5.5 Item-ID config drift check. ~3,868 lines of item-keyed data ship in the jar:
-      `potions.yml` (1,902), `fishing_treasures.yml` (843), `repair.vanilla.yml` (377),
-      `salvage.vanilla.yml` (371), `treasures.yml` (375). Items present in `26.2` may not exist in
-      early `1.21.x`.
-      - Good news: `platform/Materials.java` guards with `containsId` before `Registries.ITEM.get`,
-        so it degrades rather than crashing — and it avoids the defaulted-registry trap that bit
-        Hunter (`Registries.ENTITY_TYPE` unknown id ⇒ PIG).
-      - [ ] Add a per-band test asserting every id in those five files either resolves **or** is
-            skipped cleanly, with a log line. Silent skips are not acceptable.
+- [x] 5.5 Item-ID config drift check — **DONE.** Commits `40486acc2` (the cross-band script),
+      `f0bddd64b` (3 live XP bugs it found), `c0b868782` (loader hardening + the per-band test).
+      `./gradlew build` exit 0, **1704 tests / 0 failures / 0 skipped**.
+      - ⚠️⚠️ **The "five files" scope was itself a probe hole.** `experience.yml` carries **~340
+        block/item ids** in the XP tables and was not on the list — the same shape as the two holes
+        5.2 found. Scope is now **six files, 689 id references**.
+      - Good news, and it held: `platform/Materials.java` guards with `containsId` before
+        `Registries.ITEM.get`, so it degrades rather than crashing — and it avoids the
+        defaulted-registry trap that bit Hunter (`Registries.ENTITY_TYPE` unknown id ⇒ PIG).
+      - [x] **`scripts/config-id-audit.py`** resolves all 689 against all 8 cached jars ≥ 1.21.4.
+            🔑🔑 Its whole point is a split **a per-band test structurally cannot make**:
+            **ABSENT-ON-BAND** (expected drift, the row stays) vs **DEAD-EVERYWHERE** (a defect).
+            On one version the two are identical, and "expected drift" is the reading a reviewer
+            reaches for. `--check` fails on the second only — failing on the first would punish the
+            both-names pattern that keeps one config correct on every band.
+      - [x] **Per-band test** `ConfigItemIdResolutionTest` — every id either resolves **or** is
+            recorded and named in a summary line. Silent skips are not acceptable, and that is now
+            the assertion rather than the intent. **3 mutations, 3 kills**, including
+            *dropped-but-not-recorded*.
+      - **Measured drift (the ship gate's real numbers):** `1.21.10` **15** · `1.21.8`/`1.21.5`
+        **43** — the 7 spears (repair + salvage), the whole copper equipment tier
+        (9 items × fishing/repair/salvage) and `copper_nugget`.
+
+      🎉 **The audit found three live XP holes on `master`, each invisible to every compiler, test
+      and boot log** — a config key matching no registry id is just a lookup that misses:
+
+      | Row | Truth |
+      |---|---|
+      | `Mining.Chain: 100` | `chain` → **`iron_chain`** in the Copper Age drop — **paid zero on the shipping build** |
+      | `Mining.End_Bricks: 50` | the block is `end_stone_bricks`; dead on all 8 versions |
+      | `Smelting.Deepslate_Lapis_Lazuli_Ore` | the item is `deepslate_lapis_ore` |
+
+      `Chain` keeps its row **and gains `Iron_Chain`** — the both-names pattern the file already used
+      (`Lapis_Ore`/`Lapis_Lazuli_Ore`). One row is live per version, so nothing must be remembered at
+      the next cut. 🔑 All three fixes **ADD a key**, so `copyMissingDefaults` reaches existing
+      installs; a changed *value* would have reached nobody (`ConfigRetunes`).
+      🔑 **5 dead legacy doubles were deleted, and they are why `End_Bricks` went unnoticed** — a
+      table with known-dead rows in it has no signal left to read.
+
+      ⚠️⚠️ **BOTH obvious registry-id sources are wrong, and neither fails visibly.** Use
+      `assets/minecraft/blockstates/<id>.json` + `assets/minecraft/items/<id>.json` (generated per
+      *registered* object). `javap Blocks` gives **yarn FIELD NAMES, not registry ids** — and
+      `Blocks.COPPER_CHAINS` is a `CopperBlockSet` holding several ids under one field, invisible to
+      a type-matching regex. `lang/en_us.json` **keeps stale keys through renames**: 1.21.11 still
+      carries `block.minecraft.chain`, so the very bug found here reads as clean there.
+
+      ⚠️⚠️ **A registry probe in an MC-free config's load path poisons the whole test fork.**
+      `TreasureConfig`/`FishingTreasureConfig`/`ExperienceConfig` are MC-free by design and their
+      tests run without bootstrap; initializing `Registries` there **throws**, and every later touch
+      in that fork gets `NoClassDefFoundError`. Doing it in the constructor cost **351 failures
+      across 8 unrelated classes**. The probe now runs once from `onServerStarting` — same point and
+      same argument as `SkillAvailability#probe`.
 - [x] 5.6a **Suite + boot on 1.21.10: PASSED.** `./gradlew build` exit 0, **1682 tests / 0 failures /
       0 skipped** — the same count as master, because the spear tests assert absence rather than
       skipping. `scripts/boot-check.sh <jar> 1.21.10` PASSED (0 ERROR, 0 mixin failures, clean

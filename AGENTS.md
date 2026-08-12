@@ -71,6 +71,7 @@ Tooling (all converse-checked; run them, don't trust them because they printed s
 | `scripts/mixin-allow-audit.py` | the true per-band injection-point count for every mixin injector, from bytecode. `--check` must pass before a band ships |
 | `scripts/extract-mc-surface.py` | regenerates the MC contact-surface manifest from **both** source trees, including `<McClass>.<CONSTANT>` field references. `--self-test` proves the constant detector can still fire *and* still stay quiet |
 | `scripts/probe-bands.py` | which of the 566 MC symbols differ on a version (`--control` guards it) |
+| `scripts/config-id-audit.py` | which of the 689 **config** item/block ids are absent per band, and which are dead on *every* version (a defect, not drift). `--self-test` + a 95% control floor; ids come from the jar's generated `blockstates/`+`items/` data, **never** from `javap` field names or lang keys |
 | `scripts/boot-check.sh` | that a **built jar** boots a real server on a given version |
 
 ---
