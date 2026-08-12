@@ -31,6 +31,15 @@ FIELD that vanished from a class that survived. `Items` exists on every version,
 resolved as a clean CLASS row while the band build failed on it. Field lookups reuse the member
 search below unchanged -- javap prints a field as `... TYPE NAME;`, which the same pattern matches.
 
+⚠️ CALLEDMETHOD / ACCESSEDFIELD / CALLEDCTOR records (added 2026-08-12) close the same hole one
+level over: a manifest cannot see an ordinary INSTANCE METHOD renamed on a class that SURVIVED.
+`Entity#getEntityWorld` is `getWorld` below 1.21.9 -- 57 call sites, zero records, found only by
+compiling mc/1.21.8. They come from our own compiled bytecode rather than from source text, so the
+owner is the COMPILE-TIME RECEIVER TYPE (`ServerPlayerEntity#getEntityWorld`, not
+`Entity#getEntityWorld`); the supertype walk in find_member is what makes that resolve, and it was
+already required for mixin descriptors. A CALLEDCTOR is nearly always PRESENT by construction --
+every class has some constructor -- so read its SIGNATURE column, not its state.
+
 Requires: javap on PATH, and each version's yarn-mapped merged jar already in the Loom cache
 (scripts/javap-mc.sh --list-versions).
 """
@@ -79,11 +88,21 @@ def load_surface() -> list[tuple[str, str]]:
     return recs
 
 
+# Every record type written `owner#member`. The three bytecode kinds resolve through exactly the
+# same member search as the rest -- javap prints a method as `... name(args);`, a field as
+# `... TYPE name;` and a constructor as `... pkg.Owner(args);`, all of which the one pattern in
+# find_member matches. Adding a kind here is the whole integration.
+MEMBER_KINDS = (
+    "METHOD", "ACCESSOR", "STATICMEMBER", "STATICFIELD",
+    "CALLEDMETHOD", "ACCESSEDFIELD", "CALLEDCTOR",
+)
+
+
 def owner_of(kind: str, val: str) -> str | None:
     """The class whose members must be inspected for this record."""
     if kind in ("CLASS", "MIXINCLASS"):
         return val
-    if kind in ("METHOD", "ACCESSOR", "STATICMEMBER", "STATICFIELD"):
+    if kind in MEMBER_KINDS:
         return val.split("#", 1)[0]
     if kind == "ATTARGET":
         m = re.match(r"^L([^;]+);", val)
@@ -110,7 +129,7 @@ def name_candidates(fqn: str) -> list[str]:
 
 def member_of(kind: str, val: str) -> str | None:
     """The member name that must exist on the owner, if any."""
-    if kind in ("METHOD", "ACCESSOR", "STATICMEMBER", "STATICFIELD"):
+    if kind in MEMBER_KINDS:
         raw = val.split("#", 1)[1]
         return re.split(r"[(<\s]", raw)[0] or None
     if kind == "ATTARGET":
@@ -143,19 +162,51 @@ def _split_types(s: str | None) -> list[str]:
     return [re.sub(r"<.*", "", t).strip() for t in out if t.strip()]
 
 
-def javap_all(jar: Path, classes: list[str]) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+def nonmc_classpath(control: str) -> str:
+    """Classpath that resolves what Minecraft alone cannot: Loom's INTERFACE-INJECTED jar + fabric-api.
+
+    Fabric API injects its own interfaces into MC types at build time -- `Entity implements
+    AttachmentTarget` -- and mcMMO calls `entity.getAttached(...)`. javac therefore writes the owner
+    as `net/minecraft/entity/Entity`, so the record looks like a Minecraft member and reads ABSENT
+    against the shared merged jar, on EVERY version, forever. It is not a Minecraft member at all.
+
+    The injected jar lives in the PROJECT's own loom-cache (hash-suffixed), not the shared
+    minecraftMaven one the rest of this script reads -- injection is per-project by construction.
+    One jar per fabric-api module, newest first, keeps the command line bounded; any version
+    declares the member names, which is all this lookup needs.
+    """
+    parts: list[str] = []
+    for p in sorted(REPO.glob(
+            f".gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-merged-*/{control}-*/*.jar")):
+        if not p.name.endswith("-sources.jar"):
+            parts.append(str(p))
+    fabric = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "net.fabricmc.fabric-api"
+    for module in sorted(fabric.glob("*")) if fabric.is_dir() else []:
+        jars = [j for j in sorted(module.rglob("*.jar"), reverse=True)
+                if not j.name.endswith("-sources.jar")]
+        if jars:
+            parts.append(str(jars[0]))
+    import os
+    return os.pathsep.join(parts)
+
+
+def javap_all(jar: str | Path | None, classes: list[str]) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     """Run javap in chunks; return (members, supertypes).
 
     One invocation per chunk, not per class -- ~170 JVM starts per version, times 12 versions, is
     not viable. javap tolerates unknown classes on the command line, so unresolvable names simply
     do not appear in the output.
+
+    `jar=None` resolves from the platform JDK instead, for the java.lang supertypes an MC class
+    inherits real members from.
     """
     members: dict[str, list[str]] = {}
     supers: dict[str, list[str]] = {}
     CHUNK = 100
     for i in range(0, len(classes), CHUNK):
+        cp = ["-cp", str(jar)] if jar is not None else []
         p = subprocess.run(
-            ["javap", "-p", "-cp", str(jar), *classes[i : i + CHUNK]],
+            ["javap", "-p", *cp, *classes[i : i + CHUNK]],
             capture_output=True, text=True, errors="replace",
         )
         cur = None
@@ -185,7 +236,7 @@ def resolve_owner(fqn: str, members: dict[str, list[str]]) -> str | None:
 
 def find_member(
     owner: str, member: str, members: dict[str, list[str]], supers: dict[str, list[str]],
-    jar: Path, cache: dict[str, tuple[dict[str, list[str]], dict[str, list[str]]]],
+    jar: str | Path, aux_cp: str | None = None,
 ) -> list[str]:
     """Search owner and its whole supertype closure.
 
@@ -194,6 +245,13 @@ def find_member(
     AbstractBlock.AbstractBlockState; WorldAccess#setBlockState comes from ModifiableWorld), so a
     probe that does not walk the hierarchy reports false ABSENT on the very version the mod is
     known to compile against.
+
+    ⚠️ THE CLOSURE DOES NOT STOP AT net.minecraft, and it did until 2026-08-12. `SpawnReason#ordinal`
+    is declared on `java.lang.Enum`, `RegistryEntry#equals` on `java.lang.Object` and
+    `DefaultedRegistry#iterator` on `java.lang.Iterable` -- all three are perfectly real calls our
+    bytecode makes on an MC type, and all three read as false ABSENT while the walk skipped every
+    non-MC supertype. JDK classes are resolved from the platform (javap with no -cp) and
+    java.lang.Object is seeded explicitly, because javap never prints `extends java.lang.Object`.
     """
     pat = re.compile(r"[\s.]" + re.escape(member) + r"\s*[(;]")
     seen: set[str] = set()
@@ -205,18 +263,29 @@ def find_member(
         seen.add(cls)
         body = members.get(cls)
         if body is None:
-            if not cls.startswith("net.minecraft"):
-                continue
-            extra_m, extra_s = javap_all(jar, [cls])
+            if cls.startswith("net.minecraft"):
+                cp: str | Path | None = jar
+            else:
+                # A non-MC supertype: fabric-api when classifying (aux_cp), otherwise the platform
+                # JDK, which is where java.lang.Enum#ordinal and Object#equals actually live.
+                cp = aux_cp
+            extra_m, extra_s = javap_all(cp, [cls])
             members.update({k: v for k, v in extra_m.items() if k not in members})
             supers.update({k: v for k, v in extra_s.items() if k not in supers})
-            body = members.get(cls)
-            if body is None:
-                continue
+            # ⚠️ NEGATIVE-CACHE THE MISS, or the walk re-spawns javap for the same unresolvable
+            # class on every record that passes through it. `members` is per-version and shared
+            # across all records, so one JVM start becomes hundreds: an unfixed miss turned a
+            # 20-minute 12-version probe into a >90-minute one, all of it re-asking a question that
+            # had already been answered "no".
+            members.setdefault(cls, [])
+            body = members[cls]
         hits = [b for b in body if pat.search(" " + b)]
         if hits:
             return hits
-        stack.extend(supers.get(cls, []))
+        # java.lang.Object is every class's supertype and javap never says so.
+        stack.extend(supers.get(cls, []) or [])
+        if cls != "java.lang.Object":
+            stack.append("java.lang.Object")
     return []
 
 
@@ -228,6 +297,9 @@ def main() -> int:
                     help="version the mod is known to compile against; must resolve 100%% of records")
     ap.add_argument("--allow-control-failures", action="store_true",
                     help="continue despite a failed control check (for debugging the probe only)")
+    ap.add_argument("--no-nonmc-classify", action="store_true",
+                    help="skip the fabric-api classification pass, so every control ABSENT is "
+                         "reported raw (for auditing what the classifier is absorbing)")
     args = ap.parse_args()
 
     versions = [v.strip() for v in args.versions.split(",") if v.strip()] or cached_versions()
@@ -250,7 +322,6 @@ def main() -> int:
             continue
         print(f"  probing {v} ...", flush=True)
         members, supers = javap_all(jar, classes)
-        cache: dict[str, tuple[dict[str, list[str]], dict[str, list[str]]]] = {}
         per: dict[tuple[str, str], tuple[str, str]] = {}
         for kind, val in recs:
             owner = resolve_owner(owner_of(kind, val), members)
@@ -265,7 +336,7 @@ def main() -> int:
                 # the real signal. Members that matter carry their own METHOD/ATTARGET record.
                 per[(kind, val)] = ("PRESENT", "")
                 continue
-            hits = find_member(owner, mem, members, supers, jar, cache)
+            hits = find_member(owner, mem, members, supers, jar)
             per[(kind, val)] = ("PRESENT", " | ".join(sorted(hits))) if hits else ("ABSENT", "")
         result[v] = per
 
@@ -284,6 +355,42 @@ def main() -> int:
     # members that javap never lists.
     control = args.control if args.control in result else (live[-1] if live else None)
     control_absent = [r for r in recs if result[control][r][0] == "ABSENT"] if control else []
+
+    # --- classify the control's ABSENT rows: which of them are not Minecraft's at all? ---------
+    #
+    # Order matters -- this runs BEFORE the control check, because a Fabric-injected member is a
+    # false ABSENT there and would otherwise block every run forever. A record qualifies only if it
+    # is ABSENT against Minecraft alone AND resolves once Loom's interface-injected jar and
+    # fabric-api are on the classpath. That is a mechanical property, not a name list: nothing is
+    # exempted by being called `getAttached`, only by actually being declared outside Minecraft.
+    #
+    # They are then dropped from the band analysis, because their presence does not vary with the
+    # Minecraft version -- fabric-api is pinned per band by gradle.properties, and drift in it is a
+    # different axis this table does not measure. Dropped LOUDLY: printed here and listed in the
+    # generated table, so the set can never grow in silence.
+    nonmc: list[tuple[str, str]] = []
+    if control and control_absent and not args.no_nonmc_classify:
+        aux = nonmc_classpath(control)
+        if aux:
+            aux_members, aux_supers = javap_all(aux, sorted({o for k, v in control_absent if (o := owner_of(k, v))}))
+            for kind, val in control_absent:
+                own = resolve_owner(owner_of(kind, val), aux_members)
+                mem = member_of(kind, val)
+                if own and mem and find_member(own, mem, aux_members, aux_supers, aux, aux_cp=aux):
+                    nonmc.append((kind, val))
+        else:
+            print("⚠️ no interface-injected jar or fabric-api cache found; cannot classify "
+                  "non-Minecraft members. Run a build first.", file=sys.stderr)
+
+    if nonmc:
+        print(f"\nnon-Minecraft members: {len(nonmc)} record(s) resolve only with fabric-api on the "
+              f"classpath (interface injection). Excluded from the band analysis:")
+        for kind, val in nonmc:
+            print(f"     {kind:<14} {val}")
+        drop = set(nonmc)
+        recs = [r for r in recs if r not in drop]
+        control_absent = [r for r in control_absent if r not in drop]
+
     if control and control_absent:
         print(f"\n❌ PROBE IS UNTRUSTWORTHY: {len(control_absent)} record(s) ABSENT on the control "
               f"version {control}, which the mod demonstrably compiles against:", file=sys.stderr)
@@ -320,6 +427,17 @@ def main() -> int:
     lines.append("*call* to still appear inside the injected method's body, which this probe cannot see.")
     lines.append("That residual is risk R4; `allow = N` on every injector plus a real boot per band is")
     lines.append("the mitigation.\n")
+
+    if nonmc:
+        lines.append(f"### Excluded: {len(nonmc)} non-Minecraft member(s)\n")
+        lines.append("These resolve **only** with Loom's interface-injected jar and fabric-api on the")
+        lines.append("classpath, so they are Fabric API's surface, not Minecraft's — javac merely records")
+        lines.append("the MC class as the owner. Their presence does not vary with the Minecraft version,")
+        lines.append("and fabric-api is pinned per band in `gradle.properties`. Listed so the exclusion is")
+        lines.append("never silent:\n")
+        for k, v in nonmc:
+            lines.append(f"- `{k}` `{v}`")
+        lines.append("")
 
     lines.append("## Bands\n")
     lines.append("A band = versions whose entire resolution is byte-identical.\n")
