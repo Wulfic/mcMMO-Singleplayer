@@ -6,7 +6,7 @@ super abilities for vanilla Minecraft — no server, no database, no plugin plat
 
 | | |
 |---|---|
-| **Minecraft** | 1.21.11 |
+| **Minecraft** | 1.21.5 – 1.21.11 — one build per version band, see [Supported versions](#supported-versions) |
 | **Mod loader** | Fabric Loader ≥ 0.19.3 |
 | **Required dependency** | Fabric API |
 | **Java** | 21+ |
@@ -17,11 +17,46 @@ the complete config reference and a troubleshooting guide. This README is the sh
 
 ---
 
+## Supported versions
+
+mcMMO‑SP ships **one build per version band**. A band is a run of Minecraft versions across which
+the mod's Minecraft‑facing surface is identical, so a single jar covers all of them.
+
+| Minecraft | Release tag prefix | Fabric API | Mod Menu | Cloth Config |
+|---|---|---|---|---|
+| **1.21.11** | `mc1.21.11-…` | `0.141.4+1.21.11` | `17.0.0` | `21.11.153` |
+| **1.21.9 – 1.21.10** | `mc1.21.10-…` | `0.138.4+1.21.10` | `16.0.1` | `20.0.149` |
+| **1.21.6 – 1.21.8** | `mc1.21.8-…` | `0.136.1+1.21.8` | `15.0.2` | `19.0.147` |
+| **1.21.5** | `mc1.21.5-…` | `0.128.2+1.21.5` | `14.0.2` | `18.0.145` |
+
+Every band needs **Fabric Loader ≥ 0.19.3** and **Java 21+**. On [Releases](../../releases), pick the
+tag whose prefix matches your Minecraft version. Each jar declares its band as a dependency range in
+`fabric.mod.json`, so Fabric Loader stops a mismatched install at startup with a clear message
+instead of letting it misbehave quietly.
+
+Minecraft **1.21.4 and older are not supported**, and neither is the `26.x` line yet.
+
+### What differs between bands
+
+The mod is the same on every band — same skills, same sub‑skills, same numbers. Only two things
+depend on what your Minecraft version actually contains:
+
+| Feature | Needs | On older bands |
+|---|---|---|
+| **The Spears skill** | **1.21.11+** | Spear items don't exist below 1.21.11, so the skill is **switched off** — no XP, no procs, no XP bar, and no `/mcstats` line. `/mcstats spears` tells you it's the Minecraft version rather than a config setting. |
+| **Copper gear** — Repair, Salvage, copper equipment as Fishing treasure, `copper_nugget` from Hylian Luck, and Smelting's copper nugget row | **1.21.9+** | Those config rows simply find nothing to match. Everything else in Repair, Salvage, Fishing and Smelting works normally. |
+
+Nothing else in the mod is version‑gated. mcMMO asks the game's own registries what exists rather
+than carrying a table of version numbers, so a band never has to be told what it can furnish.
+
+---
+
 ## Installation
 
-1. Install [Fabric Loader](https://fabricmc.net/use/) for Minecraft 1.21.11.
+1. Install [Fabric Loader](https://fabricmc.net/use/) (≥ 0.19.3) for your Minecraft version.
 2. Drop [Fabric API](https://modrinth.com/mod/fabric-api) into `.minecraft/mods/`.
-3. Drop the mcMMO jar from [Releases](../../releases) into `.minecraft/mods/`.
+3. Drop the mcMMO jar for your band from [Releases](../../releases) into `.minecraft/mods/` — see
+   [Supported versions](#supported-versions) for which tag that is.
 4. Launch. Configs are generated on first world load.
 
 Optionally add **Mod Menu + Cloth Config** (in‑game settings screen) and **Advancement Plaques**
@@ -73,10 +108,14 @@ the average of their parents and which earn no XP of their own.
 | Category | Skills |
 |---|---|
 | **Gathering** | Mining, Woodcutting, Herbalism, Excavation, Fishing, **Husbandry** |
-| **Combat** | Swords, Axes, Unarmed, Archery, Crossbows, Tridents, Maces, Spears, Taming, **Hunter** |
+| **Combat** | Swords, Axes, Unarmed, Archery, Crossbows, Tridents, Maces, Spears\*, Taming, **Hunter** |
 | **Movement** | **Parkour**, **Swimming**, **Flying** |
 | **Misc** | **Stealth**, **Unarmored**, Repair, Alchemy, **Cooking** |
 | **Child skills** | **Agility** (avg. of Parkour + Swimming + Flying), **Salvage** (avg. of Repair + Fishing), **Smelting** (avg. of Mining + Repair) |
+
+\* **Spears needs Minecraft 1.21.11+** — spear items don't exist below it, so on older bands the
+skill is switched off entirely and does not appear in `/mcstats`. See
+[Supported versions](#supported-versions).
 
 ### New in this port
 
@@ -102,9 +141,10 @@ so speed buffs, elytra rockets and ice boats are not XP multipliers. Standing st
 walking pays nothing, and being *carried* pays nothing — Stealth reads your actual server-side
 movement input, so a taped-down shift key in a water current earns zero.
 
-> **Still planned:** Cooking — the design is drafted in [`plans/new-skills/`](plans/new-skills/), no
-> code yet. Husbandry and Hunter are **code-complete but not yet play-tested**, along with the six
-> movement/stealth skills above; see [`PLAYTEST_G.md`](PLAYTEST_G.md).
+> **All eight are shipped and code‑complete**, including Cooking. What they are still short on is
+> *play* — see the play‑test caveat under [Port status & known gaps](#port-status--known-gaps). Each
+> skill's design document is in [`plans/completed/`](plans/completed/), and the in‑game verification
+> plan is [`plans/PLAYTEST_G.md`](plans/PLAYTEST_G.md).
 
 **RetroMode is on by default** — levels scale 1–1000 rather than 1–100, and every level requirement
 in the configs is multiplied by 10. Turn it off in `config.yml` under `General.RetroMode.Enabled`.
@@ -181,8 +221,8 @@ declared as dependencies, and mcMMO detects each at runtime and degrades gracefu
 ### Mod Menu + Cloth Config — in‑game config editor
 
 Install **both** (Cloth Config builds the widgets, Mod Menu provides the entry point) and mcMMO gains
-a config screen from the mod list. Versions targeting MC 1.21.11: Mod Menu `17.0.0`, Cloth Config
-`21.11.153`.
+a config screen from the mod list. Both mods are versioned per Minecraft release — the pair that
+matches each band is in the [Supported versions](#supported-versions) table.
 
 Edits are written straight back to the YAML on disk and take effect on the **next world load** — not
 instantly, since most values are read once at load time.
@@ -273,8 +313,25 @@ Requires JDK 21. The remapped mod jar lands in `build/libs/`. The JUnit suite ru
 ./gradlew runClient   # dev client
 ```
 
-Releases are built and published automatically by [`.github/workflows/release.yml`](.github/workflows/release.yml)
-on every push to `master` or an `mc/**` branch, keeping one "latest" release per Minecraft line.
+### Branches and releases
+
+Each version band is its own branch. `master` **is** the newest supported band; `mc/**` branches
+exist only for older ones.
+
+| Branch | Band |
+|---|---|
+| `master` | 1.21.11 |
+| `mc/1.21.10` | 1.21.9 – 1.21.10 |
+| `mc/1.21.8` | 1.21.6 – 1.21.8 |
+| `mc/1.21.5` | 1.21.5 |
+
+A branch pins its own `minecraft_version` and `yarn_mappings` in `gradle.properties` and its own
+band range in `fabric.mod.json`, so checking one out and running `./gradlew build` produces that
+band's jar with no further configuration.
+
+Fixes land on `master` first and are propagated to the band branches, each propagation commit
+carrying a `Backport-of: <sha>` trailer naming the `master` commit it came from. Releases are
+published per band and tagged `mc<minecraft version>-v<mod version>-build.<n>`.
 
 ---
 
@@ -287,7 +344,7 @@ clean, but it is **young** — expect rough edges and please file issues.
 > the restructured Agility, Stealth and Unarmored all pass the unit suite and boot clean, but their
 > XP rates and reference speeds are **starting estimates, not measured numbers** — the tuning
 > comments in `experience.yml` say so explicitly. Balance feedback on these is especially welcome.
-> The in‑game verification plan lives in [`PLAYTEST_G.md`](PLAYTEST_G.md).
+> The in‑game verification plan lives in [`plans/PLAYTEST_G.md`](plans/PLAYTEST_G.md).
 
 > ⚠️ **Existing Acrobatics progress does not carry over.** Acrobatics was renamed Agility, and
 > Agility then became a *child* skill — child skills have no save key at all, their level is
