@@ -183,7 +183,7 @@ public final class ProjectileListener {
         if (arrowCount <= 0) {
             return;
         }
-        if (!(victim.getEntityWorld() instanceof ServerWorld world)) {
+        if (!(victim.getWorld() instanceof ServerWorld world)) {
             return;
         }
         final ItemEntity drop = new ItemEntity(world, victim.getX(), victim.getY(), victim.getZ(),

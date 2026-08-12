@@ -180,8 +180,8 @@ public final class SecondWindListener {
         final Vec3d lunge = look.multiply(result.magnitude());
         setVelocity(player, player.getVelocity().add(lunge.x, Math.max(0.1, lunge.y * 0.5), lunge.z));
 
-        final ServerWorld world = (ServerWorld) player.getEntityWorld();
-        final Vec3d from = player.getEntityPos();
+        final ServerWorld world = (ServerWorld) player.getWorld();
+        final Vec3d from = player.getPos();
         final Vec3d to = from.add(look.multiply(result.dartRange()));
         final Box path = new Box(from, to).expand(DART_HIT_RADIUS);
 

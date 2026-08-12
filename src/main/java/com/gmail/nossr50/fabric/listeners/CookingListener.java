@@ -215,7 +215,7 @@ public final class CookingListener {
         // derivation itself is shared so the two can never drift apart.
         final String resultConfigString = SmeltingListener.materialConfigString(result);
         final CookingManager.CookAward award = mmoPlayer.getCookingManager()
-                .onCraft(resultConfigString, items, player.getEntityWorld().getTime());
+                .onCraft(resultConfigString, items, player.getWorld().getTime());
         if (award.capReached()) {
             // Once per window, not once per craft — see SmeltingListener#onFurnaceSmelt.
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,

@@ -234,7 +234,7 @@ public final class PlatformLivingEntity {
     // --- World / position (Bukkit getLocation/getWorld) ---------------------
 
     public @NotNull World getWorld() {
-        return handle.getEntityWorld();
+        return handle.getWorld();
     }
 
     public @NotNull BlockPos getBlockPos() {
@@ -242,7 +242,7 @@ public final class PlatformLivingEntity {
     }
 
     public @NotNull Vec3d getPos() {
-        return handle.getEntityPos();
+        return handle.getPos();
     }
 
     // --- Custom name --------------------------------------------------------

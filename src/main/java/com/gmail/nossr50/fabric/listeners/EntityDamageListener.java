@@ -970,7 +970,7 @@ public final class EntityDamageListener {
     private static double distanceXpMultiplier(LivingEntity target,
             PersistentProjectileEntity projectile) {
         return Archery.distanceXpBonusMultiplier(projectile.getUuid(),
-                target.getEntityWorld().getRegistryKey().getValue().toString(),
+                target.getWorld().getRegistryKey().getValue().toString(),
                 target.getX(), target.getY(), target.getZ());
     }
 
@@ -1332,7 +1332,7 @@ public final class EntityDamageListener {
 
     /** Stamp the current server tick as this player's most recent damage. */
     static void recordDamageTaken(@NotNull ServerPlayerEntity player) {
-        final MinecraftServer server = player.getEntityWorld().getServer();
+        final MinecraftServer server = player.getWorld().getServer();
         if (server != null) {
             LAST_DAMAGED_TICK.put(player.getUuid(), server.getTicks());
         }
@@ -1351,7 +1351,7 @@ public final class EntityDamageListener {
         if (last == null) {
             return Long.MAX_VALUE;
         }
-        final MinecraftServer server = player.getEntityWorld().getServer();
+        final MinecraftServer server = player.getWorld().getServer();
         if (server == null) {
             return Long.MAX_VALUE;
         }

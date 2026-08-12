@@ -66,7 +66,7 @@ class EntityDamageListenerAssassinTest {
         final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
         lenient().when(player.getUuid()).thenReturn(uuid);
         lenient().when(player.isSneaking()).thenReturn(true);
-        lenient().when(player.getEntityWorld()).thenReturn(world);
+        lenient().when(player.getWorld()).thenReturn(world);
         return player;
     }
 
@@ -181,7 +181,7 @@ class EntityDamageListenerAssassinTest {
         assertEquals(0L, EntityDamageListener.ticksSinceDamageTaken(player));
 
         // Advance the server clock; the window must open by exactly that much.
-        when(player.getEntityWorld().getServer().getTicks()).thenReturn(NOW + 137);
+        when(player.getWorld().getServer().getTicks()).thenReturn(NOW + 137);
         assertEquals(137L, EntityDamageListener.ticksSinceDamageTaken(player));
     }
 
@@ -191,7 +191,7 @@ class EntityDamageListenerAssassinTest {
         // "hit in the future" and silently disable the sub-skill rather than mistiming it once.
         final ServerPlayerEntity player = attacker();
         EntityDamageListener.recordDamageTaken(player);
-        when(player.getEntityWorld().getServer().getTicks()).thenReturn(NOW - 500);
+        when(player.getWorld().getServer().getTicks()).thenReturn(NOW - 500);
 
         assertEquals(0L, EntityDamageListener.ticksSinceDamageTaken(player));
     }

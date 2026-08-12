@@ -79,14 +79,14 @@ public final class BlastMiningListener {
 
         final BlockPos targetPos = targetBlock(serverPlayer);
         if (targetPos == null
-                || !serverPlayer.getEntityWorld().getBlockState(targetPos).isOf(Blocks.TNT)) {
+                || !serverPlayer.getWorld().getBlockState(targetPos).isOf(Blocks.TNT)) {
             return;
         }
         // PORT (K5): legacy also required EventUtils.simulateBlockBreak(targetBlock, player) — a
         // fake BlockBreakEvent asking other plugins whether removing the TNT was allowed. There are
         // no plugins in singleplayer, so the check collapses to "always allowed".
 
-        final ServerWorld world = (ServerWorld) serverPlayer.getEntityWorld();
+        final ServerWorld world = (ServerWorld) serverPlayer.getWorld();
         final Vec3d spawnPos = Vec3d.ofBottomCenter(targetPos);
         final TntEntity tnt = new TntEntity(world, spawnPos.getX(), spawnPos.getY(),
                 spawnPos.getZ(), serverPlayer);

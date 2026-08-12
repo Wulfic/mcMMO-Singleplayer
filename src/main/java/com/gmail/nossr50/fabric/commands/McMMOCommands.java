@@ -92,8 +92,17 @@ public final class McMMOCommands {
      * difference to the <em>argument</em> on the next line — one token instead of an import, a type
      * and a call. Naming the concrete type here bought nothing and made this file diverge per band.
      */
+    // BAND mc/1.21.8 — master reads: requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK)
+    //
+    // The permission API was reworked above this band: newer versions take a permission OBJECT,
+    // this band takes an int. The literal 2 is not a guess at "what GAMEMASTERS probably means" —
+    // it was traced through the newer jar's bytecode: GAMEMASTERS_CHECK is a PermissionCheck$Require
+    // over DefaultPermissions.GAMEMASTERS, which is a Permission$Level over PermissionLevel
+    // .GAMEMASTERS, whose enum constant is constructed with level 2. That is also the level vanilla
+    // puts /gamemode and /give behind — the gate GitHub #8 asked for. The two forms are the same
+    // permission, expressed in each version's own API.
     static final Predicate<ServerCommandSource> CHEAT_COMMAND =
-            CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK);
+            CommandManager.requirePermissionLevel(2);
 
     @VisibleForTesting
     static void registerAll(CommandDispatcher<ServerCommandSource> dispatcher) {

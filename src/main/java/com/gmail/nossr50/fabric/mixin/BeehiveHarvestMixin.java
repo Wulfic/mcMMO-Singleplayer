@@ -71,12 +71,17 @@ public abstract class BeehiveHarvestMixin {
      * successful honeycomb harvest. The hive's honey level is still full at this point, which is what
      * lets the bonus be delivered as further rolls of vanilla's own loot table.
      */
+    // BAND mc/1.21.8 — master anchors on the 6-arg
+    //   dropHoneycomb(ServerWorld, ItemStack, BlockState, BlockEntity, Entity, BlockPos)V.
+    // On this band the method is (World, BlockPos)V. The descriptor is spelled out in full rather
+    // than truncated at the '(' on purpose: a truncated selector would prefix-match BOTH shapes, so
+    // it would keep binding silently if this band's method were ever the wrong one. Verified against
+    // this band's merged jar -- onUseWithItem reaches it with `invokestatic dropHoneycomb:(Lnet/
+    // minecraft/world/World;Lnet/minecraft/util/math/BlockPos;)V`, still in the shears branch only.
     @Inject(method = ON_USE_WITH_ITEM, allow = 1,
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/block/BeehiveBlock;dropHoneycomb("
-                            + "Lnet/minecraft/server/world/ServerWorld;Lnet/minecraft/item/ItemStack;"
-                            + "Lnet/minecraft/block/BlockState;"
-                            + "Lnet/minecraft/block/entity/BlockEntity;Lnet/minecraft/entity/Entity;"
+                            + "Lnet/minecraft/world/World;"
                             + "Lnet/minecraft/util/math/BlockPos;)V"))
     private void mcmmo$onHoneycombHarvested(ItemStack stack, BlockState state, World world,
             BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit,

@@ -98,7 +98,7 @@ class EntityDamageListenerUnarmoredTest {
 
         final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
         lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getEntityWorld()).thenReturn(world);
+        lenient().when(player.getWorld()).thenReturn(world);
         lenient().when(player.getMainHandStack()).thenReturn(ItemStack.EMPTY);
         for (EquipmentSlot slot : EquipmentSlot.VALUES) {
             lenient().when(player.getEquippedStack(slot)).thenReturn(ItemStack.EMPTY);
@@ -382,7 +382,7 @@ class EntityDamageListenerUnarmoredTest {
         final ServerWorld world = mock(ServerWorld.class);
         lenient().when(world.getDamageSources()).thenReturn(damageSources);
         lenient().when(zombie.isAlive()).thenReturn(true);
-        lenient().when(zombie.getEntityWorld()).thenReturn(world);
+        lenient().when(zombie.getWorld()).thenReturn(world);
         return zombie;
     }
 

@@ -158,7 +158,7 @@ class EntityDamageListenerHunterTest {
 
         final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
         lenient().when(player.getUuid()).thenReturn(playerId);
-        lenient().when(player.getEntityWorld()).thenReturn(world);
+        lenient().when(player.getWorld()).thenReturn(world);
         lenient().when(player.getMainHandStack()).thenReturn(new ItemStack(Items.DIRT));
         lenient().when(player.isSprinting()).thenReturn(false);
         lenient().when(player.isSneaking()).thenReturn(false);

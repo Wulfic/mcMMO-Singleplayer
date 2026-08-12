@@ -98,7 +98,7 @@ public final class CombatUtils {
         if (IN_MCMMO_DAMAGE.get() || !target.isAlive()) {
             return;
         }
-        if (!(target.getEntityWorld() instanceof ServerWorld serverWorld)) {
+        if (!(target.getWorld() instanceof ServerWorld serverWorld)) {
             return; // damage is server-side only.
         }
 
@@ -180,7 +180,7 @@ public final class CombatUtils {
         // much on each axis and returns everything else inside it — getOtherEntities is the same
         // query, and likewise excludes the entity it is centred on (so the primary target, which the
         // triggering hit already damaged, is never struck twice).
-        for (Entity entity : target.getEntityWorld().getOtherEntities(target,
+        for (Entity entity : target.getWorld().getOtherEntities(target,
                 target.getBoundingBox().expand(ABILITY_AOE_RANGE), e -> true)) {
             if (numberOfTargets <= 0) {
                 break;

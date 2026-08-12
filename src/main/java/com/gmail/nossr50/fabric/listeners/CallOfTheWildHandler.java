@@ -87,7 +87,7 @@ public final class CallOfTheWildHandler {
         }
 
         final TransientEntityTracker tracker = McMMOMod.getTransientEntityTracker();
-        Vec3d spawnPos = player.getEntityPos().add(1.0, 0.0, 1.0);
+        Vec3d spawnPos = player.getPos().add(1.0, 0.0, 1.0);
         int amountSummoned = 0;
 
         for (int i = 0; i < summon.getEntitiesSummoned(); i++) {
@@ -121,7 +121,7 @@ public final class CallOfTheWildHandler {
 
     private static void spawnSummon(ServerPlayerEntity player, CallOfTheWildType type,
             TamingSummon summon, Vec3d pos) {
-        final ServerWorld world = (ServerWorld) player.getEntityWorld();
+        final ServerWorld world = (ServerWorld) player.getWorld();
         final MobEntity entity = createEntity(type, world);
 
         entity.refreshPositionAndAngles(pos.getX(), pos.getY(), pos.getZ(), player.getYaw(), 0.0F);
@@ -203,7 +203,7 @@ public final class CallOfTheWildHandler {
         }
 
         final Box searchBox = player.getBoundingBox().expand(5.0);
-        final List<WolfEntity> wolves = player.getEntityWorld()
+        final List<WolfEntity> wolves = player.getWorld()
                 .getEntitiesByClass(WolfEntity.class, searchBox, wolf -> true);
         for (WolfEntity wolf : wolves) {
             if (wolf.isTamed() && wolf.isOwner(player) && !wolf.isSitting()) {

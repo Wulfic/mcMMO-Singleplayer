@@ -599,7 +599,7 @@ class CookingListenerTest {
     private ServerPlayerEntity serverPlayer() {
         final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
         lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getEntityWorld()).thenReturn(world);
+        lenient().when(player.getWorld()).thenReturn(world);
         return player;
     }
 }

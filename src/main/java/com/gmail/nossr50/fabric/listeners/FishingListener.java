@@ -573,7 +573,7 @@ public final class FishingListener {
         if (!(bobber.getPlayerOwner() instanceof ServerPlayerEntity serverPlayer)) {
             return; // client-side / null owner.
         }
-        if (!(target.getEntityWorld() instanceof ServerWorld world)) {
+        if (!(target.getWorld() instanceof ServerWorld world)) {
             return; // the drop spawn and the damage are server-side only.
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
@@ -671,7 +671,7 @@ public final class FishingListener {
         if (!(bobber.getPlayerOwner() instanceof ServerPlayerEntity serverPlayer)) {
             return; // client-side / null owner.
         }
-        if (!(bobber.getEntityWorld() instanceof ServerWorld world)) {
+        if (!(bobber.getWorld() instanceof ServerWorld world)) {
             return; // the block reads and the melt are server-side only.
         }
         // Reconstruct legacy's IN_GROUND precondition: a bobber in water is bobbing/caught, not stuck.

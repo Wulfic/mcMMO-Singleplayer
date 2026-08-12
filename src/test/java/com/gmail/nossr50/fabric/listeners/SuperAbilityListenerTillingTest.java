@@ -188,9 +188,10 @@ class SuperAbilityListenerTillingTest {
 
         final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
         when(player.getStackInHand(Hand.MAIN_HAND)).thenReturn(held);
-        // ItemUsageContext's public constructor reads the world off the player (getEntityWorld, not
-        // getWorld — verified with javap), and vanilla's predicates read it back off the context.
-        when(player.getEntityWorld()).thenReturn(world);
+        // ItemUsageContext's public constructor reads the world off the PLAYER rather than taking one
+        // (verified with javap), and vanilla's predicates read it back off the context — so stubbing
+        // the player's own world accessor is what makes the context resolve at all.
+        when(player.getWorld()).thenReturn(world);
 
         final BlockHitResult hit =
                 new BlockHitResult(Vec3d.ofCenter(POS), side, POS, false);

@@ -130,8 +130,9 @@ public final class PlatformPlayer {
     // --- World / position ---------------------------------------------------
 
     public @NotNull ServerWorld getWorld() {
-        // getEntityWorld() replaced Bukkit getWorld(); for a ServerPlayerEntity it is a ServerWorld.
-        return (ServerWorld) handle.getEntityWorld();
+        // Stands in for Bukkit's getWorld(). ServerPlayerEntity narrows the entity world accessor's
+        // return type covariantly, so for this handle the value really is a ServerWorld.
+        return (ServerWorld) handle.getWorld();
     }
 
     public @NotNull BlockPos getBlockPos() {
@@ -139,7 +140,7 @@ public final class PlatformPlayer {
     }
 
     public @NotNull Vec3d getPos() {
-        return handle.getEntityPos();
+        return handle.getPos();
     }
 
     // --- Vitals -------------------------------------------------------------

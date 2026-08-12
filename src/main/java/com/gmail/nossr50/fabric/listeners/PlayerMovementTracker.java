@@ -219,9 +219,9 @@ public final class PlayerMovementTracker {
      */
     static void tickPlayer(@NotNull ServerPlayerEntity player) {
         final UUID uuid = player.getUuid();
-        final Vec3d current = player.getEntityPos();
+        final Vec3d current = player.getPos();
         final Vec3d previous = LAST_POSITIONS.put(uuid, current);
-        final ServerWorld world = player.getEntityWorld();
+        final ServerWorld world = player.getWorld();
         final RegistryKey<World> previousWorld =
                 LAST_WORLDS.put(uuid, world == null ? null : world.getRegistryKey());
         final boolean sameWorld =
@@ -327,12 +327,12 @@ public final class PlayerMovementTracker {
         if (radius <= 0) {
             return; // Not sounding — the overwhelmingly common case, and it must stay cheap.
         }
-        if (!(player.getEntityWorld() instanceof ServerWorld)) {
+        if (!(player.getWorld() instanceof ServerWorld)) {
             return;
         }
 
         final Box searchBox = player.getBoundingBox().expand(radius);
-        for (AnimalEntity animal : player.getEntityWorld().getEntitiesByClass(AnimalEntity.class,
+        for (AnimalEntity animal : player.getWorld().getEntitiesByClass(AnimalEntity.class,
                 searchBox, AnimalEntity::isAlive)) {
             final EntityNavigation navigation = animal.getNavigation();
             if (navigation.isIdle()) {
@@ -594,8 +594,8 @@ public final class PlayerMovementTracker {
             SOLAR_WINGS_TICKS.remove(uuid);
             return;
         }
-        if (!player.getEntityWorld().isDay()
-                || !player.getEntityWorld().isSkyVisibleAllowingSea(player.getBlockPos())) {
+        if (!player.getWorld().isDay()
+                || !player.getWorld().isSkyVisibleAllowingSea(player.getBlockPos())) {
             return; // Keep the counter: stepping through a tunnel shouldn't reset the progress.
         }
 
