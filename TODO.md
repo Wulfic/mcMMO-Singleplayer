@@ -8,12 +8,24 @@ branches, so there is no preprocessor to adopt; it is replaced by **Phase 4′**
 cherry-pick discipline and risk R4 are both **done and landed on `master` first**, so all three band
 branches inherit them.
 
+✅ **2026-08-12 — THE THIRD PROBE HOLE IS CLOSED, and Phase 5 is fully complete (5.8 included).**
+`extract-mc-surface.py` now reads member references out of **our own compiled bytecode**
+(`javap -v` over `build/classes`) instead of trying to recover them from source text — javac has
+already resolved every receiver type, which no regex can. **Manifest 566 → 1386 records**; control
+check green (1377/1377 on `1.21.11`, plus 9 Fabric-injected members classified and excluded by name).
+The re-probe moved the band count **6 → 7**, but the new band (`1.21.4`) is **below the `1.21.5`
+floor** and every in-scope band kept its membership — still **three branches, two of them cut**.
+Suite **1704 / 0 / 0**, `./gradlew build` exit 0. See Phase 6.2 and the Phase 1.4 re-cut table.
+🛑 **Blocked and needing a ruling: `.github/` is being deleted from version control** — see 4′.4.
+
 🎉 **2026-08-12 — the SECOND band is cut: `mc/1.21.8` (covering 1.21.6–1.21.8) is green on every
 gate** — 1704/0/0, boot-check, mixin-allow-audit 61/61, config-id-audit, brew-smoke, gameplay-smoke
 29/29, drift-audit clean on both bands. It cost **6 records, not the 9 the table predicted** — but
-it also found **a third probe hole that is still open**: the manifest cannot see an instance method
-renamed on a class that survived (`Entity#getEntityWorld` → `getWorld`, 57 sites). See Phase 6.2.
-**Close that hole before cutting `mc/1.21.5`.**
+it also found **a third probe hole** — the manifest could not see an ordinary member reference in a
+method body (57 sites). ✅ **CLOSED 2026-08-12** by reading our own bytecode; see Phase 6.2.
+⚠️ The "`getEntityWorld` → `getWorld` rename" shorthand above is **imprecise**, and the probe
+corrected it: `ServerPlayerEntity#getEntityWorld` exists on `1.21.5` too and returns `World` rather
+than `ServerWorld` — a **signature change on a covariant override**. Only `getEntityPos` is absent.
 
 🎉 **`mc/1.21.10` is cut and green, locally: 1704 tests / 0 failures / 0 skipped on 1.21.10,
 `./gradlew build` exit 0, `boot-check.sh` PASSED, `mixin-allow-audit --mc 1.21.10 --check` PASSED,
@@ -497,7 +509,8 @@ The touched surface is finite and already counted:
       on every band. *A probe with no known-good baseline is indistinguishable from a broken one.*
 
 - [x] 1.4 Collapse into bands and publish the ruling
-      - [x] **6 bands** — inside the expected 4–6, nowhere near the 12+ escalation trigger (R1 clear)
+      - [x] **7 bands** (was 6 — see the 2026-08-12 re-cut below; the new one is below the floor).
+            Still nowhere near the 12+ escalation trigger, so **R1 stays closed**.
 
       | Band | Versions | Records differing from `1.21.11` | In scope under R-b? |
       |---|---|---|---|
@@ -512,7 +525,35 @@ The touched surface is finite and already counted:
       missing static constants and the whole test tree). **The 6 bands and their membership did not
       change**; only the per-band cost rose. The boundaries were right, the counts were low.
 
+      🔁🔁 **Re-cut again 2026-08-12 against the 1386-record manifest** (hole 3 — bytecode member
+      references). **This time the band COUNT changed: 6 → 7.** `1.21.4` split out of the old
+      `1.21.2`–`1.21.4` band, because 2 records differ between `1.21.3` and `1.21.4` that a manifest
+      without called-method signatures could not see.
+
+      🎉 **It changes nothing in scope.** The split is entirely **below the `1.21.5` floor**, and
+      every in-scope band kept its exact membership — `1.21.5` · `1.21.6–1.21.8` · `1.21.9–1.21.10` ·
+      `1.21.11`. **Three band branches to cut, unchanged; two are cut and green.**
+
+      | Band | Versions | absent | sig-changed | old total | In scope? |
+      |---|---|---|---|---|---|
+      | `1.21.1` | `1.21`, `1.21.1` | 65 | 60 | 54 | ❌ below floor |
+      | `1.21.3` | `1.21.2`, `1.21.3` | 16 | 28 | 18 (as one band with `1.21.4`) | ❌ below floor |
+      | **`1.21.4`** | `1.21.4` | 15 | 27 | — **NEW SPLIT** | ❌ below floor |
+      | `1.21.5` | `1.21.5` | **8** | **19** | 12 | ✅ **next to cut** |
+      | `1.21.8` | `1.21.6`–`1.21.8` | 16 | 16 | 9 | ✅ cut, green |
+      | `1.21.10` | `1.21.9`, `1.21.10` | 2 | 8 | 2 | ✅ cut, green |
+
+      ⚠️⚠️ **These totals are NOT comparable to the old ones, and must not be read as "the cost
+      tripled".** The old counts were almost entirely *absent* rows; the new ones add a
+      signature column over 493 called methods, and **most signature deltas are benign** — a
+      covariant return, an added overload. The two bands already cut are the calibration: the table
+      now says `1.21.10` is 10 records, and the real cut needed **one** code change; it says
+      `1.21.8` is 32, and that cut cost **6**. Treat the number as *rows to look at*, not work to do.
+      🔑 On that calibration the remaining band is not the scary one: **`1.21.5` (27) is smaller
+      than `1.21.8` (32), which is already done.**
+
       🎉 **Consequence: only THREE band branches to cut** — `mc/1.21.10`, `mc/1.21.8`, `mc/1.21.5`
+      — and that survived the 2026-08-12 re-cut to 7 bands, because the new band is below the floor
       — and the largest carries **12 changed records out of 566** (was 10 of 266). Under R-a that is
       three back-ports of low-double-digit symbol counts, not the sprawl the risk register feared.
       - [x] Per-boundary changed symbols are enumerated per band in `BAND_TABLE.md` §"Phase 1.4",
@@ -730,6 +771,18 @@ auto-created `mc/1.21.11` branch had armed. So:
 - [ ] 4′.3 Set `depends.minecraft` in `fabric.mod.json` to the band's **range**, not its newest
       version — band `1.21.10` covers `1.21.9` too, and the release is tagged for only one of them.
 - [ ] 4′.4 Raise `--require-bands` in `.github/workflows/drift-audit.yml` to the new band count.
+      🛑 **BLOCKED, 2026-08-12 — the whole `.github/` tree is being removed from version control.**
+      `.gitignore` now lists `.agent/` and `.github/`, and `FUNDING.yml`, `release.yml` and
+      `drift-audit.yml` are deleted in the working tree. There is no file left to raise the count in.
+      **This is an owner decision, not a mistake to revert** — but it retires two mechanisms this
+      document leans on, and they need a replacement or an explicit waiver:
+      - **`drift-audit.yml` was R8's entire mitigation.** `scripts/drift-audit.py` still exists and
+        still runs by hand; what is gone is the *weekly, unattended* run. R8 is the likeliest risk
+        in the register (11 of the last 12 fixes were version-agnostic) and its detection is now
+        "somebody remembers to run it" — which is the state that made it a risk in the first place.
+      - **`release.yml` is what builds and releases a band branch on push.** With it gone, pushing
+        `mc/**` no longer produces a jar or a tag, so Phase 5.8's mechanism is gone even though
+        5.8 itself is complete. 7.1 ("already satisfied") and 7.4 are void as written.
 - [ ] 4′.5 Do **not** push the branch until 5.2–5.7 pass locally. A push builds and releases.
 
 ---
@@ -937,9 +990,20 @@ Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 change
       25 s with the aim provably correct); a **`/summon`-ed mob pays zero combat XP by design**
       (`COMMAND → PLAYER_PLACED → Eggs.Multiplier: 0`); and **Repair needs two clicks** within a 3 s
       confirmation window.
-- [ ] 5.8 Only now push the branch, and confirm the release tagged `mc<band>-v*` and did **not**
-      touch master's `mc1.21.11-v*` release. Then raise `--require-bands` to 1 (Phase 4′.4) — not
-      before, or the scheduled audit fails looking for a branch that is not on the remote.
+- [x] 5.8 **DONE — all three branches are pushed and each holds its own Minecraft line.** The
+      acceptance criterion is visible in the tag list, which is the only evidence that distinguishes
+      "released" from "released and then reaped by the other branch's sweep":
+
+      | Branch | Remote tip | Release tag |
+      |---|---|---|
+      | `master` | `34aad16f2` | `mc1.21.11-v2.2.050-build.23` |
+      | `mc/1.21.8` | `d1ab87f87` | `mc1.21.8-v2.2.050-build.24` |
+      | `mc/1.21.10` | `4b668e46c` | `mc1.21.10-v2.2.050-build.25` |
+
+      Three branches, three Minecraft lines, three surviving tags — so no branch's
+      "delete previous release on this Minecraft line" sweep touched another's. That is R-f's
+      topology working, and it is the specific collision the deleted `mc/1.21.11` branch had armed.
+      ⚠️ Raising `--require-bands` to 2 is **blocked** — see 4′.4.
 
 ### The two decisions the `mc/1.21.10` cut surfaced
 
@@ -1040,10 +1104,66 @@ reports the new band clean, and each branch released to its own Minecraft line.
             class-granular manifest cannot see a FIELD that vanished from a class that survived*.
             `extract-mc-surface.py` indexes imports, constants and mixin selectors; a plain
             `entity.getEntityWorld()` in a method body is none of those.
-            - [ ] **CLOSE IT BEFORE CUTTING `mc/1.21.5`.** Index instance-method calls on MC-typed
-                  receivers, re-probe, and regenerate `BAND_TABLE.md` (stale at 566 records).
-                  Otherwise that cut gets the same class of surprise from a different method — and
-                  the per-band cost estimates in Phase 1.4 are all understated.
+            - [x] ✅ **CLOSED 2026-08-12, and the fix was to stop parsing source.** Recovering a
+                  member reference from source text needs a Java type resolver — `var w =
+                  e.getEntityWorld()`, `a.getX().getY()` and `when(mock.getWorld())` are three
+                  different inference problems, and 21 of the 57 sites were Mockito stubs. **javac
+                  had already solved all of it**: every such call is a `Methodref` in the constant
+                  pool of the class file it emitted, owner and descriptor fully resolved. So
+                  `extract-mc-surface.py` now reads `javap -v` over `build/classes`, exactly as
+                  `mixin-allow-audit.py` already reads MC's own jar. Three new record types —
+                  **`CALLEDMETHOD` 493 · `ACCESSEDFIELD` 303 · `CALLEDCTOR` 27**.
+                  **Manifest: 566 → 1386 records** over 196 classes.
+                  - 🔑🔑 **The bytecode scan does NOT supersede the source scan and must never be
+                    allowed to.** javac **inlines compile-time constants**, so a `static final`
+                    primitive is referenced by *no* class file's constant pool. Measured against the
+                    current build, exactly **one** record is invisible that way —
+                    `HungerConstants#FULL_FOOD_LEVEL`, an `int` — and one is enough: deleting the
+                    source scan silently drops it.
+                    ⚠️ **An earlier draft of this entry also claimed `CommandManager#GAMEMASTERS_CHECK`
+                    as an example. That was wrong** — it is a `Predicate` *object*, so it is a
+                    perfectly ordinary `Fieldref` and both scans see it. The measurement that said
+                    otherwise had been run against a **stale `build/classes`**, before
+                    `./gradlew classes testClasses`. Recorded because it is this project's signature
+                    failure mode: a true-looking measurement quoted as the *reason* for a design, in
+                    a place no compiler or test can check it.
+                  - ⚠️ A member can produce **two records in different notation** —
+                    `EntityAttributeModifier.Operation#ADD_VALUE` (source, dotted) and
+                    `EntityAttributeModifier$Operation#ADD_VALUE` (bytecode, binary). Both resolve;
+                    `name_candidates()` already maps dotted nesting to `$`. It inflates the record
+                    count slightly and is harmless — do not "fix" it by dropping either scan.
+                  - Measured the other way, the bytecode scan found **18
+                    members no source regex had matched**: lowercase INSTANCE fields (`Vec3d#x`,
+                    `ServerPlayerEntity#networkHandler`), which SCREAMING_SNAKE cannot match by
+                    construction, and enum constants named in a `switch` case, which are
+                    **unqualified in source** and so have no `<Class>.<CONST>` chain to find.
+                  - ⚠️⚠️ **The original diagnosis was imprecise, and the probe corrected it.** This
+                    was recorded as a pure rename (`getEntityWorld` → `getWorld`). It is not:
+                    `ServerPlayerEntity#getEntityWorld` **exists on `1.21.5` too** and returns
+                    `World` there against `ServerWorld` on `1.21.11` — a **signature change on a
+                    covariant override**, not an absence. `getEntityPos` *is* absent. So the record
+                    set had to capture signatures, not just presence; a present/absent-only probe
+                    resolves the `getEntityWorld` row ✅✅ and still fails to compile.
+                  - ⚠️ **Two probe defects surfaced as false ABSENTs on the control**, both fixed —
+                    the supertype walk stopped at `net.minecraft`, so `SpawnReason#ordinal`
+                    (`java.lang.Enum`), `RegistryEntry#equals` (`Object`) and
+                    `DefaultedRegistry#iterator` (`Iterable`) read as missing; and **9 Fabric API
+                    interface-injected members** (`Entity#getAttached`) can never resolve against a
+                    vanilla jar, because javac records the *MC class* as owner while the method is
+                    declared on `AttachmentTarget`. The latter are now classified mechanically —
+                    ABSENT against Minecraft alone **and** resolvable once Loom's interface-injected
+                    jar plus fabric-api are on the classpath — then excluded from band analysis and
+                    **listed by name in `BAND_TABLE.md`**, so the exclusion can never grow silently.
+                    Nothing is exempted for being *called* `getAttached`; only for actually being
+                    declared outside Minecraft.
+                  - ⚠️ **A missed class lookup must be negative-cached.** Without it the closure walk
+                    re-spawned `javap` for the same unresolvable supertype on every record passing
+                    through it, turning a 20-minute probe into a >90-minute one — all of it
+                    re-asking a question already answered *no*.
+                  - **4 mutations, 4 kills** on the new detector: owner filter removed (JDK and our
+                    own classes leak in), regex widened to any constant-pool kind (a `String` entry
+                    whose text *is* a descriptor leaks in — this codebase's `@At` targets are exactly
+                    such literals), detector stubbed to find nothing, and `CALLEDCTOR` never emitted.
             - 🔑 **`master` could NOT absorb this one, and the reason differs from `CHEAT_COMMAND`'s.**
                   There is **no overlapping name on either side** — `1.21.11` has no `getWorld()`
                   anywhere in the entity hierarchy and `1.21.8` has no `getEntity*` — so there is
@@ -1114,7 +1234,7 @@ reports the new band clean, and each branch released to its own Minecraft line.
 
 | # | Risk | Mitigation | Owner phase |
 |---|---|---|---|
-| R1 | Band count comes out 12+, making "all versions" unviable | ✅ **CLOSED** — 6 bands, 3 branches to cut (Phase 1.4) | 1 |
+| R1 | Band count comes out 12+, making "all versions" unviable | ✅ **CLOSED** — 7 bands (6 until the 2026-08-12 re-cut split `1.21.4` out, below the floor), still **3 branches to cut** in scope, 2 of them done (Phase 1.4) | 1 |
 | R2 | CI time explodes (53s bootstrap × forks × bands) | **Downgraded.** Branches build independently, so the multiplication never happens in one run. Test split deferred; trigger is the ~30 min-per-band cap | 4′ |
 | R3 | Directives leak into skill logic, destroying readability + MC-free tests | ✅ **CLOSED** — 26 → 0 leak sites; `PlatformBoundaryGuardTest` (zero allowlist, converse-checked, catches inline FQNs as well as imports) | 2 |
 | R4 | Silent mixin misbinding across versions via dropped `@Slice` | ✅ **CLOSED** — `allow = N` on all **61 injectors**, measured from bytecode by `scripts/mixin-allow-audit.py` (control-checked against 22 shipped values); `MixinAllowCoverageTest` holds coverage, `MixinApplicationTest` loads all 37 targets so Mixin really applies. Both mutation-killed | 5 |
