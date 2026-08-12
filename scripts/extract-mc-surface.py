@@ -37,8 +37,15 @@ Record types emitted (one per line, `TYPE<TAB>VALUE`):
   STATICFIELD net.minecraft.item.Items#IRON_SPEAR
              A `<McClass>.<CONSTANT>` reference in source. See "hole 1" below.
 
-⚠️⚠️ TWO HOLES THIS SCRIPT HAD UNTIL 2026-08-11, both found by *compiling* the mc/1.21.10 band
-rather than by reading the manifest. Recorded here because each was invisible in the output:
+  CALLEDMETHOD   net.minecraft.entity.Entity#getEntityWorld
+  ACCESSEDFIELD  net.minecraft.util.math.Vec3d#x
+  CALLEDCTOR     net.minecraft.entity.TntEntity#TntEntity
+             Every net.minecraft member our COMPILED BYTECODE references, read out of each class
+             file's constant pool. See "hole 3" below -- these are the only records not derived
+             from source text, and that is the entire point of them.
+
+⚠️⚠️ THREE HOLES THIS SCRIPT HAD, every one found by *compiling* a band rather than by reading the
+manifest. Recorded here because each was invisible in the output:
 
   1. STATIC CONSTANTS WERE NOT INDEXED. `Items.IRON_SPEAR` broke the band build and was not one of
      the 266 records. `Items` exists on every version, so its `import` resolved and the probe saw a
@@ -55,19 +62,58 @@ import list before being emitted.
   🔑 The band that found these was the CHEAPEST one (1.21.10, 2 changed records of 266). 1.21.8 and
   1.21.5 are 8 and 10 records away, so this had to be fixed before either was cut.
 
+  3. AN ORDINARY MEMBER REFERENCE WAS NOT INDEXED AT ALL -- found by cutting mc/1.21.8, 2026-08-12.
+     `Entity#getEntityWorld()`/`getEntityPos()` are `getWorld()`/`getPos()` below 1.21.9: 57 call
+     sites across 22 files, and NOT ONE was a record. Hole 1 was *a class-granular manifest cannot
+     see a field that vanished from a class that survived*; this is the same shape one level over --
+     a manifest built from imports, constants and mixin selectors cannot see a plain
+     `entity.getEntityWorld()` in a method body, because that is none of those things.
+
+     🔑🔑 THE FIX IS TO STOP PARSING SOURCE FOR THIS. Recovering it from source text needs a Java
+     type resolver -- `var w = e.getEntityWorld()`, `a.getX().getY()`, and `when(mock.getWorld())`
+     are three different inference problems, and 21 of the 57 sites were Mockito stubs naming the
+     method on a mock. The compiler has already solved all of it: every one of those calls is a
+     Methodref in the constant pool of the class file javac emitted, with the owner and descriptor
+     fully resolved. So the bytecode records below are read with `javap -v` over build/classes,
+     exactly as scripts/mixin-allow-audit.py already reads MC's own jar.
+
+     ⚠️ The bytecode scan does NOT supersede the source scan, and must not be allowed to.
+     **javac inlines compile-time constants**, so a `static final` primitive is referenced by NO
+     class file's constant pool. Exactly one record is invisible that way against the current build
+     -- `HungerConstants#FULL_FOOD_LEVEL`, an int -- and one is enough: drop the source scan and it
+     goes with it, silently. Measured the other way, the bytecode scan found 18 members no source
+     regex had matched: lowercase INSTANCE fields (`Vec3d#x`, `ServerPlayerEntity#networkHandler`),
+     which SCREAMING_SNAKE cannot match by construction, and enum constants named in a `switch`
+     case, which are unqualified in source and so have no `<Class>.<CONST>` chain to find.
+
+     ⚠️ Re-measure that claim against a CURRENT build/classes, never a stale one. An earlier draft
+     named `CommandManager#GAMEMASTERS_CHECK` as a second inlined example. It is not -- it is a
+     `Predicate` OBJECT and therefore an ordinary Fieldref that both scans see. The measurement
+     behind the claim had been taken before `./gradlew classes testClasses`.
+
+     ⚠️ The same member can appear twice in different notation: `Outer.Inner#CONST` from the source
+     scan and `Outer$Inner#CONST` from the bytecode one. Both resolve -- probe-bands.py's
+     name_candidates() maps dotted nesting to '$' -- so this inflates the count slightly and is
+     harmless. It is NOT a reason to drop either scan.
+
 Usage:
     python scripts/extract-mc-surface.py [--out scripts/mc-surface.txt] [--check] [--self-test]
 
 --check     verifies the acceptance criteria from TODO 1.1 and exits non-zero on failure.
---self-test proves the constant detector can still fire and can still stay quiet, over fabricated
-            sources with a known answer. Run it before believing a --check that passed: a detector
-            that matches nothing also produces a manifest with no violations in it.
+--self-test proves the constant AND bytecode detectors can still fire and can still stay quiet, over
+            fabricated inputs with a known answer. Run it before believing a --check that passed: a
+            detector that matches nothing also produces a manifest with no violations in it.
+
+⚠️ The bytecode scan needs build/classes/java/{main,test} to exist and to be CURRENT. Run
+`./gradlew classes testClasses` first. A stale tree silently describes the code as it was; a missing
+one is a hard error here rather than a quietly smaller manifest.
 """
 
 from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -77,6 +123,11 @@ TEST_SRC = REPO / "src" / "test" / "java"
 # Both trees, because a test that will not compile fails the build exactly as hard as main code.
 SRC_TREES = (SRC, TEST_SRC)
 MIXIN_DIR = SRC / "com" / "gmail" / "nossr50" / "fabric" / "mixin"
+# Compiled output for those same two trees -- the bytecode scan's input (hole 3).
+CLASS_TREES = (
+    REPO / "build" / "classes" / "java" / "main",
+    REPO / "build" / "classes" / "java" / "test",
+)
 
 # `import net.minecraft.x.Y;`  -- a type.
 IMPORT_RE = re.compile(r"^import\s+(net\.minecraft\.[A-Za-z0-9_.]+)\s*;", re.M)
@@ -196,6 +247,82 @@ def constant_refs(text: str, imports: dict[str, str]) -> set[tuple[str, str]]:
     return found
 
 
+# --- bytecode scan (hole 3) ------------------------------------------------------------------
+#
+# One javap constant-pool line, e.g.
+#     #25 = Methodref  #26.#27  // net/minecraft/server/network/ServerPlayerEntity.getEntityWorld:()L...;
+#
+# Only the three *ref kinds are matched. That is what keeps the scan quiet on the entries that
+# merely CONTAIN the same text: a Utf8 holding a mixin @At target string
+# ("Lnet/minecraft/item/ItemStack;decrement(I)V" is a real string literal in this codebase), a Class
+# entry naming the owner, or a NameAndType naming the member. The owner charset excludes '.' so the
+# owner/member split cannot slide -- JVM binary names use '/' and '$', never '.'.
+POOL_REF_RE = re.compile(
+    r"^\s*#\d+\s*=\s*(Methodref|InterfaceMethodref|Fieldref)\s+#[\d.#]+\s*//\s*"
+    r"([\w/$]+)\.([^:\s]+):(\S+)\s*$"
+)
+CTOR_NAMES = ('"<init>"', "<init>", '"<clinit>"', "<clinit>")
+
+
+def pool_refs(javap_text: str) -> set[tuple[str, str]]:
+    """Every net.minecraft member referenced by the disassembled class(es). -> {(TYPE, VALUE)}
+
+    javac writes the COMPILE-TIME RECEIVER TYPE as the owner, not the declaring class: calling
+    getEntityWorld() on a ServerPlayerEntity yields `ServerPlayerEntity.getEntityWorld`, never
+    `Entity.getEntityWorld`. That is correct and is left alone -- probe-bands.py walks the supertype
+    closure precisely because javap never lists inherited members, so the record resolves either way,
+    and keeping the receiver type means an ABSENT row names the type the code actually used.
+
+    A constructor is emitted as `<owner>#<simple binary name>` (TntEntity#TntEntity,
+    ItemEnchantmentsComponent$Builder#ItemEnchantmentsComponent$Builder) because that is how javap
+    prints a constructor declaration, so the member search matches it unchanged. Its value is almost
+    entirely in the SIGNATURE, not in present/absent: every class has some constructor, but
+    `TntEntity(World, double, double, double, LivingEntity)` gaining an argument is a compile break.
+    """
+    found: set[tuple[str, str]] = set()
+    for line in javap_text.splitlines():
+        m = POOL_REF_RE.match(line)
+        if not m:
+            continue
+        kind, owner, name, _desc = m.groups()
+        if not owner.startswith("net/minecraft/"):
+            continue
+        dotted = owner.replace("/", ".")
+        if name in CTOR_NAMES:
+            # A <clinit> is never referenced by another class; a <init> is. Either way the member
+            # that must exist on the owner is the type's own name.
+            found.add(("CALLEDCTOR", f"{dotted}#{dotted.rsplit('.', 1)[-1]}"))
+        elif kind == "Fieldref":
+            found.add(("ACCESSEDFIELD", f"{dotted}#{name}"))
+        else:
+            found.add(("CALLEDMETHOD", f"{dotted}#{name}"))
+    return found
+
+
+def bytecode_refs() -> tuple[set[tuple[str, str]], int]:
+    """Disassemble every compiled class in both trees. -> (records, class file count)."""
+    files = sorted(str(p.relative_to(REPO)) for tree in CLASS_TREES for p in tree.rglob("*.class"))
+    if not files:
+        raise SystemExit(
+            f"error: no class files under {' or '.join(str(t) for t in CLASS_TREES)}.\n"
+            "       The bytecode scan is not optional -- it is the only thing that sees an ordinary\n"
+            "       member reference (hole 3). Build first:  ./gradlew classes testClasses"
+        )
+
+    records: set[tuple[str, str]] = set()
+    # One JVM start per chunk. 516 files one at a time is minutes of process spawn on Windows.
+    CHUNK = 80
+    for i in range(0, len(files), CHUNK):
+        p = subprocess.run(
+            ["javap", "-p", "-v", *files[i : i + CHUNK]],
+            capture_output=True, text=True, errors="replace", cwd=REPO,
+        )
+        if p.returncode != 0 and not p.stdout:
+            raise SystemExit(f"error: javap failed on chunk {i // CHUNK}: {(p.stderr or '').strip()[:400]}")
+        records |= pool_refs(p.stdout or "")
+    return records, len(files)
+
+
 def balanced(text: str, open_idx: int) -> str:
     """Return the contents of the (...) whose opening paren is at open_idx."""
     depth, i, n = 0, open_idx, len(text)
@@ -278,6 +405,10 @@ def main() -> int:
             for owner, member in constant_refs(no_str, imports):
                 records.add(("STATICFIELD", f"{owner}#{member}"))
 
+    # --- CALLEDMETHOD / ACCESSEDFIELD / CALLEDCTOR from compiled bytecode (hole 3) -----------
+    bc_records, class_files = bytecode_refs()
+    records |= bc_records
+
     # --- Mixin-only records, tracked per file so coverage can be asserted --------------------
     mixin_files = sorted(MIXIN_DIR.glob("*.java"))
     if not mixin_files:
@@ -335,6 +466,7 @@ def main() -> int:
     for tree, n in scanned.items():
         print(f"  scanned {tree}: {n} file(s)")
     print(f"  mixin files scanned: {len(mixin_files)}")
+    print(f"  class files disassembled: {class_files}")
 
     if args.check:
         ok = True
@@ -353,6 +485,16 @@ def main() -> int:
         if counts.get("STATICFIELD", 0) == 0:
             print("FAIL: zero STATICFIELD records. The constant scan found nothing, which is the "
                   "exact hole this script had until 2026-08-11.", file=sys.stderr)
+            ok = False
+        # Same anti-vacuity argument for the bytecode scan, and it needs its own floor: a stale or
+        # half-built class tree yields a smaller manifest that still looks perfectly well-formed.
+        if counts.get("CALLEDMETHOD", 0) == 0:
+            print("FAIL: zero CALLEDMETHOD records. The bytecode scan found nothing -- hole 3 is "
+                  "open again. Is build/classes current?", file=sys.stderr)
+            ok = False
+        if class_files < 400:
+            print(f"FAIL: only {class_files} class files disassembled; both trees compiled should be "
+                  ">= 400. Run ./gradlew classes testClasses.", file=sys.stderr)
             ok = False
         if len(mixin_files) != 42:
             print(f"WARN: expected 42 mixin files, found {len(mixin_files)}", file=sys.stderr)
@@ -410,27 +552,92 @@ SELF_TEST_CASES: list[tuple[str, str, set[tuple[str, str]]]] = [
 ]
 
 
+# The bytecode detector needs the same treatment, over fabricated javap output. The negatives are
+# the interesting half: a class file's constant pool holds Utf8 entries for every string literal in
+# the class, and this codebase's string literals are LITERALLY MC DESCRIPTORS (mixin @At targets).
+# So the text the scan is looking for is present in entries that must not be read as references.
+POOL_SELF_TEST_CASES: list[tuple[str, str, set[tuple[str, str]]]] = [
+    ("Methodref on an MC owner",
+     "  #25 = Methodref  #26.#27  // net/minecraft/entity/Entity.getEntityWorld:()Lnet/minecraft/world/World;",
+     {("CALLEDMETHOD", "net.minecraft.entity.Entity#getEntityWorld")}),
+    ("InterfaceMethodref on an MC owner",
+     "  #40 = InterfaceMethodref #41.#42 // net/minecraft/world/WorldAccess.setBlockState:(Lnet/minecraft/util/math/BlockPos;)Z",
+     {("CALLEDMETHOD", "net.minecraft.world.WorldAccess#setBlockState")}),
+    ("Fieldref -- an instance field, which SCREAMING_SNAKE can never match",
+     "  #57 = Fieldref  #50.#58  // net/minecraft/util/math/Vec3d.x:D",
+     {("ACCESSEDFIELD", "net.minecraft.util.math.Vec3d#x")}),
+    ("constructor, named the way javap prints a constructor declaration",
+     '  #67 = Methodref  #55.#68  // net/minecraft/entity/TntEntity."<init>":(Lnet/minecraft/world/World;DDD)V',
+     {("CALLEDCTOR", "net.minecraft.entity.TntEntity#TntEntity")}),
+    ("nested owner keeps its $ -- probe-bands resolves the binary name directly",
+     "  #12 = Fieldref  #13.#14 // net/minecraft/entity/attribute/EntityAttributeModifier$Operation.ADD_VALUE:"
+     "Lnet/minecraft/entity/attribute/EntityAttributeModifier$Operation;",
+     {("ACCESSEDFIELD",
+       "net.minecraft.entity.attribute.EntityAttributeModifier$Operation#ADD_VALUE")}),
+    ("our own class calling itself",
+     "  #19 = Methodref #20.#21 // com/gmail/nossr50/fabric/listeners/BlastMiningListener.targetBlock:()V",
+     set()),
+    ("a JDK method",
+     "  #72 = Methodref #73.#74 // java/lang/String.length:()I",
+     set()),
+    ("Class entry naming an MC type -- not a member reference",
+     "  #26 = Class  #28  // net/minecraft/entity/Entity",
+     set()),
+    ("NameAndType naming the member -- not a member reference",
+     "  #27 = NameAndType #29:#30 // getEntityWorld:()Lnet/minecraft/world/World;",
+     set()),
+    ("Utf8 holding a mixin @At target STRING LITERAL, which is a real descriptor",
+     "  #31 = Utf8  Lnet/minecraft/item/ItemStack;decrement(I)V",
+     set()),
+    ("String constant whose text looks exactly like a reference",
+     "  #33 = String #31 // net/minecraft/entity/Entity.getEntityWorld:()V",
+     set()),
+]
+
+
 def self_test() -> int:
     failures: list[str] = []
     for desc, fragment, expected in SELF_TEST_CASES:
         text = strip_comments(fragment, strip_strings=True)
         got = constant_refs(text, SELF_TEST_IMPORTS)
         if got != expected:
-            failures.append(f"  {desc}\n    expected {sorted(expected)}\n    got      {sorted(got)}")
+            failures.append(f"  [source]   {desc}\n    expected {sorted(expected)}\n    got      {sorted(got)}")
+
+    for desc, line, expected in POOL_SELF_TEST_CASES:
+        got = pool_refs(line)
+        if got != expected:
+            failures.append(f"  [bytecode] {desc}\n    expected {sorted(expected)}\n    got      {sorted(got)}")
+
+    # Every case at once, so a detector that only works on a lone line -- or one whose owner/member
+    # split slides on the longest input -- cannot pass by being fed one record at a time.
+    combined_expected = {r for _, _, e in POOL_SELF_TEST_CASES for r in e}
+    combined_got = pool_refs("\n".join(l for _, l, _ in POOL_SELF_TEST_CASES))
+    if combined_got != combined_expected:
+        failures.append("  [bytecode] all pool lines in one pass\n"
+                        f"    expected {sorted(combined_expected)}\n    got      {sorted(combined_got)}")
 
     # The suite must be capable of failing: a detector hard-wired to return nothing would pass every
     # negative case above, so assert at least one positive and one negative are actually exercised.
     positives = sum(1 for _, _, e in SELF_TEST_CASES if e)
     negatives = len(SELF_TEST_CASES) - positives
+    bc_pos = sum(1 for _, _, e in POOL_SELF_TEST_CASES if e)
+    bc_neg = len(POOL_SELF_TEST_CASES) - bc_pos
     if positives < 2 or negatives < 3:
-        failures.append(f"  self-test is too weak: {positives} positive / {negatives} negative cases")
+        failures.append(f"  source self-test is too weak: {positives} positive / {negatives} negative")
+    if bc_pos < 4 or bc_neg < 4:
+        failures.append(f"  bytecode self-test is too weak: {bc_pos} positive / {bc_neg} negative")
+    # Each of the three bytecode record types must be exercised, or a type could silently stop being
+    # emitted and this suite would still be green.
+    for kind in ("CALLEDMETHOD", "ACCESSEDFIELD", "CALLEDCTOR"):
+        if not any(k == kind for _, _, e in POOL_SELF_TEST_CASES for k, _ in e):
+            failures.append(f"  bytecode self-test never exercises {kind}")
 
     if failures:
         print(f"self-test: FAIL ({len(failures)} case(s))", file=sys.stderr)
         for f in failures:
             print(f, file=sys.stderr)
         return 1
-    print(f"self-test: PASS -- {positives} positive, {negatives} negative case(s)")
+    print(f"self-test: PASS -- source {positives}+/{negatives}-, bytecode {bc_pos}+/{bc_neg}-")
     return 0
 
 
