@@ -81,7 +81,89 @@ server**, which is the part that matters:
 
 ---
 
-## SESSION PLAN — 2026-08-12 (written before the first edit)
+## SESSION PLAN — 2026-08-12 (session 2: Phase 7.3) — written before the first edit
+
+Owner rulings taken at the top of this session:
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-i** | How deep does the version matrix go? | **Matrix + per-skill availability.** The top-level supported-version table *and* a version-availability note on anything a band cannot furnish. One GitHub wiki serves all four bands, so a page that describes only `master`'s band is wrong for three of them. |
+| **R-j** | Docs topology | **Byte-identical on every branch.** One matrix listing all bands, authored on `master`, back-ported with `Backport-of:`. **No branch states which version it is** — a self-claim is exactly the version-pinned-comment rot `AGENTS.md` forbids, and it would make the four files permanently divergent. Verified starting state: `git diff --name-only master <band> -- README.md wiki/` returns **0 files** on all three bands. |
+| **R-k** | Publishing | **Push the four branches; do NOT touch the live GitHub wiki.** A wiki push is a force-push into `<repo>.wiki.git` that destroys web-UI edits — hand the owner the command instead (`readme-and-github-wiki` has it). |
+
+### Ground truth — measured this session, not recalled
+
+**Toolchain per branch** (read from each branch's own `gradle.properties` + `fabric.mod.json`, via
+`git show <branch>:<file>` — never retyped):
+
+| Branch | MC versions | yarn | fabric-api | ModMenu | Cloth | `depends.minecraft` |
+|---|---|---|---|---|---|---|
+| `master` | 1.21.11 | `1.21.11+build.6` | `0.141.4+1.21.11` | `17.0.0` | `21.11.153` | `~1.21.11` |
+| `mc/1.21.10` | 1.21.9 – 1.21.10 | `1.21.10+build.3` | `0.138.4+1.21.10` | `16.0.1` | `20.0.149` | `>=1.21.9 <1.21.11` |
+| `mc/1.21.8` | 1.21.6 – 1.21.8 | `1.21.8+build.1` | `0.136.1+1.21.8` | `15.0.2` | `19.0.147` | `>=1.21.6 <1.21.9` |
+| `mc/1.21.5` | 1.21.5 | `1.21.5+build.1` | `0.128.2+1.21.5` | `14.0.2` | `18.0.145` | `>=1.21.5 <1.21.6` |
+
+Loader `>=0.19.3` and Java `>=21` on all four.
+
+**Player-visible feature availability** — from `scripts/config-id-audit.py` over all 8 cached jars,
+which is the only source that distinguishes *absent on this band* from *dead everywhere*:
+
+| Feature | Needs MC | Present on |
+|---|---|---|
+| **The whole Spears skill** — disabled by `SkillAvailability#probe`, not merely inert | **1.21.11+** | `master` only |
+| **Copper equipment tier** — Repair + Salvage of 10 copper items, copper gear as Fishing treasure, `copper_nugget` from Hylian Luck, Smelting's `Copper_Nugget` row | **1.21.9+** | `master`, `mc/1.21.10` |
+
+Absent-id counts corroborate exactly: `1.21.11` **1** · `1.21.9`/`1.21.10` **15** · `1.21.5`–`1.21.8`
+**44**. 🔑 The lone `1.21.11` row is `experience.yml:Mining Chain`, and it is **not a defect** — it is
+the deliberate both-names pattern (`Chain` live below 1.21.9, `Iron_Chain` live from 1.21.9), so
+exactly one of the pair resolves on every version. Nothing to document and nothing to fix.
+
+Everything else in `BAND_TABLE.md` is invisible to a player: `getEntityWorld` signatures,
+`SoundCategory#UI`, `CommandManager` permission predicates and the two redesigned seams are all
+internal. **Do not enumerate them in user-facing docs.**
+
+### The steps
+
+| # | Step | Done when |
+|---|---|---|
+| **D1** | `README.md` — replace the single `Minecraft \| 1.21.11` row with the band matrix; de-pin install step 2; per-band ModMenu/Cloth; **fix the false CI claim at line 277**; fix the Cooking *"still planned, no code yet"* contradiction and the two dead links (`PLAYTEST_G.md`, `plans/new-skills/` — **both verified absent from the tree**) | `grep -c '1\.21\.5' README.md` > 0 **and** zero references to `.github/workflows` |
+| **D2** | `wiki/Home.md` + `wiki/Installation.md` — the same matrix, same numbers, read from D1 rather than retyped | both pages list all four bands |
+| **D3** | `wiki/Optional-Integrations.md` — ModMenu/Cloth versions become a per-band table | 4 rows, matching the toolchain table above |
+| **D4** | `wiki/Skills.md` + `wiki/Super-Abilities.md` — Spears carries a *"requires MC 1.21.11+"* note, and `Super-Abilities.md:170`'s *"vanilla in 1.21.11"* correction is re-scoped so it stops reading as "true everywhere" | a reader on `mc/1.21.5` is told why Spears is missing from `/mcstats` |
+| **D5** | `wiki/Building-from-Source.md:93` — rewrite the release paragraph under R-g. It currently links a file that **does not exist on `master`** | no link to `.github/workflows/release.yml` |
+| **D6** | Copper-gear availability note wherever Repair / Salvage / Fishing treasure / Hylian Luck are documented | the 1.21.9 boundary stated once, cross-referenced elsewhere |
+| **D7** | **Caveat-expiry pass.** Verify the 4 stale caveats recorded in `readme-and-github-wiki` are actually gone (they were found 2026-08-10; *found* is not *fixed*), then write the recurring procedure into the docs section so it is a step and not a memory | each of the 4 symptoms greps clean, or is fixed |
+| **D8** | Rebuild the anchor validator in the scratchpad and re-run it | 19 pages, 0 broken `](Page#anchor)` links |
+| **D9** | Commit on `master`; cherry-pick to all three bands with `Backport-of:` trailers; `drift-audit.py --self-test` **then** `--master master` | **0 MISSING on all three bands** |
+| **D10** | Push all four; `.agent/memory/` + `state.md` updated | remote tips match local |
+
+**What I am NOT doing this session** (scope fence):
+- **Not touching the live GitHub wiki** (R-k). The owner gets the push command.
+- **Not changing `master`'s `depends.minecraft`.** ⚠️ Flagged, deliberately not fixed: `master` reads
+  `~1.21.11`, which is `>=1.21.11 <1.22` — it would load on an untested `1.21.12`, where every band
+  branch pins an explicit `>=x <y` range per 4′.3. That is a `src/` change, not a docs change, and a
+  `src/`-touching commit **releases** on the three bands (`release.yml`'s `paths:` filter). It wants
+  its own commit and its own decision.
+- **Not extending `gameplay-smoke.sh` to Trophy Hunter** — the one open *wiring-proven-but-not-
+  gameplay-proven* item. Separate, optional, and it is a harness change not a docs change.
+- **Not starting `26.x`** (R-e).
+- **Not re-auditing skill content.** The roster audit is `PrimarySkillType.values()` vs the wiki, per
+  `readme-and-github-wiki`; it was done 2026-08-10 and nothing has been added since.
+
+**Blast radius.** Docs-only — **no destructive step in this plan.** No file is overwritten unread,
+nothing is deleted, no history is rewritten. The two reversible actions:
+- **Commits on four branches.** Undo: `git revert <sha>` per branch.
+- **Pushes.** Undo: force-push the recorded prior tip. Prior tips, captured before the first edit —
+  `master` `6c5eeea85` · `mc/1.21.5` `28b91ca95` · `mc/1.21.8` `7af04cedc` · `mc/1.21.10` `2e6ad2c11`.
+  ⚠️ The band pushes are **docs-only and therefore fire nothing**: `release.yml`'s `paths:` filter is
+  `src/**`, `build.gradle`, `settings.gradle`, `gradle.properties`, `gradle/**`, `gradlew*` and the
+  workflow itself. `README.md` and `wiki/` are in none of them, so the three existing releases survive
+  untouched — the same reasoning that held for the scripts-only pushes last session, re-checked
+  against the file rather than inherited from the summary.
+
+---
+
+## SESSION PLAN — 2026-08-12 (session 1) — ✅ COMPLETE
 
 Owner rulings taken at the top of this session: **R-g** (commit the `.github/` removal),
 back-port-then-cut ordering, and **pushes are now mine to make once a branch is green**.
@@ -1400,10 +1482,72 @@ reports the new band clean, and each branch released to its own Minecraft line.
 - [ ] 7.2 ~~Enforce the CI split from 4.4~~ — **deferred with 4.4.** Each branch's build is
       independent, so the cross-band multiplication never occurs in one run. Revisit only at the
       ~30 min-per-band cap.
-- [ ] 7.3 Update `README.md` + the 17-page `wiki/` with the supported-version matrix
-      - Per `readme-and-github-wiki`: audit the wiki against the *roster*, not the diff. A
-        per-commit doc pass cannot catch a page that was never created.
-      - [ ] Add a caveat-expiry pass — 4 stale caveats have already outlived their defects
+- [x] 7.3 **DONE 2026-08-12.** `README.md` + the 19-page `wiki/` carry the supported-version matrix.
+      Per rulings **R-i / R-j / R-k** at the top of this document's session-2 plan: the matrix names
+      all four bands, the docs stay **byte-identical on every branch**, and the live GitHub wiki was
+      **not** pushed.
+      - **The matrix is read from the branches, never retyped** — `git show <branch>:gradle.properties`
+        and `:src/main/resources/fabric.mod.json` for every row. Landed in `README.md`
+        (*Supported versions*), `wiki/Installation.md` (the canonical copy), `wiki/Home.md` (a banner
+        pointing at it) and `wiki/Optional-Integrations.md` (ModMenu/Cloth per band).
+      - 🔑🔑 **A single GitHub wiki serves all four bands, so "the version this build targets" is
+        never a safe thing for a page to say.** Two pages were *actively wrong* rather than merely
+        stale: `Super-Abilities.md:170` told every reader Spears "is now a working skill" (it is
+        `SkillAvailability`-disabled on three of four bands), and `Skills.md`'s Spears section
+        described a skill those readers do not have. Both now state the **Minecraft version the
+        feature needs** — a dated fact that stays true — instead of a claim about the build.
+        This is the same defect species as GitHub #7, found in the docs rather than the code.
+      - **Only two boundaries are player-visible**, and they were measured with
+        `scripts/config-id-audit.py` over all 8 cached jars rather than reasoned from `BAND_TABLE.md`:
+        **Spears needs MC 1.21.11+**, and the **copper equipment tier** (Repair, Salvage, Fishing
+        treasure, Hylian Luck, Smelting) needs **MC 1.21.9+**. Absent-id counts corroborate exactly:
+        `1.21.11` **1** · `1.21.9`/`1.21.10` **15** · `1.21.5`–`1.21.8` **44**.
+        🔑 The lone `1.21.11` row (`experience.yml:Mining Chain`) is **not a defect** — it is the
+        deliberate both-names pattern, with `Chain` live below 1.21.9 and `Iron_Chain` from 1.21.9,
+        so exactly one of the pair resolves on every version.
+      - ⚠️ Everything else in `BAND_TABLE.md` (the `getEntityWorld` signatures, `SoundCategory#UI`,
+        the `CommandManager` predicates, the two redesigned seams) is **invisible to a player** and
+        was deliberately kept out of user-facing docs.
+      - **A fifth stale caveat, and the worst of them, was self-contradictory inside one file:**
+        `README.md` called Cooking *"Still planned … no code yet"* four paragraphs below a table
+        documenting the shipped skill. Both of that note's links were dead too —
+        `plans/new-skills/` is now `plans/completed/`, and `PLAYTEST_G.md` moved to
+        `plans/PLAYTEST_G.md` (referenced twice). Also corrected: the suite is **over 1,700 cases**,
+        not the *"~970"* `Building-from-Source.md` still claimed.
+      - **`release.yml` prose fixed in two places.** `README.md` and `wiki/Building-from-Source.md`
+        both claimed automated releases *"on every push to `master` or an `mc/**` branch"*, and the
+        wiki linked `.github/workflows/release.yml` **on `master`, where R-g deleted it**. Replaced
+        with the branch/band table and the `Backport-of:` discipline, which is true on every branch.
+      - [x] Roster audit: `PrimarySkillType.values()` vs the wiki — unchanged since the 2026-08-10
+            refresh, nothing added since, so no page is missing.
+      - [x] **Caveat-expiry pass — all 4 recorded caveats verified genuinely fixed**, not merely
+            found: the Limit Break *"dead enums"* claim is gone, the rank-ladder sentence is now
+            correctly attached to the 5 placeholder supers, `Configuration.md` lists **both**
+            `experience.yml` and `config.yml` as carrying a `Config_Version`, and
+            `Optional-Integrations.md` has the **Effects** tab row.
+            🔑 *Found* is not *fixed* — these were recorded 2026-08-10 and re-checked by grepping the
+            **symptom**, which is now written into `AGENTS.md`'s Definition of Done as a step rather
+            than living in a memory file.
+      - [x] **Anchor validator rebuilt and run: 19 pages, 251 anchors, 0 broken links, 0 hyphen
+            traps.** It lives in the scratchpad, outside the repo, and is rewritten after any wiki
+            edit.
+            - ⚠️⚠️ **Its first run reported a broken link that was not broken — the validator was.**
+              It stripped `_` as markdown emphasis, so the heading
+              `` `ExploitFix.Husbandry.Breed_Xp_Awards_Per_Window` `` slugged to
+              `…breedxpawardsperwindow` and a correct anchor read as dead. **An intraword underscore
+              is not emphasis in CommonMark and GitHub's slugger keeps it.** Fixed, and pinned by two
+              new self-test cases — one asserting the underscore survives, one asserting the *wrong*
+              slug is still reported, because the first alone would pass vacuously.
+              🔑 Same shape as this project's recurring burn, in the tooling this time: the
+              measurement was confidently wrong and the artifact it accused was fine. **The
+              validator refuses to report at all unless its own self-test passes first** — the
+              `drift-audit.py` pattern.
+            - ⚠️ Pre-existing, out of scope, recorded not fixed: **4 `README.md` headings contain
+              U+2011 non-breaking hyphens** (`mcMMO‑SP`, `Item‑triggered abilities`, `In‑game
+              feedback`, `Mod Menu + Cloth Config`). They render like ASCII `-` but are stripped from
+              the slug. **Nothing links to any of them today** — all 7 of the README's internal
+              anchors resolve, including the 4 new ones — so this is a trap waiting for the next
+              person who adds a link, not a live break.
 - [ ] 7.4 Publish per-band jars to Modrinth/CurseForge with correct version ranges
       ⚠️ **Rewritten under R-g: this is now a fully manual release.** It previously rode on
       `release.yml` producing a tagged jar per branch on push. Each band's jar must be built locally
@@ -1414,6 +1558,26 @@ reports the new band clean, and each branch released to its own Minecraft line.
         retyping it, which is how the two would drift apart.
       - 🔑 Nothing reaps stale releases any more either. The "one release per Minecraft line" sweep
         was `release.yml`'s; per-line hygiene is now manual too.
+      - ✅ **CORRECTED 2026-08-12: all four bands have in fact published a release.** From
+        `git ls-remote --tags origin` — the authoritative source, since `gh auth status` fails on
+        this machine and the `github` MCP has never connected here:
+
+        | Tag | Band |
+        |---|---|
+        | `mc1.21.11-v2.2.050-build.26` | `master` |
+        | `mc1.21.10-v2.2.050-build.25` | `mc/1.21.10` |
+        | `mc1.21.8-v2.2.050-build.24` | `mc/1.21.8` |
+        | `mc1.21.5-v2.2.050-build.27` | `mc/1.21.5` |
+
+        The earlier note that *"the next `src/`-touching push of `mc/1.21.5` publishes its **first**
+        `mc1.21.5-v*` release"* is **wrong and is retracted.** That band's `.github/` restore commit
+        (`28b91ca95`) added `release.yml` itself — and **the workflow file is in its own `paths:`
+        filter**, so the push released immediately. 🔑 The filter was read correctly last session
+        (`scripts/` is not in it) and then applied to the wrong commit: the reasoning generalised
+        *"docs/tooling pushes fire nothing"* past the one path that is always in scope, the workflow.
+      - ⚠️ **Two `mc1.21.11-v*` tags coexist** (`build.3` and `build.26`), so the "one release per
+        Minecraft line" sweep evidently reaps the **release** and not the **tag**. Harmless today;
+        worth knowing before anyone trusts the tag list as a release list.
 
 ---
 

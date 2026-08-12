@@ -76,7 +76,7 @@ Some behaviour needs a mixin because Fabric has no event for it. Two hard-won ru
 
 ## Testing
 
-The suite is ~970 cases and covers the MC-free cores directly plus a `fabric-loader-junit` harness for registry-backed tests.
+The suite is over 1,700 cases and covers the MC-free cores directly plus a `fabric-loader-junit` harness for registry-backed tests. Every band runs the same suite on its own build, and the counts stay within one or two of each other — a band that "passes" by having quietly skipped something would show up as a drop.
 
 ```bash
 ./gradlew test
@@ -88,9 +88,22 @@ For registry-dependent tests, call `McTestRegistries.bootstrap()` in `@BeforeAll
 
 ---
 
-## Releases
+## Branches, bands and releases
 
-Built and published automatically by [`.github/workflows/release.yml`](https://github.com/Wulfic/mcMMO-Singleplayer/blob/master/.github/workflows/release.yml) on every push to `master` or an `mc/**` branch, keeping one "latest" release per Minecraft line. Versioning uses the run number.
+Each supported Minecraft version band is its own branch. `master` **is** the newest supported band; `mc/**` branches exist only for older ones.
+
+| Branch | Band |
+|---|---|
+| `master` | 1.21.11 |
+| `mc/1.21.10` | 1.21.9 – 1.21.10 |
+| `mc/1.21.8` | 1.21.6 – 1.21.8 |
+| `mc/1.21.5` | 1.21.5 |
+
+A branch pins its own `minecraft_version` and `yarn_mappings` in `gradle.properties`, and its own band range in `fabric.mod.json`. Checking one out and running `./gradlew build` produces that band's jar with no further configuration — there is no preprocessor and no version switch to set.
+
+**Fixes land on `master` first, always**, then propagate to the band branches. Each propagation commit carries a `Backport-of: <sha>` trailer naming the `master` commit it came from, which makes `git log --grep='Backport-of: <sha>'` a mechanical answer to *"did this fix reach every band?"*. A `master` commit that deliberately must not propagate says so in the commit instead. This matters more than it looks: almost every bug this project gets is version-agnostic logic, so a fix that lands on one band and is forgotten on another produces no error anywhere — the bug just quietly comes back for that band's players.
+
+Releases are published per band and tagged `mc<minecraft version>-v<mod version>-build.<n>`, so each Minecraft line keeps its own latest build.
 
 ---
 

@@ -6,11 +6,13 @@ RPG skills, levelling, sub-skills and active super abilities for vanilla Minecra
 
 | | |
 |---|---|
-| **Minecraft** | 1.21.11 |
+| **Minecraft** | 1.21.5 – 1.21.11 — one build per version band, see [Installation](Installation#supported-versions) |
 | **Mod loader** | Fabric Loader ≥ 0.19.3 |
 | **Required dependency** | Fabric API |
 | **Java** | 21+ |
 | **License** | GPL-3.0-only (inherited from upstream mcMMO) |
+
+> ⚠️ **This wiki covers every supported Minecraft version at once.** The mod is the same on all of them — same skills, same sub-skills, same numbers — but two features depend on what your Minecraft version actually contains: **Spears needs 1.21.11+**, and **copper gear** (Repair, Salvage, Fishing treasure, Hylian Luck, Smelting) needs **1.21.9+**. Those are called out where they come up, and listed together under [Installation → Supported versions](Installation#supported-versions).
 
 ---
 

@@ -385,7 +385,27 @@ Not done until **all** of these are true:
       written down in `TODO.md` rather than remembered
 - [ ] `TODO.md` reflects reality
 - [ ] `.agent/memory/` updated if anything non-obvious was decided or discovered
+- [ ] **Caveat-expiry pass done** — see below
 - [ ] Diff self-reviewed — no debug code, no commented-out blocks, no secrets
+
+### The caveat-expiry pass
+
+**A doc caveat outlives the defect it describes.** When a fix lands, grep `README.md` and `wiki/`
+for the **symptom**, not for the file you edited — the page carrying the stale warning is almost
+never the page the fix touched. Five have already been caught this way: four in the 2026-08-10
+refresh (Limit Break's "dead enums", the rank-ladder sentence left attached to the wrong subject,
+the `Config_Version` count, a missing ModMenu tab) and a fifth in Phase 7.3, where the README
+called Cooking *"still planned, no code yet"* in one paragraph and documented the shipped skill in
+the table above it.
+
+Two blind spots that a per-commit doc edit **structurally cannot** reach, so check them explicitly:
+
+1. **A page that was never created.** Audit the roster against `PrimarySkillType.values()`, never
+   against the diff — an added enum constant is invisible to every incremental edit. Cooking shipped
+   across six commits with zero mentions in all 16 wiki files.
+2. **A claim that is true on `master` and false on a band.** One GitHub wiki serves every band, so
+   *"X is vanilla in \<version\>"* reads as *"X works for you"* to a player three bands down. State
+   the Minecraft version a feature needs; never state what version the build targets.
 
 "It works on my machine", "I'll add tests later", and "the delete path is obviously fine"
 are not entries on this list.
