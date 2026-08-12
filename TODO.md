@@ -8,6 +8,14 @@ branches, so there is no preprocessor to adopt; it is replaced by **Phase 4′**
 cherry-pick discipline and risk R4 are both **done and landed on `master` first**, so all three band
 branches inherit them.
 
+🎉🎉 **2026-08-12 — ALL THREE IN-SCOPE BANDS ARE CUT, GREEN AND PUSHED. Phase 6.2 is COMPLETE.**
+`mc/1.21.5` was the last one (`28b91ca95`), and every gate passed on its own build: **1705 / 0 / 0**,
+`mixin-allow-audit` 61/61, `boot-check` PASSED, `config-id-audit` exit 0, `brew-smoke` PASSED with
+its control, `gameplay-smoke` **29/29**, `drift-audit` **0 MISSING on all three bands**. The near-term
+ship list under R-b — `1.21.5` · `1.21.6–1.21.8` · `1.21.9–1.21.10` · `1.21.11` — **is now covered
+end to end.** What remains is Phase 7.3 (README + wiki version matrix), 7.4 (manual publishing) and
+the `26.x` mini-project. See Phase 6.2 for the band's own findings.
+
 ✅ **2026-08-12 — THE THIRD PROBE HOLE IS CLOSED, and Phase 5 is fully complete (5.8 included).**
 `extract-mc-surface.py` now reads member references out of **our own compiled bytecode**
 (`javap -v` over `build/classes`) instead of trying to recover them from source text — javac has
@@ -1140,10 +1148,107 @@ reports the new band clean, and each branch released to its own Minecraft line.
 ## Phase 6 — Remaining bands
 
 - [x] 6.1 Order bands cheapest-first, using the changed-symbol count from Phase 1.4:
-      **`mc/1.21.10` (2) → `mc/1.21.8` (8) → `mc/1.21.5` (10)**
-- [ ] 6.2 Per band, repeat 4′.1–5.8. **Each branch is cut from `master`**, never from the previous
+      **`mc/1.21.10` (2) → `mc/1.21.8` (8) → `mc/1.21.5` (10)** — ✅ **all three done, in that order.**
+
+      📊 **The table's calibration, now that every band is closed.** Read a record count as
+      *rows to look at*, never as work to do:
+
+      | Band | 1386-record table | real code changes | manifest delta vs `master` |
+      |---|---|---|---|
+      | `mc/1.21.10` | 10 | **1** | 2 master-only, **0** band-only |
+      | `mc/1.21.8` | 32 | **6** | 21 master-only, 16 band-only |
+      | `mc/1.21.5` | 27 | **~8**, two of them redesigns | 15 master-only, 11 band-only |
+
+      🔑 The re-cut's prediction that `1.21.5` (27) would be **cheaper than `1.21.8` (32)**
+      held, and for the stated reason: most signature deltas are benign. The one thing the table
+      could not price is that `getEntityWorld` is merely *signature-changed* on `1.21.5` but
+      *absent* on `1.21.8` — which is the difference between **3** broken call sites and **57**.
+- [x] 6.2 Per band, repeat 4′.1–5.8. **Each branch is cut from `master`**, never from the previous
       band — otherwise band N inherits band N−1's back-compat fixes and the diffs stop being
-      independent.
+      independent. ✅ **COMPLETE 2026-08-12 — all three in-scope bands are cut, green and pushed.**
+
+      🎉🎉 **`mc/1.21.5` is CUT and GREEN (2026-08-12) — the LAST in-scope band.** Tip `28b91ca95`,
+      cut from `master` `c96068c72`, covering **1.21.5 only** (a one-version band).
+      **Every gate passed on the band's own build:** `./gradlew build` exit 0, **1705 tests / 0
+      failures / 0 skipped** (master is 1704 — the extra one is a new guard, nothing was disabled),
+      `mixin-allow-audit --mc 1.21.5 --check` **61/61**, `boot-check.sh … 1.21.5` PASSED (0 ERROR,
+      0 mixin failures, canary rejected), `config-id-audit --check` exit 0 (**44 absent, 0
+      dead-everywhere**), `brew-smoke.sh` PASSED with its discriminating vanilla control,
+      `gameplay-smoke.sh` **29/29**, and `drift-audit.py --master master` reports **0 MISSING on all
+      three bands** after its self-test.
+
+      **Toolchain:** `yarn 1.21.5+build.1` · `fabric-api 0.128.2+1.21.5` · `modmenu 14.0.2` ·
+      `cloth 18.0.145`; `fabric.mod.json` depends `>=1.21.5 <1.21.6` — the range, not the pin.
+      🔑 ModMenu **14.x** is the line advertising `1.21.5` and **15.x starts at `1.21.6`**, so the
+      ecosystem draws this band's upper boundary in the same place our probe did — the same
+      independent corroboration `mc/1.21.8` got.
+
+      **Predicted 8 absent + 19 signature-changed; the compiler found 13 errors in main and 8 in
+      test, every one a predicted row, and _all_ of them inside `fabric/` or `platform/`** — Phase
+      2's blast-radius cap holding on its second real MC API break (more evidence for **R3**).
+
+      - 🔑🔑 **The band is much cheaper than the table implies, and the reason is instructive.**
+            `mc/1.21.8` needed `getEntityWorld` → `getWorld` across 57 sites. **On `1.21.5`
+            `getEntityWorld` is NOT absent** — it exists and returns `World` instead of
+            `ServerWorld`, a *covariant override change*. So only the **3 uncast** sites broke; every
+            site that already cast or used `instanceof ServerWorld` compiled untouched. Repointed to
+            `ServerPlayerEntity#getServerWorld()`. Only `getEntityPos` was genuinely absent (6 main
+            + 8 test).
+      - 🔑 **Asked first, per the standing question: `master` could absorb none of it.** `1.21.11`
+            has neither `getPos()` nor `getServerWorld()` anywhere in the entity hierarchy, so there
+            is no common name to widen to — unlike `CHEAT_COMMAND`, which *was* absorbed when both
+            sides implemented `Predicate`.
+      - [x] ⚠️⚠️ **302 tests failed on the first build, from exactly TWO unresolvable `@At`
+            targets.** `BeehiveBlock` and `ArmadilloEntity` failed mixin transformation, which took
+            out `Blocks.<clinit>`, then `Items.<clinit>`, and cascaded into 34 unrelated classes.
+            🔑 **Read the root cause, never the count** — the failure list named Cooking, Alchemy,
+            Repair and Salvage, none of which had anything wrong with them.
+      - [x] ⚠️⚠️ **Three behaviour decisions, not renames:**
+            - **`SoundCategory#UI` does not exist** (it arrives in `1.21.6`). `toVanilla`'s
+              deliberately-total switch **failing to compile is that design working**. Mapped to
+              `MASTER`, which is **vanilla-correct rather than a fallback**: before the UI slider
+              existed, UI sounds already played on master. The same-name property test keeps its
+              teeth — every other constant still asserts same-name, and a new test asserts
+              `UI → MASTER` **positively** *and* asserts vanilla genuinely lacks `UI`, so the
+              exemption cannot outlive the band difference or hide a real typo.
+            - **`CommandManager` has NEITHER `GAMEMASTERS_CHECK` NOR `requirePermissionLevel`**, in
+              any form. ⚠️ The javadoc claiming the `int` overload covers *"≤1.21.10"* was **false
+              here** — a third version-pinned claim that rotted. Now `source ->
+              source.hasPermissionLevel(2)`, and the tiers are named **by relation** rather than
+              pinned to version numbers.
+            - **`BeehiveBlock#dropHoneycomb` is the 2-arg `(World, BlockPos)` form.** Calling it is
+              the *faithful* port, not a degraded one: it is the same helper vanilla itself calls on
+              this version, so "the yield stays whatever the game says a hive yields" still holds.
+      - [x] ⚠️⚠️ **The same two seams `mc/1.21.8` had to REDESIGN needed it again** — and the
+            premise was re-verified against **this** band's jar rather than inherited:
+            - **Armadillo**: `forEachBrushedItem` absent, `brushScute()` takes no arguments, **and
+              the dispenser is still present** — a binary grep of this band's jar returns exactly
+              `ArmadilloEntity` and `DispenserBehavior$5`. Re-seamed onto `interactMob`, which a
+              dispenser never enters: **the exclusion is bought by the choice of seam instead of by
+              the signature.**
+            - **Trophy Hunter**: `LivingEntity` declares exactly one `dropLoot` (3-arg, `protected`)
+              and no `generateLoot` at any access level, so the bonus roll re-enters the injected
+              method — an **item bomb**, not a no-op. Guarded with a per-entity `@Unique` flag reset
+              in a `finally`.
+              - [ ] ⚠️ **Still wiring-proven, not gameplay-proven** — same gap as `mc/1.21.8`:
+                    Trophy Hunter is rank-gated and the smoke player is Hunter 0.
+      - [x] ⚠️ **A claim true on `master` and false here, found by an NPE rather than a compiler.**
+            `ItemUsageContext`'s constructor calls `PlayerEntity.getWorld()` on this band where
+            master calls `getEntityWorld()` — **disassembled, not assumed**. A test mock stubbing
+            only the master name left the context's world `null`, and the failure surfaced inside
+            `HoeItem#canTillFarmland`, naming the hoe rather than the mock.
+      - [x] ⚠️ **A FOURTH manifest blind spot**, minor and recorded rather than fixed:
+            `ArmadilloEntity#interactMob` dropped out of the `METHOD` records because this band
+            extracts the mixin selector to an `INTERACT_MOB` **constant**, and the source scan reads
+            only `method = "<literal>"`. Runtime coverage is unaffected — `mixin-allow-audit` reads
+            the mixin's own bytecode, resolves the constant, and binds it.
+      - [x] ⚠️ **`.github/` had to be restored on this band.** It was cut *after* ruling R-g removed
+            `.github/` from `master`, so unlike `mc/1.21.8` and `mc/1.21.10` it inherited the
+            deletion **by accident of cut timing, not by decision**, and would silently never
+            release. Restored to exactly the three paths its siblings track. 🔑 The three files are
+            **force-added with `.github/` still in `.gitignore`** — un-ignoring it instead swept in
+            12 files never tracked on any branch (`copilot-instructions.md`, the whole `skills/`
+            tree).
 
       🎉 **`mc/1.21.8` is CUT and GREEN (2026-08-12), locally and unpushed** — tip `2cd82bb1c`, cut
       from `master` `db6a17b37`, covering **1.21.6 + 1.21.7 + 1.21.8**. Every gate passed on the
