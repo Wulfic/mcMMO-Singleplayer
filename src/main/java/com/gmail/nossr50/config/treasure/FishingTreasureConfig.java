@@ -1,5 +1,6 @@
 package com.gmail.nossr50.config.treasure;
 
+import com.gmail.nossr50.config.ConfigIdSkips;
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.datatypes.treasure.EnchantmentTreasure;
 import com.gmail.nossr50.datatypes.treasure.FishingTreasure;
@@ -118,9 +119,40 @@ public class FishingTreasureConfig extends ConfigLoader {
     public final @NotNull Map<Rarity, List<EnchantmentTreasure>> fishingEnchantments =
             new EnumMap<>(Rarity.class);
 
+    private final ConfigIdSkips skips = new ConfigIdSkips(FILENAME);
+
     public FishingTreasureConfig(Path dataFolder) {
         super(FILENAME, dataFolder);
         loadKeys();
+    }
+
+    /**
+     * Drop every reward whose item this Minecraft version does not have, and report them (TODO 5.5).
+     *
+     * <p>Called once from {@code McMMOMod#onServerStarting}, never from {@link #loadKeys} — see
+     * {@link TreasureConfig#pruneUnavailableEntries()} for why a registry probe in the constructor of
+     * an MC-free config poisons every un-bootstrapped test fork it lands in.
+     *
+     * <p>This is the file that made the defect concrete: below 1.21.9 its nine copper tool/armour
+     * rewards name items that do not exist, and the class javadoc's own "faithfulness note" says
+     * unknown materials are resolved only at spawn time. So the roll picked one, {@code ItemSpecBuilder}
+     * returned empty, and the catch produced nothing at all. Removing them from the rarity bucket
+     * first means the remaining rewards keep their intended share of that bucket.
+     */
+    public void pruneUnavailableEntries() {
+        for (var bucket : fishingRewards.values()) {
+            bucket.removeIf(t -> !skips.keepItem("Fishing", t.getDrop().getMaterialId()));
+        }
+        for (var entry : shakeMap.entrySet()) {
+            entry.getValue().removeIf(
+                    t -> !skips.keepItem("Shake." + entry.getKey(), t.getDrop().getMaterialId()));
+        }
+        skips.logSummary(LOGGER);
+    }
+
+    /** Rows dropped because this Minecraft version has no such item (TODO 5.5). */
+    public @NotNull ConfigIdSkips getSkips() {
+        return skips;
     }
 
     @Override

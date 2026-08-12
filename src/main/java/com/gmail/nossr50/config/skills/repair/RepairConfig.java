@@ -1,6 +1,7 @@
 package com.gmail.nossr50.config.skills.repair;
 
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.config.ConfigIdSkips;
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.datatypes.skills.ItemType;
 import com.gmail.nossr50.datatypes.skills.MaterialType;
@@ -39,9 +40,16 @@ public class RepairConfig extends ConfigLoader {
 
     private List<Repairable> repairables = new ArrayList<>();
 
+    private final ConfigIdSkips skips = new ConfigIdSkips(FILENAME);
+
     public RepairConfig(Path dataFolder) {
         super(FILENAME, dataFolder);
         loadKeys();
+    }
+
+    /** Rows dropped because this Minecraft version has no such item (TODO 5.5). */
+    public ConfigIdSkips getSkips() {
+        return skips;
     }
 
     @Override
@@ -53,19 +61,25 @@ public class RepairConfig extends ConfigLoader {
             return;
         }
 
-        final List<String> notSupported = new ArrayList<>();
+        // Nothing below can resolve without a live registry, and every miss would log. This is the
+        // "registries absent" path the class javadoc documents (table loads empty, no crash) —
+        // stated once here rather than as N warnings that say nothing about the config.
+        if (!Materials.itemRegistryIsPopulated()) {
+            LOGGER.debug("Item registry not populated; {} loads empty.", FILENAME);
+            return;
+        }
 
         for (String key : config.getConfigurationSection("Repairables").getKeys(false)) {
             final String base = "Repairables." + key;
 
-            // Resolve the item to repair. matchMaterial-style lookup: unknown items (not in this
-            // MC version, or registries not yet loaded) are collected and skipped, not fatal.
-            final java.util.Optional<String> pathOpt = Materials.itemPath(key);
-            if (pathOpt.isEmpty()) {
-                notSupported.add(key);
+            // TODO 5.5: test existence with isItem, which does NOT log, before itemPath, which warns
+            // once per miss via Materials#item. Those per-id warnings are what the single summary
+            // line replaces; leaving them in would make the summary redundant noise on any band
+            // missing a tier (the 7 spears below 1.21.11, all of copper below 1.21.9).
+            if (!skips.keepItem("Repairables", key)) {
                 continue;
             }
-            final String itemPath = pathOpt.get();
+            final String itemPath = Materials.itemPath(key).orElseThrow();
 
             final List<String> reasons = new ArrayList<>();
 
@@ -88,7 +102,9 @@ public class RepairConfig extends ConfigLoader {
                     ? repairMaterialName
                     : repairMaterialType.getDefaultMaterial();
             if (resolvedName == null || !Materials.isItem(resolvedName)) {
-                notSupported.add(key);
+                // The repaired item exists but its repair MATERIAL does not — same outcome for the
+                // player, so it is recorded the same way, naming the material that was missing.
+                skips.record("Repairables", key + " (repair material " + resolvedName + ")");
                 continue;
             }
             final String repairMaterialPath = Materials.idOf(resolvedName).getPath();
@@ -140,10 +156,10 @@ public class RepairConfig extends ConfigLoader {
                     minimumQuantity));
         }
 
-        if (!notSupported.isEmpty()) {
-            LOGGER.debug("Repair config skipped {} unsupported item(s): {}", notSupported.size(),
-                    String.join(", ", notSupported));
-        }
+        // TODO 5.5: this used to be DEBUG, which is indistinguishable from silence in a normal boot
+        // log — and below 1.21.11 it hides the seven spears, below 1.21.9 the whole copper tier.
+        // The report is the only artefact that says a shipped repairable is not available here.
+        skips.logSummary(LOGGER);
         LOGGER.info("Loaded {} repairables from {}", repairables.size(), FILENAME);
     }
 

@@ -1,5 +1,6 @@
 package com.gmail.nossr50.config.experience;
 
+import com.gmail.nossr50.config.ConfigIdSkips;
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.config.YamlConfiguration;
 import com.gmail.nossr50.datatypes.experience.FormulaType;
@@ -22,6 +23,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * mcMMO's XP tuning config ({@code experience.yml}), ported onto {@link ConfigLoader}.
@@ -44,6 +47,8 @@ import org.jetbrains.annotations.NotNull;
  * {@link com.gmail.nossr50.platform.ExperienceBarWrapper}.
  */
 public class ExperienceConfig extends ConfigLoader {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("mcMMO/ExperienceConfig");
 
     /** Per-skill map of config-material-string -> XP, built from the {@code Experience_Values} tree. */
     private final Map<PrimarySkillType, Map<String, Integer>> blockExperienceMap =
@@ -82,6 +87,59 @@ public class ExperienceConfig extends ConfigLoader {
             }
         }
     }
+
+    /**
+     * Name every XP row whose block/item this Minecraft version does not have (TODO 5.5).
+     *
+     * <p>⚠️⚠️ Called from {@code McMMOMod#onServerStarting}, <b>never</b> from {@link #loadKeys}.
+     * The class javadoc above states this config "needs no registry and stays unit-testable", and
+     * that is load-bearing rather than descriptive: probing the registry in the load path
+     * initializes {@code net.minecraft.registry.Registries}, which <em>throws</em> in a fork with no
+     * bootstrap and stays broken for every later use in that fork. Doing it here cost 351 failures
+     * across 8 test classes. See {@code TreasureConfig#pruneUnavailableEntries}.
+     *
+     * <p><b>Reports rather than prunes, deliberately.</b> Unlike a treasure — which, left in a drop
+     * pool, gets rolled and yields nothing, costing the player the roll — an XP row keyed on an
+     * absent id is already inert: {@link #getXp} is only ever called with a config string derived
+     * from a real registry path, so a row nothing can match is a lookup that misses. Removing it from
+     * the map changes no behaviour. What was missing is any way to find out, which is what this adds.
+     *
+     * <p>Only the five block/item-keyed sections are checked. The rest of the tree is keyed by names
+     * that are not ids at all — {@code Repair} by material category, {@code Skill_Multiplier} and
+     * {@code Threshold} by skill, the curve sections by knob — and checking those would report ~60
+     * false positives and bury the real ones. {@code scripts/config-id-audit.py} carries the same
+     * split, and for the same reason.
+     *
+     * <p>⚠️ The kind differs per section because the seam does: Mining/Herbalism/Excavation/
+     * Woodcutting look up the broken BLOCK, while Smelting looks up the furnace input ITEM
+     * ({@code SmeltingManager#awardSmeltingXP}) — which is why {@code Raw_Iron} and
+     * {@code Copper_Nugget} are correct rows rather than typos.
+     */
+    public void reportUnresolvableRows() {
+        final ConfigIdSkips skips = new ConfigIdSkips("experience.yml");
+        for (var entry : XP_ID_KEYED_SECTIONS.entrySet()) {
+            final Map<String, Integer> rows = blockExperienceMap.get(entry.getKey());
+            if (rows == null) {
+                continue;
+            }
+            for (String key : rows.keySet()) {
+                if (entry.getValue()) {
+                    skips.keepBlock(StringUtils.getCapitalized(entry.getKey().toString()), key);
+                } else {
+                    skips.keepItem(StringUtils.getCapitalized(entry.getKey().toString()), key);
+                }
+            }
+        }
+        skips.logSummary(LOGGER);
+    }
+
+    /** The five id-keyed XP sections; {@code true} = keyed by block, {@code false} = by item. */
+    private static final Map<PrimarySkillType, Boolean> XP_ID_KEYED_SECTIONS = Map.of(
+            PrimarySkillType.MINING, true,
+            PrimarySkillType.WOODCUTTING, true,
+            PrimarySkillType.HERBALISM, true,
+            PrimarySkillType.EXCAVATION, true,
+            PrimarySkillType.SMELTING, false);
 
     public boolean isEarlyGameBoostEnabled() {
         return config.getBoolean("EarlyGameBoost.Enabled", true);

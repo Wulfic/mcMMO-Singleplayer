@@ -278,6 +278,15 @@ public class McMMOMod implements ModInitializer {
             // the first XP award -- see SkillAvailability, which explains why an absence read at the
             // wrong moment is indistinguishable from a version that genuinely lacks the items.
             SkillAvailability.probe();
+            // TODO 5.5 / risk R5: same moment, same argument. The shipped configs name ~690 items
+            // and blocks and the mod supports a band of Minecraft versions, so a row naming
+            // something this version does not have is normal -- dropping it SILENTLY is not.
+            // Deliberately here rather than inside each loader: these three configs are MC-free by
+            // design (their tests run in forks with no bootstrap) and a registry probe in a load
+            // path initializes Registries, which throws there and stays broken for the rest of the
+            // fork. The other three loaders already resolve against the registry at load and report
+            // from inside it.
+            pruneConfigEntriesUnavailableOnThisVersion();
             // Phase 5: bind the per-world profile store under <worldRoot>/mcmmo/players/. Player
             // profiles load lazily on join (PlayerSessionListener), not eagerly here.
             final Path modDataDir = startingServer.getSavePath(WorldSavePath.ROOT).resolve(MOD_ID);
@@ -303,6 +312,35 @@ public class McMMOMod implements ModInitializer {
             scheduler.runTimer(new ClearRegisteredXPGainTask(), 60, 60);
         } catch (Throwable t) {
             LOGGER.error("Error while enabling mcMMO for the server session", t);
+        }
+    }
+
+    /**
+     * Drop (or, for the XP tables, name) every config row whose item/block this Minecraft version
+     * does not have — TODO 5.5 / risk R5.
+     *
+     * <p>Each config reports its own one-line summary, so a boot log states plainly which shipped
+     * rows are unavailable here. On this band that is normally nothing at all; on an older one it is
+     * the seven spears (below 1.21.11) and the whole copper equipment tier (below 1.21.9).
+     *
+     * <p>Failure here must not take the session down with it: a config that cannot be pruned is
+     * strictly better than no mcMMO. The un-pruned config still works — it just degrades the way it
+     * did before this existed, resolving at use time instead.
+     */
+    private void pruneConfigEntriesUnavailableOnThisVersion() {
+        try {
+            if (treasureConfig != null) {
+                treasureConfig.pruneUnavailableEntries();
+            }
+            if (fishingTreasureConfig != null) {
+                fishingTreasureConfig.pruneUnavailableEntries();
+            }
+            if (experienceConfig != null) {
+                experienceConfig.reportUnresolvableRows();
+            }
+        } catch (Exception e) {
+            LOGGER.error("Could not audit shipped config ids against this Minecraft version;"
+                    + " configs are left as loaded.", e);
         }
     }
 
