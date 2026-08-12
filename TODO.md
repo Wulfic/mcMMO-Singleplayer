@@ -884,7 +884,7 @@ Prove the loop before cutting the rest. Cheapest first: **`mc/1.21.10` (2 change
       **`scripts/gameplay-smoke.sh` PASSED 29/29 on both bands** — it covers the whole rest of the
       list (block break XP, a combat kill, a repair, a cook, `/mcstats`, one super ability), which
       had no harness at all because **every one of those needs a player**.
-      Commits: master `03c313db2`, band `5d4f04e9a` (`Backport-of:`).
+      Commits: master `d30410e12`, band `22a27d4a7` (`Backport-of:`).
       - **The "no new harness is needed" clause above was wrong**, and it is why this item sat open.
         `boot-check.sh` proves the jar boots; the seven gameplay items each need a *player*, and a
         headless server has none. That is the same wall Phase 0 hit (`/mcstats` dies on
