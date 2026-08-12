@@ -87,7 +87,7 @@ public final class CallOfTheWildHandler {
         }
 
         final TransientEntityTracker tracker = McMMOMod.getTransientEntityTracker();
-        Vec3d spawnPos = player.getEntityPos().add(1.0, 0.0, 1.0);
+        Vec3d spawnPos = player.getPos().add(1.0, 0.0, 1.0);
         int amountSummoned = 0;
 
         for (int i = 0; i < summon.getEntitiesSummoned(); i++) {

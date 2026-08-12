@@ -121,7 +121,7 @@ public final class PetFollowTeleport {
      * @return how many pets were moved, for the tests to assert on
      */
     static int bringPetsFrom(@NotNull ServerPlayerEntity player, @NotNull Vec3d from, double radius) {
-        final ServerWorld world = player.getEntityWorld();
+        final ServerWorld world = player.getServerWorld();
         if (world == null) {
             return 0;
         }
@@ -173,8 +173,8 @@ public final class PetFollowTeleport {
             return false;
         }
 
-        final Vec3d destination = player.getEntityPos();
-        final boolean placed = pet.teleport(player.getEntityWorld(), destination.x, destination.y,
+        final Vec3d destination = player.getPos();
+        final boolean placed = pet.teleport(player.getServerWorld(), destination.x, destination.y,
                 destination.z, EnumSet.noneOf(PositionFlag.class), pet.getYaw(), pet.getPitch(),
                 false);
         if (!placed) {

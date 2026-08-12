@@ -219,9 +219,9 @@ public final class PlayerMovementTracker {
      */
     static void tickPlayer(@NotNull ServerPlayerEntity player) {
         final UUID uuid = player.getUuid();
-        final Vec3d current = player.getEntityPos();
+        final Vec3d current = player.getPos();
         final Vec3d previous = LAST_POSITIONS.put(uuid, current);
-        final ServerWorld world = player.getEntityWorld();
+        final ServerWorld world = player.getServerWorld();
         final RegistryKey<World> previousWorld =
                 LAST_WORLDS.put(uuid, world == null ? null : world.getRegistryKey());
         final boolean sameWorld =

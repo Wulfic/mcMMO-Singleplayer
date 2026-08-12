@@ -59,6 +59,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 
@@ -1155,82 +1156,80 @@ class HusbandryListenerTest {
     // --- Brush ----------------------------------------------------------------------------------
 
     @Test
-    void brushingAnArmadilloPaysTheBrushVerbWhenAScuteIsActuallyDelivered() {
+    void brushingAnArmadilloPaysTheBrushVerb() {
         allowHarvestCooldown();
         worldTime(0L);
         final Entity armadillo = harvestable(ArmadilloEntity.class);
-        final Dropper dropper = new Dropper();
 
-        HusbandryListener.onBrushedItems(armadillo, breeder(), dropper).accept(world, wool());
+        HusbandryListener.onBrushed(armadillo, breeder());
 
         verify(husbandry).onBrush();
-        assertEquals(1, dropper.delivered.size());
     }
 
     @Test
-    void aBrushThatDeliversNothingPaysNothing() {
-        // ⚠️ The reason this verb pays on the DROP where shearing pays on the attempt. Shearing is
-        // gated upstream by isShearable(); brushing is gated by nothing at all -- brushScute returns
-        // true for any adult armadillo and brush/armadillo.json carries no conditions -- so an
-        // item actually changing hands is the only available proof a harvest happened.
-        allowHarvestCooldown();
-        worldTime(0L);
+    void aBrushWithNoRealPlayerBehindItPaysNothing() {
+        // ⚠️⚠️ BAND mc/1.21.5: vanilla really does ship an armadillo-brushing dispenser
+        // (DispenserBehavior$5, jar-verified on this band). On newer versions brushScute takes the
+        // brusher as a parameter and the dispenser passes null there, so the exclusion is a property
+        // of the signature. THIS BAND HAS NO SUCH PARAMETER -- the exclusion is bought by hooking
+        // interactMob, which a dispenser never enters (see ArmadilloBrushMixin).
+        //
+        // That structural gate cannot be reached from a unit test, so what is pinned here is the
+        // defence in depth behind it: handed something that is not a real player, the listener pays
+        // nothing. MixinApplicationTest is what proves the seam itself still binds.
         final Entity armadillo = harvestable(ArmadilloEntity.class);
 
-        // Wrapped, then never invoked: exactly what an empty loot roll looks like.
-        HusbandryListener.onBrushedItems(armadillo, breeder(), new Dropper());
-
-        verify(husbandry, never()).onBrush();
-        verify(husbandry, never()).getHarvestCooldownSeconds();
-    }
-
-    @Test
-    void aDispenserBrushingAnArmadilloPaysNothingAndDropsNothingExtra() {
-        // ⚠️ Vanilla really does ship this (DispenserBehavior$5) and the plan did not mention it.
-        // It passes null for the brusher, so the exclusion is a property of the signature.
-        final Entity armadillo = harvestable(ArmadilloEntity.class);
-        final Dropper dropper = new Dropper();
-
-        HusbandryListener.onBrushedItems(armadillo, null, dropper).accept(world, wool());
+        HusbandryListener.onBrushed(armadillo, null);
 
         verify(husbandry, never()).onBrush();
         verify(husbandry, never()).rollBonusHarvestDrop();
-        assertEquals(1, dropper.delivered.size(),
-                "vanilla's own drop must pass through an automated brush untouched");
     }
 
     @Test
-    void aBrushInsideTheCooldownStillDropsTheScuteButPaysNothing() {
-        // The cooldown gates the REWARD, never the drop. A mod that withheld vanilla's own loot to
-        // enforce its own balance would be breaking the game rather than tuning itself.
+    void aBrushInsideTheCooldownPaysNothing() {
+        // The cooldown gates the REWARD, never the drop. On this band vanilla has already dropped the
+        // scute inside brushScute() before the seam is reached, so the drop is untouchable by
+        // construction -- a mod that withheld vanilla's own loot to enforce its own balance would be
+        // breaking the game rather than tuning itself.
         allowHarvestCooldown();
         worldTime(0L);
         final Entity armadillo = harvestable(ArmadilloEntity.class);
 
-        HusbandryListener.onBrushedItems(armadillo, breeder(), new Dropper()).accept(world, wool());
-        final Dropper second = new Dropper();
-        HusbandryListener.onBrushedItems(armadillo, breeder(), second).accept(world, wool());
+        HusbandryListener.onBrushed(armadillo, breeder());
+        HusbandryListener.onBrushed(armadillo, breeder());
 
         verify(husbandry, times(1)).onBrush();
-        assertEquals(1, second.delivered.size(), "the scute must still drop inside the cooldown");
     }
 
     @Test
-    void theBrushBonusIsRolledOncePerBrushNotOncePerItem() {
+    void aSuccessfulBonusRollDropsOneExtraScute() {
         allowHarvestCooldown();
         worldTime(0L);
         final Entity armadillo = harvestable(ArmadilloEntity.class);
-        final Dropper dropper = new Dropper();
         when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
 
-        final BiConsumer<ServerWorld, ItemStack> wrapped =
-                HusbandryListener.onBrushedItems(armadillo, breeder(), dropper);
-        wrapped.accept(world, wool());
-        wrapped.accept(world, wool());
+        HusbandryListener.onBrushed(armadillo, breeder());
 
-        verify(husbandry, times(1)).rollBonusHarvestDrop();
-        verify(husbandry, times(1)).onBrush();
-        assertEquals(4, dropper.delivered.size());
+        final ArgumentCaptor<ItemStack> dropped = ArgumentCaptor.forClass(ItemStack.class);
+        verify(armadillo).dropStack(eq(world), dropped.capture());
+        assertEquals(Items.ARMADILLO_SCUTE, dropped.getValue().getItem(),
+                "the extra helping must be the same item this band's own brushScute drops");
+        assertEquals(1, dropped.getValue().getCount());
+    }
+
+    @Test
+    void aFailedBonusRollDropsNothingExtra() {
+        // The converse of the above, and the reason it is a separate test: a handler that dropped a
+        // scute unconditionally would pass the positive case just as well.
+        allowHarvestCooldown();
+        worldTime(0L);
+        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        when(husbandry.rollBonusHarvestDrop()).thenReturn(false);
+
+        HusbandryListener.onBrushed(armadillo, breeder());
+
+        verify(husbandry).onBrush();
+        verify(armadillo, never()).dropStack(any(ServerWorld.class), any(ItemStack.class));
     }
 
     @Test
@@ -1242,13 +1241,12 @@ class HusbandryListenerTest {
         final Entity armadillo = harvestable(ArmadilloEntity.class);
         lenient().when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
 
-        HusbandryListener.onBrushedItems(armadillo, breeder(), new Dropper()).accept(world, wool());
-        clearInvocations(husbandry);
-        final Dropper second = new Dropper();
-        HusbandryListener.onBrushedItems(armadillo, breeder(), second).accept(world, wool());
+        HusbandryListener.onBrushed(armadillo, breeder());
+        clearInvocations(husbandry, armadillo);
+        HusbandryListener.onBrushed(armadillo, breeder());
 
         verify(husbandry, never()).rollBonusHarvestDrop();
-        assertEquals(1, second.delivered.size());
+        verify(armadillo, never()).dropStack(any(ServerWorld.class), any(ItemStack.class));
     }
 
     @Test

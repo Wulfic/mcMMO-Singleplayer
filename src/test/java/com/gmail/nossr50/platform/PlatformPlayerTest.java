@@ -2,6 +2,7 @@ package com.gmail.nossr50.platform;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -59,12 +60,41 @@ class PlatformPlayerTest {
     @Test
     void everyPlatformSoundCategoryMapsToTheVanillaConstantOfTheSameName() {
         for (final PlatformSoundCategory category : PlatformSoundCategory.values()) {
+            if (category == PlatformSoundCategory.UI) {
+                // The one constant this band's vanilla does not have. Exempted here and asserted
+                // POSITIVELY in the test below, rather than skipped — a skip would let a genuine
+                // mis-mapping hide behind the exemption.
+                continue;
+            }
             assertSame(SoundCategory.valueOf(category.name()), PlatformPlayer.toVanilla(category),
                     "PlatformSoundCategory." + category.name()
                             + " must map to vanilla SoundCategory." + category.name()
                             + " — a mis-mapped arm silently plays mcMMO's sounds on the wrong "
                             + "volume slider");
         }
+    }
+
+    /**
+     * ⚠️ <b>BAND mc/1.21.5: vanilla has no {@code UI} sound category</b> — it arrives in 1.21.6.
+     *
+     * <p>Two assertions, and the second is the load-bearing one. The first pins the mapping this
+     * band actually uses. The second proves the <em>exemption above is justified</em> by checking
+     * that vanilla really does lack the constant: without it, the {@code continue} would be a
+     * permanent blind spot that also swallows a genuine typo, and it would silently outlive the
+     * band difference it exists for. If a future jar on this line ever gains {@code UI}, this test
+     * fails and forces the exemption to be deleted rather than left to rot.
+     *
+     * <p>{@code MASTER} is the vanilla-correct answer rather than a fallback: before the UI slider
+     * existed, UI sounds already played on master, so a player hears what they would have heard.
+     */
+    @Test
+    void theUiCategoryMapsToMasterBecauseThisBandHasNoUiSlider() {
+        assertSame(SoundCategory.MASTER, PlatformPlayer.toVanilla(PlatformSoundCategory.UI),
+                "on a band without a UI volume slider, UI sounds belong on master");
+        assertThrows(IllegalArgumentException.class, () -> SoundCategory.valueOf("UI"),
+                "vanilla gained a UI sound category on this band — delete the exemption in "
+                        + "everyPlatformSoundCategoryMapsToTheVanillaConstantOfTheSameName() and "
+                        + "restore the same-name mapping in PlatformPlayer.toVanilla()");
     }
 
     /**

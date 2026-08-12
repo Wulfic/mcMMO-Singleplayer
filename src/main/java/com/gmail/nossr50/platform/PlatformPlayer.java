@@ -139,7 +139,7 @@ public final class PlatformPlayer {
     }
 
     public @NotNull Vec3d getPos() {
-        return handle.getEntityPos();
+        return handle.getPos();
     }
 
     // --- Vitals -------------------------------------------------------------
@@ -258,7 +258,14 @@ public final class PlatformPlayer {
             case PLAYERS -> SoundCategory.PLAYERS;
             case AMBIENT -> SoundCategory.AMBIENT;
             case VOICE -> SoundCategory.VOICE;
-            case UI -> SoundCategory.UI;
+            // BAND mc/1.21.5: vanilla has no UI category here — it was added in 1.21.6, and this
+            // switch failing to compile is exactly the design working. MASTER is the *vanilla-
+            // correct* answer rather than a fallback: before 1.21.6 there was no UI volume slider
+            // and UI sounds already played on master, so a player hears what they would have heard.
+            // This is NOT the "silently falling back to MASTER" the javadoc above warns about —
+            // that warns against a `default` arm swallowing an unknown future category. This is one
+            // named constant, mapped deliberately, and the switch stays total.
+            case UI -> SoundCategory.MASTER;
         };
     }
 

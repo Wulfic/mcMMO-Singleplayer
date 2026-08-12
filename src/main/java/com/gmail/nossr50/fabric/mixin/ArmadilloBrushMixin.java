@@ -1,34 +1,42 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
-import java.util.function.BiConsumer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.passive.ArmadilloEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.loot.LootTable;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Husbandry's brush verb (Pass 2 stage 4): armadillo scute XP, plus {@code Bountiful Harvest}'s bonus
  * drop and durability save.
  *
- * <h2>🔑 {@code forEachBrushedItem} is {@code forEachShearedItem}'s sibling, and the better of the two</h2>
- * Stage 3 built the shear verb on {@code LivingEntity#forEachShearedItem}, the loot funnel one level
- * below the interaction. Brushing has an exact counterpart —
- * {@code LivingEntity#forEachBrushedItem(ServerWorld, RegistryKey, Entity, ItemStack, BiConsumer)},
- * jar-verified as referenced only by {@code ArmadilloEntity} — and it improves on the shear one in the
- * way that matters most: <b>it takes the brushing entity as a parameter</b>. So the real-player gate
- * needs no interaction stash and no identity check, just a look at an argument.
+ * <h2>⚠️⚠️ BAND mc/1.21.5 — {@code forEachBrushedItem} does not exist, so the seam moved</h2>
+ * Newer versions route the drop through
+ * {@code LivingEntity#forEachBrushedItem(ServerWorld, RegistryKey, Entity, ItemStack, BiConsumer)} and
+ * hand the brushing entity to it, so master's real-player gate is just a look at an argument — and its
+ * dispenser exclusion is a property of the <em>signature</em>, because vanilla's armadillo-brushing
+ * dispenser passes {@code null} there.
  *
- * <p>That gate is load-bearing rather than theoretical. <b>Vanilla ships a dispenser that brushes
- * armadillos</b> ({@code DispenserBehavior$5}), which the plan did not mention, and it passes
- * {@code null} for the brusher — so an AFK brush farm is excluded by the signature itself.
+ * <p>On this band that funnel is absent. {@code ArmadilloEntity#brushScute()} takes <em>no
+ * arguments</em>, consults no loot table, and drops a flat {@code ItemStack(Items.ARMADILLO_SCUTE)}
+ * through {@code Entity#dropStack} inline. There is no brusher to inspect and no per-item handler to
+ * wrap.
+ *
+ * <p>🔑🔑 <b>And the dispenser is still here</b> — a binary grep of <em>this band's</em> jar for
+ * {@code brushScute} returns exactly {@code ArmadilloEntity} and
+ * {@code net/minecraft/block/dispenser/DispenserBehavior$5}. So on this band an AFK dispenser brush
+ * farm is <em>not</em> excluded by any signature, and a seam inside {@code brushScute} would pay it.
+ * <b>That is why this band hooks {@code interactMob} instead:</b> the dispenser never goes near it,
+ * so choosing the seam is what restores the exclusion master gets for free. This is the one place
+ * where this band's port is a behaviour decision rather than a rename.
  *
  * <h2>⚠️ The plan's rate limit for this verb does not exist</h2>
  * The plan filed brushing as low farm risk on the strength of "vanilla's own scute cooldown". There
@@ -43,32 +51,29 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 @Mixin(ArmadilloEntity.class)
 public abstract class ArmadilloBrushMixin {
 
+    private static final String INTERACT_MOB = "interactMob(Lnet/minecraft/entity/player/PlayerEntity;"
+            + "Lnet/minecraft/util/Hand;)Lnet/minecraft/util/ActionResult;";
+
     /**
-     * Pay the brush verb, and let {@code Bountiful Harvest} deliver the scute a second time.
+     * The one instruction in {@code interactMob} that is reached only by a <b>successful</b> brush.
      *
-     * <p>The full-argument handler form is used so the {@code Entity} doing the brushing arrives with
-     * the handler — that is the whole reason this seam beats the shear one, and it is what makes the
-     * dispenser exclusion a property of the signature rather than of a check that could rot.
+     * <p>Vanilla's shape here is {@code if (brushScute()) { stack.damage(16, player, slot); return
+     * SUCCESS; }} — so this call sits inside the taken branch. Anchoring on it rather than on
+     * {@code brushScute} itself is deliberate: {@code brushScute} returns {@code false} for a baby
+     * armadillo, and an injection on the <em>call</em> would fire for that refusal too. Reading the
+     * boolean back off the stack is not available without a wrapper library, and the branch-unique
+     * instruction says the same thing with nothing extra to depend on.
      *
-     * <p>⚠️ <b>The {@code @At} owner is {@code ArmadilloEntity}, not the declaring
-     * {@code LivingEntity}</b>, and getting that wrong costs a boot. {@code forEachBrushedItem} is
-     * inherited and invoked on {@code this}, so the {@code invokevirtual}'s owner is the subclass.
-     * That is easy to misread off {@code javap}, which prints <b>no class prefix at all</b> when an
-     * invoke's owner is the class being disassembled — so an inherited call on {@code this} looks
-     * identical to a call to a method declared right there. Naming the superclass failed the injection
-     * check with "Scanned 0 target(s)", which reads like a missing <em>method</em> rather than a
-     * mismatched owner and sends you hunting for the wrong thing.
+     * <p>There is exactly one {@code ItemStack#damage} call in the method, which is what
+     * {@code allow = 1} pins — the same anchor the durability save below uses.
      */
-    @ModifyArg(method = "brushScute", allow = 1, index = 4,
+    @Inject(method = INTERACT_MOB, allow = 1,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/entity/passive/ArmadilloEntity;forEachBrushedItem("
-                            + "Lnet/minecraft/server/world/ServerWorld;"
-                            + "Lnet/minecraft/registry/RegistryKey;Lnet/minecraft/entity/Entity;"
-                            + "Lnet/minecraft/item/ItemStack;Ljava/util/function/BiConsumer;)Z"))
-    private BiConsumer<ServerWorld, ItemStack> mcmmo$onBrushedItems(ServerWorld world,
-            RegistryKey<LootTable> lootTable, Entity brusher, ItemStack brush,
-            BiConsumer<ServerWorld, ItemStack> dropper) {
-        return HusbandryListener.onBrushedItems((Entity) (Object) this, brusher, dropper);
+                    target = "Lnet/minecraft/item/ItemStack;damage(ILnet/minecraft/entity/"
+                            + "LivingEntity;Lnet/minecraft/entity/EquipmentSlot;)V"))
+    private void mcmmo$onBrushed(PlayerEntity player, Hand hand,
+            CallbackInfoReturnable<ActionResult> cir) {
+        HusbandryListener.onBrushed((Entity) (Object) this, player);
     }
 
     /**
@@ -82,8 +87,7 @@ public abstract class ArmadilloBrushMixin {
      * {@code interactMob}, after {@code brushScute} has returned — so it hangs off that call instead.
      * There is exactly one {@code damage} call in the method.
      */
-    @ModifyArg(method = "interactMob(Lnet/minecraft/entity/player/PlayerEntity;"
-            + "Lnet/minecraft/util/Hand;)Lnet/minecraft/util/ActionResult;", allow = 1, index = 0,
+    @ModifyArg(method = INTERACT_MOB, allow = 1, index = 0,
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/item/ItemStack;damage(ILnet/minecraft/entity/"
                             + "LivingEntity;Lnet/minecraft/entity/EquipmentSlot;)V"))

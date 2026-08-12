@@ -3,6 +3,7 @@ package com.gmail.nossr50.fabric.listeners;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -188,9 +189,17 @@ class SuperAbilityListenerTillingTest {
 
         final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
         when(player.getStackInHand(Hand.MAIN_HAND)).thenReturn(held);
-        // ItemUsageContext's public constructor reads the world off the player (getEntityWorld, not
-        // getWorld — verified with javap), and vanilla's predicates read it back off the context.
-        when(player.getEntityWorld()).thenReturn(world);
+        // ItemUsageContext's public constructor reads the world off the player, and vanilla's
+        // predicates read it back off the context.
+        //
+        // ⚠️ BAND mc/1.21.5: WHICH accessor it calls differs, and this band has BOTH of them on
+        // Entity. Disassembled rather than assumed — `javap -c ItemUsageContext` shows
+        // `invokevirtual PlayerEntity.getWorld()` here, where master calls getEntityWorld(). Stub
+        // only the master one and the context's world is null, HoeItem#canTillFarmland NPEs, and
+        // the failure names the hoe rather than the mock. Both are stubbed so the harness does not
+        // depend on which name vanilla happens to use internally.
+        when(player.getWorld()).thenReturn(world);
+        lenient().when(player.getEntityWorld()).thenReturn(world);
 
         final BlockHitResult hit =
                 new BlockHitResult(Vec3d.ofCenter(POS), side, POS, false);

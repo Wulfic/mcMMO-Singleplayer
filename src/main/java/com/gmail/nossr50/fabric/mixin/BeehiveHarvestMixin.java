@@ -70,13 +70,18 @@ public abstract class BeehiveHarvestMixin {
      * only after vanilla has confirmed a full hive on the server side, so it fires exactly once per
      * successful honeycomb harvest. The hive's honey level is still full at this point, which is what
      * lets the bonus be delivered as further rolls of vanilla's own loot table.
+     *
+     * <p>⚠️ <b>BAND mc/1.21.5: the descriptor is the 2-arg form</b>, {@code dropHoneycomb(World,
+     * BlockPos)}. The tool, state, block-entity and player parameters newer versions pass do not
+     * exist yet. Verified with {@code javap} against this band's own merged jar — an {@code @At}
+     * target that no longer resolves is exactly what took 302 tests down on the first build of this
+     * band, by failing the mixin transformation of {@code BeehiveBlock} and cascading through
+     * {@code Blocks.<clinit>} into {@code Items.<clinit>}.
      */
     @Inject(method = ON_USE_WITH_ITEM, allow = 1,
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/block/BeehiveBlock;dropHoneycomb("
-                            + "Lnet/minecraft/server/world/ServerWorld;Lnet/minecraft/item/ItemStack;"
-                            + "Lnet/minecraft/block/BlockState;"
-                            + "Lnet/minecraft/block/entity/BlockEntity;Lnet/minecraft/entity/Entity;"
+                            + "Lnet/minecraft/world/World;"
                             + "Lnet/minecraft/util/math/BlockPos;)V"))
     private void mcmmo$onHoneycombHarvested(ItemStack stack, BlockState state, World world,
             BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit,
