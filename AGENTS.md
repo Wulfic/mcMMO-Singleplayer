@@ -73,6 +73,7 @@ Tooling (all converse-checked; run them, don't trust them because they printed s
 | `scripts/probe-bands.py` | which of the 566 MC symbols differ on a version (`--control` guards it) |
 | `scripts/config-id-audit.py` | which of the 689 **config** item/block ids are absent per band, and which are dead on *every* version (a defect, not drift). `--self-test` + a 95% control floor; ids come from the jar's generated `blockstates/`+`items/` data, **never** from `javap` field names or lang keys |
 | `scripts/boot-check.sh` | that a **built jar** boots a real server on a given version |
+| `scripts/gameplay-smoke.sh` | that the **earning paths** still fire on a given version, driving a real player (fabric-carpet `/player`) through mining, digging, combat, repair, cooking and a super ability, scored from `/mcstats` + the profile YAML. `--self-test` on the scorer runs first; `GAMEPLAY_SMOKE_CONTROL=1` re-runs the scenario with mcMMO **removed** and must FAIL |
 
 ---
 
