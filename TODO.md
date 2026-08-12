@@ -111,8 +111,17 @@ back-port-then-cut ordering, and **pushes are now mine to make once a branch is 
   `git ls-tree -r --name-only mc/1.21.8 -- .github` lists all three files.
   🔑 **A ruling taken on `master` is not in force on a band until it is back-ported.** That is the
   same silent-divergence shape R8 describes, arriving via infrastructure rather than a logic fix.
-  ⬜ Needs an owner call before B4 — see the question logged there. Undo for a push: force-push the
-  prior tip, recorded in B4 before pushing.
+  ✅ **RULED (owner, 2026-08-12): leave the bands as they are — they keep `release.yml` and keep
+  releasing.** R-g is `master`-only, deliberately. Record that asymmetry: `.github/` now differs
+  between `master` and every band, permanently and on purpose.
+  🎉 **…and this particular push fires nothing anyway.** `release.yml`'s `paths:` filter is
+  `src/**`, `build.gradle`, `settings.gradle`, `gradle.properties`, `gradle/**`, `gradlew*` and the
+  workflow file itself. **`scripts/` is not in it**, and both band commits are scripts-only — so no
+  build, no tag, no reaping sweep. The three existing releases survive untouched. The *next* band
+  push that touches `src/` will release normally, exactly as ruled.
+  🔑 Third time this session that reading the actual file beat reasoning from the summary of it:
+  the workflow triggers on `mc/**`, which is true, and stops at a `paths:` filter, which the
+  summary never mentioned. Undo for a push: force-push the prior tip, recorded in B4 below.
 - **C cuts a new branch.** Purely additive; undo is `git branch -D mc/1.21.5` before any push.
 
 ---
