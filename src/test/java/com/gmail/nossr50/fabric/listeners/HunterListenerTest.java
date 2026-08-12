@@ -650,10 +650,30 @@ class HunterListenerTest {
         // be an infinite snowball press once Trophy Hunter unlocked tier 1.
         final AtomicInteger rolls = trophySetUp(1_000, 100.0D);
 
+        // The snow golem half runs on every supported Minecraft version, so this test keeps its
+        // coverage on a band that has no copper golem instead of quietly becoming a no-op.
         HunterListener.onLootDropped(snowGolem(), killedBy(killer), rolls::incrementAndGet);
-        HunterListener.onLootDropped(copperGolem(), killedBy(killer), rolls::incrementAndGet);
+        assertEquals(0, rolls.get(), "a snow golem must not pay a bonus trophy");
 
-        assertEquals(0, rolls.get());
+        // ⚠️ copperGolem() is null on a version without copper golems -- it is resolved through the
+        // registry precisely because naming EntityType.COPPER_GOLEM would fail the BUILD there. The
+        // sibling gate test above handles that; this one did not, and dereferenced the null.
+        final LivingEntity copperGolem = copperGolem();
+        if (copperGolem == null) {
+            // Absence is ASSERTED, never skipped: "no copper golem" is only a fact about Minecraft if
+            // the registry actually populated, and a broken bootstrap looks identical otherwise.
+            assertTrue(McTestRegistries.entityTypeRegistryIsPopulated(),
+                    "copper_golem does not resolve AND the entity registry looks empty — that is a "
+                            + "broken bootstrap, not a Minecraft version without copper golems");
+        } else {
+            HunterListener.onLootDropped(copperGolem, killedBy(killer), rolls::incrementAndGet);
+            assertEquals(0, rolls.get(), "a copper golem must not pay a bonus trophy");
+        }
+
+        // ...and the reference point, so the zeros above cannot pass merely because the roll is dead.
+        // Without this the whole test is satisfied by Trophy Hunter being switched off entirely.
+        HunterListener.onLootDropped(zombie(), killedBy(killer), rolls::incrementAndGet);
+        assertEquals(1, rolls.get(), "a wild creature must still roll");
     }
 
     @Test
