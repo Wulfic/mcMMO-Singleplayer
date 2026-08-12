@@ -16,7 +16,11 @@ check green (1377/1377 on `1.21.11`, plus 9 Fabric-injected members classified a
 The re-probe moved the band count **6 → 7**, but the new band (`1.21.4`) is **below the `1.21.5`
 floor** and every in-scope band kept its membership — still **three branches, two of them cut**.
 Suite **1704 / 0 / 0**, `./gradlew build` exit 0. See Phase 6.2 and the Phase 1.4 re-cut table.
-🛑 **Blocked and needing a ruling: `.github/` is being deleted from version control** — see 4′.4.
+✅ **2026-08-12 — the `.github/` question is RULED (R-g): the removal is deliberate and committed.**
+CI releases are retired and **R8 is REOPENED as a manual procedure** — that is the honest reading,
+not a waiver. 4′.4 is struck, 4′.5/7.1/7.4 rewritten, and the *Multi-version discipline* section the
+`AGENTS.md` rewrite had dropped is **restored**, because it carries the `Backport-of:` convention
+`scripts/drift-audit.py` reads. **R-h:** pushes no longer release, so they no longer wait on the owner.
 
 🎉 **2026-08-12 — the SECOND band is cut: `mc/1.21.8` (covering 1.21.6–1.21.8) is green on every
 gate** — 1704/0/0, boot-check, mixin-allow-audit 61/61, config-id-audit, brew-smoke, gameplay-smoke
@@ -69,6 +73,50 @@ server**, which is the part that matters:
 
 ---
 
+## SESSION PLAN — 2026-08-12 (written before the first edit)
+
+Owner rulings taken at the top of this session: **R-g** (commit the `.github/` removal),
+back-port-then-cut ordering, and **pushes are now mine to make once a branch is green**.
+
+| # | Step | Done when |
+|---|---|---|
+| **A1** | Restore the *Multi-version discipline* section + the `scripts/` tooling table into the **new** `AGENTS.md` | `grep -c 'Backport-of' AGENTS.md` > 0 |
+| **A2** | Record R-g here: strike 4′.4, rewrite 7.1/7.4, **REOPEN R8** with the manual procedure | risk register row R8 no longer says ✅ CLOSED |
+| **A3** | Commit the working tree — `AGENTS.md`, then `.github/` + `.gitignore` as a separate commit | `git status` clean |
+| **B1** | Back-port `735838bbc` (the bytecode extractor) → `mc/1.21.8`, `Backport-of:` trailer | band `./gradlew build` exit 0, suite green |
+| **B2** | Same → `mc/1.21.10` | as B1 |
+| **B3** | `drift-audit.py --self-test`, then `--master master` | **0 MISSING on both bands** |
+| **B4** | Push `master` + both bands | remote tips match local |
+| **C** | Cut `mc/1.21.5` per 4′.1–5.8 — the **last** in-scope band | every gate in 6.2's list green |
+| **D** | Decisions + gotchas → memory | files written, `MEMORY.md` pointer added |
+
+**What I am NOT doing this session** (scope fence, per the Tier 2 rule):
+- Not starting `26.x`. It is its own mini-project (R-e) and gated behind a completed ordinary
+  back-port — B1/B2 are that gate, but starting the rename is out of scope here.
+- Not restoring `release.yml` or `drift-audit.yml`. R-g is a ruling, not a mistake to revert.
+- Not moving the `1.21.5` floor, even though 1.5 showed `1.21.2` is defensible.
+- Not touching Phase 7.3 (README + wiki version matrix) — it wants the final band count, which
+  only exists after C lands.
+
+**Blast radius of the destructive steps in here**, since B and C both rewrite shared state:
+- **A3 commits three file deletions.** Recoverable: they remain in `origin/master` history at
+  `34aad16f2` forever. Undo: `git revert <sha>`, or `git checkout 34aad16f2 -- .github/`.
+- **B4 pushes three branches.** ⚠️⚠️ **First draft of this line was WRONG and is corrected here.**
+  It claimed a push "no longer builds or tags anything". That is true of **`master` only**:
+  R-g deletes `.github/` on `master`, but **`mc/1.21.8` and `mc/1.21.10` still carry
+  `release.yml` in their own trees**, and GitHub Actions runs a `push` workflow from *the pushed
+  branch's* copy. So pushing either band **would still build, tag, and run the "delete previous
+  release on this Minecraft line" sweep** — replacing `mc1.21.8-v…build.24` /
+  `mc1.21.10-v…build.25` with fresh builds. Gate 1 (*resolve the target*) is what caught it:
+  `git ls-tree -r --name-only mc/1.21.8 -- .github` lists all three files.
+  🔑 **A ruling taken on `master` is not in force on a band until it is back-ported.** That is the
+  same silent-divergence shape R8 describes, arriving via infrastructure rather than a logic fix.
+  ⬜ Needs an owner call before B4 — see the question logged there. Undo for a push: force-push the
+  prior tip, recorded in B4 before pushing.
+- **C cuts a new branch.** Purely additive; undo is `git branch -D mc/1.21.5` before any push.
+
+---
+
 ## RULINGS (owner, 2026-08-10) — decided, do not re-litigate
 
 | # | Question | Ruling |
@@ -82,6 +130,8 @@ server**, which is the part that matters:
 | P2-b | Phase 2 — the alchemy cluster | **Seal it like the rest.** Build the potion adapter surface; all 6 go MC-free. No relocation, no waiver. |
 | P2-c | Phase 2 — guard allowlist | **Zero exceptions, hard fail.** No escape hatch, no exempt list. *An allowlist is where sealed boundaries go to rot.* |
 | R-d | Playtest | **Keeps running on master builds.** Master stays green + bootable at every commit; no forensic gap in `advancements/<uuid>.json`. |
+| **R-g** | `.github/` removal (2026-08-12) | **Deliberate — commit it.** `FUNDING.yml`, `release.yml` and `drift-audit.yml` leave version control; `.gitignore` ignores `.agent/` and `.github/`. **Consequences are accepted, not waived away:** CI releases are retired (a push builds and tags nothing), and **R8's automated leg is gone — the risk REOPENS as a manual procedure**, see the register. 4′.4 is struck; 7.1 and 7.4 are rewritten. |
+| **R-h** | Pushes (2026-08-12) | **Mine to make, once every gate on that branch is green.** Supersedes the earlier "owner keeps pushes" standing rule, which existed because a band push *released*. Under R-g it no longer does. |
 
 Because R-a was decided up front, **Phase 3 is closed** and Phase 4 is replaced (see Phase 4′).
 
@@ -770,20 +820,28 @@ auto-created `mc/1.21.11` branch had armed. So:
       that MC. Nothing else in the same commit.
 - [ ] 4′.3 Set `depends.minecraft` in `fabric.mod.json` to the band's **range**, not its newest
       version — band `1.21.10` covers `1.21.9` too, and the release is tagged for only one of them.
-- [ ] 4′.4 Raise `--require-bands` in `.github/workflows/drift-audit.yml` to the new band count.
-      🛑 **BLOCKED, 2026-08-12 — the whole `.github/` tree is being removed from version control.**
-      `.gitignore` now lists `.agent/` and `.github/`, and `FUNDING.yml`, `release.yml` and
-      `drift-audit.yml` are deleted in the working tree. There is no file left to raise the count in.
-      **This is an owner decision, not a mistake to revert** — but it retires two mechanisms this
-      document leans on, and they need a replacement or an explicit waiver:
-      - **`drift-audit.yml` was R8's entire mitigation.** `scripts/drift-audit.py` still exists and
-        still runs by hand; what is gone is the *weekly, unattended* run. R8 is the likeliest risk
-        in the register (11 of the last 12 fixes were version-agnostic) and its detection is now
-        "somebody remembers to run it" — which is the state that made it a risk in the first place.
-      - **`release.yml` is what builds and releases a band branch on push.** With it gone, pushing
-        `mc/**` no longer produces a jar or a tag, so Phase 5.8's mechanism is gone even though
-        5.8 itself is complete. 7.1 ("already satisfied") and 7.4 are void as written.
-- [ ] 4′.5 Do **not** push the branch until 5.2–5.7 pass locally. A push builds and releases.
+- [x] ~~4′.4 Raise `--require-bands` in `.github/workflows/drift-audit.yml` to the new band count.~~
+      ❌ **STRUCK by ruling R-g (owner, 2026-08-12).** `.github/` is out of version control; there is
+      no file left to raise the count in, and there is no scheduled run for the count to protect.
+      The two mechanisms it retires are recorded honestly rather than waved through:
+      - **`drift-audit.yml` was R8's automated leg.** `scripts/drift-audit.py` still exists and still
+        runs by hand; what is gone is the *weekly, unattended* run. **R8 is therefore REOPENED** —
+        see the risk register and the manual procedure written into `AGENTS.md`. Its detection is now
+        "somebody remembers to run it", which is the state that made it a risk in the first place, so
+        it is no longer honest to call it closed.
+      - **`release.yml` is what built and released a band branch on push.** With it gone, pushing
+        `mc/**` produces no jar and no tag. Phase 5.8 stayed complete — three branches are pushed and
+        three tags survive — but its *mechanism* is gone, and 7.1/7.4 are rewritten below.
+      - 🔑 **One footgun disarms itself.** The invariant this phase opens with — *no two branches may
+        resolve to the same `minecraft_version`*, because both would run the "delete previous release
+        on this Minecraft line" sweep — **cannot fire while nothing runs on push.** Do not read that
+        as the hazard being fixed: it is dormant, exactly as it was before R-a armed it, and it comes
+        straight back the day any release automation returns. Keep the one-band-one-version rule.
+- [x] 4′.5 ~~Do **not** push the branch until 5.2–5.7 pass locally. A push builds and releases.~~
+      **Revised by R-g + R-h:** a push no longer builds or releases anything, so the gate is no
+      longer about protecting a release slot. **Keep the discipline anyway** — push only a branch
+      whose gates are green, because a red band branch on the remote is a claim of support that
+      nothing checks.
 
 ---
 
@@ -1215,10 +1273,16 @@ reports the new band clean, and each branch released to its own Minecraft line.
 
 ## Phase 7 — CI, release, docs
 
-- [x] 7.1 ~~Extend the GH Actions workflow to matrix over bands~~ — **already satisfied.**
-      `release.yml` triggers on `mc/**`, so each band branch runs its own build and release; there is
-      no matrix to add. The `gradlew` `+x` workaround is per-run and unaffected, and run-number
-      versioning already applies per branch.
+- [x] 7.1 ~~Extend the GH Actions workflow to matrix over bands~~ — ❌ **VOID under R-g.**
+      This item was closed as "already satisfied" because `release.yml` triggered on `mc/**`. That
+      workflow no longer exists, so there is no CI to matrix and **no per-push build on any branch,
+      including `master`.** It is checked off because there is nothing left to do here, **not**
+      because the capability exists.
+      ⚠️ **What actually replaces it is a person running the gates.** Per band, before pushing:
+      `./gradlew build` · `scripts/boot-check.sh <jar> <mcver>` · `mixin-allow-audit.py --mc <v>
+      --check` · `config-id-audit.py --check` · `brew-smoke.sh` · `gameplay-smoke.sh` ·
+      `drift-audit.py --self-test` then `--master master`. That list is the ship gate now; nothing
+      enforces it.
 - [ ] 7.2 ~~Enforce the CI split from 4.4~~ — **deferred with 4.4.** Each branch's build is
       independent, so the cross-band multiplication never occurs in one run. Revisit only at the
       ~30 min-per-band cap.
@@ -1227,6 +1291,15 @@ reports the new band clean, and each branch released to its own Minecraft line.
         per-commit doc pass cannot catch a page that was never created.
       - [ ] Add a caveat-expiry pass — 4 stale caveats have already outlived their defects
 - [ ] 7.4 Publish per-band jars to Modrinth/CurseForge with correct version ranges
+      ⚠️ **Rewritten under R-g: this is now a fully manual release.** It previously rode on
+      `release.yml` producing a tagged jar per branch on push. Each band's jar must be built locally
+      (`./gradlew build` on that branch), version-range-checked against its `fabric.mod.json`
+      `depends.minecraft`, and uploaded by hand.
+      - 🔑 The band's range, **not** its newest version — `mc/1.21.8` supports `1.21.6`–`1.21.8`.
+        4′.3 already pins the right range in `fabric.mod.json`; read it from there rather than
+        retyping it, which is how the two would drift apart.
+      - 🔑 Nothing reaps stale releases any more either. The "one release per Minecraft line" sweep
+        was `release.yml`'s; per-line hygiene is now manual too.
 
 ---
 
@@ -1241,7 +1314,7 @@ reports the new band clean, and each branch released to its own Minecraft line.
 | R5 | Item-ID drift silently disables config rows on older versions | Per-band resolution test at 5.5 | 5 |
 | R6 | Component API cliff needs reimplementation, not a directive | Identified early at 1.5, sized separately — and it sits at `1.21.2`, below the `1.21.5` floor, so it is out of scope | 1, 6 |
 | R7 | Live playtest disrupted mid-refactor | Phase 0 tag + instance backup | 0 |
-| **R8** | **A fix lands on `master` and is silently never back-ported** — the one risk R-a *creates*, and the likeliest of all: 11 of the last 12 issue fixes were version-agnostic | ✅ **CLOSED** — `Backport-of:` convention in `AGENTS.md`, `scripts/drift-audit.py` (self-tested against synthetic drift), weekly CI | 3 |
+| **R8** | **A fix lands on `master` and is silently never back-ported** — the one risk R-a *creates*, and the likeliest of all: 11 of the last 12 issue fixes were version-agnostic | 🔴 **REOPENED 2026-08-12 by R-g.** It was closed on three legs; **two were removed in one working tree.** ① `Backport-of:` convention in `AGENTS.md` — deleted by the AGENTS.md rewrite, **restored 2026-08-12** as *Multi-version discipline*. ② `scripts/drift-audit.py` — **survives**, still self-tested. ③ weekly CI — **gone with `drift-audit.yml`**. Mitigation is now **manual and unenforced**: run `python scripts/drift-audit.py --self-test && python scripts/drift-audit.py --master master` after every `master` commit that could need back-porting | 3 |
 
 ---
 
