@@ -1,10 +1,12 @@
 package com.gmail.nossr50.config.treasure;
 
+import com.gmail.nossr50.config.ConfigIdSkips;
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.datatypes.treasure.ExcavationTreasure;
 import com.gmail.nossr50.datatypes.treasure.HusbandryTreasure;
 import com.gmail.nossr50.datatypes.treasure.HylianTreasure;
 import com.gmail.nossr50.datatypes.treasure.ItemSpec;
+import com.gmail.nossr50.datatypes.treasure.Treasure;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.util.LogUtils;
 import java.nio.file.Path;
@@ -12,6 +14,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,6 +65,8 @@ public class TreasureConfig extends ConfigLoader {
     // skill's own boundary rule: a species table would need a row per animal and would rot.
     public HashMap<String, List<HusbandryTreasure>> husbandryMap = new HashMap<>();
 
+    private final ConfigIdSkips skips = new ConfigIdSkips(FILENAME);
+
     public TreasureConfig(Path dataFolder) {
         super(FILENAME, dataFolder);
         loadKeys();
@@ -72,6 +77,48 @@ public class TreasureConfig extends ConfigLoader {
         loadTreasures("Excavation");
         loadTreasures("Hylian_Luck");
         loadTreasures("Husbandry");
+    }
+
+    /**
+     * Drop every treasure whose item this Minecraft version does not have, and report them (TODO 5.5).
+     *
+     * <p><b>⚠️⚠️ Deliberately NOT done during {@link #loadKeys}, and this is not a style choice.</b>
+     * This class is Minecraft-free by design — its tests construct it in a plain fork with no
+     * bootstrap — and the registry probe touches {@code net.minecraft.registry.Registries}. Class
+     * initialization for that type <em>throws</em> in an un-bootstrapped fork, and the failure is
+     * sticky: every later touch of the class in the same fork gets {@code NoClassDefFoundError}, so
+     * one probe in a constructor poisons the whole fork. Doing it in the constructor cost 351 test
+     * failures across 8 unrelated classes, none of which mention treasures. (Same shape as
+     * {@code ConfigBootstrapTest} poisoning its fork.)
+     *
+     * <p>So the probe lives in a method the MC-free tests never call, invoked once from
+     * {@code McMMOMod#onServerStarting} after {@code ConfigBootstrap.loadAll} — the same point, and
+     * for the same reason, as {@code SkillAvailability#probe}.
+     *
+     * <p>Pruning here rather than at drop time is the actual fix: resolution used to be deferred to
+     * {@code ItemSpecBuilder}, so a treasure naming an absent item stayed in the pool, got rolled and
+     * yielded an empty {@code Optional} — the player lost the roll outright. Removing it first keeps
+     * the surviving treasures' relative odds honest.
+     */
+    public void pruneUnavailableEntries() {
+        pruneMap("Excavation", excavationMap);
+        pruneMap("Hylian_Luck", hylianMap);
+        pruneMap("Husbandry", husbandryMap);
+        skips.logSummary(LOGGER);
+    }
+
+    private <T extends Treasure> void pruneMap(String section, Map<String, List<T>> map) {
+        for (var entry : map.entrySet()) {
+            entry.getValue().removeIf(
+                    t -> !skips.keepItem(section, t.getDrop().getMaterialId()));
+        }
+        // A source block / group whose every treasure was dropped keeps an empty list rather than
+        // vanishing: getOrDefault callers read "no treasure rolled here", which is what we mean.
+    }
+
+    /** Rows dropped because this Minecraft version has no such item (TODO 5.5). */
+    public @NotNull ConfigIdSkips getSkips() {
+        return skips;
     }
 
     /**

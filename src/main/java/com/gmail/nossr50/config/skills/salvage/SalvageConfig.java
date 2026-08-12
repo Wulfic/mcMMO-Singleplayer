@@ -1,6 +1,7 @@
 package com.gmail.nossr50.config.skills.salvage;
 
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.config.ConfigIdSkips;
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.datatypes.skills.ItemType;
 import com.gmail.nossr50.datatypes.skills.MaterialType;
@@ -35,9 +36,16 @@ public class SalvageConfig extends ConfigLoader {
 
     private List<Salvageable> salvageables = new ArrayList<>();
 
+    private final ConfigIdSkips skips = new ConfigIdSkips(FILENAME);
+
     public SalvageConfig(Path dataFolder) {
         super(FILENAME, dataFolder);
         loadKeys();
+    }
+
+    /** Rows dropped because this Minecraft version has no such item (TODO 5.5). */
+    public ConfigIdSkips getSkips() {
+        return skips;
     }
 
     @Override
@@ -49,17 +57,20 @@ public class SalvageConfig extends ConfigLoader {
             return;
         }
 
-        final List<String> notSupported = new ArrayList<>();
+        // See RepairConfig: stated once, rather than as one warning per unresolvable row.
+        if (!Materials.itemRegistryIsPopulated()) {
+            LOGGER.debug("Item registry not populated; {} loads empty.", FILENAME);
+            return;
+        }
 
         for (String key : config.getConfigurationSection("Salvageables").getKeys(false)) {
             final String base = "Salvageables." + key;
 
-            final java.util.Optional<String> pathOpt = Materials.itemPath(key);
-            if (pathOpt.isEmpty()) {
-                notSupported.add(key);
+            // TODO 5.5: isItem does not log, itemPath does — see RepairConfig for the argument.
+            if (!skips.keepItem("Salvageables", key)) {
                 continue;
             }
-            final String itemPath = pathOpt.get();
+            final String itemPath = Materials.itemPath(key).orElseThrow();
 
             final List<String> reasons = new ArrayList<>();
 
@@ -83,7 +94,7 @@ public class SalvageConfig extends ConfigLoader {
                     ? salvageMaterialName
                     : salvageMaterialType.getDefaultMaterial();
             if (resolvedName == null || !Materials.isItem(resolvedName)) {
-                notSupported.add(key);
+                skips.record("Salvageables", key + " (salvage material " + resolvedName + ")");
                 continue;
             }
             final String salvageMaterialPath = Materials.idOf(resolvedName).getPath();
@@ -135,10 +146,8 @@ public class SalvageConfig extends ConfigLoader {
                     salvageMaterialType, xpMultiplier));
         }
 
-        if (!notSupported.isEmpty()) {
-            LOGGER.debug("Salvage config skipped {} unsupported item(s): {}", notSupported.size(),
-                    String.join(", ", notSupported));
-        }
+        // TODO 5.5: was DEBUG, i.e. silent in a normal boot log. See RepairConfig for the argument.
+        skips.logSummary(LOGGER);
         LOGGER.info("Loaded {} salvageables from {}", salvageables.size(), FILENAME);
     }
 

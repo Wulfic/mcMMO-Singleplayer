@@ -1,5 +1,6 @@
 package com.gmail.nossr50.config.skills.alchemy;
 
+import com.gmail.nossr50.config.ConfigIdSkips;
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.config.YamlConfiguration;
 import com.gmail.nossr50.datatypes.skills.alchemy.AlchemyPotion;
@@ -45,6 +46,8 @@ public class PotionConfig extends ConfigLoader {
 
     public static final String FILENAME = "potions.yml";
 
+    private final ConfigIdSkips skips = new ConfigIdSkips(FILENAME);
+
     /** Cumulative Concoctions ingredient lists, indexed 1..8 (index 0 unused). */
     private final List<List<PlatformItem>> concoctionTiers = new ArrayList<>();
     private final Map<String, AlchemyPotion> alchemyPotions = new LinkedHashMap<>();
@@ -58,6 +61,12 @@ public class PotionConfig extends ConfigLoader {
     protected void loadKeys() {
         loadConcoctions();
         loadPotionMap();
+        skips.logSummary(LOGGER);
+    }
+
+    /** Rows dropped because this Minecraft version has no such item (TODO 5.5). */
+    public ConfigIdSkips getSkips() {
+        return skips;
     }
 
     // --------------------------------------------------------------------- Concoctions
@@ -81,7 +90,7 @@ public class PotionConfig extends ConfigLoader {
 
         for (int tier = 1; tier <= 8; tier++) {
             for (String ingredientString : section.getStringList(tierKeys[tier])) {
-                final PlatformItem ingredient = loadIngredient(ingredientString);
+                final PlatformItem ingredient = loadIngredient(tierKeys[tier], ingredientString);
                 if (ingredient != null) {
                     concoctionTiers.get(tier).add(ingredient);
                 }
@@ -94,9 +103,20 @@ public class PotionConfig extends ConfigLoader {
         }
     }
 
-    /** Parse an ingredient material name into a single-item stack, or {@code null} if unknown. */
-    private PlatformItem loadIngredient(String ingredient) {
+    /**
+     * Parse an ingredient material name into a single-item stack, or {@code null} if unknown.
+     *
+     * <p>TODO 5.5: an ingredient this Minecraft version does not have is recorded against
+     * {@code section} and reported in the file's one summary line. The existence test goes through
+     * {@link ConfigIdSkips#keepItem} — which does not log — before {@link Materials#stack}, which
+     * warns once per miss; otherwise a band missing an ingredient produces both a per-id warning and
+     * a summary saying the same thing.
+     */
+    private PlatformItem loadIngredient(String section, String ingredient) {
         if (ingredient == null || ingredient.isEmpty()) {
+            return null;
+        }
+        if (!skips.keepItem(section, ingredient)) {
             return null;
         }
         return Materials.stack(ingredient).orElse(null);
@@ -219,7 +239,7 @@ public class PotionConfig extends ConfigLoader {
             return children;
         }
         for (String childIngredient : childSection.getKeys(false)) {
-            final PlatformItem ingredient = loadIngredient(childIngredient);
+            final PlatformItem ingredient = loadIngredient("Children", childIngredient);
             if (ingredient != null) {
                 children.put(ingredient, childSection.getString(childIngredient));
             } else {
