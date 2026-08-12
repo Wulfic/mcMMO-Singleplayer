@@ -8,6 +8,13 @@ branches, so there is no preprocessor to adopt; it is replaced by **Phase 4′**
 cherry-pick discipline and risk R4 are both **done and landed on `master` first**, so all three band
 branches inherit them.
 
+🎉 **2026-08-12 — the SECOND band is cut: `mc/1.21.8` (covering 1.21.6–1.21.8) is green on every
+gate** — 1704/0/0, boot-check, mixin-allow-audit 61/61, config-id-audit, brew-smoke, gameplay-smoke
+29/29, drift-audit clean on both bands. It cost **6 records, not the 9 the table predicted** — but
+it also found **a third probe hole that is still open**: the manifest cannot see an instance method
+renamed on a class that survived (`Entity#getEntityWorld` → `getWorld`, 57 sites). See Phase 6.2.
+**Close that hole before cutting `mc/1.21.5`.**
+
 🎉 **`mc/1.21.10` is cut and green, locally: 1704 tests / 0 failures / 0 skipped on 1.21.10,
 `./gradlew build` exit 0, `boot-check.sh` PASSED, `mixin-allow-audit --mc 1.21.10 --check` PASSED,
 `drift-audit.py` reports the band clean.** ⬜ **It is NOT pushed** — a push builds and releases
@@ -143,6 +150,9 @@ no-op.
 
 - [ ] **Raise `--require-bands` to the live band count** in `drift-audit.yml` as each branch is cut
       (1 after `mc/1.21.10`, 2 after `mc/1.21.8`, 3 after `mc/1.21.5`).
+      ⚠️ Gated on the **push**, not on the cut: the scheduled run audits `origin`, so raising this
+      while a band is local-only makes it fail looking for a branch that is not on the remote.
+      Two bands are cut today (`mc/1.21.10`, `mc/1.21.8`) and **neither is pushed**.
 
 ---
 
@@ -998,11 +1008,83 @@ reports the new band clean, and each branch released to its own Minecraft line.
 
 ## Phase 6 — Remaining bands
 
-- [ ] 6.1 Order bands cheapest-first, using the changed-symbol count from Phase 1.4:
+- [x] 6.1 Order bands cheapest-first, using the changed-symbol count from Phase 1.4:
       **`mc/1.21.10` (2) → `mc/1.21.8` (8) → `mc/1.21.5` (10)**
 - [ ] 6.2 Per band, repeat 4′.1–5.8. **Each branch is cut from `master`**, never from the previous
       band — otherwise band N inherits band N−1's back-compat fixes and the diffs stop being
       independent.
+
+      🎉 **`mc/1.21.8` is CUT and GREEN (2026-08-12), locally and unpushed** — tip `2cd82bb1c`, cut
+      from `master` `db6a17b37`, covering **1.21.6 + 1.21.7 + 1.21.8**. Every gate passed on the
+      band's own build: `./gradlew build` exit 0, **1704 tests / 0 failures / 0 skipped** (the same
+      count as master, so nothing was disabled to get there), `mixin-allow-audit --mc 1.21.8
+      --check` **61/61**, `boot-check.sh … 1.21.8` PASSED (0 ERROR, 0 mixin failures, canary
+      rejected), `config-id-audit --check` exit 0 (**44 absent, 0 dead-everywhere**),
+      `brew-smoke.sh` PASSED with its discriminating vanilla control, `gameplay-smoke.sh`
+      **29/29**, and `drift-audit.py --master master` reports **0 MISSING on both bands** after its
+      self-test.
+
+      **Toolchain:** `yarn 1.21.8+build.1` · `fabric-api 0.136.1+1.21.8` · `modmenu 15.0.2` ·
+      `cloth 19.0.147`; `fabric.mod.json` depends `>=1.21.6 <1.21.9` — the range, not the pin.
+      🔑 ModMenu 15.x advertises support for exactly `1.21.6`/`1.21.7`/`1.21.8`, which is this
+      band's membership arrived at independently of our probe.
+
+      - [x] ⚠️⚠️ **A THIRD PROBE HOLE — and unlike the first two it is STILL OPEN.**
+            `BAND_TABLE.md` predicted 9 records for this band; the truth was **6** (the entity-by-id
+            work had already absorbed 3, and the table predates it). Of those 6, five behaved as
+            predicted. **The sixth was not a record at all**, because the manifest cannot represent
+            it: `Entity#getEntityWorld()` and `Entity#getEntityPos()` are named `getWorld()` and
+            `getPos()` below `1.21.9` — **57 call sites across 22 files, none of them indexed.**
+            🔑🔑 **A manifest cannot see an ordinary INSTANCE METHOD renamed on a class that
+            survived.** This is the same shape as 5.2's hole one level down: that one was *a
+            class-granular manifest cannot see a FIELD that vanished from a class that survived*.
+            `extract-mc-surface.py` indexes imports, constants and mixin selectors; a plain
+            `entity.getEntityWorld()` in a method body is none of those.
+            - [ ] **CLOSE IT BEFORE CUTTING `mc/1.21.5`.** Index instance-method calls on MC-typed
+                  receivers, re-probe, and regenerate `BAND_TABLE.md` (stale at 566 records).
+                  Otherwise that cut gets the same class of surprise from a different method — and
+                  the per-band cost estimates in Phase 1.4 are all understated.
+            - 🔑 **`master` could NOT absorb this one, and the reason differs from `CHEAT_COMMAND`'s.**
+                  There is **no overlapping name on either side** — `1.21.11` has no `getWorld()`
+                  anywhere in the entity hierarchy and `1.21.8` has no `getEntity*` — so there is
+                  nothing to widen to, unlike `CHEAT_COMMAND` where both concrete types implemented
+                  `Predicate`. A `platform/` helper was considered and rejected: **21 of the 57 sites
+                  are Mockito stubs naming the method on a mock**, which no production-side helper
+                  can cover, so the divergence survives the refactor. The rename is compiler-verified
+                  and therefore cannot fail silently, which is the failure mode that matters.
+            - 🎉 **All 57 sites were inside `fabric/` or `platform/`** — Phase 2's blast-radius cap
+                  held on its first real MC API rename. First live evidence for **R3**.
+      - [x] ⚠️⚠️ **Two seams needed REDESIGN, not a rename**, and both are behaviour decisions:
+            - **`ArmadilloEntity#brushScute()` takes no arguments here**, and `forEachBrushedItem`
+              does not exist. Master rides that funnel and gets its automation gate **from the
+              signature** — vanilla's brushing dispenser passes `null` for the brusher. This band has
+              **no brusher parameter but still has the dispenser** (`DispenserBehavior$5`,
+              binary-grepped from the band's jar), so a seam inside `brushScute` would have paid an
+              AFK brush farm. Re-seamed onto `interactMob`, which a dispenser never enters: **the
+              exclusion is bought by the choice of seam instead of by the signature.**
+            - **`LivingEntity#dropLoot`: the 4-arg overload AND `generateLoot` are both absent.**
+              Master's Trophy Hunter bonus roll re-invokes the 4-arg one, whose single-call body is
+              what makes the class *structurally* unable to recurse. Here the 3-arg method does
+              everything inline and is the only one — so re-invoking it **re-enters the method being
+              injected into and duplicates loot until the stack dies.** That is an item bomb, not a
+              silent no-op. Guarded with a per-entity `@Unique` flag reset in a `finally`, so the
+              second roll still runs through vanilla's own code and Looting/luck/player-kill-only
+              drops stay correct.
+              - [ ] ⚠️ **Wiring-proven, NOT gameplay-proven.** `MixinApplicationTest` applies it,
+                    `mixin-allow-audit` binds it to exactly 1 site and boot-check shows 0 mixin
+                    failures — but `gameplay-smoke.sh` never reaches the recursion path, because
+                    Trophy Hunter is rank-gated and the smoke player is Hunter 0. First thing to add
+                    if that harness is extended.
+      - [x] **A `master` defect the band found, fixed on `master` and back-ported to BOTH bands**
+            (`ebb0d3604`; `86d287666` / `9d640c524` carry `Backport-of:`).
+            `HunterListenerTest.aManufacturedGolemDropsItsLootOnce()` passed `copperGolem()` straight
+            into `onLootDropped`, and that helper returns **null** on a version with no copper golem
+            — which is exactly why it resolves through the registry rather than naming
+            `EntityType.COPPER_GOLEM`. Its sibling gate test guards the null; this one did not.
+            🔑 It also had **no reference point** — every assertion was a zero, so *Trophy Hunter
+            being switched off entirely* satisfied all of them. A wild zombie must still roll.
+            **Not a band defect**: nothing about it is version-specific except which versions can
+            reach it, so it landed on `master` first per `AGENTS.md`.
 - [ ] 6.3 Re-evaluate at the suspected component-API cliff (1.5). If the eating seam needs a full
       reimplementation, that band is its own mini-project — **size it separately, do not absorb it
       into a sweep.**
