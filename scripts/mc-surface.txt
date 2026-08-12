@@ -150,6 +150,7 @@ ACCESSEDFIELD	net.minecraft.entity.effect.StatusEffects#WATER_BREATHING
 ACCESSEDFIELD	net.minecraft.item.ItemStack#EMPTY
 ACCESSEDFIELD	net.minecraft.item.Items#AIR
 ACCESSEDFIELD	net.minecraft.item.Items#APPLE
+ACCESSEDFIELD	net.minecraft.item.Items#ARMADILLO_SCUTE
 ACCESSEDFIELD	net.minecraft.item.Items#ARROW
 ACCESSEDFIELD	net.minecraft.item.Items#BEEF
 ACCESSEDFIELD	net.minecraft.item.Items#BLAZE_POWDER
@@ -253,7 +254,6 @@ ACCESSEDFIELD	net.minecraft.registry.tag.DamageTypeTags#IS_LIGHTNING
 ACCESSEDFIELD	net.minecraft.registry.tag.DamageTypeTags#IS_PLAYER_ATTACK
 ACCESSEDFIELD	net.minecraft.registry.tag.DamageTypeTags#IS_PROJECTILE
 ACCESSEDFIELD	net.minecraft.registry.tag.FluidTags#WATER
-ACCESSEDFIELD	net.minecraft.server.command.CommandManager#GAMEMASTERS_CHECK
 ACCESSEDFIELD	net.minecraft.server.network.ServerPlayNetworkHandler#player
 ACCESSEDFIELD	net.minecraft.server.network.ServerPlayerEntity#interactionManager
 ACCESSEDFIELD	net.minecraft.server.network.ServerPlayerEntity#networkHandler
@@ -266,7 +266,6 @@ ACCESSEDFIELD	net.minecraft.sound.SoundCategory#MUSIC
 ACCESSEDFIELD	net.minecraft.sound.SoundCategory#NEUTRAL
 ACCESSEDFIELD	net.minecraft.sound.SoundCategory#PLAYERS
 ACCESSEDFIELD	net.minecraft.sound.SoundCategory#RECORDS
-ACCESSEDFIELD	net.minecraft.sound.SoundCategory#UI
 ACCESSEDFIELD	net.minecraft.sound.SoundCategory#VOICE
 ACCESSEDFIELD	net.minecraft.sound.SoundCategory#WEATHER
 ACCESSEDFIELD	net.minecraft.sound.SoundEvents#ENTITY_GENERIC_EXPLODE
@@ -315,7 +314,6 @@ ATTARGET	Lnet/minecraft/block/entity/AbstractFurnaceBlockEntity;setLastRecipe(
 ATTARGET	Lnet/minecraft/entity/ExperienceOrbEntity;<init>(
 ATTARGET	Lnet/minecraft/entity/ExperienceOrbEntity;spawn(
 ATTARGET	Lnet/minecraft/entity/LivingEntity;calcGlidingVelocity
-ATTARGET	Lnet/minecraft/entity/passive/ArmadilloEntity;forEachBrushedItem(
 ATTARGET	Lnet/minecraft/entity/projectile/FishingBobberEntity;pullHookedEntity(
 ATTARGET	Lnet/minecraft/item/ItemStack;damage(ILnet/minecraft/entity/
 ATTARGET	Lnet/minecraft/item/ItemStack;decrement(I)V
@@ -402,6 +400,7 @@ CALLEDMETHOD	net.minecraft.enchantment.EnchantmentHelper#getEnchantments
 CALLEDMETHOD	net.minecraft.enchantment.EnchantmentHelper#getEquipmentLevel
 CALLEDMETHOD	net.minecraft.enchantment.EnchantmentHelper#getLevel
 CALLEDMETHOD	net.minecraft.enchantment.EnchantmentHelper#set
+CALLEDMETHOD	net.minecraft.entity.Entity#dropStack
 CALLEDMETHOD	net.minecraft.entity.Entity#getAttached
 CALLEDMETHOD	net.minecraft.entity.Entity#getEntityWorld
 CALLEDMETHOD	net.minecraft.entity.Entity#getRotationVector
@@ -419,22 +418,20 @@ CALLEDMETHOD	net.minecraft.entity.ItemEntity#setToDefaultPickupDelay
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#addStatusEffect
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#damage
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#discard
-CALLEDMETHOD	net.minecraft.entity.LivingEntity#dropLoot
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#extinguish
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getAttached
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getAttributeInstance
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getBlockPos
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getBoundingBox
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getCustomName
-CALLEDMETHOD	net.minecraft.entity.LivingEntity#getEntityPos
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getEntityWorld
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getEquippedStack
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getEyePos
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getHealth
-CALLEDMETHOD	net.minecraft.entity.LivingEntity#getLootTableKey
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getMaxHealth
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getName
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getPitch
+CALLEDMETHOD	net.minecraft.entity.LivingEntity#getPos
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getType
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getUuid
 CALLEDMETHOD	net.minecraft.entity.LivingEntity#getX
@@ -684,10 +681,10 @@ CALLEDMETHOD	net.minecraft.server.PlayerManager#getPlayerList
 CALLEDMETHOD	net.minecraft.server.ServerAdvancementLoader#get
 CALLEDMETHOD	net.minecraft.server.command.CommandManager#argument
 CALLEDMETHOD	net.minecraft.server.command.CommandManager#literal
-CALLEDMETHOD	net.minecraft.server.command.CommandManager#requirePermissionLevel
 CALLEDMETHOD	net.minecraft.server.command.ServerCommandSource#getName
 CALLEDMETHOD	net.minecraft.server.command.ServerCommandSource#getPlayer
 CALLEDMETHOD	net.minecraft.server.command.ServerCommandSource#getPlayerOrThrow
+CALLEDMETHOD	net.minecraft.server.command.ServerCommandSource#hasPermissionLevel
 CALLEDMETHOD	net.minecraft.server.command.ServerCommandSource#isExecutedByPlayer
 CALLEDMETHOD	net.minecraft.server.command.ServerCommandSource#sendError
 CALLEDMETHOD	net.minecraft.server.command.ServerCommandSource#sendFeedback
@@ -699,7 +696,6 @@ CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getAir
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getAttributeInstance
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getBlockPos
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getBoundingBox
-CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getEntityPos
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getEntityWorld
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getEquippedStack
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getHealth
@@ -711,12 +707,15 @@ CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getMaxHealth
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getName
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getOffHandStack
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getPlayerInput
+CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getPos
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getRegistryManager
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getRotationVector
+CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getServerWorld
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getStackInHand
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getUuid
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getVehicle
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getVelocity
+CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getWorld
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getX
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getYaw
 CALLEDMETHOD	net.minecraft.server.network.ServerPlayerEntity#getZ
@@ -751,8 +750,6 @@ CALLEDMETHOD	net.minecraft.server.world.ServerWorld#getRegistryManager
 CALLEDMETHOD	net.minecraft.server.world.ServerWorld#getServer
 CALLEDMETHOD	net.minecraft.server.world.ServerWorld#getTime
 CALLEDMETHOD	net.minecraft.server.world.ServerWorld#isClient
-CALLEDMETHOD	net.minecraft.server.world.ServerWorld#isDay
-CALLEDMETHOD	net.minecraft.server.world.ServerWorld#isSkyVisibleAllowingSea
 CALLEDMETHOD	net.minecraft.server.world.ServerWorld#playSound
 CALLEDMETHOD	net.minecraft.server.world.ServerWorld#setBlockState
 CALLEDMETHOD	net.minecraft.server.world.ServerWorld#spawnEntity
@@ -839,8 +836,11 @@ CALLEDMETHOD	net.minecraft.world.World#getBlockState
 CALLEDMETHOD	net.minecraft.world.World#getEntitiesByClass
 CALLEDMETHOD	net.minecraft.world.World#getOtherEntities
 CALLEDMETHOD	net.minecraft.world.World#getRegistryKey
+CALLEDMETHOD	net.minecraft.world.World#getServer
 CALLEDMETHOD	net.minecraft.world.World#getTime
 CALLEDMETHOD	net.minecraft.world.World#isClient
+CALLEDMETHOD	net.minecraft.world.World#isDay
+CALLEDMETHOD	net.minecraft.world.World#isSkyVisibleAllowingSea
 CALLEDMETHOD	net.minecraft.world.World#setBlockState
 CALLEDMETHOD	net.minecraft.world.explosion.Explosion#getEntity
 CALLEDMETHOD	net.minecraft.world.explosion.Explosion#getPower
@@ -954,7 +954,6 @@ CLASS	net.minecraft.item.ItemPlacementContext
 CLASS	net.minecraft.item.ItemStack
 CLASS	net.minecraft.item.ItemUsageContext
 CLASS	net.minecraft.item.Items
-CLASS	net.minecraft.loot.LootTable
 CLASS	net.minecraft.nbt.NbtCompound
 CLASS	net.minecraft.nbt.NbtElement
 CLASS	net.minecraft.nbt.NbtOps
@@ -1042,8 +1041,6 @@ METHOD	net.minecraft.entity.passive.AbstractCowEntity#interactMob(Lnet/minecraft
 METHOD	net.minecraft.entity.passive.AbstractHorseEntity#bondWithPlayer
 METHOD	net.minecraft.entity.passive.AbstractHorseEntity#calculateAttributeBaseValue(DDDDLnet/minecraft/util/math/random/
 METHOD	net.minecraft.entity.passive.AnimalEntity#lovePlayer
-METHOD	net.minecraft.entity.passive.ArmadilloEntity#brushScute
-METHOD	net.minecraft.entity.passive.ArmadilloEntity#interactMob(Lnet/minecraft/entity/player/PlayerEntity;
 METHOD	net.minecraft.entity.passive.MooshroomEntity#interactMob(Lnet/minecraft/entity/player/PlayerEntity;
 METHOD	net.minecraft.entity.passive.PassiveEntity#growUp(IZ)V
 METHOD	net.minecraft.entity.passive.PassiveEntity#setBreedingAge(I)V
@@ -1242,6 +1239,7 @@ STATICFIELD	net.minecraft.entity.player.HungerConstants#FULL_FOOD_LEVEL
 STATICFIELD	net.minecraft.item.ItemStack#EMPTY
 STATICFIELD	net.minecraft.item.Items#AIR
 STATICFIELD	net.minecraft.item.Items#APPLE
+STATICFIELD	net.minecraft.item.Items#ARMADILLO_SCUTE
 STATICFIELD	net.minecraft.item.Items#ARROW
 STATICFIELD	net.minecraft.item.Items#BEEF
 STATICFIELD	net.minecraft.item.Items#BLAZE_POWDER
@@ -1345,7 +1343,6 @@ STATICFIELD	net.minecraft.registry.tag.DamageTypeTags#IS_LIGHTNING
 STATICFIELD	net.minecraft.registry.tag.DamageTypeTags#IS_PLAYER_ATTACK
 STATICFIELD	net.minecraft.registry.tag.DamageTypeTags#IS_PROJECTILE
 STATICFIELD	net.minecraft.registry.tag.FluidTags#WATER
-STATICFIELD	net.minecraft.server.command.CommandManager#GAMEMASTERS_CHECK
 STATICFIELD	net.minecraft.sound.SoundCategory#AMBIENT
 STATICFIELD	net.minecraft.sound.SoundCategory#BLOCKS
 STATICFIELD	net.minecraft.sound.SoundCategory#HOSTILE
@@ -1354,7 +1351,6 @@ STATICFIELD	net.minecraft.sound.SoundCategory#MUSIC
 STATICFIELD	net.minecraft.sound.SoundCategory#NEUTRAL
 STATICFIELD	net.minecraft.sound.SoundCategory#PLAYERS
 STATICFIELD	net.minecraft.sound.SoundCategory#RECORDS
-STATICFIELD	net.minecraft.sound.SoundCategory#UI
 STATICFIELD	net.minecraft.sound.SoundCategory#VOICE
 STATICFIELD	net.minecraft.sound.SoundCategory#WEATHER
 STATICFIELD	net.minecraft.sound.SoundEvents#ENTITY_GENERIC_EXPLODE
