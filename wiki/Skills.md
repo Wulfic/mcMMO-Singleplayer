@@ -200,7 +200,7 @@ Fighting with an empty hand. Super ability: **Berserk**. (Not to be confused wit
 
 ## Spears
 
-> ⚠️ **Spears needs Minecraft 1.21.11 or newer.** Spear items don't exist below it, so on the 1.21.5, 1.21.6–1.21.8 and 1.21.9–1.21.10 bands the skill is **switched off entirely** — no XP, no procs, no XP bar, no milestone plaques and no `/mcstats` line. Nothing on this page applies there.
+> ⚠️ **Spears needs Minecraft 1.21.11 or newer.** Spear items don't exist below it, so on every older band the skill is **switched off entirely** — no XP, no procs, no XP bar, no milestone plaques and no `/mcstats` line. Nothing on this page applies there.
 >
 > This is decided by asking the game's item registry at startup, not by a version number written into the mod, and it is deliberately **not** something you can override in `coreskills.yml` — there would be nothing for the skill to act on. `/mcstats spears` names the Minecraft version as the reason, precisely so you aren't sent to edit a config key that cannot help. See [Installation → Supported versions](Installation#supported-versions).
 
@@ -332,7 +332,7 @@ Earn XP by repairing tools and armour on an anvil (an **iron block** by default)
 
 > ⚠️ **Without an Arcane Forging rank, repairing an enchanted item strips *every* enchantment.** In RetroMode that means below Repair 100. This is faithful to upstream mcMMO and is not a bug — but it will absolutely eat your good pickaxe if you don't know about it.
 
-Material tiers (stone/gold/iron/diamond repair) unlock at increasing Repair levels. **Copper equipment is repairable and salvageable from Minecraft 1.21.9**, the version that added it; on the 1.21.5 and 1.21.6–1.21.8 bands those rows have nothing to match and every other tier behaves as described. See [Installation → Supported versions](Installation#supported-versions).
+Material tiers (stone/gold/iron/diamond repair) unlock at increasing Repair levels. **Copper equipment is repairable and salvageable from Minecraft 1.21.9**, the version that added it; on every older band those rows have nothing to match and every other tier behaves as described. See [Installation → Supported versions](Installation#supported-versions).
 
 ## Alchemy
 
