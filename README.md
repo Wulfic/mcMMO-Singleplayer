@@ -6,7 +6,7 @@ super abilities for vanilla Minecraft — no server, no database, no plugin plat
 
 | | |
 |---|---|
-| **Minecraft** | 1.21.5 – 1.21.11 — one build per version band, see [Supported versions](#supported-versions) |
+| **Minecraft** | 1.21.4 – 1.21.11 — one build per version band, see [Supported versions](#supported-versions) |
 | **Mod loader** | Fabric Loader ≥ 0.19.3 |
 | **Required dependency** | Fabric API |
 | **Java** | 21+ |
@@ -28,6 +28,7 @@ the mod's Minecraft‑facing surface is identical, so a single jar covers all of
 | **1.21.9 – 1.21.10** | `mcmmo-<version>+mc1.21.9-1.21.10.jar` | `0.138.4+1.21.10` | `16.0.1` | `20.0.149` |
 | **1.21.6 – 1.21.8** | `mcmmo-<version>+mc1.21.6-1.21.8.jar` | `0.136.1+1.21.8` | `15.0.2` | `19.0.147` |
 | **1.21.5** | `mcmmo-<version>+mc1.21.5.jar` | `0.128.2+1.21.5` | `14.0.2` | `18.0.145` |
+| **1.21.4** | `mcmmo-<version>+mc1.21.4.jar` | `0.119.4+1.21.4` | `13.0.4` | `17.0.144` |
 
 Every band needs **Fabric Loader ≥ 0.19.3** and **Java 21+**. The `+mc…` suffix on the filename is
 the band the jar serves: a single version (`+mc1.21.5`) or a range written out at both ends
@@ -40,7 +41,7 @@ startup with a clear message instead of misbehaving quietly. The two are kept in
 (`BandVersionLabelTest`), so a filename that promises a version the loader would refuse fails the
 build rather than reaching a download page.
 
-Minecraft **1.21.4 and older are not supported**, and neither is the `26.x` line yet.
+Minecraft **1.21.3 and older are not supported**, and neither is the `26.x` line yet.
 
 ### What differs between bands
 
@@ -330,6 +331,7 @@ exist only for older ones.
 | `mc/1.21.10` | 1.21.9 – 1.21.10 |
 | `mc/1.21.8` | 1.21.6 – 1.21.8 |
 | `mc/1.21.5` | 1.21.5 |
+| `mc/1.21.4` | 1.21.4 |
 
 A branch pins its own `minecraft_version` and `yarn_mappings` in `gradle.properties` and its own
 band range in `fabric.mod.json`, so checking one out and running `./gradlew build` produces that
@@ -337,7 +339,9 @@ band's jar with no further configuration.
 
 Fixes land on `master` first and are propagated to the band branches, each propagation commit
 carrying a `Backport-of: <sha>` trailer naming the `master` commit it came from. Releases are
-published per band and tagged `mc<minecraft version>-v<mod version>-build.<n>`.
+published per band and tagged `mc<minecraft version>-v<mod version>`. The tag deliberately differs
+from the jar name: the jar is what a player reads, the tag is what the release automation keys on —
+its `mc<version>-v` prefix is how each Minecraft line finds and retires its own previous release.
 
 ---
 
