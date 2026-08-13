@@ -157,10 +157,19 @@ test {
     // build.gradle's label logic instead of reimplementing it — a reimplementation would keep passing
     // if the real rule above broke. Captured into locals: reading `project` from a task's
     // execution-time closure is what the configuration cache rejects.
+    // ⚠️ mod_version is handed over SEPARATELY from gradle.properties' text, because the release path
+    // overrides it: release.yml builds with -Pmod_version=<base minus -SNAPSHOT>. A guard that rebuilt
+    // the expected string from the FILE therefore compared 2.2.050-SNAPSHOT+mc<band> against the
+    // 2.2.050+mc<band> the build really produced, and failed on the release path ONLY — green on every
+    // developer machine, red on all four bands' Build step, which is how it shipped to five branches
+    // and blocked every release from 2026-08-13. Compare against what Gradle resolved; check the
+    // file-vs-resolved relationship separately, where the override is a legal outcome.
     def resolvedVersion = project.version.toString()
     def resolvedBandVersions = bandVersions.join(',')
+    def resolvedModVersion = project.mod_version.toString()
     systemProperty 'mcmmo.build.version', resolvedVersion
     systemProperty 'mcmmo.build.bandVersions', resolvedBandVersions
+    systemProperty 'mcmmo.build.modVersion', resolvedModVersion
     inputs.property 'mcmmo.build.version', resolvedVersion
 
     // The fabric-loader-junit tests call McTestRegistries.bootstrap() -> Bootstrap.initialize(),

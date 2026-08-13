@@ -546,6 +546,46 @@ stayed up.
    R-g. Every older band still auto-releases. Out of scope here; flagged because it defeats the
    point of coherent upload naming for the one band players are most likely to want.
 
+### 10.7 — 🔴 FOUND 2026-08-13: 10.2c shipped broken and blocked every release
+
+**Phase 10 has never produced a release.** Every band's *Build* step has failed since the rename
+landed. Found by querying the Actions API, not by anything in this repo — `git ls-remote --tags`
+still shows only the pre-Phase-10 `mc1.21.*-v2.2.050-build.{24,25,27,28}` tags, so the four
+published releases are still the **old** jars under the **old** names.
+
+**Root cause — the guard asserted a string the release path cannot produce.**
+`release.yml` builds with `-Pmod_version=<base minus -SNAPSHOT>`. But
+`BandVersionLabelTest.theComputedVersionCarriesTheBandLabelAndIsLoaderParseable()` rebuilt its
+expectation from `mod_version` **as written in `gradle.properties`**:
+
+| | value |
+|---|---|
+| what the build produced (`mcmmo.build.version`) | `2.2.050+mc1.21.4` |
+| what the test computed from disk | `2.2.050-SNAPSHOT+mc1.21.4` |
+
+Reproduced locally at the exact failing commit (`dc94689485`, detached worktree, CI's own command):
+**1 failure in 1715 tests**, that assertion, that message.
+
+🔑🔑 **The shape to remember: a guard can be green on every developer machine and red on the only
+invocation that ships.** Nobody passes `-Pmod_version` by hand, so the two operands agreed locally
+and the guard looked solid on five branches. The gate that would have caught it — ship-gate step 1,
+`./gradlew build` — **does not reproduce CI**, because it omits the `-P` override CI always passes.
+
+- [x] **10.7a** `build.gradle` hands over the **resolved** `mod_version` as `mcmmo.build.modVersion`.
+- [x] **10.7b** The label assertion compares against the resolved value, not the file's text.
+- [x] **10.7c** New `theResolvedModVersionIsTheDeclaredOneOrItsReleaseForm()` keeps the
+      file-vs-build agreement check the old assertion was making *by accident* — permitting exactly
+      one difference (the `-SNAPSHOT` strip) and nothing else, so a stale configuration cache or a
+      hand-typed override is still caught.
+- [x] **10.7d** Converse `theModVersionRuleAcceptsOnlyTheSnapshotStrip()` drives the rule with values
+      no real build produces. Without it the new rule is a tautology on every dev machine — which is
+      exactly how the defect it replaces survived review.
+- [ ] **10.7e** ⚠️ **Amend ship-gate step 1 to run CI's invocation**, not a bare `./gradlew build`.
+      A gate that does not reproduce the release command cannot certify a release.
+- [ ] **10.7f** Back-port to all four bands with `Backport-of:`, then confirm each band's next run
+      goes green **and actually publishes** — this is the first time the Phase 10 naming will reach
+      a real release, so verify the jar asset name and that the old `-build.<N>` release is reaped.
+
 ### What I am NOT doing
 
 - **No per-version duplicate jars.** Ruled out with the owner: CurseForge attaches one file to many
