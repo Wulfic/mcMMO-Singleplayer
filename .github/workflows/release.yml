@@ -2,10 +2,16 @@
 # Build & Release
 #
 # On every push that can affect the built jar, this workflow:
-#   1. Derives a NEW, monotonically-increasing version:  <base>-build.<run#>
-#      (base = mod_version from gradle.properties, minus the -SNAPSHOT suffix).
-#      GITHUB_RUN_NUMBER is used so nothing is ever committed back to the repo,
-#      which means the workflow can never re-trigger itself.
+#   1. Reads the version straight from gradle.properties (mod_version, minus the
+#      -SNAPSHOT suffix). NOTHING is appended to it.
+#
+#      ⚠️ This used to be <base>-build.<run#> from GITHUB_RUN_NUMBER. That number
+#      is repo-GLOBAL, not per-branch, so identical mod code shipped as build.28
+#      on one band and build.24 on another — five numbers that look like versions,
+#      sort against each other, and mean nothing. Releasing now requires BUMPING
+#      mod_version; re-running on the same version REPLACES that band's release
+#      instead of minting a new number. Nothing is ever committed back to the repo,
+#      so the workflow still cannot re-trigger itself.
 #   2. Creates + pushes the git tag  mc<MCVER>-v<version>  BEFORE building, so
 #      that if the build fails there is a concrete tag to remove.
 #   3. Builds the Fabric mod with Gradle/Loom (this also runs the JUnit suite,
@@ -39,8 +45,15 @@
 # minecraft_version. A band branch must pin its own version in gradle.properties
 # as the first commit after it is cut.
 #
-# Why the run-number versioning cannot cause an infinite loop: GITHUB_RUN_NUMBER
-# means nothing is ever committed back to the repo.
+# Why this cannot cause an infinite loop: the version is READ from gradle.properties
+# and never written back, so a release run produces no commit to re-trigger on.
+#
+# JAR NAMING. Gradle names the jar mcmmo-<version>+mc<band>.jar, where the band comes
+# from `supported_minecraft_versions` in gradle.properties — a single version
+# (+mc1.21.5) or a range written at both ends (+mc1.21.6-1.21.8). The publish step
+# below DISCOVERS that file rather than predicting its name, so a future naming
+# change needs no edit here. The jar name and the tag differ on purpose: the jar is
+# what a player reads, the tag is what this workflow's release-reaping matches on.
 #
 # To release on EVERY push (even docs-only), delete the `paths:` block below.
 # ---------------------------------------------------------------------------
@@ -98,7 +111,16 @@ jobs:
           mc=$(grep -E '^minecraft_version=' gradle.properties | head -n1 | cut -d= -f2- | tr -d '[:space:]')
           base=$(grep -E '^mod_version=' gradle.properties | head -n1 | cut -d= -f2- | tr -d '[:space:]')
           base=${base%-SNAPSHOT}
-          version="${base}-build.${GITHUB_RUN_NUMBER}"
+          # No -build.<run number>. GITHUB_RUN_NUMBER is repo-global rather than per-branch, so it
+          # stamped identical mod code with a different number on every band (28/27/24/25/26) —
+          # numbers that read like versions and cannot be compared in any direction. The version is
+          # now exactly mod_version, identical across bands by design; the band is expressed by the
+          # +mc<range> suffix Gradle puts on the JAR, and by the mc<VER>- prefix on the TAG.
+          version="${base}"
+          # ⚠️ The mc<VER>-v prefix is load-bearing and must not be reshaped to match the jar name:
+          # the "delete previous release on this Minecraft line" step below matches on it, and so
+          # does the one-branch-per-Minecraft-version check. Keeping it is also what lets the older
+          # mc<VER>-v<...>-build.<n> releases still be reaped instead of being orphaned.
           tag="mc${mc}-v${version}"
           branch="mc/${mc}"
           if [ -z "$mc" ] || [ -z "$base" ]; then
@@ -147,27 +169,57 @@ jobs:
           MC_VERSION: ${{ steps.meta.outputs.mc_version }}
         run: |
           set -euo pipefail
-          main="build/libs/mcmmo-${RELEASE_VERSION}.jar"
-          sources="build/libs/mcmmo-${RELEASE_VERSION}-sources.jar"
           ls -la build/libs || true
-          if [ ! -f "$main" ]; then
-            echo "::error::Expected mod jar not found: $main"
+
+          # DISCOVER the jar; do not predict its name. The filename now carries a band label that
+          # Gradle derives from supported_minecraft_versions (mcmmo-2.2.050+mc1.21.6-1.21.8.jar), and
+          # rebuilding that rule here would be a second implementation of it — one that goes wrong
+          # silently the next time the naming changes. Globbing means this step never needs updating
+          # again, and it FAILS CLOSED: exactly one non-sources jar, or the release stops.
+          mapfile -t mains < <(find build/libs -maxdepth 1 -type f -name 'mcmmo-*.jar' \
+            ! -name '*-sources.jar' | sort)
+          if [ "${#mains[@]}" -eq 0 ]; then
+            echo "::error::No mod jar found in build/libs (expected one mcmmo-*.jar)."
             exit 1
           fi
+          if [ "${#mains[@]}" -gt 1 ]; then
+            echo "::error::Ambiguous: ${#mains[@]} candidate mod jars in build/libs -- ${mains[*]}. Refusing to guess which one to publish; clean build/libs or narrow the build."
+            exit 1
+          fi
+          main="${mains[0]}"
+          jar_name="$(basename "$main")"
+          echo "Publishing asset: $jar_name"
+
+          # The sources jar is optional, so this must not be a `[ ... ] && ...` one-liner: under
+          # `set -e` an AND-list whose test fails is itself a failing command, and the step would
+          # exit 0-assets instead of publishing without sources.
+          mapfile -t sources_jars < <(find build/libs -maxdepth 1 -type f -name 'mcmmo-*-sources.jar' | sort)
           assets=( "$main" )
-          [ -f "$sources" ] && assets+=( "$sources" )
+          if [ "${#sources_jars[@]}" -eq 1 ]; then
+            assets+=( "${sources_jars[0]}" )
+          else
+            echo "::warning::No single sources jar found (${#sources_jars[@]} candidates); publishing the mod jar only."
+          fi
+
+          # The band this jar actually serves, read from the same property Gradle names it from.
+          band=$(grep -E '^supported_minecraft_versions=' gradle.properties | head -n1 | cut -d= -f2- | tr -d '[:space:]')
+          band_pretty="${band//,/, }"
 
           {
-            printf '%s\n\n' "Automated build of **mcMMO (singleplayer Fabric)** for **Minecraft ${MC_VERSION}**."
+            printf '%s\n\n' "Automated build of **mcMMO (singleplayer Fabric)** for **Minecraft ${band_pretty}**."
             printf '%s\n' "- **Mod version:** \`${RELEASE_VERSION}\`"
-            printf '%s\n' "- **Minecraft:** \`${MC_VERSION}\` · **Loader:** Fabric · **Java:** 21+"
+            printf '%s\n' "- **Minecraft:** \`${band_pretty}\` · **Loader:** Fabric · **Java:** 21+"
             printf '%s\n' "- **Requires:** Fabric API"
+            printf '%s\n' "- **Built against:** \`${MC_VERSION}\` — one jar serves the whole band above"
             printf '%s\n\n' "- Built from \`${GITHUB_REF_NAME}\` @ \`${GITHUB_SHA:0:7}\`"
-            printf '%s\n' "Drop the \`mcmmo-*.jar\` into your \`mods/\` folder. Optional: ModMenu + Cloth Config for the in-game settings screen."
+            printf '%s\n' "Drop \`${jar_name}\` into your \`mods/\` folder. Optional: ModMenu + Cloth Config for the in-game settings screen."
           } > release-notes.md
 
+          # ⚠️ The version no longer carries a per-run number, so re-running on the same commit
+          # REPLACES this release rather than adding one. The commit sha in the notes above is the
+          # only thing distinguishing two builds of the same mod version — keep it there.
           gh release create "$TAG" "${assets[@]}" \
-            --title "mcMMO ${RELEASE_VERSION} — Minecraft ${MC_VERSION}" \
+            --title "mcMMO ${RELEASE_VERSION} — Minecraft ${band_pretty}" \
             --notes-file release-notes.md
 
           echo "### :rocket: Released \`${TAG}\`" >> "$GITHUB_STEP_SUMMARY"
