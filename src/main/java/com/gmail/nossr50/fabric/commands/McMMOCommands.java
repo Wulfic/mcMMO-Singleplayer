@@ -78,22 +78,32 @@ public final class McMMOCommands {
      * Brigadier stores the predicate instance it is handed, so that test compares the same object.
      *
      * <p>⚠️ <b>Declared as a plain {@link java.util.function.Predicate}, deliberately.</b> Minecraft
-     * reworked the command permission API at the <code>1.21.10 → 1.21.11</code> boundary and the
-     * concrete return type is version-specific:
+     * has reworked the command permission API more than once, and both the helper's <i>return type</i>
+     * and its <i>existence</i> vary by version:
      *
      * <ul>
-     *   <li>{@code 1.21.11+}: {@code requirePermissionLevel(PermissionCheck)} returns a
+     *   <li>newest: {@code requirePermissionLevel(PermissionCheck)} returns a
      *       {@code PermissionSourcePredicate} <i>record</i>;</li>
-     *   <li>{@code ≤1.21.10}: {@code requirePermissionLevel(int)} returns a
-     *       {@code PermissionLevelPredicate} <i>interface</i>.</li>
+     *   <li>middle: {@code requirePermissionLevel(int)} returns a
+     *       {@code PermissionLevelPredicate} <i>interface</i>;</li>
+     *   <li><b>this band</b>: {@code CommandManager} has <b>no {@code requirePermissionLevel} at
+     *       all</b>, in any form, so there is no helper to widen away — the check is written
+     *       directly against {@code ServerCommandSource}.</li>
      * </ul>
      *
-     * Both implement {@code Predicate<T>}, so widening the declaration confines the entire band
-     * difference to the <em>argument</em> on the next line — one token instead of an import, a type
-     * and a call. Naming the concrete type here bought nothing and made this file diverge per band.
+     * <p>All three are the <b>same permission — level 2</b>, the one vanilla puts {@code /gamemode}
+     * and {@code /give} behind, which is the gate GitHub #8 asked for. Expressed in each version's
+     * own API; widening the field to {@code Predicate} is what keeps that the only difference.
+     *
+     * <p>⚠️ An earlier revision of this javadoc said the {@code int} overload covers
+     * <code>≤1.21.10</code>. <b>That is false</b> — verified with {@code javap} against this band's
+     * own merged jar, {@code CommandManager} here carries neither overload, and the same holds on
+     * {@code mc/1.21.5}. The tiers above are named by <em>relation</em> rather than pinned to
+     * version numbers on purpose: a comment asserting what a version has is read by no compiler and
+     * rots in silence.
      */
     static final Predicate<ServerCommandSource> CHEAT_COMMAND =
-            CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK);
+            source -> source.hasPermissionLevel(2);
 
     @VisibleForTesting
     static void registerAll(CommandDispatcher<ServerCommandSource> dispatcher) {

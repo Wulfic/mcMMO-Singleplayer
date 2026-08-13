@@ -2,7 +2,7 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.passive.AbstractCowEntity;
+import net.minecraft.entity.passive.CowEntity;
 import net.minecraft.entity.passive.GoatEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.ActionResult;
@@ -16,10 +16,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * Husbandry's milk verb (Pass 2 stage 4): an animal milked into a bucket.
  *
  * <h2>⚠️ There is no single milking funnel — this mixin needs one target per family</h2>
- * {@code AbstractCowEntity#interactMob} carries the whole player path for the cow family, and
+ * {@code CowEntity#interactMob} carries the whole player path for the cow family, and
  * {@code MooshroomEntity#interactMob} calls {@code super} at the end of its own body — verified in
  * bytecode — so milking a mooshroom arrives here too, and only its stew-in-a-bowl route needs a mixin
  * of its own ({@link MooshroomStewMixin}).
+ *
+ * <p><b>BAND:</b> the cow-family base is {@code CowEntity} here. {@code AbstractCowEntity} was
+ * introduced later, and on versions that have it the family root moves there — so this target is the
+ * one class named differently per band, not a different design. Re-verified rather than renamed by
+ * analogy: {@code MooshroomEntity extends CowEntity} on this band and its {@code interactMob} still
+ * calls {@code super.interactMob}, so the mooshroom path is still covered.
  *
  * <p><b>{@code GoatEntity} is not in that family at all.</b> It extends {@code AnimalEntity} directly
  * and <b>re-implements the entire bucket-for-milk-bucket branch inline</b> in its own
@@ -48,7 +54,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * per-animal harvest cooldown in the listener, not any game mechanic — and because that cooldown lives
  * inside {@code HusbandryListener#onMilked}, adding a target here puts it under the gate for free.
  */
-@Mixin({AbstractCowEntity.class, GoatEntity.class})
+@Mixin({CowEntity.class, GoatEntity.class})
 public abstract class CowMilkMixin {
 
     /**

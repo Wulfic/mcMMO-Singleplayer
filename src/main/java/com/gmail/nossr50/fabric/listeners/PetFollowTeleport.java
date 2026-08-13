@@ -178,7 +178,7 @@ public final class PetFollowTeleport {
             return false;
         }
 
-        final Vec3d destination = player.getEntityPos();
+        final Vec3d destination = player.getPos();
         // Cast load-bearing on older bands — see bringPetsFrom above.
         final boolean placed = pet.teleport((ServerWorld) player.getEntityWorld(), destination.x, destination.y,
                 destination.z, EnumSet.noneOf(PositionFlag.class), pet.getYaw(), pet.getPitch(),

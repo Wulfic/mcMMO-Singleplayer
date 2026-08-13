@@ -139,7 +139,7 @@ public final class PlatformPlayer {
     }
 
     public @NotNull Vec3d getPos() {
-        return handle.getEntityPos();
+        return handle.getPos();
     }
 
     // --- Vitals -------------------------------------------------------------
@@ -258,7 +258,15 @@ public final class PlatformPlayer {
             case PLAYERS -> SoundCategory.PLAYERS;
             case AMBIENT -> SoundCategory.AMBIENT;
             case VOICE -> SoundCategory.VOICE;
-            case UI -> SoundCategory.UI;
+            // BAND: vanilla has no UI category here — it was added in 1.21.6, and this switch
+            // failing to compile is exactly the design in the javadoc above working as intended.
+            // MASTER is the vanilla-CORRECT answer, not a fallback: before the UI category existed
+            // there was no UI volume slider, and UI sounds already played on master, so a player on
+            // this band hears precisely what vanilla would have given them. This is not the
+            // "silently falling back to MASTER" the javadoc warns against — that warns about a
+            // `default` arm swallowing an unknown future category. One named constant, mapped
+            // deliberately, and the switch stays total.
+            case UI -> SoundCategory.MASTER;
         };
     }
 
@@ -520,7 +528,10 @@ public final class PlatformPlayer {
         if (!nbt.contains(SUPER_ABILITY_BOOST_KEY)) {
             return; // not a boosted stack.
         }
-        final int originalDigSpeed = nbt.getInt(SUPER_ABILITY_BOOST_KEY, 0);
+        // BAND: getInt(String) returns a plain int here and yields 0 for a missing key, so it is
+        // already the behaviour the (key, default) overload was asked for on newer versions. The
+        // contains() guard above means the key is present in any case.
+        final int originalDigSpeed = nbt.getInt(SUPER_ABILITY_BOOST_KEY);
         final RegistryEntry<Enchantment> efficiency = efficiencyEntry();
         if (originalDigSpeed > 0) {
             EnchantmentHelper.apply(stack, builder -> builder.set(efficiency, originalDigSpeed));

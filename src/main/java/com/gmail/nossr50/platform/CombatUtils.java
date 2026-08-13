@@ -123,15 +123,22 @@ public final class CombatUtils {
      * wrong one silently swaps which config switch applies; see the §F note on
      * {@code EntityDamageListener#maybeProcessCounterAttack}.
      *
-     * <p>Legacy tests tamed-ness with {@code Tameable#isTamed()}; the modern interface exposes it as a
+     * <p>Legacy tests tamed-ness with {@code Tameable#isTamed()}; newer versions expose it as a
      * non-null {@code getOwnerReference()}. {@code getOwner()} is deliberately not used here — it
      * resolves the reference and yields null for an owner who is not currently loaded, which would
      * misreport a tamed animal as wild.
+     *
+     * <p><b>BAND:</b> {@code getOwnerReference()} does not exist here, so the check reads
+     * {@code getOwnerUuid()} instead. That is the <em>correct</em> substitute rather than the merely
+     * available one: the uuid is stored state, so like {@code getOwnerReference()} — and unlike
+     * {@code getOwner()} — it answers without resolving the owner entity, and an offline owner still
+     * reads as tamed. Picking {@code getOwner()} here would have reintroduced exactly the bug the
+     * paragraph above exists to prevent.
      */
     public static boolean canCombatSkillsTrigger(@NotNull PrimarySkillType primarySkillType,
             @NotNull Entity target) {
         final boolean isPlayerOrTamed = target instanceof PlayerEntity
-                || (target instanceof Tameable tameable && tameable.getOwnerReference() != null);
+                || (target instanceof Tameable tameable && tameable.getOwnerUuid() != null);
 
         return isPlayerOrTamed
                 ? McMMOMod.getSkillTools().getPVPEnabled(primarySkillType)

@@ -1,6 +1,7 @@
 package com.gmail.nossr50.platform;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -55,16 +56,55 @@ class PlatformPlayerTest {
      * constant must map to the vanilla constant of the <b>same name</b>. Driving it from
      * {@code values()} — never a hard-coded list — is what makes it catch a newly added constant
      * too, and keeps it from going vacuous the way a table-driven guard does.
+     *
+     * <p><b>BAND: the mirror enum is deliberately WIDER than this band's vanilla.</b> Vanilla gained
+     * a {@code UI} category later, and {@link PlatformSoundCategory} keeps it on every band so that
+     * MC-free skill code compiles identically everywhere — shrinking the mirror per band would move
+     * the break out of {@code platform/} and into skill code, which is the one thing Phase 2's
+     * boundary exists to prevent. {@code PlatformPlayer#toVanilla} therefore maps a category this
+     * band's vanilla does not have onto {@code MASTER}, which is what vanilla itself did before the
+     * separate slider existed. The same-name rule still governs every category that <em>does</em>
+     * exist here, so this test enforces it for those and pins the deliberate exception for the rest —
+     * rather than being weakened to "maps to something".
      */
     @Test
     void everyPlatformSoundCategoryMapsToTheVanillaConstantOfTheSameName() {
+        int matchedByName = 0;
         for (final PlatformSoundCategory category : PlatformSoundCategory.values()) {
-            assertSame(SoundCategory.valueOf(category.name()), PlatformPlayer.toVanilla(category),
+            final SoundCategory sameName = vanillaNamed(category.name());
+            if (sameName == null) {
+                assertSame(SoundCategory.MASTER, PlatformPlayer.toVanilla(category),
+                        "vanilla has no SoundCategory." + category.name() + " on this Minecraft "
+                                + "version, so PlatformSoundCategory." + category.name()
+                                + " must fall to MASTER — the slider vanilla itself used before that "
+                                + "category existed — and never to some other arbitrary category");
+                continue;
+            }
+            matchedByName++;
+            assertSame(sameName, PlatformPlayer.toVanilla(category),
                     "PlatformSoundCategory." + category.name()
                             + " must map to vanilla SoundCategory." + category.name()
                             + " — a mis-mapped arm silently plays mcMMO's sounds on the wrong "
                             + "volume slider");
         }
+
+        // Anti-vacuity, and the reason the loop above is not just "maps to anything": if the by-name
+        // lookup were broken, every category would take the MASTER arm and the same-name rule would
+        // go untested. Every vanilla category must have been reached through it.
+        assertEquals(SoundCategory.values().length, matchedByName,
+                "the same-name rule was only exercised for " + matchedByName + " of "
+                        + SoundCategory.values().length + " vanilla categories. The rest fell to the "
+                        + "band exception, which means this test is no longer proving the mapping.");
+    }
+
+    /** This band's vanilla constant of that name, or {@code null} if the version has none. */
+    private static SoundCategory vanillaNamed(String name) {
+        for (final SoundCategory vanilla : SoundCategory.values()) {
+            if (vanilla.name().equals(name)) {
+                return vanilla;
+            }
+        }
+        return null;
     }
 
     /**

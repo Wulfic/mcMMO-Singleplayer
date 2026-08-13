@@ -644,9 +644,13 @@ public final class HusbandryListener {
         // Delivered as extra rolls of vanilla's own harvest loot table rather than as honeycombs we
         // fabricate, exactly as the shear bonus re-runs the species' own drop handler: the yield stays
         // whatever the game says a hive yields, including any future change to it.
+        // BAND: vanilla's helper is dropHoneycomb(World, BlockPos) here — the tool, state,
+        // block-entity and player parameters do not exist yet. Calling the 2-arg form is the faithful
+        // port rather than a degraded one: it is the *same helper vanilla itself calls on this
+        // version*, so the comment above still holds exactly as written — the yield stays whatever the
+        // game says a hive yields. Verified against this band's own merged jar.
         for (int helping = bonusHiveHelpings(husbandry); helping > 0; helping--) {
-            BeehiveBlock.dropHoneycomb(serverWorld, usedItem, state, world.getBlockEntity(pos),
-                    serverPlayer, pos);
+            BeehiveBlock.dropHoneycomb(serverWorld, pos);
         }
         rollHiddenBounty(husbandry, serverPlayer, HIDDEN_BOUNTY_HIVE);
     }
@@ -766,84 +770,75 @@ public final class HusbandryListener {
     }
 
     /**
-     * An armadillo is about to hand over its scute: pay the brush verb, and let
-     * {@code Bountiful Harvest} double what it drops.
+     * An armadillo has just handed over its scute: pay the brush verb, and let
+     * {@code Bountiful Harvest} deliver a second one.
      *
-     * <p>Called from {@code ArmadilloBrushMixin}. Rides {@code LivingEntity#forEachBrushedItem}, the
-     * exact sibling of the shear verb's {@code forEachShearedItem} funnel — and the better of the two,
-     * because this one <b>takes the brushing entity as a parameter</b>, so the real-player gate needs
-     * no interaction stash and no identity check. A dispenser brushing an armadillo
-     * ({@code DispenserBehavior$5}, which vanilla does have) passes {@code null} there, so it is
-     * excluded by the signature.
+     * <p>Called from {@code ArmadilloBrushMixin}.
+     *
+     * <h2>BAND: this verb hangs off {@code interactMob}, because there is no brush loot funnel here</h2>
+     * On newer versions the verb rides {@code LivingEntity#forEachBrushedItem}, the exact sibling of
+     * the shear verb's {@code forEachShearedItem} funnel, and takes the brushing entity as a parameter
+     * so the real-player gate is a look at an argument. <b>That method does not exist on this band</b>
+     * — {@code brushScute()} takes no arguments and inlines the drop, the game event and the sound —
+     * so there is nothing to wrap and no dropper to double through. The verb is therefore hooked one
+     * level up, in {@code interactMob}, which still carries the real player.
+     *
+     * <p>⚠️ <b>That is a redesign, not a rename, and the reason is the dispenser.</b> Vanilla ships a
+     * dispenser that brushes armadillos, and on the funnel seam it is excluded <em>by the signature</em>
+     * because it passes {@code null} for the brusher. Here it calls {@code brushScute()} directly —
+     * jar-confirmed — so hooking the harvest itself would have paid an AFK brush farm. Hooking
+     * {@code interactMob}, which the dispenser never enters, keeps that exclusion structural instead
+     * of turning it into a check of our own that could rot.
+     * {@code ArmadilloBrushDispenserExclusionTest} pins the call graph that makes it true.
      *
      * <h2>⚠️ Why this one pays on the drop and the shear verb pays on the attempt</h2>
      * Shearing is gated upstream by {@code isShearable()} — a sheep with no wool cannot be sheared at
      * all — so by the time the shear funnel is reached, a harvest has definitely happened.
      * <b>Brushing has no such gate.</b> {@code brushScute} returns {@code true} for any adult
-     * armadillo, {@code brush/armadillo.json} carries no conditions, and {@code nextScuteShedCooldown}
-     * — the timer the plan cited as vanilla's own limit — governs only the passive shed and is never
-     * read or reset on this path. So the XP hangs off an item actually being delivered, which is the
-     * one thing that cannot be true of a brush that achieved nothing.
+     * armadillo, and {@code nextScuteShedCooldown} — the timer the plan cited as vanilla's own limit —
+     * governs only the passive shed and is never read or reset on this path. The invariant survives
+     * the seam move because the injection point does the work: the caller injects <em>after</em>
+     * vanilla wears the brush, which is reachable only once {@code brushScute()} has returned
+     * {@code true} and the scute is already on the ground.
      *
-     * @param armadillo the animal being brushed
-     * @param brusher   whoever is brushing; {@code null} for a dispenser
-     * @param dropper   vanilla's own per-item handler
-     * @return {@code dropper} unchanged, or a wrapper that pays on first delivery
+     * @param armadillo the animal that was brushed
+     * @param brusher   whoever brushed it
      */
-    public static BiConsumer<ServerWorld, ItemStack> onBrushedItems(Entity armadillo, Entity brusher,
-            BiConsumer<ServerWorld, ItemStack> dropper) {
-        if (armadillo == null || dropper == null || !(brusher instanceof ServerPlayerEntity player)) {
-            return dropper; // A dispenser, or nobody at all.
+    public static void onArmadilloBrushed(Entity armadillo, PlayerEntity brusher) {
+        if (armadillo == null || !(brusher instanceof ServerPlayerEntity player)) {
+            return;
         }
         final HusbandryManager husbandry = husbandryOf(player);
-        if (husbandry == null) {
-            return dropper;
+        // The cooldown gates the reward, never the drop: a brush inside the window still yields its
+        // scute — vanilla has already dropped it by this point and we never touch it — it simply does
+        // not pay again. Refusing vanilla's own loot would be a mod quietly breaking the game to
+        // enforce its own balance.
+        if (husbandry == null || !harvestCooldownElapsed(husbandry, armadillo)) {
+            return;
         }
-        return new BrushPayout(husbandry, player, armadillo, dropper);
+        husbandry.onBrush();
+        if (husbandry.rollBonusHarvestDrop()) {
+            deliverBonusScute(armadillo);
+        }
+        rollHiddenBounty(husbandry, player, HIDDEN_BOUNTY_BRUSH);
     }
 
     /**
-     * Pays the brush verb the first time an item is actually handed over, then applies one
-     * {@code Bountiful Harvest} decision to every item of that brush.
+     * {@code Bountiful Harvest}'s second scute, delivered the way vanilla delivers the first.
      *
-     * <p>A named class rather than a capturing lambda because it holds state across calls, and the
-     * state is the point: the cooldown must be consumed once per brush and the bonus decided once per
-     * brush, while the handler itself may be invoked several times.
+     * <p>BAND: on the funnel seam this is a second {@code dropper.accept(world, stack.copy())} — the
+     * bonus is another helping of whatever the loot roll produced, so it stays correct even if the
+     * yield changes. There is no loot roll here: vanilla's {@code brushScute} hard-codes
+     * {@code new ItemStack(Items.ARMADILLO_SCUTE)} and drops it off the armadillo. Fabricating the
+     * same stack and dropping it the same way is therefore the faithful port rather than a degraded
+     * one — it is exactly what the game itself yields on this version — and it is dropped off the
+     * animal rather than handed to the player so that a bonus scute lands where the first one did.
      */
-    private static final class BrushPayout implements BiConsumer<ServerWorld, ItemStack> {
-
-        private final HusbandryManager husbandry;
-        private final ServerPlayerEntity brusher;
-        private final Entity armadillo;
-        private final BiConsumer<ServerWorld, ItemStack> dropper;
-        private boolean settled;
-        private boolean doubled;
-
-        private BrushPayout(HusbandryManager husbandry, ServerPlayerEntity brusher, Entity armadillo,
-                BiConsumer<ServerWorld, ItemStack> dropper) {
-            this.husbandry = husbandry;
-            this.brusher = brusher;
-            this.armadillo = armadillo;
-            this.dropper = dropper;
-        }
-
-        @Override
-        public void accept(ServerWorld world, ItemStack stack) {
-            if (!settled) {
-                settled = true;
-                // The cooldown gates the reward, never the drop: a brush inside the window still
-                // yields its scute, it simply does not pay again. Refusing vanilla's own loot would
-                // be a mod quietly breaking the game to enforce its own balance.
-                if (harvestCooldownElapsed(husbandry, armadillo)) {
-                    husbandry.onBrush();
-                    doubled = husbandry.rollBonusHarvestDrop();
-                    rollHiddenBounty(husbandry, brusher, HIDDEN_BOUNTY_BRUSH);
-                }
-            }
-            dropper.accept(world, stack);
-            if (doubled) {
-                dropper.accept(world, stack.copy());
-            }
+    private static void deliverBonusScute(Entity armadillo) {
+        // Load-bearing instanceof rather than a cast: brushing resolves on the logical server, but a
+        // null or client world here must skip the bonus rather than throw inside vanilla's interaction.
+        if (armadillo.getEntityWorld() instanceof ServerWorld serverWorld) {
+            armadillo.dropStack(serverWorld, new ItemStack(Items.ARMADILLO_SCUTE));
         }
     }
 

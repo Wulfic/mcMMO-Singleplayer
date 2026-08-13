@@ -87,7 +87,7 @@ public final class CallOfTheWildHandler {
         }
 
         final TransientEntityTracker tracker = McMMOMod.getTransientEntityTracker();
-        Vec3d spawnPos = player.getEntityPos().add(1.0, 0.0, 1.0);
+        Vec3d spawnPos = player.getPos().add(1.0, 0.0, 1.0);
         int amountSummoned = 0;
 
         for (int i = 0; i < summon.getEntitiesSummoned(); i++) {
@@ -154,10 +154,16 @@ public final class CallOfTheWildHandler {
 
     private static void applyOwnership(MobEntity entity, ServerPlayerEntity player) {
         if (entity instanceof TameableEntity tameable) {
-            tameable.setTamedBy(player); // wolves + cats: sets tamed and owner together
+            // BAND: setTamedBy(ServerPlayerEntity) does not exist here; setOwner(PlayerEntity) is
+            // its exact predecessor, not an approximation. Confirmed from the band's own bytecode:
+            // setOwner compiles to setTamed(true, true) + setOwnerUuid(player.getUuid()) + the
+            // Criteria.TAME_ANIMAL trigger — the same three effects, in the same order.
+            tameable.setOwner(player); // wolves + cats: sets tamed and owner together
         } else if (entity instanceof AbstractHorseEntity horse) {
             horse.setTame(true);
-            horse.setOwner(player);
+            // BAND: AbstractHorseEntity has no setOwner overload here — only the uuid setter, which
+            // is what setOwner itself writes and what every ownership check reads back.
+            horse.setOwnerUuid(player.getUuid());
         }
     }
 

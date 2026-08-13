@@ -70,14 +70,19 @@ public abstract class BeehiveHarvestMixin {
      * only after vanilla has confirmed a full hive on the server side, so it fires exactly once per
      * successful honeycomb harvest. The hive's honey level is still full at this point, which is what
      * lets the bonus be delivered as further rolls of vanilla's own loot table.
+     *
+     * <p><b>BAND:</b> vanilla's helper is the 2-argument {@code dropHoneycomb(World, BlockPos)} here;
+     * the tool, state, block-entity and player parameters were added later. The anchor is the same
+     * call in the same branch — only its descriptor differs. ⚠️ A stale descriptor here does <b>not</b>
+     * fail to compile: it scans zero targets and takes {@code BeehiveBlock}'s class initialisation
+     * down at load time, which cascades through {@code Blocks} and {@code Items} into hundreds of
+     * unrelated test failures. Confirmed against this band's bytecode: exactly one such call inside
+     * {@code onUseWithItem}, so {@code allow = 1} still holds.
      */
     @Inject(method = ON_USE_WITH_ITEM, allow = 1,
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/block/BeehiveBlock;dropHoneycomb("
-                            + "Lnet/minecraft/server/world/ServerWorld;Lnet/minecraft/item/ItemStack;"
-                            + "Lnet/minecraft/block/BlockState;"
-                            + "Lnet/minecraft/block/entity/BlockEntity;Lnet/minecraft/entity/Entity;"
-                            + "Lnet/minecraft/util/math/BlockPos;)V"))
+                            + "Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;)V"))
     private void mcmmo$onHoneycombHarvested(ItemStack stack, BlockState state, World world,
             BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit,
             CallbackInfoReturnable<ActionResult> cir) {

@@ -242,7 +242,7 @@ public final class PlatformLivingEntity {
     }
 
     public @NotNull Vec3d getPos() {
-        return handle.getEntityPos();
+        return handle.getPos();
     }
 
     // --- Custom name --------------------------------------------------------
