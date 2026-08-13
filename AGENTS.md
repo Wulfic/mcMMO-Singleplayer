@@ -264,8 +264,19 @@ from scratch. Two failed fixes means the diagnosis is wrong, not the fix.
 
 ## Memory
 
-**Memory is repo-local files.** Not an MCP server, not chat history. Committed, reviewable
-in a PR, and readable by any agent in any tool without a network call.
+**Memory is repo-local files.** Not an MCP server, not chat history. Readable by any agent
+in any tool without a network call, and it survives a dead server.
+
+⚠️ **It is NOT committed, and that is deliberate (ruling R-n).** `.agent/` is in
+`.gitignore`, so this tree is **local to one working copy**. Two consequences you must plan
+around, because nothing warns you:
+
+- **A fresh clone has no memory at all.** Never assume the next machine, the next agent, or a
+  band branch can read these files. Anything another checkout must know belongs in `TODO.md`,
+  `AGENTS.md`, or the commit message — those are versioned; `.agent/` is not.
+- **Memory cannot drift between branches, because it does not travel with them.** There is one
+  tree, shared by every branch you check out. Write entries so they read correctly from any
+  branch — say which branch a finding is about rather than *"here"*.
 
 ```
 .agent/memory/
@@ -312,6 +323,12 @@ Skills live in `.github/skills/` (Copilot) and `.claude/skills/` (Claude Code). 
 trees are byte-identical copies and are synced by hand — edit a skill in both, or they drift.**
 
 Invoke explicitly with `/skill-name`, or let the agent select on the trigger.
+
+⚠️ **Neither tree is committed, and neither is `.agent/`, `CLAUDE.md`, or `.mcp.json`** — all
+five are gitignored (R-n). **This file is the only tracked agent-facing document in the repo.**
+So every `/skill-name` below is unresolvable in a fresh clone, and the table is a description
+of one working copy, not a promise. If a rule must survive a clone or reach a band branch, it
+belongs *in this file* — not in a skill, and not in `.agent/memory/`.
 
 | Skill | Use when |
 |-------|----------|
