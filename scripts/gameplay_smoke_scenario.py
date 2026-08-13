@@ -117,10 +117,29 @@ def _acquire_natural_target(tag: str) -> list[str]:
     egg-farm exploit guard working correctly, and it read in the harness as "combat XP is broken":
     the kill marker fired, the XP assertion failed, and nothing in the log said why.
 
-    Worldgen animals are `CHUNK_GENERATION`/`LOAD` -> `NATURAL` -> x1.0, so the target is teleported
-    in from whatever the superflat world already spawned. Four species are tried because the
-    assertion must not hinge on a cow in particular having generated nearby; if none exists the tag
-    never lands, the marker never fires, and the phase is INCONCLUSIVE rather than a false pass.
+    Most worldgen animals are `CHUNK_GENERATION`/`LOAD` -> `NATURAL` -> x1.0, so the target is
+    teleported in from whatever the superflat world already spawned. Four species are tried because
+    the assertion must not hinge on a cow in particular having generated nearby; if none exists the
+    tag never lands, the marker never fires, and the phase is INCONCLUSIVE rather than a false pass.
+
+    ⚠️⚠️ BUT "WORLDGEN" DOES NOT IMPLY "NATURAL", AND ASSUMING IT COST A FULL DEBUGGING SESSION.
+    `SpawnReason.STRUCTURE` is reachable with no player involved at all, and it maps to
+    `MobOrigin.STRUCTURE` -> `getNetherPortalXpMultiplier()` -> shipped `Nether_Portal.Multiplier: 0`.
+    A structure-spawned cow therefore dies paying exactly nothing -- the same symptom the `/summon`
+    warning above describes, from a different origin, and `sort=nearest` will happily pick one.
+
+    Measured on `mc/1.21.4`: 9 runs, 8 x 29/29 and 1 x 27/29, where the failing run generated a
+    slower world (`Preparing spawn area`, the bot logging in as entity id 29 rather than id 1) and
+    logged `mob-origin gate is live -- first mob marked STRUCTURE` on a **worldgen thread**. Both
+    combat phases then failed with "did NOT move" while every marker fired.
+
+    So the origin is now VERIFIED rather than assumed, via the `{tag}-natural` marker below. A
+    non-natural target makes the phase INCONCLUSIVE -- the harness's own correct verdict for an unmet
+    precondition -- instead of a FAIL that reads as "combat XP is broken".
+
+    The three-part signature to recognise it by, if this ever regresses: both markers fire, the
+    combat skill stays flat, and `Hunter: mob-mastery counters are live` appears NOWHERE in the run.
+    No one of those alone is sufficient.
     """
     species = ["cow", "sheep", "pig", "chicken"]
     out = [f"execute positioned 0.5 -60 0.5 run tag @e[type=minecraft:{species[0]},sort=nearest,limit=1] add {tag}"]
@@ -134,6 +153,15 @@ def _acquire_natural_target(tag: str) -> list[str]:
         f"data merge entity @e[tag={tag},limit=1] {{NoAI:1b,PersistenceRequired:1b}}",
         f"tp @e[tag={tag},limit=1] 2.5 -60 0.5",
         f"execute if entity @e[tag={tag}] run say ===MARK {tag}-acquired===",
+        # The origin check. mcMMO writes `mcmmo:mob_origin` ONLY for an origin that does not count,
+        # so the marker fires on the ABSENCE of the path -- `unless`, not `if`. The key is Fabric's
+        # `AttachmentTarget.NBT_ATTACHMENT_KEY`, read from the pinned module's source rather than
+        # recalled, and the sub-key is the attachment's own Identifier.
+        #
+        # The path-existence form of `execute if data` is used deliberately: it needs no value match
+        # and no version-specific predicate grammar, so this one line is correct on every band.
+        f'execute unless data entity @e[tag={tag},limit=1] '
+        f'"fabric:attachments"."mcmmo:mob_origin" run say ===MARK {tag}-natural===',
     ]
     return out
 
@@ -270,7 +298,7 @@ PHASES: list[Phase] = [
         ],
         up=["UNARMED"],
         flat=["SWORDS", "AXES", "MINING"],
-        requires_markers=["fisttarget-acquired", "fisttarget-killed"],
+        requires_markers=["fisttarget-acquired", "fisttarget-natural", "fisttarget-killed"],
     ),
     Phase(
         name="combat-sword",
@@ -287,7 +315,7 @@ PHASES: list[Phase] = [
         ],
         up=["SWORDS"],
         flat=["UNARMED", "AXES"],
-        requires_markers=["swordtarget-acquired", "swordtarget-killed"],
+        requires_markers=["swordtarget-acquired", "swordtarget-natural", "swordtarget-killed"],
     ),
     Phase(
         name="repair",
@@ -732,6 +760,23 @@ def self_test() -> int:
         ("no profile written at all", "", None, True),
     ]
     failures = 0
+
+    # ⚠️ Every case below feeds a SYNTHETIC log built from `requires_markers` itself, so the scorer
+    # sees each marker no matter what the scenario actually emits. That makes the whole suite blind
+    # to the one mistake this file's own header warns about: a marker that is *required* but that no
+    # command *produces*. Its symptom is not a failure -- it is every affected phase reporting
+    # INCONCLUSIVE forever, which reads as "the harness could not tell" rather than "the harness is
+    # broken". So the emission side is checked here, against the real command table.
+    for phase in PHASES:
+        emitted = " ".join(phase.commands)
+        for marker in phase.requires_markers:
+            if f"===MARK {marker}===" not in emitted:
+                print(f"  [BROKEN] phase '{phase.name}' requires marker '{marker}' but no command "
+                      f"in it emits '===MARK {marker}==='")
+                failures += 1
+    if not failures:
+        print("  [ok] every required marker is emitted by a command in its own phase")
+
     for label, mutation, profile, should_flag in cases:
         log = _synthetic_log(mutation)
         v = check(log, profile)
