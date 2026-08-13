@@ -201,6 +201,33 @@ class BandVersionLabelTest {
                 System.getProperty("mcmmo.build.bandVersions"),
                 "build.gradle no longer passes -Dmcmmo.build.bandVersions to the test JVM. Restore the "
                         + "systemProperty in the `test { }` block.");
+        assertNotNull(
+                System.getProperty("mcmmo.build.modVersion"),
+                "build.gradle no longer passes -Dmcmmo.build.modVersion to the test JVM, so this class "
+                        + "would fall back to reading mod_version off disk — the exact defect that made "
+                        + "every band's release build fail. Restore the systemProperty.");
+    }
+
+    /**
+     * The resolved {@code mod_version} may differ from the one in {@code gradle.properties} in exactly
+     * one way: {@code release.yml} builds with {@code -Pmod_version=<base minus -SNAPSHOT>}. Any other
+     * difference is real drift — a stale configuration cache, or a hand-typed {@code -P} override that
+     * would silently mint a jar named after a version nobody declared.
+     *
+     * <p>This is the check the old cross-assertion was making by accident, against the wrong operand.
+     * Kept separate so the legal override is expressible without weakening the label comparison.
+     */
+    @Test
+    void theResolvedModVersionIsTheDeclaredOneOrItsReleaseForm() {
+        final String resolved = resolvedModVersion();
+        final String declared = modVersion();
+        assertTrue(
+                isDeclaredModVersionOrReleaseForm(declared, resolved),
+                "build.gradle resolved mod_version to \"" + resolved + "\", but gradle.properties "
+                        + "declares \"" + declared + "\". The only legal difference is release.yml "
+                        + "stripping -SNAPSHOT (which would give \"" + stripSnapshot(declared)
+                        + "\"). Anything else means a stale configuration cache or a -Pmod_version "
+                        + "override that would name the jar after an undeclared version.");
     }
 
     /**
@@ -230,7 +257,12 @@ class BandVersionLabelTest {
 
         final List<String> declared = declaredBandVersions();
         final String expectedLabel = expectedBandLabel(declared);
-        final String expected = modVersion() + "+" + expectedLabel;
+        // ⚠️ resolvedModVersion(), NOT modVersion(). release.yml builds with -Pmod_version=<base minus
+        // -SNAPSHOT>, so rebuilding this from gradle.properties' text asserts a string the release path
+        // can never produce. That is not hypothetical: it failed every band's Build step and is why
+        // Phase 10's rename never reached a release. The declared-vs-resolved relationship is checked
+        // by theResolvedModVersionIsTheDeclaredOneOrItsReleaseForm(); this assertion is about the LABEL.
+        final String expected = resolvedModVersion() + "+" + expectedLabel;
 
         assertEquals(
                 expected,
@@ -261,6 +293,36 @@ class BandVersionLabelTest {
     // -----------------------------------------------------------------------------------------
     // Converse checks. A guard that has never failed is not known to work.
     // -----------------------------------------------------------------------------------------
+
+    /**
+     * The declared-vs-resolved rule, driven with values no real build produces. Without this, the rule
+     * added alongside it would be a pure tautology on every developer machine — which is precisely how
+     * the defect it replaces survived review on five branches.
+     */
+    @Test
+    void theModVersionRuleAcceptsOnlyTheSnapshotStrip() {
+        // The two legal shapes: a local build (no override) and the release build (-SNAPSHOT stripped).
+        assertTrue(isDeclaredModVersionOrReleaseForm("2.2.050-SNAPSHOT", "2.2.050-SNAPSHOT"));
+        assertTrue(isDeclaredModVersionOrReleaseForm("2.2.050-SNAPSHOT", "2.2.050"));
+
+        // ⚠️ Honest limitation, stated rather than papered over: NO test in this class can catch a
+        // revert of resolvedModVersion() back to modVersion(). In the local form the two return the
+        // same string by construction, so any assertion distinguishing them is either tautological or
+        // testing nothing. The only thing that catches it is running the RELEASE form — which is why
+        // TODO §10.7e amends the ship gate to pass -Pmod_version. A local guard here would be
+        // decoration, and decoration gets refactored away as dead code.
+
+        // A hand-typed override that names an undeclared version must be rejected.
+        assertFalse(isDeclaredModVersionOrReleaseForm("2.2.050-SNAPSHOT", "9.9.999"));
+        assertFalse(isDeclaredModVersionOrReleaseForm("2.2.050-SNAPSHOT", "2.2.051"));
+        // Stripping must be a suffix operation, not a substring one.
+        assertFalse(isDeclaredModVersionOrReleaseForm("2.2.050-SNAPSHOT", "2.2.050-SNAPSHOT-1"));
+        // A non-SNAPSHOT declaration grants no strip licence at all.
+        assertFalse(isDeclaredModVersionOrReleaseForm("2.2.050", "2.2.049"));
+
+        assertEquals("2.2.050", stripSnapshot("2.2.050-SNAPSHOT"));
+        assertEquals("2.2.050", stripSnapshot("2.2.050"), "stripping must be idempotent");
+    }
 
     @Test
     void theLabelRuleDistinguishesASingleVersionFromARange() {
@@ -345,10 +407,37 @@ class BandVersionLabelTest {
         return versions;
     }
 
+    /**
+     * The {@code mod_version} as <em>declared in the file</em>. ⚠️ This is NOT necessarily the one the
+     * build used — see {@link #resolvedModVersion()}. Use this only to check the declared-vs-resolved
+     * relationship; never to rebuild the expected jar version.
+     */
     private static String modVersion() {
         final Matcher matcher = MOD_VERSION.matcher(readStripped(GRADLE_PROPERTIES));
         assertTrue(matcher.find(), "gradle.properties declares no mod_version");
         return matcher.group(1);
+    }
+
+    /** The {@code mod_version} Gradle actually resolved, {@code -Pmod_version} override included. */
+    private static String resolvedModVersion() {
+        final String resolved = System.getProperty("mcmmo.build.modVersion");
+        assertNotNull(resolved, "see theBuildWiringIsPresent()");
+        return resolved;
+    }
+
+    private static String stripSnapshot(String version) {
+        return version.endsWith("-SNAPSHOT")
+                ? version.substring(0, version.length() - "-SNAPSHOT".length())
+                : version;
+    }
+
+    /**
+     * Whether {@code resolved} is {@code declared}, or {@code declared} with {@code -SNAPSHOT} removed
+     * — the one transformation {@code release.yml} performs. Extracted so the converse check can drive
+     * it with values no real build produces.
+     */
+    private static boolean isDeclaredModVersionOrReleaseForm(String declared, String resolved) {
+        return resolved.equals(declared) || resolved.equals(stripSnapshot(declared));
     }
 
     private static String minecraftDependPredicate() {
