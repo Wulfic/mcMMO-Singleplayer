@@ -580,11 +580,31 @@ and the guard looked solid on five branches. The gate that would have caught it 
 - [x] **10.7d** Converse `theModVersionRuleAcceptsOnlyTheSnapshotStrip()` drives the rule with values
       no real build produces. Without it the new rule is a tautology on every dev machine — which is
       exactly how the defect it replaces survived review.
-- [ ] **10.7e** ⚠️ **Amend ship-gate step 1 to run CI's invocation**, not a bare `./gradlew build`.
+- [x] **10.7e** ⚠️ **Ship-gate step 1 now runs CI's invocation**, not a bare `./gradlew build`.
       A gate that does not reproduce the release command cannot certify a release.
-- [ ] **10.7f** Back-port to all four bands with `Backport-of:`, then confirm each band's next run
-      goes green **and actually publishes** — this is the first time the Phase 10 naming will reach
-      a real release, so verify the jar asset name and that the old `-build.<N>` release is reaped.
+- [x] **10.7f** ✅ Back-ported to all four bands (`Backport-of: a1266ad53`), each **verified on its own
+      band with its own release invocation** before commit: **1721 / 1720 / 1719 / 1719** tests
+      (`.4`/`.5`/`.8`/`.10`), 0 failures. Drift audit: self-test green, then **0 MISSING**, each band's
+      propagated count up by exactly one.
+
+      ✅ **All four then released for real** — the first time Phase 10's naming reached a player:
+
+      | Tag | Published asset | Old release |
+      |---|---|---|
+      | `mc1.21.4-v2.2.050` | `mcmmo-2.2.050+mc1.21.4.jar` | `-build.28` **reaped** |
+      | `mc1.21.5-v2.2.050` | `mcmmo-2.2.050+mc1.21.5.jar` | `-build.27` **reaped** |
+      | `mc1.21.8-v2.2.050` | `mcmmo-2.2.050+mc1.21.6-1.21.8.jar` | `-build.24` **reaped** |
+      | `mc1.21.10-v2.2.050` | `mcmmo-2.2.050+mc1.21.9-1.21.10.jar` | `-build.25` **reaped** |
+
+      The 10.4a ruling is confirmed by observation, not argument: the tag kept its `mc<VER>-v` prefix,
+      so the reaping sweep still matched the old `-build.*` releases and cleaned them up with no
+      manual step.
+- [ ] **10.7g** 🔴 **`master`'s release is now the ONLY stale one** — `mc1.21.11-v2.2.050-build.26`,
+      still carrying the old un-labelled `mcmmo-2.2.050-build.26.jar`. Under R-g `master` has no
+      workflow, so it did not re-release with its siblings and **the newest band is the one band whose
+      download still has no Minecraft version in its name** — the exact complaint Phase 10 exists to
+      fix, now surviving only where it is most visible. This is 10.6.3 with a measured consequence;
+      it needs an owner ruling (restore a workflow on `master`, or publish that one jar by hand).
 
 ### What I am NOT doing
 
@@ -605,8 +625,16 @@ and the guard looked solid on five branches. The gate that would have caught it 
 
 Nothing enforces this list any more (R-g retired CI). **It is a person running seven commands.**
 
-1. `./gradlew build` exit 0 — suite green, and the **count should match `master`** (~1705). A lower
-   count means something was disabled to get there.
+1. `./gradlew --no-daemon --stacktrace build -Pmod_version=$(grep -E '^mod_version=' gradle.properties | cut -d= -f2 | sed 's/-SNAPSHOT$//')`
+   exit 0 — suite green, and the **count should match `master`** (~1719). A lower count means
+   something was disabled to get there.
+
+   ⚠️⚠️ **The `-Pmod_version` override is NOT decoration — run the gate exactly like this.** A bare
+   `./gradlew build` is *not* what CI runs, and that gap is not theoretical: it is precisely how
+   §10.7 shipped a guard that was green on all five branches and red on every release, blocking
+   every band's release for a day with nothing reporting it. **A gate that does not reproduce the
+   release command cannot certify a release.** ⚠️ And read Gradle's own exit code — `cmd | tail`
+   returns *tail's*, which reported a failed build as `exit 0` during that investigation.
 2. `python scripts/mixin-allow-audit.py --mc <version> --check` — 61/61. A `MISMATCH` is a fact to
    record, not a bug to suppress.
 3. `scripts/boot-check.sh <jar> <version>` — 0 ERROR, 0 mixin failures, canary rejected.
@@ -638,6 +666,7 @@ silently cannot probe itself.
 | R7 | Live playtest disrupted | ✅ Phase 0 tag + instance backup |
 | **R8** | **A fix lands on `master` and is silently never back-ported** | 🔴 **REOPENED.** Closed on three legs; two were removed in one working tree by R-g. Detection is now *"somebody remembers to run the script"*. **Each new band multiplies this** — 5 bands today, 9 after Phase 9. The one open instance (`f73031ed9`) is closed by **R-q**, and the manual run did catch it — but only because someone ran it |
 | **R9** | **`drift-audit.py` is blind to docs drift** | 🔴 **OPEN, and it has now produced a real one.** It classifies a `README.md`/`wiki/`-only commit as not-propagatable and ignores it — its own self-test asserts that deliberately. R-j made docs part of what every band ships, so a forgotten docs fix serves a wrong page to that band's players. **Instance (2026-08-13):** `mc/1.21.4` shipped and released, and for a whole session the README and six wiki pages still said *"Minecraft 1.21.4 and older are not supported"* — the band's own players were told their jar did not exist. Every drift audit in that window read clean. ⚠️ Note the interim check `git diff --name-only master <band> -- README.md wiki/` **would also have said clean**: the docs were byte-identical on all five branches and identically *wrong*. Cross-branch equality is not correctness, and nothing mechanical currently checks the docs against the branch list |
+| **R11** | **A band's release fails and nobody finds out** | 🔴 **OPEN, and it has already happened.** R-g removed `.github/` from `master`, so no workflow reports to the branch a person actually works on. Phase 10's guard defect (§10.7) failed **four** band releases on 2026-08-13 and was invisible for a day: local builds green, ship gate green, drift audit green, `git status` clean. It was found only by hand-querying the Actions API. **Nothing in this repo reports a red release.** The mitigations that exist are both manual: ship-gate step 1 now reproduces CI's invocation (§10.7e), and `curl -s "https://api.github.com/repos/Wulfic/mcMMO-Singleplayer/actions/runs?per_page=5"` after any push that touches `src/**`, `build.gradle` or `gradle.properties`. ⚠️ Reading the run's **log** needs admin auth (`403` unauthenticated); the *conclusion* does not |
 | **R10** | **Two branches resolving to the same `minecraft_version`** | **Dormant, not fixed.** The tag-reaping sweep that made it fatal was `release.yml`'s, gone from `master` under R-g — but the three bands still carry it. Keep the one-band-one-version rule |
 
 ---
