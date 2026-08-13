@@ -221,10 +221,12 @@ public final class PlayerMovementTracker {
         final UUID uuid = player.getUuid();
         final Vec3d current = player.getEntityPos();
         final Vec3d previous = LAST_POSITIONS.put(uuid, current);
-        // ⚠️ The cast is load-bearing on older bands — do NOT "simplify" it away. ServerPlayerEntity
-        // only gained a covariant ServerWorld override of getEntityWorld() in 1.21.11; below that it
-        // inherits Entity's World-returning form and the bare assignment does not compile. One
-        // expression correct on every band, so no band branch needs a diff here.
+        // ⚠️ The cast is load-bearing on the older bands — do NOT "simplify" it away.
+        // ServerPlayerEntity's covariant ServerWorld override of getEntityWorld() was added in
+        // 1.21.9; on 1.21 – 1.21.5 only Entity's World-returning form exists and the bare
+        // assignment does not compile. ⚠️ Not usable on 1.21.6 – 1.21.8, which has no
+        // Entity#getEntityWorld() at all and spells the accessor getWorld() — see
+        // PetFollowTeleport#bringPetsFrom for the measured version ladder.
         final ServerWorld world = (ServerWorld) player.getEntityWorld();
         final RegistryKey<World> previousWorld =
                 LAST_WORLDS.put(uuid, world == null ? null : world.getRegistryKey());
