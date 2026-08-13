@@ -257,11 +257,19 @@ asserts REPAIR does *not* move, which a completely dead listener satisfies.
       ⚠️ The original `repair` failure remains a single unexplained event — instrumentation cleared
       the whole repair path and it has passed **9 consecutive runs** since.
 
-- [ ] **8.1a.B4 🔴 OWNER CALL — harden `gameplay-smoke.sh`'s combat phases.** `scripts/` is
-      `master`-first tooling back-ported to four bands, so this is scope, not a blocker for 8.1.
-      🔴 **It affects every band already shipped**: `mc/1.21.5`, `mc/1.21.8` and `mc/1.21.10` each
-      passed gate 6 exactly **once**. The failure mode is a **false red, never a false green**, so
-      nothing shipped broken — but "29/29" is weaker evidence than it reads.
+- [x] **8.1a.B4 DONE — `gameplay-smoke.sh`'s combat phases now verify the target's ORIGIN.**
+      `master` `ec9b497f7`, back-ported to all four bands with `Backport-of:` trailers. The target
+      must carry **no** `mcmmo:mob_origin` attachment, so a structure-spawned mob reports
+      INCONCLUSIVE instead of a false FAIL. Live-proven on **1.21.11, 1.21.4 and 1.21.5** (the
+      oldest band — the best proxy for the 1.21.3/1.21.1 cuts still to come), and proven
+      discriminating in **both** directions: a converse probe on the `/summon`-ed `PLAYER_PLACED`
+      cow did **not** fire in the same run where both natural targets did.
+      Also closed a hole in `--self-test`: it fed a **synthetic** log built from `requires_markers`
+      itself, so a required marker that **no command emits** was invisible — and its symptom is not
+      a failure but INCONCLUSIVE *forever*. Now checked against the real command table,
+      mutation-proven. ⚠️ `drift-audit.py` ignores `scripts/`-only commits, so it was never going to
+      flag this; the trailers are discipline, the runs are the evidence.
+      ⬜ Optional: re-run gate 6 a few times on `mc/1.21.8` / `mc/1.21.10`, which passed it once each.
 
 - [x] **8.1a.C Full seven-gate re-run — all green.** 1️⃣ `build` **1706/0/0**, forced with
       `test --rerun --no-build-cache` because both `UP-TO-DATE` and `FROM-CACHE` are *restored*
@@ -269,10 +277,25 @@ asserts REPAIR does *not* move, which a completely dead listener satisfies.
       0 mixin failures, canary rejected. 4️⃣ `config-id-audit` exit 0, 638/689 = 92.6%, 0
       dead-everywhere. 5️⃣ `brew-smoke` PASSED **with its vanilla control discriminating**.
       6️⃣ `gameplay-smoke` **29/29**. 7️⃣ `drift-audit --self-test` PASSED.
-- [ ] **8.1a.D 🔴 OWNER CALL — the push is a PUBLISH.** `.github/` is tracked on this branch (R-g
-      removed it from `master` only), so a `src/`-touching push **cuts a release**. R-h ruled pushes
-      are the agent's once gates are green, but it was ruled when a push no longer released. **Ask.**
-      Then `drift-audit.py --master master` — ⚠️ it audits `origin/master`, so push first.
+- [x] **8.1a.D Pushed and released (owner-approved).** `mc/1.21.4` → `origin` at `88d472a44`.
+      ⚠️ **The release itself is UNVERIFIED** — `gh` is not authenticated here and the `github` MCP
+      has never connected, so only the push is confirmed. Check the Actions tab.
+      `drift-audit --master master`: **`mc/1.21.4` is 0 propagated / 0 waived / 0 MISSING.**
+
+- [ ] **8.1a.E 🔴 OWNER RULING NEEDED — one pre-existing drift, and it is R8's exact shape.**
+      `f73031ed9` *(refactor(platform): write `getEntityWorld()` …)* is **MISSING on `mc/1.21.5`,
+      `mc/1.21.8` and `mc/1.21.10`**. It is a `master`-side idiom normalisation — a `(ServerWorld)`
+      cast at 3 sites — whose payoff is *future* band cuts, and **all three bands already compile
+      green with their own resolution**: `getServerWorld()` on `1.21.5`, `getWorld()` on `1.21.8`,
+      bare `getEntityWorld()` on `1.21.10`. A literal cherry-pick therefore conflicts on two of the
+      three and is a no-op on the third.
+      ⚠️ The standing rule says `Backport-not-needed:` **lives in the commit that made the decision
+      and cannot be applied retroactively** — and amending a *pushed* `master` commit is a
+      shared-history rewrite, which is an absolute stop. So the options are: (a) land a
+      band-appropriate equivalent on each band carrying `Backport-of: f73031ed9`, (b) relax the
+      retroactive-opt-out rule for this case and record why, or (c) teach `drift-audit.py` a
+      waiver file. **Not an agent call — a silent skip is precisely what R8 exists to prevent.**
+
 
 ### 8.4 — 🔴 BLOCKER: `config-id-audit.py` cannot audit below `1.21.4`
 
