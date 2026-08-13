@@ -169,6 +169,6 @@ Separately, **any skill not named in the tables above has no super ability at al
 
 > **Correction (GitHub #7).** This page used to say Spears' super ability "is not coming" because it depended on a custom item and a `spear` damage type that Minecraft didn't have. That was wrong, and the same belief had been written into the combat code, where it kept the entire Spears skill from paying anything. All seven spears (`minecraft:wooden_spear` … `minecraft:netherite_spear`), the `minecraft:spears` item tag and the `minecraft:spear` damage type are vanilla **from Minecraft 1.21.11**. Spears is a working skill there — see [Skills](Skills#spears).
 >
-> ⚠️ On the older bands (1.21.5 through 1.21.10) spear items do not exist, so **the Spears skill is switched off entirely** rather than merely lacking a super ability. See [Installation → Supported versions](Installation#supported-versions).
+> ⚠️ Below Minecraft 1.21.11 spear items do not exist, so **the Spears skill is switched off entirely** rather than merely lacking a super ability. See [Installation → Supported versions](Installation#supported-versions).
 >
 > 🔑 The lesson that outlived the bug: the original claim was a fact about *one* Minecraft version, written down as the *reason* for absent code and then never re-checked. It is now decided by asking the item registry at startup, which cannot go stale.

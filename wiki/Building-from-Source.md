@@ -98,12 +98,13 @@ Each supported Minecraft version band is its own branch. `master` **is** the new
 | `mc/1.21.10` | 1.21.9 – 1.21.10 |
 | `mc/1.21.8` | 1.21.6 – 1.21.8 |
 | `mc/1.21.5` | 1.21.5 |
+| `mc/1.21.4` | 1.21.4 |
 
 A branch pins its own `minecraft_version` and `yarn_mappings` in `gradle.properties`, and its own band range in `fabric.mod.json`. Checking one out and running `./gradlew build` produces that band's jar with no further configuration — there is no preprocessor and no version switch to set.
 
 **Fixes land on `master` first, always**, then propagate to the band branches. Each propagation commit carries a `Backport-of: <sha>` trailer naming the `master` commit it came from, which makes `git log --grep='Backport-of: <sha>'` a mechanical answer to *"did this fix reach every band?"*. A `master` commit that deliberately must not propagate says so in the commit instead. This matters more than it looks: almost every bug this project gets is version-agnostic logic, so a fix that lands on one band and is forgotten on another produces no error anywhere — the bug just quietly comes back for that band's players.
 
-Releases are published per band and tagged `mc<minecraft version>-v<mod version>-build.<n>`, so each Minecraft line keeps its own latest build.
+Releases are published per band and tagged `mc<minecraft version>-v<mod version>`, so each Minecraft line keeps its own latest build. The tag and the jar name deliberately differ — the jar is what a player reads (`mcmmo-<version>+mc1.21.6-1.21.8.jar`), while the tag's `mc<version>-v` prefix is what the release automation matches on to find and retire that line's previous release.
 
 ---
 

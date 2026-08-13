@@ -21,8 +21,9 @@ Both mods are versioned per Minecraft release, so the pair you want depends on w
 | **1.21.9 – 1.21.10** | `16.0.1` | `20.0.149` |
 | **1.21.6 – 1.21.8** | `15.0.2` | `19.0.147` |
 | **1.21.5** | `14.0.2` | `18.0.145` |
+| **1.21.4** | `13.0.4` | `17.0.144` |
 
-These are the versions each mcMMO band is built and tested against. Mod Menu's own release lines happen to draw their boundaries in the same places — 14.x advertises 1.21.5 and 15.x starts at 1.21.6 — which is the band split arrived at independently of mcMMO's.
+These are the versions each mcMMO band is built and tested against. Mod Menu's own release lines happen to draw their boundaries in the same places — 13.x advertises 1.21.4, 14.x advertises 1.21.5 and 15.x starts at 1.21.6 — which is the band split arrived at independently of mcMMO's.
 
 ### What happens with only one of them
 
