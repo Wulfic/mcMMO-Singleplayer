@@ -309,10 +309,21 @@ branches. So the CI half of this work structurally **cannot** obey "fixes land o
 there is no file on `master` to fix. This is an R-g consequence, not a shortcut.
 
 - [ ] **10.4a** On each of the four bands, edit `.github/workflows/release.yml`: drop
-      `-build.${GITHUB_RUN_NUMBER}` from the computed version, retag as `v<version>+mc<label>`,
-      and fix the hard-coded asset paths in the *Publish release* step (`build/libs/mcmmo-${…}.jar`)
-      — **those paths break the moment the jar is renamed**, and the step `exit 1`s on a missing
-      asset, so this is the one change that fails loudly rather than silently.
+      `-build.${GITHUB_RUN_NUMBER}` from the computed version, and fix the hard-coded asset paths in
+      the *Publish release* step (`build/libs/mcmmo-${…}.jar`) — **those paths break the moment the
+      jar is renamed**, and the step `exit 1`s on a missing asset, so this is the one change that
+      fails loudly rather than silently.
+
+      ✅ **RULED: the tag keeps its `mc<VER>-v` prefix** and only loses the `-build.<N>` suffix —
+      `mc1.21.4-v2.2.050`, not `v2.2.050+mc1.21.4`. Tempting to make the tag match the jar name, but
+      the prefix is load-bearing twice over and matching the filename buys nothing a git ref needs:
+        - the *"delete previous release on this Minecraft line"* sweep matches `mc<VER>-v*`. Keeping
+          the prefix means it still matches the four existing `mc1.21.*-v2.2.050-build.*` releases, so
+          they are reaped automatically on the next release. **This retires 10.6.2 entirely** — a new
+          tag shape would have orphaned them and left manual cleanup;
+        - **R10** (no two branches on one `minecraft_version`) is detected through that same prefix.
+      So the jar name and the tag deliberately differ. The jar is what a player reads; the tag is what
+      the release automation keys on.
 - [ ] **10.4b** State the exception in each commit body (no `master` parent exists, and why).
       ⚠️ `drift-audit.py` walks **`master`** commits looking for `Backport-of:` trailers, so a
       band-only commit is **invisible** to it — no false alarm, and no protection either. Four
@@ -344,16 +355,18 @@ land there alone.
 | 10.4 | `release.yml` × 4 bands | **a release run could tag then fail to find its asset** | revert the file; the workflow already deletes its own tag on build/publish failure |
 
 ⚠️ **10.4 is the only step that can touch a published artifact.** The `--cleanup-tag` sweep deletes
-releases by `mc<VER>-v*` prefix; changing the tag shape means the new prefix **no longer matches the
-old releases**, so the four existing `mc1.21.*-v2.2.050-build.*` releases will stop being reaped and
-must be dealt with by hand. Resolve before 10.4a — do not discover it mid-release.
+releases by `mc<VER>-v*` prefix. ✅ **Resolved by keeping that prefix** (see 10.4a): the old
+`mc1.21.*-v2.2.050-build.*` releases stay matched and get reaped on the next release, so there is no
+orphaned-release cleanup. Had the tag been reshaped to `v<version>+mc<label>`, the sweep would have
+stopped matching them silently — the release would have looked fine and the stale one would have
+stayed up.
 
 ### 10.6 — open questions for the owner
 
 1. **`2.2.050` vs `2.2.50`** (defect 3). Keep upstream's padding and accept that ModMenu disagrees
    with the filename, or normalise to `2.2.50` and have one number everywhere?
-2. **Old releases** (10.5). Leave the four `…-build.*` releases in place, or retire them once each
-   band has published under the new name?
+2. ~~**Old releases.**~~ ✅ **Retired by the 10.4a tag ruling** — the prefix is unchanged, so the
+   existing `…-build.*` releases are reaped automatically. No manual cleanup.
 3. **`master` publishes nothing.** Under R-g `master` has no workflow, so the **newest** band
    (`1.21.11`) has no release automation — its last tag, `mc1.21.11-v2.2.050-build.26`, predates
    R-g. Every older band still auto-releases. Out of scope here; flagged because it defeats the
