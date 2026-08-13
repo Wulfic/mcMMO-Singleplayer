@@ -121,11 +121,16 @@ public final class PetFollowTeleport {
      * @return how many pets were moved, for the tests to assert on
      */
     static int bringPetsFrom(@NotNull ServerPlayerEntity player, @NotNull Vec3d from, double radius) {
-        // ⚠️ The cast is load-bearing on older bands — do NOT "simplify" it away. ServerPlayerEntity
-        // only gained a covariant ServerWorld override of getEntityWorld() in 1.21.11; below that it
-        // inherits Entity's World-returning form and the bare assignment does not compile. Writing
-        // the cast keeps this one expression correct on every band, so the band branches carry no
-        // diff here at all. It is a no-op wherever the covariant override exists.
+        // ⚠️ The cast is load-bearing on the older bands — do NOT "simplify" it away.
+        // ServerPlayerEntity's covariant ServerWorld override of getEntityWorld() was added in
+        // 1.21.9. On 1.21 – 1.21.5 only Entity's World-returning form exists, so the bare
+        // assignment does not compile there; the cast is a no-op from 1.21.9 up. Read off the
+        // merged jars with javap, checking Entity as well as ServerPlayerEntity because javap
+        // never lists inherited members.
+        // ⚠️ This is NOT one expression for every band. 1.21.6 – 1.21.8 has no
+        // Entity#getEntityWorld() at all — it spells the accessor getWorld() — so that band cannot
+        // take this line and carries its own. Every other band can, which is why the cast is
+        // written here instead of being rediscovered at each cut.
         final ServerWorld world = (ServerWorld) player.getEntityWorld();
         if (world == null) {
             return 0;
@@ -179,7 +184,7 @@ public final class PetFollowTeleport {
         }
 
         final Vec3d destination = player.getPos();
-        // Cast load-bearing on older bands — see bringPetsFrom above.
+        // Cast load-bearing below 1.21.9, and not usable on 1.21.6 – 1.21.8 — see bringPetsFrom.
         final boolean placed = pet.teleport((ServerWorld) player.getEntityWorld(), destination.x, destination.y,
                 destination.z, EnumSet.noneOf(PositionFlag.class), pet.getYaw(), pet.getPitch(),
                 false);
