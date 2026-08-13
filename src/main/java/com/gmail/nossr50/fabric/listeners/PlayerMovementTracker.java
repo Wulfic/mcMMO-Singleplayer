@@ -221,6 +221,10 @@ public final class PlayerMovementTracker {
         final UUID uuid = player.getUuid();
         final Vec3d current = player.getPos();
         final Vec3d previous = LAST_POSITIONS.put(uuid, current);
+        // ⚠️ BAND 1.21.6 – 1.21.8: getWorld(), where master writes
+        // `(ServerWorld) player.getEntityWorld()`. Entity#getEntityWorld() does not exist on this
+        // band — it is present at 1.21.5 and again at 1.21.9, but not here — so master's expression
+        // cannot be taken. See PetFollowTeleport#bringPetsFrom for the measured ladder.
         final ServerWorld world = player.getWorld();
         final RegistryKey<World> previousWorld =
                 LAST_WORLDS.put(uuid, world == null ? null : world.getRegistryKey());

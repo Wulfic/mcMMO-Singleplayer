@@ -121,6 +121,17 @@ public final class PetFollowTeleport {
      * @return how many pets were moved, for the tests to assert on
      */
     static int bringPetsFrom(@NotNull ServerPlayerEntity player, @NotNull Vec3d from, double radius) {
+        // ⚠️ BAND 1.21.6 – 1.21.8: this is the one band that CANNOT take master's expression here,
+        // and it is deliberate rather than an oversight. master writes
+        // `(ServerWorld) player.getEntityWorld()`, which compiles on every other band —
+        // Entity#getEntityWorld() exists from 1.21 through 1.21.5 and again from 1.21.9, and
+        // ServerPlayerEntity gained a covariant ServerWorld override of it at 1.21.9. On THIS band
+        // Entity#getEntityWorld() does not exist at all; getWorld() is the accessor, and
+        // ServerPlayerEntity overrides it covariantly, so no cast is needed either.
+        // Measured with scripts/javap-mc.sh across all 12 cached merged jars, reading Entity as
+        // well as ServerPlayerEntity because javap never lists inherited members. The availability
+        // is NOT monotonic — present at 1.21.5, gone here, back at 1.21.9 — so do not infer it from
+        // a neighbouring band, and do not "align this with master": it will not compile.
         final ServerWorld world = player.getWorld();
         if (world == null) {
             return 0;
@@ -174,6 +185,8 @@ public final class PetFollowTeleport {
         }
 
         final Vec3d destination = player.getPos();
+        // getWorld(), not master's getEntityWorld() — this band has no such method. See
+        // bringPetsFrom above for the measured version ladder.
         final boolean placed = pet.teleport(player.getWorld(), destination.x, destination.y,
                 destination.z, EnumSet.noneOf(PositionFlag.class), pet.getYaw(), pet.getPitch(),
                 false);
