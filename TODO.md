@@ -232,6 +232,150 @@ ship list is **7** (`1.21.5` – `1.21.11`); `26.x` follows as its own project.
 
 ---
 
+## Phase 10 — jar naming and release versioning (owner-requested 2026-08-13)
+
+**The ask:** the uploaded jar should name the Minecraft versions it supports, and the mod version
+should mean something. Target host is **CurseForge**, which attaches **one file to many game
+versions** — so this is a *labelling* change, not a build-matrix change. Ruled with the owner:
+one jar per band, range-named, `+mc<lo>-<hi>`, and the run-number suffix **dropped**.
+
+### 10.0 — the three defects, named separately
+
+They are not one problem and they do not have one fix:
+
+1. **The jar filename carries no Minecraft version at all.** `mcmmo-2.2.050-build.28.jar`. The MC
+   version exists only in the git tag and inside `fabric.mod.json`. This is the manual-rename tax.
+2. **`build.<N>` is `GITHUB_RUN_NUMBER`, which is repo-global, not per-branch.** The five branches
+   sit at `build.28` / `.27` / `.24` / `.25` / `.26` for **identical mod code**. Five numbers that
+   read like five versions and are not comparable in any direction. This is the "no coherent
+   versioning" complaint, and it is the load-bearing one.
+3. **`2.2.050` is not the version the mod reports.** Fabric's semver parser normalises the padded
+   patch — `Version.parse("2.2.050").getFriendlyString()` → **`2.2.50`** (measured against
+   `fabric-loader-0.19.3`, 2026-08-13). So the filename would say `2.2.050+mc1.21.4` while ModMenu
+   says `2.2.50+mc1.21.4`. Already true today (`2.2.050-build.28` displays as `2.2.50-build.28`).
+   ⚠️ **Left as-is pending an owner ruling** — `2.2.050` mirrors upstream mcMMO's padded scheme, and
+   silently re-identifying the mod is not in scope for a naming task. See 10.6.
+
+### 10.1 — the scheme
+
+| Band | `supported_minecraft_versions` | Jar |
+|---|---|---|
+| `master` | `1.21.11` | `mcmmo-2.2.050+mc1.21.11.jar` |
+| `mc/1.21.10` | `1.21.9,1.21.10` | `mcmmo-2.2.050+mc1.21.9-1.21.10.jar` |
+| `mc/1.21.8` | `1.21.6,1.21.7,1.21.8` | `mcmmo-2.2.050+mc1.21.6-1.21.8.jar` |
+| `mc/1.21.5` | `1.21.5` | `mcmmo-2.2.050+mc1.21.5.jar` |
+| `mc/1.21.4` | `1.21.4` | `mcmmo-2.2.050+mc1.21.4.jar` |
+
+Single-version band → bare `+mc<ver>`. Multi-version band → `+mc<lo>-<hi>`. Local dev builds keep
+`-SNAPSHOT`, which lands *before* the `+`: `2.2.050-SNAPSHOT+mc1.21.4` (correct semver ordering —
+pre-release, then build metadata).
+
+✅ **All five strings verified loader-parseable** against `fabric-loader-0.19.3` before this plan was
+written, including the range and `-SNAPSHOT` forms. Not assumed — run and read.
+
+### 10.2 — `master` first (gradle side)
+
+- [ ] **10.2a** Add `supported_minecraft_versions=<csv>` to `gradle.properties`, next to
+      `minecraft_version`, with a comment saying it is the **band's** coverage and that
+      `fabric.mod.json`'s `depends.minecraft` is the other half of the same fact.
+- [ ] **10.2b** `build.gradle`: derive the `+mc…` label from that property and append it to
+      `version`. ⚠️ Resolve at **configuration** time — `processResources` already carries the
+      configuration-cache scar (dereferencing `project` in an execution-time closure is rejected);
+      the same rule binds here.
+- [ ] **10.2c** New guard `src/test/java/com/gmail/nossr50/guards/BandVersionLabelTest.java`,
+      following `MixinAllowCoverageTest`'s shape (heavy *why* javadoc + explicit converse checks):
+      - every version in the property **satisfies** `depends.minecraft`, using Fabric's own
+        `VersionPredicate` engine — not a regex over the range string;
+      - the list is sorted, contiguous-as-declared, and its endpoints match the predicate's bounds,
+        so a range **wider** than the list is caught too (the direction a one-way check misses);
+      - the computed label round-trips through `Version.parse` — the check run by hand for 10.1,
+        made permanent so a future band cannot ship an unparseable version;
+      - **converse:** a deliberately-wrong list must make the detector fire. A guard that has never
+        failed is not known to work.
+      ⚠️ Must **not** live in `com.gmail.nossr50.fabric.mixin` — that package is claimed by the Mixin
+      transformer under Knot and a test there fails to *load*, not to assert.
+- [ ] **10.2d** README: the band table gains the jar name per band. Caveat-expiry pass — grep the
+      **symptom** (`build.`, `mcmmo-2.2.050`), not the files edited.
+
+### 10.3 — the four bands (gradle side)
+
+Cherry-pick 10.2 onto `mc/1.21.10`, `mc/1.21.8`, `mc/1.21.5`, `mc/1.21.4`, each with a
+`Backport-of: <master sha>` trailer, each with its **own** `supported_minecraft_versions` — the value
+is per-band and must not be copied. Same trap as the generated MC-surface manifest: the *generator*
+back-ports, the *value* is re-derived per band.
+
+### 10.4 — 🔴 `release.yml` cannot land on `master` first
+
+**`master` has no `.github/` at all** (ruling R-g). `release.yml` exists **only** on the four band
+branches. So the CI half of this work structurally **cannot** obey "fixes land on `master` first" —
+there is no file on `master` to fix. This is an R-g consequence, not a shortcut.
+
+- [ ] **10.4a** On each of the four bands, edit `.github/workflows/release.yml`: drop
+      `-build.${GITHUB_RUN_NUMBER}` from the computed version, retag as `v<version>+mc<label>`,
+      and fix the hard-coded asset paths in the *Publish release* step (`build/libs/mcmmo-${…}.jar`)
+      — **those paths break the moment the jar is renamed**, and the step `exit 1`s on a missing
+      asset, so this is the one change that fails loudly rather than silently.
+- [ ] **10.4b** State the exception in each commit body (no `master` parent exists, and why).
+      ⚠️ `drift-audit.py` walks **`master`** commits looking for `Backport-of:` trailers, so a
+      band-only commit is **invisible** to it — no false alarm, and no protection either. Four
+      hand-edits with nothing checking they agree.
+- [ ] **10.4c** Decide what replaces per-push uniqueness. Dropping the run number means two pushes
+      at the same `mod_version` produce the **same** tag. The existing *"delete previous release on
+      this Minecraft line"* sweep already keeps exactly one release per line, and `git tag -f`
+      already force-moves the tag, so replacement is the current behaviour — but the commit sha in
+      the release notes becomes the **only** way to tell two builds of `2.2.050` apart.
+
+### 10.4′ — 🔴 ORDERING: on a band, 10.3 and 10.4 are ONE commit
+
+Landing the gradle rename on a band **without** the `release.yml` fix breaks that band's next
+release. `release.yml` builds with `-Pmod_version=…-build.${RUN}` and then looks for the literal path
+`build/libs/mcmmo-${RELEASE_VERSION}.jar`. After the rename the jar is
+`mcmmo-…-build.${RUN}+mc1.21.4.jar`, the path misses, and the *Publish release* step `exit 1`s —
+which trips the cleanup step and deletes the tag it had already pushed.
+
+That failure is **loud and self-cleaning**, not silent, and it is the reason 10.4a is worth doing in
+the same commit rather than trusting a follow-up. `master` is exempt: it has no workflow, so 10.2 can
+land there alone.
+
+### 10.5 — blast radius and rollback
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| 10.2 | `gradle.properties`, `build.gradle`, new test, `README.md` | nothing — jar name only | `git revert`; `master` is pushed and clean at `ec9b497f7` |
+| 10.3 | same four files × 4 bands | nothing | per-band `git revert` |
+| 10.4 | `release.yml` × 4 bands | **a release run could tag then fail to find its asset** | revert the file; the workflow already deletes its own tag on build/publish failure |
+
+⚠️ **10.4 is the only step that can touch a published artifact.** The `--cleanup-tag` sweep deletes
+releases by `mc<VER>-v*` prefix; changing the tag shape means the new prefix **no longer matches the
+old releases**, so the four existing `mc1.21.*-v2.2.050-build.*` releases will stop being reaped and
+must be dealt with by hand. Resolve before 10.4a — do not discover it mid-release.
+
+### 10.6 — open questions for the owner
+
+1. **`2.2.050` vs `2.2.50`** (defect 3). Keep upstream's padding and accept that ModMenu disagrees
+   with the filename, or normalise to `2.2.50` and have one number everywhere?
+2. **Old releases** (10.5). Leave the four `…-build.*` releases in place, or retire them once each
+   band has published under the new name?
+3. **`master` publishes nothing.** Under R-g `master` has no workflow, so the **newest** band
+   (`1.21.11`) has no release automation — its last tag, `mc1.21.11-v2.2.050-build.26`, predates
+   R-g. Every older band still auto-releases. Out of scope here; flagged because it defeats the
+   point of coherent upload naming for the one band players are most likely to want.
+
+### What I am NOT doing
+
+- **No per-version duplicate jars.** Ruled out with the owner: CurseForge attaches one file to many
+  game versions, so byte-identical copies would be dead weight. The band range in the filename is
+  the whole fix.
+- **Not deriving `depends.minecraft` from the new property.** Tempting single-source-of-truth, but it
+  needs `fabric.mod.json` templating through `processResources` and would change what the loader
+  reads. The 10.2c guard makes the two representations *provably* agree, which buys the same safety
+  without touching mod metadata.
+- **Not restoring `.github/` on `master`** (that is R-g, and reopening it is an owner ruling).
+- **Not touching `mod_version` itself**, pending 10.6.1.
+- **No Modrinth/CurseForge publish automation.** Not asked for.
+
+---
+
 ## Strategy decision (OPEN — gate at Phase 3)
 
 ### Recommendation: single tree + Stonecutter. Not branch-per-version.

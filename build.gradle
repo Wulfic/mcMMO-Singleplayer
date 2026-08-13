@@ -3,7 +3,50 @@ plugins {
     id 'java'
 }
 
-version = project.mod_version
+// -----------------------------------------------------------------------------
+// Band label: what Minecraft versions this jar RUNS ON, stamped into its name.
+//
+// WHY THIS EXISTS. The jar used to be `mcmmo-2.2.050-build.28.jar` — no Minecraft version anywhere
+// in the filename. The MC version lived only in the git tag and inside fabric.mod.json, so every
+// upload needed a hand-rename to say what it was for, and the branches' jars differed only by a
+// `build.<N>` that is GITHUB_RUN_NUMBER: repo-global rather than per-branch, so identical mod code got
+// a different number on every branch. Numbers that look comparable and are not.
+//
+// A band covers a RANGE of versions with ONE jar (ruling R-a), so the label is a range, not a point:
+//     1 version   -> +mc1.21.5
+//     N versions  -> +mc1.21.6-1.21.8      (endpoints, both written out in full)
+//
+// Ordering note: this is SemVer build metadata, so it sorts after any `-SNAPSHOT` pre-release tag —
+// `2.2.050-SNAPSHOT+mc1.21.6-1.21.8` is correct, not accidental. Every form the five bands can
+// produce was checked against fabric-loader 0.19.3's own parser before this landed, and
+// BandVersionLabelTest keeps checking it.
+//
+// Resolved HERE, at configuration time, and captured into a local. Reading `project` from inside a
+// task's execution-time closure is what the configuration cache rejects — see the same scar on
+// processResources below.
+//
+// findProperty, not project.<name>: a bare dereference of a missing property throws
+// MissingPropertyException naming only the property, which is a confusing failure on a band branch
+// that took this logic in a cherry-pick without gradle.properties. Fail with the fix instead.
+def declaredBandVersions = project.findProperty('supported_minecraft_versions')
+if (declaredBandVersions == null) {
+    throw new GradleException(
+            'gradle.properties is missing supported_minecraft_versions. Every branch must declare the '
+                    + "Minecraft versions ITS OWN band's jar runs on, ascending and comma-separated "
+                    + '(e.g. supported_minecraft_versions=1.21.6,1.21.7,1.21.8). The value is per-band '
+                    + 'and must not be copied from another branch.')
+}
+def bandVersions = declaredBandVersions.toString().split(',')*.trim().findAll { it }
+if (bandVersions.isEmpty()) {
+    throw new GradleException(
+            'supported_minecraft_versions is empty in gradle.properties. It must list every Minecraft '
+                    + "version this band's jar runs on, ascending and comma-separated.")
+}
+def bandLabel = bandVersions.size() == 1
+        ? "mc${bandVersions.first()}"
+        : "mc${bandVersions.first()}-${bandVersions.last()}"
+
+version = "${project.mod_version}+${bandLabel}"
 group = project.maven_group
 
 base {
@@ -109,6 +152,16 @@ tasks.withType(JavaCompile).configureEach {
 
 test {
     useJUnitPlatform()
+
+    // Hand BandVersionLabelTest the version this build ACTUALLY computed, so the guard cross-checks
+    // build.gradle's label logic instead of reimplementing it — a reimplementation would keep passing
+    // if the real rule above broke. Captured into locals: reading `project` from a task's
+    // execution-time closure is what the configuration cache rejects.
+    def resolvedVersion = project.version.toString()
+    def resolvedBandVersions = bandVersions.join(',')
+    systemProperty 'mcmmo.build.version', resolvedVersion
+    systemProperty 'mcmmo.build.bandVersions', resolvedBandVersions
+    inputs.property 'mcmmo.build.version', resolvedVersion
 
     // The fabric-loader-junit tests call McTestRegistries.bootstrap() -> Bootstrap.initialize(),
     // which builds the whole vanilla registry set. Measured 2026-08-05: that @BeforeAll costs ~53s
