@@ -63,7 +63,8 @@ price is the difference between a **signature change** and an **absence**: `getE
 
 Carried forward and still binding: **R-a** branch-per-band · **R-c/P2-a…e** full platform seal ·
 **R-d** playtest stays on master builds · **R-e** `26.x` is its own mini-project · **R-f** master =
-newest band · **R-g** `.github/` is master-only · **R-h** pushes are mine once gates are green ·
+newest band · **R-g** (as narrowed by **R-r** §10.8 — `.github/` is back on `master`, holding those
+three files and nothing else) · **R-h** pushes are mine once gates are green ·
 **R-i/R-j/R-k** docs are byte-identical on every branch, live wiki is never pushed.
 
 | # | Question | Ruling |
@@ -144,11 +145,15 @@ of `1.21.3`'s, so the second cut should be fast.
       (`1.21` → `build.9`, `1.21.1` → `build.3`, `1.21.2` → `build.1`, `1.21.3` → `build.2`,
       `1.21.4` → `build.8`).
 - [ ] **8.x.3** `fabric.mod.json` `depends.minecraft` = the band's **range**, not its newest version.
-- [ ] **8.x.4** ⚠️ **Decide `.github/` deliberately.** A branch cut from `master` today inherits
-      **no** `.github/`, because R-g removed it there — so it silently never releases. `mc/1.21.5`
-      hit exactly this by accident of cut timing. Either force-add the three files its siblings track
-      (`.github/` is in `.gitignore`, so `git add -f`; un-ignoring instead sweeps in 12 files no
-      branch tracks) or accept manual release, but make it a choice.
+- [ ] **8.x.4** ✅ **No longer a trap — but verify it, don't assume it.** A branch cut from `master`
+      now **inherits** `.github/FUNDING.yml`, `workflows/release.yml` and `workflows/drift-audit.yml`,
+      because **R-r** restored them there and tracked files survive a branch cut regardless of
+      `.gitignore`. This is the reverse of the hazard that caught `mc/1.21.5`, which was cut after
+      R-g had emptied `master` and so silently never released.
+      ⚠️ Still run `git ls-tree -r --name-only HEAD -- .github` on the fresh branch and expect
+      **exactly those three paths**. `.github/` remains in `.gitignore`, so anything absent must be
+      re-added with `git add -f` **by explicit path** — never `git add -f .github`, which sweeps in
+      the 12 untracked Copilot files no branch tracks.
 - [ ] **8.x.5** Compile. Work errors against `BAND_TABLE.md`. **Fix inside `fabric/` and `platform/`
       only** — `PlatformBoundaryGuardTest` must stay green. Phase 2's blast-radius cap has now held
       on two real MC API breaks.
@@ -179,6 +184,12 @@ of `1.21.3`'s, so the second cut should be fast.
 - [ ] **8.x.7** Run the full ship gate (below). Then push.
 - [ ] **8.x.8** Back-port anything that belongs on `master` **to `master` first**, then to every
       other band with `Backport-of:` trailers.
+- [ ] **8.x.9** Raise the weekly drift audit's floor: `--require-bands` in
+      `.github/workflows/drift-audit.yml` goes to the **new** band count, on `master` first and then
+      on every band. *(This was old 4′.4, struck by R-g and un-struck by **R-r**.)* The floor is what
+      makes *"found no bands"* fail instead of reading as a clean audit. Leaving it stale is
+      under-strict rather than noisy — the audit still passes — which is exactly why nothing will
+      remind you to do it.
 
 ### The bands
 
@@ -475,11 +486,16 @@ Cherry-pick 10.2 onto `mc/1.21.10`, `mc/1.21.8`, `mc/1.21.5`, `mc/1.21.4`, each 
 is per-band and must not be copied. Same trap as the generated MC-surface manifest: the *generator*
 back-ports, the *value* is re-derived per band.
 
-### 10.4 — 🔴 `release.yml` cannot land on `master` first
+### 10.4 — 🔴 `release.yml` could not land on `master` first *(true when done; **fixed** by R-r)*
 
-**`master` has no `.github/` at all** (ruling R-g). `release.yml` exists **only** on the four band
-branches. So the CI half of this work structurally **cannot** obey "fixes land on `master` first" —
-there is no file on `master` to fix. This is an R-g consequence, not a shortcut.
+**At the time:** `master` had no `.github/` at all (ruling R-g), so `release.yml` existed **only** on
+the four band branches, and the CI half of this work structurally could not obey "fixes land on
+`master` first" — there was no file on `master` to fix. That was an R-g consequence, not a shortcut.
+
+✅ **No longer true.** **R-r** (§10.8) restored the file on `master`, so the next `release.yml` change
+lands there first like everything else, and 10.4b's "four hand-edits with nothing checking they
+agree" stops being the only option. The four band edits below stay as the historical record of how
+this one was done.
 
 - [x] **10.4a** On each of the four bands, edit `.github/workflows/release.yml`: drop
       `-build.${GITHUB_RUN_NUMBER}` from the computed version, and fix the hard-coded asset paths in
@@ -516,8 +532,9 @@ release. `release.yml` builds with `-Pmod_version=…-build.${RUN}` and then loo
 which trips the cleanup step and deletes the tag it had already pushed.
 
 That failure is **loud and self-cleaning**, not silent, and it is the reason 10.4a is worth doing in
-the same commit rather than trusting a follow-up. `master` is exempt: it has no workflow, so 10.2 can
-land there alone.
+the same commit rather than trusting a follow-up. `master` was exempt at the time — it had no
+workflow, so 10.2 landed there alone. ⚠️ **That exemption is gone under R-r:** `master` now carries
+`release.yml` too, so this ordering rule applies to all five branches from here on.
 
 ### 10.5 — blast radius and rollback
 
@@ -541,10 +558,10 @@ stayed up.
    introduced here. Defect 3 in §10.0 stands as documented behaviour, not as an open item.
 2. ~~**Old releases.**~~ ✅ **Retired by the 10.4a tag ruling** — the prefix is unchanged, so the
    existing `…-build.*` releases are reaped automatically. No manual cleanup.
-3. **`master` publishes nothing.** Under R-g `master` has no workflow, so the **newest** band
-   (`1.21.11`) has no release automation — its last tag, `mc1.21.11-v2.2.050-build.26`, predates
-   R-g. Every older band still auto-releases. Out of scope here; flagged because it defeats the
-   point of coherent upload naming for the one band players are most likely to want.
+3. ~~**`master` publishes nothing.**~~ ✅ **CLOSED by R-r (owner, 2026-08-13), §10.8.** It was the
+   real one: the newest band — the one players are most likely to want — was the only band with no
+   release automation, which defeated the point of coherent upload naming exactly where it is most
+   visible. `.github/` is restored on `master`; the workflow needed no edit to serve it.
 
 ### 10.7 — 🔴 FOUND 2026-08-13: 10.2c shipped broken and blocked every release
 
@@ -599,12 +616,84 @@ and the guard looked solid on five branches. The gate that would have caught it 
       The 10.4a ruling is confirmed by observation, not argument: the tag kept its `mc<VER>-v` prefix,
       so the reaping sweep still matched the old `-build.*` releases and cleaned them up with no
       manual step.
-- [ ] **10.7g** 🔴 **`master`'s release is now the ONLY stale one** — `mc1.21.11-v2.2.050-build.26`,
+- [ ] **10.7g** 🔴 **`master`'s release is the ONLY stale one** — `mc1.21.11-v2.2.050-build.26`,
       still carrying the old un-labelled `mcmmo-2.2.050-build.26.jar`. Under R-g `master` has no
       workflow, so it did not re-release with its siblings and **the newest band is the one band whose
       download still has no Minecraft version in its name** — the exact complaint Phase 10 exists to
-      fix, now surviving only where it is most visible. This is 10.6.3 with a measured consequence;
-      it needs an owner ruling (restore a workflow on `master`, or publish that one jar by hand).
+      fix, now surviving only where it is most visible. ✅ **RULED by R-r — see §10.8.**
+
+### 10.8 — R-r: restore release automation on `master` (owner-ruled 2026-08-13)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-r** | 10.7g — how does `master` release? (2026-08-13) | ✅ **RULED (owner): restore `.github/` on `master`.** Force-add the same three files every band tracks. This **narrows R-g rather than reverting it**: R-g's finding was that `master` carried workflow files nothing used, and its accepted cost was that the newest band stopped releasing and R8 lost its automated leg. Both costs are now measured rather than predicted (§10.7, R11), and the owner priced them above the tidiness. R-g survives as *"`.github/` holds these three files and nothing else"*. |
+
+🔑 **`release.yml` needs ZERO edits to work on `master`.** It already lists `master` in
+`on.push.branches`, and its one-branch-per-MC-line check already has an explicit `master` case. The
+*Publish release* step **globs** `build/libs/mcmmo-*.jar` rather than predicting the name, so
+`mcmmo-2.2.050+mc1.21.11.jar` is discovered as-is. Restoring it verbatim is therefore not a
+shortcut — it is the correct diff, and it is provably zero against all four bands (all three files
+are byte-identical on every band: `release.yml` `e4e0976c3`, `drift-audit.yml` `9293ea921`,
+`FUNDING.yml` `78f498c09`).
+
+🔑🔑 **The bigger prize is `drift-audit.yml`, and it is why this is worth more than one jar rename.**
+GitHub runs `schedule` triggers **only from the default branch** (`origin/HEAD → origin/master`,
+verified). So the weekly audit sitting on all four band branches has **never fired since R-g** — it
+is not merely un-run, it is structurally unreachable there. Restoring the file on `master` is what
+actually revives **R8's third leg**, and it is the only leg that does not depend on somebody
+remembering.
+
+⚠️⚠️ **But restoring it verbatim would restore a guard that CANNOT FAIL.** The audit step passes
+`--require-bands ${{ github.event.inputs.require_bands || '0' }}`, and on a `schedule` event
+`github.event.inputs` is null — so the weekly run resolves to **`--require-bands 0`**, no floor at
+all. The file's own header says that floor is the only thing separating a broken audit from a clean
+one: a fetch that finds zero band branches exits 0, identical to success. Seventh vacuous-guard
+sighting in this project.
+
+- [x] **10.8a** ✅ `3b1ddff53`. Force-add the three files to `master` **by explicit path** — `.github/` stays in
+      `.gitignore` (un-ignoring sweeps in the 12 Copilot files no branch tracks).
+      ⚠️ `master`'s working copy already holds `.github/copilot-instructions.md` and
+      `.github/skills/**`. **Never `git add -f .github`** — that commits the whole Copilot tree,
+      which R-n forbids. One path per `add`, then read `git status` before committing.
+- [x] **10.8b** ✅ `c3351998a` on `master`. Fix the floor: the scheduled run gets **`--require-bands 4`**, the real band count.
+      Verified in **both** directions against the real repo before wiring it up — `4` → exit 0,
+      `5` → exit 2 *"expected at least 5 band branch(es), found 4"*. The count lives in exactly one
+      place (workflow-level `BAND_COUNT`) and the dispatch input deliberately has **no default**,
+      because a literal there would be a second copy of the number and the two would drift.
+      A stale floor is *under*-strict, never over-strict — cutting band #5 leaves `5 >= 4` passing,
+      so it degrades quietly and cannot false-alarm. That is also why it needs a recipe step
+      (**8.x.9** below) rather than trust. Lands on `master`, then back-ports to all four bands with
+      `Backport-of:` — the file is inert there, but R-i keeps the branches byte-identical and a
+      divergent copy is what the next cut would inherit.
+- [ ] **10.8c** Ship gate on `master`, **step 1 with CI's exact invocation** (10.7e). This is the
+      first `master` push since `a1266ad53` that will actually reach the release path, so the gate
+      that 10.7 proved necessary has to run before it, not after.
+- [ ] **10.8d** Push. ⚠️ **The push itself releases** — `.github/workflows/release.yml` is inside
+      `release.yml`'s own `paths:` filter, so adding the file triggers the workflow that publishes.
+      There is no separate "release" action to take and no way to land this quietly.
+- [ ] **10.8e** Verify from outside the repo: `git ls-remote --tags` shows `mc1.21.11-v2.2.050`, and
+      the Actions API shows the run green. Per R11 the *conclusion* is readable unauthenticated; the
+      log is not.
+- [x] **10.8f** ✅ Done. Caveat-expiry pass. Grep the **symptom** — `weekly`, `no workflow`, `R-g`,
+      `nothing runs on push` — not the files edited. Known live claims that go false: `AGENTS.md`
+      ("the weekly run is gone", "nothing runs on push"), TODO `8.x.4` (a new band now **inherits**
+      `.github/`, flipping the trap), `10.4`/`10.4′` ("`master` has no `.github/` at all"),
+      the ship-gate preamble ("R-g retired CI"), and risk rows **R8**, **R10**, **R11**.
+      ✅ `README.md` and `wiki/Building-from-Source.md` need **no** edit — both already say releases
+      are published per band, a claim that was quietly false for `master` and becomes true here.
+      *(`plans/completed/**` is an archive of what was decided then; it is not swept.)*
+
+#### 10.8 — blast radius
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| 10.8a–b | 3 new files on `master`, 1 edited × 4 bands | nothing locally | `git rm --cached` the three paths; bands `git revert` |
+| 10.8d | **a published GitHub release** | the `mc1.21.11-v2.2.050-build.26` release + tag are **reaped** by the sweep | the jar is rebuildable from that tag's commit; the sweep runs **only after a successful publish**, so a failed build leaves the old release standing and deletes only its own new tag |
+
+⚠️ **The one destructive edge is the reaping sweep**, and it is the intended effect: it deletes every
+`mc1.21.11-v*` release except the one just published, which is exactly the stale `-build.26` that
+10.7g exists to retire. Ordering is fail-safe — publish succeeds *first*, then reap. A red build
+never reaches the sweep.
 
 ### What I am NOT doing
 
@@ -615,7 +704,9 @@ and the guard looked solid on five branches. The gate that would have caught it 
   needs `fabric.mod.json` templating through `processResources` and would change what the loader
   reads. The 10.2c guard makes the two representations *provably* agree, which buys the same safety
   without touching mod metadata.
-- **Not restoring `.github/` on `master`** (that is R-g, and reopening it is an owner ruling).
+- ~~**Not restoring `.github/` on `master`**~~ — ✅ **superseded by R-r (owner, 2026-08-13), §10.8.**
+  It was correctly out of scope for a *naming* task; the owner then ruled it in once §10.7 and R11
+  measured what R-g's accepted cost actually was.
 - **Not touching `mod_version` itself**, pending 10.6.1.
 - **No Modrinth/CurseForge publish automation.** Not asked for.
 
@@ -623,7 +714,11 @@ and the guard looked solid on five branches. The gate that would have caught it 
 
 ## The ship gate — run per band, before every push
 
-Nothing enforces this list any more (R-g retired CI). **It is a person running seven commands.**
+**It is a person running seven commands, and that has not changed.** ⚠️ R-r put `release.yml` back on
+every branch including `master`, so a push now *builds and runs the suite* again — but that is gate
+**1 only**, it runs **after** the push rather than before it, and a red run reports to a tab nobody
+watches (**R11**). Six of the seven gates have no automation at all. Run the list first; the workflow
+is a backstop, never the check.
 
 1. `./gradlew --no-daemon --stacktrace build -Pmod_version=$(grep -E '^mod_version=' gradle.properties | cut -d= -f2 | sed 's/-SNAPSHOT$//')`
    exit 0 — suite green, and the **count should match `master`** (~1719). A lower count means
@@ -664,10 +759,10 @@ silently cannot probe itself.
 | R5 | Item-ID drift silently disables config rows | ✅ **CLOSED (2026-08-13, §8.4)** — `config-id-audit.py` covers all 12 versions off a committed registry manifest, plus two per-band tests (`ConfigItemIdResolutionTest` at runtime, `ConfigIdManifestTest` on the manifest). ⚠️ It stays closed only while the manifest is **cherry-picked, never regenerated per band** |
 | R6 | Component-API cliff needs reimplementation | 🔴 **NOW IN SCOPE under R-l.** Confined to band `1.21.1`; it is what R-m decides |
 | R7 | Live playtest disrupted | ✅ Phase 0 tag + instance backup |
-| **R8** | **A fix lands on `master` and is silently never back-ported** | 🔴 **REOPENED.** Closed on three legs; two were removed in one working tree by R-g. Detection is now *"somebody remembers to run the script"*. **Each new band multiplies this** — 5 bands today, 9 after Phase 9. The one open instance (`f73031ed9`) is closed by **R-q**, and the manual run did catch it — but only because someone ran it |
+| **R8** | **A fix lands on `master` and is silently never back-ported** | 🟡 **DOWNGRADED, not closed (R-r, 2026-08-13).** All three legs exist again: the convention, `drift-audit.py`, and the weekly run — restored to `master`, the only branch GitHub fires `schedule` from, and its band floor fixed from a vacuous `0` to a real `4`. ⚠️ **The unattended leg is weekly and reports to a tab nobody opens (R11)**, so between a commit and the next Monday detection is still *"somebody remembers"*. **Each new band multiplies this** — 5 bands today, 9 after Phase 9 — and the floor must be raised per cut (8.x.9) or it silently stops counting. The one open instance (`f73031ed9`) is closed by **R-q** |
 | **R9** | **`drift-audit.py` is blind to docs drift** | 🔴 **OPEN, and it has now produced a real one.** It classifies a `README.md`/`wiki/`-only commit as not-propagatable and ignores it — its own self-test asserts that deliberately. R-j made docs part of what every band ships, so a forgotten docs fix serves a wrong page to that band's players. **Instance (2026-08-13):** `mc/1.21.4` shipped and released, and for a whole session the README and six wiki pages still said *"Minecraft 1.21.4 and older are not supported"* — the band's own players were told their jar did not exist. Every drift audit in that window read clean. ⚠️ Note the interim check `git diff --name-only master <band> -- README.md wiki/` **would also have said clean**: the docs were byte-identical on all five branches and identically *wrong*. Cross-branch equality is not correctness, and nothing mechanical currently checks the docs against the branch list |
-| **R11** | **A band's release fails and nobody finds out** | 🔴 **OPEN, and it has already happened.** R-g removed `.github/` from `master`, so no workflow reports to the branch a person actually works on. Phase 10's guard defect (§10.7) failed **four** band releases on 2026-08-13 and was invisible for a day: local builds green, ship gate green, drift audit green, `git status` clean. It was found only by hand-querying the Actions API. **Nothing in this repo reports a red release.** The mitigations that exist are both manual: ship-gate step 1 now reproduces CI's invocation (§10.7e), and `curl -s "https://api.github.com/repos/Wulfic/mcMMO-Singleplayer/actions/runs?per_page=5"` after any push that touches `src/**`, `build.gradle` or `gradle.properties`. ⚠️ Reading the run's **log** needs admin auth (`403` unauthenticated); the *conclusion* does not |
-| **R10** | **Two branches resolving to the same `minecraft_version`** | **Dormant, not fixed.** The tag-reaping sweep that made it fatal was `release.yml`'s, gone from `master` under R-g — but the three bands still carry it. Keep the one-band-one-version rule |
+| **R11** | **A band's release fails and nobody finds out** | 🔴 **STILL OPEN — R-r did NOT close it.** It has already happened once: Phase 10's guard defect (§10.7) failed **four** band releases on 2026-08-13 and was invisible for a day with local builds green, ship gate green, drift audit green and `git status` clean. Found only by hand-querying the Actions API. ⚠️ **R-r restores who *can* release, not who *watches*.** `master` now has a workflow, so a red run at least appears on the branch a person works on — but **nothing pushes that anywhere**, and the failure mode was never "the run was on an obscure branch", it was "nobody looked". Both mitigations remain manual: ship-gate step 1 reproduces CI's invocation (§10.7e), and `curl -s "https://api.github.com/repos/Wulfic/mcMMO-Singleplayer/actions/runs?per_page=5"` after any push touching `src/**`, `build.gradle`, `gradle.properties` or `.github/workflows/release.yml`. ⚠️ Reading a run's **log** needs admin auth (`403` unauthenticated); the *conclusion* does not. **A real close needs a notification, not a workflow** |
+| **R10** | **Two branches resolving to the same `minecraft_version`** | 🔴 **LIVE AGAIN as of R-r (2026-08-13) — it was dormant only because `master` could not release.** The tag-reaping sweep is back on `master`, so every branch releases on push and two branches on one version means **each run deletes the other's release**. `release.yml` detects the collision and emits a `::warning::` — deliberately not a failure, so it can never take down a legitimate release, which also means **nothing stops it**. Keep the one-band-one-version rule; it is now load-bearing rather than tidy |
 
 ---
 

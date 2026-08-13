@@ -124,12 +124,23 @@ version-agnostic logic bugs.** A fix that lands on `master` and is forgotten on 
 no error anywhere — the bug simply comes back for that band's players, and the first report comes
 from a user, months later.
 
-🔴 **This section is now the ONLY written leg of that mitigation, and nothing enforces it.** Risk R8
-was closed on three legs: this convention, `scripts/drift-audit.py`, and a weekly CI run. Ruling
-**R-g** (2026-08-12) removed `.github/` from version control, so **the weekly run is gone** — and the
-rewrite that landed the same day had deleted this section too, which is why it is back. Detection is
-now *"somebody remembers to run the script"*, which is the exact condition that made R8 a risk. Run
-it by hand after every `master` commit that could need back-porting:
+🟡 **All three legs of that mitigation are back, but only one of them is unattended.** Risk R8 was
+closed on three legs: this convention, `scripts/drift-audit.py`, and a weekly CI run. Ruling **R-g**
+(2026-08-12) removed `.github/` from version control, killing the weekly leg — and the rewrite that
+landed the same day had deleted this section too, which is why it is back. Ruling **R-r**
+(2026-08-13) restored `.github/workflows/drift-audit.yml` on `master`, so the weekly run exists
+again.
+
+⚠️ **Do not read that as "R8 is handled".** Two things bound what the weekly run buys you:
+
+- **It only runs from the default branch.** GitHub fires `schedule` from `master` and nowhere else,
+  so the byte-identical copies on every `mc/**` branch are inert by construction. They are kept in
+  sync (R-i) so a freshly cut band inherits a correct file — not because they execute.
+- **It is weekly, and it reports to a tab nobody opens** (risk **R11**). Between your commit and the
+  next Monday, detection is still *"somebody remembers to run the script"* — the exact condition
+  that made R8 a risk.
+
+So keep running it by hand after every `master` commit that could need back-porting:
 
 ```
 python scripts/drift-audit.py --self-test && python scripts/drift-audit.py --master master
@@ -166,9 +177,12 @@ cannot probe itself. ⚠️ It also audits **`origin/master`**, so an unpushed `
 clean — push first, then audit.
 
 **Never resolve a band difference by changing `minecraft_version` on `master`.** Each branch pins its
-own, and **no two branches may resolve to the same `minecraft_version`.** That invariant used to be
-enforced by `release.yml`'s tag-reaping sweep; under R-g nothing runs on push, so the collision is
-**dormant, not fixed** — it returns the day any release automation does.
+own, and **no two branches may resolve to the same `minecraft_version`.** 🔴 **This is live again, not
+dormant.** The invariant is enforced by `release.yml`'s tag-reaping sweep, which R-g had removed from
+`master` and **R-r** (2026-08-13) restored — so every branch now releases on push again, and two
+branches on one `minecraft_version` means each release run **deletes the other's release**. The
+workflow detects the collision and warns; it deliberately does not fail, so it will not stop a
+legitimate release. Read the warning.
 
 **Never pin a comment to the build's Minecraft version.** A comment that asserts what version *this
 build is* (`// 1.21.11 always has Spears (pinned)`, `the port pins MC 1.21.11, which has both Spears
