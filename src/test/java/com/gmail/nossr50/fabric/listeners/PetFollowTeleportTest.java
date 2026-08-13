@@ -373,7 +373,7 @@ class PetFollowTeleportTest {
             final Predicate<Object> filter = invocation.getArgument(2, Predicate.class);
             return List.of(pets).stream().filter(filter).toList();
         });
-        lenient().when(owner.getServerWorld()).thenReturn(world);
+        lenient().when(owner.getEntityWorld()).thenReturn(world);
         return world;
     }
 }
