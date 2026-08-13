@@ -1,0 +1,292 @@
+# ---------------------------------------------------------------------------
+# Build & Release
+#
+# On every push that can affect the built jar, this workflow:
+#   1. Reads the version straight from gradle.properties (mod_version, minus the
+#      -SNAPSHOT suffix). NOTHING is appended to it.
+#
+#      ⚠️ This used to be <base>-build.<run#> from GITHUB_RUN_NUMBER. That number
+#      is repo-GLOBAL, not per-branch, so identical mod code shipped as build.28
+#      on one band and build.24 on another — five numbers that look like versions,
+#      sort against each other, and mean nothing. Releasing now requires BUMPING
+#      mod_version; re-running on the same version REPLACES that band's release
+#      instead of minting a new number. Nothing is ever committed back to the repo,
+#      so the workflow still cannot re-trigger itself.
+#   2. Creates + pushes the git tag  mc<MCVER>-v<version>  BEFORE building, so
+#      that if the build fails there is a concrete tag to remove.
+#   3. Builds the Fabric mod with Gradle/Loom (this also runs the JUnit suite,
+#      so a red test == a failed build).
+#   4. On FAILURE of the tag / build / publish steps -> deletes that tag (and any
+#      half-created release) and fails the run.
+#   5. On SUCCESS -> publishes a GitHub Release with the jar(s), then deletes the
+#      PREVIOUS release + tag on the SAME Minecraft line (mc<MCVER>-v...),
+#      keeping exactly one "latest" per Minecraft version.
+#   6. Pushing to any mc/** branch builds + releases that Minecraft line.
+#
+# RELEASE TOPOLOGY (ruled 2026-08-10, see TODO.md "OPEN - release topology"):
+# "master = newest band". master IS the release branch for the newest supported
+# Minecraft version. mc/** branches exist ONLY for OLDER bands, and are cut by
+# hand when a band is back-ported - never automatically.
+#
+# ⚠️⚠️ This workflow used to auto-create mc/<minecraft_version> on first build of
+# a new version. That step is REMOVED, and must not come back, because under
+# "master = newest band" it is actively harmful:
+#
+#   master and mc/<newest> both read the SAME minecraft_version out of
+#   gradle.properties, so both tag mc<MCVER>-v* and both run the "delete previous
+#   release on this Minecraft line" sweep below. They fight over one release slot
+#   and whichever pushes last DELETES THE OTHER'S RELEASE.
+#
+# That is not hypothetical: the auto-created mc/1.21.11 sat 90 commits stale from
+# 2026-07-23 until it was deleted on 2026-08-10. Had anything pushed to it, it
+# would have built July-23 code and destroyed master's current release.
+#
+# The invariant to preserve: NO TWO BRANCHES MAY RESOLVE TO THE SAME
+# minecraft_version. A band branch must pin its own version in gradle.properties
+# as the first commit after it is cut.
+#
+# Why this cannot cause an infinite loop: the version is READ from gradle.properties
+# and never written back, so a release run produces no commit to re-trigger on.
+#
+# JAR NAMING. Gradle names the jar mcmmo-<version>+mc<band>.jar, where the band comes
+# from `supported_minecraft_versions` in gradle.properties — a single version
+# (+mc1.21.5) or a range written at both ends (+mc1.21.6-1.21.8). The publish step
+# below DISCOVERS that file rather than predicting its name, so a future naming
+# change needs no edit here. The jar name and the tag differ on purpose: the jar is
+# what a player reads, the tag is what this workflow's release-reaping matches on.
+#
+# To release on EVERY push (even docs-only), delete the `paths:` block below.
+# ---------------------------------------------------------------------------
+name: Build & Release
+
+on:
+  push:
+    branches:
+      - master
+      - 'mc/**'
+    paths:
+      - 'src/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/release.yml'
+  workflow_dispatch: {}   # allow manual re-release from the Actions tab
+
+# Create/delete tags, releases and branches, and push the mc/** branch.
+permissions:
+  contents: write
+
+# One release at a time per branch; don't cancel a run that may be mid-publish.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history: tag ops + branch push + notes
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4   # dependency + build caching
+
+      # --- Derive version / tag / branch names from gradle.properties ---------
+      - name: Compute version metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          mc=$(grep -E '^minecraft_version=' gradle.properties | head -n1 | cut -d= -f2- | tr -d '[:space:]')
+          base=$(grep -E '^mod_version=' gradle.properties | head -n1 | cut -d= -f2- | tr -d '[:space:]')
+          base=${base%-SNAPSHOT}
+          # No -build.<run number>. GITHUB_RUN_NUMBER is repo-global rather than per-branch, so it
+          # stamped identical mod code with a different number on every band (28/27/24/25/26) —
+          # numbers that read like versions and cannot be compared in any direction. The version is
+          # now exactly mod_version, identical across bands by design; the band is expressed by the
+          # +mc<range> suffix Gradle puts on the JAR, and by the mc<VER>- prefix on the TAG.
+          version="${base}"
+          # ⚠️ The mc<VER>-v prefix is load-bearing and must not be reshaped to match the jar name:
+          # the "delete previous release on this Minecraft line" step below matches on it, and so
+          # does the one-branch-per-Minecraft-version check. Keeping it is also what lets the older
+          # mc<VER>-v<...>-build.<n> releases still be reaped instead of being orphaned.
+          tag="mc${mc}-v${version}"
+          branch="mc/${mc}"
+          if [ -z "$mc" ] || [ -z "$base" ]; then
+            echo "::error::Could not read minecraft_version / mod_version from gradle.properties"
+            exit 1
+          fi
+          {
+            echo "mc_version=$mc"
+            echo "base_version=$base"
+            echo "release_version=$version"
+            echo "tag=$tag"
+            echo "mc_branch=$branch"
+          } >> "$GITHUB_OUTPUT"
+          echo "MC=$mc  version=$version  tag=$tag  branch=$branch"
+
+      # --- Push the tag FIRST so failure has something concrete to delete -----
+      - name: Create and push tag
+        id: tag
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Idempotent across re-runs of the same run number.
+          git push origin ":refs/tags/${TAG}" || true
+          git tag -f "${TAG}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${TAG}"
+
+      # --- Build (compiles, remaps, and runs the JUnit suite) -----------------
+      - name: Build
+        id: build
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace build \
+            -Pmod_version="${{ steps.meta.outputs.release_version }}"
+
+      # --- Publish the release with the jar(s) --------------------------------
+      - name: Publish release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.meta.outputs.release_version }}
+          MC_VERSION: ${{ steps.meta.outputs.mc_version }}
+        run: |
+          set -euo pipefail
+          ls -la build/libs || true
+
+          # DISCOVER the jar; do not predict its name. The filename now carries a band label that
+          # Gradle derives from supported_minecraft_versions (mcmmo-2.2.050+mc1.21.6-1.21.8.jar), and
+          # rebuilding that rule here would be a second implementation of it — one that goes wrong
+          # silently the next time the naming changes. Globbing means this step never needs updating
+          # again, and it FAILS CLOSED: exactly one non-sources jar, or the release stops.
+          mapfile -t mains < <(find build/libs -maxdepth 1 -type f -name 'mcmmo-*.jar' \
+            ! -name '*-sources.jar' | sort)
+          if [ "${#mains[@]}" -eq 0 ]; then
+            echo "::error::No mod jar found in build/libs (expected one mcmmo-*.jar)."
+            exit 1
+          fi
+          if [ "${#mains[@]}" -gt 1 ]; then
+            echo "::error::Ambiguous: ${#mains[@]} candidate mod jars in build/libs -- ${mains[*]}. Refusing to guess which one to publish; clean build/libs or narrow the build."
+            exit 1
+          fi
+          main="${mains[0]}"
+          jar_name="$(basename "$main")"
+          echo "Publishing asset: $jar_name"
+
+          # The sources jar is optional, so this must not be a `[ ... ] && ...` one-liner: under
+          # `set -e` an AND-list whose test fails is itself a failing command, and the step would
+          # exit 0-assets instead of publishing without sources.
+          mapfile -t sources_jars < <(find build/libs -maxdepth 1 -type f -name 'mcmmo-*-sources.jar' | sort)
+          assets=( "$main" )
+          if [ "${#sources_jars[@]}" -eq 1 ]; then
+            assets+=( "${sources_jars[0]}" )
+          else
+            echo "::warning::No single sources jar found (${#sources_jars[@]} candidates); publishing the mod jar only."
+          fi
+
+          # The band this jar actually serves, read from the same property Gradle names it from.
+          band=$(grep -E '^supported_minecraft_versions=' gradle.properties | head -n1 | cut -d= -f2- | tr -d '[:space:]')
+          band_pretty="${band//,/, }"
+
+          {
+            printf '%s\n\n' "Automated build of **mcMMO (singleplayer Fabric)** for **Minecraft ${band_pretty}**."
+            printf '%s\n' "- **Mod version:** \`${RELEASE_VERSION}\`"
+            printf '%s\n' "- **Minecraft:** \`${band_pretty}\` · **Loader:** Fabric · **Java:** 21+"
+            printf '%s\n' "- **Requires:** Fabric API"
+            printf '%s\n' "- **Built against:** \`${MC_VERSION}\` — one jar serves the whole band above"
+            printf '%s\n\n' "- Built from \`${GITHUB_REF_NAME}\` @ \`${GITHUB_SHA:0:7}\`"
+            printf '%s\n' "Drop \`${jar_name}\` into your \`mods/\` folder. Optional: ModMenu + Cloth Config for the in-game settings screen."
+          } > release-notes.md
+
+          # ⚠️ The version no longer carries a per-run number, so re-running on the same commit
+          # REPLACES this release rather than adding one. The commit sha in the notes above is the
+          # only thing distinguishing two builds of the same mod version — keep it there.
+          gh release create "$TAG" "${assets[@]}" \
+            --title "mcMMO ${RELEASE_VERSION} — Minecraft ${band_pretty}" \
+            --notes-file release-notes.md
+
+          echo "### :rocket: Released \`${TAG}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Minecraft \`${MC_VERSION}\` · assets: ${assets[*]}" >> "$GITHUB_STEP_SUMMARY"
+
+      # --- Keep exactly one release per Minecraft line ------------------------
+      - name: Delete previous release on this Minecraft line
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          MC_VERSION: ${{ steps.meta.outputs.mc_version }}
+        run: |
+          set -euo pipefail
+          prefix="mc${MC_VERSION}-v"
+          gh release list --limit 200 --json tagName --jq '.[].tagName' | while read -r t; do
+            [ -z "$t" ] && continue
+            [ "$t" = "$TAG" ] && continue           # keep the one we just made
+            case "$t" in
+              "${prefix}"*)
+                echo "Deleting superseded release on the MC ${MC_VERSION} line: $t"
+                gh release delete "$t" --yes --cleanup-tag || echo "::warning::could not delete $t"
+                ;;
+            esac
+          done
+
+      # --- Guard the "one branch per Minecraft line" invariant ----------------
+      # Replaces the old "Ensure Minecraft release branch" step, which auto-created
+      # mc/<minecraft_version> and thereby manufactured the exact collision described
+      # in the header. Band branches are now cut by hand; this step only *detects*
+      # a second branch releasing the same line, and warns rather than failing so it
+      # can never take down a legitimate release.
+      - name: Check no other branch claims this Minecraft line
+        env:
+          MC_BRANCH: ${{ steps.meta.outputs.mc_branch }}
+          MC_VERSION: ${{ steps.meta.outputs.mc_version }}
+        run: |
+          set -uo pipefail
+          if [ "${GITHUB_REF_NAME}" != "master" ] \
+             && git ls-remote --exit-code --heads origin "refs/heads/${MC_BRANCH}" >/dev/null 2>&1 \
+             && [ "${GITHUB_REF_NAME}" != "${MC_BRANCH}" ]; then
+            echo "::warning::Both '${GITHUB_REF_NAME}' and '${MC_BRANCH}' target Minecraft ${MC_VERSION}. They share the mc${MC_VERSION}-v* tag prefix, so each release run deletes the other's release. Pin a distinct minecraft_version per band branch."
+          fi
+          if [ "${GITHUB_REF_NAME}" = "master" ] \
+             && git ls-remote --exit-code --heads origin "refs/heads/${MC_BRANCH}" >/dev/null 2>&1; then
+            echo "::warning::master releases Minecraft ${MC_VERSION}, but branch ${MC_BRANCH} also exists and claims the same line. Under the 'master = newest band' topology mc/** is for OLDER bands only — delete ${MC_BRANCH} or repoint it."
+          fi
+          echo "Release line mc${MC_VERSION}-v* claimed by '${GITHUB_REF_NAME}'."
+
+      # --- On build failure: delete the tag (and any partial release) ---------
+      # Scoped to the tag/build/publish steps only, so successful releases whose
+      # later housekeeping hiccuped are NEVER torn down.
+      - name: Clean up tag on failure
+        if: >-
+          failure() &&
+          ( steps.tag.outcome == 'failure' ||
+            steps.build.outcome == 'failure' ||
+            steps.release.outcome == 'failure' )
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -uo pipefail
+          if [ -z "${TAG:-}" ]; then
+            echo "No tag was computed; nothing to clean up."
+            exit 0
+          fi
+          echo "Build failed — removing tag/release ${TAG}"
+          gh release delete "${TAG}" --yes --cleanup-tag 2>/dev/null \
+            || git push origin ":refs/tags/${TAG}" 2>/dev/null \
+            || true
