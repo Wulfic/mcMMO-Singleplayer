@@ -160,11 +160,119 @@ of `1.21.3`'s, so the second cut should be fast.
 
 - [ ] **8.1 — `mc/1.21.4`** (`1.21.4` only; 42 rows). The cheapest and the one to prove the loop on,
       because it is the last band `config-id-audit.py` can still audit.
+      **Cut, ported, committed at `bfb1c11d6`; ship gate 6 of 7.** Two gameplay defects block it —
+      see [8.1a](#81a--the-two-gameplay-smoke-defects-blocking-the-band) below.
 - [ ] **8.2 — `mc/1.21.3`** (`1.21.2`, `1.21.3`; 44 rows). ⚠️ Blocked on **8.4** for a full gate run.
+      ⚠️ **Expect the mob-origin defect again** — see 8.1a.A. Bands are cut from `master`, never
+      from each other, so this branch inherits **no** fix for it, and an older band pins an older
+      fabric-api, i.e. an *older* `data-attachment-api` than the broken 1.6.2. Check
+      `fabric_readAttachmentsFromNbt` for the unconditional assign before trusting
+      `combat-egg-control`, and note that every static gate — build, boot-check, mixin audit —
+      is **blind** to it.
 - [ ] **8.3 — `mc/1.21.1`** (`1.21`, `1.21.1`; 125 rows). Per **R-m**, two pieces: the `SkillGating`
       switches land on **`master` first**, then the band branch resolves the compile/mixin absences.
       Blocked on **8.4** for a full gate run. Do this band **last** — it is the only one that changes
       `master`.
+
+### 8.1a — the two gameplay-smoke defects blocking the band
+
+`gameplay-smoke.sh` on `mc/1.21.4` scores **27 passed, 2 failed**. Both are silent in-game
+behaviour: 0 ERROR lines, 0 mixin failures, 1706/0/0 tests, and all six other gates green. **Both
+are band-specific and were measured, not assumed** — a detached-worktree build of `master`
+`f73031ed9` scored **29/29** on `1.21.11`, so both fixes belong on this branch and *not* on
+`master`. That is the sanctioned exception to "fixes land on `master` first": there is nothing on
+`master` to fix.
+
+#### A — `combat-egg-control`: the mob-origin stamp is erased before it is ever read
+
+**Root cause (proven from bytecode, not inferred).** This band's fabric-api pins
+`data-attachment-api 1.6.2`, whose `fabric_readAttachmentsFromNbt` assigns the deserialized map
+**unconditionally**; master's 1.8.48 early-returns when that map is null.
+`deserializeAttachmentData` returns null when the NBT carries no attachments, so on this band
+`Entity#readNbt` **wipes the whole attachment map**. mcMMO stamps `MOB_ORIGIN` at
+`EntityType#create(World, SpawnReason)`, which runs *before* the NBT read on every NBT-carrying
+spawn — so `/summon`, spawners and chunk load all produce a mob that reads as `NATURAL`. ⚠️ There
+is **no version bump out of it**: `0.119.4+1.21.4` is the newest fabric-api that exists for this MC.
+
+- [x] **8.1a.A1 Measure the spawn-egg path** — the one thing the root-cause note left open, because a
+      gate that closes `/summon` and leaves spawn eggs open is worse than none. **It was never
+      exposed.** `nbtCopier` short-circuits on an empty `entity_data` component (every ordinary spawn
+      egg), and when the component *is* present `NbtComponent#applyToEntity` does
+      `writeNbt(fresh) → copyFrom(nbt) → readNbt` — a **round-trip that re-serializes the live
+      attachment map**, so the stamp survives its own erasure. Read off the `1.21.4` merged jar.
+- [x] **8.1a.A2 Re-stamp at `EntityType#getEntityFromNbt` RETURN.** Verified ordering-proof from the
+      same disassembly: the body is `fromNbt(nbt).map(type -> type.create(world, reason))` followed
+      by `Util.ifPresentOrElse(opt, entity -> entity.readNbt(nbt), …)`, so `readNbt` has completed
+      before RETURN. ⚠️ **Not** a second injector on `Entity#readNbt` — that races fabric's own
+      injector at the same target, and cross-mod mixin priority is not something to bet a silent
+      exploit gate on. Reuse `MobOrigins#stampOnSpawn` unchanged: it writes nothing for a qualifying
+      origin, so `SpawnReason.LOAD` still leaves the marker fabric just restored from NBT alone.
+- [x] **8.1a.A3 Answer 8.x.6 explicitly: `master` does NOT absorb this.** Master has no defect; a
+      redundant injector there would add mixin surface and `allow=` audit churn on four branches to
+      no effect. Band-local, inside `fabric/mixin/`, so `PlatformBoundaryGuardTest` stays green.
+- [ ] **8.1a.A4 A guard test that fails when it is reverted.** ⚠️ No Mockito test can see this —
+      the defect lives in fabric-api's bytecode and the fix in an injection point. Follow
+      `guards/ArmadilloBrushDispenserExclusionTest`: assert from **this band's bytecode** that
+      `EntityType#getEntityFromNbt` really does call `Entity#readNbt` (so the re-stamp point is
+      genuinely after the erase), and from **source** that an injector selects it at RETURN.
+      Anti-vacuity count assertions first — "found nothing" and "the scan is broken" render
+      identically. **Mutation-prove it** before believing it.
+- [x] **8.1a.A5** `mixin-allow-audit.py --mc 1.21.4 --check` — **62/62 PASS**, `allow=1 computed=1`
+      on the new injector, exactly as the disassembly predicted (one `areturn`). ⚠️ **This band now
+      has 62 injectors, not the 61 the ship-gate list below quotes** — that number is `master`'s.
+
+#### B — `repair`: the anvil pays nothing. NOT root-caused
+
+`REPAIR` stays 0 across the two-click phase. ⚠️ **`repair-control` passing is worth nothing** — it
+asserts REPAIR does *not* move, which a completely dead listener satisfies.
+
+**What is now ruled out, so the search space is the repair path itself:**
+
+- **The event fires, server-side, on this band.** `cook-campfire` passes, and `onCampfireCook`
+  returns early unless `CookingListener#onUseBlock` — a `UseBlockCallback` with the same
+  `instanceof ServerPlayerEntity` gate — recorded the campfire owner first. ⚠️ The earlier note
+  justified this with *"cook-campfire rides the same event"*; the XP itself comes from
+  `CampfireCookMixin`, so state the owner-map instead. Same conclusion, sound reason.
+- **The aim and the block position are correct.** `cook-campfire` targets the identical block at
+  `2 -60 0` with the identical `_look`.
+- **Fabric's dispatch is unchanged.** `ServerPlayerInteractionManagerMixin`'s `interactBlock` HEAD
+  injector is byte-for-byte the same logic in events-interaction `4.0.4` (this band) and `4.0.36`
+  (master); only unrelated `LocalCapture` → `@Local` churn differs.
+- **The port did not touch it.** `bfb1c11d6` changes no file on this path.
+
+- [x] **8.1a.B1 Probe with instrumentation.** Every candidate exit — `anvilKindAt` failing to
+      resolve the configured anvil block, `repairableInHand` missing the `repair.yml` entry,
+      `checkConfirmation` never confirming, or one of `performRepair`'s guards (unbreakable, level,
+      `startDurability <= 0`, absent repair material) — returns **silently to a player-facing
+      notification the server log never sees**. Build with temporary logging at each, run the
+      harness, read the log. ⚠️ **Copy `logs/latest.log` out before probing** — re-using
+      `build/gameplay-smoke/<ver>/` rotates it and the run being diagnosed ends up gzipped.
+- [x] **8.1a.B2 No mcMMO fix was needed; the instrumentation was stripped** and the listener is
+      byte-identical to `bfb1c11d6`. Verified by `git diff` before and after.
+- [x] **8.1a.B3 RESOLVED — it is the HARNESS, and the evidence is a 9-run study: 8 × 29/29,
+      1 × 27/29.** The one failure is **not** the `repair` phase and **not** an mcMMO defect: it is
+      `combat-fist` + `combat-sword` being handed a **structure-spawned** cow, which
+      `Nether_Portal.Multiplier: 0` correctly prices at zero. The anti-farm gate was working.
+      Full signature + the one-line scenario fix in `gotchas.md` 2026-08-13.
+      ⚠️ The original `repair` failure remains a single unexplained event — instrumentation cleared
+      the whole repair path and it has passed **9 consecutive runs** since.
+
+- [ ] **8.1a.B4 🔴 OWNER CALL — harden `gameplay-smoke.sh`'s combat phases.** `scripts/` is
+      `master`-first tooling back-ported to four bands, so this is scope, not a blocker for 8.1.
+      🔴 **It affects every band already shipped**: `mc/1.21.5`, `mc/1.21.8` and `mc/1.21.10` each
+      passed gate 6 exactly **once**. The failure mode is a **false red, never a false green**, so
+      nothing shipped broken — but "29/29" is weaker evidence than it reads.
+
+- [x] **8.1a.C Full seven-gate re-run — all green.** 1️⃣ `build` **1706/0/0**, forced with
+      `test --rerun --no-build-cache` because both `UP-TO-DATE` and `FROM-CACHE` are *restored*
+      results, not executed ones. 2️⃣ `mixin-allow-audit` **62/62**. 3️⃣ `boot-check` PASSED, 0 ERROR,
+      0 mixin failures, canary rejected. 4️⃣ `config-id-audit` exit 0, 638/689 = 92.6%, 0
+      dead-everywhere. 5️⃣ `brew-smoke` PASSED **with its vanilla control discriminating**.
+      6️⃣ `gameplay-smoke` **29/29**. 7️⃣ `drift-audit --self-test` PASSED.
+- [ ] **8.1a.D 🔴 OWNER CALL — the push is a PUBLISH.** `.github/` is tracked on this branch (R-g
+      removed it from `master` only), so a `src/`-touching push **cuts a release**. R-h ruled pushes
+      are the agent's once gates are green, but it was ruled when a push no longer released. **Ask.**
+      Then `drift-audit.py --master master` — ⚠️ it audits `origin/master`, so push first.
 
 ### 8.4 — 🔴 BLOCKER: `config-id-audit.py` cannot audit below `1.21.4`
 
