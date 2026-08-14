@@ -411,6 +411,33 @@ introduced the difference).
       applied to a *test*, and a stale comment asserting a jar fact is worse than none, because it
       stops the next reader from re-deriving it.
 
+#### 8.2.8a — FOLLOW-UP (master-first): `boot-check.sh` fails misleadingly on a fabric-api cache miss
+
+🔴 **Found 2026-08-14 running the mandatory 1.21.2 boot-check.** The script sources fabric-api
+*only* from the Gradle cache (`boot-check.sh:47`). On a miss it prints
+`warn: fabric-api <v> not in the Gradle cache; mcMMO will fail to load without it` and **carries on**,
+so the run dies as `❌ FAIL: never reached 'Done ('` — which reads like *the mod broke the server* when
+the truth is *a dependency was never staged*. Ten minutes of log-reading to reach a one-line cause.
+
+That matters most in exactly the case it hit: a band's **non-pinned** version resolves a fabric-api
+Gradle was never asked to fetch, so the cache miss is the *normal* state there, not an edge case.
+
+**Fix (not done here — `scripts/` is propagatable under R9a, so it lands on `master` first and then
+on every band):** fail closed. Either fetch from `maven.fabricmc.net` the way the launcher is already
+fetched three lines above, or `exit 1` naming the missing coordinate. A warn-then-continue that ends
+in an unrelated symptom is the shape AGENTS.md's "log every error path" exists to prevent.
+⚠️ Needs its own guard: a run with a deliberately bogus fabric-api coordinate must fail **with that
+coordinate named**, not with `never reached 'Done ('`.
+
+*Worked around for this cut* by staging `0.106.1+1.21.2` into the Gradle cache at its own sha1 path —
+verified as genuine fabric-api (id/version read from its `fabric.mod.json`, 47 nested jars) before
+being trusted. Undo: `rm -rf ~/.gradle/caches/.../fabric-api/0.106.1+1.21.2`.
+
+🔑 **The 1.21.2 run earned its keep immediately:** that version's fabric-api bundles
+`data-attachment-api 0.106.1`, and its `fabric_readAttachmentsFromNbt` carries the **identical**
+unconditional `putfield` — so the mob-origin defect spans the whole band, not just the pinned
+version, and 8.2.7's fix is required for both.
+
 #### 8.2 — blast radius
 
 | Step | Touches | Lost if wrong | Comes back from |
