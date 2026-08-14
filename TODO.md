@@ -665,9 +665,22 @@ sighting in this project.
       (**8.x.9** below) rather than trust. Lands on `master`, then back-ports to all four bands with
       `Backport-of:` — the file is inert there, but R-i keeps the branches byte-identical and a
       divergent copy is what the next cut would inherit.
-- [ ] **10.8c** Ship gate on `master`, **step 1 with CI's exact invocation** (10.7e). This is the
-      first `master` push since `a1266ad53` that will actually reach the release path, so the gate
-      that 10.7 proved necessary has to run before it, not after.
+- [x] **10.8c** ✅ **Gates 1–4 green on `master` (2026-08-13), run before the push, not after.**
+      - **1** `-Pmod_version=2.2.050` → `BUILD SUCCESSFUL`, **1719 / 0 / 0**, matching `master`'s
+        expected count. ⚠️ **The first run reported `> Task :test FROM-CACHE`** — green without
+        executing anything; re-run under `--no-build-cache cleanTest test` for the real number, and
+        `BandVersionLabelTest` (the guard that broke every release in 10.7) passes 11/11 under the
+        release value. Hole written into ship-gate step 1 above.
+      - **2** `mixin-allow-audit.py --mc 1.21.11 --check` → **61/61**, no injector resolving to 0.
+      - **3** `boot-check.sh build/libs/mcmmo-2.2.050+mc1.21.11.jar 1.21.11` → **PASSED**, 0 ERROR,
+        0 mixin failures, canary rejected. Run against **the exact artifact being published**.
+      - **4** `config-id-audit.py --check` → **0 dead-everywhere**; control 688/689 (**99.9%**) vs the
+        80% floor; the one miss (`Chain`) correctly classified *live on an older band*.
+      - ⬜ **5 (`brew-smoke`) and 6 (`gameplay-smoke`) deliberately NOT run, and that is a narrowing
+        of the gate, not a pass.** These three commits touch `.github/` and two `.md` files — zero
+        `src/`, zero `gradle*`, zero configs — so the jar's *contents* are identical to what those
+        gates last cleared on `master`. Stated rather than skipped silently; if the next `master`
+        push touches code, both are mandatory again.
 - [ ] **10.8d** Push. ⚠️ **The push itself releases** — `.github/workflows/release.yml` is inside
       `release.yml`'s own `paths:` filter, so adding the file triggers the workflow that publishes.
       There is no separate "release" action to take and no way to land this quietly.
@@ -691,9 +704,29 @@ sighting in this project.
 | 10.8d | **a published GitHub release** | the `mc1.21.11-v2.2.050-build.26` release + tag are **reaped** by the sweep | the jar is rebuildable from that tag's commit; the sweep runs **only after a successful publish**, so a failed build leaves the old release standing and deletes only its own new tag |
 
 ⚠️ **The one destructive edge is the reaping sweep**, and it is the intended effect: it deletes every
-`mc1.21.11-v*` release except the one just published, which is exactly the stale `-build.26` that
-10.7g exists to retire. Ordering is fail-safe — publish succeeds *first*, then reap. A red build
-never reaches the sweep.
+`mc1.21.11-v*` release except the one just published. Ordering is fail-safe — publish succeeds
+*first*, then reap — so a red build never reaches the sweep.
+
+⚠️ **It reaps TWO tags on this line, not the one `10.7g` names.** Resolved from `git ls-remote --tags`
+before the push rather than assumed, and `--cleanup-tag` deletes the tag along with the release, so
+these SHAs are the entire recovery path:
+
+| Reaped tag | Commit | Recovery |
+|---|---|---|
+| `mc1.21.11-v2.2.050-build.26` | `34aad16f2` | `git checkout 34aad16f2` → build → re-upload |
+| `mc1.21.11-v2.2.050-build.3` | `afb2a6a6a` | `git checkout afb2a6a6a` → build → re-upload |
+
+Neither is worth restoring — both are the un-labelled jars 10.7g exists to retire — but *"it is
+recoverable"* is only true while the commit is written down somewhere the deleted tag isn't.
+
+#### 10.8 — ⚠️ R-r invalidates the premise R-h was granted on
+
+**R-h** (2026-08-12) delegated pushes to the agent, and stated its own reason: *"Supersedes the
+earlier 'owner keeps pushes' standing rule, **which existed because a band push released**. Under
+R-g it no longer does."* R-r makes a push release again on all five branches, so the condition that
+retired the old rule is gone and R-h now rests on a premise that is false. Flagged rather than
+silently re-interpreted in either direction — **the owner confirmed this specific push in the moment
+(2026-08-13)**, which is not the same as R-h surviving. Re-rule it explicitly before the next one.
 
 ### What I am NOT doing
 
@@ -730,6 +763,25 @@ is a backstop, never the check.
    every band's release for a day with nothing reporting it. **A gate that does not reproduce the
    release command cannot certify a release.** ⚠️ And read Gradle's own exit code — `cmd | tail`
    returns *tail's*, which reported a failed build as `exit 0` during that investigation.
+
+   ⚠️⚠️ **`BUILD SUCCESSFUL` does not mean the suite ran. Grep the log for `> Task :test`** and
+   confirm it is bare — not `FROM-CACHE`, not `UP-TO-DATE`. Found 2026-08-13 running this very gate:
+   it reported `BUILD SUCCESSFUL in 1m 21s` with **`> Task :test FROM-CACHE`**, so the release was
+   about to be certified on results the invocation never executed, and the XML under
+   `build/test-results/` was left over from an earlier run rather than produced by this one. That is
+   the same shape as 10.7 one level down — *the command was right and the execution never happened*.
+   To actually run them:
+
+   ```
+   ./gradlew --no-daemon --stacktrace --no-build-cache cleanTest test -Pmod_version=<resolved>
+   ```
+
+   ⚠️ **Also check `build/libs/` holds exactly one non-sources jar before reading a jar name off it.**
+   `build` never cleans it, so a working copy that has built several bands accumulates them — ten
+   were sitting there on 2026-08-13 (`+mc1.21.4`, `+mc1.21.5`, `+mc1.21.6-1.21.8`, `+mc1.21.9-1.21.10`,
+   `+mc1.21.11`, each also as `-SNAPSHOT`). **CI is immune** — a fresh checkout starts empty, and
+   `release.yml`'s publish step refuses to guess between candidates and `exit 1`s. **A local
+   `boot-check.sh` glob is not immune**, and would happily boot another band's jar.
 2. `python scripts/mixin-allow-audit.py --mc <version> --check` — 61/61. A `MISMATCH` is a fact to
    record, not a bug to suppress.
 3. `scripts/boot-check.sh <jar> <version>` — 0 ERROR, 0 mixin failures, canary rejected.
