@@ -84,11 +84,37 @@ public abstract class AbstractFurnaceSmeltMixin {
         SmeltingListener.onSmeltComplete(pos, output);
     }
 
+    /**
+     * <b>BAND:</b> {@code tick} calls {@code getFuelTime} <b>twice</b> on this band where newer
+     * versions call it once, so the ordinal is load-bearing and the two sites are not
+     * interchangeable. Read off both of this band's merged jars, which agree instruction for
+     * instruction:
+     *
+     * <ul>
+     *   <li><b>ordinal 0</b> ({@code bci 97}) is the reload path — {@code if (fuelTime == 0)
+     *       fuelTime = getFuelTime(…)} — which writes only {@code fuelTime}, the denominator the
+     *       flame icon renders against, after a world load restored {@code burnTime} from NBT
+     *       without it.</li>
+     *   <li><b>ordinal 1</b> ({@code bci 204}) is the ignite path, behind
+     *       {@code canAcceptRecipeOutput} — {@code burnTime = getFuelTime(…); fuelTime = burnTime}
+     *       — which is where a fuel item is actually consumed.</li>
+     * </ul>
+     *
+     * <p>Newer versions' single call is the ignite path, so {@code ordinal = 1} <em>preserves</em>
+     * the behaviour the mechanic already had rather than choosing new behaviour here. Boosting
+     * ordinal 0 as well would inflate the denominator without granting any burn time — the flame
+     * icon would drain visibly short of the fuel it represents, which is a silent cosmetic desync
+     * and not the mechanic Fuel Efficiency is meant to be.
+     *
+     * <p>⚠️ An explicit ordinal selects exactly one instruction by construction, which is why
+     * {@code allow = 1} is still the right bound (and is how {@code mixin-allow-audit.py} scores it).
+     */
     @ModifyExpressionValue(
             method = "tick",
             allow = 1,
             at = @At(
                     value = "INVOKE",
+                    ordinal = 1,
                     target = "Lnet/minecraft/block/entity/AbstractFurnaceBlockEntity;getFuelTime("
                             + "Lnet/minecraft/item/FuelRegistry;"
                             + "Lnet/minecraft/item/ItemStack;)I"))

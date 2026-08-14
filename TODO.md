@@ -316,6 +316,101 @@ outside `PROPAGATABLE_PREFIXES` (R9). The check is by hand:
       weekly audit fails on a band that does not exist yet. A stale floor is *under*-strict and will
       not remind you; a premature one is a red run nobody is watching (R11).
 
+#### 8.2.5b — the four injector breaks the compiler could not see (found 2026-08-14)
+
+🔴 **`93d729690` took compile errors to 0 and that was not the finish line.** `mixin-allow-audit
+--check --mc 1.21.3` then reported **MISMATCH=1 ZERO=3** — four injectors that compile perfectly and
+would fail at mixin-apply time. This is the `mc/1.21.5` failure shape (302 tests from two
+unresolvable `@At` targets): **a mixin selector is a string, so the compiler is structurally blind to
+every one of these.** Run gate 2 *before* gate 1 on future cuts; it is minutes, and it finds what an
+hour-long build reports only as a wall of unrelated red.
+
+⚠️ Each fix below was re-verified against **both** `1.21.2` and `1.21.3` merged jars, not adapted by
+analogy from `mc/1.21.4`. All four resolve identically on the two versions, so the band is internally
+consistent and one jar is correct for both.
+
+| Mixin | 1.21.3 reality | Shape |
+|---|---|---|
+| `TameableEntityTameMixin` | `setTamedBy` → **`setOwner(PlayerEntity)`** | rename |
+| `BeehiveHarvestMixin` | `dropHoneycomb(World, BlockPos)`, not the 6-arg form | descriptor |
+| `AbstractFurnaceSmeltMixin` | `getFuelTime` called **twice** in `tick`; master has one | `ordinal = 1` |
+| `ArmadilloBrushMixin` | **`forEachBrushedItem` does not exist** | **redesign** |
+
+- [ ] **8.2.5b.1 `TameableEntityTameMixin`** — `method = "setOwner"`. Load-bearing claim re-proven on
+      both versions: `readCustomDataFromNbt` calls `setOwnerUuid` and `setTamed` **directly** and
+      never routes through `setOwner`, so a stored pet does not re-award Taming XP on every world
+      load. Callers are exactly `WolfEntity`, `CatEntity`, `ParrotEntity` — one each.
+- [ ] **8.2.5b.2 `BeehiveHarvestMixin`** — retarget to `dropHoneycomb(World, BlockPos)V`. Exactly one
+      such call inside `onUseWithItem` on both versions, so `allow = 1` still holds. The other three
+      injectors in the file already resolve, which is what proves the *method* selector was never the
+      problem.
+- [ ] **8.2.5b.3 `AbstractFurnaceSmeltMixin`** — add `ordinal = 1`. The two sites are **not**
+      interchangeable: site 0 (`bci 97`) is the reload path, `if (fuelTime == 0) fuelTime = …`,
+      writing only the flame-icon denominator; site 1 (`bci 204`) is the ignite path behind
+      `canAcceptRecipeOutput`, `burnTime = …; fuelTime = burnTime`. Master's single site is the
+      ignite path, so `ordinal = 1` **preserves master's behaviour** rather than choosing new
+      behaviour. Boosting site 0 as well would inflate the denominator without granting burn time —
+      a silent cosmetic desync of the flame icon, and not the mechanic. `mixin-allow-audit.py:235`
+      treats an explicit ordinal as exactly one instruction, so `allow = 1` is then correct.
+- [ ] **8.2.5b.4 `ArmadilloBrushMixin`** — port `mc/1.21.4`'s redesign (owner call, 2026-08-14),
+      re-verified rather than copied. `brushScute()` here inlines
+      `dropStack(serverWorld, new ItemStack(ARMADILLO_SCUTE))` with **no loot table, no `BiConsumer`
+      and no brusher parameter**, so there is nothing to wrap.
+      ⚠️⚠️ **The dispenser exclusion therefore stops being free.** On the funnel seam the brusher is a
+      parameter and vanilla's brushing dispenser passes `null`, so AFK farms are excluded *by the
+      signature*. Here `DispenserBehavior$6` calls `brushScute()` **directly** (jar-confirmed on both
+      versions), so hooking `brushScute` would pay the dispenser. The verb hooks `interactMob`
+      instead — it carries the real `PlayerEntity` and the dispenser never enters it, keeping the
+      exclusion a property of the **call graph** rather than a check of our own that could rot. The
+      dispenser also wears its brush through a *different* `damage` overload
+      (`damage(int, ServerWorld, ServerPlayerEntity, Consumer)`), so the durability-save injector
+      excludes automation structurally too.
+      Injection point is `INVOKE` + `Shift.AFTER` on the single
+      `damage(I, LivingEntity, EquipmentSlot)V` call — the only block reachable once a scute has
+      actually been delivered, which preserves the funnel's invariant that **XP hangs off an item
+      changing hands, never off the attempt**. `HEAD` would pay for waving a brush at a baby.
+      Also needs `HusbandryListener#onArmadilloBrushed` (the band has only `onBrushedItems`, whose
+      `BiConsumer` return type has no seam here) and `ArmadilloBrushDispenserExclusionTest`, which
+      pins the call graph from bytecode — a positive-only test passes just as happily with the gate
+      gone.
+- [ ] **8.2.5b.5** Re-run `mixin-allow-audit --check --mc 1.21.3` to **exit 0**, then again with
+      `--mc 1.21.2`. ⚠️ `SLICE` on `FishingWaitTimeMixin` is informational, not a failure — the
+      script cannot evaluate a slice, and an unresolvable `@Slice` is *silently dropped*, so that one
+      is covered by boot-check rather than by this gate.
+
+**8.2.6 asked and answered NO for all four.** Every one is an absence or a rename on an *older*
+Minecraft; `master`'s code is correct for `master`. Absorbing any of them would add dead surface and
+`allow=` audit churn on six branches to no effect — the same answer 8.1a.A reached.
+
+#### 8.2.5c — the two the mixin audit could not see either (found 2026-08-14)
+
+With the four injectors fixed, gate 1 went **271 failures → 4**, in two root causes. Neither is a
+mixin, so gate 2 is blind to both — the audit is a *first* filter, not the whole of static checking.
+✅ Both fixed by porting `mc/1.21.4`'s solutions (they apply to every band below the version that
+introduced the difference).
+
+- [x] **8.2.5c.1 `PlatformPlayerTest`** — `SoundCategory.valueOf("UI")` throws: vanilla gained
+      `UI` in **1.21.6**, so this band has ten categories and `PlatformSoundCategory` mirrors eleven.
+      🔑 **The production code was already right** — `93d729690` maps `UI -> MASTER`, which is the
+      *vanilla-correct* answer rather than a fallback, because before the separate slider existed UI
+      sounds played on master. **The test was what encoded the false claim.** Fixed by keeping the
+      same-name rule for every category that exists here, pinning the deliberate exception for the
+      rest, and adding an anti-vacuity counter so it cannot silently degrade into "maps to
+      something".
+      ⚠️ **Deliberately NOT fixed by shrinking `PlatformSoundCategory` per band.** The mirror is
+      wider than vanilla on purpose: MC-free skill code must compile identically everywhere, and
+      trimming it would move the break out of `platform/` and into skill code — the exact thing
+      Phase 2's boundary exists to prevent.
+- [x] **8.2.5c.2 `SuperAbilityListenerTillingTest`** — NPE. `ItemUsageContext`'s public constructor
+      calls **`PlayerEntity#getWorld()`** on this band and `Entity#getEntityWorld()` on newer ones;
+      the test stubbed only the latter, so vanilla got a null world and the NPE surfaced inside
+      `HoeItem` with nothing pointing back at the stub. Both are now stubbed — `Entity` carries both
+      methods here and they are **separate stubs to Mockito**.
+      ⚠️ The comment that misled was `// getEntityWorld, not getWorld — verified with javap`: true
+      when written, and it **rotted silently**. This is the [[version-pinned-comments-rot]] shape
+      applied to a *test*, and a stale comment asserting a jar fact is worse than none, because it
+      stops the next reader from re-deriving it.
+
 #### 8.2 — blast radius
 
 | Step | Touches | Lost if wrong | Comes back from |
