@@ -21,13 +21,21 @@ manifest — a lookup, not a judgment call.
 own `fabric.mod.json`. Read from each branch (`git show <branch>:src/main/resources/fabric.mod.json`),
 not retyped:
 
-| Branch | MC versions covered | `depends.minecraft` | Released tag |
-|---|---|---|---|
-| `master` | `1.21.11` | `~1.21.11` | `mc1.21.11-v2.2.050-build.26` |
-| `mc/1.21.10` | `1.21.9`, `1.21.10` | `>=1.21.9 <1.21.11` | `mc1.21.10-v2.2.050-build.25` |
-| `mc/1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | `>=1.21.6 <1.21.9` | `mc1.21.8-v2.2.050-build.24` |
-| `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v2.2.050-build.27` |
-| `mc/1.21.4` | `1.21.4` | `>=1.21.4 <1.21.5` | `mc1.21.4-v2.2.050-build.29` |
+✅ **Read 2026-08-13 from the releases API, not retyped** — the whole *Released tag* column was
+stale, still naming the `-build.<N>` tags that 10.7f and R-r reaped. Phase 10's naming has now
+reached a player on **every** band:
+
+| Branch | MC versions covered | `depends.minecraft` | Released tag | Published jar |
+|---|---|---|---|---|
+| `master` | `1.21.11` | `~1.21.11` | `mc1.21.11-v2.2.050` | `mcmmo-2.2.050+mc1.21.11.jar` |
+| `mc/1.21.10` | `1.21.9`, `1.21.10` | `>=1.21.9 <1.21.11` | `mc1.21.10-v2.2.050` | `mcmmo-2.2.050+mc1.21.9-1.21.10.jar` |
+| `mc/1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | `>=1.21.6 <1.21.9` | `mc1.21.8-v2.2.050` | `mcmmo-2.2.050+mc1.21.6-1.21.8.jar` |
+| `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v2.2.050` | `mcmmo-2.2.050+mc1.21.5.jar` |
+| `mc/1.21.4` | `1.21.4` | `>=1.21.4 <1.21.5` | `mc1.21.4-v2.2.050` | `mcmmo-2.2.050+mc1.21.4.jar` |
+
+⚠️ One dangling tag survives: `mc1.21.11-v2.2.050-build.3` (`afb2a6a6a`) has **no release attached**,
+and the reaping sweep enumerates `gh release list`, so a bare tag is invisible to it. Harmless, but
+it means *"the sweep keeps one tag per line"* is false — it keeps one **release** per line.
 
 🔑 **So `1.21.6`, `1.21.7` and `1.21.9` are NOT missing** — they are covered by the `mc/1.21.8` and
 `mc/1.21.10` jars respectively. Nothing needs building for them.
@@ -616,7 +624,10 @@ and the guard looked solid on five branches. The gate that would have caught it 
       The 10.4a ruling is confirmed by observation, not argument: the tag kept its `mc<VER>-v` prefix,
       so the reaping sweep still matched the old `-build.*` releases and cleaned them up with no
       manual step.
-- [ ] **10.7g** 🔴 **`master`'s release is the ONLY stale one** — `mc1.21.11-v2.2.050-build.26`,
+- [x] **10.7g** ✅ **CLOSED 2026-08-13 by R-r** — `mc1.21.11-v2.2.050` is published carrying
+      `mcmmo-2.2.050+mc1.21.11.jar`, and `-build.26` was reaped automatically. **Phase 10 is
+      complete: all five bands ship a Minecraft-labelled jar.** The original finding follows.
+      🔴 **`master`'s release was the ONLY stale one** — `mc1.21.11-v2.2.050-build.26`,
       still carrying the old un-labelled `mcmmo-2.2.050-build.26.jar`. Under R-g `master` has no
       workflow, so it did not re-release with its siblings and **the newest band is the one band whose
       download still has no Minecraft version in its name** — the exact complaint Phase 10 exists to
@@ -681,12 +692,26 @@ sighting in this project.
         `src/`, zero `gradle*`, zero configs — so the jar's *contents* are identical to what those
         gates last cleared on `master`. Stated rather than skipped silently; if the next `master`
         push touches code, both are mandatory again.
-- [ ] **10.8d** Push. ⚠️ **The push itself releases** — `.github/workflows/release.yml` is inside
-      `release.yml`'s own `paths:` filter, so adding the file triggers the workflow that publishes.
-      There is no separate "release" action to take and no way to land this quietly.
-- [ ] **10.8e** Verify from outside the repo: `git ls-remote --tags` shows `mc1.21.11-v2.2.050`, and
-      the Actions API shows the run green. Per R11 the *conclusion* is readable unauthenticated; the
-      log is not.
+- [x] **10.8d** ✅ Pushed `0840cef8e`. The push itself released — `.github/workflows/release.yml` is
+      inside `release.yml`'s own `paths:` filter, so adding the file triggered the workflow that
+      publishes. There was no separate "release" action to take and no way to land it quietly.
+- [x] **10.8e** ✅ **VERIFIED FROM OUTSIDE THE REPO. 10.7g is closed.**
+      - run: `Build & Release` on **`master`** — `completed / success` at `0840cef8e`. That the
+        workflow fired on `master` at all is the proof R-r took effect; nothing ran there before.
+      - release: **`mc1.21.11-v2.2.050`**, assets `mcmmo-2.2.050+mc1.21.11.jar` +
+        `-sources.jar`. **Every band now ships a Minecraft-labelled jar** — the complaint Phase 10
+        exists to fix no longer survives anywhere.
+      - reaped: `mc1.21.11-v2.2.050-build.26` gone from both the release list and the tag list,
+        automatically, confirming the 10.4a tag-prefix ruling a second time.
+      - ⚠️ `-build.3` **survives as a bare tag** — see the note under the band table.
+- [x] **10.8g** ✅ Back-ported the floor fix to all four bands (`Backport-of: c3351998a`), each
+      verified byte-identical to `master`'s copy. ⚠️ **The auditor cannot check this one.**
+      `PROPAGATABLE_PREFIXES = ("src/", "gradle.properties", "build.gradle", "settings.gradle")`, so
+      a `.github/`-only commit is classified not-propagatable — drift-audit neither demanded the
+      back-port nor confirmed it. **That is R9's shape extended to CI config, and it is worse than
+      docs drift**: a divergent `release.yml` silently changes how a band *ships*. Folded into R9.
+      ⚠️ The band pushes deliberately triggered **no** releases — neither `.gitignore` nor
+      `drift-audit.yml` is in `release.yml`'s `paths:` filter. Confirmed against the API after.
 - [x] **10.8f** ✅ Done. Caveat-expiry pass. Grep the **symptom** — `weekly`, `no workflow`, `R-g`,
       `nothing runs on push` — not the files edited. Known live claims that go false: `AGENTS.md`
       ("the weekly run is gone", "nothing runs on push"), TODO `8.x.4` (a new band now **inherits**
@@ -812,9 +837,28 @@ silently cannot probe itself.
 | R6 | Component-API cliff needs reimplementation | 🔴 **NOW IN SCOPE under R-l.** Confined to band `1.21.1`; it is what R-m decides |
 | R7 | Live playtest disrupted | ✅ Phase 0 tag + instance backup |
 | **R8** | **A fix lands on `master` and is silently never back-ported** | 🟡 **DOWNGRADED, not closed (R-r, 2026-08-13).** All three legs exist again: the convention, `drift-audit.py`, and the weekly run — restored to `master`, the only branch GitHub fires `schedule` from, and its band floor fixed from a vacuous `0` to a real `4`. ⚠️ **The unattended leg is weekly and reports to a tab nobody opens (R11)**, so between a commit and the next Monday detection is still *"somebody remembers"*. **Each new band multiplies this** — 5 bands today, 9 after Phase 9 — and the floor must be raised per cut (8.x.9) or it silently stops counting. The one open instance (`f73031ed9`) is closed by **R-q** |
-| **R9** | **`drift-audit.py` is blind to docs drift** | 🔴 **OPEN, and it has now produced a real one.** It classifies a `README.md`/`wiki/`-only commit as not-propagatable and ignores it — its own self-test asserts that deliberately. R-j made docs part of what every band ships, so a forgotten docs fix serves a wrong page to that band's players. **Instance (2026-08-13):** `mc/1.21.4` shipped and released, and for a whole session the README and six wiki pages still said *"Minecraft 1.21.4 and older are not supported"* — the band's own players were told their jar did not exist. Every drift audit in that window read clean. ⚠️ Note the interim check `git diff --name-only master <band> -- README.md wiki/` **would also have said clean**: the docs were byte-identical on all five branches and identically *wrong*. Cross-branch equality is not correctness, and nothing mechanical currently checks the docs against the branch list |
+| **R9** | **`drift-audit.py` is blind to docs drift — and to `.github/` and `scripts/`** | 🔴 **OPEN, and WIDER than first written (2026-08-13).** The blindness is not a docs special case: `PROPAGATABLE_PREFIXES = ("src/", "gradle.properties", "build.gradle", "settings.gradle")`, so **everything else** is invisible — `README.md`/`wiki/`, `scripts/` (already flagged: tooling is what a band needs to run its own gates) **and `.github/`**. The `.github/` hole is the worst of the three because a divergent `release.yml` silently changes how a band *ships*, and it was exercised live this session: the R-r floor fix was back-ported to four bands with the auditor neither demanding it nor confirming it. ⚠️ Note the shape — the auditor is not wrong, it is *narrow*, and it reports a confident **"No drift"** either way. Original docs instance follows. 🔴 **OPEN, and it has now produced a real one.** It classifies a `README.md`/`wiki/`-only commit as not-propagatable and ignores it — its own self-test asserts that deliberately. R-j made docs part of what every band ships, so a forgotten docs fix serves a wrong page to that band's players. **Instance (2026-08-13):** `mc/1.21.4` shipped and released, and for a whole session the README and six wiki pages still said *"Minecraft 1.21.4 and older are not supported"* — the band's own players were told their jar did not exist. Every drift audit in that window read clean. ⚠️ Note the interim check `git diff --name-only master <band> -- README.md wiki/` **would also have said clean**: the docs were byte-identical on all five branches and identically *wrong*. Cross-branch equality is not correctness, and nothing mechanical currently checks the docs against the branch list |
 | **R11** | **A band's release fails and nobody finds out** | 🔴 **STILL OPEN — R-r did NOT close it.** It has already happened once: Phase 10's guard defect (§10.7) failed **four** band releases on 2026-08-13 and was invisible for a day with local builds green, ship gate green, drift audit green and `git status` clean. Found only by hand-querying the Actions API. ⚠️ **R-r restores who *can* release, not who *watches*.** `master` now has a workflow, so a red run at least appears on the branch a person works on — but **nothing pushes that anywhere**, and the failure mode was never "the run was on an obscure branch", it was "nobody looked". Both mitigations remain manual: ship-gate step 1 reproduces CI's invocation (§10.7e), and `curl -s "https://api.github.com/repos/Wulfic/mcMMO-Singleplayer/actions/runs?per_page=5"` after any push touching `src/**`, `build.gradle`, `gradle.properties` or `.github/workflows/release.yml`. ⚠️ Reading a run's **log** needs admin auth (`403` unauthenticated); the *conclusion* does not. **A real close needs a notification, not a workflow** |
 | **R10** | **Two branches resolving to the same `minecraft_version`** | 🔴 **LIVE AGAIN as of R-r (2026-08-13) — it was dormant only because `master` could not release.** The tag-reaping sweep is back on `master`, so every branch releases on push and two branches on one version means **each run deletes the other's release**. `release.yml` detects the collision and emits a `::warning::` — deliberately not a failure, so it can never take down a legitimate release, which also means **nothing stops it**. Keep the one-band-one-version rule; it is now load-bearing rather than tidy |
+
+---
+
+## Carried debt
+
+- [x] ✅ **The `.gitignore` hole — CLOSED 2026-08-13.** `mc/1.21.8` and `mc/1.21.10` lacked `.agent/`
+      and `.github/`, so `git status` there listed `?? .agent/`, `?? .github/copilot-instructions.md`
+      and `?? .github/skills/`, and a single `git add -A` would have committed the local memory tree
+      that **R-n** forbids. Every commit on those bands had been staged by path to dodge it — a
+      footgun, not a procedure. Seen live again this session while back-porting the floor fix.
+      Fixed on both (`Backport-of: a63ea4305`); **all five branches now hash `.gitignore` identically
+      (`b432715f0`)**.
+      🔑 **Deliberately a PARTIAL back-port.** `a63ea4305` did two things — added the ignore lines
+      *and* deleted `.github/` from version control (R-g, master-only). Only the first half belongs
+      on a band. Verified after the change that the three tracked `.github/` files are **still
+      tracked**: `.gitignore` has no effect on already-tracked paths, which is also why this was safe
+      on `master` in the first place.
+- [ ] **8.1a.A4** — the `mc/1.21.4` mob-origin re-stamp still has **no guard test**. See 8.1a.A.
+- [ ] **R9** — now known to be wider than docs; see the risk row.
 
 ---
 
