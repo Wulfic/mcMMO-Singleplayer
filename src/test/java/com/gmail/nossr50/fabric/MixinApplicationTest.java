@@ -441,6 +441,26 @@ class MixinApplicationTest {
                         + "count toward Hunter mastery and the whole anti-farm gate would be absent "
                         + "while looking present");
 
+        // ⚠️ The band's second half of the same gate, and it exists only on the sub-floor bands.
+        // This band's newest available fabric-api bundles a data-attachment-api whose
+        // fabric_readAttachmentsFromNbt assigns the deserialized map UNCONDITIONALLY — and that map
+        // is null when the NBT holds no attachments. Later releases early-return on the null. So
+        // here Entity#readNbt wipes the attachment map, and every NBT-carrying spawn path runs
+        // create(World, SpawnReason) — where the marker above is written — and THEN readNbt.
+        //
+        // Losing this handler restores the original defect exactly: the create-time stamp still
+        // fires, still logs its "gate is live" line, and is erased microseconds later. Nothing in
+        // any log, no exception, and gameplay-smoke's combat-egg-control phase pays the full natural
+        // rate for a /summoned mob. Every static check in the project is blind to it, which is why
+        // the assertion is here rather than left to the harness.
+        assertTrue(Arrays.stream(EntityType.class.getDeclaredMethods())
+                        .anyMatch(method -> method.getName().contains("restampAfterNbtRead")),
+                "EntityTypeSpawnOriginMixin's getEntityFromNbt re-stamp did not apply to EntityType "
+                        + "— on this band the mob-origin marker is written at create time and then "
+                        + "destroyed by fabric-api's attachment read, so /summon, mob spawners and "
+                        + "chunk load would all produce mobs that read as NATURAL and the egg-farm "
+                        + "exploit gate would be open");
+
         // MobEntity is loaded by EntityType's static init during bootstrap, so class-loading proves
         // nothing; the handler does. Losing this one leaves a narrower but very real hole: a zombie
         // spawner over water launders its origin into drowned that count.
