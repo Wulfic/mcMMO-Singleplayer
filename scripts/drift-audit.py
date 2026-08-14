@@ -61,8 +61,35 @@ TRAILER = re.compile(r"^\s*Backport-of:\s*([0-9a-fA-F]{7,40})\s*$", re.M)
 NOT_NEEDED = re.compile(r"^\s*Backport-not-needed:\s*(\S.*?)\s*$", re.M)
 
 # A commit touching any of these is assumed to need propagation to every band. Everything else
-# (docs, plans/, the wiki, scripts/) is master-only unless someone back-ports it deliberately.
-PROPAGATABLE_PREFIXES = ("src/", "gradle.properties", "build.gradle", "settings.gradle")
+# (docs, plans/, the wiki) is master-only unless someone back-ports it deliberately.
+#
+# ⚠️ `scripts/` and `.github/` were added 2026-08-13 (risk R9), and NEITHER was an oversight worth
+# shrugging at -- both had already produced a real miss:
+#
+#   scripts/  -- tooling is exactly what a band needs to run its OWN gates. A band that never
+#                receives config-id-audit.py cannot run gate #4, and nothing anywhere says so.
+#                AGENTS.md had been carrying "cherry-pick tooling to each band deliberately" as a
+#                written instruction, i.e. the check was a person's memory.
+#   .github/  -- a divergent release.yml changes how that band SHIPS. Exercised the same day: the
+#                drift-audit band-floor fix was back-ported to four bands and this auditor printed
+#                "No drift" identically before and after, because it could not see the commit at
+#                all. Neither demanded nor confirmed.
+#
+# 🔑 Docs stay OUT, and that is a considered exclusion rather than the same bug left unfixed. Two
+# reasons. Per-push docs failures between "fix lands on master" and "fix is back-ported" train
+# people to ignore the audit, which the header above is explicit about. And more importantly a
+# propagation check is simply the WRONG INSTRUMENT for the docs defect actually recorded against
+# R9: those pages were byte-identical on all five branches and identically WRONG. Cross-branch
+# equality is not correctness. That half is covered by a per-band guard test asserting the docs
+# match the real band set -- see BandDocsMatchRealityTest.
+PROPAGATABLE_PREFIXES = (
+    "src/",
+    "gradle.properties",
+    "build.gradle",
+    "settings.gradle",
+    "scripts/",
+    ".github/",
+)
 
 # ...except these, which are per-band BY CONSTRUCTION. A band branch pins its own Minecraft
 # version as its first commit (release.yml: "NO TWO BRANCHES MAY RESOLVE TO THE SAME
@@ -231,6 +258,22 @@ def self_test() -> int:
         g("add", "-A")
         g("commit", "-qm", "docs: master-only, not propagatable")
 
+        # R9: tooling and CI config ARE propagatable, and both had already produced a real miss
+        # before this was fixed. A band that never receives a script cannot run the gate it
+        # implements; a band whose release.yml has drifted ships differently. Each is left
+        # un-back-ported here, so both must show up as MISSING below.
+        (repo / "scripts").mkdir()
+        (repo / "scripts" / "gate.py").write_text("print('gate')\n")
+        g("add", "-A")
+        g("commit", "-qm", "feat(tooling): FORGOTTEN script the band cannot run its gate without")
+        forgotten_script = g("rev-parse", "HEAD").strip()
+
+        (repo / ".github" / "workflows").mkdir(parents=True)
+        (repo / ".github" / "workflows" / "release.yml").write_text("name: r\n")
+        g("add", "-A")
+        g("commit", "-qm", "ci: FORGOTTEN workflow change that alters how a band ships")
+        forgotten_ci = g("rev-parse", "HEAD").strip()
+
         (repo / "src" / "A.java").write_text("class A { int fixed; int forgotten; int w; }\n")
         g("commit", "-aqm", "chore: master only\n\nBackport-not-needed: 1.21.11-only toolchain")
 
@@ -244,11 +287,21 @@ def self_test() -> int:
         r = reports[0]
 
         failures = []
-        if len(r.missing) != 1:
-            failures.append(f"expected exactly 1 missing commit, got {len(r.missing)}: "
-                            f"{[c.subject for c in r.missing]}")
-        elif r.missing[0].sha != forgotten:
-            failures.append(f"reported the wrong commit as missing: {r.missing[0].subject!r}")
+        missing_shas = {c.sha for c in r.missing}
+        expected_missing = {forgotten, forgotten_script, forgotten_ci}
+        if missing_shas != expected_missing:
+            failures.append(
+                f"expected exactly 3 missing commits (a src/ fix, a scripts/ one and a .github/ "
+                f"one), got {len(r.missing)}: {[c.subject for c in r.missing]}"
+            )
+            # Name the two R9 prefixes specifically -- if either silently drops out, the auditor has
+            # regressed to the blind spot that let a band ship without its own gates.
+            if forgotten_script not in missing_shas:
+                failures.append("a scripts/-only commit was NOT reported as missing; the band would "
+                                "silently lack the tooling its gates need (R9)")
+            if forgotten_ci not in missing_shas:
+                failures.append("a .github/-only commit was NOT reported as missing; a band's "
+                                "release.yml can drift and change how it ships (R9)")
         if r.covered != 1:
             failures.append(f"expected 1 covered commit, got {r.covered}")
         if r.waived != 1:
@@ -273,11 +326,21 @@ def self_test() -> int:
         if "MISSING" not in blob:
             failures.append(f"the rendered drift report does not say MISSING:\n{blob}")
 
-        # The converse: once the missing fix IS back-ported, the audit must go clean. Without
-        # this, a script that reports EVERYTHING as drift also passes the checks above.
+        # The converse: once the missing fixes ARE back-ported, the audit must go clean. Without
+        # this, a script that reports EVERYTHING as drift also passes the checks above -- and with
+        # the R9 prefixes added, "everything" now includes two more file classes, so this converse
+        # got more load-bearing rather than less.
         g("checkout", "-q", "mc/1.21.5")
         (repo / "src" / "A.java").write_text("class A { int fixed; int forgotten; }\n")
         g("commit", "-aqm", f"fix: FORGOTTEN on the band\n\nBackport-of: {forgotten}")
+        (repo / "scripts").mkdir(exist_ok=True)
+        (repo / "scripts" / "gate.py").write_text("print('gate')\n")
+        g("add", "-A")
+        g("commit", "-qm", f"feat(tooling): the band gets its gate\n\nBackport-of: {forgotten_script}")
+        (repo / ".github" / "workflows").mkdir(parents=True, exist_ok=True)
+        (repo / ".github" / "workflows" / "release.yml").write_text("name: r\n")
+        g("add", "-A")
+        g("commit", "-qm", f"ci: the band gets the workflow\n\nBackport-of: {forgotten_ci}")
         g("checkout", "-q", "master")
         after = run_audit("master", ["mc/1.21.5"], cwd=repo)[0]
         if after.missing:
@@ -301,9 +364,10 @@ def self_test() -> int:
             for f in failures:
                 print(f"  - {f}", file=sys.stderr)
             return 1
-        print("SELF-TEST PASSED: the auditor detects a forgotten fix, clears a back-ported one, "
-              "ignores docs-only and explicitly-waived commits, flags a typo'd trailer, and "
-              "RENDERS the drift report readably (names the commit, encodable on a cp1252 console).")
+        print("SELF-TEST PASSED: the auditor detects a forgotten fix in src/, scripts/ AND "
+              ".github/ (R9), clears all three once back-ported, ignores docs-only and "
+              "explicitly-waived commits, flags a typo'd trailer, and RENDERS the drift report "
+              "readably (names the commit, encodable on a cp1252 console).")
         return 0
 
 
