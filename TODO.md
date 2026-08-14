@@ -226,6 +226,120 @@ of `1.21.3`'s, so the second cut should be fast.
       ✅ **Unblocked — 8.4 shipped.** Do this band **last** — it is the only one that changes
       `master`.
 
+### 8.2′ — the `mc/1.21.3` plan (written 2026-08-14, before any code)
+
+**Toolchain, resolved from the APIs rather than derived** (8.x.2 says look it up; `1.21.3+build.2`
+happened to match this file's prediction, but it was confirmed against `meta.fabricmc.net`, not
+trusted):
+
+| Property | Value | Source / note |
+|---|---|---|
+| `minecraft_version` | `1.21.3` | newest in band, per every prior cut |
+| `yarn_mappings` | `1.21.3+build.2` | `meta.fabricmc.net/v2/versions/yarn/1.21.3` — `build.2` is newest |
+| `loader_version` | `0.19.3` | still the newest stable, and MC-independent — **unchanged** |
+| `fabric_version` | `0.114.1+1.21.3` | Modrinth; `1.21.2` resolves to `0.106.1+1.21.2` — see the mob-origin note |
+| `supported_minecraft_versions` | `1.21.2,1.21.3` | per-band, never copied |
+| `depends.minecraft` | `>=1.21.2 <1.21.4` | the band's **range** |
+| `modmenu_version` | `12.0.1` | lists `1.21.2,1.21.3` — one artifact covers the band |
+| `cloth_config_version` | `16.0.143` | lists `1.21.2,1.21.3`; coordinate is `cloth-config-fabric`, no `+fabric` suffix in the property |
+
+✅ **R-m's three absent subsystems are all PRESENT here**, read from `plans/BAND_TABLE.md`:
+`EntityAttributes.*` (all 8), `ConsumableComponent`/`DataComponentTypes#CONSUMABLE`, and
+`PlayerInput`. So this is an **ordinary rename-shaped band** — the component cliff really is confined
+to `1.21.1`, exactly where Phase 1.5 measured it. Nothing here needs R-m's gating work.
+
+#### 🔴 The ordering problem, and why the docs commit goes FIRST on `master`
+
+`BandDocsMatchRealityTest` runs **inside gate 1**, so `mc/1.21.3` cannot go green until the support
+floor moves. But R-i/R-j require the docs be **byte-identical on every branch**, and AGENTS.md
+requires fixes land on `master` first. Those three pull against each other, and the naive order
+(fix the docs on the band to make it green) violates two of them.
+
+**Resolution — commit the docs change on `master` first, locally, then cut the band from that
+commit.** The new branch then *inherits* correct docs with no back-port at all, and the other four
+bands take an ordinary cherry-pick.
+
+⚠️ **The window this deliberately accepts:** between the `master` docs commit and the band's release,
+`master`'s README claims `1.21.2`/`1.21.3` are supported when no jar exists yet. It is bounded by
+keeping the push to the end — **nothing is pushed until the band is green** — and it is the lesser
+of the two errors: the inverse (a shipped band whose own docs deny it) is R9's *recorded* instance,
+this one is a promise that comes true within the hour.
+
+🔑 A docs-only `master` commit **does not release** — `README.md` and `wiki/` are outside
+`release.yml`'s `paths:` filter (verified 2026-08-14, `release.yml:75-83`). So this costs no release.
+
+⚠️ **`drift-audit.py` will neither demand nor confirm the docs back-port** — docs are deliberately
+outside `PROPAGATABLE_PREFIXES` (R9). The check is by hand:
+`git diff --name-only master <band> -- README.md wiki/` must print **nothing**, on all five bands.
+
+#### 8.2 — the steps
+
+- [ ] **8.2.0** On `master`: move the floor sentence `1.21.3` → **`1.21.1`** in **both**
+      `README.md:44` and `wiki/Installation.md:28`, and add the new band to the three tables that
+      enumerate bands (`README.md:9` version span, `:27-31` the jar/toolchain matrix, `:330-334` the
+      branch list). Caveat-expiry pass greps the **symptom** — `1.21.4 – 1.21.11`, `1.21.4` as
+      "oldest", `and older are not supported` — not the files edited.
+      ⚠️ `everyVersionThisBandShipsAppearsInTheReadme` needs a real mention of **both** `1.21.2` and
+      `1.21.3`; today `1.21.3` appears *only* inside the floor sentence being deleted, so removing it
+      without adding the matrix row swaps one failure for another.
+- [ ] **8.2.1** `git switch -c mc/1.21.3` off that `master` commit.
+- [ ] **8.2.2** First commit pins the toolchain above in `gradle.properties` **and nothing else**.
+- [ ] **8.2.3** `fabric.mod.json` `depends.minecraft` = `>=1.21.2 <1.21.4`.
+- [ ] **8.2.4** `git ls-tree -r --name-only HEAD -- .github` → expect **exactly three** paths
+      (`FUNDING.yml`, `workflows/release.yml`, `workflows/drift-audit.yml`), inherited via R-r.
+      Then prove the inherited tooling actually runs here: `release-sweep-selftest.sh --mutate` 6/6
+      with all four mutations *applied and* caught, and `ci-watch.sh --self-test` 6/6.
+      ⚠️ **Never `git add -f .github`** — it sweeps in 12 untracked Copilot files no branch tracks.
+- [ ] **8.2.5** Compile; work errors against `plans/BAND_TABLE.md`. Fix **only** inside `fabric/` and
+      `platform/` — `PlatformBoundaryGuardTest` stays green.
+- [ ] **8.2.6** Per 8.x.6, ask **first** whether `master` can absorb each difference — and measure the
+      absorption's reach across **every** band it claims, not just the endpoints (the `getEntityWorld`
+      lesson: present at `1.21.5`, absent `1.21.6`–`1.21.8`, back at `1.21.9`).
+- [ ] **8.2.7** ⚠️ **Expect the mob-origin defect (8.1a.A).** This band pins fabric-api `0.114.1`,
+      *older* than the `0.119.4` whose `data-attachment-api 1.6.2` carried the unconditional assign —
+      so it is very likely present and possibly worse. Read `fabric_readAttachmentsFromNbt` from this
+      band's own bytecode before trusting `combat-egg-control`. **Every static gate is blind to it**:
+      build, boot-check and the mixin audit all pass with it live. If it reproduces, port the
+      `EntityType#getEntityFromNbt` RETURN re-stamp **and** `MobOriginRestampSeamTest` from
+      `mc/1.21.4` — band-only, since `master` has no such defect.
+- [ ] **8.2.8** Full ship gate 1–7, then push, then gate 8. Gates 3/5/6 run against the **pinned**
+      `1.21.3`, matching the `mc/1.21.8` and `mc/1.21.10` precedent.
+      ⚠️ **`1.21.2` is therefore not boot-proven, and that is a stated narrowing, not a pass.**
+      Normally harmless (one jar, one band, identical surface across all 1386 records) — but the
+      mob-origin defect is a **fabric-api** defect, and `1.21.2` resolves a *different* fabric-api
+      (`0.106.1` vs `0.114.1`). So if 8.2.7 reproduces, add a second `boot-check.sh <jar> 1.21.2` run.
+- [ ] **8.2.9** Back-port the docs commit to the other four bands (no `Backport-of:` trailer is
+      required by the auditor, but carry one anyway), then verify the byte-identity by hand on all
+      five. Then raise `BAND_COUNT` **4 → 5** in `.github/workflows/drift-audit.yml` on `master`
+      first and back-port to all five bands (8.x.9).
+      ⚠️ **Order matters:** the floor must go to `5` only **after** `mc/1.21.3` is pushed, or the next
+      weekly audit fails on a band that does not exist yet. A stale floor is *under*-strict and will
+      not remind you; a premature one is a red run nobody is watching (R11).
+
+#### 8.2 — blast radius
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| 8.2.0 | `README.md`, `wiki/Installation.md` on `master` | nothing — docs only, and **no release fires** (outside `paths:`) | `git revert`; `master` clean at `a7a4f13d5` |
+| 8.2.1–8.2.7 | a **new** branch only | nothing — no existing branch is touched | `git branch -D mc/1.21.3` while unpushed |
+| 8.2.8 push | **a new public release line** `mc1.21.3-v2.2.050` | a bad jar published under a new tag | the sweep only matches `mc1.21.3-v*`, so it **cannot reach another band**; delete the release + tag, or fix forward and re-push |
+| 8.2.9 | 4 existing bands (docs) + 5 branches (`.github/`) | docs revert; a wrong `BAND_COUNT` makes the weekly audit red or vacuous | per-branch `git revert`; neither path is in `release.yml`'s `paths:`, so **no band re-releases** |
+
+🔴 **8.2.8 is the only outward-facing step.** R10 is live — before pushing, confirm no other branch
+resolves to `minecraft_version=1.21.3`, or the two runs delete each other's release.
+
+### What I am NOT doing in 8.2
+
+- **Not cutting from `mc/1.21.4`**, however tempting given the near-subset absent-set. Bands are cut
+  from `master` so their diffs stay independent; inheriting `1.21.4`'s back-compat fixes would make
+  this band's real cost unmeasurable and hide whichever of them is unnecessary here.
+- **Not fixing the mob-origin defect on `master`.** `master` has no such defect; a redundant injector
+  there would add mixin surface and `allow=` audit churn on six branches for nothing (asked and
+  answered identically at 8.1a.A).
+- **Not touching `minecraft_version` on `master`** to resolve any band difference — the standing rule.
+- **Not starting `mc/1.21.1` (8.3) or Phase 9.** `1.21.1` is the only band that changes `master`
+  (R-m) and goes last.
+
 ### 8.1a — what the `mc/1.21.4` cut found
 
 Two gameplay defects blocked the band after every static gate had passed: 0 ERROR lines, 0 mixin
