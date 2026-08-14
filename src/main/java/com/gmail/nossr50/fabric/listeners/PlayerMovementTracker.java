@@ -219,7 +219,7 @@ public final class PlayerMovementTracker {
      */
     static void tickPlayer(@NotNull ServerPlayerEntity player) {
         final UUID uuid = player.getUuid();
-        final Vec3d current = player.getEntityPos();
+        final Vec3d current = player.getPos();
         final Vec3d previous = LAST_POSITIONS.put(uuid, current);
         // ⚠️ The cast is load-bearing on the older bands — do NOT "simplify" it away.
         // ServerPlayerEntity's covariant ServerWorld override of getEntityWorld() was added in

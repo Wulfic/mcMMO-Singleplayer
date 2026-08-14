@@ -221,7 +221,7 @@ class PetFollowTeleportTest {
     void petsFollowOnTheRealSweepWithNoProfileLoaded() {
         final UUID uuid = UUID.randomUUID();
         final ServerPlayerEntity owner = player(uuid);
-        when(owner.getEntityPos()).thenReturn(new Vec3d(0, 64, 0), new Vec3d(5000, 64, 0));
+        when(owner.getPos()).thenReturn(new Vec3d(0, 64, 0), new Vec3d(5000, 64, 0));
         final WolfEntity wolf = pet(owner);
         when(wolf.shouldTryTeleportToOwner()).thenReturn(false);
         worldContaining(owner, wolf);
@@ -236,7 +236,7 @@ class PetFollowTeleportTest {
     void walkingAroundNeverTouchesThePets() {
         final UUID uuid = UUID.randomUUID();
         final ServerPlayerEntity owner = player(uuid);
-        when(owner.getEntityPos()).thenReturn(new Vec3d(0, 64, 0), new Vec3d(0.3, 64, 0));
+        when(owner.getPos()).thenReturn(new Vec3d(0, 64, 0), new Vec3d(0.3, 64, 0));
         final WolfEntity wolf = pet(owner);
         final ServerWorld world = worldContaining(owner, wolf);
 
@@ -255,7 +255,7 @@ class PetFollowTeleportTest {
         // position in the new world is a box somewhere plausible and wrong.
         final UUID uuid = UUID.randomUUID();
         final ServerPlayerEntity owner = player(uuid);
-        when(owner.getEntityPos()).thenReturn(new Vec3d(0, 64, 0), new Vec3d(5000, 64, 0));
+        when(owner.getPos()).thenReturn(new Vec3d(0, 64, 0), new Vec3d(5000, 64, 0));
         final WolfEntity wolf = pet(owner);
         final ServerWorld overworld = worldContaining(owner, wolf);
         when(overworld.getRegistryKey()).thenReturn(World.OVERWORLD, World.NETHER);
@@ -274,7 +274,7 @@ class PetFollowTeleportTest {
 
         final UUID uuid = UUID.randomUUID();
         final ServerPlayerEntity owner = player(uuid);
-        when(owner.getEntityPos()).thenReturn(new Vec3d(0, 64, 0), new Vec3d(5000, 64, 0));
+        when(owner.getPos()).thenReturn(new Vec3d(0, 64, 0), new Vec3d(5000, 64, 0));
         final WolfEntity wolf = pet(owner);
         worldContaining(owner, wolf);
 
@@ -338,7 +338,7 @@ class PetFollowTeleportTest {
         final ServerPlayerEntity handle = mock(ServerPlayerEntity.class);
         lenient().when(handle.getUuid()).thenReturn(uuid);
         lenient().when(handle.getName()).thenReturn(Text.literal("TestPlayer"));
-        lenient().when(handle.getEntityPos()).thenReturn(new Vec3d(0, 64, 0));
+        lenient().when(handle.getPos()).thenReturn(new Vec3d(0, 64, 0));
         lenient().when(handle.isOnGround()).thenReturn(true);
         lenient().when(handle.isTouchingWater()).thenReturn(false);
         return handle;

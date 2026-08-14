@@ -18,7 +18,7 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.BoggedEntity;
 import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.passive.AbstractCowEntity;
+import net.minecraft.entity.passive.CowEntity;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.GoatEntity;
 import net.minecraft.entity.passive.MooshroomEntity;
@@ -485,12 +485,17 @@ class MixinApplicationTest {
         // the original @Mixin(AbstractCowEntity.class) paid ZERO for every goat ever milked — while
         // goats went on paying for breeding, raising and feeding, which is what made it invisible.
         //
-        // 🔑 The roster was settled by binary-grepping the extracted 1.21.11 jar for MILK_BUCKET across
-        // all 1040 entity classes, NOT from a species list and NOT from method names: javap shows a
-        // method where it is DECLARED, which is not where it is reachable. That grep returns exactly
-        // three — AbstractCowEntity (carrying cow and mooshroom), GoatEntity, and WanderingTraderEntity
-        // (a trade offer, not a milking). Re-run it after a version bump; add any new hit here.
-        for (Class<?> milkable : List.of(AbstractCowEntity.class, GoatEntity.class)) {
+        // 🔑 The roster was settled by binary-grepping the extracted jar for MILK_BUCKET across every
+        // entity class, NOT from a species list and NOT from method names: javap shows a method where
+        // it is DECLARED, which is not where it is reachable. Re-run after a version bump; add any
+        // new hit here. On this band (re-run 2026-08-14 over 956 entity classes) it returns exactly
+        // three — CowEntity (carrying cow and mooshroom, which extends it and calls super), GoatEntity,
+        // and WanderingTraderEntity (a trade offer, not a milking). Newer versions interpose an
+        // AbstractCowEntity above CowEntity and the same grep names that instead; the roster is the
+        // same three either way.
+        // ⚠️ Re-run it with a pattern that recurses — `unzip 'net/minecraft/entity/*'` does NOT cross
+        // '/' and yields 75 classes, and an empty roster reads as "delete the mixin".
+        for (Class<?> milkable : List.of(CowEntity.class, GoatEntity.class)) {
             assertDoesNotThrow(() -> Class.forName(milkable.getName(), true,
                     MixinApplicationTest.class.getClassLoader()));
             final boolean hasMilkHook = Arrays.stream(milkable.getDeclaredMethods())

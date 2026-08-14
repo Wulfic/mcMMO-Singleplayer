@@ -411,7 +411,13 @@ public final class SmeltingListener {
      */
     private static boolean hasOreBlockInput(SmeltingRecipe recipe, List<RegistryEntry<Item>> ores) {
         final Ingredient ingredient = recipe.ingredient();
-        return ores.stream().anyMatch(ingredient::acceptsItem);
+        // BAND: Ingredient exposes no acceptsItem(RegistryEntry) here, so the question is asked
+        // through the Predicate<ItemStack> the type already implements. Same question, same answer:
+        // a one-count default stack matches exactly when the entry is one of the ingredient's items.
+        // Deliberately NOT getMatchingItems().contains(ore) -- that would rest on RegistryEntry
+        // identity holding across the two lists, which is true today and is not what we are asking.
+        // This runs once per recipe during a startup scan, so the per-check stack costs nothing.
+        return ores.stream().anyMatch(ore -> ingredient.test(new ItemStack(ore.value())));
     }
 
     /**

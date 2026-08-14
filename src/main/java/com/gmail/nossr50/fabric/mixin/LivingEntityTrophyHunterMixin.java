@@ -5,6 +5,8 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.server.world.ServerWorld;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -17,23 +19,26 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * introspection). A second roll respects Looting for free, needs no new data, and means "more of what
  * that creature drops" — more rotten flesh, but also more gunpowder and ender pearls.
  *
- * <h2>⚠️⚠️ The no-recursion property, and why it belongs to THESE TWO METHODS specifically</h2>
- * The injection is on the <b>3-argument</b> {@code dropLoot} and the bonus roll re-invokes the
- * <b>4-argument</b> one. That is not stylistic — it is the entire reason this class cannot loop.
- * Verified against the 1.21.11 merged jar:
+ * <h2>⚠️⚠️ BAND: the no-recursion property is STRUCTURAL on newer versions and is NOT available here</h2>
+ * Where a 4-argument {@code dropLoot} exists, this class injects the <b>3-argument</b> one and the
+ * bonus roll re-invokes the <b>4-argument</b> one, whose whole body is a single {@code generateLoot}
+ * call — so it can never re-enter the injected method, and no guard is needed.
+ *
+ * <p><b>This band has only the 3-argument overload</b>, verified against its own merged jar:
  *
  * <pre>
- *   protected void dropLoot(ServerWorld, DamageSource, boolean)                 &lt;- injected here
- *       getLootTableKey(); if empty return; dropLoot(world, source, flag, key)
- *
- *   public    void dropLoot(ServerWorld, DamageSource, boolean, RegistryKey)    &lt;- re-invoked
- *       generateLoot(world, source, flag, key, this::dropStack)   // offsets 0-16, nothing else
+ *   protected void dropLoot(ServerWorld, DamageSource, boolean)     &lt;- injected here AND re-invoked
  * </pre>
  *
- * The 4-arg overload's whole body is one {@code generateLoot} call, so it can never re-enter the 3-arg
- * one. <b>Move this injection to the 4-arg overload and it recurses until the stack dies, duplicating
- * the loot all the way down.</b> Getting this wrong produces an item bomb, not a silent no-op, which is
- * why the shape is spelled out here instead of left to be re-derived.
+ * So the bonus roll must re-enter the very method being injected, and without a guard that is an
+ * unbounded loop: each roll triggers another roll and the creature's loot duplicates until the stack
+ * dies. <b>That is why this band carries a re-entrancy flag rather than a rename</b>, and why the flag
+ * must not be "simplified" away — removing it produces an item bomb, not a silent no-op, and neither
+ * the compiler nor a signature probe nor the mixin audit can see it. The same redesign was needed on
+ * every band below the 4-argument overload's introduction.
+ *
+ * <p>Because the re-invoked method is {@code protected} here, it is {@code @Shadow}n rather than
+ * called on the cast reference.
  *
  * <h2>The funnel, checked rather than assumed</h2>
  * A binary grep of the merged jar for {@code dropLoot} returns exactly two classes: {@link LivingEntity}
@@ -68,19 +73,47 @@ public abstract class LivingEntityTrophyHunterMixin {
      * creature has no loot table at all. {@code TAIL} binds to the last one, so a creature with nothing
      * to drop never reaches the roll — correct, and free.
      *
-     * <p>Neither the 4-arg {@code dropLoot} nor {@code getLootTableKey} is {@code @Shadow}n: both are
-     * public API on {@code LivingEntity}/{@code Entity}, so an ordinary call on the cast reference does
-     * the same job with one less thing to drift.
+     * <p>⚠️⚠️ <b>BAND: the bonus roll re-enters this very method</b> — see the class javadoc. The
+     * re-entrancy flag below is load-bearing, not defensive: without it the loot duplicates without
+     * bound. Do not remove it while porting this file forward.
      */
     @Inject(method = "dropLoot(Lnet/minecraft/server/world/ServerWorld;"
                     + "Lnet/minecraft/entity/damage/DamageSource;Z)V", allow = 1,
             at = @At("TAIL"))
     private void mcmmo$trophyHunterBonusRoll(ServerWorld world, DamageSource source,
             boolean causedByPlayer, CallbackInfo ci) {
+        // The bonus roll re-enters this very method (see above), so the nested pass must not schedule
+        // a roll of its own. Without this the loot duplicates until the stack dies.
+        if (mcmmo$inTrophyRoll) {
+            return;
+        }
         final LivingEntity self = (LivingEntity) (Object) this;
         // causedByPlayer is passed straight through so the bonus roll sees exactly the loot conditions
         // the first roll did -- Looting, player-kill-only drops and the killer's luck all included.
-        HunterListener.onLootDropped(self, source, () -> self.getLootTableKey()
-                .ifPresent(key -> self.dropLoot(world, source, causedByPlayer, key)));
+        HunterListener.onLootDropped(self, source, () -> {
+            mcmmo$inTrophyRoll = true;
+            try {
+                mcmmo$dropLoot(world, source, causedByPlayer);
+            } finally {
+                // finally, not a trailing assignment: a loot table that throws must not leave this
+                // creature flagged forever -- it would silently never earn a bonus roll again.
+                mcmmo$inTrophyRoll = false;
+            }
+        });
     }
+
+    /** Set only while the bonus roll re-enters {@code dropLoot}; see the javadoc above. */
+    @Unique
+    private boolean mcmmo$inTrophyRoll;
+
+    /**
+     * Vanilla's own 3-arg {@code dropLoot} — the one this class injects into, re-entered for the bonus
+     * roll behind {@link #mcmmo$inTrophyRoll}.
+     *
+     * <p>{@code @Shadow} carries a {@code mcmmo$} prefix so the shadow does not collide with the
+     * target's own member while still resolving to it.
+     */
+    @Shadow(prefix = "mcmmo$")
+    protected abstract void mcmmo$dropLoot(ServerWorld world, DamageSource source,
+            boolean causedByPlayer);
 }

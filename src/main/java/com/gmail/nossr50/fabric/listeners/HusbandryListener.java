@@ -645,8 +645,11 @@ public final class HusbandryListener {
         // fabricate, exactly as the shear bonus re-runs the species' own drop handler: the yield stays
         // whatever the game says a hive yields, including any future change to it.
         for (int helping = bonusHiveHelpings(husbandry); helping > 0; helping--) {
-            BeehiveBlock.dropHoneycomb(serverWorld, usedItem, state, world.getBlockEntity(pos),
-                    serverPlayer, pos);
+            // BAND: dropHoneycomb takes only the world and the hive here — the tool, state, block
+            // entity and player arguments arrived later, when the drop began consulting the tool's
+            // enchantments. The yield is still vanilla's own, which is the property the comment
+            // above depends on; this band simply has fewer inputs feeding it.
+            BeehiveBlock.dropHoneycomb(world, pos);
         }
         rollHiddenBounty(husbandry, serverPlayer, HIDDEN_BOUNTY_HIVE);
     }

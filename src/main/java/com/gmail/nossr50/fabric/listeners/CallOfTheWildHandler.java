@@ -87,7 +87,7 @@ public final class CallOfTheWildHandler {
         }
 
         final TransientEntityTracker tracker = McMMOMod.getTransientEntityTracker();
-        Vec3d spawnPos = player.getEntityPos().add(1.0, 0.0, 1.0);
+        Vec3d spawnPos = player.getPos().add(1.0, 0.0, 1.0);
         int amountSummoned = 0;
 
         for (int i = 0; i < summon.getEntitiesSummoned(); i++) {
@@ -154,10 +154,16 @@ public final class CallOfTheWildHandler {
 
     private static void applyOwnership(MobEntity entity, ServerPlayerEntity player) {
         if (entity instanceof TameableEntity tameable) {
-            tameable.setTamedBy(player); // wolves + cats: sets tamed and owner together
+            // BAND: there is no setTamedBy convenience here, so the two halves it bundles are
+            // written out. setTamed's second argument is the attribute-refresh flag, which is what
+            // setTamedBy passes for a live tame.
+            tameable.setOwner(player); // wolves + cats
+            tameable.setTamed(true, true);
         } else if (entity instanceof AbstractHorseEntity horse) {
             horse.setTame(true);
-            horse.setOwner(player);
+            // BAND: AbstractHorseEntity takes the owner's UUID rather than the player here. Same
+            // stored field either way — setOwner is a wrapper over exactly this on newer versions.
+            horse.setOwnerUuid(player.getUuid());
         }
     }
 

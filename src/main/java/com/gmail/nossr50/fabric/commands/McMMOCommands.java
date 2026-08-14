@@ -92,8 +92,13 @@ public final class McMMOCommands {
      * difference to the <em>argument</em> on the next line — one token instead of an import, a type
      * and a call. Naming the concrete type here bought nothing and made this file diverge per band.
      */
+    // BAND: this Minecraft has no CommandManager#requirePermissionLevel and no GAMEMASTERS_CHECK
+    // constant — permission gating is written as a plain predicate over the source. Level 2 is the
+    // same gamemasters tier the named constant denotes, so the gate is unchanged in meaning.
+    // The Predicate<ServerCommandSource> declaration above is what keeps this a one-line band
+    // difference rather than an import, a type and a call.
     static final Predicate<ServerCommandSource> CHEAT_COMMAND =
-            CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK);
+            source -> source.hasPermissionLevel(2);
 
     @VisibleForTesting
     static void registerAll(CommandDispatcher<ServerCommandSource> dispatcher) {

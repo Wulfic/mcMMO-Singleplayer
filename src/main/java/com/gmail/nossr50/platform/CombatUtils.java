@@ -131,7 +131,12 @@ public final class CombatUtils {
     public static boolean canCombatSkillsTrigger(@NotNull PrimarySkillType primarySkillType,
             @NotNull Entity target) {
         final boolean isPlayerOrTamed = target instanceof PlayerEntity
-                || (target instanceof Tameable tameable && tameable.getOwnerReference() != null);
+                // BAND: Tameable exposes no owner *reference* here, only the stored UUID. That is
+                // the stronger test for this purpose, not a weaker one: the UUID is persisted on
+                // the entity, so it answers "is this animal owned?" without depending on whether
+                // the owner is currently loaded — which is precisely the misreport the javadoc
+                // above warns about.
+                || (target instanceof Tameable tameable && tameable.getOwnerUuid() != null);
 
         return isPlayerOrTamed
                 ? McMMOMod.getSkillTools().getPVPEnabled(primarySkillType)

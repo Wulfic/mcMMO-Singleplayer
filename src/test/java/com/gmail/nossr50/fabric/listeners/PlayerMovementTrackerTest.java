@@ -274,7 +274,7 @@ class PlayerMovementTrackerTest {
         final UUID uuid = UUID.randomUUID();
         final ServerPlayerEntity player = sneakingPlayer();
         lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getEntityPos())
+        lenient().when(player.getPos())
                 .thenReturn(new Vec3d(0, 64, 0), new Vec3d(0.05, 64, 0));
 
         final StealthManager stealth = mock(StealthManager.class);
@@ -299,7 +299,7 @@ class PlayerMovementTrackerTest {
         final UUID uuid = UUID.randomUUID();
         final ServerPlayerEntity player = sneakingPlayer();
         lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getEntityPos()).thenReturn(new Vec3d(0, 64, 0));
+        lenient().when(player.getPos()).thenReturn(new Vec3d(0, 64, 0));
 
         final StealthManager stealth = mock(StealthManager.class);
         final McMMOPlayer mmoPlayer = trackedPlayer(uuid, stealth);
@@ -341,7 +341,7 @@ class PlayerMovementTrackerTest {
     private static ServerPlayerEntity unarmoredPlayerWithArmourAttribute(UUID uuid) {
         final ServerPlayerEntity handle = player();
         lenient().when(handle.getUuid()).thenReturn(uuid);
-        lenient().when(handle.getEntityPos()).thenReturn(new Vec3d(0, 64, 0));
+        lenient().when(handle.getPos()).thenReturn(new Vec3d(0, 64, 0));
         for (EquipmentSlot slot : EquipmentSlot.VALUES) {
             lenient().when(handle.getEquippedStack(slot)).thenReturn(ItemStack.EMPTY);
         }

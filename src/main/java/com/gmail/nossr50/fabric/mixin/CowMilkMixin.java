@@ -2,7 +2,7 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.passive.AbstractCowEntity;
+import net.minecraft.entity.passive.CowEntity;
 import net.minecraft.entity.passive.GoatEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.ActionResult;
@@ -16,23 +16,34 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * Husbandry's milk verb (Pass 2 stage 4): an animal milked into a bucket.
  *
  * <h2>⚠️ There is no single milking funnel — this mixin needs one target per family</h2>
- * {@code AbstractCowEntity#interactMob} carries the whole player path for the cow family, and
+ * The root of the cow family carries the whole player path in its {@code interactMob}, and
  * {@code MooshroomEntity#interactMob} calls {@code super} at the end of its own body — verified in
  * bytecode — so milking a mooshroom arrives here too, and only its stew-in-a-bowl route needs a mixin
  * of its own ({@link MooshroomStewMixin}).
  *
+ * <p><b>BAND:</b> that root is {@code CowEntity} here. Newer Minecraft versions interpose an
+ * {@code AbstractCowEntity} above it, but the shape this mixin depends on is the same either way:
+ * one class holds the milk branch, and {@code MooshroomEntity} extends it and delegates up. Both
+ * halves were re-verified against this band's own bytecode rather than carried over — the
+ * {@code super} call to {@code CowEntity#interactMob} is present, and the roster below re-derives
+ * to the identical three classes.
+ *
  * <p><b>{@code GoatEntity} is not in that family at all.</b> It extends {@code AnimalEntity} directly
  * and <b>re-implements the entire bucket-for-milk-bucket branch inline</b> in its own
- * {@code interactMob}, so a target list of {@code AbstractCowEntity} alone paid <b>zero</b> for every
+ * {@code interactMob}, so a target list of the cow root alone paid <b>zero</b> for every
  * goat ever milked — silently, because nothing about a verb that simply never fires looks broken. The
  * tell was that goats already paid for breeding, raising and feeding: <b>an animal that pays for five
  * of six verbs is a wiring symptom, not a balance choice.</b>
  *
  * <p>🔑 <b>How the roster was settled, and how to re-settle it after a version bump:</b> not from a
  * species list and not from method names, but by binary-grepping the extracted Minecraft jar for the
- * item the verb actually produces — {@code MILK_BUCKET}. Across all 1040 entity classes in 1.21.11
- * that returns exactly three: {@code AbstractCowEntity}, {@code GoatEntity}, and
- * {@code WanderingTraderEntity} (a trade offer, not a milking, and correctly excluded). A method
+ * item the verb actually produces — {@code MILK_BUCKET}. That scan was re-run against this band's
+ * own jar (2026-08-14, 956 entity classes) and returns exactly three: {@code CowEntity},
+ * {@code GoatEntity}, and {@code WanderingTraderEntity} (a trade offer, not a milking, and correctly
+ * excluded) — the same roster the 1.21.11 scan returned, with the cow root under its name here.
+ * ⚠️ Re-run it with a pattern that actually recurses: {@code unzip 'net/minecraft/entity/*'} does
+ * <b>not</b> cross {@code /} and yields 75 classes rather than 956, and an empty roster reads as
+ * "delete this mixin" rather than as a broken scan. A method
  * listing cannot answer this question — {@code javap} shows a method where it is <em>declared</em>,
  * which is not the same as where it is reachable.
  *
@@ -48,7 +59,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * per-animal harvest cooldown in the listener, not any game mechanic — and because that cooldown lives
  * inside {@code HusbandryListener#onMilked}, adding a target here puts it under the gate for free.
  */
-@Mixin({AbstractCowEntity.class, GoatEntity.class})
+@Mixin({CowEntity.class, GoatEntity.class})
 public abstract class CowMilkMixin {
 
     /**
