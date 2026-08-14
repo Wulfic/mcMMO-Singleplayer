@@ -99,6 +99,7 @@ Each supported Minecraft version band is its own branch. `master` **is** the new
 | `mc/1.21.8` | 1.21.6 – 1.21.8 |
 | `mc/1.21.5` | 1.21.5 |
 | `mc/1.21.4` | 1.21.4 |
+| `mc/1.21.3` | 1.21.2 – 1.21.3 |
 
 A branch pins its own `minecraft_version` and `yarn_mappings` in `gradle.properties`, and its own band range in `fabric.mod.json`. Checking one out and running `./gradlew build` produces that band's jar with no further configuration — there is no preprocessor and no version switch to set.
 
