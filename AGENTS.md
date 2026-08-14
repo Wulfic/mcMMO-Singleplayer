@@ -171,10 +171,18 @@ python scripts/drift-audit.py --self-test && python scripts/drift-audit.py --mas
    be applied retroactively to one somebody merely forgot. A silent skip is the thing being
    prevented; a stated skip is the fix.
 
-⚠️ **`drift-audit.py` does not track a `scripts/`-only commit**, and tooling is exactly what a band
-needs to run its own gates. Cherry-pick tooling to each band deliberately, or the band silently
-cannot probe itself. ⚠️ It also audits **`origin/master`**, so an unpushed `master` commit reads as
-clean — push first, then audit.
+✅ **`drift-audit.py` now tracks `scripts/`-only and `.github/`-only commits** (R9a, 2026-08-13).
+Tooling is exactly what a band needs to run its own gates, and a divergent `release.yml` changes how
+a band *ships* — both used to be invisible, and the auditor reported a confident *"No drift"* either
+way. Cherry-picking tooling to each band is now enforced rather than remembered.
+⚠️ **Docs are still deliberately NOT tracked.** Per-push docs failures between *"fix lands on
+master"* and *"fix is back-ported"* train people to ignore the audit — and propagation is the wrong
+instrument anyway, because the docs defect that actually happened was byte-identical on all five
+branches and identically **wrong**. Cross-branch equality is not correctness. That half is covered by
+`BandDocsMatchRealityTest`, which asserts the documented support floor sits below every version *this*
+branch ships.
+⚠️ It audits **`origin/master`**, so an unpushed `master` commit reads as clean — push first, then
+audit.
 
 **Never resolve a band difference by changing `minecraft_version` on `master`.** Each branch pins its
 own, and **no two branches may resolve to the same `minecraft_version`.** 🔴 **This is live again, not

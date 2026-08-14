@@ -819,9 +819,9 @@ is a backstop, never the check.
 7. `python scripts/drift-audit.py --self-test` **then** `--master master` — **0 MISSING on every
    band**. ⚠️ It audits `origin/master`, so **push first, then audit**.
 
-⚠️⚠️ **`drift-audit.py` does not track a `scripts/`-only commit**, and tooling is exactly what a new
-band needs to run its own gates. **Cherry-pick tooling to each new band deliberately**, or the band
-silently cannot probe itself.
+✅ **`scripts/`-only and `.github/`-only commits are now tracked** (R9a, 2026-08-13), so "cherry-pick
+tooling deliberately" is enforced rather than remembered. ⚠️ **Docs are still not**, deliberately —
+their correctness is checked instead by `BandDocsMatchRealityTest`, which runs inside gate 1.
 
 ---
 
@@ -837,7 +837,7 @@ silently cannot probe itself.
 | R6 | Component-API cliff needs reimplementation | 🔴 **NOW IN SCOPE under R-l.** Confined to band `1.21.1`; it is what R-m decides |
 | R7 | Live playtest disrupted | ✅ Phase 0 tag + instance backup |
 | **R8** | **A fix lands on `master` and is silently never back-ported** | 🟡 **DOWNGRADED, not closed (R-r, 2026-08-13).** All three legs exist again: the convention, `drift-audit.py`, and the weekly run — restored to `master`, the only branch GitHub fires `schedule` from, and its band floor fixed from a vacuous `0` to a real `4`. ⚠️ **The unattended leg is weekly and reports to a tab nobody opens (R11)**, so between a commit and the next Monday detection is still *"somebody remembers"*. **Each new band multiplies this** — 5 bands today, 9 after Phase 9 — and the floor must be raised per cut (8.x.9) or it silently stops counting. The one open instance (`f73031ed9`) is closed by **R-q** |
-| **R9** | **`drift-audit.py` is blind to docs drift — and to `.github/` and `scripts/`** | 🔴 **OPEN, and WIDER than first written (2026-08-13).** The blindness is not a docs special case: `PROPAGATABLE_PREFIXES = ("src/", "gradle.properties", "build.gradle", "settings.gradle")`, so **everything else** is invisible — `README.md`/`wiki/`, `scripts/` (already flagged: tooling is what a band needs to run its own gates) **and `.github/`**. The `.github/` hole is the worst of the three because a divergent `release.yml` silently changes how a band *ships*, and it was exercised live this session: the R-r floor fix was back-ported to four bands with the auditor neither demanding it nor confirming it. ⚠️ Note the shape — the auditor is not wrong, it is *narrow*, and it reports a confident **"No drift"** either way. Original docs instance follows. 🔴 **OPEN, and it has now produced a real one.** It classifies a `README.md`/`wiki/`-only commit as not-propagatable and ignores it — its own self-test asserts that deliberately. R-j made docs part of what every band ships, so a forgotten docs fix serves a wrong page to that band's players. **Instance (2026-08-13):** `mc/1.21.4` shipped and released, and for a whole session the README and six wiki pages still said *"Minecraft 1.21.4 and older are not supported"* — the band's own players were told their jar did not exist. Every drift audit in that window read clean. ⚠️ Note the interim check `git diff --name-only master <band> -- README.md wiki/` **would also have said clean**: the docs were byte-identical on all five branches and identically *wrong*. Cross-branch equality is not correctness, and nothing mechanical currently checks the docs against the branch list |
+| **R9** | **A fix outside `src/` never reaches a band, and the docs deny a band that ships** | ✅ **CLOSED 2026-08-13 (`d6080f028`), as TWO fixes — it was never one problem.** **R9a (propagation):** `PROPAGATABLE_PREFIXES` gains **`scripts/`** and **`.github/`**. It had been only `src/`, `gradle.properties`, `build.gradle`, `settings.gradle`, so a band could silently lack the tooling its own gates need, and a divergent `release.yml` could change how it *ships*. Exercised live: the R-r floor fix reached four bands while the auditor printed **"No drift" identically before and after**, because it could not see the commit at all. Self-test extended both directions for both prefixes and mutation-proven (dropping either makes it fail, naming that prefix). Real audit after: still **0 MISSING**, propagated counts up 12→18/4→5/5→6/6→9 — the manual discipline *had* held; it is mechanical now. **R9b (correctness):** new per-band `BandDocsMatchRealityTest` asserts the documented support floor sits strictly below every version *this* branch ships, both docs state the same floor, and this band's versions appear in the README. ⚠️⚠️ **A propagation check could never have caught the recorded instance** — `mc/1.21.4` shipped while six pages said *"1.21.4 and older are not supported"*, and those pages were **byte-identical on all five branches and identically wrong**, so both the audit and `git diff master <band> -- README.md wiki/` read clean and were right to. **Cross-branch equality is not correctness.** 🔑 Docs stay deliberately OUT of the propagatable set: per-push docs failures train people to ignore the audit, and propagation is the wrong instrument anyway. ⚠️ **Next fires on `mc/1.21.3` (8.2)** — the floor sentence must move to `1.21.1` in the same commit, in **both** files |
 | **R11** | **A band's release fails and nobody finds out** | 🔴 **STILL OPEN — R-r did NOT close it.** It has already happened once: Phase 10's guard defect (§10.7) failed **four** band releases on 2026-08-13 and was invisible for a day with local builds green, ship gate green, drift audit green and `git status` clean. Found only by hand-querying the Actions API. ⚠️ **R-r restores who *can* release, not who *watches*.** `master` now has a workflow, so a red run at least appears on the branch a person works on — but **nothing pushes that anywhere**, and the failure mode was never "the run was on an obscure branch", it was "nobody looked". Both mitigations remain manual: ship-gate step 1 reproduces CI's invocation (§10.7e), and `curl -s "https://api.github.com/repos/Wulfic/mcMMO-Singleplayer/actions/runs?per_page=5"` after any push touching `src/**`, `build.gradle`, `gradle.properties` or `.github/workflows/release.yml`. ⚠️ Reading a run's **log** needs admin auth (`403` unauthenticated); the *conclusion* does not. **A real close needs a notification, not a workflow** |
 | **R10** | **Two branches resolving to the same `minecraft_version`** | 🔴 **LIVE AGAIN as of R-r (2026-08-13) — it was dormant only because `master` could not release.** The tag-reaping sweep is back on `master`, so every branch releases on push and two branches on one version means **each run deletes the other's release**. `release.yml` detects the collision and emits a `::warning::` — deliberately not a failure, so it can never take down a legitimate release, which also means **nothing stops it**. Keep the one-band-one-version rule; it is now load-bearing rather than tidy |
 
@@ -857,8 +857,26 @@ silently cannot probe itself.
       on a band. Verified after the change that the three tracked `.github/` files are **still
       tracked**: `.gitignore` has no effect on already-tracked paths, which is also why this was safe
       on `master` in the first place.
-- [ ] **8.1a.A4** — the `mc/1.21.4` mob-origin re-stamp still has **no guard test**. See 8.1a.A.
-- [ ] **R9** — now known to be wider than docs; see the risk row.
+- [x] ✅ **8.1a.A4 — CLOSED 2026-08-13.** `mc/1.21.4` `MobOriginRestampSeamTest`, 6 tests, band-only
+      (`master` has no such defect and no re-stamp injector, so the mcMMO half would fail there).
+      Pins both halves: **Minecraft's** — an ASM call-graph walk proving the NBT read completes
+      inside `EntityType#getEntityFromNbt`, which is what makes injecting at its RETURN
+      *ordering-proof*; and **mcMMO's** — an injector selects that method at RETURN and nothing
+      selects `Entity#readNbt`, the racy alternative.
+      🔑 **The bytecode half needs a call-graph walk, not a string scan.** `getEntityFromNbt`'s own
+      body never mentions `readNbt` — the read is in the `Consumer` lambda, a synthetic method
+      called `method_17839` on this band, an unmapped yarn name that must never be hardcoded. The
+      walk follows `invokedynamic` bootstrap handles.
+      **Mutation-proven 4 ways:** revert the fix → source test fails · add a `readNbt` injector →
+      racy-target test fails · aim the detector at an absent method → bytecode test fails · stop
+      following `invokedynamic` → bytecode test fails.
+      ⚠️⚠️ **Mutation 1 caught a vacuity hole in the guard's own first draft that review had not.**
+      That mixin is mostly javadoc and the prose names every symbol asserted on, including
+      `{@link #mcmmo$restampAfterNbtRead}` — deleting the whole injector left the mention behind and
+      the "the method is gone" assertion still passed. Source assertions now run against
+      comment-stripped text, and **the stripper has its own test**, because one returning `""` would
+      make every `assertFalse` in the file pass for free.
+- [x] ✅ **R9 — CLOSED 2026-08-13, as two fixes.** See the risk row; it was never one problem.
 
 ---
 
