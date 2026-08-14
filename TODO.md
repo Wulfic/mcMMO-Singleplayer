@@ -213,14 +213,18 @@ of `1.21.3`'s, so the second cut should be fast.
 - [x] **8.1 — `mc/1.21.4`** ✅ **SHIPPED.** Cut and ported at `bfb1c11d6`, all seven gates green,
       pushed at `88d472a44`. It proved the loop, and it is the last band `config-id-audit.py` can
       still audit. Findings in **8.1a** below — read A before cutting `1.21.3`.
-- [ ] **8.2 — `mc/1.21.3`** (`1.21.2`, `1.21.3`; 44 rows). ✅ **Unblocked — 8.4 shipped**, so all
-      seven gates run on this band.
-      ⚠️ **Expect the mob-origin defect again** — see 8.1a.A. Bands are cut from `master`, never from
-      each other, so this branch inherits **no** fix for it, and an older band pins an *older*
-      fabric-api, i.e. an older `data-attachment-api` than the broken 1.6.2. Check
-      `fabric_readAttachmentsFromNbt` for the unconditional assign before trusting
-      `combat-egg-control`, and note that every static gate — build, boot-check, mixin audit — is
-      **blind** to it.
+- [x] **8.2 — `mc/1.21.3`** (`1.21.2`, `1.21.3`) ✅ **SHIPPED 2026-08-14** at `a4f39bfde`.
+      Released `mc1.21.3-v2.2.050`, both jars attached, **verified from the API** (repo-wide: 6
+      published, 0 drafts, nothing reaped). **Coverage is now continuous `1.21.2` → `1.21.11`.**
+      Seven gates: build **1726/0/0** · mixin-allow exit 0 on **both** band versions · boot-check
+      PASSED on **both** (same jar, sha256-confirmed) · config-id exit 0 (53 absent, 0
+      dead-everywhere) · brew-smoke with a discriminating control · gameplay-smoke **29/29** with the
+      control failing as it must · drift-audit **0 MISSING** on all five bands.
+      ⚠️ **The mob-origin defect DID reproduce, exactly as predicted**, and on *both* versions — the
+      `1.21.2` fabric-api (`0.106.1`) carries the identical unconditional `putfield`. Fixed at
+      `bf2676292`; `combat-egg-control` now pays 0 where `combat-fist` pays 610.
+      🔴 **The cut's real lesson is 8.2.5b: "20 compile errors → 0" was NOT the finish line.** Four
+      more injectors were broken and *compiled perfectly*. Run gate 2 **before** gate 1 next time.
 - [ ] **8.3 — `mc/1.21.1`** (`1.21`, `1.21.1`; 125 rows). Per **R-m**, two pieces: the `SkillGating`
       switches land on **`master` first**, then the band branch resolves the compile/mixin absences.
       ✅ **Unblocked — 8.4 shipped.** Do this band **last** — it is the only one that changes
