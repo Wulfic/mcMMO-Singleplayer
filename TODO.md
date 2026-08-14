@@ -36,6 +36,12 @@ reached a player on **every** band:
 ⚠️ One dangling tag survives: `mc1.21.11-v2.2.050-build.3` (`afb2a6a6a`) has **no release attached**,
 and the reaping sweep enumerates `gh release list`, so a bare tag is invisible to it. Harmless, but
 it means *"the sweep keeps one tag per line"* is false — it keeps one **release** per line.
+**R-t leaves it standing deliberately** — no sweep can reach it, so it needs its own decision.
+
+🔴 **And the sweep did not keep one release per line either.** Six **orphaned drafts** were found
+2026-08-13 sitting alongside those five published releases — see **§11.1**. The *Released tag* column
+above is still correct; what it does not show is that each of those tags carries a second, drafted
+release object that the sweep skips by construction.
 
 🔑 **So `1.21.6`, `1.21.7` and `1.21.9` are NOT missing** — they are covered by the `mc/1.21.8` and
 `mc/1.21.10` jars respectively. Nothing needs building for them.
@@ -73,7 +79,10 @@ Carried forward and still binding: **R-a** branch-per-band · **R-c/P2-a…e** f
 **R-d** playtest stays on master builds · **R-e** `26.x` is its own mini-project · **R-f** master =
 newest band · **R-g** (as narrowed by **R-r** §10.8 — `.github/` is back on `master`, holding those
 three files and nothing else) · **R-h** pushes are mine once gates are green ·
-**R-i/R-j/R-k** docs are byte-identical on every branch, live wiki is never pushed.
+**R-i/R-j/R-k** docs are byte-identical on every branch, live wiki is never pushed ·
+**R-s/R-t/R-u** (2026-08-13, tabled in **§11.0**) — R-h re-granted on its own merits, the release
+sweep cleans up its own orphans rather than a hand-delete, and `master`'s `~1.21.11` stays because
+there is no `1.21.12`.
 
 | # | Question | Ruling |
 |---|---|---|
@@ -744,14 +753,15 @@ these SHAs are the entire recovery path:
 Neither is worth restoring — both are the un-labelled jars 10.7g exists to retire — but *"it is
 recoverable"* is only true while the commit is written down somewhere the deleted tag isn't.
 
-#### 10.8 — ⚠️ R-r invalidates the premise R-h was granted on
+#### 10.8 — ⚠️ R-r invalidated the premise R-h was granted on ✅ **re-ruled by R-s**
 
 **R-h** (2026-08-12) delegated pushes to the agent, and stated its own reason: *"Supersedes the
 earlier 'owner keeps pushes' standing rule, **which existed because a band push released**. Under
 R-g it no longer does."* R-r makes a push release again on all five branches, so the condition that
-retired the old rule is gone and R-h now rests on a premise that is false. Flagged rather than
-silently re-interpreted in either direction — **the owner confirmed this specific push in the moment
-(2026-08-13)**, which is not the same as R-h surviving. Re-rule it explicitly before the next one.
+retired the old rule is gone and R-h now rested on a premise that is false. Flagged rather than
+silently re-interpreted in either direction — **the owner confirmed that specific push in the moment
+(2026-08-13)**, which is not the same as R-h surviving. ✅ **Re-ruled 2026-08-13 as R-s (below):
+R-h stands, on its own merits rather than on the dead premise.**
 
 ### What I am NOT doing
 
@@ -767,6 +777,157 @@ silently re-interpreted in either direction — **the owner confirmed this speci
   measured what R-g's accepted cost actually was.
 - **Not touching `mod_version` itself**, pending 10.6.1.
 - **No Modrinth/CurseForge publish automation.** Not asked for.
+
+---
+
+## Phase 11 — pre-cut cleanups (2026-08-13, before `mc/1.21.3`)
+
+Three items, found by querying GitHub from outside the repo now that `gh` is authenticated here for
+the first time. **All three are invisible to every gate the repo runs** — that is the thread joining
+them, and it is R11's shape rather than a coincidence.
+
+### 11.0 — three owner rulings
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-s** | Does R-h survive R-r? (2026-08-13) | ✅ **RULED (owner): R-h STANDS — the agent pushes once the ship gate is green**, and a push publishing a real release is accepted. R-h is re-granted on its own merits rather than inheriting the dead *"a push no longer releases"* premise, so §10.8's flag is resolved rather than carried. ⚠️ The obligation that comes with it: **report what released**, read from the API rather than assumed, because R11 is still open and a red run reports nowhere. |
+| **R-t** | Clean up the 6 orphaned drafts + the bare tag? | ✅ **RULED (owner): fix the workflow and let the sweep do it.** No hand-deletion. Each band's next release reaps its own orphan, which makes the fix **proven by observation** instead of by argument — the same standard 10.4a's tag-prefix ruling was held to and confirmed twice. ⚠️ **This deliberately leaves `mc1.21.11-v2.2.050-build.3` standing**: the sweep enumerates *releases*, and that tag has none, so no sweep can ever reach it. It needs a separate decision or it is permanent. |
+| **R-u** | `master`'s `~1.21.11` vs the bands' closed ranges | ✅ **RULED (owner): leave it — `1.21.12` does not exist and will not.** `1.21.11` is the **last** `1.21.x`; the line continues at `26.1`. Provable from this file's own scope line (*"every stable `1.21.x` (**12**)"* — `1.21` … `1.21.11` is exactly 12), so `~1.21.11`'s `>=1.21.11 <1.22` window is **empty by construction** and the asymmetry with the four bands costs nothing. 🔑 Recorded because it reads as an untidiness a future pass will "fix" — and that fix would be a `src/` change, i.e. a needless `master` release. `BandVersionLabelTest` already permits the tilde deliberately (`theRangeIsNotUnboundedAboveTheBand`), so nothing enforces the change either way. ⚠️ This is a **dated fact about Minecraft's versioning**, which stays true — not a claim about what this build targets, which would rot. |
+
+### 11.1 — 🔴 every release run orphans a draft, one per band, forever
+
+**Found 2026-08-13 from the Releases API.** The repo publishes 5 releases and carries **6 drafts**,
+and the drafts are not half-finished uploads — each is a *formerly published* release (`draft: true`
+**with** `published_at` set) still holding both jar assets:
+
+| tag | live id | orphaned draft ids |
+|---|---|---|
+| `mc1.21.4-v2.2.050` | `370323008` | `370312521`, `370252596` |
+| `mc1.21.11-v2.2.050` | `370315399` | `370299032` |
+| `mc1.21.10-v2.2.050` | `370322940` | `370257071` |
+| `mc1.21.8-v2.2.050` | `370322826` | `370255620` |
+| `mc1.21.5-v2.2.050` | `370322811` | `370254125` |
+
+**Root cause — two lines that are each correct alone:**
+
+1. `release.yml`'s *Create and push tag* step runs `git push origin ":refs/tags/${TAG}"` before
+   re-tagging, for idempotency across re-runs. **Deleting a tag out from under a published release
+   converts that release to a draft; it does not delete it.** `gh release create` then mints a
+   *second* release object at the same tag.
+2. The reaping sweep protects the new release **by tag name** — `[ "$t" = "$TAG" ] && continue`. Two
+   releases now share that name, so the orphan is skipped on every subsequent run, forever.
+
+🔑 **The arithmetic is the proof, and it is exact.** `master` released twice → 1 orphan; `mc/1.21.4`
+three times → 2; `.5`/`.8`/`.10` twice each → 3. **6.** Nothing else is a candidate explanation.
+
+⚠️ **This is also why 10.7f's *"the sweep works"* observation was true and still missed it.** The
+`-build.*` releases were reaped correctly **because their tag names differed**. Dropping the
+`-build.<N>` suffix (10.4a) is what made re-releases collide on one tag name — so the defect was
+*introduced by* Phase 10 and *hidden by* the very evidence that Phase 10 succeeded.
+
+Player-facing impact is **nil** — drafts are collaborator-only. The cost is that it grows by one per
+band per release: 5 today, **9 after Phase 9**, and it makes `gh release list` unreadable exactly
+when a person is checking whether a release worked.
+
+- [x] **11.1a** ⚠️⚠️ **Do NOT fix it by deleting the old release before the tag push.** That is the
+      obvious fix and it destroys the property §10.8's blast-radius table depends on: publish
+      succeeds *first*, then reap, so **a red build leaves the previous release standing**. Deleting
+      up front would tear down a good release on behalf of a build that then fails.
+- [x] **11.1b** Reap by **release id**, not tag name. After a successful publish, resolve the new
+      release's id from `GET /releases/tags/{tag}` — ✅ **verified 2026-08-13 that this endpoint
+      returns the published release and ignores same-tag drafts** (`mc1.21.4-v2.2.050` → `370323008`,
+      `draft:false`, with two drafts present). Then delete every release on the `mc<VER>-v` prefix
+      whose id differs.
+- [x] **11.1c** ⚠️⚠️ **Clean up the TAG only when the tag differs.** A same-tag orphan shares the tag
+      the new release is standing on, so reaping it with a tag delete would delete that tag and
+      **draft the release just published** — the exact defect being fixed, inverted, and it would
+      look like success. Delete the tag for a differently-named release; delete the release alone for
+      a same-tag orphan.
+      ✅ Also switched from `gh release delete <tag>` to `gh api -X DELETE .../releases/<id>`:
+      **the tag form is ambiguous once two releases share a tag**, which is the whole premise here.
+- [x] **11.1d** ✅ Dry-run read-only against the live repo: **1** deletion (`370299032`, tag kept),
+      live `370315399` kept by id, all 9 other-band releases untouched.
+      Then promoted to a committed guard — new **`scripts/release-sweep-selftest.sh`**, 6 cases,
+      `--mutate` proving each can fail. It **extracts the step from `release.yml` itself** rather
+      than copying it, because a copy drifts and then certifies the copy.
+      ⚠️⚠️ **Its first draft certified itself.** YAML block scalars strip indentation, the mutation
+      patterns were written at *file* indentation, and **2 of 4 mutations silently no-op'd and
+      "passed"** — a vacuous *proof*, not a vacuous guard, which is a new variant of this project's
+      recurring defect (**eighth sighting**). `--mutate` now asserts each pattern actually matched
+      and reports `MUTATION DID NOT APPLY` rather than counting it as caught.
+      🔑 M1 is the one that matters: it deletes the same-tag orphan's tag, and the harness catches
+      `DELETED-TAG mc1.21.11-v2.2.050` **while the log line still says "keeping the tag"** — proof
+      that a reassuring log message is not a guard.
+- [ ] **11.1e** Land on `master`, push, and **read the result from the API**: `master`'s orphan
+      `370299032` must be gone and `370315399`'s successor must be published and `draft:false`.
+      That observation is the test — no JUnit suite can reach a workflow file.
+- [ ] **11.1f** Back-port to all four bands with `Backport-of:`. ✅ R9a now tracks `.github/`, so
+      drift-audit demands this rather than trusting it. ⚠️ Each band's own orphan is reaped by *its*
+      next release, which a `.github/`-only push does **not** trigger — `release.yml` is in its own
+      `paths:` filter, so this push does fire on every band. Expect 4 releases.
+
+### 11.2 — R11: a local post-push CI check (`scripts/ci-watch.sh`)
+
+R11 has already cost a day (§10.7) and its mitigation is still *"remember to curl the Actions API"*.
+`gh` is authenticated in this working copy for the first time, so the check becomes a script.
+
+- [x] **11.2a** ✅ New `scripts/ci-watch.sh <sha|HEAD>` — resolve the sha, find the `Build & Release`
+      run for it, wait for completion, print the conclusion, and **exit non-zero on failure**.
+- [x] **11.2b** ✅ **Fails closed on "no run found"**, with four distinct exit codes rather than a
+      boolean: `0` succeeded-or-legitimately-skipped · `1` the run failed/timed out · `2` environment
+      · **`3` cannot tell** — the sha is not on the remote, or it changes paths the workflow builds on
+      and no run exists. *"I could not see a run"* and *"the run passed"* are the two states R11 is
+      about and they must never render alike.
+      🔑 It reads the `paths:` filter **out of `release.yml`** and diffs the commit against it, so
+      *"docs-only, no run expected"* is derived rather than assumed — and checking that **first**
+      turns the docs-only answer from a 90-second wait into 1.6 s.
+- [x] **11.2c** ✅ `--self-test`, 6 cases, stubbing `gh`: success→0, failure→1, missing-run-but-should
+      -build→3, docs-only→0, unpushed→3, never-completes→1. **Mutation-proven 4 ways** (missing run
+      reports OK · any conclusion counts as success · unpushed reports OK · timeout reports success);
+      all four caught.
+- [x] **11.2d** ✅ Ship gate gains **step 8** (below). Cherry-picked to every band in 11.1f —
+      `scripts/` is propagatable under R9a, so drift-audit demands it.
+
+⚠️ **This does not close R11 and must not be recorded as closing it.** It is still a person running a
+command; it just makes the command short and its failure mode explicit. A real close needs a
+notification that reaches the owner when no terminal is open.
+
+### 11.3 — the weekly drift audit has never fired
+
+`drift-audit.yml` landed on `master` at `3b1ddff53` (R-r) with its floor fixed at `c3351998a`, and
+`gh run list --workflow=drift-audit.yml` returns **nothing**. Its `cron` is Monday 07:00, so the
+first real firing is still ahead — and a guard that has never run is not known to work, which is the
+rule this repo has already been burned by seven times.
+
+- [ ] **11.3a** Trigger it once via `workflow_dispatch` and read the conclusion. ⚠️ Leave the
+      `require_bands` input **blank** — that is the path the weekly `schedule` run takes
+      (`github.event.inputs` is null on a schedule, falling through to `env.BAND_COUNT`), and it is
+      the only path worth proving. Supplying a value tests a path nothing uses.
+
+#### 11.x — blast radius
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| 11.1b–d | `.github/workflows/release.yml` on `master` | nothing — read-only until pushed | `git revert`; `master` clean at `010cc2d5d` |
+| 11.1e | **a published release, and the reaping sweep** | 🔴 a wrong `--cleanup-tag` branch deletes the live tag and **drafts the release it just published** | the jar rebuilds from the tag's commit; the release re-publishes on the next push. Bounded to the `mc1.21.11-v*` line |
+| 11.1f | 4 band branches | **4 releases fire** (`release.yml` is in its own `paths:` filter) | per-band `git revert` |
+| 11.2 | new `scripts/` file, `TODO.md` | nothing — read-only over the GitHub API | delete the file |
+| 11.3a | nothing — the audit only reads | nothing | n/a |
+
+🔴 **11.1e is the one destructive step**, and its blast radius is *one Minecraft line's releases*, not
+the repo's. The sweep only ever matches `mc${MC_VERSION}-v*`, so a bug in it cannot reach another
+band — which is exactly why it lands on `master` alone first and the bands wait for 11.1e's
+observation.
+
+### What I am NOT doing in Phase 11
+
+- **Not hand-deleting the 6 drafts** (R-t). The sweep does it, or the fix is not proven.
+- **Not deleting `mc1.21.11-v2.2.050-build.3`.** No release is attached, so no sweep reaches it; it
+  needs its own owner call. Recovery is `afb2a6a6a`, already recorded in §10.8.
+- **Not tightening `master`'s `~1.21.11`** (R-u) — the window it over-claims is empty.
+- **Not closing R11.** 11.2 shortens the manual check; it does not make anything unattended.
+- **Not starting the `mc/1.21.3` cut** until 11.1e has been observed. Cutting a band on top of a
+  known-broken release sweep just mints a sixth orphan.
 
 ---
 
@@ -818,6 +979,11 @@ is a backstop, never the check.
 6. `scripts/gameplay-smoke.sh` — 29/29, and `GAMEPLAY_SMOKE_CONTROL=1` must **fail**.
 7. `python scripts/drift-audit.py --self-test` **then** `--master master` — **0 MISSING on every
    band**. ⚠️ It audits `origin/master`, so **push first, then audit**.
+8. `scripts/ci-watch.sh --self-test` **then** `scripts/ci-watch.sh HEAD` — **after** the push, the
+   only gate that runs downstream of it. Exit 0 means that sha's `Build & Release` run *completed
+   successfully*, read from the API. ⚠️ **This is R11's mitigation, not its close.** Steps 1–7 all
+   certify a build that has not shipped yet; step 8 is the only one that looks at what actually did.
+   §10.7 is what happens without it: four band releases red for a day behind five green ship gates.
 
 ✅ **`scripts/`-only and `.github/`-only commits are now tracked** (R9a, 2026-08-13), so "cherry-pick
 tooling deliberately" is enforced rather than remembered. ⚠️ **Docs are still not**, deliberately —
