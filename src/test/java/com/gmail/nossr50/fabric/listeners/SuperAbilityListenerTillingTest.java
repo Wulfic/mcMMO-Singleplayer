@@ -188,8 +188,14 @@ class SuperAbilityListenerTillingTest {
 
         final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
         when(player.getStackInHand(Hand.MAIN_HAND)).thenReturn(held);
-        // ItemUsageContext's public constructor reads the world off the player (getEntityWorld, not
-        // getWorld — verified with javap), and vanilla's predicates read it back off the context.
+        // ItemUsageContext's public constructor reads the world off the player, and vanilla's
+        // predicates read it back off the context. BAND: which accessor it calls is not stable
+        // across versions — it is PlayerEntity#getWorld here and Entity#getEntityWorld on newer
+        // bands, read out of the constructor's own bytecode rather than assumed. Both are stubbed
+        // rather than one, because Entity carries both methods on this band and the two are
+        // separate stubs to Mockito: getting it wrong hands vanilla a null world, and the NPE
+        // surfaces inside HoeItem where nothing points back at this line.
+        when(player.getWorld()).thenReturn(world);
         when(player.getEntityWorld()).thenReturn(world);
 
         final BlockHitResult hit =
