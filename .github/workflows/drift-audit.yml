@@ -21,7 +21,12 @@
 # remote refs, and the script would find zero band branches and exit 0 --
 # indistinguishable from a clean audit. --require-bands is what turns that
 # specific failure into a hard error, and it must be raised to the real band
-# count as branches are cut (see TODO Phase 4'/6).
+# count as branches are cut -- see BAND_COUNT below and TODO step 8.x.9.
+#
+# ⚠️ This file only runs from the DEFAULT BRANCH. GitHub fires `schedule` from
+# there and nowhere else, so the copies on the mc/** band branches are inert by
+# construction -- they are kept byte-identical (R-i) so a freshly cut band
+# inherits a correct file, not because they ever execute.
 # ---------------------------------------------------------------------------
 name: Band drift audit
 
@@ -33,12 +38,37 @@ on:
   workflow_dispatch:
     inputs:
       require_bands:
-        description: 'Fail if fewer than this many mc/** branches are found'
+        description: 'Override the band floor (blank = use the declared BAND_COUNT)'
         required: false
-        default: '0'
+        # Deliberately NO default. A literal here would be a second copy of the
+        # number below, and the two would drift; blank is falsy, so the `||` in
+        # the audit step falls through to the one declared value.
 
 permissions:
   contents: read
+
+env:
+  # ⚠️ THE ONE PLACE THIS NUMBER LIVES. The count of mc/** band branches that
+  # MUST be found, or the audit fails instead of reporting success.
+  #
+  # This exists because "found no bands" and "found no drift" print identically.
+  # A shallow clone, a branch rename, or a failed fetch all yield zero branches
+  # and a clean exit 0 -- the audit reports success precisely when it has become
+  # incapable of detecting anything. The floor is the only thing that tells those
+  # two states apart.
+  #
+  # ⚠️ It was `0` from the day this workflow was written, which made the weekly
+  # run unable to fail: `github.event.inputs` is null on a `schedule` event, so
+  # the fallback was what every scheduled run actually used. Nobody noticed,
+  # because the file simultaneously stopped running at all -- R-g moved it off the
+  # default branch, and GitHub only fires `schedule` from there. R-r brought it
+  # back; this is the defect it came back with.
+  #
+  # ⚠️ Raise it when a band is cut (TODO 8.x.9). A stale value is UNDER-strict,
+  # never over-strict -- with 5 bands and a floor of 4 the audit still passes -- so
+  # nothing will ever remind you. That is the trade: it cannot false-alarm, and it
+  # cannot nag.
+  BAND_COUNT: '4'
 
 jobs:
   audit:
@@ -65,9 +95,12 @@ jobs:
         run: python scripts/drift-audit.py --self-test
 
       - name: Audit every band branch against master
+        # The `||` is load-bearing on the SCHEDULED run, not just the manual one:
+        # `github.event.inputs` is null on a `schedule` event, so this fallback is
+        # the value the weekly audit always uses. See BAND_COUNT above.
         run: |
           python scripts/drift-audit.py \
-            --require-bands "${{ github.event.inputs.require_bands || '0' }}" \
+            --require-bands "${{ github.event.inputs.require_bands || env.BAND_COUNT }}" \
             --json drift-audit.json
 
       - name: Upload the report
