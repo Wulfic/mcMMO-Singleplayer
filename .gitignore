@@ -83,3 +83,8 @@ $RECYCLE.BIN/
 # Python bytecode from scripts/
 __pycache__/
 *.pyc
+
+
+# Custom
+.agent/
+.github/
