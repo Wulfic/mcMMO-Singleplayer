@@ -38,10 +38,10 @@ and the reaping sweep enumerates `gh release list`, so a bare tag is invisible t
 it means *"the sweep keeps one tag per line"* is false — it keeps one **release** per line.
 **R-t leaves it standing deliberately** — no sweep can reach it, so it needs its own decision.
 
-🔴 **And the sweep did not keep one release per line either.** Six **orphaned drafts** were found
-2026-08-13 sitting alongside those five published releases — see **§11.1**. The *Released tag* column
-above is still correct; what it does not show is that each of those tags carries a second, drafted
-release object that the sweep skips by construction.
+🔴 **And the sweep did not keep one release per line either** — six **orphaned drafts** were found
+2026-08-13 sitting alongside those five published releases. ✅ **FIXED and CLEAN as of `f18cbef82`
+and its four back-ports: 0 drafts, 5 published, one per band.** See **§11.1** for the mechanism and
+the observation that proved it.
 
 🔑 **So `1.21.6`, `1.21.7` and `1.21.9` are NOT missing** — they are covered by the `mc/1.21.8` and
 `mc/1.21.10` jars respectively. Nothing needs building for them.
@@ -858,13 +858,46 @@ when a person is checking whether a release worked.
       🔑 M1 is the one that matters: it deletes the same-tag orphan's tag, and the harness catches
       `DELETED-TAG mc1.21.11-v2.2.050` **while the log line still says "keeping the tag"** — proof
       that a reassuring log message is not a guard.
-- [ ] **11.1e** Land on `master`, push, and **read the result from the API**: `master`'s orphan
-      `370299032` must be gone and `370315399`'s successor must be published and `draft:false`.
-      That observation is the test — no JUnit suite can reach a workflow file.
-- [ ] **11.1f** Back-port to all four bands with `Backport-of:`. ✅ R9a now tracks `.github/`, so
-      drift-audit demands this rather than trusting it. ⚠️ Each band's own orphan is reaped by *its*
-      next release, which a `.github/`-only push does **not** trigger — `release.yml` is in its own
-      `paths:` filter, so this push does fire on every band. Expect 4 releases.
+- [x] **11.1e** ✅ **CONFIRMED BY OBSERVATION.** `f18cbef82` on `master`, run `31767425216` green.
+      The sweep's own log, and it reaped **two**, not the one predicted:
+
+      ```
+      Published release id 370334085 on tag mc1.21.11-v2.2.050
+      Deleting orphaned draft release 370299032 on the live tag … (keeping the tag).
+      Deleting orphaned draft release 370315399 on the live tag … (keeping the tag).
+      Reaped 2 release(s); mc1.21.11-v2.2.050 (id 370334085) stands.
+      ```
+
+      🔑 The second one is the mechanism caught in the act: `370315399` was the *live* release when
+      the run started, and **this very run drafted it** by re-pushing the tag. The fix cleaned up the
+      orphan it had just created, in the same run. The harness fixture predicted exactly this pair,
+      so the stub-based cases are now known to model production.
+      ✅ The tag survived and moved to `f18cbef82` — the 11.1c edge held.
+- [x] **11.1f** ✅ Back-ported to all four bands (`Backport-of: f18cbef82`) at `1608d5084` /
+      `6c4ec8db4` / `edd7a8932` / `4b2716be6`. Per band before commit: three files **byte-identical
+      to `master`'s**, `release-sweep-selftest --mutate` 6/6 with all four mutations caught,
+      `ci-watch --self-test` 6/6. All four releases green
+      (`31767640640` / `31767642188` / `31767727306` / `31767646758`), each verified through the new
+      ship-gate step 8.
+      ⚠️ **Ship gate deliberately narrowed to steps 1 (in CI), 7 and 8** — the change is `.github/` +
+      `scripts/` only, zero `src/`, zero `gradle*`, zero configs, so the jar is byte-identical to
+      what gates 2–6 last cleared on each band. Stated rather than skipped silently, per 10.8c.
+      ✅ Gate 7 after the pushes: self-test green, then **0 MISSING on every band**
+      (20 / 7 / 8 / 11 propagated), each count up by exactly one.
+
+      ### ✅ 11.1 RESULT — **0 drafts, 5 published, one per band**
+
+      | Line | Release | Assets |
+      |---|---|---|
+      | `mc1.21.11-v2.2.050` | `370334085` | `+mc1.21.11` |
+      | `mc1.21.10-v2.2.050` | `370335986` | `+mc1.21.9-1.21.10` |
+      | `mc1.21.8-v2.2.050` | `370335873` | `+mc1.21.6-1.21.8` |
+      | `mc1.21.5-v2.2.050` | `370336242` | `+mc1.21.5` |
+      | `mc1.21.4-v2.2.050` | `370335894` | `+mc1.21.4` |
+
+      **All seven orphans gone** — the six found, plus the one `master`'s own run minted — and not
+      one was deleted by hand. R-t's *"let the sweep prove itself"* is what makes that a result
+      rather than a tidy-up. ⚠️ `mc1.21.11-v2.2.050-build.3` still stands, as R-t intended.
 
 ### 11.2 — R11: a local post-push CI check (`scripts/ci-watch.sh`)
 
@@ -899,10 +932,17 @@ notification that reaches the owner when no terminal is open.
 first real firing is still ahead — and a guard that has never run is not known to work, which is the
 rule this repo has already been burned by seven times.
 
-- [ ] **11.3a** Trigger it once via `workflow_dispatch` and read the conclusion. ⚠️ Leave the
-      `require_bands` input **blank** — that is the path the weekly `schedule` run takes
-      (`github.event.inputs` is null on a schedule, falling through to `env.BAND_COUNT`), and it is
-      the only path worth proving. Supplying a value tests a path nothing uses.
+- [x] **11.3a** ✅ **FIRED AND GREEN — run `31767895610`, `workflow_dispatch` on `master`.** The
+      `require_bands` input was left **blank**, so it took the same route a `schedule` event does
+      (`github.event.inputs` is null there, falling through to `env.BAND_COUNT`) — the only path
+      worth proving; supplying a value would have tested a path nothing uses.
+      🔑 **The floor resolved live**, visible in the run's own command line:
+      `python scripts/drift-audit.py --require-bands "4" --json drift-audit.json`, with
+      `BAND_COUNT: 4` in the step env. R-r's fix from a vacuous `0` to a real `4` is now observed
+      rather than argued, and the run found all four bands and reported the same **0 MISSING** as the
+      local audit.
+      ⚠️ **R8's unattended leg is now known to work — and it is still weekly, and still reports to a
+      tab nobody opens (R11).** What this closes is *"the guard has never run"*, nothing more.
 
 #### 11.x — blast radius
 
@@ -1005,6 +1045,7 @@ their correctness is checked instead by `BandDocsMatchRealityTest`, which runs i
 | **R8** | **A fix lands on `master` and is silently never back-ported** | 🟡 **DOWNGRADED, not closed (R-r, 2026-08-13).** All three legs exist again: the convention, `drift-audit.py`, and the weekly run — restored to `master`, the only branch GitHub fires `schedule` from, and its band floor fixed from a vacuous `0` to a real `4`. ⚠️ **The unattended leg is weekly and reports to a tab nobody opens (R11)**, so between a commit and the next Monday detection is still *"somebody remembers"*. **Each new band multiplies this** — 5 bands today, 9 after Phase 9 — and the floor must be raised per cut (8.x.9) or it silently stops counting. The one open instance (`f73031ed9`) is closed by **R-q** |
 | **R9** | **A fix outside `src/` never reaches a band, and the docs deny a band that ships** | ✅ **CLOSED 2026-08-13 (`d6080f028`), as TWO fixes — it was never one problem.** **R9a (propagation):** `PROPAGATABLE_PREFIXES` gains **`scripts/`** and **`.github/`**. It had been only `src/`, `gradle.properties`, `build.gradle`, `settings.gradle`, so a band could silently lack the tooling its own gates need, and a divergent `release.yml` could change how it *ships*. Exercised live: the R-r floor fix reached four bands while the auditor printed **"No drift" identically before and after**, because it could not see the commit at all. Self-test extended both directions for both prefixes and mutation-proven (dropping either makes it fail, naming that prefix). Real audit after: still **0 MISSING**, propagated counts up 12→18/4→5/5→6/6→9 — the manual discipline *had* held; it is mechanical now. **R9b (correctness):** new per-band `BandDocsMatchRealityTest` asserts the documented support floor sits strictly below every version *this* branch ships, both docs state the same floor, and this band's versions appear in the README. ⚠️⚠️ **A propagation check could never have caught the recorded instance** — `mc/1.21.4` shipped while six pages said *"1.21.4 and older are not supported"*, and those pages were **byte-identical on all five branches and identically wrong**, so both the audit and `git diff master <band> -- README.md wiki/` read clean and were right to. **Cross-branch equality is not correctness.** 🔑 Docs stay deliberately OUT of the propagatable set: per-push docs failures train people to ignore the audit, and propagation is the wrong instrument anyway. ⚠️ **Next fires on `mc/1.21.3` (8.2)** — the floor sentence must move to `1.21.1` in the same commit, in **both** files |
 | **R11** | **A band's release fails and nobody finds out** | 🔴 **STILL OPEN — R-r did NOT close it.** It has already happened once: Phase 10's guard defect (§10.7) failed **four** band releases on 2026-08-13 and was invisible for a day with local builds green, ship gate green, drift audit green and `git status` clean. Found only by hand-querying the Actions API. ⚠️ **R-r restores who *can* release, not who *watches*.** `master` now has a workflow, so a red run at least appears on the branch a person works on — but **nothing pushes that anywhere**, and the failure mode was never "the run was on an obscure branch", it was "nobody looked". Both mitigations remain manual: ship-gate step 1 reproduces CI's invocation (§10.7e), and `curl -s "https://api.github.com/repos/Wulfic/mcMMO-Singleplayer/actions/runs?per_page=5"` after any push touching `src/**`, `build.gradle`, `gradle.properties` or `.github/workflows/release.yml`. ⚠️ Reading a run's **log** needs admin auth (`403` unauthenticated); the *conclusion* does not. **A real close needs a notification, not a workflow** |
+| | | 🟡 **DOWNGRADED 2026-08-13 (§11.2), still open.** The manual `curl` is now `scripts/ci-watch.sh` — **ship-gate step 8**, the only gate downstream of the push, self-tested 6 ways and mutation-proven 4 ways. It reports four states rather than a boolean, because *"I could not see a run"* and *"the run passed"* are the two R11 conflates: exit **3** is *cannot tell* (sha not on the remote, or it changes paths the workflow builds on and no run exists). It derives *"no run expected"* by diffing the commit against `release.yml`'s own `paths:` filter, so a docs-only push is a **stated skip**, never a silent pass. ⚠️ **It is still a person running a command.** It shortened the check and made its failure mode explicit; it did not make anything unattended. Used in anger the same session — it is what verified all five Phase 11 releases. Reading a run's **log** now works too (`gh` is authenticated here as of 2026-08-13), which the row previously recorded as `403` |
 | **R10** | **Two branches resolving to the same `minecraft_version`** | 🔴 **LIVE AGAIN as of R-r (2026-08-13) — it was dormant only because `master` could not release.** The tag-reaping sweep is back on `master`, so every branch releases on push and two branches on one version means **each run deletes the other's release**. `release.yml` detects the collision and emits a `::warning::` — deliberately not a failure, so it can never take down a legitimate release, which also means **nothing stops it**. Keep the one-band-one-version rule; it is now load-bearing rather than tidy |
 
 ---
