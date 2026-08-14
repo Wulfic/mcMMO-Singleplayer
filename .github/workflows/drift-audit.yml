@@ -68,7 +68,7 @@ env:
   # never over-strict -- with 5 bands and a floor of 4 the audit still passes -- so
   # nothing will ever remind you. That is the trade: it cannot false-alarm, and it
   # cannot nag.
-  BAND_COUNT: '4'
+  BAND_COUNT: '5'
 
 jobs:
   audit:
