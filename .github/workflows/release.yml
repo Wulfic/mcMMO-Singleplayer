@@ -21,6 +21,14 @@
 #   5. On SUCCESS -> publishes a GitHub Release with the jar(s), then deletes the
 #      PREVIOUS release + tag on the SAME Minecraft line (mc<MCVER>-v...),
 #      keeping exactly one "latest" per Minecraft version.
+#
+#      ⚠️ That sweep reaps by release ID, not tag name, and it only cleans up a
+#      TAG when the reaped release sat on a different one. Re-releasing at the same
+#      mod_version leaves the previous release behind as a DRAFT on the SAME tag
+#      (step 2 deletes the remote tag, and GitHub drafts any published release whose
+#      tag disappears rather than deleting it), so a name-keyed sweep skips the
+#      orphan as if it were the new release. Six had accumulated by 2026-08-13 --
+#      one per band per re-release. See TODO.md 11.1.
 #   6. Pushing to any mc/** branch builds + releases that Minecraft line.
 #
 # RELEASE TOPOLOGY (ruled 2026-08-10, see TODO.md "OPEN - release topology"):
@@ -222,28 +230,118 @@ jobs:
             --title "mcMMO ${RELEASE_VERSION} — Minecraft ${band_pretty}" \
             --notes-file release-notes.md
 
+          # Resolve the release we just made by ID, and hand it to the reaping step below.
+          #
+          # ⚠️ The reap CANNOT identify it by tag name. The tag step above deletes the remote tag
+          # before re-pushing it, and GitHub converts a published release whose tag disappears into a
+          # DRAFT rather than deleting it -- so after a re-release there are TWO release objects on
+          # this tag, and a name-based "skip the one we just made" skips the orphan too. That is how
+          # six drafts accumulated by 2026-08-13 (see TODO.md 11.1); the ID is the only thing that
+          # tells them apart.
+          #
+          # GET /releases/tags/{tag} resolves to the PUBLISHED release and ignores same-tag drafts --
+          # verified against this repo while two such drafts existed.
+          release_id=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.id')
+          if [ -z "${release_id}" ] || [ "${release_id}" = "null" ]; then
+            echo "::error::Published ${TAG} but could not resolve its release id; refusing to run the reaping sweep blind."
+            exit 1
+          fi
+          echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
+          echo "Published release id ${release_id} on tag ${TAG}"
+
           echo "### :rocket: Released \`${TAG}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "Minecraft \`${MC_VERSION}\` · assets: ${assets[*]}" >> "$GITHUB_STEP_SUMMARY"
 
       # --- Keep exactly one release per Minecraft line ------------------------
+      #
+      # Reaps by release ID, not tag name. Two things make that necessary rather than fussy:
+      #
+      #   1. A re-release leaves the previous release object behind as a DRAFT on the SAME tag (the
+      #      tag step deletes the remote tag, and GitHub drafts any published release whose tag
+      #      vanishes). Skipping "the one we just made" by NAME skips that orphan too, forever. Six
+      #      had piled up by 2026-08-13 -- one per band per re-release -- see TODO.md 11.1.
+      #   2. `gh release delete <tag>` is ambiguous once two releases share a tag. Deleting by ID
+      #      through the API says exactly which object goes.
+      #
+      # ⚠️⚠️ The tag is deleted ONLY for a release on a DIFFERENT tag. A same-tag orphan sits on the
+      # tag the release just published is standing on, so cleaning up its tag would delete that tag
+      # and DRAFT the fresh release -- reintroducing this very defect, in a way that looks like
+      # success. This is the one edge in this workflow where the obvious call is the destructive one.
       - name: Delete previous release on this Minecraft line
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.meta.outputs.tag }}
           MC_VERSION: ${{ steps.meta.outputs.mc_version }}
+          KEEP_ID: ${{ steps.release.outputs.release_id }}
         run: |
           set -euo pipefail
+
+          # Fail closed on an empty filter or an unknown keeper: either would turn "reap the
+          # superseded releases on this line" into "reap this line", including the one just shipped.
+          if [ -z "${MC_VERSION:-}" ]; then
+            echo "::error::No minecraft_version resolved; refusing to sweep on an empty prefix."
+            exit 1
+          fi
+          if [ -z "${KEEP_ID:-}" ]; then
+            echo "::error::No release id to keep; refusing to sweep (the sweep would delete the release just published)."
+            exit 1
+          fi
           prefix="mc${MC_VERSION}-v"
-          gh release list --limit 200 --json tagName --jq '.[].tagName' | while read -r t; do
-            [ -z "$t" ] && continue
-            [ "$t" = "$TAG" ] && continue           # keep the one we just made
+          echo "Sweeping releases matching '${prefix}*', keeping id ${KEEP_ID} (tag ${TAG})."
+
+          # id<TAB>tag_name<TAB>draft, drafts included -- they are the orphans being cleaned up.
+          mapfile -t rows < <(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate \
+            --jq '.[] | [.id, .tag_name, .draft] | @tsv')
+
+          # mapfile succeeds with ZERO lines when the command inside the process substitution fails,
+          # so an API error would sweep nothing and exit 0 -- safe in the destructive direction, but
+          # silent, and silence is how the orphan pile-up went unnoticed for a day. The publish step
+          # just created a release, so an empty listing is impossible and means the query broke.
+          if [ "${#rows[@]}" -eq 0 ]; then
+            echo "::error::Listed 0 releases immediately after publishing ${TAG}; the API query failed. Refusing to report a clean sweep."
+            exit 1
+          fi
+
+          reaped=0
+          for row in "${rows[@]}"; do
+            id=${row%%$'\t'*}
+            rest=${row#*$'\t'}
+            t=${rest%%$'\t'*}
+            draft=${rest#*$'\t'}
+            [ -z "$id" ] && continue
+            [ "$id" = "$KEEP_ID" ] && continue       # keep the one we just made -- BY ID
             case "$t" in
-              "${prefix}"*)
-                echo "Deleting superseded release on the MC ${MC_VERSION} line: $t"
-                gh release delete "$t" --yes --cleanup-tag || echo "::warning::could not delete $t"
-                ;;
+              "${prefix}"*) ;;
+              *) continue ;;
             esac
+
+            # `draft` is the literal string true/false, so it must be COMPARED, not tested for
+            # emptiness -- ${draft:+...} is non-empty for "false" too and would label every release
+            # a draft. A log line that misreports what it deleted is how the next person misreads it.
+            if [ "$draft" = "true" ]; then kind="draft release"; else kind="release"; fi
+
+            if [ "$t" = "$TAG" ]; then
+              # Same-tag orphan: the release goes, the TAG STAYS -- it is the live release's tag.
+              echo "Deleting orphaned ${kind} ${id} on the live tag ${t} (keeping the tag)."
+              if gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/${id}"; then
+                reaped=$((reaped + 1))
+              else
+                echo "::warning::could not delete orphaned release ${id} (${t})"
+              fi
+            else
+              echo "Deleting superseded ${kind} ${id} on the MC ${MC_VERSION} line: ${t} (and its tag)."
+              if gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/${id}"; then
+                reaped=$((reaped + 1))
+                git push origin ":refs/tags/${t}" \
+                  || echo "::warning::deleted release ${id} but could not delete tag ${t}"
+              else
+                echo "::warning::could not delete superseded release ${id} (${t})"
+              fi
+            fi
           done
+
+          echo "Reaped ${reaped} release(s) on the ${prefix}* line; ${TAG} (id ${KEEP_ID}) stands."
+          echo "Reaped \`${reaped}\` superseded release(s) on \`${prefix}*\`" >> "$GITHUB_STEP_SUMMARY"
 
       # --- Guard the "one branch per Minecraft line" invariant ----------------
       # Replaces the old "Ensure Minecraft release branch" step, which auto-created
