@@ -328,6 +328,38 @@ Skills:
         # flight is routinely further than 32 blocks back at the moment the owner teleports, and 128
         # covers the whole band in which a pet was still being ticked (vanilla simulation distance).
         Pets_Follow_Teleport_Radius: 128
+        Pet_Combat_Mode:
+            # Your pets have a combat stance, and it belongs to YOU rather than to any one pet:
+            #   PASSIVE (the default) -- a pet fights only what you fight.
+            #   AGGRESSIVE            -- idle pets pick the nearest hostile to you and go for it.
+            # Sneak and right-click any pet you own while holding the Toggle_Item to flip it. The pet
+            # you click is only proving it is yours; the stance changes for ALL of your pets.
+            #
+            # Turning this off disables the gesture, the aggressive sweep and the engage-range boost
+            # below, restoring vanilla pathing exactly.
+            Enabled: true
+            # What you must be holding to toggle the stance. While this is in your main hand,
+            # sneak-right-clicking a pet changes the stance INSTEAD of sitting it -- a plain
+            # right-click, or any other item, still sits it as usual.
+            # Must differ from Second_Wind_Item, Smoke_Bomb_Item and Herdsmans_Call_Item.
+            Toggle_Item: BONE
+            # How far from YOU (not from each pet) an aggressive-mode pet looks for a fight, in
+            # blocks. Measured from the player so the whole pack shares one search and a pet that
+            # lagged behind cannot drag something home from somewhere you have never been.
+            Aggressive_Radius: 32
+            # How far a pet will CHASE a target it already has, in blocks. This is the fix for "my
+            # pets ignore what I shoot": a wolf's natural follow range is 16, and past that it simply
+            # cannot work out a path, so it stands still next to you with a target it will never walk
+            # to. A melee kill happens at about 3 blocks; a bow kill at 20-40. The weapon was never
+            # the problem -- the reach was.
+            #
+            # Raise this with care. Path-search cost grows with the CUBE of this number, it applies
+            # per pet and per repath, and values above 64 are capped (with a warning in the log).
+            # It applies in both stances, and only while a pet actually has a target.
+            Engage_Range: 32
+            # Server ticks between aggressive-mode sweeps. 20 is one second, which is well inside
+            # what a player notices; lowering it buys nothing and costs a box query every tick.
+            Sweep_Interval_Ticks: 20
         Call_Of_The_Wild:
             # Item_Material: Material of the item needed to summon the pet
             # Item_Amount: Amount of items required to summon the pet

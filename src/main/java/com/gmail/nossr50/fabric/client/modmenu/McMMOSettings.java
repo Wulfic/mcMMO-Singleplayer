@@ -292,6 +292,26 @@ public final class McMMOSettings {
                     ability.replace('_', ' ') + " Cooldown (sec)", null));
         }
 
+        // ---- Taming: pet combat mode -----------------------------------------------------------
+        // Added with the feature rather than after it — a knob with no entry here is the
+        // audit-item-1-3 "dead ModMenu switch" shape in reverse: live config the player cannot see.
+        //
+        // ⚠️ Pet_Combat_Mode.Toggle_Item is deliberately ABSENT, and that is a limitation of this
+        // screen rather than an oversight: ConfigSetting.Kind has BOOLEAN/INT/DOUBLE and no string
+        // kind, so no item-name knob can be offered here. Second_Wind_Item, Smoke_Bomb_Item and
+        // Herdsmans_Call_Item are missing for exactly the same reason. Changing it means editing
+        // config.yml.
+        list.add(ConfigSetting.bool(CAT_ABILITIES, CONFIG_YML,
+                "Skills.Taming.Pet_Combat_Mode.Enabled", true, "Pet Combat Mode",
+                "Sneak + right-click a pet holding a bone to switch your pets between passive "
+                        + "(they fight what you fight) and aggressive (they pick their own fights). "
+                        + "Off also restores vanilla pet pathing."));
+        // ⚠️ Aggressive_Radius, Engage_Range and Sweep_Interval_Ticks are shipped in config.yml and
+        // have getters, but are NOT offered here yet: nothing consumes them until the aggressive
+        // sweep and the engage-range boost land. CatalogueKeysReachCodeTest refuses a switch over a
+        // key no gameplay code reads, and it is right to — a row here today would be a slider the
+        // player can move that changes nothing. They get added with the code that reads them.
+
         // ---- Anti-cheat / exploit gates (experience.yml) ---------------------------------------
         // GitHub #9. Every switch below is verified to reach live code by
         // ExperienceConfigKeyAgreementTest (the getter reads the shipped key) and
