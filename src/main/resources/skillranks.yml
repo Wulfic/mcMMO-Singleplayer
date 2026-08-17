@@ -102,38 +102,21 @@ Archery:
             Rank_18: 900
             Rank_19: 950
             Rank_20: 1000
-# Agility is a CHILD skill: its level is the mean of Parkour, Swimming and Flying. Only the two
-# sub-skills that work in ALL THREE mediums are still ranked here, because the mean is only an
-# honest gate for a perk that spans all three -- and each of these carries one rank PER medium, so
-# no single parent's level could gate all three ranks.
+# AGILITY WAS RETIRED 2026-08-17 and its block deleted from this file. It had been a CHILD skill --
+# its level was the mean of Parkour, Swimming and Flying -- holding the last two sub-skills that
+# worked in all three mediums, each carrying one rank PER medium.
 #
 # MOVED OUT 2026-08-10: Dodge/Athlete/Smash -> Parkour, LeadLungs/LakeRaider -> Swimming,
-# Glide/SolarWings -> Flying. The numbers below and there are unchanged; what changed is which
-# level they are read against.
-Agility:
-    # Fleet Footed and Second Wind carry one rank per movement medium, in the same order:
-    # rank 1 = Land, rank 2 = Water, rank 3 = Air.
-    FleetFooted:
-        Standard:
-            Rank_1: 1
-            Rank_2: 20
-            Rank_3: 40
-        RetroMode:
-            Rank_1: 1
-            Rank_2: 200
-            Rank_3: 400
-    SecondWind:
-        Standard:
-            Rank_1: 25
-            Rank_2: 50
-            Rank_3: 75
-        RetroMode:
-            Rank_1: 250
-            Rank_2: 500
-            Rank_3: 750
-# Parkour, Swimming and Flying are Agility's three parent skills: their XP is what Agility's level
-# is averaged from. Every sub-skill below is gated on that parent's OWN level rather than on the
-# average, so it is earned by doing the thing it is a perk for.
+# Glide/SolarWings -> Flying, numbers unchanged.
+# MOVED OUT 2026-08-17: FleetFooted and SecondWind -> ALL THREE parents, one single-rank sub-skill
+# each. Their numbers were NOT carried over. As ranks 1/2/3 of one shared ladder they read
+# 1/200/400 and 250/500/750 against the MEAN, which encoded unlock ORDER (land, then water, then
+# air). Split across three parents there is no order left to encode, so every medium now unlocks at
+# what rank 1 cost: FleetFooted 1, SecondWind 250 (RetroMode). This is a buff for specialists -- a
+# pure flier capped Agility at 333 and could never reach the air ranks at all.
+#
+# Parkour, Swimming and Flying were Agility's three parent skills. Every sub-skill below is gated on
+# that parent's OWN level, so it is earned by doing the thing it is a perk for.
 Parkour:
     SnowWalker:
         Standard:
@@ -158,6 +141,18 @@ Parkour:
             Rank_1: 15
         RetroMode:
             Rank_1: 150
+    # The land third of the two retired Agility sub-skills (2026-08-17). Identical numbers sit under
+    # Swimming and Flying: one perk per medium, each earned in its own medium, at the same price.
+    FleetFooted:
+        Standard:
+            Rank_1: 1
+        RetroMode:
+            Rank_1: 1
+    SecondWind:
+        Standard:
+            Rank_1: 25
+        RetroMode:
+            Rank_1: 250
 Swimming:
     # Moved here from Agility on 2026-08-10, numbers unchanged.
     LeadLungs:
@@ -170,6 +165,17 @@ Swimming:
             Rank_1: 50
         RetroMode:
             Rank_1: 500
+    # The water third of the two retired Agility sub-skills (2026-08-17).
+    FleetFooted:
+        Standard:
+            Rank_1: 1
+        RetroMode:
+            Rank_1: 1
+    SecondWind:
+        Standard:
+            Rank_1: 25
+        RetroMode:
+            Rank_1: 250
 Flying:
     # Moved here from Agility on 2026-08-10, numbers unchanged -- and for these two the move is what
     # makes them reachable at all. Against Agility's mean, Glide's 350 needed Flying 1050 and
@@ -184,6 +190,19 @@ Flying:
             Rank_1: 75
         RetroMode:
             Rank_1: 750
+    # The air third of the two retired Agility sub-skills (2026-08-17). These two are the clearest
+    # case for flattening: as ranks 3 and 3 of the shared ladder they needed 400 and 750 of the MEAN
+    # of three skills, which a pure flier could never reach -- Agility caps at 333 for them.
+    FleetFooted:
+        Standard:
+            Rank_1: 1
+        RetroMode:
+            Rank_1: 1
+    SecondWind:
+        Standard:
+            Rank_1: 25
+        RetroMode:
+            Rank_1: 250
 Axes:
     AxesLimitBreak:
         Standard:

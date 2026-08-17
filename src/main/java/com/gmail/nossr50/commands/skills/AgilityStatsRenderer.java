@@ -68,11 +68,11 @@ public final class AgilityStatsRenderer extends SkillStatsRenderer {
             return lines;
         }
         if (agility.canFleetFoot(medium)) {
-            lines.add(getStatMessage(SubSkillType.AGILITY_FLEET_FOOTED,
+            lines.add(getStatMessage(medium.fleetFootedSubSkill(),
                     percent.format(agility.getFleetFootedBonus(medium))));
         }
         if (agility.canSecondWind(medium)) {
-            lines.add(getStatMessage(SubSkillType.AGILITY_SECOND_WIND, calculateLength(skillValue)));
+            lines.add(getStatMessage(medium.secondWindSubSkill(), calculateLength(skillValue)));
         }
         return lines;
     }

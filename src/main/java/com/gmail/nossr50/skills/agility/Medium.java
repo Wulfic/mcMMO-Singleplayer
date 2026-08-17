@@ -23,23 +23,29 @@ import com.gmail.nossr50.datatypes.skills.SubSkillType;
  */
 public enum Medium {
 
-    /** Sprinting on land. Pays Parkour; Fleet Footed's first rank. */
-    LAND(1, "Land", PrimarySkillType.PARKOUR),
+    /** Sprinting on land. Pays Parkour, and gates on Parkour's own sub-skills. */
+    LAND("Land", PrimarySkillType.PARKOUR,
+            SubSkillType.PARKOUR_FLEET_FOOTED, SubSkillType.PARKOUR_SECOND_WIND),
 
-    /** Moving while in water. Pays Swimming; Fleet Footed's second rank. */
-    WATER(2, "Water", PrimarySkillType.SWIMMING),
+    /** Moving while in water. Pays Swimming, and gates on Swimming's own sub-skills. */
+    WATER("Water", PrimarySkillType.SWIMMING,
+            SubSkillType.SWIMMING_FLEET_FOOTED, SubSkillType.SWIMMING_SECOND_WIND),
 
-    /** Gliding on an elytra. Pays Flying; Fleet Footed's third rank. */
-    AIR(3, "Air", PrimarySkillType.FLYING);
+    /** Gliding on an elytra. Pays Flying, and gates on Flying's own sub-skills. */
+    AIR("Air", PrimarySkillType.FLYING,
+            SubSkillType.FLYING_FLEET_FOOTED, SubSkillType.FLYING_SECOND_WIND);
 
-    private final int fleetFootedRank;
     private final String configName;
     private final PrimarySkillType primarySkill;
+    private final SubSkillType fleetFootedSubSkill;
+    private final SubSkillType secondWindSubSkill;
 
-    Medium(int fleetFootedRank, String configName, PrimarySkillType primarySkill) {
-        this.fleetFootedRank = fleetFootedRank;
+    Medium(String configName, PrimarySkillType primarySkill, SubSkillType fleetFootedSubSkill,
+            SubSkillType secondWindSubSkill) {
         this.configName = configName;
         this.primarySkill = primarySkill;
+        this.fleetFootedSubSkill = fleetFootedSubSkill;
+        this.secondWindSubSkill = secondWindSubSkill;
     }
 
     /**
@@ -51,13 +57,25 @@ public enum Medium {
     }
 
     /**
-     * The {@link SubSkillType#AGILITY_FLEET_FOOTED} (and
-     * {@link SubSkillType#AGILITY_SECOND_WIND}) rank that unlocks this medium. Both sub-skills carry
-     * one rank per medium in the same order, so the two share this number rather than each keeping
-     * their own copy of "water is the second one".
+     * This medium's Fleet Footed sub-skill — {@code PARKOUR_}, {@code SWIMMING_} or {@code FLYING_}.
+     *
+     * <p>Replaced {@code fleetFootedRank()} on 2026-08-17. Until then both sub-skills lived on the
+     * retired {@code AGILITY} child skill carrying one <em>rank</em> per medium (land 1, water 2, air
+     * 3), and this enum held that rank number. Retiring the parent dissolved the ladder, so the
+     * medium now names a whole sub-skill rather than an index into one — which is what lets each
+     * medium be gated on the level of the skill you actually earn by travelling through it.
      */
-    public int fleetFootedRank() {
-        return fleetFootedRank;
+    public SubSkillType fleetFootedSubSkill() {
+        return fleetFootedSubSkill;
+    }
+
+    /**
+     * This medium's Second Wind sub-skill — the body {@code SuperAbilityType.SECOND_WIND} dispatches
+     * to here. The ability stays a single constant with a single cooldown; only what <em>gates</em>
+     * each body is per-medium.
+     */
+    public SubSkillType secondWindSubSkill() {
+        return secondWindSubSkill;
     }
 
     /** This medium's section name in {@code experience.yml} / {@code advanced.yml}. */
