@@ -222,6 +222,14 @@ class SkillStatsRendererTest {
 
     @Test
     void miscRenderersEmitAStatsSectionAtMaxLevel() {
+        // ⚠️ Agility's screen stopped being a function of Agility's own level on 2026-08-17. Its two
+        // remaining sub-skills were re-homed onto Parkour, Swimming and Flying, so every line it
+        // renders is now gated on those three — maxing AGILITY alone produces an empty screen, which
+        // is correct rather than a regression. Set the parents, or this asserts nothing.
+        for (PrimarySkillType parent : List.of(PrimarySkillType.PARKOUR, PrimarySkillType.SWIMMING,
+                PrimarySkillType.FLYING)) {
+            when(mmoPlayer.getSkillLevel(parent)).thenReturn(1000);
+        }
         for (PrimarySkillType s : List.of(PrimarySkillType.AGILITY, PrimarySkillType.REPAIR,
                 PrimarySkillType.SALVAGE, PrimarySkillType.SMELTING)) {
             when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);

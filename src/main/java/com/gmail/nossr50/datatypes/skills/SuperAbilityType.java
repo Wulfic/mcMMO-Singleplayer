@@ -96,11 +96,17 @@ public enum SuperAbilityType {
             "Placeholder"),
 
     /**
-     * Agility's active (Pass 2). The mod's first super ability that is not gated on holding a tool:
-     * it is triggered by a held item and dispatched on the player's <em>movement state</em>, with a
-     * different body per medium (land lunge / water buff / air boost). One ability rather than three
-     * keeps it to one cooldown slot, one config block and one locale block — from the player's seat
-     * it is simply "the Agility button".
+     * The movement active (Pass 2). The mod's first super ability that is not gated on holding a
+     * tool: it is triggered by a held item and dispatched on the player's <em>movement state</em>,
+     * with a different body per medium (land lunge / water buff / air boost). One ability rather than
+     * three keeps it to one cooldown slot, one item and one cooldown block — from the player's seat
+     * it is simply "the movement button".
+     *
+     * <p>It is the only super ability with no single parent skill. It belonged to Agility until that
+     * skill was retired on 2026-08-17; each body is now gated on the skill for the medium it fires in
+     * — Parkour, Swimming or Flying — while the ability itself stays one constant. Staying one
+     * constant is deliberate: three would be three independent cooldowns, and a player could lunge on
+     * land, dive and surge, then glide and soar without waiting for any of them.
      */
     SECOND_WIND(
             "Agility.Skills.SecondWind.On",
@@ -108,7 +114,7 @@ public enum SuperAbilityType {
             "Agility.Skills.SecondWind.Other.On",
             "Agility.Skills.SecondWind.Refresh",
             "Agility.Skills.SecondWind.Other.Off",
-            "Agility.SubSkill.SecondWind.Name"),
+            "Parkour.SubSkill.SecondWind.Name"),
 
     /**
      * Stealth's active (Pass 2). Like {@link #SECOND_WIND} it is not gated on holding a tool — it is
@@ -163,7 +169,21 @@ public enum SuperAbilityType {
         SKULL_SPLITTER.subSkillTypeDefinition = SubSkillType.AXES_SKULL_SPLITTER;
         TREE_FELLER.subSkillTypeDefinition = SubSkillType.WOODCUTTING_TREE_FELLER;
         SERRATED_STRIKES.subSkillTypeDefinition = SubSkillType.SWORDS_SERRATED_STRIKES;
-        SECOND_WIND.subSkillTypeDefinition = SubSkillType.AGILITY_SECOND_WIND;
+        // ⚠️ NOMINAL binding, and the only one in this map that is. Second Wind has THREE sub-skills
+        // (PARKOUR_/SWIMMING_/FLYING_SECOND_WIND, one per medium) because a sub-skill's parent is
+        // derived from its enum name prefix and no one constant can span three parents -- but it is
+        // still ONE ability with one cooldown, so this field can only name one of them.
+        //
+        // That is safe ONLY because all three unlock at the same level, which is what makes the one
+        // answer correct for every medium. It is a coupling, not a coincidence: let the three
+        // diverge and this binding starts lying silently, in the two callers below. Deliberately NOT
+        // left null "to be resolved per medium" -- PlaceholderSuperAbilityTest requires non-null, and
+        // a null here is an NPE on a path no test walks.
+        //
+        // Callers: RankUtils#getSuperAbilityUnlockLevel and McMMOPlayer#processAbilityActivation.
+        // Anything that needs the medium's ACTUAL sub-skill asks Medium#secondWindSubSkill().
+        // Pinned by SuperAbilityTypeTest#allSecondWindSubSkillsUnlockAtTheSameLevel.
+        SECOND_WIND.subSkillTypeDefinition = SubSkillType.PARKOUR_SECOND_WIND;
         SMOKE_BOMB.subSkillTypeDefinition = SubSkillType.STEALTH_SMOKE_BOMB;
         HERDSMANS_CALL.subSkillTypeDefinition = SubSkillType.HUSBANDRY_HERDSMANS_CALL;
         BLAST_MINING.subSkillTypeDefinition = SubSkillType.MINING_BLAST_MINING;

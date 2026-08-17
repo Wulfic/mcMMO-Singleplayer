@@ -558,6 +558,179 @@ gated behind a printed per-version add/remove count rather than a silent write.
 
 ---
 
+## Agility retirement — fold the last two sub-skills into Parkour / Swimming / Flying
+
+**Owner ruling, 2026-08-17. Tier 2 — it removes a `PrimarySkillType` constant.** The four design
+questions this section used to leave open were **asked and answered by the owner on 2026-08-17,
+before the first edit**. They are recorded here rather than only in `.agent/memory/decisions.md`
+because `.agent/` is gitignored and **does not travel to a band branch** — the back-port needs them.
+
+**The decision:** `AGILITY` goes away as a skill. Its two surviving sub-skills split across the three
+movement parents that already own everything else — **six single-rank sub-skills, not two 3-rank
+ones**, because a sub-skill's parent is derived from its enum name prefix and one constant cannot
+span three parents.
+
+| Today | Becomes |
+|---|---|
+| `AGILITY_FLEET_FOOTED(3)` — land, water, air | `PARKOUR_FLEET_FOOTED(1)` · `SWIMMING_FLEET_FOOTED(1)` · `FLYING_FLEET_FOOTED(1)` |
+| `AGILITY_SECOND_WIND(3)` — land, water, air | `PARKOUR_SECOND_WIND(1)` · `SWIMMING_SECOND_WIND(1)` · `FLYING_SECOND_WIND(1)` |
+
+⚠️⚠️ **This overrules the stated reason those two were kept**, and the re-home answers it rather than
+routing around it (see A-1). The 2026-08-10 restructure re-parented every *single-medium* sub-skill
+and left exactly these two on Agility because each carries **one rank per medium**, gated by the mean
+of Parkour/Swimming/Flying — *"there is no single parent whose level could gate all three of their
+ranks"*. Dropping the child skill deletes that gate. A mechanical find-and-replace here ships
+sub-skills that unlock at the wrong level and **nothing fails** — no compiler and no test reads a
+balance number.
+
+### The four rulings (A-1 … A-4)
+
+**A-1 — Unlock levels: FLATTEN TO RANK 1's NUMBER.** Fleet Footed unlocks at **1** in each parent;
+Second Wind at **250** in each (RetroMode; Standard is /10). The 1/200/400 and 250/500/750 ladders
+encoded *unlock order* on one shared ladder; split across three parents there is no order left to
+encode, and keeping them would make a swimmer wait until Swimming 200 for the perk a runner gets at
+Parkour 1.
+⚠️ **This is a buff for every specialist and the deliberate end of the all-rounder gate.** A pure
+flier caps Agility at 333 today and can *never* reach the air ranks; afterwards they get air Fleet
+Footed at Flying 1 and Limitless at Flying 250. **Say so in the wiki in plain words.**
+
+**A-2 — Second Wind stays ONE `SuperAbilityType`**, its parent resolved from the medium at
+activation. One cooldown slot, one `Second_Wind_Item`, one cooldown/duration block — from the
+player's seat it stays a single button whose effect depends on where you are. Three constants were
+rejected as a real buff (Dart on land → dive → Aquaman → glide out → Limitless, all chainable).
+⚠️ `SECOND_WIND.subSkillTypeDefinition` is a **static single binding** with exactly two production
+callers (`RankUtils#getSuperAbilityUnlockLevel` at `RankUtils.java:245`, and `McMMOPlayer.java:1234`)
+plus `PlaceholderSuperAbilityTest`, which asserts it is never null. Keep it bound — to
+`PARKOUR_SECOND_WIND` as the nominal constant — and add a medium-aware `subSkillFor(Medium)` beside
+it. **Leaving the field null "to be resolved later" is an NPE on a path no test walks** — the exact
+shape of the Taming `UniqueDataType` save-path defect.
+🔑 **A-1 is what makes that nominal binding safe**: all three unlock at 250, so the one static answer
+is correct for every medium. That is a *coupling*, not a coincidence — if the three ever diverge the
+binding starts lying silently. **A test pins "all three `*_SECOND_WIND` unlock at the same level"**,
+and its failure message must say why.
+
+**A-3 — Rename `skills/agility/` → `skills/movement/`, `AgilityManager` → `MovementManager`**
+(`datatypes/skills/subskills/agility/` moves too). `AgilityManager` has hosted every Parkour,
+Swimming and Flying sub-skill since 2026-08-10 — it is the movement manager in all but name, and a
+package named for a deleted skill is the rot this repo keeps getting burned by.
+⚠️ **Cost accepted knowingly:** the rename makes the five band cherry-picks conflict-prone, so it
+lands as its **own commit, separate from behaviour**, and last.
+
+**A-4 — Delete the Agility advancement tree; reissue the rank plaques under the new parents.**
+`milestone/skill/agility`, `milestone/level/agility/*`, `milestone/maxed/agility` and
+`milestone/rank/agility_{fleet_footed,second_wind}/*` go. ⚠️ **Accepted player-visible cost:** an
+earned Agility advancement silently vanishes from the player's list.
+
+### Concrete target state
+
+`skillranks.yml` — delete the `Agility:` block; add to each of the three parents:
+
+```yaml
+FleetFooted:  { Standard: { Rank_1: 1 },  RetroMode: { Rank_1: 1 } }
+SecondWind:   { Standard: { Rank_1: 25 }, RetroMode: { Rank_1: 250 } }
+```
+
+`advanced.yml` — `Skills.Agility.FleetFooted.{Land,Water,Air}_MaxBonus` become one `MaxBonus` under
+each parent (`0.20` Parkour, `0.50` Swimming, `0.15` Flying), each with its own `MaxBonusLevel`.
+`Skills.Agility.SecondWind`'s bodies split to the medium that uses them — `Dart*` → Parkour,
+`AquamanAmplifier` → Swimming, `LimitlessBoost` → Flying. The *ability-level* keys in `config.yml`
+(`Second_Wind: 240` cooldown/duration, `Second_Wind_Item: FEATHER`) stay **single**, per A-2.
+⚠️ **Every one of those is a moved path, so every one needs a `ConfigRetunes` entry** — the
+2026-08-10 move already established the pattern *("mcMMO moves your values to the new paths on first
+boot and tells you it did so")*. A changed shipped default reaches nobody who has run the mod once.
+
+`locale_en_US.properties` — `Agility.SubSkill.{FleetFooted,SecondWind}.*` become the six
+`<Parent>.SubSkill.<Name>.{Name,Description}` keys `SkillLocaleCompletenessTest` derives from the
+enum. The five `SuperAbilityType` ability strings stay **one block** (A-2); they are literal keys in
+the enum constructor, so re-home them to a neutral `Movement.Skills.SecondWind.*` — not to one
+parent, which would read as a lie in the other two. Drop `Agility.SkillName`, `XPBar.Agility`,
+`Overhaul.Name.Agility`.
+
+**Persistence — RULED: the reader ignores the orphan, nothing migrates.** Agility is a child skill
+with no stored level or XP, so a pre-2026-08-10 profile's dead `skills.AGILITY` / `experience.AGILITY`
+key has nothing to migrate *to* — the two sub-skills' progress was never stored, it was derived.
+`SkillRenames` stays empty; **deleting a constant is not renaming one.**
+⚠️ **Prove both directions before believing it** (the Taming lesson): a test that loads a profile
+carrying `skills.AGILITY` and asserts it round-trips — **loads without error AND saves without
+writing the key back or NPEing.** The load path is the half everyone checks; the save path is where
+the Taming defect was.
+
+### Phases — one reviewable commit each, in this order
+
+- [x] **A0 — persistence proof.** ✅ **Already in the suite and already green** — the guard did not
+      need writing: `FlatFileProfileStoreTest#agilityProgressIsNotMigratedBecauseAChildSkillHasNoSaveKey`
+      (`:160`) loads a profile carrying `skills.AGILITY: 63` / `experience.AGILITY: 100.0` and asserts
+      the rewritten file contains **no** `AGILITY` at all. Both directions are structural, not
+      incidental: load iterates `SkillTools.NON_CHILD_SKILLS` (a child skill is never read), and
+      `saveProfile` builds a **fresh** `YamlConfiguration.empty()` (`FlatFileProfileStore.java:287`),
+      so an orphan key is dropped on the next save rather than merged forward.
+      ⚠️ **This test does not survive phase E untouched** — its line 177 asserts the *derived* Agility
+      level via `PrimarySkillType.AGILITY` and stops compiling. When E lands, delete **only** that
+      assertion and keep the two orphan-key ones; deleting the test wholesale would remove the only
+      proof that a legacy key is still ignored.
+- [ ] **A — the six sub-skills.** Add the new `SubSkillType` constants and the `skillranks.yml`
+      blocks; repoint `MovementManager#canFleetFoot/canSecondWind` from `Medium#fleetFootedRank()` to
+      the medium's own constant. `Medium` gains `fleetFootedSubSkill()` / `secondWindSubSkill()` and
+      **loses `fleetFootedRank()`** — delete it rather than leaving it unused, it is the thing that
+      encoded the dissolved ladder.
+- [ ] **B — Second Wind's medium-aware binding** + the "all three unlock alike" guard (A-2).
+- [ ] **C — config + locale + `ConfigRetunes` path moves.** ⚠️ ModMenu rows land with the code that
+      READS the key, never with the key — `CatalogueKeysReachCodeTest` is right to refuse them early.
+- [ ] **D — renderers + advancements.** Delete `AgilityStatsRenderer`; Parkour/Swimming/Flying
+      renderers each gain a Fleet Footed row and a Second Wind row showing **that medium's** state.
+      Advancement JSONs per A-4.
+- [ ] **E — remove `PrimarySkillType.AGILITY`** and `SkillTools.AGILITY_PARENTS`, `isChildSkill`'s
+      `AGILITY` arm, `MISC_SKILLS`, `getPrimarySkill(SECOND_WIND)`, `coreskills.yml`, `experience.yml`.
+      🔑 **Audit against `PrimarySkillType.values()`, never against the diff.**
+- [ ] **F — the rename (A-3), mechanical and behaviour-free.** Its own commit, so a band can take it
+      cleanly.
+- [ ] **G — gates, in this order:** `mixin-allow-audit.py --check` **before** `./gradlew build` (javac
+      is blind to mixin selector breakage); then `classes testClasses` → `extract-mc-surface.py`;
+      `config-id-audit.py --self-test` then the audit; `boot-check.sh`; `gameplay-smoke.sh` with
+      `GAMEPLAY_SMOKE_CONTROL=1` proving the control still fails.
+      ⚠️ `gameplay-smoke.sh` scores a **super ability** — Second Wind's re-home is exactly the kind of
+      change that breaks it, and its `combat-sword` leg is flaky 1-in-3 cold. State the base rate.
+- [ ] **H — mutation pass on every new guard.** 🔑🔑 The signal is *"the red I got is the red I
+      predicted"*, not *"all caught"*. **Predict what each mutation should break before running it**,
+      and confirm the mutation actually changed compiled behaviour before believing a red test.
+
+### Blast radius and rollback
+
+Every phase is one commit on `master` with a green build behind it, so **rollback is
+`git revert <sha>` of that commit** — no history rewrite, nothing irreversible. The only deletions
+are tracked files (advancement JSONs, `AgilityStatsRenderer`, the `Agility:` config blocks), all
+recoverable from the commit that removed them. **Nothing here touches a player's save**: the profile
+change is *not writing a key that was already dead*.
+⚠️ The one unrecoverable-shaped step is **F, the rename** — `git mv` across ~30 files. It goes last,
+alone, on a clean tree, and is verified with `git status` showing renames rather than delete+add.
+
+### What I am **not** doing
+
+- **Not preserving the all-rounder gate in any form.** A-1 ends it deliberately. Being an all-rounder
+  still earns *more* perks (all six instead of two); it is no longer a *gate* on any one of them.
+- **Not re-scaling the Second Wind bodies.** Dart/Aquaman/Limitless keep their current magnitudes;
+  only what gates them moves.
+- **Not touching Roll, Dodge, Athlete, Smash, Snow Walker, Lead Lungs, Lake Raider, Glide or Solar
+  Wings.** They were re-parented on 2026-08-10 and are already correct.
+- **Not adding a `ParkourManager`/`SwimmingManager`/`FlyingManager` split.** One movement manager,
+  as today — three managers would mean three lazy-construction sites for one behaviour family.
+- **Not migrating the orphan `skills.AGILITY` key.** Ruled above; there is nothing to migrate to.
+
+### Then, and this is not optional
+
+- [ ] **Back-port to all five `mc/**` branches** with `Backport-of:` trailers. Version-agnostic logic,
+      same class as the Taming work — and this one is bigger, so it is more likely to be forgotten,
+      not less. ⚠️ `mc-surface.txt` is regenerated per band, never cherry-picked.
+      🔑 Take **F (the rename) as its own cherry-pick**, after the behaviour commits, or every one of
+      them conflicts.
+- [ ] **Caveat-expiry pass** on `README.md` and `wiki/` — grep the **symptom** (*"Agility"*,
+      *"Fleet Footed"*, *"Second Wind"*, *"child skill"*, *"all-rounder"*, *"mean of"*), and audit the
+      wiki roster against `PrimarySkillType.values()`. A removed skill is invisible to every
+      incremental doc edit, exactly as an added one was for Cooking. ⚠️ One wiki serves every band.
+- [ ] Full ship gate per band before each push.
+
+---
+
 ## Phase 9 — the `26.x` band
 
 **Its own mini-project (R-e). Do not absorb it into a sweep.** Gated behind Phase 8 delivering at

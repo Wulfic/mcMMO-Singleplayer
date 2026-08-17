@@ -1,19 +1,19 @@
 {
-  "parent": "mcmmo:milestone/skill/agility",
+  "parent": "mcmmo:milestone/skill/swimming",
   "display": {
     "icon": {
-      "id": "minecraft:feather"
+      "id": "minecraft:heart_of_the_sea"
     },
     "title": {
-      "text": "Second Wind Improved",
+      "text": "Second Wind Unlocked",
       "color": "aqua",
       "bold": true
     },
     "description": {
-      "text": "Second Wind grew stronger (up to 3 ranks).",
+      "text": "You can now use Second Wind.",
       "color": "yellow"
     },
-    "frame": "task",
+    "frame": "goal",
     "show_toast": true,
     "announce_to_chat": false,
     "hidden": true

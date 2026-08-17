@@ -430,12 +430,17 @@ public class AgilityManager extends SkillManager {
     // --- Sub-skill 3: Fleet Footed ------------------------------------------------------------
 
     /**
-     * Whether this medium's Fleet Footed rank is unlocked (land at rank 1, water 2, air 3).
+     * Whether this medium's Fleet Footed sub-skill is unlocked.
+     *
+     * <p>Reads the level of the skill the medium <em>pays</em> — Parkour on land, Swimming in water,
+     * Flying in the air. Before 2026-08-17 this was one three-rank sub-skill on the retired
+     * {@code AGILITY} child skill, gated on the mean of all three, so a player's swimming raised the
+     * bar on their sprinting.
      */
     public boolean canFleetFoot(@NotNull Medium medium) {
-        return RankUtils.hasReachedRank(medium.fleetFootedRank(), mmoPlayer,
-                SubSkillType.AGILITY_FLEET_FOOTED)
-                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_FLEET_FOOTED);
+        final SubSkillType subSkill = medium.fleetFootedSubSkill();
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, subSkill)
+                && Permissions.isSubSkillEnabled(getPlayer(), subSkill);
     }
 
     /**
@@ -573,13 +578,16 @@ public class AgilityManager extends SkillManager {
     // --- Sub-skill 7: Second Wind --------------------------------------------------------------
 
     /**
-     * Whether the Second Wind body for {@code medium} is unlocked. The three bodies share the
-     * ability's three ranks in medium order, so a level-250 player has the land lunge only.
+     * Whether the Second Wind body for {@code medium} is unlocked.
+     *
+     * <p>Each body is gated on its own medium's skill, so a swimmer has Aquaman without needing to
+     * run or fly for it. Before 2026-08-17 the three bodies shared one three-rank ladder read against
+     * the mean of all three skills, which meant a specialist unlocked at most the land lunge.
      */
     public boolean canSecondWind(@NotNull Medium medium) {
-        return RankUtils.hasReachedRank(medium.fleetFootedRank(), mmoPlayer,
-                SubSkillType.AGILITY_SECOND_WIND)
-                && Permissions.isSubSkillEnabled(getPlayer(), SubSkillType.AGILITY_SECOND_WIND);
+        final SubSkillType subSkill = medium.secondWindSubSkill();
+        return RankUtils.hasUnlockedSubskill(mmoPlayer, subSkill)
+                && Permissions.isSubSkillEnabled(getPlayer(), subSkill);
     }
 
     /**
