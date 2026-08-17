@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/skill/agility",
+  "parent": "mcmmo:milestone/skill/flying",
   "display": {
     "icon": {
-      "id": "minecraft:feather"
+      "id": "minecraft:elytra"
     },
     "title": {
-      "text": "Fleet Footed Unlocked",
+      "text": "Second Wind Unlocked",
       "color": "aqua",
       "bold": true
     },
     "description": {
-      "text": "You can now use Fleet Footed.",
+      "text": "You can now use Second Wind.",
       "color": "yellow"
     },
     "frame": "goal",

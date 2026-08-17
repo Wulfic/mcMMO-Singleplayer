@@ -197,27 +197,35 @@ class AgilityMovementTest {
     // --- Fleet Footed: per-medium rank gating + scaling ------------------------------------------
 
     @Test
-    void fleetFootedUnlocksOneMediumPerRank() {
-        // RetroMode ladder from skillranks.yml: land at 1, water at 200, air at 400.
+    void fleetFootedUnlocksInEveryMediumAtLevelOneOfThatMediumsSkill() {
+        // Flattened on 2026-08-17 with the Agility retirement: skillranks.yml now carries
+        // FleetFooted Rank_1: 1 under Parkour, Swimming AND Flying. It used to be one 3-rank ladder
+        // at 1/200/400 read against the mean of the three, which is why the numbers here changed.
         final AgilityManager early = managerAtLevel(1);
-        assertTrue(early.canFleetFoot(Medium.LAND));
-        assertFalse(early.canFleetFoot(Medium.WATER));
-        assertFalse(early.canFleetFoot(Medium.AIR));
+        for (Medium medium : Medium.values()) {
+            assertTrue(early.canFleetFoot(medium),
+                    () -> medium + " unlocks at 1 in its own skill, and this player has 1 in all of "
+                            + "them — a surviving mean-of-three gate would deny water and air here");
+        }
 
-        final AgilityManager mid = managerAtLevel(250);
-        assertTrue(mid.canFleetFoot(Medium.LAND));
-        assertTrue(mid.canFleetFoot(Medium.WATER));
-        assertFalse(mid.canFleetFoot(Medium.AIR), "air is rank 3, unlocked at 400");
-
-        final AgilityManager maxed = managerAtLevel(1000);
-        assertTrue(maxed.canFleetFoot(Medium.AIR));
+        // Level 0 is the discriminating case: without it this test would pass against a gate that
+        // was simply always true.
+        final AgilityManager none = managerAtLevels(0, 0, 0, 0);
+        for (Medium medium : Medium.values()) {
+            assertFalse(none.canFleetFoot(medium), () -> medium + " is locked below level 1");
+        }
     }
 
     @Test
     void fleetFootedPaysNothingForALockedMedium() {
-        final AgilityManager early = managerAtLevel(1);
-        assertEquals(0.0, early.getFleetFootedBonus(Medium.WATER), EPSILON);
-        assertEquals(0.0, early.getFleetFootedBonus(Medium.AIR), EPSILON);
+        // A pure runner: Parkour maxed, never swum, never flown. Under the retired mean-of-three gate
+        // this player's Agility 333 would have paid a water bonus to someone who has never been in
+        // water.
+        final AgilityManager runner = managerAtLevels(333, 1000, 0, 0);
+        assertEquals(0.0, runner.getFleetFootedBonus(Medium.WATER), EPSILON);
+        assertEquals(0.0, runner.getFleetFootedBonus(Medium.AIR), EPSILON);
+        assertTrue(runner.getFleetFootedBonus(Medium.LAND) > 0.0,
+                "the medium they actually trained must still pay, or this asserts nothing");
     }
 
     @Test
@@ -322,15 +330,20 @@ class AgilityMovementTest {
     // --- Second Wind ----------------------------------------------------------------------------
 
     @Test
-    void secondWindUnlocksOneBodyPerRank() {
-        // RetroMode ladder: land at 250, water at 500, air at 750.
-        final AgilityManager mid = managerAtLevel(250);
-        assertTrue(mid.canSecondWind(Medium.LAND));
-        assertFalse(mid.canSecondWind(Medium.WATER));
-        assertFalse(mid.canSecondWind(Medium.AIR));
+    void everySecondWindBodyUnlocksAt250OfItsOwnMediumsSkill() {
+        // Flattened on 2026-08-17: SecondWind Rank_1: 250 under Parkour, Swimming AND Flying. It used
+        // to be one 3-rank ladder at 250/500/750 read against the mean of the three.
+        final AgilityManager justUnder = managerAtLevel(249);
+        for (Medium medium : Medium.values()) {
+            assertFalse(justUnder.canSecondWind(medium), () -> medium + " is locked at 249");
+        }
 
-        final AgilityManager maxed = managerAtLevel(1000);
-        assertTrue(maxed.canSecondWind(Medium.AIR));
+        final AgilityManager atThreshold = managerAtLevel(250);
+        for (Medium medium : Medium.values()) {
+            assertTrue(atThreshold.canSecondWind(medium),
+                    () -> medium + " unlocks at exactly 250 of its own skill — under the retired "
+                            + "ladder only the land body was live at this level");
+        }
     }
 
     @Test
@@ -338,8 +351,17 @@ class AgilityMovementTest {
         // Returning null rather than a zeroed result is load-bearing: an all-zeros result is
         // indistinguishable from a legitimately weak one, and the caller has to be able to refuse
         // without consuming the cooldown.
-        assertNull(managerAtLevel(250).computeSecondWind(Medium.WATER, 100));
-        assertNull(managerAtLevel(1).computeSecondWind(Medium.LAND, 100));
+        //
+        // A runner at Parkour 1000 / Swimming 0 / Flying 0: Dart is live, the other two bodies are
+        // not. Asserting a live one alongside the null ones is what stops this passing against a
+        // computeSecondWind that returns null unconditionally.
+        final AgilityManager runner = managerAtLevels(333, 1000, 0, 0);
+        assertNull(runner.computeSecondWind(Medium.WATER, 100));
+        assertNull(runner.computeSecondWind(Medium.AIR, 100));
+        assertNotNull(runner.computeSecondWind(Medium.LAND, 100));
+
+        assertNull(managerAtLevel(1).computeSecondWind(Medium.LAND, 100),
+                "below 250 in every skill, no body resolves");
     }
 
     @Test
@@ -415,11 +437,21 @@ class AgilityMovementTest {
 
     @Test
     void everyMovementSubSkillIsInertForABrandNewPlayer() {
-        // The whole new roster at once: a level-1 player should feel exactly like the shipped
-        // Acrobatics skill, with only Fleet Footed (land, rank 1) switched on.
+        // The whole new roster at once: a level-1 player should feel essentially like vanilla.
+        //
+        // ⚠️ Fleet Footed is the deliberate exception, and it grew on 2026-08-17. It unlocks at level
+        // 1 in EVERY medium now, not just on land — flattening the ladder extended to water and air
+        // the always-on-ness that land already had. What keeps that from being a real buff at level 1
+        // is the SCALING, not the gate: the bonus is a linear ramp to MaxBonusLevel 1000, so a fresh
+        // player gets a fraction of a percent. That is what is asserted here, because asserting the
+        // gate is off would now be asserting something false.
         final AgilityManager fresh = managerAtLevel(1);
-        assertEquals(0.0, fresh.getFleetFootedBonus(Medium.WATER), EPSILON);
-        assertEquals(0.0, fresh.getFleetFootedBonus(Medium.AIR), EPSILON);
+        for (Medium medium : Medium.values()) {
+            assertTrue(fresh.canFleetFoot(medium), () -> medium + " is unlocked from level 1");
+            assertTrue(fresh.getFleetFootedBonus(medium) < 0.001,
+                    () -> medium + " pays a negligible bonus at level 1, not its cap: got "
+                            + fresh.getFleetFootedBonus(medium));
+        }
         assertEquals(1.0, fresh.getAthleteExhaustionMultiplier(), EPSILON);
         assertEquals(0.0, fresh.getLeadLungsAirTopUpPerTick(), EPSILON);
         assertEquals(0.0, fresh.getGlideDescentReduction(), EPSILON);
@@ -462,25 +494,62 @@ class AgilityMovementTest {
     }
 
     /**
-     * The converse, and the half that is easy to leave out: the two sub-skills that did <em>not</em>
-     * move must still read the average, or "re-parent everything" would have been the quieter bug.
+     * The 2026-08-17 Agility retirement, in the one assertion that can catch it going wrong.
      *
-     * <p>A pure flier is the sharpest case. Flying 1000 with nothing else is Agility 333, so Fleet
-     * Footed's water rank (200) is unlocked and its air rank (400) is not — even though the player's
-     * flying is maxed. That is the deliberate all-rounder design, and it is also proof the gate is
-     * the mean rather than any single parent: Flying alone would have unlocked the air rank, and
-     * Swimming alone would have denied the water one.
+     * <p>This <b>replaces</b> {@code agilitysOwnSubSkillsStillGateOnTheThreeSkillMean}, which pinned
+     * the exact opposite and was correct until the child skill was dropped. Fleet Footed and Second
+     * Wind used to be one 3-rank sub-skill apiece read against the mean of Parkour/Swimming/Flying;
+     * each rank is now a single-rank sub-skill of its own medium's parent.
+     *
+     * <p>A <b>pure flier</b> is still the sharpest case, and the verdict inverts. Flying 1000 with
+     * nothing else was Agility 333 — which unlocked the <em>water</em> rank for a player who had never
+     * been in water, and denied the <em>air</em> rank (400) to one whose flying was maxed. Both halves
+     * were backwards, and neither reported anything. Now the air bodies are live and the land and
+     * water ones are dead, which is only satisfiable if each reads its own parent.
+     *
+     * <p>⚠️ This fails in both directions on purpose: a mean-of-three gate would light up water, and
+     * a single shared gate would light up all three. The old constants coming back would produce no
+     * error anywhere — the same silent shape as GitHub #4.
      */
     @Test
-    void agilitysOwnSubSkillsStillGateOnTheThreeSkillMean() {
+    void movementSubSkillsFollowTheirOwnMediumsParentNotTheAverage() {
         final AgilityManager flier = managerAtLevels(333, 0, 0, 1000);
 
-        assertTrue(flier.canFleetFoot(Medium.LAND), "rank 1 at Agility 1");
-        assertTrue(flier.canFleetFoot(Medium.WATER), "rank 2 at Agility 200, and the mean is 333");
-        assertFalse(flier.canFleetFoot(Medium.AIR),
-                "rank 3 needs Agility 400; maxed Flying alone only reaches 333");
-        assertNull(flier.computeSecondWind(Medium.AIR, 100),
-                "Second Wind's air body needs Agility 750 — unreachable without swimming and running");
+        assertTrue(flier.canFleetFoot(Medium.AIR),
+                "air Fleet Footed is gated on Flying, which is maxed — under the retired mean gate "
+                        + "this needed Agility 400 and a pure flier could never reach it");
+        assertNotNull(flier.computeSecondWind(Medium.AIR, 100),
+                "Limitless is gated on Flying, which is maxed — under the retired mean gate it "
+                        + "needed Agility 750 and was unreachable without also running and swimming");
+
+        assertFalse(flier.canFleetFoot(Medium.WATER),
+                "water Fleet Footed is gated on Swimming, which is 0 — the mean of three would have "
+                        + "wrongly unlocked it at Agility 333");
+        assertNull(flier.computeSecondWind(Medium.WATER, 100),
+                "Aquaman is gated on Swimming, which is 0");
+        assertNull(flier.computeSecondWind(Medium.LAND, 100),
+                "Dart is gated on Parkour, which is 0");
+    }
+
+    /**
+     * The Second Wind half of the retirement, from the specialist's seat: each medium's body is
+     * unlocked by that medium's own skill and by nothing else.
+     *
+     * <p>Three one-medium players rather than one all-rounder, because an all-rounder satisfies this
+     * for free — every body would be live and the assertion could not tell a per-parent gate from a
+     * shared one.
+     */
+    @Test
+    void eachSecondWindBodyIsUnlockedOnlyByItsOwnMediumsSkill() {
+        final AgilityManager runner = managerAtLevels(333, 1000, 0, 0);
+        assertNotNull(runner.computeSecondWind(Medium.LAND, 100), "Parkour 1000 unlocks Dart");
+        assertNull(runner.computeSecondWind(Medium.WATER, 100), "Swimming 0 denies Aquaman");
+        assertNull(runner.computeSecondWind(Medium.AIR, 100), "Flying 0 denies Limitless");
+
+        final AgilityManager swimmer = managerAtLevels(333, 0, 1000, 0);
+        assertNotNull(swimmer.computeSecondWind(Medium.WATER, 100), "Swimming 1000 unlocks Aquaman");
+        assertNull(swimmer.computeSecondWind(Medium.LAND, 100), "Parkour 0 denies Dart");
+        assertNull(swimmer.computeSecondWind(Medium.AIR, 100), "Flying 0 denies Limitless");
     }
 
     // --- XP routing: each medium pays its own skill, never Agility -------------------------------

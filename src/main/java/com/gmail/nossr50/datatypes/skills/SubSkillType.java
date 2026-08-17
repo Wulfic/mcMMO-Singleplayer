@@ -9,20 +9,14 @@ public enum SubSkillType {
     /* !! Warning -- Do not let subskills share a name with any existing PrimarySkillType as it will clash with the static import !! */
 
     /*
-     * AGILITY
+     * AGILITY — RETIRED 2026-08-17. There is deliberately no block here.
      *
-     * ⚠️ AGILITY IS A CHILD SKILL, and after 2026-08-10 that is the entire membership rule for this
-     * block: a sub-skill belongs here if and only if it spans more than one movement medium, so that
-     * the mean of Parkour/Swimming/Flying is the honest gate for it. Everything single-medium was
-     * re-parented to the medium's own primary skill — see the PARKOUR, SWIMMING and FLYING blocks.
-     *
-     * Both survivors carry one rank per medium (land, then water, then air) rather than being three
-     * sub-skills apiece, which is exactly why neither could be re-parented: there is no single parent
-     * whose level could gate all three of their ranks. They are the all-rounder's reward, and a pure
-     * flier capping Agility at 333 can never reach the air ranks. That is the design, not a bug.
+     * Agility's last two sub-skills each carried one rank per movement medium (land, water, air) and
+     * were gated on the MEAN of Parkour/Swimming/Flying, because no single parent's level could
+     * honestly gate all three ranks. Retiring the child skill dissolved that ladder, so each rank
+     * became its own parent's single-rank sub-skill: see FLEET_FOOTED and SECOND_WIND in the PARKOUR,
+     * SWIMMING and FLYING blocks below.
      */
-    AGILITY_FLEET_FOOTED(3),
-    AGILITY_SECOND_WIND(3),
 
     /* ALCHEMY */
     ALCHEMY_CATALYSIS(1),
@@ -90,9 +84,18 @@ public enum SubSkillType {
      * past the level cap of 1000, so a specialist could NEVER unlock either one. They were
      * unreachable, not merely slow. Same numbers, read against Flying itself, are now earnable by
      * flying.
+     *
+     * ⚠️ FLEET_FOOTED and SECOND_WIND ARRIVED 2026-08-17 as the air third of the two retired AGILITY_*
+     * sub-skills. Their unlock levels were FLATTENED, not carried over: as ranks 3 and 3 of a shared
+     * ladder they sat at 400 and 750 of the MEAN of three skills, which a pure flier could never reach
+     * (Agility caps at 333 for them). Read against Flying itself they are 1 and 250 — the same numbers
+     * the land third gets, because the 1/2/3 ordering encoded unlock ORDER on one ladder and there is
+     * no order left to encode.
      */
     FLYING_GLIDE(1),
     FLYING_SOLAR_WINGS(1),
+    FLYING_FLEET_FOOTED(1),
+    FLYING_SECOND_WIND(1),
 
     /* Herbalism */
     HERBALISM_DOUBLE_DROPS(1),
@@ -176,6 +179,15 @@ public enum SubSkillType {
     PARKOUR_ATHLETE(1),
     PARKOUR_SMASH(1),
     /*
+     * ⚠️ FLEET_FOOTED and SECOND_WIND ARRIVED 2026-08-17 as the land third of the two retired AGILITY_*
+     * sub-skills. See the FLYING block for why the unlock levels were flattened rather than carried
+     * over. PARKOUR_SECOND_WIND is additionally the NOMINAL binding for SuperAbilityType.SECOND_WIND,
+     * which stays a single ability whose body is chosen by the medium — that binding is only correct
+     * while all three SECOND_WIND sub-skills unlock at the same level, and a test says so.
+     */
+    PARKOUR_FLEET_FOOTED(1),
+    PARKOUR_SECOND_WIND(1),
+    /*
      * ⚠️ MOVED FROM AGILITY_ROLL, 2026-08-03 — GitHub #4 ("rolling never procs"), and the move IS
      * the fix.
      *
@@ -226,9 +238,15 @@ public enum SubSkillType {
      * One of Agility's three parents. Both constants MOVED HERE FROM AGILITY_* on 2026-08-10. Holding
      * your breath and finding treasure in silt are things a swimmer earns by swimming; under the
      * three-skill mean they were gated on how much the player also ran and flew.
+     *
+     * ⚠️ FLEET_FOOTED and SECOND_WIND ARRIVED 2026-08-17 as the water third of the two retired
+     * AGILITY_* sub-skills. See the FLYING block for why the unlock levels were flattened rather than
+     * carried over.
      */
     SWIMMING_LEAD_LUNGS(1),
     SWIMMING_LAKE_RAIDER(1),
+    SWIMMING_FLEET_FOOTED(1),
+    SWIMMING_SECOND_WIND(1),
 
     /* Swords */
     SWORDS_COUNTER_ATTACK(1),
