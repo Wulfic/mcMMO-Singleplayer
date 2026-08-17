@@ -1061,6 +1061,13 @@ rule this repo has already been burned by seven times.
       local audit.
       ⚠️ **R8's unattended leg is now known to work — and it is still weekly, and still reports to a
       tab nobody opens (R11).** What this closes is *"the guard has never run"*, nothing more.
+- [x] **11.3b** ✅ **AND IT HAS NOW FIRED UNATTENDED.** Run `32005557735`, **`event: schedule`**,
+      *Band drift audit*, **success**, `2026-08-17T07:22:56Z` on `4440af5d0` — the real weekly cron,
+      with nobody dispatching it. 11.3a proved the *file* worked when poked; this is the first time the
+      leg ran **on its own**, which is the only version of it R8 was ever counting on.
+      🔑 Found incidentally while querying the API for something else (§12.3), which is R11 restating
+      itself: **the run reported nowhere.** A green scheduled audit and a repo with no scheduled audit
+      at all still look identical from inside this working copy.
 
 #### 11.x — blast radius
 
@@ -1228,12 +1235,36 @@ i.e. the gate is weakest on the run that exists to widen coverage.
    shutdown, **0 ERROR, 0 mixin failures**. 🔑 That is what makes the download path trustworthy — not
    that a file appeared, but that the server accepted it.
 
-### 12.3 — propagation
+### 12.3 — propagation ✅ DONE
 
-- [ ] Back-port both to all five bands with `Backport-of:` trailers, then
-      `drift-audit.py --self-test && --master master` → **0 MISSING on all five**.
-      🔑 The back-port is its own regression test for 12.1: a `scripts/`-only push must now come back
-      as a **stated skip with a determinable range**, not as the guess it was making before.
+- [x] Back-ported to all five bands, one commit each carrying **both** trailers
+      (`Backport-of: f9a0e0f2c`, `Backport-of: 54db48fae` — the auditor's `TRAILER.finditer` collects
+      every trailer in a message, so one commit satisfies both master commits).
+      Per band **before** commit: both blobs byte-identical to `master`'s, `ci-watch --mutate` 4/4
+      caught, `boot-check --self-test` 4/4 against **that band's own pinned fabric-api**.
+
+| Branch | commit | | Branch | commit |
+|---|---|---|---|---|
+| `master` | `54db48fae` | | `mc/1.21.5` | `f0bd4eb8d` |
+| `mc/1.21.3` | `5a3c0355a` | | `mc/1.21.8` | `3c25c8e6e` |
+| `mc/1.21.4` | `1916eb71f` | | `mc/1.21.10` | `23fab559d` |
+
+- [x] All six pushed and level. **Gate 7** — `drift-audit.py --self-test` green, then `--master
+      master`: **0 MISSING on all five bands** (23 / 3 / 10 / 11 / 14 propagated).
+- [x] **Gate 8 is the regression test, and it passed on all five.** Every band's `scripts/`-only push
+      now returns *"no run exists … and nothing in the pushed range touches the filter"* — a stated
+      skip **over a resolved two-commit range**, which is precisely the reasoning the old script could
+      not do. ✅ API confirms **zero releases fired**, as the `paths:` filter predicted.
+
+⚠️ **A process error worth recording, because nothing caught it but re-reading the output.** The first
+back-port attempt ran switch + `checkout master -- <paths>` + verify in a loop with **no commit in
+it**. Since all five bands held byte-identical blobs, `git switch` carried the staged changes
+*forward* instead of refusing — so four bands were "verified green" while nothing was committed on
+any of them, and the whole change was sitting uncommitted on whichever branch the loop ended on.
+🔑 **Staging and committing are separate, and a loop that verifies without committing verifies a
+working tree that is about to move.** It surfaced only because the follow-up blob check listed four
+bands as *still pre-fix*. Nothing was lost — no band was ever damaged — but the loop had reported
+`ALL FOUR STAGED AND GREEN`.
 
 ### 12.x — blast radius
 
@@ -1298,6 +1329,10 @@ is a backstop, never the check.
 2. `python scripts/mixin-allow-audit.py --mc <version> --check` — 61/61. A `MISMATCH` is a fact to
    record, not a bug to suppress.
 3. `scripts/boot-check.sh <jar> <version>` — 0 ERROR, 0 mixin failures, canary rejected.
+   ⚠️ **Read the exit code, not just the verdict line: `1` = the mod is bad, `2` = ENVIRONMENT and
+   nothing was proven about the mod** (§12.2). It used to warn-and-continue on a fabric-api cache
+   miss and then report the resulting dead server as a mod failure at exit 1. It now fetches from
+   `maven.fabricmc.net` and refuses at 2 if that fails. `--self-test` first, as with every other gate.
 4. `python scripts/config-id-audit.py --check` — 0 dead-everywhere. Works on **every** band since
    8.4; it reads the committed `scripts/mc-ids.txt`, so it needs no local Loom cache at all.
    ⚠️ **Cherry-pick `extract-mc-ids.py` + `mc-ids.txt` together** — the audit imports the
@@ -1306,11 +1341,19 @@ is a backstop, never the check.
 6. `scripts/gameplay-smoke.sh` — 29/29, and `GAMEPLAY_SMOKE_CONTROL=1` must **fail**.
 7. `python scripts/drift-audit.py --self-test` **then** `--master master` — **0 MISSING on every
    band**. ⚠️ It audits `origin/master`, so **push first, then audit**.
-8. `scripts/ci-watch.sh --self-test` **then** `scripts/ci-watch.sh HEAD` — **after** the push, the
+8. `scripts/ci-watch.sh --mutate` **then** `scripts/ci-watch.sh HEAD` — **after** the push, the
    only gate that runs downstream of it. Exit 0 means that sha's `Build & Release` run *completed
    successfully*, read from the API. ⚠️ **This is R11's mitigation, not its close.** Steps 1–7 all
    certify a build that has not shipped yet; step 8 is the only one that looks at what actually did.
    §10.7 is what happens without it: four band releases red for a day behind five green ship gates.
+
+   ⚠️ **Run it FROM the branch you pushed.** §12.1 made it resolve the push range from that branch's
+   remote-tracking reflog, so `ci-watch.sh <band-sha>` invoked while sitting on `master` cannot
+   establish a range and fails closed at **exit 3 (cannot tell)** — correct, but not the answer you
+   wanted. `CI_WATCH_BASE=<sha before the push>` is the override when the reflog is gone.
+   ⚠️ **And it no longer trusts the `paths:` filter over a run that exists.** It looks for a run
+   first; the filter now only ever explains an *absence*. That ordering is the fix — a docs-only tip
+   commit on a push that also carried `src/**` used to report a green release as *"Skipped."*
 
 ✅ **`scripts/`-only and `.github/`-only commits are now tracked** (R9a, 2026-08-13), so "cherry-pick
 tooling deliberately" is enforced rather than remembered. ⚠️ **Docs are still not**, deliberately —
@@ -1329,7 +1372,7 @@ their correctness is checked instead by `BandDocsMatchRealityTest`, which runs i
 | R5 | Item-ID drift silently disables config rows | ✅ **CLOSED (2026-08-13, §8.4)** — `config-id-audit.py` covers all 12 versions off a committed registry manifest, plus two per-band tests (`ConfigItemIdResolutionTest` at runtime, `ConfigIdManifestTest` on the manifest). ⚠️ It stays closed only while the manifest is **cherry-picked, never regenerated per band** |
 | R6 | Component-API cliff needs reimplementation | 🔴 **NOW IN SCOPE under R-l.** Confined to band `1.21.1`; it is what R-m decides |
 | R7 | Live playtest disrupted | ✅ Phase 0 tag + instance backup |
-| **R8** | **A fix lands on `master` and is silently never back-ported** | 🟡 **DOWNGRADED, not closed (R-r, 2026-08-13).** All three legs exist again: the convention, `drift-audit.py`, and the weekly run — restored to `master`, the only branch GitHub fires `schedule` from, and its band floor fixed from a vacuous `0` to a real `4`. ⚠️ **The unattended leg is weekly and reports to a tab nobody opens (R11)**, so between a commit and the next Monday detection is still *"somebody remembers"*. **Each new band multiplies this** — 5 bands today, 9 after Phase 9 — and the floor must be raised per cut (8.x.9) or it silently stops counting. The one open instance (`f73031ed9`) is closed by **R-q** |
+| **R8** | **A fix lands on `master` and is silently never back-ported** | 🟡 **DOWNGRADED, not closed (R-r, 2026-08-13).** All three legs exist again: the convention, `drift-audit.py`, and the weekly run — restored to `master`, the only branch GitHub fires `schedule` from, and its band floor fixed from a vacuous `0` to a real `4`. ⚠️ **The unattended leg is weekly and reports to a tab nobody opens (R11)**, so between a commit and the next Monday detection is still *"somebody remembers"*. **Each new band multiplies this** — 5 bands today, 9 after Phase 9 — and the floor must be raised per cut (8.x.9) or it silently stops counting. The one open instance (`f73031ed9`) is closed by **R-q**. ✅ **2026-08-17 (§11.3b): the weekly leg has now fired UNATTENDED for the first time** — run `32005557735`, `event: schedule`, success. The leg is no longer theoretical; the reporting gap (R11) is all that is left of this row |
 | **R9** | **A fix outside `src/` never reaches a band, and the docs deny a band that ships** | ✅ **CLOSED 2026-08-13 (`d6080f028`), as TWO fixes — it was never one problem.** **R9a (propagation):** `PROPAGATABLE_PREFIXES` gains **`scripts/`** and **`.github/`**. It had been only `src/`, `gradle.properties`, `build.gradle`, `settings.gradle`, so a band could silently lack the tooling its own gates need, and a divergent `release.yml` could change how it *ships*. Exercised live: the R-r floor fix reached four bands while the auditor printed **"No drift" identically before and after**, because it could not see the commit at all. Self-test extended both directions for both prefixes and mutation-proven (dropping either makes it fail, naming that prefix). Real audit after: still **0 MISSING**, propagated counts up 12→18/4→5/5→6/6→9 — the manual discipline *had* held; it is mechanical now. **R9b (correctness):** new per-band `BandDocsMatchRealityTest` asserts the documented support floor sits strictly below every version *this* branch ships, both docs state the same floor, and this band's versions appear in the README. ⚠️⚠️ **A propagation check could never have caught the recorded instance** — `mc/1.21.4` shipped while six pages said *"1.21.4 and older are not supported"*, and those pages were **byte-identical on all five branches and identically wrong**, so both the audit and `git diff master <band> -- README.md wiki/` read clean and were right to. **Cross-branch equality is not correctness.** 🔑 Docs stay deliberately OUT of the propagatable set: per-push docs failures train people to ignore the audit, and propagation is the wrong instrument anyway. ⚠️ **Next fires on `mc/1.21.3` (8.2)** — the floor sentence must move to `1.21.1` in the same commit, in **both** files |
 | **R11** | **A band's release fails and nobody finds out** | 🔴 **STILL OPEN — R-r did NOT close it.** It has already happened once: Phase 10's guard defect (§10.7) failed **four** band releases on 2026-08-13 and was invisible for a day with local builds green, ship gate green, drift audit green and `git status` clean. Found only by hand-querying the Actions API. ⚠️ **R-r restores who *can* release, not who *watches*.** `master` now has a workflow, so a red run at least appears on the branch a person works on — but **nothing pushes that anywhere**, and the failure mode was never "the run was on an obscure branch", it was "nobody looked". Both mitigations remain manual: ship-gate step 1 reproduces CI's invocation (§10.7e), and `curl -s "https://api.github.com/repos/Wulfic/mcMMO-Singleplayer/actions/runs?per_page=5"` after any push touching `src/**`, `build.gradle`, `gradle.properties` or `.github/workflows/release.yml`. ⚠️ Reading a run's **log** needs admin auth (`403` unauthenticated); the *conclusion* does not. **A real close needs a notification, not a workflow** |
 | | | 🟡 **DOWNGRADED 2026-08-13 (§11.2), still open.** The manual `curl` is now `scripts/ci-watch.sh` — **ship-gate step 8**, the only gate downstream of the push, self-tested 6 ways and mutation-proven 4 ways. It reports four states rather than a boolean, because *"I could not see a run"* and *"the run passed"* are the two R11 conflates: exit **3** is *cannot tell* (sha not on the remote, or it changes paths the workflow builds on and no run exists). It derives *"no run expected"* by diffing the commit against `release.yml`'s own `paths:` filter, so a docs-only push is a **stated skip**, never a silent pass. ⚠️ **It is still a person running a command.** It shortened the check and made its failure mode explicit; it did not make anything unattended. Used in anger the same session — it is what verified all five Phase 11 releases. Reading a run's **log** now works too (`gh` is authenticated here as of 2026-08-13), which the row previously recorded as `403` |
