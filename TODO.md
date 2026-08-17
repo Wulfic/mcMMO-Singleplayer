@@ -1193,16 +1193,40 @@ ever resolves the pinned coordinate, so `boot-check.sh <jar> 1.21.2` on the `mc/
 a fabric-api Loom was never asked to fetch. That is the second boot the `mc/1.21.3` cut added (8.2.8),
 i.e. the gate is weakest on the run that exists to widen coverage.
 
-- [ ] **12.2a** Cache first, then **download** from `maven.fabricmc.net`. ✅ **Verified 2026-08-17,
-      both coordinates `200`** (`0.106.1+1.21.2` and `0.114.1+1.21.3`) — the `+` is literal in a Maven
-      path and needs no escaping. This adds no new dependency class: the script already `curl`s the
-      server launcher on line 41.
-- [ ] **12.2b** If both fail → **exit 2 (environment), never 1**, naming the coordinate and the cache
-      path it looked in. Same doctrine as ci-watch's exit 3: *"I could not stage the dependency"* and
-      *"the mod broke the server"* must never render alike.
-- [ ] **12.2c** `--self-test` proving the refusal: an unresolvable fabric-api coordinate must exit **2
-      before any JVM is launched**, plus the converse (a resolvable one proceeds past staging). This
-      script has never had a self-test — every sibling gate carries one.
+- [x] **12.2a** ✅ Cache first, then **download** from `maven.fabricmc.net`. Verified 2026-08-17, both
+      coordinates `200` (`0.106.1+1.21.2`, `0.114.1+1.21.3`) — the `+` is literal in a Maven path and
+      needs no escaping. Adds no new dependency class: the script already `curl`s the server launcher.
+      🔑 Staged **before** the launcher download now, not after: it is the cheaper check and the one
+      that used to fail silently, so failing fast costs nothing and saves a discarded download.
+- [x] **12.2b** ✅ Both fail → **exit 2 (environment), never 1**, naming the coordinate, the cache dir
+      and the URL. The exit-code contract is now in the file header: `1` = *the mod is bad*, `2` =
+      *nothing was proven about the mod*. ⚠️ The launcher-fetch failure was **exit 1 too** and is
+      fixed in the same commit — same defect, same line of reasoning, one line away.
+- [x] **12.2c** ✅ `--self-test`, **4 assertions**, the first this script has ever had.
+      ⚠️ **The obvious version of this test was vacuous and was rewritten.** A case using the *pinned*
+      coordinate only ever hits the Gradle cache, so it leaves the entire new download path
+      unexercised — the same "green without executing the thing" shape as `:test FROM-CACHE`. It now
+      drives three staging states through a `BOOT_CHECK_FAPI_CACHE` seam and a stubbed `curl`
+      (offline, deterministic), and **asserts the exact maven coordinate URL** rather than trusting
+      that curl was called at all.
+      Every case also asserts **`booted=0`** — a refusal that fires after the JVM starts has already
+      lost the distinction it exists to make.
+
+**✅ 12.2 VERIFIED three ways.**
+
+1. `--self-test` **4/4**.
+2. **Mutation-proven**: reverting the refusal to the old warn-and-continue makes **exactly one** case
+   fail — *"cache miss + 404 → exit 2"* returns **0** — and the other three still pass, so the red is
+   the mutation and not collateral damage.
+   ⚠️ The first mutation run was thrown away: it put the mutant in `/tmp`, so `REPO` resolved to `/`,
+   `prop` read no `gradle.properties`, and a case failed on **empty MC/fabric-api values** rather than
+   on the mutation. A mutation proof whose red comes from its own harness proves nothing — the same
+   error as 12.1f, caught the same way (the failure did not match the prediction).
+3. **A real boot, forcing the new path.** `BOOT_CHECK_FAPI_CACHE=<empty>` against the `mc/1.21.3` jar
+   on `1.21.3` fetched fabric-api from maven for real and then **PASSED the full boot**: canary
+   rejected, mcMMO initialised, configs loaded, `/mcmmo` renders, `/mcstats` dispatches, clean
+   shutdown, **0 ERROR, 0 mixin failures**. 🔑 That is what makes the download path trustworthy — not
+   that a file appeared, but that the server accepted it.
 
 ### 12.3 — propagation
 
