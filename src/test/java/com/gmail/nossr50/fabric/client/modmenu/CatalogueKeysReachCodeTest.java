@@ -1,5 +1,6 @@
 package com.gmail.nossr50.fabric.client.modmenu;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -175,6 +176,44 @@ class CatalogueKeysReachCodeTest {
                         + "longer understands method references");
     }
 
+    /**
+     * The stripper's own test, and it is not optional.
+     *
+     * <p>A {@link ConfigIndex#stripComments} that returned {@code ""} would make the scan find no
+     * calls and no reads at all — at which point every catalogue key reports "no getter reads this",
+     * which looks like a catastrophic finding rather than a broken tool. The two emptiness assertions
+     * at the top of {@link #everyCatalogueKeyReachesProductionCode} catch that particular shape, so
+     * what this pins is the subtler half: comments gone, code and <b>string literals</b> intact, and
+     * offsets unmoved.
+     */
+    @Test
+    void theCommentStripperRemovesDocsWithoutTouchingCodeOrStringLiterals() {
+        final String source = """
+                /** Doc that calls {@link #getGhost()} and mentions "Not.A.Real.Key". */
+                public boolean getReal() {
+                    // getCommentedOut() must not count as a call
+                    return config.getBoolean("General.Real_Key", true); /* getBlockDoc() */
+                }
+                """;
+        final String stripped = ConfigIndex.stripComments(source);
+
+        assertEquals(source.length(), stripped.length(),
+                "the stripper moved offsets — enclosing() would mis-attribute every match");
+
+        // The three names that appear ONLY in comments must be gone. These are the defect: each one
+        // would otherwise be indexed as a call and mark a dead getter reachable.
+        assertFalse(stripped.contains("getGhost"), "a javadoc {@link} still reads as a call");
+        assertFalse(stripped.contains("getCommentedOut"), "a // comment still reads as a call");
+        assertFalse(stripped.contains("getBlockDoc"), "a /* */ comment still reads as a call");
+        assertFalse(stripped.contains("Not.A.Real.Key"),
+                "a key named only in a comment still reads as a config read");
+
+        // ...and everything real survives, or the scan would report the whole codebase dead.
+        assertTrue(stripped.contains("public boolean getReal()"), "the declaration was destroyed");
+        assertTrue(stripped.contains("config.getBoolean(\"General.Real_Key\", true)"),
+                "the string literal was destroyed — CONFIG_READ reads its keys out of these");
+    }
+
     /** A parsed view of the config package: who reads which key, and who calls whom. */
     private record ConfigIndex(Map<String, Set<String>> keyToReaders,
             Map<String, Set<String>> concatPrefixToReaders,
@@ -187,7 +226,7 @@ class CatalogueKeysReachCodeTest {
             final Map<String, Set<String>> callGraph = new HashMap<>();
 
             for (Path source : javaFilesUnder(CONFIG_PACKAGE)) {
-                final String text = Files.readString(source);
+                final String text = stripComments(Files.readString(source));
                 final List<int[]> starts = new ArrayList<>();
                 final List<String> names = new ArrayList<>();
                 final Matcher declarations = METHOD_DECLARATION.matcher(text);
@@ -227,7 +266,7 @@ class CatalogueKeysReachCodeTest {
                         || source.getFileName().toString().equals("McMMOSettings.java")) {
                     continue; // the catalogue naming a getter would be circular.
                 }
-                final String text = Files.readString(source);
+                final String text = stripComments(Files.readString(source));
                 for (Pattern shape : List.of(INVOCATION, METHOD_REFERENCE)) {
                     final Matcher calls = shape.matcher(text);
                     while (calls.find()) {
@@ -291,6 +330,67 @@ class CatalogueKeysReachCodeTest {
                 }
             });
             return byPrefix;
+        }
+
+        /**
+         * Blanks out Java comments, preserving every offset and every string literal.
+         *
+         * <p>⚠️⚠️ <b>Without this the scan cannot tell a call from a doc cross-reference</b>, and it
+         * fails in the direction that matters: {@link #INVOCATION} matches {@code getFoo(} whether it
+         * is real code or {@code {@link #getFoo()}} inside a javadoc block — and because javadoc sits
+         * <em>above</em> the member it documents, {@link #enclosing} attributes it to the
+         * <em>preceding</em> method. So one live getter documenting its dead neighbour marks that
+         * neighbour reachable, and this whole test goes quietly green over a dead switch. Found by
+         * accident, and measured: deleting a single {@code {@link #getPetEngageRange()}} from the
+         * javadoc of the getter above it took the offender count from 2 to 3.
+         *
+         * <p>Blanking rather than deleting, so every index into the returned text still lines up with
+         * the original — {@link #enclosing} maps match offsets to method declarations and would
+         * silently mis-attribute every match if the text shifted. Newlines are kept for the same
+         * reason.
+         *
+         * <p>String literals are preserved deliberately and are the reason this is a state machine
+         * rather than two regexes: {@link #CONFIG_READ} reads its keys out of exactly those literals,
+         * so a stripper that blanked {@code "Skills.Taming.…"} would report every key unread — which
+         * renders as "no config getter reads this key at all" and would look like a finding rather
+         * than a broken scanner.
+         */
+        static String stripComments(String java) {
+            final char[] out = java.toCharArray();
+            final int n = out.length;
+            int i = 0;
+            while (i < n) {
+                final char c = out[i];
+                if (c == '"' || c == '\'') {
+                    // Skip the literal whole, honouring escapes, so a // or /* inside one survives.
+                    final char quote = c;
+                    i++;
+                    while (i < n && out[i] != quote) {
+                        i += (out[i] == '\\') ? 2 : 1;
+                    }
+                    i++;
+                } else if (c == '/' && i + 1 < n && out[i + 1] == '/') {
+                    while (i < n && out[i] != '\n') {
+                        out[i++] = ' ';
+                    }
+                } else if (c == '/' && i + 1 < n && out[i + 1] == '*') {
+                    while (i < n && !(out[i] == '*' && i + 1 < n && out[i + 1] == '/')) {
+                        if (out[i] != '\n') {
+                            out[i] = ' ';
+                        }
+                        i++;
+                    }
+                    if (i < n) {
+                        out[i++] = ' '; // the '*'
+                    }
+                    if (i < n) {
+                        out[i++] = ' '; // the '/'
+                    }
+                } else {
+                    i++;
+                }
+            }
+            return new String(out);
         }
 
         private static String enclosing(List<int[]> starts, List<String> names, int position) {
