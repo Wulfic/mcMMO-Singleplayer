@@ -1,6 +1,7 @@
 package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.fabric.McMMOMod;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttribute;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
@@ -12,7 +13,7 @@ import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * The single owner of every {@link EntityAttributeModifier} mcMMO applies to a player (F2).
+ * The single owner of every {@link EntityAttributeModifier} mcMMO applies to an entity (F2).
  *
  * <p>Continuous-state skills — Agility's Fleet Footed, later Stealth's Padfoot and Unarmored — buff
  * a player only <em>while</em> some condition holds, which means something has to take the buff back
@@ -51,7 +52,7 @@ public final class SkillAttributeService {
     /**
      * Every attribute modifier mcMMO can apply, as (attribute, id) pairs.
      *
-     * <p>Enumerating them is what makes {@link #clearAll(ServerPlayerEntity)} possible: teardown has
+     * <p>Enumerating them is what makes {@link #clearAll(LivingEntity)} possible: teardown has
      * to be able to remove a buff without knowing which skill applied it or why. Adding a managed
      * buff means adding a constant here — if it is not in this enum, it is not cleaned up on logout.
      */
@@ -134,7 +135,37 @@ public final class SkillAttributeService {
          * diamond skin (20/0) still takes noticeably more from a heavy blow than a diamond set
          * (20/8), which also keeps its enchantments.
          */
-        UNARMORED_IRON_SKIN(EntityAttributes.ARMOR, "unarmored_iron_skin", Operation.ADD_VALUE);
+        UNARMORED_IRON_SKIN(EntityAttributes.ARMOR, "unarmored_iron_skin", Operation.ADD_VALUE),
+
+        /**
+         * Taming → the pet combat mode's engage range. The <b>only managed buff that is not applied
+         * to a player</b>, which is why this service is typed on {@link LivingEntity} rather than
+         * {@code ServerPlayerEntity}.
+         *
+         * <p>It exists because "my pets ignore what I shoot" was never about the weapon. A wolf's
+         * base {@code FOLLOW_RANGE} is {@code 16.0} — {@code WolfEntity.createWolfAttributes()} sets
+         * only movement speed, max health and attack damage, so the follow range is inherited from
+         * {@code MobEntity.createMobAttributes()} (bytecode-verified). {@code MeleeAttackGoal#canStart}
+         * asks {@code navigation.findPathTo(target, 0)}, and that number sizes <em>both</em> the
+         * pathfinder's search limit and the {@code ChunkCache} it is handed, so past 16 blocks the
+         * path comes back null and the goal never starts. The wolf stands next to you holding a
+         * target it will never walk to. A melee kill happens at ~3 blocks; a bow kill at 20–40.
+         *
+         * <p>Additive, because the base value is what is being raised and a multiplicative operation
+         * would make the same config number mean different distances if Mojang retunes the default.
+         *
+         * <p>⚠️ <b>{@code EntityNavigation#setMaxFollowRange} is the cleaner lever and is deliberately
+         * NOT used.</b> It does not exist below 1.21.2 — {@code javap} on the 1.21 merged jar shows
+         * only {@code rangeMultiplier}/{@code setRangeMultiplier} — so it is a <em>compile error</em>
+         * on an older band rather than a check that quietly answers wrong. The attribute ports.
+         * {@code setRangeMultiplier} is a trap for a different reason: it scales the search limit but
+         * not the {@code ChunkCache} sizing, so the pathfinder would search past its own block data.
+         *
+         * <p>⚠️ Cost is superlinear — 16 → 32 takes the search box from ~32³ to ~48³, about 3.4× the
+         * volume, per repath, per pet. Hence the config cap, and hence "only while engaged".
+         */
+        TAMING_PET_ENGAGE_RANGE(EntityAttributes.FOLLOW_RANGE, "taming_pet_engage",
+                Operation.ADD_VALUE);
 
         private final RegistryEntry<EntityAttribute> attribute;
         private final Identifier id;
@@ -169,13 +200,13 @@ public final class SkillAttributeService {
      * @param amount the modifier value in the units of {@link Managed#operation()}; {@code 0}
      *               removes it
      */
-    public static void set(@NotNull ServerPlayerEntity player, @NotNull Managed buff, double amount) {
-        final EntityAttributeInstance instance = player.getAttributeInstance(buff.attribute);
+    public static void set(@NotNull LivingEntity entity, @NotNull Managed buff, double amount) {
+        final EntityAttributeInstance instance = entity.getAttributeInstance(buff.attribute);
         if (instance == null) {
             // A player always has these attributes; a null here means the attribute was not
             // registered for this entity type, which is a wiring bug rather than a game state.
-            McMMOMod.LOGGER.warn("Player {} has no {} attribute instance; skipping mcMMO buff {}.",
-                    player.getName().getString(), buff.id(), buff.name());
+            McMMOMod.LOGGER.warn("{} has no {} attribute instance; skipping mcMMO buff {}.",
+                    entity.getName().getString(), buff.id(), buff.name());
             return;
         }
 
@@ -197,8 +228,8 @@ public final class SkillAttributeService {
     }
 
     /** Whether this managed buff is currently applied to the player. Test/diagnostic seam. */
-    public static boolean isApplied(@NotNull ServerPlayerEntity player, @NotNull Managed buff) {
-        final EntityAttributeInstance instance = player.getAttributeInstance(buff.attribute);
+    public static boolean isApplied(@NotNull LivingEntity entity, @NotNull Managed buff) {
+        final EntityAttributeInstance instance = entity.getAttributeInstance(buff.attribute);
         return instance != null && instance.getModifier(buff.id()) != null;
     }
 
@@ -206,8 +237,8 @@ public final class SkillAttributeService {
      * The value of this managed buff on the player, or {@code 0} when it is not applied. Test seam —
      * lets a test distinguish "removed" from "applied at zero" without reaching into vanilla.
      */
-    public static double appliedValue(@NotNull ServerPlayerEntity player, @NotNull Managed buff) {
-        final EntityAttributeInstance instance = player.getAttributeInstance(buff.attribute);
+    public static double appliedValue(@NotNull LivingEntity entity, @NotNull Managed buff) {
+        final EntityAttributeInstance instance = entity.getAttributeInstance(buff.attribute);
         if (instance == null) {
             return 0.0;
         }
@@ -223,9 +254,9 @@ public final class SkillAttributeService {
      * per-tick callers re-derive from live state — but it is cheap and it makes the invariant
      * "mcMMO owns nothing on a player who is not online" trivially true.
      */
-    public static void clearAll(@NotNull ServerPlayerEntity player) {
+    public static void clearAll(@NotNull LivingEntity entity) {
         for (Managed buff : Managed.values()) {
-            final EntityAttributeInstance instance = player.getAttributeInstance(buff.attribute);
+            final EntityAttributeInstance instance = entity.getAttributeInstance(buff.attribute);
             if (instance != null) {
                 instance.removeModifier(buff.id());
             }

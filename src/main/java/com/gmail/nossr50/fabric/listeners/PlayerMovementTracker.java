@@ -238,6 +238,15 @@ public final class PlayerMovementTracker {
         // player is most likely to be teleporting. It takes no McMMOPlayer for the same reason.
         PetFollowTeleport.onPlayerMoved(player, previous, current, sameWorld);
 
+        // ⚠️ THE PET COMBAT SWEEP SITS ABOVE THE MISSING-PROFILE RETURN FOR THE SAME REASON PET
+        // FOLLOW DOES, and half of it would be wrong below the line. Its reach half is a vanilla
+        // PATHING override — it is what makes a pet able to walk to the mob you shot at bow range —
+        // and it applies in both stances, so it is not an mcMMO mechanic gated on mcMMO data. Only
+        // the aggressive-acquisition half needs a profile, and it resolves one itself and fails
+        // closed to PASSIVE when there is none. Putting the whole call below the return would mean
+        // pets stop being able to chase during a fresh join or a failed load, silently.
+        PetCombatSweep.tick(player);
+
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(uuid);
         if (mmoPlayer == null) {
             return; // Data not loaded yet (mid-join) — nothing to credit and nothing to buff.
