@@ -1,16 +1,16 @@
 {
-  "parent": "mcmmo:milestone/skill/agility",
+  "parent": "mcmmo:milestone/skill/swimming",
   "display": {
     "icon": {
-      "id": "minecraft:feather"
+      "id": "minecraft:heart_of_the_sea"
     },
     "title": {
-      "text": "Second Wind Unlocked",
+      "text": "Fleet Footed Unlocked",
       "color": "aqua",
       "bold": true
     },
     "description": {
-      "text": "You can now use Second Wind.",
+      "text": "You can now use Fleet Footed.",
       "color": "yellow"
     },
     "frame": "goal",
