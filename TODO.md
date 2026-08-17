@@ -229,6 +229,67 @@ of `1.21.3`'s, so the second cut should be fast.
       switches land on **`master` first**, then the band branch resolves the compile/mixin absences.
       ✅ **Unblocked — 8.4 shipped.** Do this band **last** — it is the only one that changes
       `master`.
+      🔴 **Two extra renames now, from the Taming work below.** Record them here while the evidence
+      is fresh, because both are *compile* failures on that band rather than checks that answer
+      wrong:
+      - `EntityAttributes.FOLLOW_RANGE` → **`GENERIC_FOLLOW_RANGE`** on `1.21` / `1.21.1`. This is
+        the same rename `SkillAttributeService`'s existing `MOVEMENT_SPEED` reference hits, so both
+        land in one edit.
+      - `EntityNavigation#setMaxFollowRange` **does not exist below `1.21.2`** (`javap` on the 1.21
+        merged jar shows only `rangeMultiplier` / `setRangeMultiplier`). That absence is *why* the
+        reach fix uses the attribute rather than the navigation setter — nothing to port, but do not
+        "simplify" it back on `master` either.
+
+---
+
+## Taming — pet combat mode + the ranged reach fix (owner track, plan in the untracked `fix.md`)
+
+⚠️ **`fix.md` is deliberately UNTRACKED** (owner ruling, 2026-08-17). This section exists because the
+*back-port* is multi-version work and `.agent/memory/` does not survive a clone — per **R-n**, a fact
+another checkout must know belongs in a tracked file, and this is it.
+
+- [x] **Phases 1–7 ✅ DONE on `master`, 2026-08-17**, four commits, **not yet pushed**:
+      `e0d7e054e` (guard fix) · `b070534a4` (stance + gesture) · `920f2d140` (targeting + reach +
+      trigger gaps) · `381c10b2a` (`mc-surface.txt`).
+      All seven gates green: mixin-allow `60 OK / 61` · build **1803 tests, 0 failures** ·
+      `mc-surface` regenerated · config-id **0 dead-everywhere** · `boot-check` exit 0 on a real
+      `1.21.11` server · `gameplay-smoke` **29/29** with the control failing as it must.
+- [ ] 🔴 **LIVE PLAY-TEST — owner only.** No gate above can see this bug. Shoot a mob at ~25 blocks
+      with a wolf at your heels **in passive mode** and watch it close, then toggle and watch the
+      pack pick its own fight. Every claim in the reach fix is bytecode plus unit tests and **none of
+      it has been watched in a world**. §G debt is real: the repair-anvil fix shipped green and
+      unwatched. Budget 3 attempts on any failure, then stop and report.
+- [ ] **Push, then `python scripts/drift-audit.py --self-test && … --master master`** — it audits
+      `origin/master`, so an unpushed commit reads as clean.
+- [ ] **Back-port all four commits to all five `mc/**` branches** with `Backport-of:` trailers. This
+      is a **version-agnostic logic change** — the exact class that made up 11 of the last 12
+      forgotten fixes. ⚠️ `mc-surface.txt` is a generated per-branch artifact: **regenerate it on
+      each band, never cherry-pick it.**
+- [ ] **Caveat-expiry pass.** Grep `README.md` and `wiki/` for the **symptom**, not the files
+      touched: *"wolves"*, *"pets"*, *"sic"*, *"Call of the Wild"*, *"sitting"*. The wiki Taming page
+      needs the new gesture, **the sit-toggle cost** (while a bone is in your main hand, sneak +
+      right-click changes the stance instead of sitting the pet) and both stances. ⚠️ One wiki serves
+      every band — state what a *player* does, never what version the build targets.
+
+**What shipped, in one line each** (so a fresh clone can review the commits without `fix.md`):
+
+- A **player-wide** pet stance, `UniqueDataType.PET_COMBAT_MODE`, `0 = PASSIVE`, unreadable values
+  fail closed to `PASSIVE`. The gesture is per-pet but the stance is not — **every player-facing
+  string says "your pets"**, and a test pins that wording.
+- The gesture **claims its click on both logical sides** (`CONSUME`/`CONSUME`), because it is
+  suppressing vanilla's wolf sit-toggle. Same rule as the repair anvil.
+- Aggressive pets take the **nearest hostile to the player** (not to the pet) within 32. Candidates
+  are **`Monster`, never `HostileEntity`** — the latter silently omits slime, magma cube, ghast,
+  phantom and hoglin. Exclusions delegate to vanilla's `canAttackWithOwner`; the warden is the one
+  explicit addition.
+- The reported "pets ignore what you shoot" was **never the weapon**: a wolf's `FOLLOW_RANGE` is 16
+  and `MeleeAttackGoal#canStart` bails when `findPathTo` returns null past it. Fixed with a
+  **temporary** `FOLLOW_RANGE` modifier while engaged, in **both** stances.
+- Three trigger gaps closed: a thrown trident sicced nothing, only arrows and tridents reached the
+  code at all, and it required a loaded profile.
+- ⚠️ Fixed a latent crash on the way: `PlayerProfile`'s 3-arg constructor seeded one
+  `UniqueDataType` by hand while `getUniqueData` unboxed a `Map#get` to `long`, so the next constant
+  added was an **NPE that took out saving for the entire profile**.
 
 ### 8.2′ — the `mc/1.21.3` plan (written 2026-08-14, before any code)
 
