@@ -610,6 +610,107 @@ public class GeneralConfig extends ConfigLoader {
         return config.getDouble("Skills.Taming.Pets_Follow_Teleport_Radius", 128.0D);
     }
 
+    /* Taming — pet combat mode (the passive/aggressive toggle and the engage-range reach fix). */
+
+    /**
+     * The master switch for the pet combat-mode feature: off disables the toggle gesture, the
+     * aggressive-targeting sweep <em>and</em> the engage-range boost, restoring vanilla pathing
+     * behaviour exactly.
+     *
+     * <p>⚠️ Off also hands the sneak-right-click gesture back to vanilla, so a bone click sits the
+     * pet again. That is the point — one switch, no half-disabled state where the gesture is
+     * swallowed but does nothing.
+     */
+    public boolean isPetCombatModeEnabled() {
+        return config.getBoolean("Skills.Taming.Pet_Combat_Mode.Enabled", true);
+    }
+
+    /**
+     * The item that must be in the main hand to toggle the pet combat mode by sneak-right-clicking a
+     * pet. Named Bukkit-style or as a namespaced id and resolved through
+     * {@link com.gmail.nossr50.platform.Materials}, so an unknown name simply never triggers.
+     *
+     * <p>⚠️ Must differ from {@link #getSecondWindItem()}, {@link #getSmokeBombItem()} and
+     * {@link #getHerdsmansCallItem()}. Those three collide with each other because they share a
+     * {@code UseItemCallback}; this one is on {@code UseEntityCallback} instead, so the collision is
+     * not identical — but a player holding the shared item and clicking a pet would fire the use-item
+     * active <em>and</em> the toggle from one press, which is worse than either alone.
+     * {@code PetCombatModeItemDistinctTest} pins all four apart.
+     *
+     * <p>The bone default deliberately shadows vanilla's sit-toggle for that one gesture: while a
+     * bone is in your main hand, sneak-right-clicking a pet changes its combat mode instead of
+     * sitting it. A plain right-click, or any other item, still sits it.
+     */
+    public String getPetCombatModeToggleItem() {
+        return config.getString("Skills.Taming.Pet_Combat_Mode.Toggle_Item", "BONE");
+    }
+
+    /**
+     * How far from the <em>player</em> the aggressive-mode sweep looks for a fight, in blocks
+     * (ruling R-5 — centred on the player, never on each pet, so one box query serves the whole pack
+     * and a pet that lagged behind cannot drag a mob home).
+     *
+     * <p>⚠️ Paired with {@link #getPetEngageRange()} by default, and that is not a coincidence to be
+     * optimised away: a hostile found at this distance is only worth targeting if a pet can actually
+     * <em>path</em> to it, which is what the engage range buys. Raising this without raising that
+     * produces pets that acquire targets they then stand still and stare at — the exact symptom the
+     * reach fix exists to remove.
+     */
+    public double getPetAggressiveRadius() {
+        return config.getDouble("Skills.Taming.Pet_Combat_Mode.Aggressive_Radius", 32.0D);
+    }
+
+    /**
+     * The ceiling on {@link #getPetEngageRange()}. See that method for why a ceiling exists at all.
+     *
+     * <p>64 rather than something rounder: it is twice the default, which is the largest step that
+     * keeps the per-repath search box (~±96 blocks) inside the six-chunk radius a loaded entity can
+     * generally count on having block data for.
+     */
+    public static final double PET_ENGAGE_RANGE_CAP = 64.0D;
+
+    /**
+     * The follow range a pet is temporarily raised to while it has a live target, in blocks.
+     *
+     * <p>This is the whole of the "my pets ignore what I shoot" fix. A wolf's base
+     * {@code FOLLOW_RANGE} is 16 (inherited from {@code MobEntity.createMobAttributes()}), and
+     * {@code MeleeAttackGoal#canStart} bails when {@code navigation.findPathTo} returns null — which
+     * it does past that range, because the follow range sizes both the pathfinder's search limit and
+     * the {@code ChunkCache} it is handed. A melee kill happens at ~3 blocks and a bow kill at 20–40,
+     * so the weapon was never the variable; the reach was.
+     *
+     * <p>⚠️ <b>Hard-capped, and the cap is not defensive noise.</b> Path search cost is superlinear
+     * in this number: 16 → 32 takes the search box from ~32³ to ~48³, roughly 3.4× the volume, per
+     * repath, per pet. {@link #PET_ENGAGE_RANGE_CAP} is what stops a config edit from turning a
+     * six-wolf pack into a tick-time problem, and the boost applies only to a pet that has a target
+     * and is removed the moment it does not.
+     */
+    public double getPetEngageRange() {
+        final double configured =
+                config.getDouble("Skills.Taming.Pet_Combat_Mode.Engage_Range", 32.0D);
+        if (configured > PET_ENGAGE_RANGE_CAP) {
+            // Logged rather than silently clamped: a value that does not do what the file says it
+            // does is exactly the class of defect this repo keeps finding, and pathfinding cost is
+            // not something a player can observe going wrong until the server is already stuttering.
+            LOGGER.warn("Skills.Taming.Pet_Combat_Mode.Engage_Range is {}, above the {} cap — "
+                            + "using the cap. Path search cost grows with the cube of this value.",
+                    configured, PET_ENGAGE_RANGE_CAP);
+            return PET_ENGAGE_RANGE_CAP;
+        }
+        // A value below a wolf's own base follow range would be a de-buff rather than a boost; the
+        // applier treats "at or below base" as "no modifier", so no clamp is needed on this side.
+        return configured;
+    }
+
+    /**
+     * How many server ticks between aggressive-mode sweeps. The sweep is a box query plus a target
+     * assignment per idle pet, so it does not need to run every tick; one second is well inside the
+     * reaction time a player can notice.
+     */
+    public int getPetSweepIntervalTicks() {
+        return Math.max(1, config.getInt("Skills.Taming.Pet_Combat_Mode.Sweep_Interval_Ticks", 20));
+    }
+
     /* Woodcutting */
     public boolean getTreeFellerSoundsEnabled() {
         return config.getBoolean("Skills.Woodcutting.Tree_Feller_Sounds", true);

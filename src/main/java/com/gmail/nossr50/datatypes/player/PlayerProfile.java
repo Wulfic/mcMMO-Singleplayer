@@ -113,8 +113,17 @@ public class PlayerProfile {
             skillsXp.put(primarySkillType, 0F);
         }
 
-        //Misc Cooldowns
-        uniquePlayerData.put(UniqueDataType.CHIMAERA_WING_DATS, 0); //Chimaera wing
+        // Misc per-player data (Chimaera Wing's cooldown, the pet combat stance, ...).
+        //
+        // ⚠️ Seeded from values(), NOT from a hand-written list. This used to name CHIMAERA_WING_DATS
+        // alone, which made adding any second constant an NPE on the very next save: saveProfile
+        // loops over values() calling getUniqueData, and that unboxed a null Map#get straight to
+        // long. Zero is the same default FlatFileProfileStore hands back for an absent key, so a
+        // freshly built profile and a profile loaded from a file written before the constant existed
+        // now agree by construction rather than by coincidence.
+        for (UniqueDataType uniqueDataType : UniqueDataType.values()) {
+            uniquePlayerData.put(uniqueDataType, 0);
+        }
         lastLogin = System.currentTimeMillis();
     }
 
@@ -336,8 +345,18 @@ public class PlayerProfile {
         uniquePlayerData.put(uniqueDataType, newData);
     }
 
+    /**
+     * This player's value for a miscellaneous data key, or {@code 0} when the profile carries none.
+     *
+     * <p>⚠️ {@code getOrDefault}, not {@code get}. The return type is a primitive, so a {@code get}
+     * miss unboxes null and throws — and every caller of this method reaches it through a
+     * {@code UniqueDataType.values()} loop ({@code FlatFileProfileStore#saveProfile}), so a single
+     * unseeded constant took out saving for the whole profile rather than degrading one field.
+     * Zero is the same value the store's read side substitutes for an absent key, which is what lets
+     * a new constant be added without a migration.
+     */
     public long getUniqueData(UniqueDataType uniqueDataType) {
-        return uniquePlayerData.get(uniqueDataType);
+        return uniquePlayerData.getOrDefault(uniqueDataType, 0);
     }
 
     /**
