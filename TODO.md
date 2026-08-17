@@ -1089,6 +1089,151 @@ observation.
 
 ---
 
+## Phase 12 — the two defective gates (2026-08-17, before 8.3)
+
+Both were filed at the end of the `mc/1.21.3` cut and **neither is fixed**. They are the same shape as
+each other and as R11: **a gate that cannot see the thing it exists to watch reports the same green as
+a gate that looked and found nothing.** 8.3 runs both, so they go first.
+
+Tier 1 each, staged as two commits. ⚠️ `scripts/` is **outside `release.yml`'s `paths:` filter**
+(verified 2026-08-17 against the file: `src/**`, `build.gradle`, `settings.gradle`,
+`gradle.properties`, `gradle/**`, `gradlew`, `gradlew.bat`, `.github/workflows/release.yml`) — so
+**neither commit nor any of its five back-ports releases anything.** It is propagatable under R9a, so
+drift-audit *will* demand the back-port.
+
+### 12.1 — 🔴 `ci-watch.sh` reported exit 0 for a push that DID release
+
+**Reproduced live 2026-08-17, from the API and the working copy — not from the filed note, which had
+the mechanism half right.**
+
+| Evidence | Value |
+|---|---|
+| the run | `31774466258` · `Build & Release` · `event: push` · **`conclusion: success`** |
+| its `headSha` | **`f3ef33c0c`** |
+| what `f3ef33c0c` changes | **`TODO.md`, and nothing else** |
+| what the same push also carried | `bf2676292` — `src/main/…/EntityTypeSpawnOriginMixin.java` + `src/test/…/MixinApplicationTest.java` |
+| `bash scripts/ci-watch.sh f3ef33c0c` | *"touches nothing in the `paths:` filter, so no run is expected. **Skipped, not passed**."* → **exit 0** |
+
+So the band's release run was green, real, and attributed to a sha the gate declared could not build.
+
+**Two independent defects, one symptom. Either alone produces the exit 0.**
+
+- **A — the filter is evaluated over the TIP COMMIT ALONE.** `ci-watch.sh:62` runs
+  `git diff-tree --no-commit-id --name-only -r "$sha"`, which is one commit. **GitHub evaluates
+  `paths:` over every commit in the push** and then stamps the run with the push's head sha — so the
+  head sha of a real run can itself sit outside the filter, which is exactly what `f3ef33c0c` is.
+- **B — the filter is consulted BEFORE anything asks whether a run exists.** `ci-watch.sh:165`
+  returns at the filter; the poll loop that would have found run `31774466258` starts at `:171` and is
+  never reached. 🔑 **B is the load-bearing one**, and it is a doctrine error rather than a parsing
+  error: the `paths:` filter is evidence about an **absence**, and it was being used to rule on a
+  **presence** it had not looked for.
+
+- [x] **12.1a** ✅ Ask the API **first** — `find_run()` is extracted and called before the filter is
+      consulted. A run found at this sha is reported on whatever the filter says. This alone closes
+      the observed case.
+- [x] **12.1b** ✅ The filter is evaluated over the **push range** (`push_triggers_release`), not one
+      commit. Resolution order, **failing closed at every step**: `CI_WATCH_BASE` override → the
+      remote-tracking reflog (`<upstream>@{1}..<upstream>@{0}`, used **only** when `@{0}` really is
+      this sha) → **refuse**. An undeterminable range reaches **"cannot tell" (exit 3)**, never
+      *"skipped"*; `0` is now reserved for a range that was read and provably matches nothing.
+      🔑 The range is read with `git log --name-only`, the **union over the commits**, not the net
+      diff — a file added and then reverted inside one push still triggered GitHub, and a superset can
+      only push the verdict toward *"a run was expected"*, which is the safe side.
+- [x] **12.1c** ✅ Fast docs-only path kept: one API call, then the filter, then return. Verified on
+      `master` `4440af5d0` — *"no run exists … nothing in the pushed range touches the filter"*, no
+      90 s appear-wait.
+- [x] **12.1d** ✅ Self-test **6 → 8 cases**. The one that matters — *"run EXISTS though the filter
+      says docs-only → reported, not skipped"* — is **red before the fix and green after**.
+- [x] **12.1e** ✅ `--mutate` added, 4 mutations, **all caught**, each proven to have applied.
+
+**✅ 12.1 VERIFIED, and the exit code is the least interesting half.** Against the real sha, before
+and after:
+
+| | verdict | exit |
+|---|---|---|
+| committed version | *"touches nothing in the `paths:` filter … **Skipped, not passed**"* | 0 |
+| fixed version | *"✓ `Build & Release` **succeeded** for `f3ef33c0c` (run `31774466258`)"* | 0 |
+
+⚠️ **Both exit 0, and that is the point** — the codes coincide only because that run happened to
+pass. Had it failed, the old script still reported 0 while the release was red, which is R11 wearing a
+green tick. The discriminating case is the one now pinned in the self-test.
+
+#### 🔴 12.1f — the mutation harness certified itself first (NINTH sighting)
+
+The `--mutate` pass's first run reported **all four mutations NOT CAUGHT**, which is implausible on
+its face — M4 turns every conclusion into a success and could not possibly go unnoticed. It was not a
+weak guard; **the mutations were rewriting their own argument list.**
+
+Every pattern is a literal that appears *twice* in the file: once in `watch()`, and once as the
+`mutate "…" 'pattern' 'replacement'` call inside `self_test()` — and **`self_test()` sits above
+`watch()`**, so `str.replace(old, new, 1)` hit the self-test's own text and left the real code
+untouched. Python exited 0, the pattern was genuinely "found", and the harness scored four clean
+no-ops as *"the guard is decoration"*.
+
+🔑🔑 **`release-sweep-selftest.sh` is immune for a structural reason worth copying, not a lucky one:
+it extracts the code under test into a SEPARATE FILE.** The patterns and the code never share a
+document, so a collision is impossible. This harness mutates *itself*, and self-mutation needs the
+test scaffolding cut out of the mutant before it can mean anything.
+
+- [x] Build the mutant from a **`base.sh` with `self_test()` excised**, so each pattern is unique.
+- [x] Assert **uniqueness, not mere presence**: `count(old) != 1` now exits `8` = *MUTATION
+      AMBIGUOUS*, distinct from `9` = *absent*. [[mutation-that-never-applied]] taught "assert it
+      applied"; this adds **"assert it applied *where you meant*"** — a first-occurrence replace on an
+      ambiguous pattern is a silent no-op wearing a successful exit code.
+
+### 12.2 — 🔴 `boot-check.sh` reports a STAGING failure as a MOD failure
+
+`boot-check.sh:49-53`: when the fabric-api jar is not in the Gradle cache it prints `warn:` and
+**continues**. The server then boots with no fabric-api, mcMMO cannot load, the log never reaches
+`Done (`, and the verdict is `❌ FAIL: never reached 'Done ('` — *the mod broke the server* — at
+**exit 1, the same code a real mod failure returns.**
+
+⚠️ It bites hardest exactly where it is least expected: a band's **non-pinned** version. Gradle only
+ever resolves the pinned coordinate, so `boot-check.sh <jar> 1.21.2` on the `mc/1.21.3` band asks for
+a fabric-api Loom was never asked to fetch. That is the second boot the `mc/1.21.3` cut added (8.2.8),
+i.e. the gate is weakest on the run that exists to widen coverage.
+
+- [ ] **12.2a** Cache first, then **download** from `maven.fabricmc.net`. ✅ **Verified 2026-08-17,
+      both coordinates `200`** (`0.106.1+1.21.2` and `0.114.1+1.21.3`) — the `+` is literal in a Maven
+      path and needs no escaping. This adds no new dependency class: the script already `curl`s the
+      server launcher on line 41.
+- [ ] **12.2b** If both fail → **exit 2 (environment), never 1**, naming the coordinate and the cache
+      path it looked in. Same doctrine as ci-watch's exit 3: *"I could not stage the dependency"* and
+      *"the mod broke the server"* must never render alike.
+- [ ] **12.2c** `--self-test` proving the refusal: an unresolvable fabric-api coordinate must exit **2
+      before any JVM is launched**, plus the converse (a resolvable one proceeds past staging). This
+      script has never had a self-test — every sibling gate carries one.
+
+### 12.3 — propagation
+
+- [ ] Back-port both to all five bands with `Backport-of:` trailers, then
+      `drift-audit.py --self-test && --master master` → **0 MISSING on all five**.
+      🔑 The back-port is its own regression test for 12.1: a `scripts/`-only push must now come back
+      as a **stated skip with a determinable range**, not as the guess it was making before.
+
+### 12.x — blast radius
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| 12.1 | `scripts/ci-watch.sh` on `master` | nothing — read-only over the GitHub API | `git revert`; `master` clean at `4440af5d0` |
+| 12.2 | `scripts/boot-check.sh` on `master` | nothing — it only writes under `build/boot-check/` and downloads into it | `git revert` |
+| 12.3 | 5 band branches | nothing — **no band releases**, `scripts/` is outside the `paths:` filter | per-band `git revert` |
+
+**No step here is outward-facing and no step deletes anything.** The one new side effect is a network
+fetch into `build/`, which is already what line 41 does.
+
+### What I am NOT doing in Phase 12
+
+- **Not closing R11.** Both fixes make a gate see what it was blind to; neither makes anything
+  unattended. R11 closes on a notification, not on a better script.
+- **Not rewriting `ci-watch.sh`'s exit-code contract.** The four states are right; the bug is that one
+  path reached the wrong one.
+- **Not teaching `boot-check.sh` to pick a fabric-api version for a version it was not given.** It
+  takes the coordinate as `$4` on purpose. Guessing one is how a gate certifies the wrong artifact.
+- **Not starting 8.3** until both are green and back-ported.
+
+---
+
 ## The ship gate — run per band, before every push
 
 **It is a person running seven commands, and that has not changed.** ⚠️ R-r put `release.yml` back on
