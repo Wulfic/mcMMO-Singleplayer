@@ -19,6 +19,7 @@ import com.gmail.nossr50.fabric.listeners.AlchemyListener;
 import com.gmail.nossr50.fabric.listeners.BlockBreakListener;
 import com.gmail.nossr50.fabric.listeners.EntityDamageListener;
 import com.gmail.nossr50.fabric.listeners.HunterListener;
+import com.gmail.nossr50.fabric.listeners.PetCombatModeListener;
 import com.gmail.nossr50.fabric.listeners.PlayerMovementTracker;
 import com.gmail.nossr50.fabric.listeners.ProjectileListener;
 import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
@@ -247,6 +248,11 @@ public class McMMOMod implements ModInitializer {
         // Its trigger item must differ from BOTH of the above (goat horn vs gunpowder vs feather) —
         // HerdsmansCallListenerTest pins the three apart so a config edit cannot collide them.
         HerdsmansCallListener.register();
+        // Taming: the passive/aggressive pet combat-mode toggle. The mod's only UseEntityCallback,
+        // and the second listener (after RepairSalvageListener) that has to CLAIM its click on both
+        // logical sides rather than observe it — here it is vanilla's wolf sit-toggle being
+        // suppressed, so a client-side PASS would visibly sit the pet and then snap it back.
+        PetCombatModeListener.register();
 
         // PORT Phase 3 (with Phase 10 skills): register the Fabric-native gameplay hooks that
         // drive the legacy listeners, routing each to the ported skill managers. Preferred
