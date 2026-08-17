@@ -4,8 +4,10 @@ import com.gmail.nossr50.datatypes.experience.XPGainReason;
 import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.player.UniqueDataType;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.datatypes.skills.subskills.taming.PetCombatMode;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.SkillManager;
@@ -157,6 +159,42 @@ public class TamingManager extends SkillManager {
         }
         lastSummonTimeStamp = now;
         return true;
+    }
+
+    /**
+     * This player's pet combat stance — whether their pets fight only what they fight, or pick their
+     * own targets. Player-wide, not per-pet; see {@link PetCombatMode}.
+     *
+     * <p>Reads through {@link PetCombatMode#fromStoredValue(long)}, so a profile that predates this
+     * feature (or one whose value has been hand-edited to something unreadable) answers
+     * {@link PetCombatMode#PASSIVE} — the behaviour the mod had before the feature existed.
+     *
+     * <p>No rank gate and no permission gate, deliberately: this is quality-of-life, config-gated
+     * only. The caller checks {@code GeneralConfig#isPetCombatModeEnabled} — a config switch, not a
+     * skill level.
+     */
+    public @NotNull PetCombatMode getPetCombatMode() {
+        return PetCombatMode.fromStoredValue(
+                mmoPlayer.getProfile().getUniqueData(UniqueDataType.PET_COMBAT_MODE));
+    }
+
+    /**
+     * Flips this player's pet combat stance and returns the mode they are now in.
+     *
+     * <p>⚠️ Returns the <em>new</em> mode rather than {@code void}, because every caller needs it for
+     * the message it then sends, and a caller that had to re-read would be one refactor away from
+     * announcing the old stance. {@code setUniqueData} marks the profile dirty, so the flip survives
+     * a restart without an explicit save here.
+     *
+     * <p>Toggling to {@link PetCombatMode#PASSIVE} deliberately does <b>not</b> clear any pet's
+     * current target (ruling R-6). Passive gates the acquisition of a <em>new</em> target; a fight
+     * already under way finishes. Freezing a pet mid-swing with a hostile on it reads as a bug, and
+     * this method touching entities at all would drag Minecraft types into a manager that has none.
+     */
+    public @NotNull PetCombatMode togglePetCombatMode() {
+        final PetCombatMode next = getPetCombatMode().toggled();
+        mmoPlayer.getProfile().setUniqueData(UniqueDataType.PET_COMBAT_MODE, next.storedValue());
+        return next;
     }
 
     /**
