@@ -56,6 +56,7 @@ import net.minecraft.entity.passive.LlamaEntity;
 import net.minecraft.entity.passive.WolfEntity;
 import net.minecraft.entity.projectile.ArrowEntity;
 import net.minecraft.entity.projectile.PersistentProjectileEntity;
+import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.entity.projectile.TridentEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -436,6 +437,11 @@ public final class EntityDamageListener {
         // Impale). Mutually exclusive with the two branches above — a hit's direct source is exactly
         // one entity type — so at most one of the three fires.
         result = applyProjectileAttackBonus(entity, source, result);
+        // Call of the Wild's "sic your pets on it", for any ranged hit. ⚠️ DELIBERATELY ITS OWN
+        // STATEMENT rather than a block inside applyProjectileAttackBonus, which is where it used to
+        // live and where it was wrong twice over — see sicPetsOnRangedHit. It adds no damage, so it
+        // is not part of the running total and nothing below depends on its position.
+        sicPetsOnRangedHit(entity, source);
         // Pass 2: Agility Smash. Rides the same melee seam rather than adding a second damage mixin,
         // but deliberately outside the weapon-classified arm above — Smash is about the *sprint*, so
         // it applies whatever is in the player's hand, including nothing.
@@ -865,6 +871,56 @@ public final class EntityDamageListener {
      */
     private static final Identifier MANNEQUIN_ID = Identifier.ofVanilla("mannequin");
 
+    /**
+     * Call of the Wild's {@code attackTarget}: a ranged hit points the shooter's nearby pets at
+     * whatever they just struck.
+     *
+     * <h2>Why this is its own method, and not the block it used to be</h2>
+     * It lived inside {@link #applyProjectileAttackBonus}, and it inherited two of that method's
+     * early returns as bugs rather than as rules — neither of which had anything to do with siccing
+     * pets:
+     * <ul>
+     *   <li><b>A thrown trident sicced nothing.</b> The trident arm returns to
+     *       {@code applyTridentImpale} <em>before</em> the sic was reached, so throwing a trident —
+     *       unambiguously a ranged weapon — left the pack standing there. Reordering the block would
+     *       have fixed this one case and left the shape that caused it.</li>
+     *   <li><b>Nothing but arrows and tridents reached the code at all.</b> That method opens on
+     *       {@code instanceof PersistentProjectileEntity}, correctly, because it computes Archery,
+     *       Crossbows and Impale bonuses and those only exist for arrows and tridents. A snowball,
+     *       an egg, a splash potion or a fired firework is invisible to it — and each of those is
+     *       still the player hitting a mob from a distance.</li>
+     * </ul>
+     *
+     * <p>So the fix is separation, not reordering: the damage-bonus method keeps its narrow
+     * projectile type because its <em>maths</em> needs one, and the sic asks the only question it
+     * actually cares about — <b>did this player hit that mob with something they threw or fired?</b>
+     * {@code ProjectileEntity} is the common ancestor of arrows, tridents, snowballs, eggs, thrown
+     * potions and firework rockets (verified against the merged jar).
+     *
+     * <p>Two conditions carried over unchanged, both deliberate:
+     * <ul>
+     *   <li><b>The creeper skip.</b> Sending the pack at a creeper is sending the pack to be blown
+     *       up, next to its owner. Vanilla's own {@code canAttackWithOwner} makes the same refusal.</li>
+     *   <li><b>{@code isTargetDummy} first.</b> An armour stand or a mannequin is not a fight.</li>
+     * </ul>
+     *
+     * <p>No Taming rank gate and no {@code McMMOPlayer} lookup: legacy gated this on a permission
+     * that is always granted in singleplayer, so a resolved shooter is the whole condition — which
+     * also means a pet still answers a shot fired during the window before a profile loads.
+     */
+    private static void sicPetsOnRangedHit(LivingEntity target, DamageSource source) {
+        if (!(source.getSource() instanceof ProjectileEntity projectile)) {
+            return; // A melee hit, or environmental damage.
+        }
+        if (!(projectile.getOwner() instanceof ServerPlayerEntity shooter)) {
+            return; // A dispenser, a skeleton, or a wild projectile — nobody's pets to sic.
+        }
+        if (isTargetDummy(target) || target instanceof CreeperEntity) {
+            return;
+        }
+        CallOfTheWildHandler.attackTarget(shooter, target);
+    }
+
     private static float applyProjectileAttackBonus(LivingEntity target, DamageSource source,
             float amount) {
         if (!(source.getSource() instanceof PersistentProjectileEntity projectile)) {
@@ -883,14 +939,6 @@ public final class EntityDamageListener {
 
         if (projectile instanceof TridentEntity) {
             return applyTridentImpale(mmoPlayer, target, amount);
-        }
-
-        // Call of the Wild's attackTarget: legacy sics the shooter's nearby wolves on any non-creeper
-        // struck by an ARROW (bow or crossbow — not a trident, and not a melee hit). It runs regardless
-        // of the Skill Shot / Powered Shot outcome and has no Taming rank gate, only the permission
-        // (always granted in singleplayer), so a resolved player is the whole condition here.
-        if (!(target instanceof CreeperEntity)) {
-            CallOfTheWildHandler.attackTarget(shooter, target);
         }
 
         if (isCrossbowShot(projectile)) {

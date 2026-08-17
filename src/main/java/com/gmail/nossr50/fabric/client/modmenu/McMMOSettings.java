@@ -306,11 +306,21 @@ public final class McMMOSettings {
                 "Sneak + right-click a pet holding a bone to switch your pets between passive "
                         + "(they fight what you fight) and aggressive (they pick their own fights). "
                         + "Off also restores vanilla pet pathing."));
-        // ⚠️ Aggressive_Radius, Engage_Range and Sweep_Interval_Ticks are shipped in config.yml and
-        // have getters, but are NOT offered here yet: nothing consumes them until the aggressive
-        // sweep and the engage-range boost land. CatalogueKeysReachCodeTest refuses a switch over a
-        // key no gameplay code reads, and it is right to — a row here today would be a slider the
-        // player can move that changes nothing. They get added with the code that reads them.
+        list.add(ConfigSetting.decimal(CAT_ABILITIES, CONFIG_YML,
+                "Skills.Taming.Pet_Combat_Mode.Aggressive_Radius", 32.0, 1.0, 64.0,
+                "Pets: Aggressive Search Radius",
+                "How far from YOU an aggressive pet looks for a fight, in blocks. Measured from "
+                        + "you, not from each pet, so the pack fights near you."));
+        list.add(ConfigSetting.decimal(CAT_ABILITIES, CONFIG_YML,
+                "Skills.Taming.Pet_Combat_Mode.Engage_Range", 32.0, 16.0, 64.0,
+                "Pets: Chase Range",
+                "How far a pet will chase a target it already has. A wolf's natural limit is 16, "
+                        + "which is why pets ignore what you shoot at bow range. Raise with care — "
+                        + "path search cost grows with the cube of this number."));
+        list.add(ConfigSetting.integer(CAT_ABILITIES, CONFIG_YML,
+                "Skills.Taming.Pet_Combat_Mode.Sweep_Interval_Ticks", 20, 1, 200,
+                "Pets: Aggressive Check Interval (ticks)",
+                "How often aggressive pets look for a new fight. 20 ticks is one second."));
 
         // ---- Anti-cheat / exploit gates (experience.yml) ---------------------------------------
         // GitHub #9. Every switch below is verified to reach live code by
