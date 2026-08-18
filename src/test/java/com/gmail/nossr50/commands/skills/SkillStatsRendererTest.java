@@ -424,7 +424,7 @@ class SkillStatsRendererTest {
      */
     @Test
     void eachParentScreenShowsItsOwnMediumsFleetFootedNumber() {
-        for (PrimarySkillType s : List.of(PrimarySkillType.AGILITY, PrimarySkillType.PARKOUR,
+        for (PrimarySkillType s : List.of(PrimarySkillType.PARKOUR,
                 PrimarySkillType.SWIMMING, PrimarySkillType.FLYING)) {
             when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
         }
@@ -455,25 +455,17 @@ class SkillStatsRendererTest {
         }
     }
 
-    /**
-     * The cross-medium screen is gone with the skill.
-     *
-     * <p>{@code AGILITY} still exists as an enum constant until it is removed, so the factory answers
-     * <em>something</em>; what must not survive is a bespoke renderer for a skill nobody can earn.
-     */
-    @Test
-    void theRetiredSkillHasNoBespokeScreenOfItsOwn() {
-        assertTrue(SkillStatsRenderer.forSkill(PrimarySkillType.AGILITY)
-                        instanceof GenericSkillStatsRenderer,
-                "AgilityStatsRenderer was deleted on 2026-08-17; the retired skill must fall through "
-                        + "to the generic renderer rather than gaining a replacement");
-    }
+    // theRetiredSkillHasNoBespokeScreenOfItsOwn was deleted here on 2026-08-17. It asserted that
+    // AGILITY fell through to the generic renderer; the constant itself is now gone, which is a
+    // strictly stronger statement than the test could make and one the compiler enforces. What a
+    // player typing the old name gets instead is pinned by
+    // McMMOCommandsTest#everyRetiredSkillNamesALiveLocaleStringAndNoLiveSkill (A-5).
 
     @Test
     void eachMovedSubSkillRendersOnItsNewParentsScreen() {
         // The converse, and the half that matters most: a sub-skill can be removed from one screen
         // and simply vanish. Assert it ARRIVED, per skill, at a level that unlocks all of them.
-        for (PrimarySkillType s : List.of(PrimarySkillType.AGILITY, PrimarySkillType.PARKOUR,
+        for (PrimarySkillType s : List.of(PrimarySkillType.PARKOUR,
                 PrimarySkillType.SWIMMING, PrimarySkillType.FLYING)) {
             when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
         }

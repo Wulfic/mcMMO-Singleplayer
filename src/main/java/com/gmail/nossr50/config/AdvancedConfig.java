@@ -53,7 +53,7 @@ public class AdvancedConfig extends ConfigLoader {
             reason.add("Skills.General.Ability.EnchantBuff should be at least 1!");
         }
 
-        /* AGILITY */
+        /* PARKOUR */
         if (getMaximumProbability(SubSkillType.PARKOUR_DODGE) < 1) {
             reason.add("Skills.Parkour.Dodge.ChanceMax should be at least 1!");
         }
@@ -650,7 +650,7 @@ public class AdvancedConfig extends ConfigLoader {
     // sole net.md_5.bungee.api.ChatColor users. Colour parsing, if ever needed, belongs on the
     // Phase 7 Formatting/Style pipeline, not bungee ChatColor.
 
-    /* AGILITY */
+    /* PARKOUR */
     public double getDodgeDamageModifier() {
         return config.getDouble("Skills.Parkour.Dodge.DamageModifier", 2.0D);
     }

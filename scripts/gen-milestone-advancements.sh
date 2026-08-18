@@ -54,7 +54,10 @@ done
 
 # Thematic vanilla icon per skill (lowercase enum name -> minecraft item id).
 declare -A ICON=(
-    [agility]=feather
+    # No [agility] row: the skill was retired 2026-08-17. This table is hand-maintained rather than
+    # derived from PrimarySkillType.values(), and the script rm -rf's its output directory before
+    # regenerating -- so a row left here for a deleted skill silently RE-CREATES its whole
+    # advancement tree on the next run. Deleting the JSONs is only half the job.
     [alchemy]=brewing_stand
     [archery]=bow
     [axes]=diamond_axe
@@ -100,7 +103,7 @@ declare -A ICON=(
 # reads "Master Miner", not "Mining Milestone". Deliberately gender-neutral throughout -- these are
 # titles the player wears, and half the roster's obvious nouns ("Swordsman", "Herdsman") are not.
 declare -A ROLE=(
-    [agility]=Acrobat
+    # No [agility] row -- see the ICON table above.
     [alchemy]=Alchemist
     [archery]=Archer
     [axes]=Reaver
