@@ -48,8 +48,25 @@ public final class SkillRenames {
             new EnumMap<>(PrimarySkillType.class);
 
     /**
-     * Legacy YAML section name → the section name it is spelled with today. Insertion-ordered so
-     * the warnings come out in a stable order.
+     * Legacy YAML section name → a <em>description</em> of where its values belong today.
+     * Insertion-ordered so the warnings come out in a stable order.
+     *
+     * <p>⚠️ The value is prose, <b>not a section name</b>, and that is a deliberate widening from
+     * what this table held until 2026-08-18. A one-word destination can only express "this skill
+     * was renamed", and it went wrong the moment a rename chained: {@code Acrobatics} was pointed at
+     * {@code Agility}, Agility was then retired, and the warning went on telling players to create a
+     * section that the very next boot migrates away again. It never lost data — the
+     * {@link #MOVED_CONFIG_PATHS} entries fire on the following load — but a message naming a dead
+     * intermediate is a pointer aimed at nothing, which is the defect family this whole class exists
+     * to prevent.
+     *
+     * <p>Written without a {@code Skills.} prefix on purpose: mcMMO spells the same section at
+     * different depths in different files ({@code Skills.Parkour} in advanced.yml, bare
+     * {@code Parkour} in skillranks.yml), and a section-level warning cannot know which file it is
+     * about to be read in.
+     *
+     * <p>{@code SkillRenamesTest} holds the invariant: no destination here may name a skill that is
+     * absent from {@link PrimarySkillType#values()}.
      */
     private static final Map<String, String> LEGACY_CONFIG_SECTIONS = new LinkedHashMap<>();
 
@@ -143,7 +160,18 @@ public final class SkillRenames {
         //
         // LEGACY_ENUM_NAMES is intentionally left EMPTY rather than deleted. It is the mechanism, not
         // the data: the next rename costs one line here instead of a silent profile reset.
-        LEGACY_CONFIG_SECTIONS.put("Acrobatics", "Agility");
+        // ⚠️ The destination was "Agility" until 2026-08-18, and that had quietly rotted: Agility
+        // itself was retired on 2026-08-17, so the warning told players to move their tuning into a
+        // section the very next boot migrates away again. Nothing was ever lost — the
+        // MOVED_CONFIG_PATHS entries below key on `Skills.Agility.*` and fire on the following load,
+        // so the two-step landed — but it asked a player to create a section the mod then deletes,
+        // and no test looked at this table at all. It now names the live destinations directly.
+        LEGACY_CONFIG_SECTIONS.put("Acrobatics",
+                "the Parkour, Swimming or Flying section that owns the perk — Dodge, Roll, Athlete, "
+                        + "Smash and Snow Walker are Parkour's, Lead Lungs and Lake Raider are "
+                        + "Swimming's, Glide and Solar Wings are Flying's, and Fleet Footed and "
+                        + "Second Wind now exist once under each of the three — or the Movement "
+                        + "section for Second_Wind_Item and XP_After_Teleport_Cooldown");
 
         // 2026-08-03 (GitHub #4): Roll was re-parented from AGILITY to PARKOUR so that the falls it
         // pays XP for level the skill that gates it. Every derived address moved with the enum name;
@@ -314,7 +342,9 @@ public final class SkillRenames {
     }
 
     /**
-     * Legacy YAML section names mapped to their current spelling, for the config-orphan warning.
+     * Legacy YAML section names mapped to a <em>description</em> of where their values belong now,
+     * for the config-orphan warning. Prose, not a section name — see
+     * {@link #LEGACY_CONFIG_SECTIONS} for why, and never feed these to a setter.
      *
      * @return an unmodifiable view; never {@code null}
      */
