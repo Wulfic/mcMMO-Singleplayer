@@ -222,15 +222,11 @@ class SkillStatsRendererTest {
 
     @Test
     void miscRenderersEmitAStatsSectionAtMaxLevel() {
-        // ⚠️ Agility's screen stopped being a function of Agility's own level on 2026-08-17. Its two
-        // remaining sub-skills were re-homed onto Parkour, Swimming and Flying, so every line it
-        // renders is now gated on those three — maxing AGILITY alone produces an empty screen, which
-        // is correct rather than a regression. Set the parents, or this asserts nothing.
-        for (PrimarySkillType parent : List.of(PrimarySkillType.PARKOUR, PrimarySkillType.SWIMMING,
-                PrimarySkillType.FLYING)) {
-            when(mmoPlayer.getSkillLevel(parent)).thenReturn(1000);
-        }
-        for (PrimarySkillType s : List.of(PrimarySkillType.AGILITY, PrimarySkillType.REPAIR,
+        // ⚠️ AGILITY was dropped from this list on 2026-08-17, when its renderer was deleted with
+        // the skill. It renders generically now and has no Stats section at all — which is correct,
+        // not a regression: its two sub-skills moved to Parkour, Swimming and Flying, and
+        // eachParentScreenShowsItsOwnMediumsFleetFootedNumber is where they are asserted instead.
+        for (PrimarySkillType s : List.of(PrimarySkillType.REPAIR,
                 PrimarySkillType.SALVAGE, PrimarySkillType.SMELTING)) {
             when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
             assertTrue(anyLineContains(render(SkillStatsRenderer.forSkill(s)), "Stats"),
@@ -416,28 +412,61 @@ class SkillStatsRendererTest {
                 "a stat line resolved to a locale miss; lines=" + lines);
     }
 
+    /**
+     * Fleet Footed and Second Wind now render on each parent's own screen, showing <b>that medium's
+     * body</b> — replacing {@code agilityRendersOnlyItsTwoCrossMediumSubSkills}, which rendered the
+     * deleted cross-medium screen.
+     *
+     * <p>⚠️ Asserted on the <b>value</b>, not the label. All three mediums share the sub-skill's
+     * display name, so "Fleet Footed appears on the Swimming screen" is satisfied by a renderer that
+     * hardcoded Parkour's medium and printed the land number under a water heading. The three max
+     * bonuses differ (0.20 land / 0.50 water / 0.15 air), so the number is what names the medium.
+     */
     @Test
-    void agilityRendersOnlyItsTwoCrossMediumSubSkills() {
-        // After the 2026-08-10 re-parenting, /mcstats agility is Fleet Footed and Second Wind and
-        // nothing else. Every single-medium perk moved to the screen for the skill that gates it.
-        //
-        // This player is a maxed all-rounder, so every one of the seven moved sub-skills is unlocked
-        // and WOULD render if it were still Agility's -- without that, "absent" would be satisfied by
-        // the sub-skill merely being locked and the assertion would prove nothing.
+    void eachParentScreenShowsItsOwnMediumsFleetFootedNumber() {
         for (PrimarySkillType s : List.of(PrimarySkillType.AGILITY, PrimarySkillType.PARKOUR,
                 PrimarySkillType.SWIMMING, PrimarySkillType.FLYING)) {
             when(mmoPlayer.getSkillLevel(s)).thenReturn(1000);
         }
 
-        final List<String> lines = render(new AgilityStatsRenderer());
-
-        assertTrue(anyLineContains(lines, "Fleet Footed"), "lines=" + lines);
-        assertTrue(anyLineContains(lines, "Second Wind"), "lines=" + lines);
-        for (String moved : List.of("Dodge", "Roll Chance", "Sprint Hunger", "Smash",
-                "Breath Extension", "Lake Raider", "Descent Slowed", "Elytra Mending")) {
-            assertFalse(anyLineContains(lines, moved),
-                    moved + " belongs to a parent skill's screen now; lines=" + lines);
+        record Expected(PrimarySkillType skill, String bonus) {}
+        for (Expected e : List.of(
+                new Expected(PrimarySkillType.PARKOUR, "20.00%"),
+                new Expected(PrimarySkillType.SWIMMING, "50.00%"),
+                new Expected(PrimarySkillType.FLYING, "15.00%"))) {
+            final List<String> lines = render(SkillStatsRenderer.forSkill(e.skill()));
+            // ⚠️ Matched on the .Stat LABEL ("Fleet Footed Bonus"), not the sub-skill name. The
+            // screen lists every sub-skill by name first ("Fleet Footed - Unlocked") and only then
+            // its effect values, so selecting on the name alone picks the roster line and asserts
+            // against a string that never carried a number in the first place.
+            final String fleetFooted = lines.stream()
+                    .filter(line -> line.contains("Fleet Footed Bonus"))
+                    .findFirst()
+                    .orElse(null);
+            assertNotNull(fleetFooted,
+                    "/mcstats " + e.skill() + " must show Fleet Footed; lines=" + lines);
+            assertTrue(fleetFooted.contains(e.bonus()),
+                    e.skill() + "'s Fleet Footed line must show that medium's own bonus "
+                            + e.bonus() + ", not another medium's; line=" + fleetFooted);
+            assertTrue(anyLineContains(lines, "Second Wind"),
+                    "/mcstats " + e.skill() + " must show Second Wind; lines=" + lines);
+            assertFalse(anyLineContains(lines, "!Movement"),
+                    "a Second Wind line resolved to a locale miss; lines=" + lines);
         }
+    }
+
+    /**
+     * The cross-medium screen is gone with the skill.
+     *
+     * <p>{@code AGILITY} still exists as an enum constant until it is removed, so the factory answers
+     * <em>something</em>; what must not survive is a bespoke renderer for a skill nobody can earn.
+     */
+    @Test
+    void theRetiredSkillHasNoBespokeScreenOfItsOwn() {
+        assertTrue(SkillStatsRenderer.forSkill(PrimarySkillType.AGILITY)
+                        instanceof GenericSkillStatsRenderer,
+                "AgilityStatsRenderer was deleted on 2026-08-17; the retired skill must fall through "
+                        + "to the generic renderer rather than gaining a replacement");
     }
 
     @Test
