@@ -39,7 +39,7 @@ class AgilityRollTest {
         player = mock(PlatformPlayer.class);
 
         // Default: exploit prevention off (so canGainRollXP never throttles) and no exploiting state.
-        lenient().when(experienceConfig.isAgilityExploitingPrevented()).thenReturn(false);
+        lenient().when(experienceConfig.isMovementExploitingPrevented()).thenReturn(false);
         lenient().when(experienceConfig.getRollXPModifier()).thenReturn(80);
         lenient().when(experienceConfig.getFallXPModifier()).thenReturn(120);
         lenient().when(experienceConfig.getFeatherFallXPModifier()).thenReturn(2.0);
@@ -113,7 +113,7 @@ class AgilityRollTest {
 
     @Test
     void exploitingPlayerRollsButEarnsNoXp() {
-        when(experienceConfig.isAgilityExploitingPrevented()).thenReturn(true);
+        when(experienceConfig.isMovementExploitingPrevented()).thenReturn(true);
         when(player.hasEnderPearlInEitherHand()).thenReturn(true); // classic fall-XP farm
         when(player.getHealth()).thenReturn(20.0F);
 
