@@ -57,7 +57,7 @@ Why any of this happened is on [Movement Skills](Movement-Skills#why-every-perk-
 Check these in order:
 
 1. **Are you sneaking on the ground?** Crouch-swimming pays nothing by design, and neither does sneaking on the spot — you have to actually cover distance.
-2. **`ExploitFix.Stealth.Require_Movement_Input`.** This gate reads your real server-side input state so being *carried* earns nothing. If input packets aren't arriving for some reason, the gate reduces Stealth XP to **zero** rather than merely mis-tuning it. Setting it to `false` temporarily will tell you whether this is the cause — if that fixes it, please **file an issue**, because that's a real bug and not something you should have to leave off.
+2. **`ExploitFix.Stealth.Require_Movement_Input`.** This gate reads your real server-side input state so being *carried* earns nothing. If input packets aren't arriving for some reason, the gate reduces Stealth XP to **zero** rather than merely mis-tuning it. Setting it to `false` temporarily will tell you whether this is the cause — if that fixes it, please **[file an issue](https://github.com/Wulfic/mcMMO-Singleplayer/issues)**, because that's a real bug and not something you should have to leave off.
 
 ## "Unarmored earns no XP"
 
@@ -127,7 +127,7 @@ Working as intended — `Skills.Herbalism.Prevent_AFK_Leveling` is shipped on. U
 
 Likely real, and likely the reference speeds. Land's is the known vanilla sprint speed, but **Water (3.16) and Air (30.0) are estimates that have not been measured in-game**.
 
-Correcting them in `experience.yml` → `Experience_Values.Movement.Travel.Reference_Speed` is the intended fix. If you measure a better number, **please open an issue with it** — that's genuinely useful data.
+Correcting them in `experience.yml` → `Experience_Values.Movement.Travel.Reference_Speed` is the intended fix. If you measure a better number, **please [open an issue](https://github.com/Wulfic/mcMMO-Singleplayer/issues) with it** — that's genuinely useful data.
 
 ---
 

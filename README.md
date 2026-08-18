@@ -366,7 +366,10 @@ its `mc<version>-v` prefix is how each Minecraft line finds and retires its own 
 ## Port status & known gaps
 
 The port is feature‑complete against upstream mcMMO's single‑player‑relevant surface and boots
-clean, but it is **young** — expect rough edges and please file issues.
+clean, but it is **young** — expect rough edges and please [file issues](https://github.com/Wulfic/mcMMO-Singleplayer/issues).
+
+> ⚠️ **File them on *this* repo, not upstream mcMMO.** This is a fork; upstream
+> maintains the Bukkit/Spigot plugin and cannot act on a single‑player Fabric bug.
 
 > ⚠️ **The five new skills are code‑complete but lightly play‑tested.** Parkour, Swimming, Flying,
 > Stealth and Unarmored all pass the unit suite and boot clean, but their XP rates and reference

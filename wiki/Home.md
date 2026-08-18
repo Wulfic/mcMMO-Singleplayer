@@ -49,7 +49,7 @@ It is also **young**:
 
 - The new skills are **code-complete but lightly play-tested**. Live play has started and has already produced a dozen fixed bug reports, but [Cooking](Cooking) in particular has not been played at all. XP rates, reference speeds and drop chances are starting estimates, not measured numbers — the tuning comments in `experience.yml` say so in as many words.
 - The eight **Limit Break** sub-skills are implemented but ship **off**, and off is completely invisible: no damage, no `/mcstats` entry, no rank plaques. Against mobs the bonus is not nerfed the way upstream nerfs it against an armoured player, and +10 is more than a diamond sword's base damage. Turn it on in **Settings → Abilities → Limit Break**. See [Differences from mcMMO](Differences-from-mcMMO#features).
-- Balance feedback and bug reports are genuinely useful right now. Please file issues.
+- Balance feedback and bug reports are genuinely useful right now. Please [file issues on this repo](https://github.com/Wulfic/mcMMO-Singleplayer/issues) — **not on upstream mcMMO**, which maintains the Bukkit/Spigot plugin and cannot act on a single-player Fabric bug.
 
 ---
 

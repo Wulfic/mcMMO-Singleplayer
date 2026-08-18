@@ -1247,6 +1247,74 @@ on the same tag, and:
 
 ---
 
+## Phase 14 — the fork stops pointing at upstream (owner-requested 2026-08-18)
+
+**The defect, stated precisely.** This repo is a GitHub *fork* of `mcMMO-Dev/mcMMO`
+(`"fork": true`, `parent.full_name: mcMMO-Dev/mcMMO` — confirmed against the API, not assumed), and
+three inherited pointers still route our players and our money to the upstream project:
+
+| Pointer | Where | What it does today |
+|---|---|---|
+| `contact.issues` | `src/main/resources/fabric.mod.json` | 🔴 **The ModMenu "Issues" button.** A player who hits a bug in *our* mod files it on *upstream's* tracker, where it is noise for them and invisible to us |
+| `contact.homepage` / `contact.sources` | same file | Points at upstream. `sources` is also the **GPL-3.0 "how to obtain source" link baked into the jar** — and it does not lead to the source of this binary |
+| `.github/FUNDING.yml` | tracked | The Sponsor button on our repo pays `nossr50` (Sponsors + Patreon + `paypal.me`) |
+
+⚠️ **The attribution links are NOT part of this defect and must stay.** `README.md` (×3),
+`wiki/Home.md`, `wiki/Differences-from-mcMMO.md` (×2), `wiki/Installation.md`, `wiki/_Footer.md` all
+link `mcMMO-Dev/mcMMO` as *credit* or as *"use upstream for multiplayer"*. Those are correct, and two
+of them are GPL-3.0 obligations. **Retargeting a link is only right where the link answers "where do
+I go about THIS build".** Grep hits are not the unit of work here.
+
+### 14.1 — the jar's own metadata
+
+- [x] ✅ `fabric.mod.json` `contact` → `homepage`, `sources`, `issues` all on `Wulfic/mcMMO-Singleplayer`.
+- [x] ✅ Guard test — `ModContactLinksTest`, 5 tests, **mutation-proven 4 ways** (predictions written first; 4/4 matched).
+      🔑🔑 **Mutation 2 is the finding:** delete the whole `contact` block and `noContactLinkNamesUpstream` goes **GREEN** — no block, no upstream mention — while dropping the GPL source link out of the jar. Every `assertFalse(slice.contains(BAD))` has that hole; the extractor needs its own both-directions test (`theContactBlockExtractorActuallyFindsTheBlock` asserts it found all three keys *and* did not swallow `entrypoints`). Caught only because the prediction named the green in advance. Asserts each contact URL is under our repo and that none is
+      under `mcMMO-Dev`. **Fails if this change is reverted**, which is the whole point: the values
+      were wrong for the entire life of the port and nothing noticed.
+      ⚠️ It must NOT live in `com.gmail.nossr50.fabric.mixin` — that package is claimed by the Mixin
+      transformer under `fabric-loader-junit` and a test there fails to load before asserting
+      anything. Same reason `BandVersionLabelTest` sits in `guards/`.
+
+### 14.2 — the docs that say "file an issue" without saying where
+
+Four places tell a player to report something and then do not link a tracker. A player who follows
+the only mcMMO link on the page lands upstream.
+
+- [x] ✅ `README.md` — "please file issues", plus an explicit *file here, not upstream* note
+- [x] ✅ `wiki/Home.md` — "Please file issues."
+- [x] ✅ `wiki/Troubleshooting.md` ×2 — "file an issue", "open an issue with it"
+- [x] ✅ **`wiki/Building-from-Source.md` — found by the caveat-expiry sweep, not by the plan.** Its *Contributing* section said "Issues and PRs welcome" with nothing to click, on the fork's own contribution page. Same pass caught a **404**: it linked `/blob/master/PLAYTEST_G.md`, but the file is at `plans/PLAYTEST_G.md`.
+
+### 14.3 — funding
+
+- [x] ✅ `.github/FUNDING.yml` → `ko_fi: wulfic` (owner-supplied, 2026-08-18). Drop the `github`,
+      `patreon` and `custom` rows: all three named `nossr50`.
+      ⚠️ **`.github/` is master-only (R-g/R-r) — `Backport-not-needed`.**
+
+### 14.4 — detaching the fork
+
+🔴 **Not doable from here, and not doable by API at all.** There is no REST/GraphQL endpoint and no
+`gh` command that leaves a fork network; the self-serve "Leave fork network" control does not cover
+this case. The two real routes are a **GitHub Support request** or **recreating the repo**, and both
+are the owner's to run — recreating drops stars, watchers, issues and existing release download
+counts. Written up for the owner rather than attempted.
+
+**What detaching actually buys, so the decision is made on facts:** it stops PRs defaulting to
+upstream's base repo, stops our commits being reachable from upstream's network, and removes the
+"forked from mcMMO-Dev/mcMMO" header. **It does not touch anything in 14.1–14.3** — those are in-repo
+values and are wrong whether or not the fork is detached. Order does not matter.
+
+### 14.5 — back-port
+
+- [ ] 14.1 and 14.2 touch `src/` and docs → all five bands (`Backport-of:`).
+- [ ] 14.3 is `.github/` → master only, `Backport-not-needed:`.
+
+**What I am NOT doing:** not touching the attribution links; not adding issue templates; not enabling
+or configuring the issue tracker (`has_issues` is already `true` — verified); not detaching the fork.
+
+---
+
 ## Phase 9 — the `26.x` band
 
 **Its own mini-project (R-e). Do not absorb it into a sweep.** Gated behind Phase 8 delivering at
