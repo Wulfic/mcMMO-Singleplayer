@@ -17,11 +17,15 @@ import org.junit.jupiter.api.Test;
 class DatatypeEnumTest {
 
     @Test
-    void primarySkillTypeHasAllTwentySevenSkills() {
+    void primarySkillTypeHasAllTwentySixSkills() {
         // Guards against an accidental add/drop when the enum is touched later. Re-derived rather
-        // than bumped: 19 shipped skills, the three movement domains (Parkour / Swimming / Flying)
-        // that Agility derives from, Stealth, Unarmored, Husbandry, Hunter, and Cooking.
-        assertEquals(19 + 3 + 1 + 1 + 1 + 1 + 1, PrimarySkillType.values().length);
+        // than bumped: 18 shipped skills, the three movement domains (Parkour / Swimming / Flying),
+        // Stealth, Unarmored, Husbandry, Hunter, and Cooking.
+        //
+        // 19 -> 18 on 2026-08-17: AGILITY was retired. It was the CHILD skill the three movement
+        // domains used to derive a mean into; its last two sub-skills became six single-rank ones,
+        // two under each parent. This test going red is the intended way to notice a skill leaving.
+        assertEquals(18 + 3 + 1 + 1 + 1 + 1 + 1, PrimarySkillType.values().length);
     }
 
     @Test
