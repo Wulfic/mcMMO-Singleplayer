@@ -76,7 +76,8 @@ class SicPetsOnRangedHitTest {
         final ServerWorld world = mock(ServerWorld.class);
         shooter = mock(ServerPlayerEntity.class);
         lenient().when(shooter.getUuid()).thenReturn(UUID.randomUUID());
-        lenient().when(shooter.getEntityWorld()).thenReturn(world);
+        // getWorld() on this band -- see PetCombatSweep for the measured version ladder.
+        lenient().when(shooter.getWorld()).thenReturn(world);
         lenient().when(shooter.getBoundingBox()).thenReturn(new Box(-0.3, 0, -0.3, 0.3, 1.8, 0.3));
 
         pet = mock(WolfEntity.class);

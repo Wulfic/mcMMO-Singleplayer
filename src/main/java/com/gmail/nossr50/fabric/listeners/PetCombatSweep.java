@@ -95,7 +95,11 @@ public final class PetCombatSweep {
             return;
         }
 
-        final World world = player.getEntityWorld();
+        // getWorld(), not master's getEntityWorld() -- this band has no such method.
+        // Entity#getEntityWorld() exists from 1.21 through 1.21.5 and again from 1.21.9, so the
+        // availability is NOT monotonic and must not be inferred from a neighbouring band. The
+        // measured ladder lives in PetFollowTeleport#bringPetsFrom; this is the same resolution.
+        final World world = player.getWorld();
         if (world == null) {
             return;
         }

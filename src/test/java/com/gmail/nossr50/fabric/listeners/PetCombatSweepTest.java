@@ -87,7 +87,8 @@ class PetCombatSweepTest {
         playerUuid = UUID.randomUUID();
         lenient().when(player.getUuid()).thenReturn(playerUuid);
         lenient().when(player.getName()).thenReturn(Text.literal("tester"));
-        lenient().when(player.getEntityWorld()).thenReturn(world);
+        // getWorld() on this band -- see PetCombatSweep for the measured version ladder.
+        lenient().when(player.getWorld()).thenReturn(world);
         lenient().when(player.getBoundingBox()).thenReturn(new Box(-0.3, 0, -0.3, 0.3, 1.8, 0.3));
         // age 0 % 20 == 0, so every test is on a sweep tick unless it says otherwise.
         player.age = 0;
