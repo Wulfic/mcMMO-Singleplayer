@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.agility;
+package com.gmail.nossr50.skills.movement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -52,9 +52,12 @@ class ParkourSnowWalkerTest {
     }
 
     @Test
-    void theSubSkillIsParentedToParkourNotAgility() {
-        // The parent map keys off the enum name's prefix. Renaming the constant to AGILITY_* would
-        // silently re-gate the whole sub-skill onto the three-skill average.
+    void theSubSkillIsParentedToParkourAndNotAnotherMovementSkill() {
+        // The parent map keys off the enum name's PREFIX and reports nothing when it is wrong.
+        // Re-prefixing this constant SWIMMING_ or FLYING_ compiles, and silently re-gates the whole
+        // sub-skill onto a level the player earns by doing something else entirely. Until the
+        // AGILITY skill was retired on 2026-08-17 the available wrong answer was worse still: the
+        // MEAN of all three.
         assertSame(PrimarySkillType.PARKOUR, SubSkillType.PARKOUR_SNOW_WALKER.getParentSkill());
     }
 
@@ -68,14 +71,14 @@ class ParkourSnowWalkerTest {
     void aNoviceCannotWalkOnSnow() {
         when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR)).thenReturn(99);
 
-        assertFalse(new AgilityManager(mmoPlayer).canSnowWalk());
+        assertFalse(new MovementManager(mmoPlayer).canSnowWalk());
     }
 
     @Test
     void oneHundredParkourUnlocksIt() {
         when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR)).thenReturn(100);
 
-        assertTrue(new AgilityManager(mmoPlayer).canSnowWalk());
+        assertTrue(new MovementManager(mmoPlayer).canSnowWalk());
     }
 
     @Test
@@ -92,6 +95,6 @@ class ParkourSnowWalkerTest {
         lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.SWIMMING)).thenReturn(1000);
         lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.FLYING)).thenReturn(1000);
 
-        assertFalse(new AgilityManager(mmoPlayer).canSnowWalk());
+        assertFalse(new MovementManager(mmoPlayer).canSnowWalk());
     }
 }

@@ -40,7 +40,7 @@ import org.jetbrains.annotations.NotNull;
  *       the first death, while re-deriving self-heals on the next tick.</li>
  * </ul>
  *
- * <p>Not every buff belongs here: Agility's air (elytra) body writes velocity directly, because
+ * <p>Not every buff belongs here: Fleet Footed's air (elytra) body writes velocity directly, because
  * gliding is velocity-driven with no attribute behind it ({@code LivingEntity#travelGliding},
  * bytecode-verified). Attributes only.
  */
@@ -58,23 +58,31 @@ public final class SkillAttributeService {
      */
     public enum Managed {
         /**
-         * Agility → Fleet Footed, land body. A percentage bonus on top of the vanilla sprint
+         * Parkour → Fleet Footed, land body. A percentage bonus on top of the vanilla sprint
          * multiplier, live only while sprinting.
+         *
+         * <p>🔴 <b>The id string is FROZEN and must never be changed</b> (ruling A-9). The
+         * constant was called {@code AGILITY_FLEET_FOOTED_LAND} until 2026-08-17, and renaming the
+         * CONSTANT is free — but this <em>string</em> is written into every player's entity NBT as
+         * the modifier's identifier. {@link #clearAll(LivingEntity)} removes only the ids it still
+         * knows, so a renamed id strands the old modifier permanently: an unremovable speed buff on
+         * everyone who has already played. Rename the constant, never the literal.
          */
-        AGILITY_FLEET_FOOTED_LAND(EntityAttributes.MOVEMENT_SPEED, "agility_fleet_footed",
+        MOVEMENT_FLEET_FOOTED_LAND(EntityAttributes.MOVEMENT_SPEED, "agility_fleet_footed",
                 Operation.ADD_MULTIPLIED_TOTAL),
 
         /**
-         * Agility → Fleet Footed, water body. Targets {@code WATER_MOVEMENT_EFFICIENCY} rather than
+         * Swimming → Fleet Footed, water body. 🔴 Its id string is FROZEN too — see
+         * {@link #MOVEMENT_FLEET_FOOTED_LAND}. Targets {@code WATER_MOVEMENT_EFFICIENCY} rather than
          * {@code MOVEMENT_SPEED} because — bytecode-verified in
          * {@code LivingEntity#travelInWater} — swim speed is a flat {@code 0.02} that movement speed
          * only contributes to <em>in proportion to</em> this attribute:
          * {@code g += (getMovementSpeed() - g) * waterMovementEfficiency}. With no Depth Strider the
          * efficiency is 0 and a movement-speed buff moves a swimming player not at all. This is the
          * same attribute Depth Strider uses, so the two stack additively and the config cap is what
-         * stops a max-Agility Depth Strider III player from becoming silly.
+         * stops a max-Swimming Depth Strider III player from becoming silly.
          */
-        AGILITY_FLEET_FOOTED_WATER(EntityAttributes.WATER_MOVEMENT_EFFICIENCY,
+        MOVEMENT_FLEET_FOOTED_WATER(EntityAttributes.WATER_MOVEMENT_EFFICIENCY,
                 "agility_fleet_footed_water", Operation.ADD_VALUE),
 
         /**
@@ -89,7 +97,7 @@ public final class SkillAttributeService {
          *       the attribute. (It also speeds up crawling through a 1-block gap. Intended.)</li>
          *   <li><b>Vanilla's own maximum of 1.0 is the ceiling</b>, which is full walking speed, so
          *       no configuration of {@code MaxSneakSpeedBonus} can make sneaking outrun walking.
-         *       Same free-ceiling property {@link #AGILITY_FLEET_FOOTED_WATER} gets from
+         *       Same free-ceiling property {@link #MOVEMENT_FLEET_FOOTED_WATER} gets from
          *       {@code WATER_MOVEMENT_EFFICIENCY}.</li>
          *   <li><b>It shares no attribute with Fleet Footed</b>, so D-AG5's "two skills fighting over
          *       one attribute" concern is structurally impossible here rather than carefully
@@ -120,7 +128,7 @@ public final class SkillAttributeService {
          *   <li><b>Vanilla's own clamp is the ceiling.</b> {@code ARMOR} is a
          *       {@code ClampedEntityAttribute("armor", 0.0, 0.0, 30.0)}, so no configuration of the
          *       tier table can push a player past what the game already permits. Same free-ceiling
-         *       property {@link #AGILITY_FLEET_FOOTED_WATER} and {@link #STEALTH_PADFOOT} get.</li>
+         *       property {@link #MOVEMENT_FLEET_FOOTED_WATER} and {@link #STEALTH_PADFOOT} get.</li>
          *   <li><b>Damage that ignores armour still ignores this.</b> {@code applyArmorToDamage}
          *       skips the whole computation for {@code BYPASSES_ARMOR} sources, so the void, starve
          *       and magic damage are as lethal to a maxed skin as to a diamond set.</li>

@@ -15,8 +15,8 @@ import static org.mockito.Mockito.when;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.platform.SkillAttributeService;
-import com.gmail.nossr50.skills.agility.AgilityManager;
-import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.movement.MovementManager;
+import com.gmail.nossr50.skills.movement.Medium;
 import com.gmail.nossr50.skills.stealth.StealthManager;
 import com.gmail.nossr50.skills.unarmored.UnarmoredManager;
 import com.gmail.nossr50.util.player.UserManager;
@@ -270,7 +270,7 @@ class PlayerMovementTrackerTest {
      * the payout actually happened.
      */
     @Test
-    void sneakTravelIsCreditedEvenThoughItHasNoAgilityMedium() {
+    void sneakTravelIsCreditedEvenThoughItHasNoTravelMedium() {
         final UUID uuid = UUID.randomUUID();
         final ServerPlayerEntity player = sneakingPlayer();
         lenient().when(player.getUuid()).thenReturn(uuid);
@@ -322,7 +322,7 @@ class PlayerMovementTrackerTest {
         final McMMOPlayer mmoPlayer = mock(McMMOPlayer.class);
         lenient().when(mmoPlayer.getPlayer()).thenReturn(platformPlayer);
         lenient().when(mmoPlayer.getStealthManager()).thenReturn(stealth);
-        lenient().when(mmoPlayer.getAgilityManager()).thenReturn(mock(AgilityManager.class));
+        lenient().when(mmoPlayer.getMovementManager()).thenReturn(mock(MovementManager.class));
 
         UserManager.track(mmoPlayer);
         return mmoPlayer;
@@ -358,7 +358,7 @@ class PlayerMovementTrackerTest {
         final McMMOPlayer mmoPlayer = mock(McMMOPlayer.class);
         lenient().when(mmoPlayer.getPlayer()).thenReturn(platformPlayer);
         lenient().when(mmoPlayer.getUnarmoredManager()).thenReturn(unarmored);
-        lenient().when(mmoPlayer.getAgilityManager()).thenReturn(mock(AgilityManager.class));
+        lenient().when(mmoPlayer.getMovementManager()).thenReturn(mock(MovementManager.class));
 
         UserManager.track(mmoPlayer);
         return mmoPlayer;
@@ -446,14 +446,14 @@ class PlayerMovementTrackerTest {
      * depend on an unrelated skill having loaded — silently, and only for players in that state.
      */
     @Test
-    void ironSkinSurvivesAMissingAgilityManager() {
+    void ironSkinSurvivesAMissingMovementManager() {
         final UUID uuid = UUID.randomUUID();
         final ServerPlayerEntity player = unarmoredPlayerWithArmourAttribute(uuid);
         final UnarmoredManager unarmored = mock(UnarmoredManager.class);
         when(unarmored.getSkinArmorPoints(true)).thenReturn(20.0);
 
         final McMMOPlayer mmoPlayer = trackedUnarmoredPlayer(uuid, unarmored);
-        when(mmoPlayer.getAgilityManager()).thenReturn(null);
+        when(mmoPlayer.getMovementManager()).thenReturn(null);
         try {
             PlayerMovementTracker.tickPlayer(player);
 

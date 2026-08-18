@@ -3,8 +3,8 @@ package com.gmail.nossr50.commands.skills;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
-import com.gmail.nossr50.skills.agility.AgilityManager;
-import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.movement.MovementManager;
+import com.gmail.nossr50.skills.movement.Medium;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,7 +31,7 @@ import java.util.List;
  */
 public final class FlyingStatsRenderer extends SkillStatsRenderer {
 
-    private AgilityManager agility;
+    private MovementManager agility;
 
     public FlyingStatsRenderer() {
         super(PrimarySkillType.FLYING);
@@ -40,7 +40,7 @@ public final class FlyingStatsRenderer extends SkillStatsRenderer {
     @Override
     protected void dataCalculations(float skillValue) {
         // Both lines are magnitudes off the manager, which reads the live config; neither is RNG.
-        agility = mmoPlayer.getAgilityManager();
+        agility = mmoPlayer.getMovementManager();
     }
 
     @Override
