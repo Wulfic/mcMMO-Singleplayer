@@ -1334,7 +1334,7 @@ or configuring the issue tracker (`has_issues` is already `true` — verified); 
 
 ---
 
-## Phase 15 — A-7: the ONE combined back-port (Taming + Agility retirement + Skills tab + fixes)
+## Phase 15 — A-7: the ONE combined back-port ✅ COMPLETE (2026-08-18)
 
 **Owner-started 2026-08-18.** This is the pass A-7 deferred: the Taming track and the Agility
 retirement were held back deliberately so the bands take them together, once, with the rename
@@ -1393,39 +1393,43 @@ is then a *verified* precedent rather than a prediction.
 
 ### Per-band recipe — run in full, per band, in this order
 
-- [ ] **15.0 — master bumps to `1.1.0-SNAPSHOT` and releases.** Watch the run. `mc1.21.11-v1.1.0`
-      published, `mc1.21.11-v1.0.0` reaped, **zero orphan drafts** (the [[release-draft-orphans]]
-      check — a same-tag draft is the failure this whole gate exists to prevent).
-- [ ] **15.1 — `mc/1.21.10`** · 15.2 — `mc/1.21.8` · 15.3 — `mc/1.21.5` · 15.4 — `mc/1.21.4` ·
-      15.5 — `mc/1.21.3`
+- [x] ✅ **15.0 — master `6f0a34616`.** `mc1.21.11-v1.1.0` published, `mc1.21.11-v1.0.0` reaped,
+      **0 drafts** — checked with `--json isDraft`, not read off the list by eye.
+- [x] ✅ **15.1 `mc/1.21.10`** `f86c6d0d4` · **15.2 `mc/1.21.8`** `e307afc6e` ·
+      **15.3 `mc/1.21.5`** `805163176` · **15.4 `mc/1.21.4`** `96a661dd2` ·
+      **15.5 `mc/1.21.3`** `2f97730ab` — all pushed, all released at **`v1.1.0`**, **0 drafts**.
+- [x] ✅ **`drift-audit.py` (`--self-test` first): 0 MISSING on all five bands.** Was 14 each.
+- [x] ✅ Per band: `./gradlew build` green at **1840 tests, 0 failures** · `mixin-allow-audit --check`
+      60 OK/61 (1 SLICE), no injector at 0 sites · `extract-mc-surface` self-test + `--check`
+      acceptance PASS · `config-id-audit` **dead-on-every-version: none**.
 
-For each band:
+### 🔑 What it actually cost, and the one real find
 
-1. **Cherry-pick 1–3 and 5–14 in the table's order**, `-x` off, each carrying its own
-   `Backport-of: <sha>` trailer. **Skip #4** — see step 3.
-2. **Resolve conflicts against the BAND's own files, never master's.** The Phase 14 precedent is the
-   rule: when a band's text is correct *for that band*, the band's text wins and the commit body
-   says so under a `BAND-SPECIFIC RESOLUTION` heading. ⚠️ `gradle.properties` — take **only**
-   `mod_version`; `minecraft_version` and `supported_minecraft_versions` are per-band and are never
-   copied. ⚠️ `TODO.md` is **not** back-ported (diverged wholesale; no band commit has ever carried
-   it).
-3. **Regenerate `mc-surface.txt` on the band — do not pick `381c10b2a`.** The generator back-ports;
-   the generated fact does not. `./gradlew classes testClasses` **first** (a stale `build/classes`
-   yields a confidently wrong answer), then `scripts/extract-mc-surface.py`, then commit it with the
-   `Backport-of: 381c10b2a` trailer so the auditor clears it.
-4. **Band-specific API breaks to expect** (from the Taming work, already recorded for 8.3):
-   `EntityAttributes.FOLLOW_RANGE` is `GENERIC_FOLLOW_RANGE` below the rename boundary, and
-   `EntityNavigation#setMaxFollowRange` does not exist on the oldest bands. **Verify with
-   `javap-mc.sh` per band — never recall a signature.**
-5. **Bump `mod_version` to `1.1.0-SNAPSHOT` as the LAST commit**, its own commit, carrying
-   `Backport-not-needed: the version bump is authored per branch, not propagated`.
-6. **The ship gate, in full, on the band** — see "The ship gate" below. Non-negotiable:
-   `./gradlew build` green · `mixin-allow-audit --check` · `extract-mc-surface --check` ·
-   `config-id-audit --self-test` · `BandDocsMatchRealityTest`.
-7. **Push, then watch the release run.** `mc<VER>-v1.1.0` published, `v1.0.0` reaped, **no orphan
-   draft**. A refusal here means step 5 was skipped.
-8. **`drift-audit.py --self-test && --master master`** — that band must drop to **0 MISSING**.
-   ⚠️ It audits `origin/master`; push before auditing.
+**The pick order was free.** Chronological order already places F (`97b0e972f`, the rename) after
+every behaviour commit, so nine behaviour picks landed in pre-rename spelling and F renamed them
+once. **Zero content conflicts on all five bands** — `TODO.md` was the only conflict anywhere, and it
+resolves to the band's copy every time.
+
+**One band needed real work.** `mc/1.21.8` is the single band where `Entity#getEntityWorld()` does
+not exist. Availability is **not monotonic** — present 1.21–1.21.5, gone on 1.21.6–1.21.8, back from
+1.21.9 — so it cannot be inferred from a neighbouring band. Fixed at three sites against
+`javap-mc.sh`, following the ladder this band had already measured in `PetFollowTeleport`.
+⚠️ **The cherry-picks applied cleanly and the compile is what caught it.**
+
+🔴 **The real find, and it was NOT caused by this work: `mc/1.21.4` and `mc/1.21.3` were shipping a
+contact-surface manifest describing a different Minecraft.** Both carried the byte-identical blob
+`1c480efc4` while every other branch had its own. It named `CommandManager#requirePermissionLevel`
+and `AbstractCowEntity` — **neither exists on those bands**, so no code there could ever have
+contacted them. Regenerating fixed it; the two now differ by exactly three records, all real version
+facts (`Ingredient#test` vs `#acceptsItem`).
+
+⚠️⚠️ **No gate could have caught it, and this is worth closing separately.**
+`extract-mc-surface.py --check` **does not compare against the committed file** — it regenerates
+(it *writes*; it is not read-only) and verifies its own acceptance criteria. A stale or foreign
+manifest passes `--check` every time. The only thing that surfaces it is a human noticing `git diff`
+is non-empty afterwards, which is exactly the *"somebody remembers to look"* condition R8 exists to
+eliminate. **Two bands agreeing byte-for-byte is the tell** — the generator back-ports, the
+generated fact is re-derived, so identical manifests are suspicious rather than reassuring.
 
 ### Attempt budget
 
@@ -2326,6 +2330,22 @@ their correctness is checked instead by `BandDocsMatchRealityTest`, which runs i
 ---
 
 ## Carried debt
+
+- [ ] 🔴 **`extract-mc-surface.py --check` cannot detect a stale or foreign manifest** (found
+      2026-08-18, Phase 15). It **regenerates** the file — it *writes*, it is not read-only — and
+      then verifies its own **acceptance criteria**. It never reads the committed manifest, so a
+      committed file describing a *different Minecraft version* passes `--check` every time. That is
+      not hypothetical: `mc/1.21.4` and `mc/1.21.3` were both shipping the byte-identical blob
+      `1c480efc4`, naming `CommandManager#requirePermissionLevel` and `AbstractCowEntity` —
+      **neither symbol exists on either band**. Detection currently depends on a human noticing
+      `git diff` is non-empty after a regeneration, which is the *"somebody remembers to look"*
+      condition R8 exists to eliminate.
+      **The fix has a shape:** `--check` should fail when the regenerated content differs from what
+      is committed (the way `mixin-allow-audit --check` and `drift-audit --self-test` already fail
+      loudly), and separately refuse a manifest naming a symbol absent from this band's merged jar.
+      ⚠️ **Two bands with byte-identical manifests is the tell** — the generator back-ports, the
+      generated fact is re-derived per branch, so identical files are suspicious rather than
+      reassuring. A guard could assert exactly that across branches.
 
 - [x] ✅ **The `.gitignore` hole — CLOSED 2026-08-13.** `mc/1.21.8` and `mc/1.21.10` lacked `.agent/`
       and `.github/`, so `git status` there listed `?? .agent/`, `?? .github/copilot-instructions.md`
