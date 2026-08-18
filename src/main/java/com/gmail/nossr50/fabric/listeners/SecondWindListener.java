@@ -2,7 +2,6 @@ package com.gmail.nossr50.fabric.listeners;
 
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
-import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.runnables.skills.AbilityDisableTask;
@@ -102,6 +101,25 @@ public final class SecondWindListener {
                 : McMMOMod.getGeneralConfig().getSecondWindItem();
     }
 
+    /**
+     * How long a Second Wind fired in {@code medium} runs for, in seconds — scaled on the skill the
+     * player earns by travelling through <em>that</em> medium.
+     *
+     * <p>⚠️ <b>This used to read {@code AGILITY}, the mean of Parkour, Swimming and Flying</b>, and
+     * moving it is a behaviour change rather than a rename. A swimmer with Swimming 900 and nothing
+     * in the other two had an Agility of 300 and was scaled on that; they are now scaled on 900. That
+     * is the same correction the 2026-08-17 unlock flattening made to what <em>gates</em> each body —
+     * the duration was simply the half no gate test reads, so it survived the first pass.
+     *
+     * <p>Package-visible and pure over {@code (McMMOPlayer, Medium)} so the mapping from medium to
+     * skill is testable without a world: mock a different length per skill and the answer names which
+     * one was asked.
+     */
+    static int durationTicks(@NotNull McMMOPlayer mmoPlayer, @NotNull Medium medium) {
+        return mmoPlayer.calculateAbilityActivationTicks(medium.primarySkill(),
+                SuperAbilityType.SECOND_WIND);
+    }
+
     private static void tryActivate(@NotNull McMMOPlayer mmoPlayer,
             @NotNull ServerPlayerEntity player) {
         if (mmoPlayer.getAbilityMode(SuperAbilityType.SECOND_WIND)) {
@@ -132,8 +150,7 @@ public final class SecondWindListener {
             return;
         }
 
-        final int ticks = mmoPlayer.calculateAbilityActivationTicks(PrimarySkillType.AGILITY,
-                SuperAbilityType.SECOND_WIND);
+        final int ticks = durationTicks(mmoPlayer, medium);
         final SecondWindResult result = agility.computeSecondWind(medium, ticks);
         if (result == null) {
             // This medium's rank is not unlocked — the player has Second Wind but not, say, its

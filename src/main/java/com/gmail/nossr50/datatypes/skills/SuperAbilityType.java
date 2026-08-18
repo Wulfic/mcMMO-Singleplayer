@@ -182,7 +182,10 @@ public enum SuperAbilityType {
         //
         // Callers: RankUtils#getSuperAbilityUnlockLevel and McMMOPlayer#processAbilityActivation.
         // Anything that needs the medium's ACTUAL sub-skill asks Medium#secondWindSubSkill().
-        // Pinned by SuperAbilityTypeTest#allSecondWindSubSkillsUnlockAtTheSameLevel.
+        // Pinned by SuperAbilityTypeTest#allSecondWindSubSkillsUnlockAtTheSameLevel, which
+        // asserts every medium's unlock level EQUALS this binding's -- not the literal number,
+        // so it fails on divergence however it arrives -- plus
+        // #theNominalBindingIsOneOfTheThreePerMediumSecondWinds for the identity half.
         SECOND_WIND.subSkillTypeDefinition = SubSkillType.PARKOUR_SECOND_WIND;
         SMOKE_BOMB.subSkillTypeDefinition = SubSkillType.STEALTH_SMOKE_BOMB;
         HERDSMANS_CALL.subSkillTypeDefinition = SubSkillType.HUSBANDRY_HERDSMANS_CALL;
