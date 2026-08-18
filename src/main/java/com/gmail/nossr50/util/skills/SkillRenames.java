@@ -85,12 +85,38 @@ public final class SkillRenames {
      * <p>So a move is scoped to the one file it was written for, and a path that means something
      * different elsewhere is simply not that file's problem.
      *
+     * <p><b>Usually one destination; occasionally several.</b> {@code newPaths} is a list because a
+     * skill that dissolves into three does not always split its keys one-for-one: retiring Agility
+     * on 2026-08-17 left {@code Skills.Agility.FleetFooted.MaxBonusLevel} — one number meaning "the
+     * level Fleet Footed stops scaling at" — with three equally correct homes, one per parent. Fanning
+     * it out preserves the player's intent exactly; picking one parent and letting the other two fall
+     * back to the shipped default would half-apply their tuning, which is worse than not applying it.
+     * ⚠️ A one-to-many move is still <b>one delete</b>: every destination is written before the legacy
+     * path is cleared. Declaring the same legacy path in three separate entries instead does NOT work
+     * — the first entry deletes it and the other two silently find nothing.
+     *
      * @param fileName   the config file this move applies to, and only this one
      * @param legacyPath where the value may still be stranded
-     * @param newPath    where the code reads it from now
+     * @param newPaths   every path the code reads it from now; at least one
      */
     public record MovedPath(@NotNull String fileName, @NotNull String legacyPath,
-                            @NotNull String newPath) {
+                            @NotNull List<String> newPaths) {
+
+        public MovedPath {
+            if (newPaths.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "MovedPath " + legacyPath + " in " + fileName + " has no destination; a move "
+                                + "to nowhere is a RETIREMENT and belongs in LEGACY_CONFIG_PATHS, "
+                                + "where the player is told rather than having their tuning deleted");
+            }
+            newPaths = List.copyOf(newPaths);
+        }
+
+        /** The overwhelmingly common single-destination move. */
+        public MovedPath(@NotNull String fileName, @NotNull String legacyPath,
+                @NotNull String newPath) {
+            this(fileName, legacyPath, List.of(newPath));
+        }
     }
 
     /**
@@ -164,6 +190,68 @@ public final class SkillRenames {
             MOVED_CONFIG_PATHS.add(new MovedPath("skillranks.yml",
                     "Agility." + subSkill, newParent + "." + subSkill));
         }
+
+        // 2026-08-17: Agility is RETIRED. Its last two sub-skills split across the three movement
+        // parents that already owned everything else, so what was one sub-skill carrying one rank per
+        // medium is now three single-rank sub-skills -- a sub-skill's parent is derived from its enum
+        // name prefix, and one constant cannot span three parents.
+        //
+        // ⚠️ Declared LEAF BY LEAF rather than as a sub-tree move, and that is the entry condition
+        // above being honoured rather than dodged. `Skills.Agility.FleetFooted` as a sub-tree is NOT
+        // shape-identical to any one parent's block: its three `<Medium>_MaxBonus` leaves each go to a
+        // DIFFERENT parent and each is renamed to a bare `MaxBonus` on arrival. Named one at a time,
+        // every entry below is a single leaf with a single destination, same unit and same meaning --
+        // which is exactly what the migrator can carry safely.
+        MOVED_CONFIG_PATHS.add(new MovedPath("advanced.yml",
+                "Skills.Agility.FleetFooted.Land_MaxBonus",
+                "Skills.Parkour.FleetFooted.MaxBonus"));
+        MOVED_CONFIG_PATHS.add(new MovedPath("advanced.yml",
+                "Skills.Agility.FleetFooted.Water_MaxBonus",
+                "Skills.Swimming.FleetFooted.MaxBonus"));
+        MOVED_CONFIG_PATHS.add(new MovedPath("advanced.yml",
+                "Skills.Agility.FleetFooted.Air_MaxBonus",
+                "Skills.Flying.FleetFooted.MaxBonus"));
+
+        // The one-to-many case, and the reason MovedPath carries a list at all. "The level Fleet
+        // Footed stops scaling at" was a single number under Agility and is now three, one per
+        // parent. All three are equally the player's stated intent, so all three get it. Migrating it
+        // to Parkour alone would leave a player who raised it to 1000 with 1000 on land and the
+        // shipped default in water and air -- their tuning half-applied, which reads as a bug.
+        MOVED_CONFIG_PATHS.add(new MovedPath("advanced.yml",
+                "Skills.Agility.FleetFooted.MaxBonusLevel",
+                List.of("Skills.Parkour.FleetFooted.MaxBonusLevel",
+                        "Skills.Swimming.FleetFooted.MaxBonusLevel",
+                        "Skills.Flying.FleetFooted.MaxBonusLevel")));
+
+        // Second Wind stays ONE super ability with one cooldown and one trigger item (ruling A-2);
+        // only the three BODIES split, each to the parent whose medium fires it. Leaf names are
+        // unchanged, so these are the plainest moves in the table.
+        for (String[] body : new String[][] {
+                {"DartRange", "Parkour"}, {"DartDamage", "Parkour"}, {"DartKnockback", "Parkour"},
+                {"AquamanAmplifier", "Swimming"},
+                {"LimitlessBoost", "Flying"},
+        }) {
+            MOVED_CONFIG_PATHS.add(new MovedPath("advanced.yml",
+                    "Skills.Agility.SecondWind." + body[0],
+                    "Skills." + body[1] + ".SecondWind." + body[0]));
+        }
+
+        // ⚠️⚠️ THE RANK LADDERS ARE WARN-ONLY, AND THAT IS THE POINT OF RULING A-1.
+        // `Agility.FleetFooted` shipped as Rank_1 1 / Rank_2 200 / Rank_3 400 and `Agility.SecondWind`
+        // as 250 / 500 / 750 -- three ranks on ONE ladder, encoding the order the mediums unlocked in.
+        // Split across three parents there is no order left to encode, so each is now a SINGLE rank at
+        // the old rank 1 number. Migrating a player's ladder would carry Rank_2 and Rank_3 into a
+        // sub-skill that has no rank 2 or 3, resurrecting the very gate A-1 deliberately removed and
+        // stranding two values nothing reads. Same call as GracefulRoll above: migrate only where the
+        // destination MEANS THE SAME THING.
+        LEGACY_CONFIG_PATHS.put("Agility.FleetFooted",
+                "Parkour.FleetFooted, Swimming.FleetFooted and Flying.FleetFooted -- now ONE rank "
+                        + "each instead of one ladder of three, so the old Rank_2/Rank_3 levels no "
+                        + "longer mean anything and are not carried across");
+        LEGACY_CONFIG_PATHS.put("Agility.SecondWind",
+                "Parkour.SecondWind, Swimming.SecondWind and Flying.SecondWind -- now ONE rank each "
+                        + "instead of one ladder of three, so the old Rank_2/Rank_3 levels no longer "
+                        + "mean anything and are not carried across");
 
         // config.yml, same date and the same reason: Dodge's anti-lightning switch follows Dodge.
         // A leaf rather than a sub-tree, which the migrator handles identically.

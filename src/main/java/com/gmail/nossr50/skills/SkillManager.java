@@ -5,6 +5,7 @@ import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Base class every {@code *Manager} extends. Holds the owning {@link McMMOPlayer} and the
@@ -69,13 +70,33 @@ public abstract class SkillManager {
      * @return the scaled value, never above {@code maxBonus}
      */
     protected double scaleToLevel(double maxBonus, int maxBonusLevel) {
+        return scaleToLevel(maxBonus, maxBonusLevel, skill);
+    }
+
+    /**
+     * The same ladder, scaled on a skill other than the manager's own.
+     *
+     * <p>⚠️ <b>Needed because one manager can host sub-skills belonging to several skills.</b> The
+     * movement manager owns Parkour's, Swimming's and Flying's passives, so "the player's level in
+     * this skill" is not a property of the manager at all — it is a property of the sub-skill being
+     * scaled. Reading the manager's own skill there gave every movement passive the level of the
+     * retired Agility, the MEAN of the three, which is a third of what a specialist had earned.
+     *
+     * @param maxBonus      the value reached at {@code maxBonusLevel} and beyond
+     * @param maxBonusLevel the level at which scaling stops
+     * @param scalingSkill  the skill whose level drives the ramp
+     * @return the scaled value, never above {@code maxBonus}
+     */
+    protected double scaleToLevel(double maxBonus, int maxBonusLevel,
+            @NotNull PrimarySkillType scalingSkill) {
         if (maxBonus <= 0) {
             return 0.0;
         }
         if (maxBonusLevel <= 0) {
             return maxBonus; // Degenerate config: treat everyone as maxed rather than dividing by 0.
         }
-        final double progress = Math.min(1.0, (double) getSkillLevel() / maxBonusLevel);
+        final double progress =
+                Math.min(1.0, (double) mmoPlayer.getSkillLevel(scalingSkill) / maxBonusLevel);
         return maxBonus * progress;
     }
 
