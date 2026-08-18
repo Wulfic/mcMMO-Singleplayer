@@ -1650,11 +1650,33 @@ failure to investigate.
 
 ---
 
-## Phase 18 — the cross-branch manifest identity guard (2026-08-18, before 8.3)
+## Phase 18 — the cross-branch manifest identity guard ✅ COMPLETE (2026-08-18)
 
 Closes the second half of the carried debt filed at the end of Phase 15 and deferred by **P16-1**.
 Piece 1 (validate manifest symbols against the band's merged jar) stays deferred — see *What I am
 NOT doing*.
+
+**Shipped.** `master` `a6a2ed8e2`, back-ported to all five bands (`18271dc86` · `d164cfc34` ·
+`7ca2035f6` · `a3360774d` · `f05864262`), all pushed. `drift-audit.py`: **0 MISSING on all five**,
+with each band's propagated count up by exactly one (40→41 / 31→32 / 28→29 / 27→28 / 20→21) — the
+count is what proves the auditor *saw* the commit rather than merely printing green.
+`manifest-identity-audit.py --require-bands 5`: **exit 0, six distinct manifests.**
+
+⚠️ **A failing baseline was taken first** — the audit was run after the `master` push and named
+`a6a2ed8e2` MISSING on all five. Without that, the green run afterwards is indistinguishable from an
+auditor that cannot see.
+
+🔑 **Two files in one commit with OPPOSITE identity invariants, verified separately after the push:**
+
+| File | Invariant | Result |
+|---|---|---|
+| `scripts/manifest-identity-audit.py` | identical on every branch | `66f8c3f22` ×6 ✅ |
+| `.github/workflows/drift-audit.yml` | identical on every branch (**R-i**) | `75ec3ff9b` ×6 ✅ |
+| `scripts/mc-surface.txt` | **distinct** on every branch | 6 distinct ✅ |
+
+⚠️ **This back-port needed no Gradle at all**, unlike Phase 17's. The guard reads git blob shas, so
+`build/classes` is not an input and the `FROM-CACHE` trap that made Phase 17's per-band record counts
+load-bearing simply does not apply here. Do not copy Phase 17's recipe wholesale.
 
 ### Why this is worth a phase now that Phase 16 has landed
 
@@ -1747,7 +1769,13 @@ Phase 16 pattern:
       already sees every branch. This buys the same weak leg `drift-audit` has — weekly, from
       `master` only, reporting to a tab nobody opens (**R11**). It is a backstop, not the check.
 - [x] **18.5** Add it to the ship gate as step **9**, and mark the carried-debt row.
-- [ ] **18.6** Decide the propagation question BEFORE the master commit — see below. **BLOCKING: nothing is committed until this is answered.**
+- [x] **18.6** ✅ Owner ruled **(a) back-port**. Decided before the commit was written, which is
+      the only time it could be: `Backport-not-needed:` lives in the commit that made the
+      decision and cannot be applied retroactively.
+      🔑 **The deciding argument was inheritance, not consistency.** A branch cut from `master`
+      inherits tracked files, so 8.3's `mc/1.21.1` would have received the guard automatically
+      while the five older bands never did — a permanent split where the newest band is the only
+      one carrying it.
 
 ### The one decision that cannot be deferred
 
