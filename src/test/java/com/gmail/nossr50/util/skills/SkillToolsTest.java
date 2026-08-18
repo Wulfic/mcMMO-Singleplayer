@@ -77,9 +77,9 @@ class SkillToolsTest {
     void childSkillClassification() {
         assertTrue(SkillTools.isChildSkill(PrimarySkillType.SALVAGE));
         assertTrue(SkillTools.isChildSkill(PrimarySkillType.SMELTING));
-        // Agility owns all ten movement sub-skills but earns no XP: its level is the mean of the
-        // three domains below, which are ordinary XP-bearing skills.
-        assertTrue(SkillTools.isChildSkill(PrimarySkillType.AGILITY));
+        // The three movement skills are ordinary XP-bearing primaries. Until 2026-08-17 a fourth,
+        // derived AGILITY child skill sat on top of them holding the mean of all three; retiring it
+        // is why the child count below is 2 and not 3.
         assertFalse(SkillTools.isChildSkill(PrimarySkillType.PARKOUR));
         assertFalse(SkillTools.isChildSkill(PrimarySkillType.SWIMMING));
         assertFalse(SkillTools.isChildSkill(PrimarySkillType.FLYING));
@@ -93,16 +93,14 @@ class SkillToolsTest {
         // Hunter is standalone: it earns its own XP from kills, and its second (mastery) axis is a
         // per-mob counter that no parent skill could possibly derive.
         assertFalse(SkillTools.isChildSkill(PrimarySkillType.HUNTER));
-        // 26 skills, 3 of them children. Re-derived from the enum rather than hardcoded, so adding
-        // a skill without deciding whether it is a child cannot silently pass this.
-        assertEquals(3, skillTools.getChildSkills().size());
-        assertEquals(PrimarySkillType.values().length - 3, SkillTools.NON_CHILD_SKILLS.size());
+        // 2 of them children -- Salvage and Smelting. Re-derived from the enum rather than
+        // hardcoded, so adding a skill without deciding whether it is a child cannot silently pass.
+        assertEquals(2, skillTools.getChildSkills().size());
+        assertEquals(PrimarySkillType.values().length - 2, SkillTools.NON_CHILD_SKILLS.size());
     }
 
     @Test
     void childSkillParents() {
-        assertEquals(SkillTools.AGILITY_PARENTS,
-                skillTools.getChildSkillParents(PrimarySkillType.AGILITY));
         assertEquals(SkillTools.SALVAGE_PARENTS,
                 skillTools.getChildSkillParents(PrimarySkillType.SALVAGE));
         assertEquals(SkillTools.SMELTING_PARENTS,

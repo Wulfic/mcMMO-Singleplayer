@@ -199,33 +199,31 @@ class SkillGatingTest {
 
     @Test
     void aChildSkillGainSkipsOnlyTheDisabledParent() throws IOException {
-        // Agility earns no XP of its own, so a gain aimed at it is split three ways. A disabled
-        // Parkour must refuse its third without swallowing Swimming's and Flying's.
-        disable(PrimarySkillType.PARKOUR);
+        // A child skill earns no XP of its own, so a gain aimed at it is split across its parents.
+        // A disabled Repair must refuse its share without swallowing Fishing's.
+        // (Carried by Salvage since Agility, the three-parent case, was retired on 2026-08-17.)
+        disable(PrimarySkillType.REPAIR);
 
-        mmoPlayer.beginXpGain(PrimarySkillType.AGILITY,
-                3f * oneLevelOfXp(PrimarySkillType.SWIMMING), XPGainReason.PVE, XPGainSource.SELF);
+        mmoPlayer.beginXpGain(PrimarySkillType.SALVAGE,
+                2f * oneLevelOfXp(PrimarySkillType.FISHING), XPGainReason.PVE, XPGainSource.SELF);
 
-        assertEquals(0, mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR),
+        assertEquals(0, mmoPlayer.getSkillLevel(PrimarySkillType.REPAIR),
                 "the disabled parent takes none of the split");
-        assertTrue(mmoPlayer.getSkillLevel(PrimarySkillType.SWIMMING) >= 1,
-                "an enabled parent still takes its share");
-        assertTrue(mmoPlayer.getSkillLevel(PrimarySkillType.FLYING) >= 1,
+        assertTrue(mmoPlayer.getSkillLevel(PrimarySkillType.FISHING) >= 1,
                 "an enabled parent still takes its share");
     }
 
     @Test
     void aDisabledChildSkillPaysNoneOfItsParents() throws IOException {
-        // The other direction: switching Agility off must not quietly redirect its XP into three
-        // skills that are still on. Nothing is earned at all.
-        disable(PrimarySkillType.AGILITY);
+        // The other direction: switching the child off must not quietly redirect its XP into
+        // parents that are still on. Nothing is earned at all.
+        disable(PrimarySkillType.SALVAGE);
 
-        mmoPlayer.beginXpGain(PrimarySkillType.AGILITY,
-                3f * oneLevelOfXp(PrimarySkillType.SWIMMING), XPGainReason.PVE, XPGainSource.SELF);
+        mmoPlayer.beginXpGain(PrimarySkillType.SALVAGE,
+                2f * oneLevelOfXp(PrimarySkillType.FISHING), XPGainReason.PVE, XPGainSource.SELF);
 
-        assertEquals(0, mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR));
-        assertEquals(0, mmoPlayer.getSkillLevel(PrimarySkillType.SWIMMING));
-        assertEquals(0, mmoPlayer.getSkillLevel(PrimarySkillType.FLYING));
+        assertEquals(0, mmoPlayer.getSkillLevel(PrimarySkillType.REPAIR));
+        assertEquals(0, mmoPlayer.getSkillLevel(PrimarySkillType.FISHING));
     }
 
     @Test
@@ -248,37 +246,37 @@ class SkillGatingTest {
         assertEquals(0, mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.MINING));
     }
 
-    // --- the Agility ruling -------------------------------------------------
+    // --- the frozen-parent ruling -------------------------------------------
 
     @Test
-    void aDisabledParentStillCountsTowardAgilityAtItsFrozenLevel() throws IOException {
-        // ⚠️ THE RULING (2026-08-05), and the reason it is not merely a detail.
-        //
-        // Agility is the mean of Parkour/Swimming/Flying and the divisor stays at THREE. A disabled
-        // parent keeps contributing whatever level it had reached; it simply stops climbing. So
-        // disabling a skill can never raise Agility, and can never lower it either.
-        profile.addLevels(PrimarySkillType.PARKOUR, 90);
-        disable(PrimarySkillType.PARKOUR);
+    void aDisabledParentStillCountsTowardItsChildAtItsFrozenLevel() throws IOException {
+        // ⚠️ THE RULING (2026-08-05), and the reason it is not merely a detail. It was taken for
+        // Agility, which was retired on 2026-08-17; the rule belongs to child skills as a class and
+        // Salvage carries it now. The DIVISOR is the parent count and stays fixed: a disabled parent
+        // keeps contributing whatever level it had reached, it simply stops climbing. So disabling a
+        // skill can never raise a child's level, and can never lower it either.
+        profile.addLevels(PrimarySkillType.REPAIR, 90);
+        disable(PrimarySkillType.REPAIR);
 
-        assertEquals(30, mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY),
-                "(90 + 0 + 0) / 3 — the disabled parent keeps its frozen contribution");
+        assertEquals(45, mmoPlayer.getSkillLevel(PrimarySkillType.SALVAGE),
+                "(90 + 0) / 2 — the disabled parent keeps its frozen contribution");
         // The exploit this closes: dropping the disabled parent out of the average instead would read
-        // 90 here, handing out 60 free Agility levels and the perks gated behind them for switching a
+        // 90 here, handing out 45 free Salvage levels and the perks gated behind them for switching a
         // skill OFF.
-        assertNotEquals(90, mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY),
+        assertNotEquals(90, mmoPlayer.getSkillLevel(PrimarySkillType.SALVAGE),
                 "a disabled parent must not be excluded from the mean");
     }
 
     @Test
-    void aDisabledParentStopsRaisingAgility() throws IOException {
-        profile.addLevels(PrimarySkillType.PARKOUR, 90);
-        disable(PrimarySkillType.PARKOUR);
+    void aDisabledParentStopsRaisingItsChild() throws IOException {
+        profile.addLevels(PrimarySkillType.REPAIR, 90);
+        disable(PrimarySkillType.REPAIR);
 
-        mmoPlayer.beginXpGain(PrimarySkillType.PARKOUR, 100f * oneLevelOfXp(PrimarySkillType.PARKOUR),
+        mmoPlayer.beginXpGain(PrimarySkillType.REPAIR, 100f * oneLevelOfXp(PrimarySkillType.REPAIR),
                 XPGainReason.PVE, XPGainSource.SELF);
 
-        assertEquals(90, mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR), "frozen, not reset");
-        assertEquals(30, mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY));
+        assertEquals(90, mmoPlayer.getSkillLevel(PrimarySkillType.REPAIR), "frozen, not reset");
+        assertEquals(45, mmoPlayer.getSkillLevel(PrimarySkillType.SALVAGE));
     }
 
     // --- funnel 2: sub-skill procs -----------------------------------------
@@ -402,20 +400,23 @@ class SkillGatingTest {
     @Test
     void aDisabledChildSkillFiresNoPlaqueWhenItsParentLevels() throws IOException {
         // The one plaque route the XP gate does not close by itself. A child's level is derived from
-        // its parents and climbs without any XP of its own ever being applied, so a disabled Agility
-        // would keep plaquing off an enabled Parkour's level-ups. Mirrors
+        // its parents and climbs without any XP of its own ever being applied, so a disabled child
+        // would keep plaquing off an enabled parent's level-ups. Mirrors
         // McMMOPlayerTest#levellingAParentAlsoFiresItsChildSkillsMilestonePlaques, which pins the
-        // enabled case.
-        disable(PrimarySkillType.AGILITY);
-        profile.addLevels(PrimarySkillType.PARKOUR, 299);
-        assertEquals(99, mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY),
+        // enabled case on the same pair. (Carried by Salvage since Agility was retired 2026-08-17.)
+        //
+        // Repair 599 -> 600 takes Salvage 299 -> 300, so BOTH cross a 100-level plaque interval in
+        // one gain -- which is what makes the suppressed half a real assertion rather than a gap.
+        disable(PrimarySkillType.SALVAGE);
+        profile.addLevels(PrimarySkillType.REPAIR, 599);
+        assertEquals(299, mmoPlayer.getSkillLevel(PrimarySkillType.SALVAGE),
                 "the derived level itself is untouched — only the plaque is suppressed");
 
-        mmoPlayer.beginXpGain(PrimarySkillType.PARKOUR, oneLevelOfXp(PrimarySkillType.PARKOUR),
+        mmoPlayer.beginXpGain(PrimarySkillType.REPAIR, oneLevelOfXp(PrimarySkillType.REPAIR),
                 XPGainReason.PVE, XPGainSource.SELF);
 
-        assertEquals(300, mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR));
-        verify(player).grantMilestoneAdvancement("level/parkour/adept", true);
-        verify(player, never()).grantMilestoneAdvancement("level/agility/apprentice", true);
+        assertEquals(600, mmoPlayer.getSkillLevel(PrimarySkillType.REPAIR));
+        verify(player).grantMilestoneAdvancement("level/repair/expert", true);
+        verify(player, never()).grantMilestoneAdvancement("level/salvage/adept", true);
     }
 }

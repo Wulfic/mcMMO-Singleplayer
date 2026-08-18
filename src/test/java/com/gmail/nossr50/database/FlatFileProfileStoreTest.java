@@ -159,9 +159,15 @@ class FlatFileProfileStoreTest {
     @Test
     void agilityProgressIsNotMigratedBecauseAChildSkillHasNoSaveKey(@TempDir Path dir)
             throws Exception {
-        // The 2026-07-27 ruling, pinned so it cannot be undone by accident. Agility's level is
-        // recomputed from Parkour/Swimming/Flying on every load, so a stored AGILITY key is ignored
-        // on read and never written back.
+        // The 2026-07-27 ruling, pinned so it cannot be undone by accident, and re-checked when
+        // AGILITY was retired outright on 2026-08-17. A stored AGILITY key is an ORPHAN, not a
+        // rename: a child skill never had a level of its own to migrate, so the key is ignored on
+        // read and never written back.
+        //
+        // ⚠️ Both halves matter and only one is obvious. Load ignores it because the loader
+        // iterates SkillTools.NON_CHILD_SKILLS; SAVE drops it because saveProfile builds a FRESH
+        // YamlConfiguration rather than merging into what was read. The save direction is where
+        // the Taming UniqueDataType defect lived.
         final UUID uuid = UUID.randomUUID();
         Files.writeString(dir.resolve(uuid + ".yml"),
                 "uuid: " + uuid + "\nname: Veteran\n"
@@ -172,9 +178,9 @@ class FlatFileProfileStoreTest {
         McMMOMod.setProfileStore(store);
         final PlayerProfile profile = store.loadProfile(uuid, "Veteran", STARTING_LEVEL);
 
-        // (30 + starting + starting) / 3 — derived from the parents, not read from the file.
-        assertEquals((30 + STARTING_LEVEL + STARTING_LEVEL) / 3,
-                profile.getSkillLevel(PrimarySkillType.AGILITY));
+        // The derived-Agility assertion that stood here was deleted 2026-08-17 with the constant
+        // itself; there is no skill left to derive. The two orphan-key assertions below are the
+        // ones this test exists for and they are deliberately untouched.
 
         // Dirty the profile so save() actually rewrites — nothing marks it dirty on load any more,
         // which is itself the point: there is no migration left to perform.

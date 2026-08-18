@@ -41,27 +41,35 @@ import org.jetbrains.annotations.Nullable;
  * are unit-testable. Sound/notification feedback is emitted by the listener (the MC-typed layer), not
  * here, so this class imports no Minecraft types.
  *
- * <p><b>Agility earns no XP of its own.</b> It is a child skill: it owns all ten sub-skills and its
- * level — which is what every rank gate reads — is the mean of {@code PARKOUR}, {@code SWIMMING} and
- * {@code FLYING}. So every award in this class names its destination explicitly rather than going
- * through {@link SkillManager#applyXpGain}, which would target {@code AGILITY} and be split evenly
- * across all three parents by {@code McMMOPlayer#beginXpGain}. Travel pays the medium's own skill
- * ({@link Medium#primarySkill()}); falling and dodging pay {@link #EPISODIC_XP_SKILL}.
+ * <p><b>This manager belongs to no single skill, and that is the whole point of it.</b> It hosts
+ * every Parkour, Swimming and Flying sub-skill. Until 2026-08-17 that was expressed by keying it on
+ * the {@code AGILITY} child skill, whose level was the mean of the three; {@code AGILITY} is now
+ * retired and the manager is keyed <em>nominally</em> on {@code PARKOUR} (ruling A-8).
+ *
+ * <p>⚠️ <b>The inherited {@link SkillManager#skill} field is load-bearing for nothing here, and it
+ * must stay that way.</b> Every XP award names its destination explicitly rather than going through
+ * {@link SkillManager#applyXpGain} — travel pays the medium's own skill
+ * ({@link Medium#primarySkill()}), falling and dodging pay {@link #EPISODIC_XP_SKILL} — and all four
+ * level ramps pass an explicit skill to {@code scaleToLevel}. Reaching for the inherited
+ * {@code getSkillLevel()} or the two-argument {@code scaleToLevel} would silently scale a swimmer's
+ * or a flier's perk on their <em>Parkour</em> level. That is the same defect shape phase C found
+ * four times over, when those ramps still read the mean.
  */
 public class AgilityManager extends SkillManager {
 
     /**
      * Where the Fall domain's XP goes — Roll, Graceful Roll and Dodge.
      *
-     * <p>Agility cannot hold it (a child skill earns nothing) and splitting it three ways would mean
-     * falling off a cliff trains your swimming. Landing well is a land-movement skill, so it pays
-     * Parkour. Consequence worth knowing: a player who only ever flies gets nothing from Roll or
-     * Dodge, and since Agility is the mean of three, their perks stall at level 333.
+     * <p>Splitting it three ways would mean falling off a cliff trains your swimming. Landing well
+     * is a land-movement skill, so it pays Parkour. Consequence worth knowing: a player who only
+     * ever flies gets nothing from Roll or Dodge — but as of 2026-08-17 that no longer holds their
+     * air perks back, because those are gated on Flying itself rather than on a mean of three.
      */
     public static final PrimarySkillType EPISODIC_XP_SKILL = PrimarySkillType.PARKOUR;
 
     public AgilityManager(McMMOPlayer mmoPlayer) {
-        super(mmoPlayer, PrimarySkillType.AGILITY);
+        // NOMINAL — see the class javadoc. Nothing in this class reads the field it sets.
+        super(mmoPlayer, PrimarySkillType.PARKOUR);
         this.fallLocationMap = new BlockLocationHistory(50);
     }
 
@@ -123,8 +131,12 @@ public class AgilityManager extends SkillManager {
             final Probability probability = isGraceful
                     ? ProbabilityUtil.getGracefulRollProbability(mmoPlayer)
                     : ProbabilityUtil.getSubSkillProbability(SubSkillType.PARKOUR_ROLL, mmoPlayer);
+            // PARKOUR, not the retired AGILITY: Roll is a Parkour sub-skill and Parkour is where
+            // its XP is paid. The skill argument only selects which skill's "lucky" permission is
+            // consulted, so this was inert rather than wrong -- but naming a retired skill in a
+            // live call is how the next reader learns the wrong parent.
             final boolean rngSuccess = ProbabilityUtil.isStaticSkillRNGSuccessful(
-                    PrimarySkillType.AGILITY, mmoPlayer, probability);
+                    PrimarySkillType.PARKOUR, mmoPlayer, probability);
 
             final RollResult result = rollCheck(baseDamage, isGraceful, rngSuccess);
             if (result == null) {
@@ -434,8 +446,8 @@ public class AgilityManager extends SkillManager {
      *
      * <p>Reads the level of the skill the medium <em>pays</em> — Parkour on land, Swimming in water,
      * Flying in the air. Before 2026-08-17 this was one three-rank sub-skill on the retired
-     * {@code AGILITY} child skill, gated on the mean of all three, so a player's swimming raised the
-     * bar on their sprinting.
+     * retired {@code AGILITY} child skill, gated on the mean of all three, so a player's swimming
+     * raised the bar on their sprinting.
      */
     public boolean canFleetFoot(@NotNull Medium medium) {
         final SubSkillType subSkill = medium.fleetFootedSubSkill();

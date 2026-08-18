@@ -12,6 +12,7 @@ import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.platform.scheduler.TickScheduler;
+import com.gmail.nossr50.util.skills.SkillTools;
 import java.util.EnumMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -210,41 +211,37 @@ class ExperienceBarManagerTest {
 
     // --- child-skill bars ------------------------------------------------------------------------
 
+    // ⚠⚠ trainingAParentAlsoShowsTheAgilityBar and everyAgilityParentSurfacesTheAgilityBar
+    // were deleted here on 2026-08-17. They were the ONLY positive coverage of
+    // ExperienceBarManager#updateExperienceBar's child-propagation loop, and retiring AGILITY took
+    // away their subject: it was the one child skill whose bar was wanted, so it was the one child
+    // skill absent from `disabledBars`.
+    //
+    // 🔴 CONSEQUENCE, STATED RATHER THAN HIDDEN: that loop is now INERT in production. Both
+    // remaining child skills (Salvage, Smelting) are in `disabledBars`, so showBar returns early for
+    // every child it can reach. It is retained deliberately -- it is the correct behaviour the day a
+    // child skill's bar is wanted again -- but it is NOT currently exercised by anything, and the
+    // test below would still pass if the whole loop were deleted. Do not read that test as proof the
+    // loop works; it proves only that suppression outranks propagation.
+
     @Test
-    void trainingAParentAlsoShowsTheAgilityBar() {
-        // Agility gains no XP of its own, so it would never show a bar at all if it waited for one.
-        // Running is training it, and the player should see that.
-        manager.updateExperienceBar(PrimarySkillType.PARKOUR);
+    void aParentGainDoesNotResurrectAnySuppressedChildBar() {
+        // Derived from the child list rather than naming Salvage and Smelting, so a child skill
+        // added later is covered without anyone remembering to extend this.
+        final SkillTools skillTools = new SkillTools();
+        for (PrimarySkillType child : skillTools.getChildSkills()) {
+            for (PrimarySkillType parent : skillTools.getChildSkillParents(child)) {
+                manager.hideAll();
 
-        final FakeBar agility = bars.get(PrimarySkillType.AGILITY);
-        assertTrue(agility != null && agility.visible,
-                "training Parkour must surface the Agility bar it feeds");
-    }
+                manager.updateExperienceBar(parent);
 
-    @Test
-    void everyAgilityParentSurfacesTheAgilityBar() {
-        for (PrimarySkillType parent : new PrimarySkillType[] {
-            PrimarySkillType.PARKOUR, PrimarySkillType.SWIMMING, PrimarySkillType.FLYING}) {
-            // hideAll rather than clearing the recorded bars: the manager keeps its bar objects for
-            // cheap re-show, so the factory runs once per skill and a cleared map would never be
-            // repopulated.
-            manager.hideAll();
-
-            manager.updateExperienceBar(parent);
-
-            final FakeBar agility = bars.get(PrimarySkillType.AGILITY);
-            assertTrue(agility != null && agility.visible, parent + " must surface Agility's bar");
+                assertNull(bars.get(child),
+                        child + " is suppressed and training its parent " + parent
+                                + " must not resurrect its bar");
+                assertTrue(bars.get(parent).visible,
+                        "but " + parent + "'s own bar still shows");
+            }
         }
-    }
-
-    @Test
-    void aParentGainDoesNotResurrectTheSuppressedChildBars() {
-        // Salvage and Smelting are hidden by default and the parent-propagation must not undo that.
-        manager.updateExperienceBar(PrimarySkillType.REPAIR); // parent of BOTH Salvage and Smelting
-
-        assertNull(bars.get(PrimarySkillType.SALVAGE), "Salvage stays suppressed");
-        assertNull(bars.get(PrimarySkillType.SMELTING), "Smelting stays suppressed");
-        assertTrue(bars.get(PrimarySkillType.REPAIR).visible, "but Repair's own bar still shows");
     }
 
     private void pump(long ticks) {

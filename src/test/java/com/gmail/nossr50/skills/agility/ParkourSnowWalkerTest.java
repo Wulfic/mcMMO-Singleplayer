@@ -79,11 +79,18 @@ class ParkourSnowWalkerTest {
     }
 
     @Test
-    void aHighAgilityAverageDoesNotGrantIt() {
-        // The whole point of the Parkour parenting: someone who maxed Swimming and Flying has a high
-        // Agility level, and must still be earning Snow Walker on their own two feet.
+    void maxedSwimmingAndFlyingDoNotGrantIt() {
+        // The whole point of the Parkour parenting: someone who maxed Swimming and Flying must still
+        // be earning Snow Walker on their own two feet.
+        //
+        // ⚠️ This used to stub the retired AGILITY at 667 -- the mean of (0 + 1000 + 1000) --
+        // because that was the wrong answer available at the time. The constant is gone, so the
+        // wrong answers left are the OTHER TWO MEDIUMS' skills, and they are what is stubbed high
+        // now. Stubbing nothing at all would make this pass against a gate that is simply always
+        // false.
         when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR)).thenReturn(0);
-        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY)).thenReturn(667);
+        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.SWIMMING)).thenReturn(1000);
+        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.FLYING)).thenReturn(1000);
 
         assertFalse(new AgilityManager(mmoPlayer).canSnowWalk());
     }
