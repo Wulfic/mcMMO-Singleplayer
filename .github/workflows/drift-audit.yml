@@ -27,6 +27,20 @@
 # there and nowhere else, so the copies on the mc/** band branches are inert by
 # construction -- they are kept byte-identical (R-i) so a freshly cut band
 # inherits a correct file, not because they ever execute.
+#
+# TWO GUARDS RUN HERE, and they answer unrelated questions:
+#
+#   drift-audit.py            did a master fix REACH every band?
+#   manifest-identity-audit.py  do two bands carry a byte-identical
+#                             scripts/mc-surface.txt? That manifest is a
+#                             PER-BAND generated fact, so identical bytes on
+#                             two branches means at least one describes a
+#                             Minecraft it does not ship -- and no per-branch
+#                             check can ever see it, because on the branch it
+#                             came from every record is true.
+#
+# The second one lives here only because this job already has the full history
+# and every band ref, which is what any cross-branch check needs.
 # ---------------------------------------------------------------------------
 name: Band drift audit
 
@@ -103,10 +117,44 @@ jobs:
             --require-bands "${{ github.event.inputs.require_bands || env.BAND_COUNT }}" \
             --json drift-audit.json
 
+      # ---------------------------------------------------------------------
+      # The second, independent guard. It lives in THIS job because this is the
+      # only workflow that already checks out full history and fetches every
+      # band branch -- which is exactly what a cross-branch check needs, and
+      # what nothing else here has.
+      #
+      # ⚠️ Both identity steps run with !cancelled() rather than on success, so
+      # a red drift audit cannot HIDE a manifest collision. They answer two
+      # unrelated questions and this is the one weekly run that asks either.
+      #
+      # ⚠️ Same weak leg as the audit above: weekly, from the default branch
+      # only, reporting to a tab nobody opens (R11). A backstop, never the
+      # check. The ship gate is where this actually gets run.
+      # ---------------------------------------------------------------------
+      - name: Prove the identity guard can still detect a collision
+        if: ${{ !cancelled() }}
+        # First, and on its own synthetic repository, for the same reason the
+        # drift self-test runs first: "no collisions" is what a working guard
+        # prints and also what a completely broken one prints.
+        run: python scripts/manifest-identity-audit.py --self-test
+
+      - name: Refuse two branches carrying a byte-identical mc-surface.txt
+        if: ${{ !cancelled() }}
+        # BAND_COUNT means the same thing to both scripts -- mc/** branches,
+        # master excluded -- so the one declared number governs both floors.
+        # Without a floor this guard passes trivially on a shallow clone: zero
+        # pairs to compare reads exactly like zero collisions.
+        run: |
+          python scripts/manifest-identity-audit.py \
+            --require-bands "${{ github.event.inputs.require_bands || env.BAND_COUNT }}" \
+            --json manifest-identity.json
+
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: drift-audit
-          path: drift-audit.json
+          path: |
+            drift-audit.json
+            manifest-identity.json
           if-no-files-found: ignore
