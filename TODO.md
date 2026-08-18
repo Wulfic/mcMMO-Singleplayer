@@ -1823,6 +1823,173 @@ failure to investigate.
 
 ---
 
+## Phase 19 — `AGENTS.md` is byte-identical on every branch (owner-ruled 2026-08-18, before 8.3)
+
+Closes the open question left standing at the end of Phase 18 (*"`AGENTS.md` is 420 lines divergent
+on every band, yet it is the repo's only tracked agent-facing doc"*). It was tabled deliberately in
+Phases 17 and 18; the owner ruled it on 2026-08-18, before any code was written.
+
+### 19.0 — the defect, measured rather than described
+
+`AGENTS.md` is the **only tracked agent-facing document in the repo**. `.agent/`, `.claude/`,
+`.github/skills/`, `CLAUDE.md` and `.mcp.json` are all gitignored under **R-n**, verified here on all
+six branches — the tracked agent-facing set is exactly `[AGENTS.md]` on every one. So it is the sole
+mechanism by which a rule survives a clone or reaches a band. It has not been doing that:
+
+| branch | blob | lines | has `## Destructive Actions`? |
+|---|---|---|---|
+| `master` | `b749f88a6` | 451 | yes |
+| `mc/1.21.3` | `4620d2fc8` | 451 | yes |
+| `mc/1.21.4` | `296b40baf` | 428 | yes |
+| `mc/1.21.5` | `d936e4995` | 391 | yes |
+| `mc/1.21.10` | `44dd5318b` | 129 | 🔴 **no** |
+| `mc/1.21.8` | `44dd5318b` | 129 | 🔴 **no** |
+
+**Two bands carry a 129-line pre-rewrite stub.** Its only sections are the multi-version discipline,
+an obsolete *"Agentic Loop"*, and an `mcp-compressor` routing rule that no longer describes reality.
+Absent: **Destructive Actions (rule zero)**, Operating Reality, the workflow tiers, Attempt Budgets,
+Memory, Skills, Tools, and the Definition of Done. An agent checking out `mc/1.21.10` is handed no
+destructive-action procedure at all — not a weakened one, none.
+
+🔑 **And the other three are not merely stale, they are actively false on the branch that carries
+them.** `mc/1.21.4` and `mc/1.21.5` both still assert:
+
+- *"the weekly run is gone"* — false; **R-r** restored `.github/workflows/drift-audit.yml`, and it is
+  byte-identical on all six branches today.
+- *"`drift-audit.py` does not track a `scripts/`-only commit"* — false, and falsified **by this very
+  repo's history**: R9a added `scripts/` to `PROPAGATABLE_PREFIXES`, and Phases 17 and 18 back-ported
+  script-only commits to those exact branches through that mechanism.
+
+A doc that tells an agent a guard does not exist is worse than a missing doc: it actively argues
+against running the thing that would catch the problem.
+
+⚠️ **Nothing in any band's copy is band-specific.** Every one of the five diffs is `master` having
+newer, more correct text — checked line by line, not sampled. There is no content to lose.
+
+### 19.1 — the ruling (owner, 2026-08-18) — **P19-1**
+
+> **`AGENTS.md` is byte-identical on `master` and every `mc/**` branch**, the same treatment
+> `.github/workflows/drift-audit.yml` already gets under **R-i**. Band-specific notes do not live in
+> it; they live in the band's commit message or in `TODO.md`.
+
+⚠️ **Phase-scoped label on purpose.** The `R-` series is exhausted and already double-booked (see the
+note at §15) — `R-a … R-u` are all taken. This follows `P15-1` / `P16-1`.
+
+**Why identity is the right invariant *here* and the wrong one for `FUNDING.yml`** — this is the
+distinction the guard is built on, and it was nearly got wrong:
+
+- **`.github/FUNDING.yml` is read by GitHub from the *default branch alone*.** A band's copy is
+  inert. That is precisely why `3d5e2b681` carries an explicit `Backport-not-needed:` trailer, and
+  the five bands still holding upstream's `nossr50` blob `78f498c09` is a **stated skip, correctly
+  reasoned — not drift.** A guard demanding identity here would fire on a ruled opt-out, and a guard
+  that cries wolf on a decision somebody already made is how the real signal gets ignored.
+- **`AGENTS.md` is read from the checkout, by the agent working on that branch.** The exact inverse:
+  the band's copy is the *only* one that matters there. `master`'s correctness buys the band nothing.
+
+That asymmetry — *who reads which copy* — is the whole test for whether a path belongs in the set,
+and it is what the exclusion list must state.
+
+### 19.2 — what changes
+
+1. **`scripts/branch-file-identity-audit.py`** (new). The inverse of
+   `manifest-identity-audit.py`: a declared set of paths **must** be byte-identical across `master`
+   and every `mc/**` branch. Ship gate step **10**, plus a step in `.github/workflows/drift-audit.yml`.
+2. **`AGENTS.md` on `master`** gains the P19-1 rule (in *Multi-version discipline*) and a tooling
+   table row for the new script.
+3. **The five bands take `master`'s `AGENTS.md` verbatim**, plus the new script, via the
+   path-restricted back-port recipe from Phase 18 (`git checkout <sha> -- <paths>`, `Backport-of:`
+   trailer, blob identity asserted before each commit).
+
+### 19.3 — the path set, derived from measurement and not from assumption
+
+Measured across all six branches: **1271 paths, 1210 already byte-identical, 58 differing, 3 absent
+somewhere.** The set below is not "everything that happens to match today" — incidental identity in
+`legacy/` or `src/main/resources/` is not an invariant and must not be frozen into one. It is the
+**governance and tooling layer**, whose entire purpose is to be the same on every branch:
+
+| in the set | why |
+|---|---|
+| `AGENTS.md` | P19-1. Read from the checkout; the only tracked agent-facing doc |
+| `.gitignore` | protects `.agent/` per **R-n**; a hole here already cost a near-miss (closed 2026-08-13, `b432715f0` ×6) |
+| `.github/workflows/*.yml` | **R-i**. A divergent `release.yml` changes how a band *ships* (R9a) |
+| `scripts/**` except `mc-surface.txt` | R9a: tooling is exactly what a band needs to run its own gates |
+
+| excluded | why — and this list is load-bearing |
+|---|---|
+| `scripts/mc-surface.txt` | **the inverse invariant.** Owned by `manifest-identity-audit.py`, which requires it to be *distinct*. Both scripts naming it would make the repo unshippable |
+| `.github/FUNDING.yml` | read from the default branch only; band copies inert. Ruled skip (`3d5e2b681`) |
+| `TODO.md`, `gradle.properties`, `src/**`, `README.md`, `wiki/**` | legitimately per-band |
+
+🔑 **Globs are expanded against the union of all six branches' trees, never against a hardcoded
+list.** A hardcoded list is how a *newly added* script reaches `master` and is silently never
+required anywhere else — the R8 shape, one level up. Union expansion means a path present on one
+branch and absent on another is a **violation**, so a new script is covered the moment it exists.
+
+### 19.4 — the guard's failure modes, stated before it is written
+
+The inverted invariant has its own vacuity traps, and they are **not** the ones Phase 18 hit. Each
+gets a self-test case that must FIRE, and a detector mutation proving the case depends on the
+detector:
+
+1. 🔴 **A path absent on *every* branch passes a naive "all blobs equal" check** — `None == None`.
+   This is the exact inversion of Phase 18's 12th sighting: there, absent entries must not *group*;
+   here, absent entries must not *match*. Absent anywhere = violation, fail closed.
+2. 🔴 **An empty path set is a vacuous pass.** A typo'd or over-narrow spec matches nothing and the
+   guard reports success having compared zero files. **Exit 2, never 0** — the direct analogue of
+   Phase 18's "fewer than two branches".
+3. Fewer than two branches → exit 2. Zero pairs compared is not a pass.
+4. `--require-bands N` floor, same semantics as `drift-audit.py` (master not counted).
+
+### 19.5 — verification, in this order
+
+1. `--self-test` green, and **mutation-proven**: stub each detector on a *copy* and assert the
+   self-test goes red **and names the right case**. Harness in the scratchpad, not the repo.
+2. 🔑 **The failing baseline, before any fix.** Run the guard on the real repo — it **must** exit 1
+   and name `AGENTS.md` across five bands. A guard first seen passing is not known to work.
+3. Land on `master`, push, re-run: still exit 1 (the bands are untouched).
+4. Back-port, push, re-run: **exit 0**.
+5. `drift-audit.py --self-test && --master master --require-bands 5` → 0 MISSING.
+6. `manifest-identity-audit.py --require-bands 5` → exit 0, six distinct manifests **unchanged**.
+   ⚠️ This phase must not perturb it; assert it, do not assume it.
+
+⚠️ **No Gradle anywhere in this phase.** Like Phase 18 and unlike Phase 17, the guard reads git blob
+shas — `build/classes` is not an input. Do not copy Phase 17's recipe.
+
+### 19.6 — blast radius and rollback
+
+| step | touches | lost if wrong | comes back from |
+|---|---|---|---|
+| new script on `master` | 1 new file | nothing | it is additive; `git rm` |
+| `AGENTS.md` edit on `master` | 1 file | the edit | `b749f88a6` |
+| back-port ×5 | `AGENTS.md` + 1 new file per band | each band's current `AGENTS.md` | `mc/1.21.10` `18271dc86` · `mc/1.21.8` `d164cfc34` · `mc/1.21.5` `7ca2035f6` · `mc/1.21.4` `a3360774d` · `mc/1.21.3` `f05864262` |
+
+The back-port overwrites a tracked file on five branches. It is `git checkout <sha> -- <paths>`,
+**path-restricted, never `-- .`**, on a clean tree, and every band's current content has been read in
+full (§19.0) before being replaced. Undo per band: `git checkout <sha above> -- AGENTS.md`.
+
+⚠️ **`git checkout --` destroys uncommitted work.** `git status --short` on each band **first**;
+the recipe refuses to proceed on a dirty tree.
+
+### 19.7 — what I am NOT doing
+
+- **Not rewriting `AGENTS.md`'s content.** `master`'s text is taken as correct and propagated
+  verbatim. This phase is about identity, not prose. Anything wrong in it stays wrong on six
+  branches instead of one — a separate, more visible problem.
+- **Not adding `.github/FUNDING.yml` to the set.** §19.1.
+- **Not adding `build.gradle` / `gradlew` / `LICENSE`.** Identical today, but that is incidental — a
+  band cut on an older Loom may legitimately need a different `build.gradle`. Freezing an accident
+  into an invariant creates a false failure later.
+- **Not touching `.agent/`, `.claude/` or `.github/skills/`.** Untracked by R-n; unreachable by any
+  committed guard, which is exactly why the rule has to live in `AGENTS.md`.
+- **Not cutting `mc/1.21.1`** (8.3). Next.
+
+### 19.8 — attempt budget
+
+3 per failure class, per the standing rule. On exhaustion: stop, write all three attempts to
+`gotchas.md`, report. Specifically **do not** widen the path set to make a failure disappear.
+
+---
+
 ## Phase 9 — the `26.x` band
 
 **Its own mini-project (R-e). Do not absorb it into a sweep.** Gated behind Phase 8 delivering at
