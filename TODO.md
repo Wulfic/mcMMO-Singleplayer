@@ -1334,6 +1334,114 @@ or configuring the issue tracker (`has_issues` is already `true` — verified); 
 
 ---
 
+## Phase 15 — A-7: the ONE combined back-port (Taming + Agility retirement + Skills tab + fixes)
+
+**Owner-started 2026-08-18.** This is the pass A-7 deferred: the Taming track and the Agility
+retirement were held back deliberately so the bands take them together, once, with the rename
+absorbed. `drift-audit.py --master master` reports the **same 14 commits missing on all five
+bands** — no band has diverged on this backlog, so one recipe serves all five.
+
+⚠️ **This is the exact accumulation that made 11 of the last 12 forgotten fixes.** Twelve of the
+fourteen are version-agnostic logic; nothing on a band would ever error to report them missing.
+
+### The 14, oldest → newest (this IS the cherry-pick order)
+
+| # | Commit | What | Conflict risk |
+|---|---|---|---|
+| 1 | `e0d7e054e` | fix(guards): a javadoc `{@link}` counted as a call | low — guard test only |
+| 2 | `b070534a4` | feat(taming): pet combat mode, the stance + gesture | **high** — new listener, `McMMOMod` registration |
+| 3 | `920f2d140` | feat(taming): aggressive targeting + the ranged reach fix | **high** — `FOLLOW_RANGE` |
+| 4 | `381c10b2a` | chore(surface): regenerate `mc-surface.txt` | 🔴 **NEVER cherry-picked — regenerated** |
+| 5 | `98f6a0bd4` | feat(movement): A — the six per-parent sub-skills | medium |
+| 6 | `b7bfb4ba5` | feat(movement): B — Second Wind duration follows the medium | medium |
+| 7 | `6d2a40d84` | feat(movement): C — config/locale move, four ramps stop reading the mean | **high** — YAML |
+| 8 | `38644b380` | feat(movement): D — the three parent screens | medium |
+| 9 | `93e1db507` | feat(movement): E — `AGILITY` the constant is retired | **high** |
+| 10 | `03cacda3d` | feat(movement): F1 — the live settings move to a `Movement` root | **high** — YAML |
+| 11 | `97b0e972f` | refactor(movement): **F — the package + manager rename** | 🔴 **highest** |
+| 12 | `ac5251e41` | feat(modmenu): the Skills tab | medium |
+| 13 | `461f33bab` | fix(config): the Acrobatics rename warning named a retired skill | low |
+| 14 | `881206dae` | docs(config): shipped YAML comments stop naming a retired skill | low |
+
+⚠️ **A-7's mandatory mitigation is satisfied by this order, not despite it.** F (`97b0e972f`) is the
+rename, and chronological order already places it **after every behaviour commit** — 2, 3 and 5–10
+all land in pre-rename spelling and F renames them in one step, on every band. **Do not reorder to
+"get the rename over with".** That inverts the mitigation and makes all nine behaviour picks
+conflict on names instead of one pick conflicting on paths.
+
+### 🔴 The blocker A-7 could not have known about — the stale-version gate
+
+Phase 13 (`a0f4bab9c`) shipped **"Refuse a stale mod_version"**, and it is **live on all five
+bands**. Every branch reads `mod_version=1.0.0-SNAPSHOT`; every branch has already published
+`mc<VER>-v1.0.0` **at its current HEAD**. This back-port moves each band's HEAD, so each band's
+release run would refuse — correctly, loudly, and after doing nothing.
+
+**RULED (P15-1, owner, 2026-08-18): `1.1.0` on all six branches, master first.**
+⚠️ **Phase-scoped label on purpose — the `R-` series is double-booked.** `R-s/R-t/R-u` name a
+2026-08-13 trio in the RULINGS carry-forward *and* R-s/R-t name the 2026-08-18 version rulings.
+Do not mint another `R-` letter until that collision is untangled. `mod_version` is
+**not** per-band (R-p) — one number, six tag prefixes — so bumping the bands alone would break that
+invariant and make `1.1.0` mean different content depending on the branch.
+
+⚠️ **Accepted cost, stated before doing it:** master's code is unchanged by this phase, so master's
+`v1.1.0` republishes a byte-identical jar under a new number. That is the price of R-p. What `1.1.0`
+means fork-wide is *"pet combat mode, the Skills tab, and Agility retired — on every band"*, and on
+master that was already true at `1.0.0`.
+
+**Master goes first** — the same order Phase 13 used, for the same reason: the bands' gate behaviour
+is then a *verified* precedent rather than a prediction.
+
+### Per-band recipe — run in full, per band, in this order
+
+- [ ] **15.0 — master bumps to `1.1.0-SNAPSHOT` and releases.** Watch the run. `mc1.21.11-v1.1.0`
+      published, `mc1.21.11-v1.0.0` reaped, **zero orphan drafts** (the [[release-draft-orphans]]
+      check — a same-tag draft is the failure this whole gate exists to prevent).
+- [ ] **15.1 — `mc/1.21.10`** · 15.2 — `mc/1.21.8` · 15.3 — `mc/1.21.5` · 15.4 — `mc/1.21.4` ·
+      15.5 — `mc/1.21.3`
+
+For each band:
+
+1. **Cherry-pick 1–3 and 5–14 in the table's order**, `-x` off, each carrying its own
+   `Backport-of: <sha>` trailer. **Skip #4** — see step 3.
+2. **Resolve conflicts against the BAND's own files, never master's.** The Phase 14 precedent is the
+   rule: when a band's text is correct *for that band*, the band's text wins and the commit body
+   says so under a `BAND-SPECIFIC RESOLUTION` heading. ⚠️ `gradle.properties` — take **only**
+   `mod_version`; `minecraft_version` and `supported_minecraft_versions` are per-band and are never
+   copied. ⚠️ `TODO.md` is **not** back-ported (diverged wholesale; no band commit has ever carried
+   it).
+3. **Regenerate `mc-surface.txt` on the band — do not pick `381c10b2a`.** The generator back-ports;
+   the generated fact does not. `./gradlew classes testClasses` **first** (a stale `build/classes`
+   yields a confidently wrong answer), then `scripts/extract-mc-surface.py`, then commit it with the
+   `Backport-of: 381c10b2a` trailer so the auditor clears it.
+4. **Band-specific API breaks to expect** (from the Taming work, already recorded for 8.3):
+   `EntityAttributes.FOLLOW_RANGE` is `GENERIC_FOLLOW_RANGE` below the rename boundary, and
+   `EntityNavigation#setMaxFollowRange` does not exist on the oldest bands. **Verify with
+   `javap-mc.sh` per band — never recall a signature.**
+5. **Bump `mod_version` to `1.1.0-SNAPSHOT` as the LAST commit**, its own commit, carrying
+   `Backport-not-needed: the version bump is authored per branch, not propagated`.
+6. **The ship gate, in full, on the band** — see "The ship gate" below. Non-negotiable:
+   `./gradlew build` green · `mixin-allow-audit --check` · `extract-mc-surface --check` ·
+   `config-id-audit --self-test` · `BandDocsMatchRealityTest`.
+7. **Push, then watch the release run.** `mc<VER>-v1.1.0` published, `v1.0.0` reaped, **no orphan
+   draft**. A refusal here means step 5 was skipped.
+8. **`drift-audit.py --self-test && --master master`** — that band must drop to **0 MISSING**.
+   ⚠️ It audits `origin/master`; push before auditing.
+
+### Attempt budget
+
+**3 fixes per band, per distinct failure.** A band that will not go green in three is *stopped and
+reported*, not widened — the remaining bands still run. A conflict resolved by deleting a test or
+loosening an assertion is the failure this phase exists to prevent, not a resolution.
+
+### What I am NOT doing
+
+Not back-porting `TODO.md`. Not back-porting `.github/` beyond what already sits on each band
+(R-g/R-r). Not cherry-picking `mc-surface.txt`. Not touching `minecraft_version` or
+`supported_minecraft_versions` on any branch. Not cutting `mc/1.21.1` (that is 8.3). Not doing the
+live Taming play-test — that is the owner's, and it is still owed.
+
+---
+
 ## Phase 9 — the `26.x` band
 
 **Its own mini-project (R-e). Do not absorb it into a sweep.** Gated behind Phase 8 delivering at
