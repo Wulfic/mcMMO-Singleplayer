@@ -111,9 +111,9 @@ Releases are published per band and tagged `mc<minecraft version>-v<mod version>
 
 ## Contributing
 
-Issues and PRs welcome. Two things that make a PR much easier to take:
+[Issues](https://github.com/Wulfic/mcMMO-Singleplayer/issues) and PRs welcome — **on this repo, not upstream mcMMO**, which maintains the Bukkit/Spigot plugin and cannot act on a single-player Fabric report. Two things that make a PR much easier to take:
 
 1. **Tests.** New mechanics need unit coverage; bug fixes need a test that fails without the fix.
 2. **Say what you observed, not what you expected.** "Seems fine" isn't a verification — a `/mcstats` delta, a message on screen, or a block that changed is.
 
-**Balance feedback on the six new skills is especially wanted right now.** Their XP rates and reference speeds are starting estimates, not measured numbers — see [`PLAYTEST_G.md`](https://github.com/Wulfic/mcMMO-Singleplayer/blob/master/PLAYTEST_G.md).
+**Balance feedback on the six new skills is especially wanted right now.** Their XP rates and reference speeds are starting estimates, not measured numbers — see [`plans/PLAYTEST_G.md`](https://github.com/Wulfic/mcMMO-Singleplayer/blob/master/plans/PLAYTEST_G.md).
