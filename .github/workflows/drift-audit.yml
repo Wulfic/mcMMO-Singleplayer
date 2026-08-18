@@ -28,7 +28,7 @@
 # construction -- they are kept byte-identical (R-i) so a freshly cut band
 # inherits a correct file, not because they ever execute.
 #
-# TWO GUARDS RUN HERE, and they answer unrelated questions:
+# THREE GUARDS RUN HERE, and they answer unrelated questions:
 #
 #   drift-audit.py            did a master fix REACH every band?
 #   manifest-identity-audit.py  do two bands carry a byte-identical
@@ -38,8 +38,21 @@
 #                             Minecraft it does not ship -- and no per-branch
 #                             check can ever see it, because on the branch it
 #                             came from every record is true.
+#   branch-file-identity-audit.py  the INVERSE (P19-1): does the shared
+#                             governance/tooling layer -- AGENTS.md,
+#                             .gitignore, .github/workflows/*.yml, scripts/**
+#                             -- differ between branches? Those are ONE
+#                             artifact every branch shares, not a per-band
+#                             fact. AGENTS.md is the only tracked agent-facing
+#                             doc in the repo, and two bands were found
+#                             carrying a stub with no Destructive Actions
+#                             section at all.
 #
-# The second one lives here only because this job already has the full history
+# ⚠️⚠️ The last two hold OPPOSITE invariants over the same directory, and
+# mc-surface.txt must appear in exactly one of them. If it ever lands in both,
+# no state satisfies both guards and nothing can ship.
+#
+# The last two live here only because this job already has the full history
 # and every band ref, which is what any cross-branch check needs.
 # ---------------------------------------------------------------------------
 name: Band drift audit
@@ -149,6 +162,28 @@ jobs:
             --require-bands "${{ github.event.inputs.require_bands || env.BAND_COUNT }}" \
             --json manifest-identity.json
 
+      - name: Prove the shared-layer guard can still detect drift
+        if: ${{ !cancelled() }}
+        # Same ordering rule as the two guards above: "no drift" is what a
+        # working guard prints and also what a completely broken one prints,
+        # and this is the only thing that tells them apart.
+        run: python scripts/branch-file-identity-audit.py --self-test
+
+      - name: Refuse a shared file that differs between branches
+        if: ${{ !cancelled() }}
+        # BAND_COUNT means the same thing to all three scripts -- mc/**
+        # branches, master excluded -- so the one declared number governs
+        # every floor.
+        #
+        # ⚠️ This guard has a SECOND way to pass trivially that the others do
+        # not: if its include globs match nothing it compares zero files and
+        # reports success. It exits 2 on an empty path set for exactly that
+        # reason, so treat a 2 here as a red result, never as a skip.
+        run: |
+          python scripts/branch-file-identity-audit.py \
+            --require-bands "${{ github.event.inputs.require_bands || env.BAND_COUNT }}" \
+            --json branch-file-identity.json
+
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@v4
@@ -157,4 +192,5 @@ jobs:
           path: |
             drift-audit.json
             manifest-identity.json
+            branch-file-identity.json
           if-no-files-found: ignore
