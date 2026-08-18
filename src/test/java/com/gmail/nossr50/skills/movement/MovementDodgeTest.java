@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.agility;
+package com.gmail.nossr50.skills.movement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -16,7 +16,7 @@ import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
-import com.gmail.nossr50.datatypes.skills.subskills.agility.DodgeResult;
+import com.gmail.nossr50.datatypes.skills.subskills.movement.DodgeResult;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.Misc;
@@ -28,18 +28,18 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Covers the deterministic half of the Agility Dodge port (K1) — {@link
- * AgilityManager#dodgeCheck}, with the RNG outcome and the attacker's XP-eligibility injected so the
+ * MovementManager#dodgeCheck}, with the RNG outcome and the attacker's XP-eligibility injected so the
  * damage-reduction, XP, fatal, and floor branches are all provable off a mocked {@link PlatformPlayer}.
- * The RNG roll and the per-mob anti-farm cap live one layer up ({@link AgilityManager#processDodge}
+ * The RNG roll and the per-mob anti-farm cap live one layer up ({@link MovementManager#processDodge}
  * and the listener) and are verified in-game.
  */
-class AgilityDodgeTest {
+class MovementDodgeTest {
 
     private ExperienceConfig experienceConfig;
     private AdvancedConfig advancedConfig;
     private PlatformPlayer player;
     private McMMOPlayer mmoPlayer;
-    private AgilityManager manager;
+    private MovementManager manager;
 
     @BeforeEach
     void setUp(@TempDir Path dataFolder) {
@@ -68,7 +68,7 @@ class AgilityDodgeTest {
         // PARKOUR, not AGILITY: Dodge was re-parented on 2026-08-10, so the level its rank gate and
         // its odds both read is Parkour's own rather than the mean of the three movement skills.
         lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR)).thenReturn(1000);
-        manager = new AgilityManager(mmoPlayer);
+        manager = new MovementManager(mmoPlayer);
     }
 
     /** Seconds-granularity "now", the unit {@code McMMOPlayer#actualizeRespawnATS} stores. */
@@ -143,7 +143,7 @@ class AgilityDodgeTest {
     }
 
     /**
-     * The wiring case: the gate above is worthless unless {@link AgilityManager#processDodge}
+     * The wiring case: the gate above is worthless unless {@link MovementManager#processDodge}
      * actually consults it. Runs the real entry point with the skill RNG pinned to certainty, so
      * dropping the {@code && isRespawnGracePeriodOver()} term turns this red.
      */

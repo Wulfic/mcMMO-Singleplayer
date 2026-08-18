@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.agility;
+package com.gmail.nossr50.skills.movement;
 
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.datatypes.BlockLocationHistory;
@@ -7,8 +7,8 @@ import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
-import com.gmail.nossr50.datatypes.skills.subskills.agility.DodgeResult;
-import com.gmail.nossr50.datatypes.skills.subskills.agility.RollResult;
+import com.gmail.nossr50.datatypes.skills.subskills.movement.DodgeResult;
+import com.gmail.nossr50.datatypes.skills.subskills.movement.RollResult;
 import com.gmail.nossr50.datatypes.treasure.ExcavationTreasure;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
@@ -55,7 +55,7 @@ import org.jetbrains.annotations.Nullable;
  * or a flier's perk on their <em>Parkour</em> level. That is the same defect shape phase C found
  * four times over, when those ramps still read the mean.
  */
-public class AgilityManager extends SkillManager {
+public class MovementManager extends SkillManager {
 
     /**
      * Where the Fall domain's XP goes — Roll, Graceful Roll and Dodge.
@@ -67,7 +67,7 @@ public class AgilityManager extends SkillManager {
      */
     public static final PrimarySkillType EPISODIC_XP_SKILL = PrimarySkillType.PARKOUR;
 
-    public AgilityManager(McMMOPlayer mmoPlayer) {
+    public MovementManager(McMMOPlayer mmoPlayer) {
         // NOMINAL — see the class javadoc. Nothing in this class reads the field it sets.
         super(mmoPlayer, PrimarySkillType.PARKOUR);
         this.fallLocationMap = new BlockLocationHistory(50);
@@ -181,8 +181,8 @@ public class AgilityManager extends SkillManager {
      */
     public @Nullable RollResult rollCheck(double baseDamage, boolean isGraceful, boolean rngSuccess) {
         final double threshold = McMMOMod.getAdvancedConfig().getRollDamageThreshold() * 2;
-        final double modifiedDamage = Agility.calculateModifiedRollDamage(baseDamage, threshold);
-        final boolean isExploiting = isPlayerExploitingAgility();
+        final double modifiedDamage = Movement.calculateModifiedRollDamage(baseDamage, threshold);
+        final boolean isExploiting = isPlayerExploitingMovement();
 
         // They rolled: the reduced hit is survivable and the roll proc'd.
         if (!isFatal(modifiedDamage) && rngSuccess) {
@@ -318,7 +318,7 @@ public class AgilityManager extends SkillManager {
      */
     public @Nullable DodgeResult dodgeCheck(double baseDamage, boolean rngSuccess,
             boolean attackerXpEligible) {
-        final double modifiedDamage = Agility.calculateModifiedDodgeDamage(baseDamage,
+        final double modifiedDamage = Movement.calculateModifiedDodgeDamage(baseDamage,
                 McMMOMod.getAdvancedConfig().getDodgeDamageModifier());
 
         if (isFatal(modifiedDamage) || !rngSuccess) {
@@ -358,7 +358,7 @@ public class AgilityManager extends SkillManager {
      * if they hold an Ender Pearl, are riding an entity, or are landing on a block they already fell
      * onto recently.
      */
-    private boolean isPlayerExploitingAgility() {
+    private boolean isPlayerExploitingMovement() {
         if (!McMMOMod.getExperienceConfig().isMovementExploitingPrevented()) {
             return false;
         }
@@ -775,5 +775,5 @@ public class AgilityManager extends SkillManager {
     // earned. The 2026-08-10 re-parenting moved each sub-skill's GATE onto its real parent and left
     // the SCALING behind, and nothing failed: the gate tests all passed, because a gate and a ramp
     // read the level in different places. Fixed 2026-08-17; pinned by
-    // AgilityMovementTest#everyScaledPassiveRampsOnItsOwnParentNotTheAverage.
+    // MovementTravelTest#everyScaledPassiveRampsOnItsOwnParentNotTheAverage.
 }

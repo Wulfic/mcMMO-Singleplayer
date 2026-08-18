@@ -488,6 +488,6 @@ class EntityDamageListenerUnarmoredTest {
 
         assertEquals(6F, EntityDamageListener.onModifyAppliedDamage(player, fall, 6F), EPSILON);
         verify(unarmored, never()).onDamageTaken(anyDouble());
-        verify(mmoPlayer).getAgilityManager();
+        verify(mmoPlayer).getMovementManager();
     }
 }

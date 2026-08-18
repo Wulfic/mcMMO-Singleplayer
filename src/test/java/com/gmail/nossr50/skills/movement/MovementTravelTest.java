@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.agility;
+package com.gmail.nossr50.skills.movement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -42,7 +42,7 @@ import org.junit.jupiter.api.io.TempDir;
  * point of Fleet Footed and Second Wind carrying one rank per medium is that a mid-level player has
  * some and not others, and a mocked gate would never catch getting that mapping backwards.
  */
-class AgilityMovementTest {
+class MovementTravelTest {
 
     private static final double EPSILON = 1.0E-9;
 
@@ -111,7 +111,7 @@ class AgilityMovementTest {
      * {@link #reParentedSubSkillsFollowTheirOwnParentNotTheAverage()}, where the three parents
      * deliberately disagree.
      */
-    private AgilityManager managerAtLevel(int level) {
+    private MovementManager managerAtLevel(int level) {
         return managerAtLevels(level, level, level);
     }
 
@@ -124,11 +124,11 @@ class AgilityMovementTest {
      * the three parents must be set to <b>disagree</b>, or a test cannot tell which of them a gate
      * or a ramp actually read. A fixture with all three equal proves nothing about routing.
      */
-    private AgilityManager managerAtLevels(int parkour, int swimming, int flying) {
+    private MovementManager managerAtLevels(int parkour, int swimming, int flying) {
         lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR)).thenReturn(parkour);
         lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.SWIMMING)).thenReturn(swimming);
         lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.FLYING)).thenReturn(flying);
-        final AgilityManager manager = new AgilityManager(mmoPlayer);
+        final MovementManager manager = new MovementManager(mmoPlayer);
         manager.setMovementXpSettings(defaultSettings());
         return manager;
     }
@@ -153,7 +153,7 @@ class AgilityMovementTest {
 
     @Test
     void aSingleTickAccumulatesRatherThanPayingFractionalXp() {
-        final AgilityManager manager = managerAtLevel(1);
+        final MovementManager manager = managerAtLevel(1);
         // One tick at the land reference speed is worth 30/20 = 1.5 XP under this fixture's pinned
         // baseline, so the first tick pays 1 and banks 0.5 — it must never hand a fraction to the XP
         // pipeline. Land pays Parkour, never Agility: Agility is a child skill, and a gain addressed
@@ -165,7 +165,7 @@ class AgilityMovementTest {
 
     @Test
     void theBankedRemainderIsNotLost() {
-        final AgilityManager manager = managerAtLevel(1);
+        final MovementManager manager = managerAtLevel(1);
         // 1.5 XP per tick: pays 1, banks .5 -> pays 2 (1.5 + .5), banks 0 -> pays 1, banks .5 ...
         // Over four ticks that is 6 XP total, which is exactly 4 x 1.5 with nothing truncated away.
         float total = 0;
@@ -177,7 +177,7 @@ class AgilityMovementTest {
 
     @Test
     void aTinyMovementPaysNothingUntilItAddsUp() {
-        final AgilityManager manager = managerAtLevel(1);
+        final MovementManager manager = managerAtLevel(1);
         // A hundredth of a tick's travel is worth 0.015 XP — nothing should reach the pipeline yet.
         assertEquals(0F, manager.onMovementTick(Medium.LAND, perTick(Medium.LAND) / 100), EPSILON);
         verify(mmoPlayer, never()).beginXpGain(any(), anyFloat(), any(), any());
@@ -185,7 +185,7 @@ class AgilityMovementTest {
 
     @Test
     void standingStillNeverPays() {
-        final AgilityManager manager = managerAtLevel(1000);
+        final MovementManager manager = managerAtLevel(1000);
         for (Medium medium : Medium.values()) {
             assertEquals(0F, manager.onMovementTick(medium, 0.0), EPSILON);
         }
@@ -196,8 +196,8 @@ class AgilityMovementTest {
     void aRocketBoostedTickPaysNoMoreThanACruisingOne() {
         // The clamp, asserted through the manager rather than the settings object, because this is
         // the path that actually runs in game.
-        final AgilityManager cruising = managerAtLevel(1000);
-        final AgilityManager boosted = managerAtLevel(1000);
+        final MovementManager cruising = managerAtLevel(1000);
+        final MovementManager boosted = managerAtLevel(1000);
 
         assertEquals(cruising.onMovementTick(Medium.AIR, perTick(Medium.AIR)),
                 boosted.onMovementTick(Medium.AIR, perTick(Medium.AIR) * 20), EPSILON);
@@ -210,7 +210,7 @@ class AgilityMovementTest {
         // Flattened on 2026-08-17 with the Agility retirement: skillranks.yml now carries
         // FleetFooted Rank_1: 1 under Parkour, Swimming AND Flying. It used to be one 3-rank ladder
         // at 1/200/400 read against the mean of the three, which is why the numbers here changed.
-        final AgilityManager early = managerAtLevel(1);
+        final MovementManager early = managerAtLevel(1);
         for (Medium medium : Medium.values()) {
             assertTrue(early.canFleetFoot(medium),
                     () -> medium + " unlocks at 1 in its own skill, and this player has 1 in all of "
@@ -219,7 +219,7 @@ class AgilityMovementTest {
 
         // Level 0 is the discriminating case: without it this test would pass against a gate that
         // was simply always true.
-        final AgilityManager none = managerAtLevels(0, 0, 0);
+        final MovementManager none = managerAtLevels(0, 0, 0);
         for (Medium medium : Medium.values()) {
             assertFalse(none.canFleetFoot(medium), () -> medium + " is locked below level 1");
         }
@@ -230,7 +230,7 @@ class AgilityMovementTest {
         // A pure runner: Parkour maxed, never swum, never flown. Under the retired mean-of-three gate
         // this player's Agility 333 would have paid a water bonus to someone who has never been in
         // water.
-        final AgilityManager runner = managerAtLevels(1000, 0, 0);
+        final MovementManager runner = managerAtLevels(1000, 0, 0);
         assertEquals(0.0, runner.getFleetFootedBonus(Medium.WATER), EPSILON);
         assertEquals(0.0, runner.getFleetFootedBonus(Medium.AIR), EPSILON);
         assertTrue(runner.getFleetFootedBonus(Medium.LAND) > 0.0,
@@ -289,7 +289,7 @@ class AgilityMovementTest {
     void leadLungsAccumulatesFractionalAirIntoWholeTicks() {
         // Vanilla spends one air per tick and air is an integer, so a 0.75/tick top-up has to bank:
         // flooring every tick would return 0 forever and the sub-skill would do nothing at all.
-        final AgilityManager manager = managerAtLevel(1000);
+        final MovementManager manager = managerAtLevel(1000);
         assertEquals(0.75, manager.getLeadLungsAirTopUpPerTick(), EPSILON);
 
         assertEquals(0, manager.consumeLeadLungsAirTopUp(), "0.75 banked");
@@ -331,7 +331,7 @@ class AgilityMovementTest {
 
     @Test
     void solarWingsRepairsFasterOnTheGround() {
-        final AgilityManager manager = managerAtLevel(1000);
+        final MovementManager manager = managerAtLevel(1000);
         assertEquals(1, manager.getSolarWingsRepairAmount(false));
         assertEquals(2, manager.getSolarWingsRepairAmount(true));
     }
@@ -342,12 +342,12 @@ class AgilityMovementTest {
     void everySecondWindBodyUnlocksAt250OfItsOwnMediumsSkill() {
         // Flattened on 2026-08-17: SecondWind Rank_1: 250 under Parkour, Swimming AND Flying. It used
         // to be one 3-rank ladder at 250/500/750 read against the mean of the three.
-        final AgilityManager justUnder = managerAtLevel(249);
+        final MovementManager justUnder = managerAtLevel(249);
         for (Medium medium : Medium.values()) {
             assertFalse(justUnder.canSecondWind(medium), () -> medium + " is locked at 249");
         }
 
-        final AgilityManager atThreshold = managerAtLevel(250);
+        final MovementManager atThreshold = managerAtLevel(250);
         for (Medium medium : Medium.values()) {
             assertTrue(atThreshold.canSecondWind(medium),
                     () -> medium + " unlocks at exactly 250 of its own skill — under the retired "
@@ -364,7 +364,7 @@ class AgilityMovementTest {
         // A runner at Parkour 1000 / Swimming 0 / Flying 0: Dart is live, the other two bodies are
         // not. Asserting a live one alongside the null ones is what stops this passing against a
         // computeSecondWind that returns null unconditionally.
-        final AgilityManager runner = managerAtLevels(1000, 0, 0);
+        final MovementManager runner = managerAtLevels(1000, 0, 0);
         assertNull(runner.computeSecondWind(Medium.WATER, 100));
         assertNull(runner.computeSecondWind(Medium.AIR, 100));
         assertNotNull(runner.computeSecondWind(Medium.LAND, 100));
@@ -375,7 +375,7 @@ class AgilityMovementTest {
 
     @Test
     void secondWindResolvesADifferentBodyPerMedium() {
-        final AgilityManager manager = managerAtLevel(1000);
+        final MovementManager manager = managerAtLevel(1000);
 
         final SecondWindResult dart = manager.computeSecondWind(Medium.LAND, 100);
         assertNotNull(dart);
@@ -399,13 +399,13 @@ class AgilityMovementTest {
 
     @Test
     void smashAndLakeRaiderAreLockedBelowTheirUnlockLevels() {
-        final AgilityManager early = managerAtLevel(1);
+        final MovementManager early = managerAtLevel(1);
         assertFalse(early.canSmash(), "Smash unlocks at 150 in RetroMode");
         assertFalse(early.rollSmash(), "a locked sub-skill must never roll");
         assertFalse(early.canLakeRaider(), "Lake Raider unlocks at 500 in RetroMode");
         assertFalse(early.rollLakeRaiderSuccess());
 
-        final AgilityManager maxed = managerAtLevel(1000);
+        final MovementManager maxed = managerAtLevel(1000);
         assertTrue(maxed.canSmash());
         assertTrue(maxed.canLakeRaider());
     }
@@ -425,7 +425,7 @@ class AgilityMovementTest {
 
     @Test
     void lakeRaiderPicksTheFirstTreasureWhoseStaticRollWins() {
-        final AgilityManager manager = managerAtLevel(1000);
+        final MovementManager manager = managerAtLevel(1000);
         // The main roll gates everything: a lost main roll must not consult the table at all.
         assertTrue(manager.rollLakeRaiderTreasure(java.util.List.of(), true, chance -> true)
                 .isEmpty(), "no candidates -> nothing");
@@ -433,7 +433,7 @@ class AgilityMovementTest {
 
     @Test
     void lakeRaiderPaysNothingWhenTheMainRollFails() {
-        final AgilityManager manager = managerAtLevel(1000);
+        final MovementManager manager = managerAtLevel(1000);
         final com.gmail.nossr50.datatypes.treasure.ExcavationTreasure treasure =
                 new com.gmail.nossr50.datatypes.treasure.ExcavationTreasure(
                         new com.gmail.nossr50.datatypes.treasure.ItemSpec("diamond", 1), 0, 100.0, 0);
@@ -454,7 +454,7 @@ class AgilityMovementTest {
         // is the SCALING, not the gate: the bonus is a linear ramp to MaxBonusLevel 1000, so a fresh
         // player gets a fraction of a percent. That is what is asserted here, because asserting the
         // gate is off would now be asserting something false.
-        final AgilityManager fresh = managerAtLevel(1);
+        final MovementManager fresh = managerAtLevel(1);
         for (Medium medium : Medium.values()) {
             assertTrue(fresh.canFleetFoot(medium), () -> medium + " is unlocked from level 1");
             assertTrue(fresh.getFleetFootedBonus(medium) < 0.001,
@@ -502,7 +502,7 @@ class AgilityMovementTest {
      */
     @Test
     void everyScaledPassiveRampsOnItsOwnParentNotAnotherMediums() {
-        final AgilityManager runner = managerAtLevels(1000, 0, 0);
+        final MovementManager runner = managerAtLevels(1000, 0, 0);
         assertEquals(0.20, runner.getFleetFootedBonus(Medium.LAND), EPSILON,
                 "land Fleet Footed must ramp on Parkour 1000 — the full 0.20");
         assertEquals(0.0, runner.getFleetFootedBonus(Medium.WATER), EPSILON,
@@ -517,7 +517,7 @@ class AgilityMovementTest {
         assertEquals(0.0, runner.getGlideDescentReduction(), EPSILON,
                 "Glide must ramp on Flying, which is 0");
 
-        final AgilityManager swimmer = managerAtLevels(0, 1000, 0);
+        final MovementManager swimmer = managerAtLevels(0, 1000, 0);
         assertEquals(0.50, swimmer.getFleetFootedBonus(Medium.WATER), EPSILON,
                 "water Fleet Footed must ramp on Swimming 1000 — the full 0.50");
         assertEquals(0.0, swimmer.getFleetFootedBonus(Medium.LAND), EPSILON);
@@ -526,7 +526,7 @@ class AgilityMovementTest {
         assertEquals(1.0, swimmer.getAthleteExhaustionMultiplier(), EPSILON,
                 "Athlete is Parkour's and this player has none — no reduction at all");
 
-        final AgilityManager flier = managerAtLevels(0, 0, 1000);
+        final MovementManager flier = managerAtLevels(0, 0, 1000);
         assertEquals(0.15, flier.getFleetFootedBonus(Medium.AIR), EPSILON,
                 "air Fleet Footed must ramp on Flying 1000 — the full 0.15");
         assertEquals(0.0, flier.getFleetFootedBonus(Medium.LAND), EPSILON);
@@ -552,7 +552,7 @@ class AgilityMovementTest {
      */
     @Test
     void theNominalParkourKeyIsReadByNothing() {
-        final AgilityManager swimmer = managerAtLevels(0, 1000, 0);
+        final MovementManager swimmer = managerAtLevels(0, 1000, 0);
 
         assertEquals(0.50, swimmer.getFleetFootedBonus(Medium.WATER), EPSILON,
                 "a swimmer with Parkour 0 must still get the full water bonus; 0.0 here means "
@@ -567,7 +567,7 @@ class AgilityMovementTest {
 
     @Test
     void reParentedSubSkillsFollowTheirOwnParentNotTheAverage() {
-        final AgilityManager runner = managerAtLevels(1000, 0, 0);
+        final MovementManager runner = managerAtLevels(1000, 0, 0);
 
         // Parkour's own: unlocked by running, despite Agility sitting at 333.
         assertTrue(runner.canDodge(), "Dodge is gated on Parkour 1 and this player has Parkour 1000");
@@ -604,7 +604,7 @@ class AgilityMovementTest {
      */
     @Test
     void movementSubSkillsFollowTheirOwnMediumsParentNotTheAverage() {
-        final AgilityManager flier = managerAtLevels(0, 0, 1000);
+        final MovementManager flier = managerAtLevels(0, 0, 1000);
 
         assertTrue(flier.canFleetFoot(Medium.AIR),
                 "air Fleet Footed is gated on Flying, which is maxed — under the retired mean gate "
@@ -632,12 +632,12 @@ class AgilityMovementTest {
      */
     @Test
     void eachSecondWindBodyIsUnlockedOnlyByItsOwnMediumsSkill() {
-        final AgilityManager runner = managerAtLevels(1000, 0, 0);
+        final MovementManager runner = managerAtLevels(1000, 0, 0);
         assertNotNull(runner.computeSecondWind(Medium.LAND, 100), "Parkour 1000 unlocks Dart");
         assertNull(runner.computeSecondWind(Medium.WATER, 100), "Swimming 0 denies Aquaman");
         assertNull(runner.computeSecondWind(Medium.AIR, 100), "Flying 0 denies Limitless");
 
-        final AgilityManager swimmer = managerAtLevels(0, 1000, 0);
+        final MovementManager swimmer = managerAtLevels(0, 1000, 0);
         assertNotNull(swimmer.computeSecondWind(Medium.WATER, 100), "Swimming 1000 unlocks Aquaman");
         assertNull(swimmer.computeSecondWind(Medium.LAND, 100), "Parkour 0 denies Dart");
         assertNull(swimmer.computeSecondWind(Medium.AIR, 100), "Flying 0 denies Limitless");
@@ -656,7 +656,7 @@ class AgilityMovementTest {
         for (Medium medium : Medium.values()) {
             final McMMOPlayer owner = mock(McMMOPlayer.class);
             lenient().when(owner.getPlayer()).thenReturn(player);
-            final AgilityManager manager = new AgilityManager(owner);
+            final MovementManager manager = new MovementManager(owner);
             manager.setMovementXpSettings(defaultSettings());
 
             // Enough ticks that even the stingiest medium clears one whole XP and flushes.
@@ -682,7 +682,7 @@ class AgilityMovementTest {
         // The accumulator is per-medium because each one now pays a different skill. With a single
         // shared remainder, part of a second's swimming would be flushed into Parkour the moment the
         // player climbed out and sprinted — small, but wrong every time the medium changes.
-        final AgilityManager manager = managerAtLevel(1);
+        final MovementManager manager = managerAtLevel(1);
 
         // Two-fifths of a tick in each: land banks 0.6 XP, water banks 0.69. Neither reaches a whole
         // XP on its own, so both must pay nothing — but 0.6 + 0.69 = 1.29 does, so a shared ledger
@@ -697,14 +697,14 @@ class AgilityMovementTest {
     void fallAndDodgeXpGoToParkourRatherThanBeingSplitAcrossAllThreeDomains() {
         // Landing well is a land-movement skill, and splitting the XP three ways would mean falling
         // off a cliff trains your swimming.
-        assertEquals(PrimarySkillType.PARKOUR, AgilityManager.EPISODIC_XP_SKILL);
+        assertEquals(PrimarySkillType.PARKOUR, MovementManager.EPISODIC_XP_SKILL);
 
         // The shipped fall multipliers, plus enough health to survive — without either the mocked
         // player takes a fatal fall, mcMMO bows out, and the test would pass by awarding nothing.
         lenient().when(experienceConfig.getFallXPModifier()).thenReturn(600);
         lenient().when(experienceConfig.getRollXPModifier()).thenReturn(600);
         lenient().when(player.getHealth()).thenReturn(20F);
-        final AgilityManager manager = managerAtLevel(1);
+        final MovementManager manager = managerAtLevel(1);
         manager.processFallDamage(10.0);
 
         verify(mmoPlayer, org.mockito.Mockito.atLeastOnce()).beginXpGain(
