@@ -466,7 +466,7 @@ public class AgilityManager extends SkillManager {
             return 0.0;
         }
         return scaleToLevel(advanced.getFleetFootedMaxBonus(medium),
-                advanced.getFleetFootedMaxBonusLevel());
+                advanced.getFleetFootedMaxBonusLevel(medium), medium.primarySkill());
     }
 
     // --- Sub-skill 4: Athlete -----------------------------------------------------------------
@@ -495,7 +495,8 @@ public class AgilityManager extends SkillManager {
             return 1.0;
         }
         final double cap = Math.min(0.95, Math.max(0.0, advanced.getAthleteMaxExhaustionReduction()));
-        return 1.0 - scaleToLevel(cap, advanced.getAthleteMaxBonusLevel());
+        return 1.0 - scaleToLevel(cap, advanced.getAthleteMaxBonusLevel(),
+                PrimarySkillType.PARKOUR);
     }
 
     // --- Sub-skill 5: Smash -------------------------------------------------------------------
@@ -549,7 +550,8 @@ public class AgilityManager extends SkillManager {
         }
         final double cap = Math.min(0.95,
                 Math.max(0.0, advanced.getLeadLungsMaxAirTopUpPerTick()));
-        return scaleToLevel(cap, advanced.getLeadLungsMaxBonusLevel());
+        return scaleToLevel(cap, advanced.getLeadLungsMaxBonusLevel(),
+                PrimarySkillType.SWIMMING);
     }
 
     /**
@@ -648,7 +650,8 @@ public class AgilityManager extends SkillManager {
             return 0.0;
         }
         final double cap = Math.min(0.9, Math.max(0.0, advanced.getGlideMaxDescentReduction()));
-        return scaleToLevel(cap, advanced.getGlideMaxBonusLevel());
+        return scaleToLevel(cap, advanced.getGlideMaxBonusLevel(),
+                PrimarySkillType.FLYING);
     }
 
     // --- Sub-skill 9: Lake Raider -------------------------------------------------------------
@@ -753,4 +756,12 @@ public class AgilityManager extends SkillManager {
 
     // Note: the level-scaling ladder these sub-skills share (`scaleToLevel`) lives on
     // {@link SkillManager}, since Stealth's passives are shaped identically.
+    //
+    // ⚠️⚠️ EVERY CALL TO IT HERE NAMES ITS SCALING SKILL, and none may use the two-argument form.
+    // This manager's own skill was the retired Agility -- the MEAN of Parkour, Swimming and Flying --
+    // so the short form silently scaled every movement passive on a third of what a specialist had
+    // earned. The 2026-08-10 re-parenting moved each sub-skill's GATE onto its real parent and left
+    // the SCALING behind, and nothing failed: the gate tests all passed, because a gate and a ramp
+    // read the level in different places. Fixed 2026-08-17; pinned by
+    // AgilityMovementTest#everyScaledPassiveRampsOnItsOwnParentNotTheAverage.
 }

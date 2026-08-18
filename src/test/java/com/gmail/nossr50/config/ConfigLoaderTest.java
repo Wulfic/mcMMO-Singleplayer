@@ -34,6 +34,18 @@ class ConfigLoaderTest {
             new SkillRenames.MovedPath("test-config.yml",
                     "Skills.Agility.Roll", "Skills.Parkour.Roll"));
 
+    /**
+     * A one-to-many move, as the Agility retirement produced on 2026-08-17: one
+     * {@code MaxBonusLevel} under a dissolving skill, three equally correct homes under the three
+     * skills that replaced it.
+     */
+    private static final List<SkillRenames.MovedPath> FAN_OUT = List.of(
+            new SkillRenames.MovedPath("test-config.yml",
+                    "Skills.Agility.FleetFooted.MaxBonusLevel",
+                    List.of("Skills.Parkour.FleetFooted.MaxBonusLevel",
+                            "Skills.Swimming.FleetFooted.MaxBonusLevel",
+                            "Skills.Flying.FleetFooted.MaxBonusLevel")));
+
     /** Minimal concrete loader over the test fixture resource. */
     private static final class TestConfig extends ConfigLoader {
         TestConfig(Path dataFolder) {
@@ -42,6 +54,20 @@ class ConfigLoaderTest {
 
         TestConfig(Path dataFolder, List<ConfigRetunes.Retune> retunes) {
             super("test-config.yml", dataFolder, retunes, ROLL_MOVED);
+        }
+
+        /**
+         * A loader with an explicit move table. A named factory rather than another two-argument
+         * constructor, because {@code List<Retune>} and {@code List<MovedPath>} erase to the same
+         * signature.
+         */
+        static TestConfig withMoves(Path dataFolder, List<SkillRenames.MovedPath> moves) {
+            return new TestConfig(dataFolder, List.of(), moves);
+        }
+
+        private TestConfig(Path dataFolder, List<ConfigRetunes.Retune> retunes,
+                List<SkillRenames.MovedPath> moves) {
+            super("test-config.yml", dataFolder, retunes, moves);
         }
 
         @Override
@@ -169,6 +195,96 @@ class ConfigLoaderTest {
     }
 
     @Test
+    void aOneToManyMoveReachesEveryDestination(@TempDir Path dataFolder) throws IOException {
+        // Retiring a skill can leave one key with several homes: "the level Fleet Footed stops
+        // scaling at" was one number under Agility and is three under Parkour/Swimming/Flying. All
+        // three are the player's stated intent, so all three must receive it -- delivering to one and
+        // letting the other two fall back to the shipped default half-applies their tuning, which is
+        // harder to diagnose than not applying it at all.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                Skills:
+                  Agility:
+                    FleetFooted:
+                      MaxBonusLevel:
+                        Standard: 55
+                        RetroMode: 555
+                """);
+
+        final TestConfig loader = TestConfig.withMoves(dataFolder, FAN_OUT);
+
+        for (String parent : new String[] {"Parkour", "Swimming", "Flying"}) {
+            assertEquals(55, loader.config()
+                            .getInt("Skills." + parent + ".FleetFooted.MaxBonusLevel.Standard"),
+                    parent + " did not receive the fanned-out tuning");
+            assertEquals(555, loader.config()
+                            .getInt("Skills." + parent + ".FleetFooted.MaxBonusLevel.RetroMode"),
+                    parent + " did not receive the nested RetroMode leaf");
+        }
+    }
+
+    @Test
+    void aOneToManyMoveDeletesTheSourceExactlyOnceAtTheEnd(@TempDir Path dataFolder)
+            throws IOException {
+        // The trap the list exists to avoid. Declaring the same legacy path as three separate
+        // single-target moves looks equivalent and is not: the first entry clears the source, and the
+        // other two then find nothing and silently deliver the shipped default. This asserts the
+        // source is gone AFTER all three landed -- the ordering, not just the outcome.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                Skills:
+                  Agility:
+                    FleetFooted:
+                      MaxBonusLevel:
+                        Standard: 55
+                        RetroMode: 555
+                """);
+
+        final TestConfig loader = TestConfig.withMoves(dataFolder, FAN_OUT);
+
+        assertFalse(loader.config().contains("Skills.Agility.FleetFooted.MaxBonusLevel"),
+                "the dead path must go, or the file keeps lying about what is in effect");
+        assertEquals(3, java.util.stream.Stream.of("Parkour", "Swimming", "Flying")
+                        .filter(parent -> loader.config()
+                                .contains("Skills." + parent + ".FleetFooted.MaxBonusLevel"))
+                        .count(),
+                "all three destinations must exist alongside the delete; if only one does, the "
+                        + "source was cleared before the other two were written");
+    }
+
+    /**
+     * <b>The converse of a guard test</b> — ruling A-6, and it is asserted in this direction on
+     * purpose.
+     *
+     * <p>Retiring Agility empties {@code Skills.Agility}, and mcMMO deliberately does <em>not</em>
+     * remove what is left: the values were carried to the new paths, so nothing is lost, and deleting
+     * a further block from a file the player owns and may have hand-edited buys tidiness at the price
+     * of a destructive write. A normal guard test proves a destructive path is blocked; there is no
+     * destructive path here to block, so what needs pinning is that nobody adds one later as a
+     * "cleanup". Without this test that change passes every other test in the suite.
+     */
+    @Test
+    void whatIsLeftUnderTheRetiredSkillIsKeptRatherThanTidiedAway(@TempDir Path dataFolder)
+            throws IOException {
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                Skills:
+                  Agility:
+                    FleetFooted:
+                      MaxBonusLevel:
+                        Standard: 55
+                        RetroMode: 555
+                    SomethingWeNeverMigrated: 7
+                """);
+
+        final TestConfig loader = TestConfig.withMoves(dataFolder, FAN_OUT);
+
+        assertTrue(loader.config().contains("Skills.Agility.SomethingWeNeverMigrated"),
+                "A-6: a key under the retired skill that no move claims is LEFT ALONE. mcMMO removes "
+                        + "only what it has just written somewhere else; anything else is the "
+                        + "player's file to keep.");
+        assertEquals(7, loader.config().getInt("Skills.Agility.SomethingWeNeverMigrated"),
+                "and its value is untouched, not merely its key");
+    }
+
+    @Test
     void keepsTheNewPathWhenThePlayerHasTunedBoth(@TempDir Path dataFolder) throws IOException {
         // The case a migrator must not guess at. If both spellings are customised, the value at the
         // NEW path is the one the game has actually been using, so it wins -- silently preferring the
@@ -230,9 +346,14 @@ class ConfigLoaderTest {
                     + " — this guard must cover every file the move table names");
             assertFalse(file.contains(move.legacyPath()),
                     move.fileName() + " still defines the moved path " + move.legacyPath());
-            assertTrue(file.contains(move.newPath()),
-                    move.fileName() + " does not define the destination " + move.newPath()
-                            + " — a move whose target does not exist migrates tuning into a void");
+            // Every destination, not just the first: a one-to-many move exists precisely because a
+            // dissolving skill leaves one key with several homes, and checking only newPaths.get(0)
+            // would pass a move that strands two thirds of the player's tuning.
+            for (String target : move.newPaths()) {
+                assertTrue(file.contains(target),
+                        move.fileName() + " does not define the destination " + target
+                                + " — a move whose target does not exist migrates tuning into a void");
+            }
         }
     }
 
