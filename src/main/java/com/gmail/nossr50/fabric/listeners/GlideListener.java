@@ -1,8 +1,8 @@
 package com.gmail.nossr50.fabric.listeners;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
-import com.gmail.nossr50.skills.agility.AgilityManager;
-import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.movement.MovementManager;
+import com.gmail.nossr50.skills.movement.Medium;
 import com.gmail.nossr50.util.player.UserManager;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -45,7 +45,7 @@ public final class GlideListener {
         if (mmoPlayer == null) {
             return glideVelocity;
         }
-        final AgilityManager agility = mmoPlayer.getAgilityManager();
+        final MovementManager agility = mmoPlayer.getMovementManager();
         if (agility == null) {
             return glideVelocity;
         }

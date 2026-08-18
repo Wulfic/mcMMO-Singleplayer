@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.agility;
+package com.gmail.nossr50.skills.movement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
  * <ul>
  *   <li>{@link Agility#calculateModifiedDodgeDamage(double, double)} — pure dodge-damage math,
  *       floored at 1.0;</li>
- *   <li>{@link AgilityManager#canGainRollXP()} — the anti-exploit cooldown that throttles Roll XP
+ *   <li>{@link MovementManager#canGainRollXP()} — the anti-exploit cooldown that throttles Roll XP
  *       farming.</li>
  * </ul>
  *
@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
  * exploit-prevention toggle can be flipped both ways — the bundled default only exercises the
  * "prevention on" branch.
  */
-class AgilityTest {
+class MovementTest {
 
     @AfterEach
     void tearDown() {
@@ -34,11 +34,11 @@ class AgilityTest {
 
     @Test
     void modifiedDodgeDamageHalvesAndFloors() {
-        assertEquals(5.0D, Agility.calculateModifiedDodgeDamage(10.0D, 2.0D), 1e-9,
+        assertEquals(5.0D, Movement.calculateModifiedDodgeDamage(10.0D, 2.0D), 1e-9,
                 "10 / 2 = 5");
-        assertEquals(25.0D, Agility.calculateModifiedDodgeDamage(100.0D, 4.0D), 1e-9,
+        assertEquals(25.0D, Movement.calculateModifiedDodgeDamage(100.0D, 4.0D), 1e-9,
                 "100 / 4 = 25");
-        assertEquals(1.0D, Agility.calculateModifiedDodgeDamage(1.0D, 2.0D), 1e-9,
+        assertEquals(1.0D, Movement.calculateModifiedDodgeDamage(1.0D, 2.0D), 1e-9,
                 "0.5 floored to 1.0 — a dodge never fully negates a hit");
     }
 
@@ -48,7 +48,7 @@ class AgilityTest {
         when(experienceConfig.isMovementExploitingPrevented()).thenReturn(false);
         McMMOMod.setExperienceConfig(experienceConfig);
 
-        final AgilityManager manager = new AgilityManager(mock(McMMOPlayer.class));
+        final MovementManager manager = new MovementManager(mock(McMMOPlayer.class));
 
         for (int i = 0; i < 10; i++) {
             assertTrue(manager.canGainRollXP(), "no cooldown when exploit prevention is off");
@@ -61,7 +61,7 @@ class AgilityTest {
         when(experienceConfig.isMovementExploitingPrevented()).thenReturn(true);
         McMMOMod.setExperienceConfig(experienceConfig);
 
-        final AgilityManager manager = new AgilityManager(mock(McMMOPlayer.class));
+        final MovementManager manager = new MovementManager(mock(McMMOPlayer.class));
 
         assertTrue(manager.canGainRollXP(), "first roll is allowed and arms the cooldown");
         assertFalse(manager.canGainRollXP(), "immediate retry is inside the cooldown → blocked");

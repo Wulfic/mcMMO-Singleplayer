@@ -3,8 +3,8 @@ package com.gmail.nossr50.commands.skills;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
-import com.gmail.nossr50.skills.agility.AgilityManager;
-import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.movement.MovementManager;
+import com.gmail.nossr50.skills.movement.Medium;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,7 +25,7 @@ import java.util.List;
  */
 public final class SwimmingStatsRenderer extends SkillStatsRenderer {
 
-    private AgilityManager agility;
+    private MovementManager agility;
 
     public SwimmingStatsRenderer() {
         super(PrimarySkillType.SWIMMING);
@@ -35,7 +35,7 @@ public final class SwimmingStatsRenderer extends SkillStatsRenderer {
     protected void dataCalculations(float skillValue) {
         // Lead Lungs' magnitude comes off the manager (it reads the live config and the level
         // ladder); Lake Raider is an RNG line resolved at render time like every other one.
-        agility = mmoPlayer.getAgilityManager();
+        agility = mmoPlayer.getMovementManager();
     }
 
     @Override

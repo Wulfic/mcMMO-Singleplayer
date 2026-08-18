@@ -18,7 +18,7 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
-import com.gmail.nossr50.skills.agility.AgilityManager;
+import com.gmail.nossr50.skills.movement.MovementManager;
 import com.gmail.nossr50.skills.alchemy.AlchemyManager;
 import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
@@ -115,7 +115,7 @@ class SkillStatsRendererTest {
         when(mmoPlayer.getWoodcuttingManager()).thenReturn(new WoodcuttingManager(mmoPlayer));
         when(mmoPlayer.getHerbalismManager()).thenReturn(new HerbalismManager(mmoPlayer));
         when(mmoPlayer.getArcheryManager()).thenReturn(new ArcheryManager(mmoPlayer));
-        when(mmoPlayer.getAgilityManager()).thenReturn(new AgilityManager(mmoPlayer));
+        when(mmoPlayer.getMovementManager()).thenReturn(new MovementManager(mmoPlayer));
         when(mmoPlayer.getTamingManager()).thenReturn(new TamingManager(mmoPlayer));
         when(mmoPlayer.getFishingManager()).thenReturn(new FishingManager(mmoPlayer));
         when(mmoPlayer.getAlchemyManager()).thenReturn(new AlchemyManager(mmoPlayer));
@@ -487,7 +487,7 @@ class SkillStatsRendererTest {
     }
 
     @Test
-    void everyAgilityParentHasItsOwnRendererRatherThanTheGenericOne() {
+    void everyMovementSkillHasItsOwnRendererRatherThanTheGenericOne() {
         // Swimming and Flying fell through to GenericSkillStatsRenderer until 2026-08-10, correctly:
         // they owned no sub-skills at all. Re-parenting gave each of them two, so a generic renderer
         // here would now silently drop real effect lines rather than honestly render nothing.

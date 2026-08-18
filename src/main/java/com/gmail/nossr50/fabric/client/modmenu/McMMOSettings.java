@@ -1,6 +1,6 @@
 package com.gmail.nossr50.fabric.client.modmenu;
 
-import com.gmail.nossr50.skills.agility.MovementXpSettings;
+import com.gmail.nossr50.skills.movement.MovementXpSettings;
 import com.gmail.nossr50.skills.stealth.StealthXpSettings;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;

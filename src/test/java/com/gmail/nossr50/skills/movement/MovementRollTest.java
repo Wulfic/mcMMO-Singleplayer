@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.agility;
+package com.gmail.nossr50.skills.movement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
-import com.gmail.nossr50.datatypes.skills.subskills.agility.RollResult;
+import com.gmail.nossr50.datatypes.skills.subskills.movement.RollResult;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import org.junit.jupiter.api.AfterEach;
@@ -21,16 +21,16 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Covers the deterministic half of the Agility Roll port (K2) — the parts that do not roll the
- * skill RNG (that lives in {@link AgilityManager#processFallDamage} and is verified in-game). The
- * RNG outcome is injected into {@link AgilityManager#rollCheck} so the damage-reduction, XP, fatal,
+ * skill RNG (that lives in {@link MovementManager#processFallDamage} and is verified in-game). The
+ * RNG outcome is injected into {@link MovementManager#rollCheck} so the damage-reduction, XP, fatal,
  * and exploit branches are all provable off a mocked {@link PlatformPlayer}.
  */
-class AgilityRollTest {
+class MovementRollTest {
 
     private ExperienceConfig experienceConfig;
     private AdvancedConfig advancedConfig;
     private PlatformPlayer player;
-    private AgilityManager manager;
+    private MovementManager manager;
 
     @BeforeEach
     void setUp() {
@@ -55,7 +55,7 @@ class AgilityRollTest {
 
         final McMMOPlayer mmoPlayer = mock(McMMOPlayer.class);
         when(mmoPlayer.getPlayer()).thenReturn(player);
-        manager = new AgilityManager(mmoPlayer);
+        manager = new MovementManager(mmoPlayer);
     }
 
     @AfterEach

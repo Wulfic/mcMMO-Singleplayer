@@ -3,8 +3,8 @@ package com.gmail.nossr50.commands.skills;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
-import com.gmail.nossr50.skills.agility.AgilityManager;
-import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.movement.MovementManager;
+import com.gmail.nossr50.skills.movement.Medium;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,7 +53,7 @@ import java.util.List;
  */
 public final class ParkourStatsRenderer extends SkillStatsRenderer {
 
-    private AgilityManager agility;
+    private MovementManager agility;
     private String rollChance;
     private String gracefulRollChance;
 
@@ -65,7 +65,7 @@ public final class ParkourStatsRenderer extends SkillStatsRenderer {
     protected void dataCalculations(float skillValue) {
         // Athlete's number comes off the manager, which reads the live config; Snow Walker is a
         // binary unlock and Smash's odds are resolved at render time like every other RNG line.
-        agility = mmoPlayer.getAgilityManager();
+        agility = mmoPlayer.getMovementManager();
 
         if (!hasUnlocked(SubSkillType.PARKOUR_ROLL)) {
             return;
