@@ -844,7 +844,12 @@ document it as live** — 64 mentions. Three classes, and only the first is mere
 skill is invisible to every incremental doc edit, exactly as an *added* one was for Cooking.
 ⚠️ **One wiki serves every band**, so say what a player does, never what version the build targets.
 
-Files with hits: `README.md` (12), `wiki/Movement-Skills.md` (16), `wiki/Configuration.md` (10),
+⚠️ **`wiki/Configuration.md` is down to 4 hits, not 10.** The Skills-tab work (2026-08-18) deleted
+the *"Disabling one of Agility's parents"* subsection — it sat directly under the section that work
+rewrote and described a skill that no longer exists — and replaced it with the Salvage/Smelting child
+note that section actually needed. The rest of that file is still owed.
+
+Files with hits: `README.md` (12), `wiki/Movement-Skills.md` (16), `wiki/Configuration.md` (~4, was 10),
 `wiki/Skills.md` (7), `wiki/Troubleshooting.md` (4), `wiki/XP-and-Levelling.md` (4),
 `wiki/Super-Abilities.md` (3), `wiki/Differences-from-mcMMO.md` (2), `wiki/Stealth.md` (2), and one
 each in `Commands.md`, `Home.md`, `Hunter.md`, `Husbandry.md`, `Optional-Integrations.md`.
@@ -861,6 +866,139 @@ each in `Commands.md`, `Home.md`, `Hunter.md`, `Husbandry.md`, `Optional-Integra
       wiki roster against `PrimarySkillType.values()`. A removed skill is invisible to every
       incremental doc edit, exactly as an added one was for Cooking. ⚠️ One wiki serves every band.
 - [ ] Full ship gate per band before each push.
+
+---
+
+## The Skills tab — the per-skill master switches reach the config screen (owner-requested 2026-08-18)
+
+**Tier 1.** Six files, no new mechanic, nothing destructive. The whole subsystem behind this already
+ships: `coreskills.yml` carries a `<Skill>.Enabled` row for every constant, and `SkillGating`
+enforces all six meanings of "disabled" (no XP, no procs, no super, no XP bar, no `/mcstats`, no
+plaques). **The only thing missing is the control.** Today a player who wants Fishing off must find
+and hand-edit a YAML file — which is precisely the gap the ModMenu editor exists to close, and the
+one tab it never got.
+
+### Rulings taken (owner, 2026-08-18)
+
+| # | Question | Ruling |
+|---|---|---|
+| S-1 | When a toggle applies | **Next world load only.** Identical to the contract every other tab already documents (`ConfigDocument` writes the yml; `ConfigBootstrap` reloads on world load). No live-reload path, no server-thread hop. ⚠️ Consequence: a player toggling from the pause menu sees *nothing change*, so the tab description and every row's tooltip must say so — an unexplained no-op reads as a bug. |
+| S-2 | A command as a second path | **No. The ModMenu tab only.** Accepted and stated: Cloth and ModMenu are optional, so a player with neither still hand-edits `coreskills.yml`. `wiki/Optional-Integrations.md` already documents that fallback for every other tab. |
+| S-3 | A skill this MC version cannot furnish | **Show the row, locked, and say why.** `SkillAvailability` force-disables it whatever the config says, so an editable toggle would be a control that cannot do anything — the exact "lying switch" shape `CatalogueKeysReachCodeTest` exists to catch. ⚠️ A locked row must also **not write**: silently rewriting a value the player never touched is worse than the missing control. |
+
+⚠️ **S-3's known limit, stated rather than papered over.** `SkillAvailability.probe()` runs from
+`onServerStarting`, so a screen opened from the **title screen** (no world ever loaded this session)
+sees every skill as supported and renders every row editable. That is the same one-answer-per-process
+design that exists to stop the probe being decided by test scheduling, and weakening it for a
+cosmetic lock would be the worse trade. The lock is a courtesy in-game; `/mcstats <skill>` remains
+the authority, and it already names the Minecraft version as the reason.
+
+### The two traps this has to be built around, both already stepped on in this repo
+
+1. ⚠️⚠️ **The roster must come from `PrimarySkillType.values()`, never a transcribed array.**
+   `McMMOSettings` holds three hand-kept rosters (`XP_MULTIPLIER_SKILLS`, `LEVEL_CAP_SKILLS`,
+   `COOLDOWN_ABILITIES`) and **two of the three have already shipped wrong** — Cooking reached
+   neither array, and `Herdsmans_Call` shipped a working ability with a live config key and no
+   slider. Each was found by an audit, not by the suite. A fourth transcription would fail the same
+   way, silently, the next time a skill lands. Generate the rows.
+2. ⚠️⚠️ **`CatalogueKeysReachCodeTest` will call every one of these rows DEAD, and it is not wrong
+   to.** `CoreSkillsConfig#loadKeys` reads the key as `config.getBoolean(enabledPath(skill), true)` —
+   there is no string literal anywhere for `CONFIG_READ` to match, and `readersOf`'s concat-prefix
+   fallback needs a literal prefix that also does not exist. This is the ungreppable-dynamic-key
+   shape (`XPBar.<Skill>` again). **Do not widen the regex** — an exemption plus a *stronger*
+   replacement guard, or the exemption is just a hole.
+
+### Phases
+
+- [x] **S-a — the catalogue rows.** ✅ shipped `McMMOSettings`: add `CORESKILLS_YML`, a `CAT_SKILLS` tab, and
+      rows built by looping `PrimarySkillType.values()` with the path from
+      `CoreSkillsConfig.enabledPath(skill)` — the same method `/mcstats` already quotes at the
+      player, so the screen and the message can never disagree. Label = capitalized constant (it is
+      the yml key the tooltip tells them to look for). Every row's tooltip states: disabling is
+      total, the level is kept, and **it applies on the next world load**.
+      ⚠️ `SALVAGE` and `SMELTING` are child skills and DO get rows — unlike the XP-multiplier tab,
+      where a child's slider would be dead, `SkillGating` genuinely gates them. Their tooltip says
+      which parent they belong to.
+      ⚠️ `PrimarySkillType` is Minecraft-free, so the catalogue stays unit-testable with no game
+      bootstrap. Keep it that way: `SkillAvailability` is NOT imported here.
+- [x] **S-b — the screen.** ✅ shipped `ClothConfigScreenBuilder`: for a coreskills row, ask
+      `SkillAvailability.isSkillSupported`; when false, append the reason to the tooltip, give the
+      entry a **no-op save consumer**, and call `setEditable(false)` on the built entry.
+      ✅ `setEditable(boolean)` verified present on `AbstractConfigListEntry` in **all six** Cloth
+      versions the bands pin — 16.0.143, 17.0.144, 18.0.145, 19.0.147, 20.0.149 and master's
+      21.11.153 (`javap` over the Loom-cached jars, 2026-08-18). The back-port cannot break on it.
+      ⚠️ The lock DECISION is a pure function on the Minecraft-free side so it can be tested; only
+      the one line that hands it `SkillAvailability::isSkillSupported` is untested, and that is
+      stated rather than hidden.
+- [x] **S-c — the guards.** ✅ shipped — suite **1825**, 0 failures (was 1818) New `CoreSkillsCatalogueTest`, plus edits to the two existing ones:
+      - `McMMOSettingsTest#everyKeyExistsInBundledDefaultsWithMatchingType` — add the
+        `coreskills.yml` case, or it hits its own `fail("unknown config file")`.
+      - **Both directions of the roster**: every `values()` constant has exactly one row, AND every
+        `*.Enabled` root section in the shipped `coreskills.yml` maps to a live constant. The second
+        half is what would catch a resurrected `Agility:` row — and it is the direction the three
+        hand-kept arrays have never had.
+      - **The behavioural one, and the only one that proves the tab does anything**: write `false`
+        through a real `ConfigSession` into a temp dir, `saveAll()`, then construct a
+        `CoreSkillsConfig` over that directory and assert `isPrimarySkillEnabled` is now false —
+        **with a positive co-assertion that a second, untouched skill is still true**, so a
+        blanket-false bug cannot pass as a success.
+      - **The lock**: fed a predicate that calls one skill unsupported, that row locks and the others
+        do not, and the locked row writes nothing.
+      - `CatalogueKeysReachCodeTest` — skip `coreskills.yml` rows with the reason written in, and
+        replace what was lost: assert the exemption set is **exactly** the coreskills rows (so it
+        cannot quietly grow), and that `isPrimarySkillEnabled` is named by production code outside
+        the config package. If `SkillGating` ever stops calling it, that reddens.
+- [x] **S-d — docs, and the caveat-expiry pass.** ✅ shipped `wiki/Optional-Integrations.md` grows a **Skills**
+      row in the tab table; `wiki/Configuration.md` and `README.md` stop implying hand-editing is the
+      only way in. ⚠️ Two lines in that same tab table are already stale — it credits General with
+      "level-up broadcasts" (a switch culled for having no getter) and Experience with "the Agility
+      … per-second rates" (retired 2026-08-17). Fix both while inside that table; the wider Agility
+      doc pass stays where it is scoped.
+      ⚠️ One wiki serves every band, so the Skills row says what the tab does, never what MC version
+      this build targets.
+- [ ] **S-e — back-port.** Rides with the A-7 combined back-port, not separately. Version-agnostic
+      logic, five branches, `Backport-of:` trailers.
+
+### Mutation pass — 5 mutations, 4 predicted exactly, 1 over-caught
+
+| # | Mutation | Predicted | Actual |
+|---|---|---|---|
+| M1 | drop `MINING` from the generated row loop | 3 red | **4 red** — `childSkillRowsExplainWhereTheirLevelComesFrom` also fell, because its `rowFor(MINING)` helper throws when the row is absent. Explained, not a defect. |
+| M2 | invert the lock in `booleanSaveConsumer` | `aLockedRowDoesNotWriteAnything` + `togglingARowOff…` | exactly that |
+| M3 | drop the negation in `isLockedByVersion` | `onlyAnUnfurnishableSkillRowIsLocked` | exactly that |
+| M4 | delete "next world load" from the tooltip | `everySkillHasExactlyOneMasterSwitchRow` | exactly that |
+| M5 | widen the exemption to `config.yml` | `theDynamicKeyExemptionCoversOnlyCoreskills` | exactly that |
+
+⚠️⚠️ **The first parse of the mutation results was wrong and looked plausible.** A regex reading
+`<testcase name=…>` up to the next `<failure>` mis-attributed every failure, because a *passing*
+testcase is written self-closing (`<testcase …/>`) and has no closing tag for the lookahead to stop
+at — so a failure was credited to whichever earlier test happened to precede it. The counts were
+right and only the names were wrong, which is exactly why it survived a first reading. **Parse the
+JUnit XML with an XML parser** (`xml.etree`), never a regex. 10th-sighting shape: the tell was M3 and
+M5 reporting red tests that could not possibly relate to the mutation.
+
+### Verified, but only in the way this task allows
+
+- ✅ Suite **1825**, 0 failures. ✅ `extract-mc-surface.py --self-test` PASS, `--check` **1415 records,
+  manifest byte-identical** — renaming nothing and adding no MC call, as expected for a client screen
+  built from Cloth widgets that were already in use.
+- 🔴 **Never watched in game.** Nothing here has been seen rendered: not the tab, not a locked row,
+  not the greyed-out state. The Cloth API call is `setEditable(false)` on the built entry, verified
+  present in all six pinned Cloth versions by `javap`, but "the method exists" is not "the row looks
+  disabled". Worth a look on the next live play-test, alongside the Taming items.
+- ⚠️ **One line is deliberately untested**, and it is the one that binds the lock to reality:
+  `McMMOSettings.isLockedByVersion(setting, SkillAvailability::isSkillSupported)` in
+  `ClothConfigScreenBuilder`. Everything either side of it has a test; that composition needs a
+  screen, and the screen needs Minecraft.
+
+### What this is NOT doing
+
+- **No live reload** (S-1). The screen does not touch a running world's `CoreSkillsConfig`.
+- **No command** (S-2), and no per-sub-skill switch — `CoreSkillsConfig` documents at length why the
+  finer surface was deliberately not revived for GitHub #10.
+- **No change to `SkillGating`, `coreskills.yml`, or any enforcement.** This is a control over a
+  mechanism that already works; if anything about the mechanism needs changing, that is a different
+  task and gets its own plan.
 
 ---
 
