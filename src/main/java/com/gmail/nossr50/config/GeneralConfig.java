@@ -399,21 +399,27 @@ public class GeneralConfig extends ConfigLoader {
     /**
      * The grace period, in seconds, during which a freshly teleported player earns no movement XP.
      *
-     * <p>Stays under {@code Skills.Agility}: it guards the movement-XP pipeline as a whole, which is
-     * Agility's umbrella, and applies identically to Parkour, Swimming and Flying.
+     * <p>Lives under the neutral {@code Skills.Movement} root rather than any one parent: it guards
+     * the movement-XP pipeline as a whole and applies identically to Parkour, Swimming and Flying,
+     * so filing it under one of them would read as a lie in the other two. It was under
+     * {@code Skills.Agility} until that skill was retired on 2026-08-17; {@code SkillRenames}
+     * migrates an existing config.
      */
     public int getXPAfterTeleportCooldown() {
-        return config.getInt("Skills.Agility.XP_After_Teleport_Cooldown", 5);
+        return config.getInt("Skills.Movement.XP_After_Teleport_Cooldown", 5);
     }
 
     /**
-     * The item that triggers Agility's Second Wind super ability on right-click (never consumed).
-     * Named Bukkit-style or as a namespaced id; resolved through
+     * The item that triggers the Second Wind super ability on right-click (never consumed). Named
+     * Bukkit-style or as a namespaced id; resolved through
      * {@link com.gmail.nossr50.platform.Materials}, so an unknown name simply never triggers rather
      * than crashing.
+     *
+     * <p>Under the neutral {@code Skills.Movement} root: Second Wind is ONE ability with one
+     * cooldown whose body is chosen by how you are moving (A-2), so it belongs to no single parent.
      */
     public String getSecondWindItem() {
-        return config.getString("Skills.Agility.Second_Wind_Item", "FEATHER");
+        return config.getString("Skills.Movement.Second_Wind_Item", "FEATHER");
     }
 
     /**
