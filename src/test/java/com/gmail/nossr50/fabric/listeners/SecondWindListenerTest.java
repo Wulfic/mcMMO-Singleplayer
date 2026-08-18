@@ -27,11 +27,12 @@ class SecondWindListenerTest {
     /**
      * A player whose four movement skills would each yield a distinguishable ability length.
      *
-     * <p>{@code AGILITY} is stubbed too, and to a value none of the others use — it is the wrong
-     * answer this test exists to catch, and leaving it unstubbed would make a regression return
-     * Mockito's default 0 rather than something recognisable.
+     * <p>A fourth stub for {@code AGILITY} — the wrong answer, deliberately set to a value none of
+     * the others used — stood here until the constant was retired on 2026-08-17. Reading the mean
+     * is a compile error now rather than a recognisable number, which is strictly better; what these
+     * three stubs still catch is one medium reading <em>another medium's</em> skill.
      */
-    private static McMMOPlayer playerWithLengths(int parkour, int swimming, int flying, int agility) {
+    private static McMMOPlayer playerWithLengths(int parkour, int swimming, int flying) {
         final McMMOPlayer mmoPlayer = mock(McMMOPlayer.class);
         lenient().when(mmoPlayer.calculateAbilityActivationTicks(PrimarySkillType.PARKOUR,
                 SuperAbilityType.SECOND_WIND)).thenReturn(parkour);
@@ -39,14 +40,12 @@ class SecondWindListenerTest {
                 SuperAbilityType.SECOND_WIND)).thenReturn(swimming);
         lenient().when(mmoPlayer.calculateAbilityActivationTicks(PrimarySkillType.FLYING,
                 SuperAbilityType.SECOND_WIND)).thenReturn(flying);
-        lenient().when(mmoPlayer.calculateAbilityActivationTicks(PrimarySkillType.AGILITY,
-                SuperAbilityType.SECOND_WIND)).thenReturn(agility);
         return mmoPlayer;
     }
 
     @Test
     void eachMediumScalesItsDurationOnItsOwnSkill() {
-        final McMMOPlayer mmoPlayer = playerWithLengths(10, 20, 30, 99);
+        final McMMOPlayer mmoPlayer = playerWithLengths(10, 20, 30);
 
         assertEquals(10, SecondWindListener.durationTicks(mmoPlayer, Medium.LAND),
                 "sprinting on land must scale Dart on PARKOUR");
@@ -66,7 +65,7 @@ class SecondWindListenerTest {
     @Test
     void aSpecialistIsNoLongerTaxedByTheTwoSkillsTheyDidNotTrain() {
         // Lengths as the super-ability formula would yield them: 900 -> 47 s, the mean 300 -> 17 s.
-        final McMMOPlayer swimmer = playerWithLengths(2, 47, 2, 17);
+        final McMMOPlayer swimmer = playerWithLengths(2, 47, 2);
 
         assertEquals(47, SecondWindListener.durationTicks(swimmer, Medium.WATER),
                 "a Swimming-900 specialist must get the Swimming-900 duration, not the 17 s their "
@@ -79,7 +78,7 @@ class SecondWindListenerTest {
      */
     @Test
     void everyMediumResolvesToAMovementSkill() {
-        final McMMOPlayer mmoPlayer = playerWithLengths(10, 20, 30, 99);
+        final McMMOPlayer mmoPlayer = playerWithLengths(10, 20, 30);
         for (Medium medium : Medium.values()) {
             final int ticks = SecondWindListener.durationTicks(mmoPlayer, medium);
             assertTrue(ticks == 10 || ticks == 20 || ticks == 30,

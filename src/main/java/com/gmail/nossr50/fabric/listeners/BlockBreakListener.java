@@ -827,7 +827,10 @@ public final class BlockBreakListener {
         }
         final Optional<ExcavationTreasure> won = agility.rollLakeRaiderTreasure(candidates,
                 agility.rollLakeRaiderSuccess(),
-                chance -> ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.AGILITY,
+                // SWIMMING, not the retired AGILITY: Lake Raider is a Swimming sub-skill (its
+                // proc message is Swimming.SubSkill.LakeRaider.Proc). The skill argument only
+                // selects which skill's "lucky" permission is consulted.
+                chance -> ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.SWIMMING,
                         mmoPlayer, chance));
         if (won.isEmpty()) {
             return;

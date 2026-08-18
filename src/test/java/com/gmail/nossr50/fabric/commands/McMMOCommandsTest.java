@@ -1,12 +1,18 @@
 package com.gmail.nossr50.fabric.commands;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.util.McTestRegistries;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.tree.CommandNode;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -72,5 +78,53 @@ class McMMOCommandsTest {
 
         assertEquals(new TreeSet<>(McMMOCommands.commandGating().keySet()), registeredNames,
                 "every registered command must have a recorded gating decision");
+    }
+
+    /**
+     * A-5. {@code /mcstats agility} must answer <em>"the skill was retired, here is where its perks
+     * went"</em> rather than <em>"Unknown skill"</em>.
+     *
+     * <p>Three properties, and the middle one is the one worth having:
+     *
+     * <ol>
+     *   <li><b>The row exists.</b> Deleting it goes red rather than silently regressing a player
+     *       who levelled Agility for weeks back to an error message.</li>
+     *   <li><b>⚠️ No token in the table names a LIVE skill.</b> The branch is checked ahead of
+     *       {@code matchSkill}, so a row added for a skill that still exists would shadow it: the
+     *       real screen stops rendering and the player is told their working skill was retired.
+     *       Nothing else in the codebase would notice.</li>
+     *   <li><b>The locale key resolves.</b> {@code LocaleLoader} answers {@code !key!} for a miss
+     *       rather than throwing, so a typo'd or deleted key ships as literal punctuation in chat.
+     *       These keys are literals in a table — no enum-derived completeness check covers them.</li>
+     * </ol>
+     */
+    @Test
+    void everyRetiredSkillNamesALiveLocaleStringAndNoLiveSkill() {
+        final Map<String, String> retired = McMMOCommands.retiredSkills();
+
+        assertTrue(retired.containsKey("agility"),
+                "Agility was retired 2026-08-17; typing its name must still explain where Fleet "
+                        + "Footed and Second Wind went, not answer \"Unknown skill\"");
+
+        for (Map.Entry<String, String> entry : retired.entrySet()) {
+            final String token = entry.getKey();
+            assertEquals(token.toLowerCase(Locale.ROOT), token,
+                    "the table is looked up with a lower-cased token, so its keys must be lower case");
+
+            for (PrimarySkillType live : PrimarySkillType.values()) {
+                assertNotEquals(live.name().toLowerCase(Locale.ROOT), token,
+                        "/mcstats " + token + " would report a LIVE skill as retired and never "
+                                + "render its screen -- the retired branch runs before matchSkill");
+            }
+
+            final String message = LocaleLoader.getString(entry.getValue());
+            assertFalse(message.startsWith("!") && message.endsWith("!"),
+                    entry.getValue() + " does not resolve; LocaleLoader returned " + message);
+            for (String parent : List.of("Parkour", "Swimming", "Flying")) {
+                assertTrue(message.contains(parent),
+                        "the retirement message must say where the perks went; " + parent
+                                + " is missing from: " + message);
+            }
+        }
     }
 }

@@ -2,6 +2,7 @@ package com.gmail.nossr50.skills.agility;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -78,11 +79,14 @@ class RollProbabilityTest {
     }
 
     @Test
-    void theRollGateReadsParkourNotAgilitysThreeSkillMean() {
-        // Both levels are stubbed and they differ, so the assertion can only pass if the probability
-        // resolved its parent skill to PARKOUR. Under the pre-#4 AGILITY parenting this reads 4.4.
+    void theRollGateReadsParkourNotTheOtherMovementSkills() {
+        // ⚠️ The AGILITY stub that stood beside this one -- the mean, the wrong answer GitHub #4
+        // was about -- went with the constant on 2026-08-17. The wrong answers still REACHABLE are
+        // the other two movement skills, so they are stubbed to differ instead: the assertion can
+        // only pass if the probability resolved its parent to PARKOUR.
         when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR)).thenReturn(REPORTER_PARKOUR);
-        when(mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY)).thenReturn(REPORTER_AGILITY_MEAN);
+        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.SWIMMING)).thenReturn(8);
+        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.FLYING)).thenReturn(0);
 
         assertEquals(12.6, rollPercent(), 1e-9,
                 "126 Parkour / 1000 MaxBonusLevel * 100 ChanceMax");

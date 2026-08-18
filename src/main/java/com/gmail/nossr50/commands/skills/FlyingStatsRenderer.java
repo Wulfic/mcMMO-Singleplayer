@@ -13,7 +13,8 @@ import java.util.List;
  *
  * <p>Flying is one of the three parents of the child skill <b>Agility</b>. Until 2026-08-10 it owned
  * no sub-skills and fell through to {@link GenericSkillStatsRenderer}; both sub-skills below were
- * {@code AGILITY_*} constants gated on the mean of Parkour, Swimming and Flying.
+ * {@code AGILITY_*} constants gated on the mean of Parkour, Swimming and Flying, back when a
+ * retired {@code AGILITY} child skill held that mean.
  *
  * <p>This pair is the one the re-parenting mattered most for. Their unlock levels (350 and 750) were
  * read against that mean, so a player who <em>only</em> flew needed Flying 1050 and Flying 2250 to

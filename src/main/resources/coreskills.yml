@@ -19,24 +19,16 @@
 # also why disabling a skill is not a way to "respec" -- it cannot give you anything.
 #
 # ---------------------------------------------------------------------------------------------
-# AGILITY IS DERIVED, AND ITS THREE PARENTS ARE NOT
+# AGILITY WAS RETIRED 2026-08-17 -- there is deliberately no `Agility:` row below
 # ---------------------------------------------------------------------------------------------
-# Agility earns no XP of its own; its level is the mean of Parkour, Swimming and Flying, always
-# divided by three. So disabling one of those three FREEZES that parent's contribution at
-# whatever level it had reached -- the parent stops climbing, and Agility stops climbing with it.
+# It was a CHILD skill whose level was the mean of Parkour, Swimming and Flying, and disabling one
+# parent froze that parent's third of the average. All of that is gone: Parkour, Swimming and
+# Flying are three ordinary skills now, each owning the movement perks specific to it, and each
+# switched on or off here independently with no third skill deriving anything from the result.
 #
-#   Parkour 300, Swimming 60, Flying 90 (disabled)  ->  Agility = (300 + 60 + 90) / 3 = 150
-#
-# The divisor deliberately stays at three. Dropping the disabled parent out of the average
-# instead would make Agility the mean of only what you still train, so switching off the two
-# domains you never use would hand you up to 200 free Agility levels and every perk gated behind
-# them. Turning a skill OFF must never be a way to get stronger.
-#
-# Agility itself can be disabled independently of its parents, and vice versa.
+# An `Agility:` block left over in YOUR copy of this file is harmless -- it is simply never read.
 # ---------------------------------------------------------------------------------------------
 
-Agility:
-    Enabled: true
 Alchemy:
     Enabled: true
 Archery:
