@@ -37,8 +37,9 @@ These are the versions each mcMMO band is built and tested against. Mod Menu's o
 
 | Tab | Holds |
 |---|---|
-| **General** | RetroMode, autosave, level-up broadcasts and sounds, milestone plaques, master volume. |
-| **Experience** | Global XP multiplier, early-game boost, curve shape, the Agility and Stealth per-second rates. |
+| **General** | RetroMode, autosave, level-up sounds, milestone plaques, master volume. |
+| **Skills** | **A master switch per skill** — turn a whole skill off. See [Configuration](Configuration#turn-a-whole-skill-off) for what "off" means. |
+| **Experience** | Global XP multiplier, early-game boost, curve shape, the movement and Stealth per-second rates. |
 | **XP Multipliers** | A per-skill XP multiplier for all 24 earning skills. |
 | **Abilities** | Super-ability master switch, activation rules, tool durability, a cooldown slider per ability. |
 | **Anti-Cheat** | Every anti-farm gate — see [Configuration](Configuration#anti-cheat-the-exploit-gates). |
@@ -48,6 +49,12 @@ These are the versions each mcMMO band is built and tested against. Mod Menu's o
 ### When edits take effect
 
 Edits are written **straight back to the YAML on disk** — this is a real config editor, not a parallel settings store — and take effect on the **next world load**, not instantly. Most mcMMO values are read once at load time.
+
+⚠️ That applies to the **Skills** tab too, and it is the one place it is easy to misread as a bug: switch a skill off from the pause menu and it keeps paying XP until you leave the world and come back. Nothing is wrong — the file has been written. Each row's tooltip says so.
+
+### A skill your Minecraft version cannot furnish
+
+A skill needs items to work on, and not every version has them. On a version that lacks them the skill is switched off in code whatever your config says, so its row on the **Skills** tab is shown **greyed out** rather than hidden — you can see it exists, and the tooltip says why you cannot reach it. Your level in it is kept. `/mcstats <skill>` gives the same answer, and names the Minecraft version as the reason rather than sending you to edit a config key that cannot help. See [Installation → Supported versions](Installation#supported-versions).
 
 ---
 

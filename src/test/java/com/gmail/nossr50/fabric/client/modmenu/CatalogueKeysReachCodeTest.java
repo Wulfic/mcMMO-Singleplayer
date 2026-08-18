@@ -113,6 +113,9 @@ class CatalogueKeysReachCodeTest {
 
         final List<String> offenders = new ArrayList<>();
         for (ConfigSetting setting : McMMOSettings.all()) {
+            if (isExemptDynamicKey(setting)) {
+                continue;
+            }
             final Set<String> readers = index.readersOf(setting.path());
             if (readers.isEmpty()) {
                 offenders.add(setting.file() + ":" + setting.path()
@@ -133,6 +136,61 @@ class CatalogueKeysReachCodeTest {
                         + "toggle over a dead mechanic tells the player something false — either "
                         + "wire the key or drop the switch AND cull the shipped key:\n  - "
                         + String.join("\n  - ", offenders));
+    }
+
+    /**
+     * The one family this source scan structurally cannot judge: the {@code coreskills.yml} master
+     * switches.
+     *
+     * <p>{@code CoreSkillsConfig} reads them as {@code config.getBoolean(enabledPath(skill), true)},
+     * where {@code enabledPath} assembles {@code "Mining" + ".Enabled"} from the enum constant. There
+     * is <b>no string literal</b> for {@link #CONFIG_READ} to match and no literal prefix for
+     * {@code readersOf}'s concat fallback either, so every one of those 26 rows would be reported as
+     * "no config getter reads this key at all" — a confident, wrong finding about the most thoroughly
+     * enforced switch in the mod.
+     *
+     * <p><b>Why the regex is not widened instead.</b> Matching a non-literal argument means matching
+     * <em>any</em> {@code getBoolean(...)} call, which would mark every key in the file live and
+     * quietly destroy the guard for the other 130 rows. The exemption is narrow, it is asserted to be
+     * exactly this file by {@link #theDynamicKeyExemptionCoversOnlyCoreskills()}, and the behaviour it
+     * cannot check is checked properly — by execution — in {@code CoreSkillsCatalogueTest}.
+     */
+    private static boolean isExemptDynamicKey(ConfigSetting setting) {
+        return McMMOSettings.CORESKILLS_YML.equals(setting.file());
+    }
+
+    /**
+     * The exemption's own guard: it must cover exactly the {@code coreskills.yml} rows, and the getter
+     * it excuses must still be reachable from gameplay.
+     *
+     * <p>An exemption nobody re-checks is just a hole with a comment on it. Two things could rot: the
+     * skip could grow to cover a file that <em>can</em> be scanned (silently un-guarding it), or
+     * {@code SkillGating} could stop calling {@code isPrimarySkillEnabled} — which would make all 26
+     * switches dead in exactly the way this class exists to detect, while the exemption hid it.
+     */
+    @Test
+    void theDynamicKeyExemptionCoversOnlyCoreskills() throws IOException {
+        final List<String> exempt = new ArrayList<>();
+        for (ConfigSetting setting : McMMOSettings.all()) {
+            if (isExemptDynamicKey(setting)) {
+                exempt.add(setting.file() + ":" + setting.path());
+            }
+        }
+        assertFalse(exempt.isEmpty(), "nothing is exempt any more — either the Skills tab was removed "
+                + "or the exemption stopped matching; if the tab is gone, delete this test with it");
+        for (String key : exempt) {
+            assertTrue(key.startsWith(McMMOSettings.CORESKILLS_YML + ":"),
+                    "the dynamic-key exemption has grown beyond coreskills.yml and now excuses "
+                            + key + " — that key is scannable and must be proven live like the rest");
+        }
+
+        // ...and the getter the exemption excuses is genuinely reached from gameplay. This is the
+        // part the skip gives up, bought back at the only granularity a source scan can offer.
+        final ConfigIndex index = ConfigIndex.build();
+        assertTrue(index.calledFromOutsideConfig.contains("isPrimarySkillEnabled"),
+                "nothing outside com.gmail.nossr50.config calls CoreSkillsConfig#isPrimarySkillEnabled "
+                        + "— the per-skill master switches read nothing, so all 26 rows on the Skills "
+                        + "tab are dead controls. SkillGating is what is supposed to call it.");
     }
 
     /**

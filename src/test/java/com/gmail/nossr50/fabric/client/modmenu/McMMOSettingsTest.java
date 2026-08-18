@@ -42,12 +42,18 @@ class McMMOSettingsTest {
         final YamlConfiguration config = bundled(McMMOSettings.CONFIG_YML);
         final YamlConfiguration experience = bundled(McMMOSettings.EXPERIENCE_YML);
         final YamlConfiguration advanced = bundled(McMMOSettings.ADVANCED_YML);
+        final YamlConfiguration coreskills = bundled(McMMOSettings.CORESKILLS_YML);
 
         for (ConfigSetting setting : McMMOSettings.all()) {
             final YamlConfiguration doc = switch (setting.file()) {
                 case McMMOSettings.CONFIG_YML -> config;
                 case McMMOSettings.EXPERIENCE_YML -> experience;
                 case McMMOSettings.ADVANCED_YML -> advanced;
+                // The Skills tab. Its rows are generated from PrimarySkillType.values(), so this
+                // check earns its keep in the other direction here: a skill constant with no block
+                // in the shipped coreskills.yml would render a switch that writes a key the file
+                // never carried. CoreSkillsCatalogueTest covers the roster itself.
+                case McMMOSettings.CORESKILLS_YML -> coreskills;
                 default -> {
                     fail("catalogue references an unknown config file: " + setting.file());
                     yield null;
