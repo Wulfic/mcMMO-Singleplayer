@@ -196,8 +196,8 @@ public class ExperienceConfig extends ConfigLoader {
         return config.getInt("Fishing_ExploitFix_Options.OverFishLimit", 10);
     }
 
-    public boolean isAgilityExploitingPrevented() {
-        return config.getBoolean("ExploitFix.Agility", true);
+    public boolean isMovementExploitingPrevented() {
+        return config.getBoolean("ExploitFix.Movement", true);
     }
 
     public boolean isTreeFellerXPReduced() {
@@ -470,31 +470,32 @@ public class ExperienceConfig extends ConfigLoader {
         return config.getInt("Experience_Bars.Max_Visible", 3);
     }
 
-    /* Agility */
+    /* Movement -- the shared XP model of Parkour, Swimming and Flying. Under a neutral root since
+     * the Agility skill that used to be its umbrella was retired on 2026-08-17. */
     public int getDodgeXPModifier() {
-        return config.getInt("Experience_Values.Agility.Dodge", 120);
+        return config.getInt("Experience_Values.Movement.Dodge", 120);
     }
 
     public int getRollXPModifier() {
-        return config.getInt("Experience_Values.Agility.Roll", 80);
+        return config.getInt("Experience_Values.Movement.Roll", 80);
     }
 
     public int getFallXPModifier() {
-        return config.getInt("Experience_Values.Agility.Fall", 120);
+        return config.getInt("Experience_Values.Movement.Fall", 120);
     }
 
     public double getFeatherFallXPModifier() {
-        return config.getDouble("Experience_Values.Agility.FeatherFall_Multiplier", 2.0);
+        return config.getDouble("Experience_Values.Movement.FeatherFall_Multiplier", 2.0);
     }
 
     /**
-     * Agility movement XP paid per second of qualifying travel, before the per-medium multiplier
+     * Movement XP paid per second of qualifying travel, before the per-medium multiplier
      * (Pass 2 / D-AG6). Deliberately per <em>second</em> rather than per block — see
      * {@link com.gmail.nossr50.skills.agility.MovementXpSettings} for why that distinction is the
      * whole balance model.
      */
     public double getMovementBaselineXpPerSecond() {
-        return config.getDouble("Experience_Values.Agility.Movement.Baseline_Xp_Per_Second",
+        return config.getDouble("Experience_Values.Movement.Travel.Baseline_Xp_Per_Second",
                 MovementXpSettings.DEFAULT_BASELINE_XP_PER_SECOND);
     }
 
@@ -508,7 +509,7 @@ public class ExperienceConfig extends ConfigLoader {
      */
     public double getMovementReferenceSpeed(Medium medium) {
         return config.getDouble(
-                "Experience_Values.Agility.Movement.Reference_Speed." + medium.configName(),
+                "Experience_Values.Movement.Travel.Reference_Speed." + medium.configName(),
                 MovementXpSettings.defaultReferenceSpeed(medium));
     }
 
@@ -521,7 +522,7 @@ public class ExperienceConfig extends ConfigLoader {
      */
     public double getMovementMediumMultiplier(Medium medium) {
         return config.getDouble(
-                "Experience_Values.Agility.Movement.Medium_Multiplier." + medium.configName(),
+                "Experience_Values.Movement.Travel.Medium_Multiplier." + medium.configName(),
                 MovementXpSettings.defaultMediumMultiplier(medium));
     }
 
@@ -888,15 +889,15 @@ public class ExperienceConfig extends ConfigLoader {
             reason.add("Experience_Values.Combat.Multiplier.Animals should be at least 0!");
         }
 
-        /* Agility */
+        /* Movement */
         if (getDodgeXPModifier() < 0) {
-            reason.add("Experience_Values.Agility.Dodge should be at least 0!");
+            reason.add("Experience_Values.Movement.Dodge should be at least 0!");
         }
         if (getRollXPModifier() < 0) {
-            reason.add("Experience_Values.Agility.Roll should be at least 0!");
+            reason.add("Experience_Values.Movement.Roll should be at least 0!");
         }
         if (getFallXPModifier() < 0) {
-            reason.add("Experience_Values.Agility.Fall should be at least 0!");
+            reason.add("Experience_Values.Movement.Fall should be at least 0!");
         }
 
         /* Fishing */

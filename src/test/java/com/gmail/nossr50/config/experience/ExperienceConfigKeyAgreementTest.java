@@ -84,8 +84,8 @@ class ExperienceConfigKeyAgreementTest {
                 ExperienceConfig::isMannequinInteractionPrevented));
         gates.add(new Gate("ExploitFix.Fishing", false,
                 ExperienceConfig::isFishingExploitingPrevented));
-        gates.add(new Gate("ExploitFix.Agility", false,
-                ExperienceConfig::isAgilityExploitingPrevented));
+        gates.add(new Gate("ExploitFix.Movement", false,
+                ExperienceConfig::isMovementExploitingPrevented));
         gates.add(new Gate("ExploitFix.TreeFellerReducedXP", false,
                 ExperienceConfig::isTreeFellerXPReduced));
         gates.add(new Gate("ExploitFix.LavaStoneAndCobbleFarming", false,

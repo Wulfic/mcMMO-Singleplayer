@@ -45,7 +45,7 @@ class AgilityTest {
     @Test
     void rollXpAlwaysAllowedWhenExploitPreventionOff() {
         final ExperienceConfig experienceConfig = mock(ExperienceConfig.class);
-        when(experienceConfig.isAgilityExploitingPrevented()).thenReturn(false);
+        when(experienceConfig.isMovementExploitingPrevented()).thenReturn(false);
         McMMOMod.setExperienceConfig(experienceConfig);
 
         final AgilityManager manager = new AgilityManager(mock(McMMOPlayer.class));
@@ -58,7 +58,7 @@ class AgilityTest {
     @Test
     void rollXpCooldownBlocksRapidRetriesWhenPreventionOn() {
         final ExperienceConfig experienceConfig = mock(ExperienceConfig.class);
-        when(experienceConfig.isAgilityExploitingPrevented()).thenReturn(true);
+        when(experienceConfig.isMovementExploitingPrevented()).thenReturn(true);
         McMMOMod.setExperienceConfig(experienceConfig);
 
         final AgilityManager manager = new AgilityManager(mock(McMMOPlayer.class));

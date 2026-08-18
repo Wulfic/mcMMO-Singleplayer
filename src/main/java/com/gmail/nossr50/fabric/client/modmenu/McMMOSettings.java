@@ -39,11 +39,11 @@ public final class McMMOSettings {
     /**
      * Skills that have an {@code Experience_Formula.Skill_Multiplier.<name>} key.
      *
-     * <p>⚠️ <b>Child skills must never appear here</b> (Agility, Salvage, Smelting). A child earns no
-     * XP of its own, so both XP paths split the gain to its parents and return before the multiplier
-     * is read — a slider for one is a control that cannot do anything. {@code Agility} was offered
-     * exactly that way; Salvage and Smelting never were, and that asymmetry is what gave it away.
-     * {@code ExperienceConfigKeyAgreementTest} now pins both directions.
+     * <p>⚠️ <b>Child skills must never appear here</b> (Salvage, Smelting). A child earns no XP of
+     * its own, so both XP paths split the gain to its parents and return before the multiplier is
+     * read — a slider for one is a control that cannot do anything. The retired {@code Agility} was
+     * offered exactly that way; Salvage and Smelting never were, and that asymmetry is what gave it
+     * away. {@code ExperienceConfigKeyAgreementTest} now pins both directions.
      */
     private static final String[] XP_MULTIPLIER_SKILLS = {
         "Alchemy", "Archery", "Axes", "Cooking", "Crossbows", "Excavation", "Fishing",
@@ -52,9 +52,16 @@ public final class McMMOSettings {
         "Woodcutting"
     };
 
-    /** Skills that have a {@code Skills.<name>.Level_Cap} key. */
+    /**
+     * Skills that have a {@code Skills.<name>.Level_Cap} key.
+     *
+     * <p>⚠️ {@code Agility} was dropped on 2026-08-17 when the skill was retired. The key is
+     * derived from the enum name, so the row was offering a cap on a skill that no longer exists —
+     * a control that writes to a path nothing reads, which is the exact defect
+     * {@code CatalogueKeysReachCodeTest} exists to catch.
+     */
     private static final String[] LEVEL_CAP_SKILLS = {
-        "Agility", "Alchemy", "Archery", "Axes", "Cooking", "Crossbows", "Excavation", "Fishing",
+        "Alchemy", "Archery", "Axes", "Cooking", "Crossbows", "Excavation", "Fishing",
         "Flying", "Herbalism", "Hunter", "Husbandry", "Maces", "Mining", "Parkour", "Repair",
         "Salvage", "Smelting", "Spears", "Stealth", "Swimming", "Swords", "Taming", "Tridents",
         "Unarmed", "Unarmored", "Woodcutting"
@@ -162,7 +169,7 @@ public final class McMMOSettings {
         list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Cripple", true,
                 "Cripple Particles", "Anvil-shard burst when Maces' Cripple procs."));
         list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Dodge", true,
-                "Dodge Particles", "Smoke puff when Agility dodges a hit."));
+                "Dodge Particles", "Smoke puff when Parkour dodges a hit."));
         list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Greater_Impact", true,
                 "Greater Impact Particles",
                 "Explosion puff when Axes' Greater Impact or a wolf's Pummel sends a mob flying."));
@@ -219,12 +226,12 @@ public final class McMMOSettings {
         // not been the default for some time — the same class of silent balance bug as a config
         // fallback that disagrees with the class it feeds.
         list.add(ConfigSetting.decimal(CAT_XP, EXPERIENCE_YML,
-                "Experience_Values.Agility.Movement.Baseline_Xp_Per_Second",
+                "Experience_Values.Movement.Travel.Baseline_Xp_Per_Second",
                 MovementXpSettings.DEFAULT_BASELINE_XP_PER_SECOND, 0.0, 1000.0,
-                "Agility: Movement XP per Second",
+                "Movement XP per Second",
                 "XP per second of sprinting, swimming or gliding. Each medium's payout is "
                         + "normalised against its own top speed, so a faster medium does not level "
-                        + "faster — raise this to level Agility faster overall."));
+                        + "faster — raise this to level Parkour, Swimming and Flying faster."));
 
         // Stealth sneak XP, same shape and same reasoning: the baseline is the knob a player wants,
         // while the reference speed is a balance internal that only means anything alongside it.
@@ -374,8 +381,9 @@ public final class McMMOSettings {
         list.add(ConfigSetting.integer(CAT_EXPLOITS, EXPERIENCE_YML,
                 "Fishing_ExploitFix_Options.OverFishLimit", 10, 0, 1000, "Fishing: Over-Fish Limit",
                 "Casts in one spot before the catch quality starts dropping."));
-        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML, "ExploitFix.Agility", true,
-                "Agility Anti-Exploit", "Blocks self-inflicted damage from feeding Agility XP."));
+        list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML, "ExploitFix.Movement", true,
+                "Movement Anti-Exploit",
+                "Blocks self-inflicted damage from feeding fall and dodge XP."));
         list.add(ConfigSetting.bool(CAT_EXPLOITS, EXPERIENCE_YML, "ExploitFix.TreeFellerReducedXP",
                 true, "Tree Feller Pays Reduced XP",
                 "Felling a whole tree at once pays less per log than cutting it by hand."));
