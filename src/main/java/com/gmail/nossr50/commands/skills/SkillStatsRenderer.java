@@ -73,7 +73,6 @@ public abstract class SkillStatsRenderer {
             case MACES -> new MacesStatsRenderer();
             case SPEARS -> new SpearsStatsRenderer();
             case TAMING -> new TamingStatsRenderer();
-            case AGILITY -> new AgilityStatsRenderer();
             case ALCHEMY -> new AlchemyStatsRenderer();
             case REPAIR -> new RepairStatsRenderer();
             case SALVAGE -> new SalvageStatsRenderer();
@@ -85,9 +84,11 @@ public abstract class SkillStatsRenderer {
             case STEALTH -> new StealthStatsRenderer();
             case UNARMORED -> new UnarmoredStatsRenderer();
             case PARKOUR -> new ParkourStatsRenderer();
-            // All three of Agility's parents render their own effects as of 2026-08-10, when the
-            // single-medium sub-skills were re-parented off the averaged child level onto the skill
-            // that earns them. Before that, SWIMMING and FLYING owned nothing and fell through here.
+            // The three movement skills render their own effects. The 2026-08-10 re-parenting gave
+            // them the single-medium sub-skills; retiring Agility on 2026-08-17 gave them Fleet
+            // Footed and Second Wind as well, and AgilityStatsRenderer was deleted with the skill --
+            // there is no longer a cross-medium screen because there is no longer a cross-medium
+            // level. Before 2026-08-10, SWIMMING and FLYING owned nothing and fell through here.
             case SWIMMING -> new SwimmingStatsRenderer();
             case FLYING -> new FlyingStatsRenderer();
             default -> new GenericSkillStatsRenderer(skill);
@@ -263,7 +264,19 @@ public abstract class SkillStatsRenderer {
      * activation perks, so only the base length remains.
      */
     protected String calculateLength(float skillValue) {
-        final SuperAbilityType ability = McMMOMod.getSkillTools().getSuperAbility(skill);
+        return calculateLength(skillValue, McMMOMod.getSkillTools().getSuperAbility(skill));
+    }
+
+    /**
+     * The same length, for a named super ability rather than this skill's own.
+     *
+     * <p>⚠️ <b>Needed because one super ability can belong to more than one skill's screen.</b> Second
+     * Wind fires in all three movement mediums and is rendered by Parkour, Swimming and Flying alike,
+     * but {@code getSuperAbility(skill)} is a one-to-one map and answers {@code null} for two of the
+     * three — which would not fail here, it would {@code NullPointerException} inside
+     * {@code getSuperAbilityMaxLength} the moment a swimmer opened their stats screen.
+     */
+    protected String calculateLength(float skillValue, SuperAbilityType ability) {
         final int maxLength = McMMOMod.getSkillTools().getSuperAbilityMaxLength(ability);
         final int abilityLengthVar = McMMOMod.getAdvancedConfig().getAbilityLength();
         final int abilityLengthCap = McMMOMod.getAdvancedConfig().getAbilityLengthCap();

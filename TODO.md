@@ -719,10 +719,26 @@ the Taming defect was.
       gate test reads.
 - [ ] **C — config + locale + `ConfigRetunes` path moves.** ⚠️ ModMenu rows land with the code that
       READS the key, never with the key — `CatalogueKeysReachCodeTest` is right to refuse them early.
-- [ ] **D — renderers + advancements.** Delete `AgilityStatsRenderer`; Parkour/Swimming/Flying
-      renderers each gain a Fleet Footed row and a Second Wind row showing **that medium's** state.
-      Advancement JSONs per A-4.
-- [ ] **E — remove `PrimarySkillType.AGILITY`** and `SkillTools.AGILITY_PARENTS`, `isChildSkill`'s
+- [ ] **D — renderers.** Delete `AgilityStatsRenderer`; Parkour/Swimming/Flying renderers each gain a
+      Fleet Footed row and a Second Wind row showing **that medium's** state.
+      ⚠️ **A-4's advancement deletion MOVED OUT of D and into E** — tried in D, and
+      `MilestoneAdvancementResourcesTest` correctly refused it. That guard derives the expected
+      datapack from `Milestones`, which is driven by `PrimarySkillType.values()`, so while `AGILITY`
+      is still a constant its advancement tree is *required* to exist. Deleting the JSONs before the
+      enum is not "early", it is **red**. Third instance of the same pressure phase A hit: removing an
+      enum constant forces every reader into one commit.
+      🔑 Also: `SkillStatsRenderer#calculateLength` resolved the ability via `getSuperAbility(skill)`,
+      a **one-to-one** map that answers `null` for two of the three movement skills — an NPE the
+      moment a swimmer opened their stats screen, not a misprint. It now takes the ability by name.
+- [ ] **E — remove `PrimarySkillType.AGILITY`** — **now also carries A-4** (delete the Agility
+      advancement tree: `milestone/skill/agility`, `milestone/level/agility/*`,
+      `milestone/maxed/agility`) **and A-5** (the `/mcstats agility` retirement message, which needs
+      the command branch that only exists once the constant is gone).
+      ⚠️ **Fix `scripts/gen-milestone-advancements.sh` in the SAME commit** — it holds `[agility]`
+      rows in its `ICON` and `ROLE` tables and `rm -rf`s its output directory before regenerating, so
+      a stale row re-creates the tree on the next run. This trap has already fired once here, from the
+      other side, in 2026-07-27.
+      Also remove and `SkillTools.AGILITY_PARENTS`, `isChildSkill`'s
       `AGILITY` arm, `MISC_SKILLS`, `getPrimarySkill(SECOND_WIND)`, `coreskills.yml`, `experience.yml`.
       🔑 **Audit against `PrimarySkillType.values()`, never against the diff.**
 - [ ] **F — the rename (A-3), mechanical and behaviour-free.** Its own commit, so a band can take it
