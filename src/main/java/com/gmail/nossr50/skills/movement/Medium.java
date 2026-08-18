@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.agility;
+package com.gmail.nossr50.skills.movement;
 
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;

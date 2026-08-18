@@ -1,8 +1,8 @@
-package com.gmail.nossr50.datatypes.skills.subskills.agility;
+package com.gmail.nossr50.datatypes.skills.subskills.movement;
 
 /**
  * Immutable outcome of a successful Agility Dodge (see
- * {@link com.gmail.nossr50.skills.agility.AgilityManager#dodgeCheck}).
+ * {@link com.gmail.nossr50.skills.movement.MovementManager#dodgeCheck}).
  *
  * <p>Unlike {@link RollResult}, a Dodge only produces a result when it <em>succeeds</em>: the
  * evaluator returns {@code null} when the player fails the roll (or the reduced hit would still be

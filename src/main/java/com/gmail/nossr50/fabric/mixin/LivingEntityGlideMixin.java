@@ -46,7 +46,7 @@ public abstract class LivingEntityGlideMixin {
             // One call site in this method; cap it so a future remap that widens the match is a
             // build failure rather than a silent second injection.
             allow = 1)
-    private Vec3d mcmmo$applyAgilityGlide(Vec3d glideVelocity) {
+    private Vec3d mcmmo$applyGlideBonus(Vec3d glideVelocity) {
         return GlideListener.modifyGlideVelocity((LivingEntity) (Object) this, glideVelocity);
     }
 }

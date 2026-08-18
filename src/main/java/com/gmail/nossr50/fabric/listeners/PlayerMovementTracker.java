@@ -5,8 +5,8 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.platform.SkillAttributeService;
-import com.gmail.nossr50.skills.agility.AgilityManager;
-import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.movement.MovementManager;
+import com.gmail.nossr50.skills.movement.Medium;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.skills.stealth.StealthManager;
 import com.gmail.nossr50.skills.unarmored.UnarmoredManager;
@@ -43,7 +43,7 @@ import org.jetbrains.annotations.Nullable;
  * item used. Movement is not an event; it is a continuous state, and nothing in the codebase sampled
  * it before this. One {@code END_SERVER_TICK} sweep measures how far each online player moved,
  * decides which medium they moved through, and hands that to
- * {@link AgilityManager#onMovementTick} — or, when they are crouched, to
+ * {@link MovementManager#onMovementTick} — or, when they are crouched, to
  * {@link StealthManager#onSneakTick}.
  *
  * <p><b>It has also become the mod's general per-tick per-player sweep</b>, which is a wider job than
@@ -60,7 +60,7 @@ import org.jetbrains.annotations.Nullable;
  *
  * <p><b>This class deliberately does not compute XP.</b> It owns only the platform-y guards below;
  * the speed clamp that turns distance into credited seconds is MC-free arithmetic in
- * {@link com.gmail.nossr50.skills.agility.MovementXpSettings}, where it can be unit-tested. Getting
+ * {@link com.gmail.nossr50.skills.movement.MovementXpSettings}, where it can be unit-tested. Getting
  * that split wrong is how the most important formula in the skill ends up buried in a tick handler
  * that no test can reach.
  *
@@ -265,7 +265,7 @@ public final class PlayerMovementTracker {
         // compiling, booting clean, and passing every unit test that does not drive tickPlayer itself.
         callTheHerd(player, mmoPlayer);
 
-        final AgilityManager agility = mmoPlayer.getAgilityManager();
+        final MovementManager agility = mmoPlayer.getMovementManager();
         if (agility == null) {
             return;
         }
@@ -398,7 +398,7 @@ public final class PlayerMovementTracker {
      * rather than a write to a shared concurrent set 20 times a second.
      */
     private static void publishSnowWalker(@NotNull ServerPlayerEntity player,
-            @NotNull AgilityManager agility) {
+            @NotNull MovementManager agility) {
         final UUID uuid = player.getUuid();
         if (agility.canSnowWalk()) {
             SNOW_WALKERS.add(uuid);
@@ -556,10 +556,10 @@ public final class PlayerMovementTracker {
      * {@link com.gmail.nossr50.fabric.mixin.LivingEntityGlideMixin}.
      */
     private static void applyFleetFooted(@NotNull ServerPlayerEntity player,
-            @NotNull AgilityManager agility, @Nullable Medium medium) {
-        SkillAttributeService.set(player, SkillAttributeService.Managed.AGILITY_FLEET_FOOTED_LAND,
+            @NotNull MovementManager agility, @Nullable Medium medium) {
+        SkillAttributeService.set(player, SkillAttributeService.Managed.MOVEMENT_FLEET_FOOTED_LAND,
                 medium == Medium.LAND ? agility.getFleetFootedBonus(Medium.LAND) : 0.0);
-        SkillAttributeService.set(player, SkillAttributeService.Managed.AGILITY_FLEET_FOOTED_WATER,
+        SkillAttributeService.set(player, SkillAttributeService.Managed.MOVEMENT_FLEET_FOOTED_WATER,
                 medium == Medium.WATER ? agility.getFleetFootedBonus(Medium.WATER) : 0.0);
     }
 
@@ -572,7 +572,7 @@ public final class PlayerMovementTracker {
      * broken". Clamped to the vanilla maximum so it can top up but never overfill.
      */
     private static void applyLeadLungs(@NotNull ServerPlayerEntity player,
-            @NotNull AgilityManager agility) {
+            @NotNull MovementManager agility) {
         if (!player.isSubmergedInWater()) {
             return;
         }
@@ -596,7 +596,7 @@ public final class PlayerMovementTracker {
      * never land.
      */
     private static void applySolarWings(@NotNull ServerPlayerEntity player,
-            @NotNull AgilityManager agility) {
+            @NotNull MovementManager agility) {
         final UUID uuid = player.getUuid();
         if (!agility.canSolarWings()) {
             SOLAR_WINGS_TICKS.remove(uuid);

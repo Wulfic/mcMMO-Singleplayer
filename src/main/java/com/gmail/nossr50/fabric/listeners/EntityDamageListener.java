@@ -5,8 +5,8 @@ import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
-import com.gmail.nossr50.datatypes.skills.subskills.agility.DodgeResult;
-import com.gmail.nossr50.datatypes.skills.subskills.agility.RollResult;
+import com.gmail.nossr50.datatypes.skills.subskills.movement.DodgeResult;
+import com.gmail.nossr50.datatypes.skills.subskills.movement.RollResult;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.MetadataStore;
@@ -14,7 +14,7 @@ import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.LimitBreak;
 import com.gmail.nossr50.skills.MeleeDamageBonus;
 import com.gmail.nossr50.skills.MeleeDamageBonus.MeleeWeapon;
-import com.gmail.nossr50.skills.agility.AgilityManager;
+import com.gmail.nossr50.skills.movement.MovementManager;
 import com.gmail.nossr50.skills.archery.Archery;
 import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
@@ -1351,7 +1351,7 @@ public final class EntityDamageListener {
         if (mmoPlayer == null) {
             return amount;
         }
-        final AgilityManager agility = mmoPlayer.getAgilityManager();
+        final MovementManager agility = mmoPlayer.getMovementManager();
         if (agility == null || !agility.rollSmash()) {
             return amount;
         }
@@ -1808,7 +1808,7 @@ public final class EntityDamageListener {
         if (mmoPlayer == null) {
             return amount; // data not loaded (e.g. mid-join).
         }
-        final AgilityManager agility = mmoPlayer.getAgilityManager();
+        final MovementManager agility = mmoPlayer.getMovementManager();
         if (agility == null) {
             return amount;
         }
@@ -1853,7 +1853,7 @@ public final class EntityDamageListener {
         if (mmoPlayer == null) {
             return amount;
         }
-        final AgilityManager agility = mmoPlayer.getAgilityManager();
+        final MovementManager agility = mmoPlayer.getMovementManager();
         if (agility == null) {
             return amount;
         }

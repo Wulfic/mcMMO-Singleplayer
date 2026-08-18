@@ -3,7 +3,7 @@ package com.gmail.nossr50.config;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
-import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.movement.Medium;
 import com.gmail.nossr50.util.text.StringUtils;
 import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
@@ -666,7 +666,7 @@ public class AdvancedConfig extends ConfigLoader {
     }
 
     /**
-     * ⚠️ <b>Read by nothing but the validator above.</b> {@code AgilityManager#rollCheck} hardcodes
+     * ⚠️ <b>Read by nothing but the validator above.</b> {@code MovementManager#rollCheck} hardcodes
      * the graceful threshold as {@code getRollDamageThreshold() * 2}, exactly as legacy's
      * {@code Roll#rollCheck} did, so this key is a knob that does not turn — and it is not shipped in
      * {@code advanced.yml} either, so it always answers with the default below. Left in place (rather

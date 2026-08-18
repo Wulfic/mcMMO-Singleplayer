@@ -5,9 +5,9 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.runnables.skills.AbilityDisableTask;
-import com.gmail.nossr50.skills.agility.AgilityManager;
-import com.gmail.nossr50.skills.agility.Medium;
-import com.gmail.nossr50.skills.agility.SecondWindResult;
+import com.gmail.nossr50.skills.movement.MovementManager;
+import com.gmail.nossr50.skills.movement.Medium;
+import com.gmail.nossr50.skills.movement.SecondWindResult;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
@@ -138,7 +138,7 @@ public final class SecondWindListener {
             return;
         }
 
-        final AgilityManager agility = mmoPlayer.getAgilityManager();
+        final MovementManager agility = mmoPlayer.getMovementManager();
         if (agility == null) {
             return;
         }

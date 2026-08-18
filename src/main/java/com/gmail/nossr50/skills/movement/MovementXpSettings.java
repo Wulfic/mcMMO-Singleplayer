@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.agility;
+package com.gmail.nossr50.skills.movement;
 
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.fabric.McMMOMod;
@@ -22,7 +22,7 @@ import org.jetbrains.annotations.NotNull;
  *
  * <p>This type is a snapshot rather than a set of live config reads because it is consulted 20×/s
  * per player. Re-reading the YAML tree every tick is the trap the Alchemy Catalysis brew hook fell
- * into; {@link AgilityManager} builds one of these lazily per player session, which is exactly the
+ * into; {@link MovementManager} builds one of these lazily per player session, which is exactly the
  * lifetime of a loaded config.
  */
 public final class MovementXpSettings {

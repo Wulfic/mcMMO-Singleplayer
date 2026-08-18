@@ -16,7 +16,7 @@ import com.gmail.nossr50.runnables.skills.AbilityDisableTask;
 import com.gmail.nossr50.runnables.skills.ToolLowerTask;
 import com.gmail.nossr50.skills.LimitBreak;
 import com.gmail.nossr50.skills.SkillManager;
-import com.gmail.nossr50.skills.agility.AgilityManager;
+import com.gmail.nossr50.skills.movement.MovementManager;
 import com.gmail.nossr50.skills.alchemy.AlchemyManager;
 import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.skills.axes.AxesManager;
@@ -204,8 +204,8 @@ public class McMMOPlayer {
             // manager's EPISODIC_XP_SKILL and the nominal SECOND_WIND binding.
             // ⚠️ The inherited SkillManager#skill field is therefore load-bearing for NOTHING in
             // this manager: every XP award names its own destination and all four level ramps pass
-            // an explicit skill to scaleToLevel. Pinned by AgilityMovementTest.
-            case PARKOUR -> new AgilityManager(this);
+            // an explicit skill to scaleToLevel. Pinned by MovementTravelTest.
+            case PARKOUR -> new MovementManager(this);
             case REPAIR -> new RepairManager(this);
             case SALVAGE -> new SalvageManager(this);
             case SMELTING -> new SmeltingManager(this);
@@ -236,11 +236,11 @@ public class McMMOPlayer {
      *     public XxxManager getXxxManager() { return (XxxManager) skillManagers.get(PrimarySkillType.XXX); }
      * Uncomment/add one per manager as it ports, alongside its initManager() case above. The
      * manager ↔ skill mapping is the switch above, and it is one-to-one for every manager EXCEPT
-     * the movement one: AgilityManager↔PARKOUR is nominal and it also serves Swimming and Flying.
+     * the movement one: MovementManager↔PARKOUR is nominal and it also serves Swimming and Flying.
      */
 
-    public AgilityManager getAgilityManager() {
-        return (AgilityManager) skillManagers.get(PrimarySkillType.PARKOUR);
+    public MovementManager getMovementManager() {
+        return (MovementManager) skillManagers.get(PrimarySkillType.PARKOUR);
     }
 
     public AlchemyManager getAlchemyManager() {
