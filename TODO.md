@@ -1565,13 +1565,13 @@ gets run for real on each band rather than assumed.
 2. ✅ `drift-audit.py --self-test` (a broken auditor also prints "no drift"), then
    `--master master` — expect it to name `831888252` as un-propagated on all five bands. That
    *failing* run is the baseline evidence; without it, the green run at the end is unfalsifiable.
-3. ⬜ Per band, in order `mc/1.21.10` → `mc/1.21.8` → `mc/1.21.5` → `mc/1.21.4` → `mc/1.21.3`:
+3. ✅ Per band, in order `mc/1.21.10` → `mc/1.21.8` → `mc/1.21.5` → `mc/1.21.4` → `mc/1.21.3`:
    - `git checkout <band>`
    - `git checkout 831888252 -- scripts/extract-mc-surface.py` — the **path-restricted** pick. A
      plain `cherry-pick` would drag `TODO.md`/`AGENTS.md` into a conflict for no reason.
    - commit with a `Backport-of: 831888252` trailer — that trailer is what `drift-audit.py` reads,
      so a commit without it is invisible to the audit even though the bytes arrived.
-4. ⬜ Per band, the verification that is the point of the phase:
+4. ✅ Per band, the verification that is the point of the phase:
    - `./gradlew classes testClasses` — **required.** The bytecode scan reads
      `build/classes/java/{main,test}`, and a stale tree yields a confidently wrong answer.
    - `python scripts/extract-mc-surface.py --self-test` — run this *before* believing a `--check`
@@ -1579,7 +1579,45 @@ gets run for real on each band rather than assumed.
    - `python scripts/extract-mc-surface.py --check` — read-only. Record the record count.
    - `git status --short` must stay clean afterwards. That is the direct proof `--check` no longer
      writes, and it is the one assertion the old code could never make.
-5. ⬜ Back on `master`: re-run `drift-audit.py --master master` → **0 drift**, and push the bands.
+5. ✅ Back on `master`: re-run `drift-audit.py --master master` → **0 drift**, and push the bands.
+
+### ✅ COMPLETE — 2026-08-18
+
+| Band | Back-port | `--self-test` | `--check` | records | `git status` after |
+|---|---|---|---|---|---|
+| `mc/1.21.10` | `11efcffd1` | PASS | PASS | 1413 | clean |
+| `mc/1.21.8` | `a9d50b468` | PASS | PASS | 1410 | clean |
+| `mc/1.21.5` | `7b049fb93` | PASS | PASS | 1410 | clean |
+| `mc/1.21.4` | `8b15295ae` | PASS | PASS | 1409 | clean |
+| `mc/1.21.3` | `4fbcbc3ef` | PASS | PASS | 1410 | clean |
+
+`drift-audit.py --master master`: **0 MISSING on all five bands** (40/20/27/28/31 propagated). The
+auditor's `--self-test` passed both before and after, and the *pre-pick* run named `831888252` as
+MISSING on all five — so the green run is falsifiable rather than the default output of a broken
+auditor.
+
+**🔑 The record count is what proved the build was the band's own.** `compileJava` came back
+`FROM-CACHE` on every band — the Phase 13 trap, and the one input `--check` cannot function without.
+The counts came out **1413 / 1410 / 1410 / 1409 / 1410** against `master`'s **1415**. A cache that
+had handed back `master`'s classes would have produced 1415 and a wall of drift on every band. The
+differing counts are the evidence; "the build said SUCCESSFUL" is not.
+
+🔑 **`--check` returning PASS on all five is a real result, but a weaker one than it looks.** It
+proves each band's committed manifest matches what its own source and bytecode currently say. It
+cannot prove the manifest belongs to *this* branch — a manifest valid for another band is true on
+every line, which is exactly how `1c480efc4` survived. Only the cross-branch identity guard closes
+that, and it is still carried debt.
+
+⚠️ **The Java suite was not run, deliberately, and that is defensible here.** Only
+`scripts/extract-mc-surface.py` changed on any band. `ConfigIdManifestTest` and
+`MixinApplicationTest` are the only files in `src/` that mention the script or the manifest, and
+both mentions are **javadoc/comment text** — neither test opens either file. `./gradlew classes
+testClasses` compiled green on all five. No band's `mc-surface.txt` was modified: `git status` was
+asserted clean after every `--check`, which is simultaneously the proof the read-only fix works.
+
+⚠️ No release fired, as predicted: `scripts/**` is absent from `release.yml`'s `paths:` filter
+(verified by reading the trigger block on a band, not assumed), so no tag moved and the reaping
+sweep never ran.
 
 ### Blast radius
 
