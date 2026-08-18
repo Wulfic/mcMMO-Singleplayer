@@ -1650,6 +1650,151 @@ failure to investigate.
 
 ---
 
+## Phase 18 — the cross-branch manifest identity guard (2026-08-18, before 8.3)
+
+Closes the second half of the carried debt filed at the end of Phase 15 and deferred by **P16-1**.
+Piece 1 (validate manifest symbols against the band's merged jar) stays deferred — see *What I am
+NOT doing*.
+
+### Why this is worth a phase now that Phase 16 has landed
+
+The obvious justification — *"it catches the `1c480efc4` shape"* — is **the weaker half of the
+argument, and stating only it would oversell the guard.** Post-Phase-16 `--check` regenerates from
+*this* branch's source + bytecode and compares against the committed file, so a manifest copied from
+another band now fails `--check` **unless the two bands generate the same manifest**. That residual
+case is the whole point, and Phase 17 measured it rather than imagining it:
+
+> `compileJava` came back **`FROM-CACHE` on every one of the five bands.** The only evidence the
+> classes were that band's own was the per-band record count — **1413 / 1410 / 1410 / 1409 / 1410**
+> against `master`'s **1415** — read off five terminals by a person.
+
+That is the real failure mode. If Gradle's cache ever hands band X the classes of band Y, then X
+*regenerates Y's manifest*, `--check` compares Y's manifest against Y's manifest and **passes**, and
+X commits a manifest describing a different Minecraft. Every per-branch check in the repo is green.
+The one and only tell is that X's and Y's committed blobs are byte-identical — which is what this
+guard reads, and what nothing else looks at. **It mechanises the five numbers a human compared by
+eye.**
+
+Note the record counts already collide three ways (**1410** on `mc/1.21.8`, `mc/1.21.5` and
+`mc/1.21.3`) while the full manifests do not. The count was a *cheap proxy* that happened to work;
+the blob is the actual fact.
+
+🔑 So the guard's job is not "detect a copy-paste". It is **"detect that two branches' generated
+facts came out the same, whatever the cause"** — stale cache, copied blob, or a band that was never
+really regenerated.
+
+### Design
+
+New `scripts/manifest-identity-audit.py`. Read-only; it never writes a file, so no destructive path
+exists in it and none needs guarding.
+
+- **Byte-identity is read as a git blob sha**: `git rev-parse <ref>:scripts/mc-surface.txt`. Git
+  already content-addresses blobs, so identical content on two branches *is* an identical sha. No
+  checkout, no working tree, no branch switching — the guard cannot disturb the checkout it runs in.
+  🔑 It compares the **committed, `text=auto`-normalised** bytes, which is the right unit twice over:
+  that is what ships, and it means a CRLF/LF difference can never mask a duplicated manifest.
+- **Group branches by blob sha. Any group of 2 or more is a violation** → exit 1, naming every
+  branch in the group and the sha. Groups, not pairs, so a three-way collision reports as one
+  finding rather than three.
+- **Fewer than 2 resolvable branches → exit 2, never exit 0.** With one branch there are zero pairs
+  and the guard passes while proving nothing — the identical failure `--require-bands` exists for in
+  `drift-audit.py`. `--require-bands N` mirrors that floor, and the workflow passes the real count.
+- **A branch with no `scripts/mc-surface.txt` is a violation, not a skip.** Fail closed: an absent
+  manifest is a band whose `--check` gate cannot run at all, and silently dropping it from the
+  comparison is one more way for the guard to be green about nothing.
+- **Refs:** prefer `origin/**`, fall back to local, exactly like `drift-audit.py`. And carry the
+  same warning it does — auditing remotes hides a local commit, so a manifest fixed (or broken)
+  locally reads clean. Warn when a local branch's blob differs from its remote counterpart;
+  `--local` forces local refs.
+
+### The self-test
+
+`--self-test` builds a throwaway repo and asserts **firing and quiet cases separately**, per the
+Phase 16 pattern:
+
+- **Firing:** two bands sharing a blob (must name exactly that pair) · a three-way group (must
+  report one group of three, not three findings) · a branch missing the manifest · fewer than two
+  branches.
+- **Quiet:** every branch distinct → exit 0 · a branch whose manifest differs by a single byte → not
+  a collision (states the known hole below, rather than pretending the guard covers it).
+- **Mutation:** a stubbed comparator that never groups must **redden every firing case**. Without
+  this the firing assertions can pass for free — the 11th-sighting shape, where a guard asserting
+  "nothing reported" is satisfied by a guard that reports nothing ever.
+
+### What this guard does NOT prove — stated here so it does not become the next false-clean
+
+- **Distinct is not correct.** Six manifests that differ from one another can all six be wrong. This
+  is a collision detector and nothing more; the correctness half is piece 1, still debt.
+- **One changed byte defeats it.** A copied-then-hand-edited manifest is not byte-identical. That
+  hole is real and is *not* closed here — but it is narrow, because a hand-edited manifest is what
+  Phase 16's `--check` already fails on (record-set drift, plus its explicit "same records,
+  different bytes" case for a tampered `DO NOT EDIT BY HAND` header). The two guards compose;
+  neither is complete alone.
+- **It cannot see a manifest copied from a branch outside the audit set** — a deleted band, or a
+  working copy that never got pushed.
+
+### Steps
+
+- [x] **18.1** Write `scripts/manifest-identity-audit.py` with `--self-test`, `--require-bands`,
+      `--local`, `--json`.
+- [x] **18.2** Run `--self-test` — all firing and quiet cases, and the stubbed-comparator mutation.
+- [x] **18.3** Run it for real against all six branches. **Expect exit 0** — the six blobs were
+      already measured distinct in Phase 17 (`96aaff324` · `0c8d4c6f8` · `857bd1d3c` · `4bfb87cd8` ·
+      `a163060798` · `2d9dd661c`). A green first run proves nothing on its own, which is why 18.2
+      comes first.
+- [x] **18.4** Add it to `.github/workflows/drift-audit.yml` as two steps (self-test, then audit),
+      reusing that job's existing `fetch-depth: 0` + band fetch. It is the only workflow that
+      already sees every branch. This buys the same weak leg `drift-audit` has — weekly, from
+      `master` only, reporting to a tab nobody opens (**R11**). It is a backstop, not the check.
+- [x] **18.5** Add it to the ship gate as step **9**, and mark the carried-debt row.
+- [ ] **18.6** Decide the propagation question BEFORE the master commit — see below. **BLOCKING: nothing is committed until this is answered.**
+
+### The one decision that cannot be deferred
+
+`scripts/` is propagatable under **R9a**, so `drift-audit.py` will report this commit MISSING on all
+five bands from the moment it lands. Two lawful outcomes:
+
+- **(a) Back-port it** to all five bands with `Backport-of:` trailers — the Phase 16 to 17
+  precedent.
+- **(b) Waive it** with `Backport-not-needed: repo-wide cross-branch guard; it reads every branch's
+  committed blob and returns the same answer from any checkout`.
+
+**This must be settled before the commit is written, not after.** The `Backport-not-needed:` trailer
+is an opt-out that lives *in the commit that made the decision* and **cannot be applied
+retroactively** — that is the entire mechanism. Choosing (b) later means amending or a second commit
+that the auditor will not read.
+
+### What I am NOT doing
+
+- **Not** validating manifest symbols against the band's merged jar (piece 1). Needs a Loom-cached
+  jar and `probe-bands.py`'s resolver; it is a separate phase and it would **not** have caught the
+  original incident — every symbol in the `1c480efc4` blob was real.
+- **Not** adding an allowlist / waiver flag for a legitimate collision. Two bands that genuinely
+  generate identical manifests has **never been observed**, and shipping the silencer before the
+  first real firing is how a guard gets silenced. If it ever fires legitimately, that deserves a
+  ruling, not a flag.
+- **Not** extending the guard to `mc-ids.txt`. That manifest is a fact about *Minecraft*, not about
+  a branch — per its own rule it is cherry-picked and **must** be byte-identical across bands. The
+  invariant there is the exact inverse, and folding both into one script would invite applying the
+  wrong one.
+- **Not** bumping `mod_version` or touching `src/`. Nothing shipped changes.
+- **Not** starting 8.3.
+
+### 18 — blast radius
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| 18.1 | new file `scripts/manifest-identity-audit.py` | nothing — the path is unused; verified absent before writing | delete the file |
+| 18.4 | `.github/workflows/drift-audit.yml` on `master`, additive steps | a red weekly audit; nothing ships from this workflow | `git revert`; the file is committed at `54e2c5dab` |
+| 18.5 | `TODO.md` | docs only, outside `release.yml`'s `paths:` — no release fires | `git revert` |
+| 18.6 | five band branches (only if (a)) | nothing — additive commits | `git reset --hard <band>@{1}` before push; a revert after |
+
+Nothing in this phase releases: `scripts/`, `.github/` and `TODO.md` sit outside `release.yml`'s
+`paths:` filter, so `ci-watch.sh` will correctly report *"skipped, not passed"*. Expected, not a
+failure to investigate.
+
+---
+
 ## Phase 9 — the `26.x` band
 
 **Its own mini-project (R-e). Do not absorb it into a sweep.** Gated behind Phase 8 delivering at
@@ -2444,11 +2589,17 @@ fetch into `build/`, which is already what line 41 does.
 
 ## The ship gate — run per band, before every push
 
-**It is a person running seven commands, and that has not changed.** ⚠️ R-r put `release.yml` back on
+**It is a person running nine commands, and that has not changed.** ⚠️ R-r put `release.yml` back on
 every branch including `master`, so a push now *builds and runs the suite* again — but that is gate
 **1 only**, it runs **after** the push rather than before it, and a red run reports to a tab nobody
-watches (**R11**). Six of the seven gates have no automation at all. Run the list first; the workflow
-is a backstop, never the check.
+watches (**R11**). Run the list first; the workflow is a backstop, never the check.
+
+⚠️ **Only gates 1, 7 and 9 have any unattended leg at all, and two of those are weekly.** Gate 1 fires
+per push via `release.yml`; gates **7** and **9** run from `.github/workflows/drift-audit.yml`, which
+GitHub fires **weekly and only from the default branch** — inert on every band by construction, and
+reporting to a tab nobody opens (**R11**). The other six have no automation whatsoever.
+⚠️ The count said *"seven"* while eight gates were listed, from the day gate 8 was added until
+2026-08-18. Update this sentence when you add a gate; nothing else counts them.
 
 1. `./gradlew --no-daemon --stacktrace build -Pmod_version=$(grep -E '^mod_version=' gradle.properties | cut -d= -f2 | sed 's/-SNAPSHOT$//')`
    exit 0 — suite green, and the **count should match `master`** (~1719). A lower count means
@@ -2508,6 +2659,18 @@ is a backstop, never the check.
    first; the filter now only ever explains an *absence*. That ordering is the fix — a docs-only tip
    commit on a push that also carried `src/**` used to report a green release as *"Skipped."*
 
+9. `python scripts/manifest-identity-audit.py --self-test` **then** `--require-bands <band count>` —
+   **0 collisions**, and every branch's `scripts/mc-surface.txt` distinct. This is the *cross-branch*
+   half of the manifest guard; gate 1's `extract-mc-surface.py --check` is the per-branch half and
+   **neither one can do the other's job**.
+   ⚠️ **It defaults to `origin/**`, so push first — or pass `--local`.** A local-only manifest is
+   invisible to the default run, and it says so rather than reading clean.
+   ⚠️ **Exit 2 is not a pass.** Fewer than two branches means zero pairs were compared, which is what
+   a shallow clone produces and is indistinguishable from a clean result without the floor.
+   🔑 **What a green run does NOT mean:** distinct is not correct. Six manifests that all differ can
+   all six be wrong; this gate only proves no two branches share one. And a copied-then-*edited*
+   manifest is not byte-identical — that one is gate 1's job.
+
 ✅ **`scripts/`-only and `.github/`-only commits are now tracked** (R9a, 2026-08-13), so "cherry-pick
 tooling deliberately" is enforced rather than remembered. ⚠️ **Docs are still not**, deliberately —
 their correctness is checked instead by `BandDocsMatchRealityTest`, which runs inside gate 1.
@@ -2546,12 +2709,29 @@ their correctness is checked instead by `BandDocsMatchRealityTest`, which runs i
       ⚠️ **This flips the ship gate from *silently regenerates* to *verifies*.** A band that has
       legitimately moved records must now regenerate deliberately (a plain run) and commit the diff.
 
-- [ ] 🔴 **The other half is still open, and it is the half that would have caught the actual
-      incident.** Two pieces, both deferred by P16-1:
-      1. **Validate manifest symbols against the band's merged jar** — refuse a manifest naming a
+- [ ] 🟡 **DOWNGRADED 2026-08-18 (Phase 18) — piece 2 shipped, piece 1 is still open.** The two
+      pieces deferred by P16-1:
+      1. 🔴 **Validate manifest symbols against the band's merged jar** — refuse a manifest naming a
          symbol the band does not have. Needs a Loom-cached jar and `probe-bands.py`'s resolver.
-      2. **A cross-branch byte-identity guard** — no two bands may carry a byte-identical
-         `mc-surface.txt`. Has to see all six branches, so it is a new script, not a flag.
+         **Still open.** ⚠️ Note it would **not** have caught the recorded incident: every symbol in
+         the `1c480efc4` blob was real.
+      2. [x] ✅ **A cross-branch byte-identity guard — CLOSED, `scripts/manifest-identity-audit.py`.**
+         Groups all six branches by the git **blob sha** of `scripts/mc-surface.txt`; any group of 2+
+         is exit 1. Absent manifest = violation, not a skip. Fewer than two branches = **exit 2, not
+         0** — zero pairs compared is not a pass. Ship gate step **9**, plus a weekly leg in
+         `drift-audit.yml`. Self-test: 2 quiet / 5 firing / 1 warning case, **mutation-proven 9 ways**.
+         🔑 **Its real justification is not "somebody copied a file".** Post-Phase-16 a copied
+         manifest already fails `--check` *unless the two bands generate the same one* — which is
+         exactly what a build-cache hit produces. Phase 17 measured `compileJava` coming back
+         **`FROM-CACHE` on all five bands**, with the per-band record counts (1413/1410/1410/1409/1410
+         vs master's 1415) the only evidence the classes were each band's own. This gate mechanises
+         those five numbers, and the blob is the fact the count only proxied — three bands already
+         share the count **1410** while their manifests differ.
+         ⚠️⚠️ **Building it found a vacuity hole in its own first self-test.** FIRING3 used **one**
+         branch with no manifest, so *"absent manifests must not group with each other"* passed for
+         free — a single entry can never form a group. A grouper keying on `None` left the suite
+         green. The fixture now uses **two** absent branches. Caught only by mutation, not review:
+         the 12th sighting of an assertion satisfied over a slice too small to test it.
       🔑🔑 **Measured in Phase 16, not assumed:** an attempt to reproduce the incident on `master` by
       injecting the two real `1c480efc4` symbols (`CommandManager#requirePermissionLevel`,
       `AbstractCowEntity`) into the committed manifest was a **no-op — `master` already references
