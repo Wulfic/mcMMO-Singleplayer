@@ -172,6 +172,18 @@ test {
     systemProperty 'mcmmo.build.modVersion', resolvedModVersion
     inputs.property 'mcmmo.build.version', resolvedVersion
 
+    // ⚠️⚠️ A FILE A GUARD TEST READS MUST BE DECLARED AS A TASK INPUT, or Gradle does not know the
+    // test depends on it — and with org.gradle.caching=true it serves a CACHED PASS after that file
+    // changes. BandVersionLabelTest asserts release.yml still refuses a stale mod_version; measured
+    // 2026-08-18, three mutations of that workflow (deleting the refusal step, moving it below the
+    // tag push, turning its exit 1 into exit 0) ALL scored "not caught" — not because the assertions
+    // were wrong, but because :test never re-ran. A guard that cannot re-run is decoration.
+    //
+    // gradle.properties needs no entry here: mcmmo.build.version above already changes with it.
+    // fabric.mod.json rides in on processResources' output, which is already a test input.
+    inputs.file(rootProject.file('.github/workflows/release.yml'))
+            .withPropertyName('releaseWorkflow')
+
     // The fabric-loader-junit tests call McTestRegistries.bootstrap() -> Bootstrap.initialize(),
     // which builds the whole vanilla registry set. Measured 2026-08-05: that @BeforeAll costs ~53s
     // and is CPU-bound, not GC-bound (512m and 3g time identically), so it is a fixed per-JVM cost.

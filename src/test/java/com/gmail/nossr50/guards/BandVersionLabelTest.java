@@ -74,6 +74,13 @@ class BandVersionLabelTest {
     private static final Path FABRIC_MOD_JSON =
             Path.of("src", "main", "resources", "fabric.mod.json");
 
+    private static final Path RELEASE_WORKFLOW =
+            Path.of(".github", "workflows", "release.yml");
+
+    /** {@code 1.0.0} or {@code 1.0.0-SNAPSHOT} — three unpadded numeric segments, nothing else. */
+    private static final Pattern FORK_MOD_VERSION =
+            Pattern.compile("^(\\d+)\\.(\\d+)\\.(\\d+)(-SNAPSHOT)?$");
+
     /** {@code supported_minecraft_versions=1.21.6,1.21.7,1.21.8} — ignores comment lines. */
     private static final Pattern BAND_VERSIONS =
             Pattern.compile("^\\s*supported_minecraft_versions\\s*=\\s*(\\S.*?)\\s*$", Pattern.MULTILINE);
@@ -228,6 +235,128 @@ class BandVersionLabelTest {
                         + "stripping -SNAPSHOT (which would give \"" + stripSnapshot(declared)
                         + "\"). Anything else means a stale configuration cache or a -Pmod_version "
                         + "override that would name the jar after an undeclared version.");
+    }
+
+    /**
+     * <b>The version line is this fork's own, and its FORM is load-bearing</b> (ruling R-s, TODO.md
+     * Phase 13).
+     *
+     * <p>Until 2026-08-18 {@code mod_version} was {@code 2.2.050-SNAPSHOT} — upstream mcMMO's Bukkit
+     * plugin number, borrowed by a singleplayer Fabric fork that shares none of its release cadence.
+     * Two separate things were wrong with it, and only one of them is cosmetic:
+     *
+     * <ul>
+     *   <li><b>The padded patch does not survive Fabric's parser.</b> {@code Version.parse("2.2.050")}
+     *       reports {@code 2.2.50}, so the jar filename said {@code 2.2.050+mc1.21.11} while ModMenu
+     *       said {@code 2.2.50+mc1.21.11} — the same download identifying itself two ways depending on
+     *       where you read it. That is TODO.md 10.0 defect 3, left open pending this ruling.
+     *   <li><b>Sharing upstream's number invites a comparison that is meaningless.</b>
+     * </ul>
+     *
+     * <p>So this asserts the ROUND TRIP, not just the shape: any version whose friendly form differs
+     * from what is written on disk is rejected, whatever produced it. A regex alone would pass
+     * {@code 2.2.050} again the day somebody re-pads a segment "so it sorts".
+     */
+    @Test
+    void theModVersionIsThisForksOwnUnpaddedSemver() throws Exception {
+        final String declared = modVersion();
+        assertTrue(
+                FORK_MOD_VERSION.matcher(declared).matches(),
+                "gradle.properties declares mod_version=\"" + declared + "\". This fork's version "
+                        + "line is plain three-segment semver, optionally -SNAPSHOT (e.g. "
+                        + "1.0.0-SNAPSHOT). See TODO.md Phase 13.");
+
+        final String base = stripSnapshot(declared);
+        assertTrue(
+                roundTripsThroughFabric(base),
+                "mod_version \"" + declared + "\" does not survive Fabric's own parser: "
+                        + "Version.parse(\"" + base + "\") reports \""
+                        + Version.parse(base).getFriendlyString() + "\". The jar filename would "
+                        + "advertise one version while ModMenu shows another. Do not zero-pad a "
+                        + "segment — that is exactly how 2.2.050 came to display as 2.2.50.");
+    }
+
+    /**
+     * <b>The release path must still REFUSE a version that already shipped</b> (ruling R-t).
+     *
+     * <p>⚠️ This guard exists because the requirement was previously written down as a
+     * <em>comment</em>. TODO.md Phase 10 dropped the {@code -build.<run#>} suffix and noted that
+     * "releasing now requires BUMPING mod_version" — then shipped nothing that checked anybody had.
+     * So {@code mc1.21.11-v2.2.050} was re-used on every push for months: each run force-moved a tag
+     * clones had already fetched, orphaned the previous release as a same-tag draft, and reported
+     * success. A gate that can be deleted without anything going red is the same as no gate.
+     *
+     * <p><b>The ORDERING is asserted, not just the presence.</b> The check is only meaningful
+     * <em>before</em> the tag is pushed — the tag step force-deletes and re-pushes the ref, so the
+     * same comparison run afterwards would always find the tag already on this run's commit and pass.
+     * Moving the step down would leave a green, entirely vacuous guard.
+     */
+    @Test
+    void theReleaseWorkflowRefusesAStaleModVersion() {
+        final String workflow = read(RELEASE_WORKFLOW);
+
+        final int refusal = workflow.indexOf("- name: Refuse a stale mod_version");
+        assertTrue(
+                refusal >= 0,
+                "release.yml no longer has the \"Refuse a stale mod_version\" step. Without it, "
+                        + "pushing without bumping mod_version silently re-points an existing tag and "
+                        + "replaces that band's release — and the run still goes green. See TODO.md "
+                        + "Phase 13.");
+
+        final int tagPush = workflow.indexOf("- name: Create and push tag");
+        assertTrue(tagPush >= 0, "release.yml no longer has the \"Create and push tag\" step.");
+        assertTrue(
+                refusal < tagPush,
+                "release.yml runs \"Refuse a stale mod_version\" AFTER \"Create and push tag\". The "
+                        + "tag step force-deletes and re-pushes the ref, so by then the tag always "
+                        + "points at this run's commit and the check can never fail. Move it back "
+                        + "above the tag step.");
+
+        final String body = workflow.substring(refusal, tagPush);
+        assertTrue(
+                body.contains("GITHUB_SHA"),
+                "the refusal step no longer compares the existing tag against GITHUB_SHA. Reduced to "
+                        + "a bare existence check it would also reject a legitimate re-run of the "
+                        + "same commit, which is what workflow_dispatch is for.");
+        // ⚠️ Scoped to the REFUSAL BRANCH, not to the whole step. The step opens with a
+        // fail-closed guard on an empty TAG that also ends in `exit 1`, so a bare
+        // body.contains("exit 1") stays true when the refusal itself is changed to exit 0 — the
+        // assertion passes while the gate waves the release through. Measured: mutation M4 scored
+        // NOT CAUGHT against exactly that weaker form on 2026-08-18.
+        final int refusalBranch = body.indexOf("::error::mod_version ");
+        assertTrue(
+                refusalBranch >= 0,
+                "the refusal step no longer emits its ::error:: for an already-shipped mod_version, "
+                        + "so a forgotten bump would produce no annotation to read.");
+        assertTrue(
+                body.substring(refusalBranch).contains("exit 1"),
+                "the refusal branch no longer exits non-zero: it reports that the version already "
+                        + "shipped and then releases anyway — a warning, not a gate.");
+    }
+
+    /**
+     * The converse for {@link #theModVersionIsThisForksOwnUnpaddedSemver()}. Drives both rules with
+     * values no current build produces, so the guard is proven able to FAIL — a shape check that has
+     * only ever seen a passing input is indistinguishable from one that returns true.
+     */
+    @Test
+    void theForkVersionRulesRejectTheUpstreamAndPaddedForms() throws Exception {
+        assertTrue(FORK_MOD_VERSION.matcher("1.0.0").matches());
+        assertTrue(FORK_MOD_VERSION.matcher("1.0.0-SNAPSHOT").matches());
+        assertTrue(FORK_MOD_VERSION.matcher("12.4.37-SNAPSHOT").matches());
+        assertFalse(FORK_MOD_VERSION.matcher("1.0").matches(), "two segments is not this line");
+        assertFalse(
+                FORK_MOD_VERSION.matcher("1.0.0-build.7").matches(), "the run-number suffix is gone");
+        assertFalse(FORK_MOD_VERSION.matcher("v1.0.0").matches(), "the v lives on the TAG, not here");
+
+        // The shape check ALONE is not enough, and this is the pair that proves it: 2.2.050 matches
+        // three-numeric-segments perfectly well and is still the exact defect being retired.
+        assertTrue(FORK_MOD_VERSION.matcher("2.2.050-SNAPSHOT").matches());
+        assertFalse(roundTripsThroughFabric("2.2.050"), "Fabric reports 2.2.050 as 2.2.50");
+        assertEquals("2.2.50", Version.parse("2.2.050").getFriendlyString());
+
+        assertTrue(roundTripsThroughFabric("1.0.0"));
+        assertFalse(roundTripsThroughFabric("1.0.00"));
     }
 
     /**
@@ -423,6 +552,15 @@ class BandVersionLabelTest {
         final String resolved = System.getProperty("mcmmo.build.modVersion");
         assertNotNull(resolved, "see theBuildWiringIsPresent()");
         return resolved;
+    }
+
+    /**
+     * Whether Fabric reports the version back exactly as written. {@code Version#getFriendlyString}
+     * is what ModMenu renders and what the loader compares, so a value that does not survive this
+     * round trip is one the jar filename and the running game disagree about.
+     */
+    private static boolean roundTripsThroughFabric(String version) throws Exception {
+        return Version.parse(version).getFriendlyString().equals(version);
     }
 
     private static String stripSnapshot(String version) {
