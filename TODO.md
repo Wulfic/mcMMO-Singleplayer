@@ -621,6 +621,31 @@ lands as its **own commit, separate from behaviour**, and last.
 `milestone/rank/agility_{fleet_footed,second_wind}/*` go. ⚠️ **Accepted player-visible cost:** an
 earned Agility advancement silently vanishes from the player's list.
 
+**A-5 — `/mcstats agility` gets a retirement message, not an unknown-skill error.** Keep exactly one
+locale string saying the skill was retired and its perks now live under Parkour, Swimming and Flying.
+**Why:** a player who levelled Agility for weeks and gets *"no such skill"* concludes the mod broke.
+`Agility.SkillName` / `Overhaul.Name.Agility` / `XPBar.Agility` still go — the bar simply stops
+appearing; this is one string and one branch in the command, not a retained skill.
+
+**A-6 — the dead `Skills.Agility:` block STAYS in the player's `advanced.yml`; `ConfigRetunes` logs
+that it is dead and moves on.** `ConfigRetunes` moves the *values* to the new per-parent paths (per
+"Concrete target state" below) and then **leaves the orphan block alone**. **Why:** deleting a block
+from a file the player owns is a write we cannot prove safe for every hand-edited config, and rule
+zero prices that far above the tidiness it buys. Cost accepted: a dead `Skills.Agility:` section sits
+in an existing player's config indefinitely, so the log line must say plainly that it is no longer
+read.
+⚠️ **This is a refusal to destroy, so it needs the CONVERSE test**, not a guard test: load a config
+carrying `Skills.Agility:`, run the retune, and assert the block is **still there** and the new paths
+are populated. Otherwise a later "cleanup" deletes it and nothing fails.
+
+**A-7 — ONE combined back-port pass, at the very end** (owner, 2026-08-17). The four Taming commits
+do **not** go to the bands now; they wait for the Agility retirement to finish and both tracks are
+cherry-picked together.
+⚠️ **Cost stated and accepted at the time of the ruling:** F's rename means the *Taming* picks will
+conflict too, not just the Agility ones, and ~10 unpropagated commits is the exact accumulation that
+made 11 of the last 12 forgotten fixes. **Mitigation, mandatory:** take **F as its own cherry-pick,
+after every behaviour commit**, on every band.
+
 ### Concrete target state
 
 `skillranks.yml` — delete the `Agility:` block; add to each of the three parents:
@@ -668,12 +693,30 @@ the Taming defect was.
       level via `PrimarySkillType.AGILITY` and stops compiling. When E lands, delete **only** that
       assertion and keep the two orphan-key ones; deleting the test wholesale would remove the only
       proof that a legacy key is still ignored.
-- [ ] **A — the six sub-skills.** Add the new `SubSkillType` constants and the `skillranks.yml`
+- [x] **A — the six sub-skills.** ✅ **shipped `98f6a0bd4`**, suite green at 1803 tests. Add the new `SubSkillType` constants and the `skillranks.yml`
       blocks; repoint `MovementManager#canFleetFoot/canSecondWind` from `Medium#fleetFootedRank()` to
       the medium's own constant. `Medium` gains `fleetFootedSubSkill()` / `secondWindSubSkill()` and
       **loses `fleetFootedRank()`** — delete it rather than leaving it unused, it is the thing that
       encoded the dissolved ladder.
 - [ ] **B — Second Wind's medium-aware binding** + the "all three unlock alike" guard (A-2).
+      ⚠️ **Two things the plan did not know, both found by reading the code after A landed:**
+      **(B-i) The guard A-2 depends on does not exist.** `SuperAbilityType.java:191` carries the comment
+      *"Pinned by `SuperAbilityTypeTest#allSecondWindSubSkillsUnlockAtTheSameLevel`"* and **there is no
+      such test class**. Phase A shipped a comment asserting a guard it never wrote — the binding is
+      unpinned right now. Write it, and assert the nominal binding's answer *equals every medium's*
+      answer rather than re-asserting the literal 250, so the guard fails on divergence however it
+      arrives.
+      **(B-ii) The ability DURATION still reads `AGILITY`, the mean.**
+      `SecondWindListener.java:135` calls `calculateAbilityActivationTicks(PrimarySkillType.AGILITY, …)`,
+      so how *long* Second Wind runs is scaled on the mean of the three skills even though A already
+      made what *gates* it per-medium. Phase E deletes that constant, so this line must move — and it
+      is **a behaviour change, not a rename**: a Swimming-900 / Parkour-0 / Flying-0 specialist scales
+      on 300 today and on **900** afterwards. Taken under **A-1** (specialists stop being taxed by the
+      mean) rather than re-asked; it is the *fifth* consequence of A-1 and belongs in the wiki sentence
+      A-1 already owes. Duration becomes `medium.primarySkill()`.
+      🔑 This is the shape the plan warned about — *"a mechanical find-and-replace ships sub-skills that
+      unlock at the wrong level and nothing fails"* — except it landed on the **duration**, which no
+      gate test reads.
 - [ ] **C — config + locale + `ConfigRetunes` path moves.** ⚠️ ModMenu rows land with the code that
       READS the key, never with the key — `CatalogueKeysReachCodeTest` is right to refuse them early.
 - [ ] **D — renderers + advancements.** Delete `AgilityStatsRenderer`; Parkour/Swimming/Flying
