@@ -1307,8 +1307,27 @@ values and are wrong whether or not the fork is detached. Order does not matter.
 
 ### 14.5 — back-port
 
-- [ ] 14.1 and 14.2 touch `src/` and docs → all five bands (`Backport-of:`).
-- [ ] 14.3 is `.github/` → master only, `Backport-not-needed:`.
+- [x] ✅ 14.1 and 14.2 → **all five bands** (`Backport-of: 4108711c6`), each built green before push.
+      🔑 **Phase 13 had to go with it.** The bands sat at `mod_version=2.2.050-SNAPSHOT` with no
+      stale gate, so this fix alone — it touches `src/**`, so it fires `release.yml` — would have
+      re-tagged `mc<VER>-v2.2.050` at a new commit, drafted the published release whose tag
+      vanished, and had the name-keyed sweep skip the orphan. That is the six-orphan defect of
+      2026-08-13, once per band. `a0f4bab9c` was back-ported first (`Backport-of: a0f4bab9c`).
+      ⚠️ **`wiki/Troubleshooting.md` conflicted on all five, and the band side was the correct
+      one.** The bands predate the Agility retirement, so their key is
+      `Experience_Values.Agility.Movement.Reference_Speed`; master's post-retirement path names a
+      key that does not exist there. The resolver **walks each branch's own `experience.yml` and
+      refuses** if the key it is about to keep is not in it — the band side is not trusted for
+      being the band side.
+      ⚠️ **`TODO.md` deliberately not back-ported** — the band's own plan doc, diverged wholesale,
+      and no back-port commit on any band has ever carried it.
+- [x] ✅ 14.3 is `.github/` → master only, `Backport-not-needed:` stated in the commit.
+- [x] ✅ **Verified end to end**, not just green: all 6 release runs succeeded, **6 releases, all
+      `v1.0.0`, zero orphan drafts, zero `v2.2.050` left**, and the *downloaded published jar*
+      (`mcmmo-1.0.0+mc1.21.11.jar`) reports all three contact URLs on this fork. `drift-audit.py`
+      (`--self-test` first) flags neither commit as missing on any band.
+      ⚠️ It does still report the **pre-existing** Agility-retirement and Taming backlog on every
+      band. That predates this work and is untouched by it.
 
 **What I am NOT doing:** not touching the attribution links; not adding issue templates; not enabling
 or configuring the issue tracker (`has_issues` is already `true` — verified); not detaching the fork.
