@@ -2784,15 +2784,16 @@ fetch into `build/`, which is already what line 41 does.
 
 ## The ship gate — run per band, before every push
 
-**It is a person running nine commands, and that has not changed.** ⚠️ R-r put `release.yml` back on
+**It is a person running ten commands, and that has not changed.** ⚠️ R-r put `release.yml` back on
 every branch including `master`, so a push now *builds and runs the suite* again — but that is gate
 **1 only**, it runs **after** the push rather than before it, and a red run reports to a tab nobody
 watches (**R11**). Run the list first; the workflow is a backstop, never the check.
 
-⚠️ **Only gates 1, 7 and 9 have any unattended leg at all, and two of those are weekly.** Gate 1 fires
-per push via `release.yml`; gates **7** and **9** run from `.github/workflows/drift-audit.yml`, which
-GitHub fires **weekly and only from the default branch** — inert on every band by construction, and
-reporting to a tab nobody opens (**R11**). The other six have no automation whatsoever.
+⚠️ **Only gates 1, 7, 9 and 10 have any unattended leg at all, and three of those are weekly.** Gate 1
+fires per push via `release.yml`; gates **7**, **9** and **10** run from
+`.github/workflows/drift-audit.yml`, which GitHub fires **weekly and only from the default branch** —
+inert on every band by construction, and reporting to a tab nobody opens (**R11**). The other six
+have no automation whatsoever.
 ⚠️ The count said *"seven"* while eight gates were listed, from the day gate 8 was added until
 2026-08-18. Update this sentence when you add a gate; nothing else counts them.
 
@@ -2865,6 +2866,23 @@ reporting to a tab nobody opens (**R11**). The other six have no automation what
    🔑 **What a green run does NOT mean:** distinct is not correct. Six manifests that all differ can
    all six be wrong; this gate only proves no two branches share one. And a copied-then-*edited*
    manifest is not byte-identical — that one is gate 1's job.
+
+10. `python scripts/branch-file-identity-audit.py --self-test` **then** `--require-bands <band count>`
+    — **0 differing paths**. The **inverse** of gate 9 (P19-1): `AGENTS.md`, `.gitignore`,
+    `.github/workflows/*.yml` and `scripts/**` are one artifact every branch shares, and must be
+    byte-identical.
+    ⚠️⚠️ **Gates 9 and 10 hold opposite invariants over `scripts/`.** `mc-surface.txt` must be
+    **distinct** on every branch (gate 9) and is therefore **excluded** from gate 10. If it ever
+    appears in both sets, no state satisfies both and nothing can ship. Do not resolve a gate-10
+    failure by widening its exclusion list.
+    ⚠️ **Exit 2 is not a pass, and this gate has an extra way to hit it**: an empty path set means
+    the include globs matched nothing and zero files were compared — success reported precisely
+    when the guard became incapable of detecting anything.
+    ⚠️ **Defaults to `origin/**`, so push first — or pass `--local`.**
+    🔑 **What a green run does NOT mean:** identical is not correct. Six copies that agree can be
+    six copies of the same wrong file — that was the recorded R9 defect, a docs claim byte-identical
+    on five branches and identically **wrong**. Content correctness is `BandDocsMatchRealityTest`'s
+    job, not this one's.
 
 ✅ **`scripts/`-only and `.github/`-only commits are now tracked** (R9a, 2026-08-13), so "cherry-pick
 tooling deliberately" is enforced rather than remembered. ⚠️ **Docs are still not**, deliberately —
