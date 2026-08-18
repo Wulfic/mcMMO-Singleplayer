@@ -242,11 +242,14 @@ of `1.21.3`'s, so the second cut should be fast.
 
 ---
 
-## Taming — pet combat mode + the ranged reach fix (owner track, plan in the untracked `fix.md`)
+## Taming — pet combat mode + the ranged reach fix (owner track)
 
-⚠️ **`fix.md` is deliberately UNTRACKED** (owner ruling, 2026-08-17). This section exists because the
-*back-port* is multi-version work and `.agent/memory/` does not survive a clone — per **R-n**, a fact
-another checkout must know belongs in a tracked file, and this is it.
+⚠️ **The plan lived in an untracked `fix.md`, which was deleted on 2026-08-18 once this section
+carried everything it held** (owner ruling D-3). This section exists because the *back-port* is
+multi-version work and `.agent/memory/` does not survive a clone — per **R-n**, a fact another checkout
+must know belongs in a tracked file, and this is it. 🔑 The deletion is the reason the rulings table
+below exists: gate 2 of the destructive-action procedure asked where the content survived, and for four
+of the six rulings the honest answer was *nowhere*.
 
 - [x] **Phases 1–7 ✅ DONE on `master`, 2026-08-17**, four commits, **not yet pushed**:
       `e0d7e054e` (guard fix) · `b070534a4` (stance + gesture) · `920f2d140` (targeting + reach +
@@ -270,6 +273,25 @@ another checkout must know belongs in a tracked file, and this is it.
       needs the new gesture, **the sit-toggle cost** (while a bone is in your main hand, sneak +
       right-click changes the stance instead of sitting the pet) and both stances. ⚠️ One wiki serves
       every band — state what a *player* does, never what version the build targets.
+
+**The six rulings behind it** (owner, 2026-08-14 and 2026-08-17). Recorded here on 2026-08-18 when
+`fix.md` was deleted: the "what shipped" bullets below carried the *mechanism*, but four of these
+decisions and both of their consequences existed nowhere tracked, and a decision that lives only in a
+deleted file did not happen.
+
+| # | Ruling |
+|---|---|
+| R-1 | **Sneak + right-click the pet with a bone in hand.** The click is consumed so vanilla's sit-toggle does not also fire. |
+| R-2 | One toggle sets **a player-level default every pet inherits.** No per-pet override. |
+| R-3 | Aggressive targets are **hostiles minus creeper and ghast** — the same exclusions vanilla's own `WolfEntity#canAttackWithOwner` makes, so they are delegated rather than re-listed. |
+| R-4 | The ranged fix goes as far as **fixing the reach *and* closing the trigger gaps**, not just one. |
+| R-5 | The aggressive scan is **centred on the player, radius `32.0`** — not on each pet, and not 16. One box query per player per sweep whatever the pack size, and a pet that lagged behind cannot drag a mob home. ⚠️ **This makes `Aggressive_Radius` and `Engage_Range` the same number by default, and that is coherent rather than coincidence:** a mob found at 32 is only worth targeting if a pet can *path* 32. **Do not let one default drift without re-checking the other.** |
+| R-6 | **Toggling to passive mid-fight lets the fight finish.** Passive gates only the *acquisition* of a new target; it never calls `setTarget(null)` — a pet frozen mid-swing with a zombie on it reads as a bug, and the reach boost is stance-independent anyway. ⚠️ **Consequence for the tests:** the passive-mode negative test must assert *"the sweep picked nothing"*, **never** *"the pet has no target"* — the latter passes for free and would stay green with the whole feature deleted. |
+
+⚠️ **R-1 and R-2 are deliberately mismatched in scope and that is not a mistake.** The gesture aims at
+one animal; the stance it flips is player-wide. The clicked pet only proves *intent and ownership* — so
+**every player-facing string says "your pets", never "this wolf"**, or the first bug report is "I
+toggled one wolf and the others changed too". A test pins the wording.
 
 **What shipped, in one line each** (so a fresh clone can review the commits without `fix.md`):
 
@@ -853,6 +875,143 @@ Files with hits: `README.md` (12), `wiki/Movement-Skills.md` (16), `wiki/Configu
 `wiki/Skills.md` (7), `wiki/Troubleshooting.md` (4), `wiki/XP-and-Levelling.md` (4),
 `wiki/Super-Abilities.md` (3), `wiki/Differences-from-mcMMO.md` (2), `wiki/Stealth.md` (2), and one
 each in `Commands.md`, `Home.md`, `Hunter.md`, `Husbandry.md`, `Optional-Integrations.md`.
+
+### The rulings taken before this pass started (owner, 2026-08-18)
+
+| # | Question | Ruling |
+|---|---|---|
+| D-1 | How much of the Acrobatics → Agility → retired history survives | **One migration section, present tense everywhere else.** Every page describes today only: three movement skills, per-medium Fleet Footed and Second Wind. The chain survives in exactly one place — `wiki/Troubleshooting.md`'s "my Agility is gone" entry — cross-linked from `wiki/Configuration.md`'s migration section. Rationale: the word "Agility" on ten pages is ten future caveat-expiry liabilities, and an upgrading player only needs to find the answer once. |
+| D-2 | Does the doc work ride the A-7 back-port | **README rides; the wiki does not.** `README.md` is per-branch, so after the code back-port every band's README describes a retired skill as live — it gets its own commit and a `Backport-of:` trailer on all five bands. `wiki/` is one publication serving every band; five identical copies is the instrument AGENTS.md already rejects. |
+| D-3 | `fix.md` (untracked Taming plan, repo root) | **Delete**, once `TODO.md` and `.agent/memory/` are confirmed to carry its rulings. Guarded per rule zero: resolve, prove recoverable, confirm. |
+| D-4 | The `Acrobatics` → `Agility` rename warning | **Point it at the real destinations, and give the table its first test.** Found while verifying ground truth for this pass, not by the suite. |
+
+### D-a — the code defect this pass turned up (do this FIRST; the docs describe it)
+
+`SkillRenames.LEGACY_CONFIG_SECTIONS` still maps `Acrobatics` → `Agility`, and
+`ConfigLoader#warnOnRenamedSections` interpolates that value into *"move them to 'Agility'"*.
+
+**Not data loss, and say so rather than overstating it.** `migrateMovedPaths` runs on
+`Skills.Agility.*` and fires on the boot *after* the player renames, so the two-step genuinely
+lands. What is wrong is that the message names an intermediate that is no longer a skill — it asks
+a player to create a section the very next boot deletes.
+
+- [ ] The destination becomes the live one: `Skills.Parkour` / `Skills.Swimming` / `Skills.Flying`
+      for sub-skill tuning, `Skills.Movement` for `Second_Wind_Item` and
+      `XP_After_Teleport_Cooldown`. The value is interpolated into a fixed format string, so this
+      needs the message reworded, not just the map entry swapped.
+- [ ] **The guard that table has never had:** every destination named by `legacyConfigSections()`
+      and `legacyConfigPaths()` must resolve to something the code still reads — no destination may
+      name a `PrimarySkillType` that is absent from `values()`. This is the exact defect shape the
+      repo keeps re-finding (a pointer aimed at something dead), and nothing in the suite looks for
+      it. Must go red when `Agility` is put back as a destination.
+- [ ] 🔑 Ordering matters: `README.md:369` quotes this warning verbatim, so the code fact has to be
+      settled before D-b writes the sentence about it.
+
+### D-b — `README.md` (12 hits, one of them player-actionable)
+
+- [ ] `:194` `Skills.Agility.Second_Wind_Item` → **`Skills.Movement.Second_Wind_Item`**. Verified
+      live at `GeneralConfig.java:422`. This is the GitHub #7 shape — a config path a player is
+      told to edit that reaches nothing — and it is the single highest-value line in the pass.
+- [ ] `:122` child-skills row: drop Agility, keep Salvage and Smelting.
+- [ ] `:130` + `:136-139` the "New in this port" table: the three movement skills stop *"feeding
+      Agility"* and own their own Fleet Footed and Second Wind; the `Agility (child)` row goes.
+      ⚠️ `:130` says *"Eight primary skills"* — re-count against `PrimarySkillType.values()`, do
+      not adjust the number by arithmetic on the diff.
+- [ ] `:191` Second Wind row: *"Rank 1 unlocks land, 2 water, 3 air"* is dead. It is now **one rank
+      per medium, each gated on that medium's own skill** — Fleet Footed at level 1, Second Wind at
+      250 (RetroMode, which is the shipped default; the Standard numbers are 1 and 25).
+- [ ] `:360` play-test caveat: *"the restructured Agility"* → the movement skills.
+- [ ] `:365-370` the Acrobatics carry-over note: rewrite against whatever D-a lands, and add the
+      second half that is now true — an `Agility:` section is likewise no longer read.
+- [ ] **The A-1 sentence, owed since phase A and still written nowhere.** In plain words: this is a
+      **buff for specialists** and the deliberate end of the all-rounder gate. A pure flier capped
+      Agility at 333 and could never reach the air ranks at all; they now get air Fleet Footed at
+      Flying 1 and Limitless at Flying 250. It owes **five** consequences — the flattened unlocks
+      (A-1), Second Wind's duration following the medium (B-ii), and the four ramps that stopped
+      reading the mean (phase C).
+
+### D-c — `wiki/Movement-Skills.md` (15 hits; this is a rewrite, not an edit)
+
+Every structural element of the page is about the retired skill: the title, the tree diagram at
+`:14`, the "Agility's sub-skills" section at `:85`, and **every row of the tuning table at
+`:145-155`**. Verified current paths, all four moves confirmed in `SkillRenames`:
+
+| Was | Is |
+|---|---|
+| `Experience_Values.Agility.Movement` | `Experience_Values.Movement.Travel` |
+| `Experience_Values.Agility.{Dodge,Roll,Fall,FeatherFall_Multiplier}` | `Experience_Values.Movement.*` |
+| `Skills.Agility.{FleetFooted,SecondWind}` (advanced.yml) | `Skills.{Parkour,Swimming,Flying}.{FleetFooted,SecondWind}` |
+| `Agility.*` (skillranks.yml) | `{Parkour,Swimming,Flying}.{FleetFooted,SecondWind}` |
+| `Skills.Agility.Second_Wind_Item` / `.XP_After_Teleport_Cooldown` | `Skills.Movement.*` |
+| `ExploitFix.Agility` | `ExploitFix.Movement` |
+| `Skills.Agility.{Level_Cap,Enabled_For_PVP,Enabled_For_PVE}` | **gone** — per-skill keys with no skill |
+
+- [ ] ⚠️ `:155` is not a path fix but a **mechanics** fix: *"Capping `Skills.Agility.Level_Cap` caps
+      what Fleet Footed and Second Wind can reach"* describes a cap that no longer exists. Each of
+      the six sub-skills now answers to its own parent's `Level_Cap`.
+
+### D-d — the other 12 wiki pages
+
+Two are dead config keys and rank as actively wrong, not untidy — the exploit-fix switch was
+**renamed**, so a player editing the documented key changes nothing:
+
+- [ ] `wiki/XP-and-Levelling.md:108` and `wiki/Configuration.md:217` — `Agility` → **`Movement`**
+      (confirmed at `experience.yml:57`).
+- [ ] `wiki/Super-Abilities.md:69` — `Skills.Agility.Second_Wind_Item` → `Skills.Movement.*`, and
+      the owning-skill column stops naming Agility.
+- [ ] `wiki/Troubleshooting.md:113` — `Experience_Values.Agility.Movement.Reference_Speed` →
+      `Experience_Values.Movement.Travel.Reference_Speed`.
+- [ ] `wiki/Troubleshooting.md:32` — **this is the one page D-1 keeps.** Heading becomes
+      *"Acrobatics is gone / Agility is gone"* and it carries the whole chain in one place.
+- [ ] `wiki/Configuration.md:266,272` — the migration section; cross-link Troubleshooting per D-1.
+- [ ] `wiki/Skills.md` (7), `wiki/XP-and-Levelling.md:152,158,196`, `wiki/Stealth.md:77,89`,
+      `wiki/Differences-from-mcMMO.md:13,23`, `wiki/Super-Abilities.md:77,168`, and one line each in
+      `Commands.md:49`, `Home.md:38`, `Hunter.md:133`, `Husbandry.md:7` — present tense per D-1.
+      ⚠️ `Skills.md:35,276,298` and `Differences-from-mcMMO.md:23` are where the *reasoning* about
+      the mean lives; those want rewriting to the A-1 argument, not deleting.
+
+### D-e — the shipped resources, which the audit never grepped
+
+The 2026-08-18 caveat-expiry pass was run over `README.md` + `wiki/` only. The symptom leaked into
+files players read and edit directly. ⚠️ **Do not touch the migration notes** (*"moved here from
+`Skills.Agility` on 2026-08-10"*) — those are correct history and are exactly what tells a player
+where their old tuning went. Only these four are stale:
+
+- [ ] `config.yml:246` and `:282` — *"Must differ from **Agility's** `Second_Wind_Item`"*. Attributes
+      a live key to a retired skill and implies the dead path.
+- [ ] `advanced.yml:951` — *"Cannot stack with **Agility's** Smash"*. Smash has been a **Parkour**
+      sub-skill since 2026-08-10; this one was already stale before the retirement. Same sentence is
+      duplicated at `wiki/Stealth.md:77`.
+- [ ] `experience.yml:1056` — a cross-reference to *"the comment under
+      `Experience_Values.Agility.Movement`"*, a path that no longer exists. Broken pointer.
+- [ ] `experience.yml:237` — *"PINK is Repair/Salvage/Smelting … **Agility**/Stealth"*, a colour
+      allocation naming a bar that was retired with the skill.
+
+### D-f — the roster audit, against `values()` and never against the diff
+
+- [ ] 26 constants in `PrimarySkillType`; `AGILITY` is confirmed absent. Audit the wiki roster
+      against that list, not against this diff — **a removed skill is invisible to every
+      incremental doc edit**, exactly as an added one was for Cooking (six commits, zero mentions in
+      16 wiki files).
+- [ ] ⚠️ One wiki serves every band: say what a player does, never what version this build targets.
+
+### D-g — gates and the commit split
+
+- [ ] Staged commits, and the split is load-bearing for D-2: **D-a its own commit** (code + test),
+      **README its own commit** (it back-ports), **wiki its own commit** (it does not), **resources
+      its own commit** (they back-port).
+- [ ] `./gradlew build` — D-a touches code, so the full suite runs and the new guard must be shown
+      red before green.
+- [ ] `python scripts/config-id-audit.py --self-test` then the audit — D-e edits shipped YAML.
+- [ ] `mixin-allow-audit.py --check` and `extract-mc-surface.py` are **not** expected to move; run
+      them anyway and say so, rather than asserting it.
+
+### D-h — `fix.md`, per D-3 and rule zero
+
+- [ ] Resolve the target (`git status` shows exactly one untracked path), prove it is recoverable
+      (its rulings R-1..R-6 are in `TODO.md`'s Taming block and `.agent/memory/`; the file is
+      untracked, so **git cannot bring it back** — copy it to the scratchpad first), quote the exact
+      command, then delete. Narrow scope: the one named file, never a glob.
 
 ### Then, and this is not optional
 
