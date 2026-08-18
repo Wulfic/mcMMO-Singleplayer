@@ -1541,6 +1541,77 @@ pick: it is now capable of failing, and a band whose committed manifest is wrong
 
 ---
 
+## Phase 17 — Phase 16 reaches the five bands (2026-08-18, before 8.3)
+
+The back-port half of Phase 16. `831888252` touched three files; **only `scripts/extract-mc-surface.py`
+travels** (owner-ruled). `TODO.md` and `AGENTS.md` are planning docs — bands are already 3399 and 420
+lines divergent respectively, because those have never propagated and deliberately do not now.
+
+**Why this one has to propagate at all.** `scripts/` is tracked by `drift-audit.py` under **R9a**: a
+band needs the tooling to run its own gates, and a band running the *old* `extract-mc-surface.py` is
+running a `--check` that grades its own output. That is precisely the defect Phase 16 closed, so a
+band left behind keeps the hole open while `master` reports it fixed.
+
+**What this is NOT evidence of.** Every band's `mc-surface.txt` blob is already distinct
+(`0c8d4c6f8` · `857bd1d3c` · `4bfb87cd8` · `a163060798` · `2d9dd661c`), so Phase 15's per-band
+regeneration did clear the `1c480efc4` twin. That is a *prediction* that `--check` will pass on all
+five, not a result. The whole point of this phase is that the flag can now return non-zero, so it
+gets run for real on each band rather than assumed.
+
+### Steps
+
+1. ✅ `git push` `master` **first**. `drift-audit.py` reads `origin/master`; an unpushed commit reads
+   as clean, so auditing before the push proves nothing.
+2. ✅ `drift-audit.py --self-test` (a broken auditor also prints "no drift"), then
+   `--master master` — expect it to name `831888252` as un-propagated on all five bands. That
+   *failing* run is the baseline evidence; without it, the green run at the end is unfalsifiable.
+3. ⬜ Per band, in order `mc/1.21.10` → `mc/1.21.8` → `mc/1.21.5` → `mc/1.21.4` → `mc/1.21.3`:
+   - `git checkout <band>`
+   - `git checkout 831888252 -- scripts/extract-mc-surface.py` — the **path-restricted** pick. A
+     plain `cherry-pick` would drag `TODO.md`/`AGENTS.md` into a conflict for no reason.
+   - commit with a `Backport-of: 831888252` trailer — that trailer is what `drift-audit.py` reads,
+     so a commit without it is invisible to the audit even though the bytes arrived.
+4. ⬜ Per band, the verification that is the point of the phase:
+   - `./gradlew classes testClasses` — **required.** The bytecode scan reads
+     `build/classes/java/{main,test}`, and a stale tree yields a confidently wrong answer.
+   - `python scripts/extract-mc-surface.py --self-test` — run this *before* believing a `--check`
+     that passed.
+   - `python scripts/extract-mc-surface.py --check` — read-only. Record the record count.
+   - `git status --short` must stay clean afterwards. That is the direct proof `--check` no longer
+     writes, and it is the one assertion the old code could never make.
+5. ⬜ Back on `master`: re-run `drift-audit.py --master master` → **0 drift**, and push the bands.
+
+### Blast radius
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| `git push master` | `origin/master`, fast-forward, 1 commit | nothing — no history rewrite | `831888252` is local too |
+| `git checkout 831888252 -- <script>` on a band | one file in the band's worktree | that band's *older* copy of the script | `git checkout <band> -- scripts/extract-mc-surface.py`, or the band's HEAD before the new commit |
+| per-band commit | the band branch tip, additive | nothing | `git reset --hard <band>@{1}` before push; after push, a revert commit |
+| `./gradlew classes testClasses` | `build/` only, gitignored | nothing tracked | rebuild |
+
+⚠️ **`git checkout -- <path>` is the destructive shape here.** It is correct against a *committed*
+file and catastrophic against a dirty one — it silently discards uncommitted work. `git status --short`
+before every one of them. This is the exact trap that cost an hour in Phase 16.
+
+⚠️ Nothing here releases: `scripts/` sits outside `release.yml`'s `paths:` filter, so `ci-watch.sh`
+will correctly report *"skipped, not passed"* on every band. That is the expected result, not a
+failure to investigate.
+
+### What I am NOT doing
+
+- **Not** carrying `AGENTS.md` or `TODO.md` to any band. Reconciling AGENTS.md's 420-line divergence
+  is a real question, but it is not this phase and doing it here would hide the script pick inside a
+  400-line diff.
+- **Not** regenerating any band's `mc-surface.txt`. It is a per-band generated fact; a pick would
+  ship a manifest describing the wrong Minecraft, which is the original incident.
+- **Not** bumping `mod_version`. No shipped artifact changes, so no band's release is affected and no
+  tag moves.
+- **Not** writing the cross-branch byte-identity guard. Still carried debt.
+- **Not** starting 8.3.
+
+---
+
 ## Phase 9 — the `26.x` band
 
 **Its own mini-project (R-e). Do not absorb it into a sweep.** Gated behind Phase 8 delivering at
