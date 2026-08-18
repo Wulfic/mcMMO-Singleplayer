@@ -57,7 +57,9 @@ class AgilityMovementTest {
         experienceConfig = mock(ExperienceConfig.class);
         player = mock(PlatformPlayer.class);
 
-        lenient().when(advancedConfig.getFleetFootedMaxBonusLevel()).thenReturn(1000);
+        lenient().when(advancedConfig.getFleetFootedMaxBonusLevel(Medium.LAND)).thenReturn(1000);
+        lenient().when(advancedConfig.getFleetFootedMaxBonusLevel(Medium.WATER)).thenReturn(1000);
+        lenient().when(advancedConfig.getFleetFootedMaxBonusLevel(Medium.AIR)).thenReturn(1000);
         lenient().when(advancedConfig.getFleetFootedMaxBonus(Medium.LAND)).thenReturn(0.20);
         lenient().when(advancedConfig.getFleetFootedMaxBonus(Medium.WATER)).thenReturn(0.50);
         lenient().when(advancedConfig.getFleetFootedMaxBonus(Medium.AIR)).thenReturn(0.15);
@@ -239,7 +241,7 @@ class AgilityMovementTest {
 
     @Test
     void fleetFootedNeverExceedsItsCapAboveTheBonusLevel() {
-        when(advancedConfig.getFleetFootedMaxBonusLevel()).thenReturn(100);
+        when(advancedConfig.getFleetFootedMaxBonusLevel(any(Medium.class))).thenReturn(100);
         assertEquals(0.20, managerAtLevel(1000).getFleetFootedBonus(Medium.LAND), EPSILON,
                 "level far past MaxBonusLevel must clamp, not keep scaling");
     }
@@ -474,6 +476,39 @@ class AgilityMovementTest {
      * every Swimming and Flying one must be dead — an assertion that is only satisfiable if each
      * reads its own parent, and that a mean-of-three gate fails in both directions at once.
      */
+    /**
+     * The <b>ramp</b>, as distinct from the gate — and the reason the two need separate tests.
+     *
+     * <p>⚠️ The 2026-08-10 re-parenting moved every movement sub-skill's <em>unlock</em> onto the
+     * medium's own skill and left its <em>scaling</em> reading {@code AGILITY}, the mean of all three.
+     * Nothing failed, because a gate and a ramp read the player's level in different places:
+     * {@code reParentedSubSkillsFollowTheirOwnParentNotTheAverage} above proves the gates and would
+     * pass with every ramp still on the mean.
+     *
+     * <p>The fixture is deliberately <b>inconsistent</b>: all three parents at 1000 while Agility is
+     * stubbed at 333. No real profile can be in that state — that is the point. It makes the two
+     * candidate answers maximally far apart, so a ramp reading the mean returns a third of the bonus
+     * rather than something merely a bit off.
+     */
+    @Test
+    void everyScaledPassiveRampsOnItsOwnParentNotTheAverage() {
+        final AgilityManager specialist = managerAtLevels(333, 1000, 1000, 1000);
+
+        assertEquals(0.20, specialist.getFleetFootedBonus(Medium.LAND), EPSILON,
+                "Fleet Footed on land must ramp on Parkour 1000 (full 0.20), not on Agility 333");
+        assertEquals(0.50, specialist.getFleetFootedBonus(Medium.WATER), EPSILON,
+                "Fleet Footed in water must ramp on Swimming 1000 (full 0.50), not on Agility 333");
+        assertEquals(0.15, specialist.getFleetFootedBonus(Medium.AIR), EPSILON,
+                "Fleet Footed in air must ramp on Flying 1000 (full 0.15), not on Agility 333");
+
+        assertEquals(0.5, specialist.getAthleteExhaustionMultiplier(), EPSILON,
+                "Athlete must ramp on Parkour 1000 — the full 0.5 reduction, not a third of it");
+        assertEquals(0.75, specialist.getLeadLungsAirTopUpPerTick(), EPSILON,
+                "Lead Lungs must ramp on Swimming 1000");
+        assertEquals(0.5, specialist.getGlideDescentReduction(), EPSILON,
+                "Glide must ramp on Flying 1000");
+    }
+
     @Test
     void reParentedSubSkillsFollowTheirOwnParentNotTheAverage() {
         final AgilityManager runner = managerAtLevels(333, 1000, 0, 0);

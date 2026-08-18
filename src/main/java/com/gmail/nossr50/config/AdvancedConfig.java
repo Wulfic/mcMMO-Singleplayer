@@ -4,6 +4,7 @@ import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.util.text.StringUtils;
 import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
@@ -676,13 +677,26 @@ public class AdvancedConfig extends ConfigLoader {
         return config.getDouble("Skills.Parkour.GracefulRoll.DamageThreshold", 14.0D);
     }
 
-    // --- Agility movement domains (Pass 2) ---------------------------------------------------
+    // --- the three movement domains (Pass 2) --------------------------------------------------
     //
     // Each of these reads a RetroMode/Standard-scaled MaxBonusLevel the same way the shipped skills
     // do, so a level authored against the 1-1000 ladder still behaves on the 1-100 one.
+    //
+    // ⚠️ Every path below is keyed on the MEDIUM'S OWN PARENT SKILL, never on a fixed skill name.
+    // Fleet Footed and Second Wind moved off the retired Agility on 2026-08-17 and became one
+    // sub-skill per parent, so "which block do I read" is now a function of the medium and hardcoding
+    // one parent would silently serve Parkour's tuning to a swimmer.
 
-    public int getFleetFootedMaxBonusLevel() {
-        return maxBonusLevel("Skills.Agility.FleetFooted.MaxBonusLevel");
+    /**
+     * The level Fleet Footed stops scaling at, for one medium.
+     *
+     * <p>Took a {@code Medium} on 2026-08-17: there are three of these keys now, one under each
+     * parent, where there used to be a single number under Agility. Leaving this argument-less and
+     * reading Parkour's would have compiled and passed every existing test while quietly giving every
+     * medium the land ladder.
+     */
+    public int getFleetFootedMaxBonusLevel(Medium medium) {
+        return maxBonusLevel(fleetFootedPath(medium, "MaxBonusLevel"));
     }
 
     /**
@@ -690,6 +704,9 @@ public class AdvancedConfig extends ConfigLoader {
      * deliberate — see {@link com.gmail.nossr50.platform.SkillAttributeService.Managed}: land is a
      * movement-speed <em>fraction</em>, water is a flat addition to water movement efficiency
      * (vanilla-capped at 1.0), and air is a per-tick velocity nudge factor.
+     *
+     * <p>The key is a bare {@code MaxBonus} under each parent; it was {@code <Medium>_MaxBonus} under
+     * Agility, because one block had to hold all three.
      */
     public double getFleetFootedMaxBonus(Medium medium) {
         final double fallback = switch (medium) {
@@ -697,8 +714,17 @@ public class AdvancedConfig extends ConfigLoader {
             case WATER -> 0.50D;
             case AIR -> 0.15D;
         };
-        return config.getDouble("Skills.Agility.FleetFooted." + medium.configName() + "_MaxBonus",
-                fallback);
+        return config.getDouble(fleetFootedPath(medium, "MaxBonus"), fallback);
+    }
+
+    /**
+     * {@code Skills.<the medium's parent skill>.FleetFooted.<leaf>}, spelled the way every other
+     * per-skill path in this file is — {@link StringUtils#getCapitalized} over the enum name, the
+     * same call {@link GeneralConfig} and {@link SubSkillType#getAdvancedConfigPath} make.
+     */
+    private static String fleetFootedPath(Medium medium, String leaf) {
+        return "Skills." + StringUtils.getCapitalized(medium.primarySkill().toString())
+                + ".FleetFooted." + leaf;
     }
 
     public int getAthleteMaxBonusLevel() {
@@ -726,23 +752,23 @@ public class AdvancedConfig extends ConfigLoader {
     }
 
     public double getSecondWindDartRange() {
-        return config.getDouble("Skills.Agility.SecondWind.DartRange", 6.0D);
+        return config.getDouble("Skills.Parkour.SecondWind.DartRange", 6.0D);
     }
 
     public double getSecondWindDartDamage() {
-        return config.getDouble("Skills.Agility.SecondWind.DartDamage", 6.0D);
+        return config.getDouble("Skills.Parkour.SecondWind.DartDamage", 6.0D);
     }
 
     public double getSecondWindDartKnockback() {
-        return config.getDouble("Skills.Agility.SecondWind.DartKnockback", 1.5D);
+        return config.getDouble("Skills.Parkour.SecondWind.DartKnockback", 1.5D);
     }
 
     public int getSecondWindAquamanAmplifier() {
-        return config.getInt("Skills.Agility.SecondWind.AquamanAmplifier", 1);
+        return config.getInt("Skills.Swimming.SecondWind.AquamanAmplifier", 1);
     }
 
     public double getSecondWindLimitlessBoost() {
-        return config.getDouble("Skills.Agility.SecondWind.LimitlessBoost", 1.2D);
+        return config.getDouble("Skills.Flying.SecondWind.LimitlessBoost", 1.2D);
     }
 
     public int getGlideMaxBonusLevel() {

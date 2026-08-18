@@ -134,7 +134,7 @@ public final class SecondWindListener {
             // Standing still, walking, or riding something. Tell them why and leave the cooldown
             // untouched so the next press — while actually moving — works.
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
-                    "Agility.Skills.SecondWind.NotMoving");
+                    "Movement.Skills.SecondWind.NotMoving");
             return;
         }
 
@@ -156,7 +156,7 @@ public final class SecondWindListener {
             // This medium's rank is not unlocked — the player has Second Wind but not, say, its
             // water body yet. Also a free refusal.
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
-                    "Agility.Skills.SecondWind.Locked");
+                    "Movement.Skills.SecondWind.Locked");
             return;
         }
 
