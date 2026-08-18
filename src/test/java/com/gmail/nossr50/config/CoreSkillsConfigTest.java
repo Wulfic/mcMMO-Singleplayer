@@ -23,8 +23,9 @@ class CoreSkillsConfigTest {
     @Test
     void primarySkillEnabledReadsExplicitTrue(@TempDir Path dataFolder) {
         final CoreSkillsConfig config = new CoreSkillsConfig(dataFolder);
-        // coreskills.yml sets Agility.Enabled: true explicitly.
-        assertTrue(config.isPrimarySkillEnabled(PrimarySkillType.AGILITY));
+        // coreskills.yml sets Alchemy.Enabled: true explicitly. (This read the retired Agility row
+        // until 2026-08-17 -- any explicitly-listed skill exercises the same branch.)
+        assertTrue(config.isPrimarySkillEnabled(PrimarySkillType.ALCHEMY));
     }
 
     @Test

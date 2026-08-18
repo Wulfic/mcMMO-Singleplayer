@@ -186,7 +186,6 @@ public class McMMOPlayer {
     private void initManager(PrimarySkillType primarySkillType) {
         final SkillManager manager = switch (primarySkillType) {
             // PORT Phase 10.2/10.3: uncomment each case as the manager class ports.
-            case AGILITY -> new AgilityManager(this);
             case ALCHEMY -> new AlchemyManager(this);
             case ARCHERY -> new ArcheryManager(this);
             case AXES -> new AxesManager(this);
@@ -199,6 +198,14 @@ public class McMMOPlayer {
             case HUSBANDRY -> new HusbandryManager(this);
             case MACES -> new MacesManager(this);
             case MINING -> new MiningManager(this);
+            // The movement manager, keyed NOMINALLY on PARKOUR since AGILITY was retired
+            // 2026-08-17 (ruling A-8). It hosts every Parkour, Swimming AND Flying sub-skill, so
+            // no one skill honestly owns it — PARKOUR is named because it already holds the
+            // manager's EPISODIC_XP_SKILL and the nominal SECOND_WIND binding.
+            // ⚠️ The inherited SkillManager#skill field is therefore load-bearing for NOTHING in
+            // this manager: every XP award names its own destination and all four level ramps pass
+            // an explicit skill to scaleToLevel. Pinned by AgilityMovementTest.
+            case PARKOUR -> new AgilityManager(this);
             case REPAIR -> new RepairManager(this);
             case SALVAGE -> new SalvageManager(this);
             case SMELTING -> new SmeltingManager(this);
@@ -228,11 +235,12 @@ public class McMMOPlayer {
      * Skill-manager accessors (Phase 10.2/10.3). Each is the one-liner:
      *     public XxxManager getXxxManager() { return (XxxManager) skillManagers.get(PrimarySkillType.XXX); }
      * Uncomment/add one per manager as it ports, alongside its initManager() case above. The
-     * manager ↔ skill mapping is the commented switch above (AgilityManager↔AGILITY, …).
+     * manager ↔ skill mapping is the switch above, and it is one-to-one for every manager EXCEPT
+     * the movement one: AgilityManager↔PARKOUR is nominal and it also serves Swimming and Flying.
      */
 
     public AgilityManager getAgilityManager() {
-        return (AgilityManager) skillManagers.get(PrimarySkillType.AGILITY);
+        return (AgilityManager) skillManagers.get(PrimarySkillType.PARKOUR);
     }
 
     public AlchemyManager getAlchemyManager() {

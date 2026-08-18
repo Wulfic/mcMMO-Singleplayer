@@ -19,7 +19,17 @@ package com.gmail.nossr50.datatypes.skills;
  * plaque simply stops firing. Renames go through {@code util/skills/SkillRenames}.
  */
 public enum PrimarySkillType {
-    AGILITY,
+    // AGILITY -- RETIRED 2026-08-17, and there is deliberately no constant here. It was a CHILD
+    // skill whose level was the mean of Parkour, Swimming and Flying; its last two sub-skills (Fleet
+    // Footed, Second Wind) became six single-rank sub-skills, one pair per parent. A sub-skill's
+    // parent is derived from its enum name PREFIX, so one constant could not span three parents.
+    //
+    // The movement manager survives the removal and is keyed NOMINALLY on PARKOUR -- see
+    // AgilityManager's constructor for why that field is load-bearing for nothing.
+    //
+    // An existing profile's `skills.AGILITY` / `experience.AGILITY` key is an ORPHAN, not a rename:
+    // a child skill never had a stored level to migrate. FlatFileProfileStore drops it on the next
+    // save; FlatFileProfileStoreTest pins both directions.
     ALCHEMY,
     ARCHERY,
     AXES,
