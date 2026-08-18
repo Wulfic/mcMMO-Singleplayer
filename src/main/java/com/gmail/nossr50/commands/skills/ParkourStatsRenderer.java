@@ -2,7 +2,9 @@ package com.gmail.nossr50.commands.skills;
 
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.skills.agility.AgilityManager;
+import com.gmail.nossr50.skills.agility.Medium;
 import com.gmail.nossr50.util.random.ProbabilityUtil;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,9 +30,11 @@ import java.util.List;
  *       running-and-jumping perk, and a strong swimmer should not be handed it by the average.</li>
  * </ul>
  *
- * <p>What is <em>not</em> here is Fleet Footed and Second Wind: they work in all three mediums and
- * carry one rank per medium, so no single parent's level could gate them and they remain
- * Agility-gated ({@link AgilityStatsRenderer}).
+ * <p><b>Fleet Footed and Second Wind moved here on 2026-08-17</b>, when Agility was retired — this
+ * paragraph used to say the opposite, that they could never live on a parent screen. Each was one
+ * sub-skill carrying one rank per medium, gated on the mean of the three movement skills; each is now
+ * a single-rank sub-skill of the skill that earns it, so this screen shows the <em>land</em> body of
+ * both, unlocked by Parkour alone.
  *
  * <h2>Why a binary sub-skill still gets a stats line</h2>
  * Snow Walker has no magnitude — it is on or it is off — so the line pairs its {@code .Stat} label
@@ -104,6 +108,22 @@ public final class ParkourStatsRenderer extends SkillStatsRenderer {
         if (hasUnlocked(SubSkillType.PARKOUR_SNOW_WALKER)) {
             messages.add(getStatMessage(SubSkillType.PARKOUR_SNOW_WALKER,
                     SubSkillType.PARKOUR_SNOW_WALKER.getLocaleDescription()));
+        }
+
+        // Fleet Footed and Second Wind arrived here on 2026-08-17 with the retirement of Agility.
+        // Both used to be one sub-skill carrying one rank per medium, gated on the MEAN of the three
+        // movement skills, so a Parkour specialist could not reach the rank for the medium they had
+        // actually trained. Each is now a single-rank sub-skill of this skill, and each line below
+        // shows Parkour's OWN body of it -- not a shared number repeated on three screens.
+        if (agility != null && agility.canFleetFoot(Medium.LAND)) {
+            messages.add(getStatMessage(SubSkillType.PARKOUR_FLEET_FOOTED,
+                    percent.format(agility.getFleetFootedBonus(Medium.LAND))));
+        }
+        // ⚠️ The length is asked for SECOND_WIND by name. getSuperAbility(skill) is one-to-one and
+        // answers null for two of the three movement skills, which would NPE rather than misprint.
+        if (agility != null && agility.canSecondWind(Medium.LAND)) {
+            messages.add(getStatMessage(SubSkillType.PARKOUR_SECOND_WIND,
+                    calculateLength(skillValue, SuperAbilityType.SECOND_WIND)));
         }
 
         return messages;
