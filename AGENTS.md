@@ -124,12 +124,23 @@ version-agnostic logic bugs.** A fix that lands on `master` and is forgotten on 
 no error anywhere — the bug simply comes back for that band's players, and the first report comes
 from a user, months later.
 
-🔴 **This section is now the ONLY written leg of that mitigation, and nothing enforces it.** Risk R8
-was closed on three legs: this convention, `scripts/drift-audit.py`, and a weekly CI run. Ruling
-**R-g** (2026-08-12) removed `.github/` from version control, so **the weekly run is gone** — and the
-rewrite that landed the same day had deleted this section too, which is why it is back. Detection is
-now *"somebody remembers to run the script"*, which is the exact condition that made R8 a risk. Run
-it by hand after every `master` commit that could need back-porting:
+🟡 **All three legs of that mitigation are back, but only one of them is unattended.** Risk R8 was
+closed on three legs: this convention, `scripts/drift-audit.py`, and a weekly CI run. Ruling **R-g**
+(2026-08-12) removed `.github/` from version control, killing the weekly leg — and the rewrite that
+landed the same day had deleted this section too, which is why it is back. Ruling **R-r**
+(2026-08-13) restored `.github/workflows/drift-audit.yml` on `master`, so the weekly run exists
+again.
+
+⚠️ **Do not read that as "R8 is handled".** Two things bound what the weekly run buys you:
+
+- **It only runs from the default branch.** GitHub fires `schedule` from `master` and nowhere else,
+  so the byte-identical copies on every `mc/**` branch are inert by construction. They are kept in
+  sync (R-i) so a freshly cut band inherits a correct file — not because they execute.
+- **It is weekly, and it reports to a tab nobody opens** (risk **R11**). Between your commit and the
+  next Monday, detection is still *"somebody remembers to run the script"* — the exact condition
+  that made R8 a risk.
+
+So keep running it by hand after every `master` commit that could need back-porting:
 
 ```
 python scripts/drift-audit.py --self-test && python scripts/drift-audit.py --master master
@@ -160,15 +171,44 @@ python scripts/drift-audit.py --self-test && python scripts/drift-audit.py --mas
    be applied retroactively to one somebody merely forgot. A silent skip is the thing being
    prevented; a stated skip is the fix.
 
-⚠️ **`drift-audit.py` does not track a `scripts/`-only commit**, and tooling is exactly what a band
-needs to run its own gates. Cherry-pick tooling to each band deliberately, or the band silently
-cannot probe itself. ⚠️ It also audits **`origin/master`**, so an unpushed `master` commit reads as
-clean — push first, then audit.
+✅ **`drift-audit.py` now tracks `scripts/`-only and `.github/`-only commits** (R9a, 2026-08-13).
+Tooling is exactly what a band needs to run its own gates, and a divergent `release.yml` changes how
+a band *ships* — both used to be invisible, and the auditor reported a confident *"No drift"* either
+way. Cherry-picking tooling to each band is now enforced rather than remembered.
+⚠️ **Docs are still deliberately NOT tracked.** Per-push docs failures between *"fix lands on
+master"* and *"fix is back-ported"* train people to ignore the audit — and propagation is the wrong
+instrument anyway, because the docs defect that actually happened was byte-identical on all five
+branches and identically **wrong**. Cross-branch equality is not correctness. That half is covered by
+`BandDocsMatchRealityTest`, which asserts the documented support floor sits below every version *this*
+branch ships.
+⚠️ It audits **`origin/master`**, so an unpushed `master` commit reads as clean — push first, then
+audit.
+
+✅ **`AGENTS.md` is byte-identical on every branch** (**P19-1**, 2026-08-18), the same treatment
+`.github/workflows/drift-audit.yml` gets under **R-i**, and `scripts/branch-file-identity-audit.py`
+enforces it. Band-specific notes do **not** live in this file — they live in the band's commit
+message or in `TODO.md`.
+⚠️ **This is not tidiness; it is the only mechanism this file has.** `AGENTS.md` is the sole tracked
+agent-facing document in the repo, and when the rule was made `mc/1.21.10` and `mc/1.21.8` were both
+carrying a 129-line pre-rewrite stub **with no Destructive Actions section at all** — an agent
+working there was handed no rule zero, not a weakened one. Two other bands were worse than stale:
+they asserted *"the weekly run is gone"* and *"`drift-audit.py` does not track a `scripts/`-only
+commit"*, both **false on the branch carrying them** and both falsified by that branch's own history.
+A doc that tells an agent a guard does not exist argues against running the thing that would catch
+the problem.
+🔑 **The test for whether a shared file belongs under this rule is *who reads which copy*.**
+`.github/FUNDING.yml` is read by GitHub from the **default branch alone**, so a band's copy is inert
+and its divergence is a correctly-reasoned `Backport-not-needed:` — it is deliberately **excluded**.
+`AGENTS.md` is read from the **checkout**, by the agent working on that branch, so the band's copy is
+the only one that matters and `master` being right buys the band nothing.
 
 **Never resolve a band difference by changing `minecraft_version` on `master`.** Each branch pins its
-own, and **no two branches may resolve to the same `minecraft_version`.** That invariant used to be
-enforced by `release.yml`'s tag-reaping sweep; under R-g nothing runs on push, so the collision is
-**dormant, not fixed** — it returns the day any release automation does.
+own, and **no two branches may resolve to the same `minecraft_version`.** 🔴 **This is live again, not
+dormant.** The invariant is enforced by `release.yml`'s tag-reaping sweep, which R-g had removed from
+`master` and **R-r** (2026-08-13) restored — so every branch now releases on push again, and two
+branches on one `minecraft_version` means each release run **deletes the other's release**. The
+workflow detects the collision and warns; it deliberately does not fail, so it will not stop a
+legitimate release. Read the warning.
 
 **Never pin a comment to the build's Minecraft version.** A comment that asserts what version *this
 build is* (`// 1.21.11 always has Spears (pinned)`, `the port pins MC 1.21.11, which has both Spears
@@ -186,9 +226,12 @@ Tooling (all converse-checked; run them, don't trust them because they printed s
 |---|---|
 | `scripts/drift-audit.py` | which `master` fixes have not reached each band. `--self-test` proves it can still detect drift — **run that first**, because "no drift" is also what a broken auditor prints |
 | `scripts/mixin-allow-audit.py` | the true per-band injection-point count for every mixin injector, from bytecode. `--check` must pass before a band ships |
-| `scripts/extract-mc-surface.py` | regenerates the MC contact-surface manifest. **Two scans, and neither supersedes the other**: source text (imports, `<McClass>.<CONSTANT>` fields, mixin selectors) *and* `javap -v` over `build/classes` for called methods, accessed fields and constructors. javac **inlines compile-time constants**, so the bytecode scan alone loses them; a source regex cannot resolve a receiver type, so the source scan alone loses instance-method calls. ⚠️ Run `./gradlew classes testClasses` first — a stale `build/classes` yields a confidently wrong answer |
+| `scripts/extract-mc-surface.py` | regenerates the MC contact-surface manifest. **Two scans, and neither supersedes the other**: source text (imports, `<McClass>.<CONSTANT>` fields, mixin selectors) *and* `javap -v` over `build/classes` for called methods, accessed fields and constructors. javac **inlines compile-time constants**, so the bytecode scan alone loses them; a source regex cannot resolve a receiver type, so the source scan alone loses instance-method calls. ⚠️ Run `./gradlew classes testClasses` first — a stale `build/classes` yields a confidently wrong answer. ✅ **`--check` is READ-ONLY and compares against the COMMITTED manifest** (P16-1, 2026-08-18) — it used to regenerate and then grade its own output, so a file describing a *different Minecraft* passed every time. A plain run is now the deliberate regeneration, and its diff gets committed. ⚠️ **This is not a full guard**: the manifest is a per-band generated fact, and a manifest that is valid *for another branch* is true on every line, so no per-branch check can see it — two bands with byte-identical manifests is the only tell |
 | `scripts/probe-bands.py` | which of the **1386** MC symbols differ on a version (`--control` guards it) |
-| `scripts/config-id-audit.py` | which of the 689 **config** item/block ids are absent per band, and which are dead on *every* version (a defect, not drift). `--self-test` + a 95% control floor; ids come from the jar's generated `blockstates/`+`items/` data, **never** from `javap` field names or lang keys |
+| `scripts/config-id-audit.py` | which of the 689 **config** item/block ids are absent per band, and which are dead on *every* version (a defect, not drift). `--self-test` + a control floor. Ids come from the committed `scripts/mc-ids.txt`, **never** from `javap` field names, lang keys, or `models/item/` — all three were measured and all three fail silently |
+| `scripts/extract-mc-ids.py` | regenerates `scripts/mc-ids.txt` (every vanilla item/block registry id, per MC version) from each version's **data-generator dump**, offline, using the server bundler jar Loom already caches. ⚠️ Dry-run by default; `--write` to apply. ⚠️⚠️ **The manifest is a fact about Minecraft, not about a branch — cherry-pick it, never regenerate it per band.** That is the *inverse* of the `mc-surface.txt` rule above; do not carry that one over |
+| `scripts/manifest-identity-audit.py` | whether two branches carry a **byte-identical** `mc-surface.txt`. That manifest is a per-band generated fact, so identical bytes mean at least one branch describes a Minecraft it does not ship — and **no per-branch check can ever see it**, because on the branch it came from every record is true. ⚠️ Its real target is a **build-cache hit**, not a copy-paste: post-P16-1 a copied manifest already fails `--check` *unless the two bands generate the same one*, which is exactly what a cache hit produces. ⚠️ **Exit 2 is not a pass** — fewer than two branches means zero pairs compared |
+| `scripts/branch-file-identity-audit.py` | the **inverse** guard (P19-1): the shared governance/tooling layer — `AGENTS.md`, `.gitignore`, `.github/workflows/*.yml`, `scripts/**` — must be byte-identical on every branch. ⚠️⚠️ **`mc-surface.txt` is excluded and must stay excluded**: the other guard requires it to *differ*, and a file in both sets makes the repo unshippable. Paths come from the **union** of every branch's tree, so a file present on one branch and absent on another is a violation — that is how a new shared tool that never reached a band gets caught. ⚠️ **Exit 2 is not a pass** — an empty path set compared nothing |
 | `scripts/boot-check.sh` | that a **built jar** boots a real server on a given version |
 | `scripts/gameplay-smoke.sh` | that the **earning paths** still fire on a given version, driving a real player (fabric-carpet `/player`) through mining, digging, combat, repair, cooking and a super ability, scored from `/mcstats` + the profile YAML. `--self-test` on the scorer runs first; `GAMEPLAY_SMOKE_CONTROL=1` re-runs the scenario with mcMMO **removed** and must FAIL |
 
