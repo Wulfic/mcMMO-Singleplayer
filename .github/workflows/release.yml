@@ -8,28 +8,36 @@
 #      ⚠️ This used to be <base>-build.<run#> from GITHUB_RUN_NUMBER. That number
 #      is repo-GLOBAL, not per-branch, so identical mod code shipped as build.28
 #      on one band and build.24 on another — five numbers that look like versions,
-#      sort against each other, and mean nothing. Releasing now requires BUMPING
-#      mod_version; re-running on the same version REPLACES that band's release
-#      instead of minting a new number. Nothing is ever committed back to the repo,
-#      so the workflow still cannot re-trigger itself.
-#   2. Creates + pushes the git tag  mc<MCVER>-v<version>  BEFORE building, so
+#      sort against each other, and mean nothing. Releasing requires BUMPING
+#      mod_version. Nothing is ever committed back to the repo, so the workflow
+#      still cannot re-trigger itself.
+#   2. REFUSES a mod_version that already shipped a DIFFERENT commit -- the step
+#      "Refuse a stale mod_version" below (ruling R-t, TODO.md Phase 13).
+#
+#      ⚠️ This gate is what makes the paragraph above true. Dropping the run number
+#      made bumping mod_version mandatory, but shipped nothing that checked anybody
+#      had -- so every push re-used mc<MCVER>-v2.2.050 for months, re-pointed a tag
+#      every clone had already fetched, and looked like a successful release each
+#      time. Forgetting to bump has to fail LOUDLY; that is the entire defect.
+#      Re-running the SAME commit still passes -- that is a re-run, not a release.
+#   3. Creates + pushes the git tag  mc<MCVER>-v<version>  BEFORE building, so
 #      that if the build fails there is a concrete tag to remove.
-#   3. Builds the Fabric mod with Gradle/Loom (this also runs the JUnit suite,
+#   4. Builds the Fabric mod with Gradle/Loom (this also runs the JUnit suite,
 #      so a red test == a failed build).
-#   4. On FAILURE of the tag / build / publish steps -> deletes that tag (and any
+#   5. On FAILURE of the tag / build / publish steps -> deletes that tag (and any
 #      half-created release) and fails the run.
-#   5. On SUCCESS -> publishes a GitHub Release with the jar(s), then deletes the
+#   6. On SUCCESS -> publishes a GitHub Release with the jar(s), then deletes the
 #      PREVIOUS release + tag on the SAME Minecraft line (mc<MCVER>-v...),
 #      keeping exactly one "latest" per Minecraft version.
 #
 #      ⚠️ That sweep reaps by release ID, not tag name, and it only cleans up a
 #      TAG when the reaped release sat on a different one. Re-releasing at the same
 #      mod_version leaves the previous release behind as a DRAFT on the SAME tag
-#      (step 2 deletes the remote tag, and GitHub drafts any published release whose
+#      (step 3 deletes the remote tag, and GitHub drafts any published release whose
 #      tag disappears rather than deleting it), so a name-keyed sweep skips the
 #      orphan as if it were the new release. Six had accumulated by 2026-08-13 --
 #      one per band per re-release. See TODO.md 11.1.
-#   6. Pushing to any mc/** branch builds + releases that Minecraft line.
+#   7. Pushing to any mc/** branch builds + releases that Minecraft line.
 #
 # RELEASE TOPOLOGY (ruled 2026-08-10, see TODO.md "OPEN - release topology"):
 # "master = newest band". master IS the release branch for the newest supported
@@ -143,6 +151,78 @@ jobs:
             echo "mc_branch=$branch"
           } >> "$GITHUB_OUTPUT"
           echo "MC=$mc  version=$version  tag=$tag  branch=$branch"
+
+      # --- Refuse a mod_version that already shipped different code ----------
+      #
+      # Ruling R-t (2026-08-18, TODO.md Phase 13). Phase 10 removed the -build.<run#> suffix and
+      # wrote "releasing now requires BUMPING mod_version" -- in a COMMENT. Nothing checked. So
+      # mc1.21.11-v2.2.050 was re-used on every push from July to 2026-08-18: the step below
+      # force-deleted and re-pushed a tag that clones had already fetched (every `git fetch` after
+      # one of those runs reports "would clobber existing tag"), GitHub turned each superseded
+      # release into a same-tag DRAFT orphan, and the run went green every time. A forgotten bump
+      # has to be LOUD.
+      #
+      # The remote TAG is the authority here, not the release object. `gh release create` on an
+      # existing tag records target_commitish as a branch name rather than a sha on some paths, so
+      # a release-based check answers confidently and wrongly; the tag is what the reap sweep and
+      # every clone actually see, and it is one cheap ls-remote away.
+      #
+      # ⚠️ It compares against GITHUB_SHA rather than merely testing existence, so RE-RUNNING this
+      # workflow on the same commit stays idempotent. That is a re-run, not a release, and failing
+      # it would make `workflow_dispatch` useless for retrying a flaked publish.
+      #
+      # ⚠️ Annotated vs lightweight: `git tag -f` below makes a LIGHTWEIGHT tag, so refs/tags/<T>
+      # is the commit. An annotated tag would put the tag OBJECT's sha there and the peeled commit
+      # under refs/tags/<T>^{}. Prefer the peeled ref when present, or this compares a tag object
+      # against a commit and refuses every release.
+      - name: Refuse a stale mod_version
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.meta.outputs.release_version }}
+        run: |
+          set -euo pipefail
+
+          # Fail closed on an empty tag: an unset TAG would make the grep below match nothing and
+          # wave through exactly the case this gate exists to catch.
+          if [ -z "${TAG:-}" ]; then
+            echo "::error::No tag was computed; refusing to check a stale version blind."
+            exit 1
+          fi
+
+          # Peeled ref first, plain ref second. Two ls-remote calls rather than one parse: an
+          # annotated tag hides the COMMIT behind refs/tags/<T>^{} and puts the tag OBJECT's sha on
+          # the plain ref, so asking for the peeled form directly beats re-implementing ref peeling
+          # here and getting it wrong on the one tag shape this repo does not currently create.
+          # ls-remote exits 0 with no output when a ref does not exist, which is the "free version"
+          # case handled below -- it is not an error.
+          peeled=$(git ls-remote origin "refs/tags/${TAG}^{}" | cut -f1)
+          plain=$(git ls-remote origin "refs/tags/${TAG}" | cut -f1)
+          existing="${peeled:-$plain}"
+
+          if [ -z "$existing" ]; then
+            echo "Version ${RELEASE_VERSION} has not shipped on this Minecraft line yet (${TAG} is free)."
+            exit 0
+          fi
+
+          if [ "$existing" = "${GITHUB_SHA}" ]; then
+            echo "${TAG} already points at ${GITHUB_SHA:0:7} -- this is a re-run of the same commit, not a new release. Continuing."
+            exit 0
+          fi
+
+          echo "::error::mod_version ${RELEASE_VERSION} has ALREADY shipped on this Minecraft line: tag ${TAG} points at ${existing:0:7}, but this run is ${GITHUB_SHA:0:7}. Releasing would re-point a tag every clone has fetched and orphan the published release as a same-tag draft. Bump mod_version in gradle.properties and push again."
+          {
+            echo "### :no_entry: Refused -- \`mod_version\` was not bumped"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Version | \`${RELEASE_VERSION}\` |"
+            echo "| Tag | \`${TAG}\` |"
+            echo "| Already shipped | \`${existing:0:7}\` |"
+            echo "| This run | \`${GITHUB_SHA:0:7}\` |"
+            echo ""
+            echo "Bump \`mod_version\` in \`gradle.properties\` and push again. See TODO.md Phase 13."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       # --- Push the tag FIRST so failure has something concrete to delete -----
       - name: Create and push tag
