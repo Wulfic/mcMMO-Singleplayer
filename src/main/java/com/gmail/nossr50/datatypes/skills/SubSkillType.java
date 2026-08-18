@@ -171,7 +171,7 @@ public enum SubSkillType {
      * the same defect GitHub #4 fixed for Roll.
      *
      * Dodge is the one whose home was arguable -- it is a combat reaction, not a medium -- and it is
-     * here because it always paid its XP here (AgilityManager#EPISODIC_XP_SKILL). Its gate now
+     * here because it always paid its XP here (MovementManager#EPISODIC_XP_SKILL). Its gate now
      * levels off the very hits it pays for, closing the asymmetry the Roll move left behind.
      */
     PARKOUR_SNOW_WALKER(1),
@@ -193,7 +193,7 @@ public enum SubSkillType {
      *
      * Roll's odds are `skillLevel / MaxBonusLevel * ChanceMax`, which with the shipped RetroMode
      * numbers is `level / 10` percent. Under AGILITY that level was the *mean* of Parkour, Swimming
-     * and Flying — but fall XP is paid to PARKOUR alone (AgilityManager#EPISODIC_XP_SKILL), so
+     * and Flying — but fall XP is paid to PARKOUR alone (MovementManager#EPISODIC_XP_SKILL), so
      * falling levelled Roll's own gate at a third rate and only while the player also swam and flew.
      * The reporter's PARKOUR 126 / SWIMMING 8 / FLYING 0 bought Agility 44: a 4.4% roll, 8.8%
      * graceful. Legacy Acrobatics had no such gap — it earned XP from the very falls Roll gates on,

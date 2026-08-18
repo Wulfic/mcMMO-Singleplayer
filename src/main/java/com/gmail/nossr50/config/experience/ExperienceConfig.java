@@ -8,8 +8,8 @@ import com.gmail.nossr50.datatypes.mobs.MobOrigin;
 import com.gmail.nossr50.datatypes.skills.MaterialType;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.alchemy.PotionStage;
-import com.gmail.nossr50.skills.agility.Medium;
-import com.gmail.nossr50.skills.agility.MovementXpSettings;
+import com.gmail.nossr50.skills.movement.Medium;
+import com.gmail.nossr50.skills.movement.MovementXpSettings;
 import com.gmail.nossr50.skills.cooking.CookingManager;
 import com.gmail.nossr50.skills.husbandry.HusbandryManager;
 import com.gmail.nossr50.skills.hunter.HunterManager;
@@ -491,7 +491,7 @@ public class ExperienceConfig extends ConfigLoader {
     /**
      * Movement XP paid per second of qualifying travel, before the per-medium multiplier
      * (Pass 2 / D-AG6). Deliberately per <em>second</em> rather than per block — see
-     * {@link com.gmail.nossr50.skills.agility.MovementXpSettings} for why that distinction is the
+     * {@link com.gmail.nossr50.skills.movement.MovementXpSettings} for why that distinction is the
      * whole balance model.
      */
     public double getMovementBaselineXpPerSecond() {

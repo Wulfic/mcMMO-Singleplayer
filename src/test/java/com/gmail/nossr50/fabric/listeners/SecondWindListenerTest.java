@@ -8,7 +8,7 @@ import static org.mockito.Mockito.mock;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
-import com.gmail.nossr50.skills.agility.Medium;
+import com.gmail.nossr50.skills.movement.Medium;
 import org.junit.jupiter.api.Test;
 
 /**

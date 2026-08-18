@@ -1,14 +1,14 @@
-package com.gmail.nossr50.skills.agility;
+package com.gmail.nossr50.skills.movement;
 
 /**
- * Static helpers backing the Agility skill. Port note (Phase 10.3): only the pure dodge-damage
+ * Static helpers backing the movement skills. Port note (Phase 10.3): only the pure dodge-damage
  * math survives — the config-cached statics ({@code dodgeDamageModifier}, {@code dodgeXpModifier},
  * {@code dodgeLightningDisabled}) are dropped here and read live at their call sites when the Dodge
  * combat path lands, mirroring the {@link com.gmail.nossr50.skills.archery.Archery} treatment.
  */
-public final class Agility {
+public final class Movement {
 
-    private Agility() {
+    private Movement() {
     }
 
     /**

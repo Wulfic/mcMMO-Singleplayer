@@ -2,7 +2,7 @@ package com.gmail.nossr50.fabric.listeners;
 
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.fabric.McMMOMod;
-import com.gmail.nossr50.skills.agility.AgilityManager;
+import com.gmail.nossr50.skills.movement.MovementManager;
 import com.gmail.nossr50.util.player.UserManager;
 import net.minecraft.entity.player.HungerManager;
 import net.minecraft.server.MinecraftServer;
@@ -49,7 +49,7 @@ public final class AthleteListener {
         if (mmoPlayer == null) {
             return exhaustion;
         }
-        final AgilityManager agility = mmoPlayer.getAgilityManager();
+        final MovementManager agility = mmoPlayer.getMovementManager();
         if (agility == null) {
             return exhaustion;
         }
