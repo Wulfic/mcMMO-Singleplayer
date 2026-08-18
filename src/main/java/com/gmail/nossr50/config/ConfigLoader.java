@@ -357,18 +357,37 @@ public abstract class ConfigLoader {
      * the exact old and new paths costs nothing and cannot destroy anything.
      */
     private void warnOnRenamedSections() {
+        for (Map.Entry<String, String> stranded : strandedLegacySections().entrySet()) {
+            LOGGER.warn("{} still contains a '{}' section, which mcMMO no longer reads. Any values "
+                            + "you set under '{}' are being ignored — move them to {}.",
+                    fileName, stranded.getKey(), stranded.getKey(), stranded.getValue());
+        }
+    }
+
+    /**
+     * The subset of {@link SkillRenames#legacyConfigSections()} this config file still carries
+     * values for: legacy section name → a description of where those values belong now.
+     *
+     * <p>Split out of {@link #warnOnRenamedSections()} for the same reason its sibling
+     * {@link #strandedLegacyPaths()} was — a bare {@code LOGGER.warn} is not assertable, and until
+     * 2026-08-18 nothing in the suite looked at the section table at all. That is how it came to
+     * spend a day pointing {@code Acrobatics} at {@code Agility}, a section retired the day before.
+     * Package-private for the test.
+     *
+     * @return an insertion-ordered map, empty (the common case) when nothing is stranded
+     */
+    @NotNull Map<String, String> strandedLegacySections() {
+        final Map<String, String> stranded = new LinkedHashMap<>();
         for (Map.Entry<String, String> rename : SkillRenames.legacyConfigSections().entrySet()) {
             final String legacy = rename.getKey();
             for (String key : config.getKeys(true)) {
-                if (!isUnderSection(key, legacy)) {
-                    continue;
+                if (isUnderSection(key, legacy)) {
+                    stranded.put(legacy, rename.getValue());
+                    break; // One entry per rename; the whole section moves together.
                 }
-                LOGGER.warn("{} still contains a '{}' section, which was renamed to '{}'. Any "
-                                + "values you set under '{}' are being ignored — move them to '{}'.",
-                        fileName, legacy, rename.getValue(), legacy, rename.getValue());
-                break; // One warning per file per rename; the whole section moves together.
             }
         }
+        return stranded;
     }
 
     /**
