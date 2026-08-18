@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -52,6 +53,29 @@ public final class ConfigSession {
     /** Stages an edit to {@code setting}; only actually marks the file dirty if the value changed. */
     public void write(@NotNull ConfigSetting setting, @NotNull Object value) {
         doc(setting.file()).set(setting.path(), value);
+    }
+
+    /**
+     * The save callback a boolean widget for {@code setting} should be given.
+     *
+     * <p>{@code locked} yields a callback that writes <b>nothing at all</b>, for a row the screen
+     * renders read-only (a skill this Minecraft version cannot furnish — owner ruling S-3).
+     *
+     * <p>⚠️ A disabled <em>widget</em> is not enough on its own, and that is why this exists as a
+     * decision rather than a line inside the screen builder: Cloth invokes every entry's save
+     * consumer when the screen is saved, whether or not that entry was editable. The ordinary
+     * consumer would therefore write the value back into a file the player may have hand-edited.
+     * Rewriting a value nobody touched is worse than the control being missing, so a locked row's
+     * callback is inert — and being here rather than in the Minecraft-facing builder is what makes
+     * that assertable in a unit test.
+     *
+     * @param setting the row being rendered
+     * @param locked  whether the screen is rendering this row read-only
+     * @return a callback that stages the edit, or one that does nothing
+     */
+    public @NotNull Consumer<Boolean> booleanSaveConsumer(@NotNull ConfigSetting setting,
+            boolean locked) {
+        return locked ? value -> { } : value -> write(setting, value);
     }
 
     /** True if any staged edit changed a value that still needs flushing to disk. */

@@ -1,22 +1,34 @@
 package com.gmail.nossr50.fabric.client.modmenu;
 
+import com.gmail.nossr50.config.CoreSkillsConfig;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.skills.movement.MovementXpSettings;
 import com.gmail.nossr50.skills.stealth.StealthXpSettings;
+import com.gmail.nossr50.util.skills.SkillTools;
+import com.gmail.nossr50.util.text.StringUtils;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * The curated catalogue of mcMMO config options exposed by the ModMenu config screen.
  *
  * <p>This is intentionally a hand-picked subset of the ~hundreds of keys across mcMMO's dozen YAML
  * files — the settings a singleplayer player is most likely to want to change (XP rates, ability
- * toggles/cooldowns, skill level caps, sounds), spanning {@code config.yml} and {@code
- * experience.yml}. Every {@link ConfigSetting#path()} here must exist in the bundled default of its
- * file with a matching type; {@code McMMOSettingsTest} asserts exactly that, so a typo can never
- * ship as a silent no-op.
+ * toggles/cooldowns, skill level caps, sounds), spanning {@code config.yml}, {@code experience.yml},
+ * {@code advanced.yml} and {@code coreskills.yml}. Every {@link ConfigSetting#path()} here must exist
+ * in the bundled default of its file with a matching type; {@code McMMOSettingsTest} asserts exactly
+ * that, so a typo can never ship as a silent no-op.
+ *
+ * <p>The one family that is <em>not</em> hand-picked is the Skills tab: those rows are generated from
+ * {@code PrimarySkillType.values()}, so a skill added later cannot ship without its master switch.
+ * See the comment on that block for why the curated approach was not repeated there.
  *
  * <p>Minecraft-free by design — the Cloth Config UI reads this list, but the list itself needs no
  * game classes and is fully unit-testable.
@@ -26,9 +38,11 @@ public final class McMMOSettings {
     public static final String CONFIG_YML = "config.yml";
     public static final String EXPERIENCE_YML = "experience.yml";
     public static final String ADVANCED_YML = "advanced.yml";
+    public static final String CORESKILLS_YML = "coreskills.yml";
 
     // Category (Cloth tab) display names.
     private static final String CAT_GENERAL = "General";
+    private static final String CAT_SKILLS = "Skills";
     private static final String CAT_XP = "Experience";
     private static final String CAT_XP_SKILL = "XP Multipliers";
     private static final String CAT_ABILITIES = "Abilities";
@@ -84,7 +98,134 @@ public final class McMMOSettings {
 
     private static final List<ConfigSetting> ALL = buildCatalogue();
 
+    /**
+     * {@code coreskills.yml} path → the skill whose master switch lives there, for the Skills tab.
+     *
+     * <p>Built from the same loop that builds the rows, so the two cannot disagree — the screen asks
+     * this to decide whether a row needs the version lock, and a hand-kept second copy of the mapping
+     * is precisely the shape that has already shipped wrong twice here (see {@code XP_MULTIPLIER_SKILLS}).
+     */
+    private static final Map<String, PrimarySkillType> MASTER_SWITCH_BY_PATH = buildMasterSwitchMap();
+
     private McMMOSettings() {
+    }
+
+    /**
+     * The skill whose master switch {@code setting} toggles, or {@code null} when the setting is not
+     * a Skills-tab row at all.
+     *
+     * <p>Minecraft-free on purpose: the screen needs it to ask {@code SkillAvailability} about the
+     * row, but the mapping itself is testable with no game bootstrap.
+     */
+    public static @Nullable PrimarySkillType masterSwitchSkill(@NotNull ConfigSetting setting) {
+        return CORESKILLS_YML.equals(setting.file())
+                ? MASTER_SWITCH_BY_PATH.get(setting.path())
+                : null;
+    }
+
+    /**
+     * Whether {@code setting}'s row must be rendered read-only because this Minecraft version cannot
+     * furnish the skill (owner ruling S-3, 2026-08-18).
+     *
+     * <p>{@code SkillAvailability} force-disables such a skill whatever {@code coreskills.yml} says,
+     * so an editable toggle would be a control that cannot do anything — the "lying switch" shape the
+     * catalogue guards exist to catch. The caller passes the availability predicate rather than this
+     * class reaching for it, which keeps the decision unit-testable and this class Minecraft-free.
+     *
+     * <p>⚠️ A locked row must also not be <em>written</em>. Rewriting a value the player never
+     * touched, in a file they may have hand-edited, is worse than the missing control; the screen
+     * gives a locked row a no-op save consumer.
+     *
+     * @param setting   the catalogue row being rendered
+     * @param supported answers whether this Minecraft version can furnish a given skill
+     * @return {@code true} only for a Skills-tab row whose skill this version cannot furnish
+     */
+    public static boolean isLockedByVersion(@NotNull ConfigSetting setting,
+            @NotNull Predicate<PrimarySkillType> supported) {
+        final PrimarySkillType skill = masterSwitchSkill(setting);
+        return skill != null && !supported.test(skill);
+    }
+
+    /** The sentence appended to a locked row's tooltip, saying why it cannot be changed. */
+    public static @NotNull String unsupportedNotice(@NotNull PrimarySkillType skill) {
+        return "⚠ This version of Minecraft does not have the items " + displayName(skill)
+                + " works on, so it stays off however this file is set. Your level is saved.";
+    }
+
+    private static @NotNull Map<String, PrimarySkillType> buildMasterSwitchMap() {
+        final Map<String, PrimarySkillType> map = new LinkedHashMap<>();
+        for (PrimarySkillType skill : PrimarySkillType.values()) {
+            map.put(CoreSkillsConfig.enabledPath(skill), skill);
+        }
+        return Map.copyOf(map);
+    }
+
+    /** A skill's name as the yml spells it — deliberately the config key, not a localized name. */
+    private static @NotNull String displayName(@NotNull PrimarySkillType skill) {
+        return StringUtils.getCapitalized(skill.toString());
+    }
+
+    /**
+     * The tooltip on a Skills-tab row.
+     *
+     * <p>Says all three of the things a player has to know before flipping it, because none of them
+     * is guessable from a toggle labelled with a skill name:
+     *
+     * <ol>
+     *   <li><b>"Disabled" is total</b> — the six consequences move together, by design.</li>
+     *   <li><b>The level is kept.</b> Without this a player reasonably fears they are deleting
+     *       hundreds of levels, which is the opposite of what happens.</li>
+     *   <li><b>⚠️ It applies on the next world load</b> (owner ruling S-1, 2026-08-18). This screen
+     *       edits the yml on disk; nothing re-reads it mid-session. A player toggling from the pause
+     *       menu and seeing XP keep arriving would otherwise file it as a bug — the same "silent
+     *       no-op" that makes a dead switch worse than a missing one.</li>
+     * </ol>
+     *
+     * <p>A child skill says so and names its parents, because "Salvage: off" while its level keeps
+     * climbing from Repair and Fishing is confusing until you know a child's level is derived.
+     */
+    private static @NotNull String masterSwitchTooltip(@NotNull PrimarySkillType skill) {
+        final StringBuilder text = new StringBuilder()
+                .append("Off = this skill stops existing for you: no XP from any source, no "
+                        + "sub-skill procs, no super ability, no XP bar, no /mcstats line and no "
+                        + "milestone plaques. Your level and XP are kept — switching it back on "
+                        + "returns you exactly where you left off, so this cannot be used to "
+                        + "respec. ⚠ Takes effect on the next world load.");
+        if (SkillTools.isChildSkill(skill)) {
+            text.append(" ").append(displayName(skill))
+                    .append(" is a child skill: its level is derived from ")
+                    .append(parentNames(skill))
+                    .append(" and keeps rising while it is off — what the switch stops is its "
+                            + "procs and its /mcstats line.");
+        }
+        return text.toString();
+    }
+
+    /**
+     * A child skill's parents, spelled out.
+     *
+     * <p>Reads {@code SkillTools}' own parent lists rather than naming Repair/Fishing/Mining here, so
+     * a re-parenting (as Agility was re-parented in Pass 2) updates this tooltip from the same edit.
+     *
+     * <p>⚠️ The switch duplicates the <em>shape</em> of {@code SkillTools#getChildSkillParents}
+     * because that method is an instance member, and this runs during the catalogue's static init —
+     * constructing a {@code SkillTools} there would drag in the locale loader and the service
+     * locator, which is exactly the Minecraft-free property this class is kept for. It therefore
+     * copies that method's contract too, {@code throw} included: a third child skill added without
+     * a branch here fails loudly the first time the catalogue is built (i.e. in every unit test),
+     * rather than quietly attributing it to the wrong parents.
+     */
+    private static @NotNull String parentNames(@NotNull PrimarySkillType child) {
+        final List<PrimarySkillType> parents = switch (child) {
+            case SALVAGE -> List.copyOf(SkillTools.SALVAGE_PARENTS);
+            case SMELTING -> List.copyOf(SkillTools.SMELTING_PARENTS);
+            default -> throw new IllegalStateException(
+                    "SkillTools calls " + child + " a child skill but this tooltip has no parents "
+                            + "for it — add a branch, or the Skills tab describes it wrongly");
+        };
+        final List<String> names = new ArrayList<>();
+        parents.forEach(parent -> names.add(displayName(parent)));
+        return String.join(" and ", names);
     }
 
     /** The full, ordered catalogue of editable settings. */
@@ -152,6 +293,31 @@ public final class McMMOSettings {
         list.add(ConfigSetting.bool(CAT_GENERAL, CONFIG_YML, "Skills.Herbalism.Prevent_AFK_Leveling",
                 true, "Herbalism: Prevent AFK Leveling",
                 "Blocks Herbalism XP from crops harvested while riding (anti-AFK-farm)."));
+
+        // ---- Skills: the per-skill master switches (coreskills.yml) ----------------------------
+        // GitHub #10 shipped the switch and its enforcement (SkillGating) but never a control, so
+        // until now turning a skill off meant finding and hand-editing a YAML file. This is that
+        // control, and it is the whole of it: there is no per-sub-skill switch (CoreSkillsConfig
+        // documents why that finer surface was deliberately not revived).
+        //
+        // ⚠️⚠️ GENERATED FROM PrimarySkillType.values(), never a transcribed array, and that is not
+        // a style preference. Three hand-kept rosters live in this file and two of them have already
+        // shipped wrong: Cooking reached neither XP_MULTIPLIER_SKILLS nor LEVEL_CAP_SKILLS, and
+        // Herdsmans_Call shipped a working ability with a live cooldown key and no slider. Both were
+        // found by an audit, not by the suite. A skill added tomorrow gets its switch here for free.
+        //
+        // ⚠️ The path comes from CoreSkillsConfig.enabledPath -- the same method /mcstats <skill>
+        // quotes at a player when it tells them where to switch a skill back on. One source, so the
+        // screen and the message cannot drift apart.
+        //
+        // ⚠️ SALVAGE and SMELTING DO get rows, unlike the XP Multipliers tab where a child skill's
+        // slider would be dead. A child earns no XP of its own, but SkillGating gates its procs and
+        // its /mcstats line like any other skill, so the switch here genuinely does something.
+        for (PrimarySkillType skill : PrimarySkillType.values()) {
+            list.add(ConfigSetting.bool(CAT_SKILLS, CORESKILLS_YML,
+                    CoreSkillsConfig.enabledPath(skill), true, displayName(skill),
+                    masterSwitchTooltip(skill)));
+        }
 
         // ---- Effects: particles, fireworks and the anvil/Tree-Feller feedback (config.yml) ------
         // GitHub-audit item 4(c). Every switch on this tab was a DEAD KEY until it was wired: the

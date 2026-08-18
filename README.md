@@ -232,8 +232,12 @@ Install **both** (Cloth Config builds the widgets, Mod Menu provides the entry p
 a config screen from the mod list. Both mods are versioned per Minecraft release — the pair that
 matches each band is in the [Supported versions](#supported-versions) table.
 
+The screen carries a tab per area — including a **Skills** tab with a master switch for every skill,
+so turning one off no longer means finding and hand‑editing a YAML file.
+
 Edits are written straight back to the YAML on disk and take effect on the **next world load** — not
-instantly, since most values are read once at load time.
+instantly, since most values are read once at load time. That includes the skill switches: one turned
+off from the pause menu keeps paying XP until you reload the world.
 
 With **Mod Menu but no Cloth Config**, the button still works but opens a small info screen with an
 *Open Config Folder* shortcut instead of the editor. With **neither**, nothing is lost — hand‑editing
@@ -282,7 +286,7 @@ Configs are plain YAML, written on first load to:
 | `advanced.yml` | The numbers behind every sub‑skill — activation chances, damage bonuses, max levels, caps. |
 | `experience.yml` | XP curve, per‑skill XP tables, XP bars, diminishing returns, exploit fixes. |
 | `skillranks.yml` | The level at which each sub‑skill rank unlocks (standard **and** RetroMode ladders). |
-| `coreskills.yml` | The per‑skill master switch — turn a whole skill off (no XP, no procs, no super, no XP bar, no `/mcstats`, no plaques). |
+| `coreskills.yml` | The per‑skill master switch — turn a whole skill off (no XP, no procs, no super, no XP bar, no `/mcstats`, no plaques). Also the **Skills** tab of the in‑game settings screen (Mod Menu + Cloth Config). |
 | `treasures.yml` / `fishing_treasures.yml` | Excavation & Fishing loot tables, Hylian Luck, shake drops. |
 | `repair.vanilla.yml` / `salvage.vanilla.yml` | Repairable/salvageable items and their materials. |
 | `potions.yml` | Alchemy brewing tree and custom potion concoctions. |
