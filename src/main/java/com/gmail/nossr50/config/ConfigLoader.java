@@ -251,7 +251,7 @@ public abstract class ConfigLoader {
         }
         boolean moved = false;
         for (SkillRenames.MovedPath move : movedPaths) {
-            moved |= migrateOnePath(move.legacyPath(), move.newPath());
+            moved |= migrateOnePath(move.legacyPath(), move.newPaths());
         }
         if (!moved) {
             return; // The overwhelmingly common case: nothing stranded, so the file is not touched.
@@ -272,11 +272,15 @@ public abstract class ConfigLoader {
      * <p>Split out and package-private so the decision is assertable without a
      * {@code LOGGER}-scraping test.
      *
+     * <p>⚠️ <b>The delete happens once, after every destination is written.</b> A one-to-many move
+     * exists because a dissolving skill can leave one number with several equally correct homes;
+     * clearing the legacy path per destination would move it to the first and lose it for the rest.
+     *
      * @param legacy the dotted path values may be stranded at
-     * @param target where the code reads them from now
+     * @param targets every path the code reads them from now; each receives the full sub-tree
      * @return {@code true} if the config was modified
      */
-    boolean migrateOnePath(@NotNull String legacy, @NotNull String target) {
+    boolean migrateOnePath(@NotNull String legacy, @NotNull List<String> targets) {
         if (!config.contains(legacy)) {
             return false;
         }
@@ -288,24 +292,27 @@ public abstract class ConfigLoader {
         final Map<String, Object> leaves = new LinkedHashMap<>();
         collectLeaves(legacy, leaves);
 
-        for (Map.Entry<String, Object> leaf : leaves.entrySet()) {
-            final String targetKey = leaf.getKey().isEmpty()
-                    ? target
-                    : target + "." + leaf.getKey();
-            final Object existing = config.get(targetKey);
-            if (existing != null && !valuesMatch(existing, defaultConfig.get(targetKey))) {
-                LOGGER.warn("{}: '{}' moved to '{}', but you have tuned BOTH. Keeping {} (the value "
-                                + "the game has been using) and discarding {} from the old path.",
-                        fileName, legacy, target, existing, leaf.getValue());
-                continue;
+        for (String target : targets) {
+            for (Map.Entry<String, Object> leaf : leaves.entrySet()) {
+                final String targetKey = leaf.getKey().isEmpty()
+                        ? target
+                        : target + "." + leaf.getKey();
+                final Object existing = config.get(targetKey);
+                if (existing != null && !valuesMatch(existing, defaultConfig.get(targetKey))) {
+                    LOGGER.warn("{}: '{}' moved to '{}', but you have tuned BOTH. Keeping {} (the "
+                                    + "value the game has been using) and discarding {} from the old "
+                                    + "path.",
+                            fileName, legacy, target, existing, leaf.getValue());
+                    continue;
+                }
+                config.set(targetKey, leaf.getValue());
             }
-            config.set(targetKey, leaf.getValue());
         }
 
         config.set(legacy, null);
-        LOGGER.info("{}: moved your '{}' settings to '{}' and removed the old keys, which the game "
+        LOGGER.info("{}: moved your '{}' settings to {} and removed the old keys, which the game "
                         + "no longer reads.",
-                fileName, legacy, target);
+                fileName, legacy, targets);
         return true;
     }
 
