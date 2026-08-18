@@ -118,50 +118,6 @@ Skills:
 
 
     #
-    #  Settings for Agility
-    #
-    #  Agility is a CHILD skill -- its level is the mean of Parkour, Swimming and Flying -- so only
-    #  the two sub-skills that work in ALL THREE mediums are still tuned here. Each carries one rank
-    #  per medium (land, water, air), which is precisely why neither could be re-parented: no single
-    #  parent's level could honestly gate all three ranks.
-    #
-    #  MOVED OUT 2026-08-10: Dodge, Athlete and Smash -> `Skills.Parkour`; LeadLungs and LakeRaider
-    #  -> `Skills.Swimming`; Glide and SolarWings -> `Skills.Flying`. The VALUES are unchanged, but
-    #  each is now read against one skill instead of the average of three, so a specialist reaches
-    #  them roughly three times sooner (and Glide/SolarWings become reachable at all -- gated on the
-    #  mean they needed Flying 1050 and 2250, both past the level cap). If you had tuned any of those
-    #  blocks, mcMMO moves your values to the new paths on first boot and tells you it did so.
-    ###
-    Agility:
-        FleetFooted:
-            # Move faster in whichever medium you are travelling through. One sub-skill, three ranks:
-            # rank 1 unlocks Land, rank 2 Water, rank 3 Air. The bonus scales linearly with your
-            # Agility level up to MaxBonusLevel, then stops.
-            #
-            # Land is a percentage bonus on movement speed, on top of the vanilla sprint multiplier.
-            # Water is NOT a movement-speed bonus: swim speed in 1.21.11 ignores movement speed unless
-            #   water movement efficiency is above zero, so this raises that attribute directly. It is
-            #   the same one Depth Strider uses and vanilla hard-caps it at 1.0, so a Depth Strider III
-            #   player is already at the cap and gains nothing here - that is intended, not a bug.
-            # Air is a per-tick forward velocity nudge while gliding; elytra flight is velocity-driven
-            #   and has no attribute behind it.
-            MaxBonusLevel:
-                Standard: 100
-                RetroMode: 1000
-            Land_MaxBonus: 0.20
-            Water_MaxBonus: 0.50
-            Air_MaxBonus: 0.15
-
-        SecondWind:
-            # Agility's super ability. One ability, three bodies, dispatched on how you are moving:
-            # sprinting = a forward lunge, in water = a buff, gliding = a speed burst.
-            # Rank 1 unlocks the land body, rank 2 water, rank 3 air.
-            DartRange: 6.0
-            DartDamage: 6.0
-            DartKnockback: 1.5
-            AquamanAmplifier: 1
-            LimitlessBoost: 1.2
-    #
     #  Settings for Alchemy
     ###
     Alchemy:
@@ -346,6 +302,27 @@ Skills:
             RepairPerInterval: 1
             IntervalTicks: 100
             GroundedMultiplier: 2
+
+        # Arrived 2026-08-17 when Agility was retired. Fleet Footed and Second Wind were its last two
+        # sub-skills; each carried one rank per medium and was gated on Agility -- the MEAN of Parkour,
+        # Swimming and Flying -- so a specialist could never reach the rank for the medium they
+        # actually trained. Each is now a single-rank sub-skill of the skill you earn by moving that
+        # way. If you had tuned `Skills.Agility.FleetFooted` or `.SecondWind`, mcMMO moves your values
+        # to these paths on first boot and tells you it did so.
+        FleetFooted:
+            # A per-tick forward velocity nudge while gliding; elytra flight is velocity-driven and has no
+            # attribute behind it.
+            # Scales linearly with Flying up to MaxBonusLevel, then stops.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            MaxBonus: 0.15
+
+        SecondWind:
+            # Flying's body of Second Wind. The ability itself stays ONE super ability with one cooldown
+            # and one trigger item, dispatched on how you are moving when you fire it -- only the
+            # effect and what unlocks it are per-skill.
+            LimitlessBoost: 1.2
     #
     #  Settings for Herbalism
     ###
@@ -811,6 +788,29 @@ Skills:
             BonusDamage: 2.0
             KnockbackStrength: 0.8
 
+
+        # Arrived 2026-08-17 when Agility was retired. Fleet Footed and Second Wind were its last two
+        # sub-skills; each carried one rank per medium and was gated on Agility -- the MEAN of Parkour,
+        # Swimming and Flying -- so a specialist could never reach the rank for the medium they
+        # actually trained. Each is now a single-rank sub-skill of the skill you earn by moving that
+        # way. If you had tuned `Skills.Agility.FleetFooted` or `.SecondWind`, mcMMO moves your values
+        # to these paths on first boot and tells you it did so.
+        FleetFooted:
+            # A percentage bonus on movement speed while sprinting, on top of the vanilla sprint multiplier.
+            # Scales linearly with Parkour up to MaxBonusLevel, then stops.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            MaxBonus: 0.20
+
+        SecondWind:
+            # Parkour's body of Second Wind. The ability itself stays ONE super ability with one cooldown
+            # and one trigger item, dispatched on how you are moving when you fire it -- only the
+            # effect and what unlocks it are per-skill.
+            DartRange: 6.0
+            DartDamage: 6.0
+            DartKnockback: 1.5
+
         # SnowWalker has no advanced.yml block: the effect is binary (you walk on powder snow or you
         # do not), so there is nothing to tune. Its unlock level lives in skillranks.yml.
 
@@ -986,6 +986,29 @@ Skills:
             MaxBonusLevel:
                 Standard: 100
                 RetroMode: 1000
+
+        # Arrived 2026-08-17 when Agility was retired. Fleet Footed and Second Wind were its last two
+        # sub-skills; each carried one rank per medium and was gated on Agility -- the MEAN of Parkour,
+        # Swimming and Flying -- so a specialist could never reach the rank for the medium they
+        # actually trained. Each is now a single-rank sub-skill of the skill you earn by moving that
+        # way. If you had tuned `Skills.Agility.FleetFooted` or `.SecondWind`, mcMMO moves your values
+        # to these paths on first boot and tells you it did so.
+        FleetFooted:
+            # NOT a movement-speed bonus: swim speed ignores movement speed unless water movement efficiency
+            # is above zero, so this raises that attribute directly. It is the one Depth Strider uses and
+            # vanilla hard-caps it at 1.0 -- a Depth Strider III player is already at the cap and gains
+            # nothing here, which is intended rather than a bug.
+            # Scales linearly with Swimming up to MaxBonusLevel, then stops.
+            MaxBonusLevel:
+                Standard: 100
+                RetroMode: 1000
+            MaxBonus: 0.50
+
+        SecondWind:
+            # Swimming's body of Second Wind. The ability itself stays ONE super ability with one cooldown
+            # and one trigger item, dispatched on how you are moving when you fire it -- only the
+            # effect and what unlocks it are per-skill.
+            AquamanAmplifier: 1
     #
     #  Settings for Swords
     ###

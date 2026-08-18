@@ -109,11 +109,11 @@ public enum SuperAbilityType {
      * land, dive and surge, then glide and soar without waiting for any of them.
      */
     SECOND_WIND(
-            "Agility.Skills.SecondWind.On",
-            "Agility.Skills.SecondWind.Off",
-            "Agility.Skills.SecondWind.Other.On",
-            "Agility.Skills.SecondWind.Refresh",
-            "Agility.Skills.SecondWind.Other.Off",
+            "Movement.Skills.SecondWind.On",
+            "Movement.Skills.SecondWind.Off",
+            "Movement.Skills.SecondWind.Other.On",
+            "Movement.Skills.SecondWind.Refresh",
+            "Movement.Skills.SecondWind.Other.Off",
             "Parkour.SubSkill.SecondWind.Name"),
 
     /**
