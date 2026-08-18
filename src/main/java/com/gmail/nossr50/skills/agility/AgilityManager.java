@@ -212,7 +212,7 @@ public class AgilityManager extends SkillManager {
      * @return {@code true} if Roll XP may be awarded this call
      */
     public boolean canGainRollXP() {
-        if (!McMMOMod.getExperienceConfig().isAgilityExploitingPrevented()) {
+        if (!McMMOMod.getExperienceConfig().isMovementExploitingPrevented()) {
             return true;
         }
 
@@ -359,7 +359,7 @@ public class AgilityManager extends SkillManager {
      * onto recently.
      */
     private boolean isPlayerExploitingAgility() {
-        if (!McMMOMod.getExperienceConfig().isAgilityExploitingPrevented()) {
+        if (!McMMOMod.getExperienceConfig().isMovementExploitingPrevented()) {
             return false;
         }
 

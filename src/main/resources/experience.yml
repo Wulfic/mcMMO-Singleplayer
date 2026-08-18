@@ -52,7 +52,9 @@ ExploitFix:
     # Prevent many exploits related to fishing
     Fishing: true
     EndermanEndermiteFarms: true
-    Agility: true
+    # Renamed from `Agility` on 2026-08-17 when that skill was retired. Same switch, same behaviour:
+    # blocks self-inflicted damage from feeding the movement skills' fall/dodge XP.
+    Movement: true
     LavaStoneAndCobbleFarming: true
     TreeFellerReducedXP: true
     PistonCheating: true
@@ -479,12 +481,15 @@ Conversion:
 Experience_Values:
     PVP:
         Rewards: true
-    Agility:
+    # Renamed from `Agility` on 2026-08-17. A neutral root for the XP model the three movement
+    # skills SHARE -- filing it under Parkour, Swimming or Flying would read as a lie in the other
+    # two. Your tuned values are moved here on first boot.
+    Movement:
         Dodge: 800
         Roll: 600
         Fall: 600
 
-        # FeatherFall_Multiplier: Multiply Agility XP by this value when wearing boots with the Feather Fall enchant
+        # FeatherFall_Multiplier: Multiply fall XP by this value when wearing boots with the Feather Fall enchant
         FeatherFall_Multiplier: 2.0
 
         # Movement XP (Land / Water / Air domains).
@@ -504,7 +509,11 @@ Experience_Values:
         # Travel at or above the reference speed pays the full rate and never more; travel slower
         # pays pro-rata; standing still pays nothing. XP-per-block is a DERIVED quantity - nobody
         # tunes it, it falls out of the reference speed.
-        Movement:
+        # Renamed from `Movement` on 2026-08-18: its parent block is now called Movement too, and
+        # `Experience_Values.Movement.Movement` is not a path anyone should have to read. `Travel` is
+        # the honest name -- this is the per-SECOND travel model, as against the episodic Dodge, Roll
+        # and Fall values beside it.
+        Travel:
             # XP per second of travel, before the per-medium multiplier.
             #
             # Halved from the original 30.0 (2026-07-27). Movement is the most passive XP source in
