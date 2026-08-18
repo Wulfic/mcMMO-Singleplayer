@@ -283,8 +283,8 @@ Skills:
     #
     #  Settings for Flying
     #
-    #  One of Agility's three parents. Both blocks below moved here from `Skills.Agility` on
-    #  2026-08-10, and this is the pair the move mattered most for: read against Agility's mean of
+    #  Both blocks below moved here from the retired `Skills.Agility` on 2026-08-10, and this is
+    #  the pair the move mattered most for: read against that skill's mean of
     #  three, Glide's unlock (350) needed Flying 1050 and SolarWings' (750) needed Flying 2250 from a
     #  player who only ever flew -- both past the 1000 cap, so a specialist could never unlock either.
     ###
@@ -739,11 +739,11 @@ Skills:
     #
     #  Settings for Parkour
     ###
-    #  Parkour is one of Agility's three parent skills. Roll lives here rather than under Agility
-    #  because Agility's level is the MEAN of Parkour, Swimming and Flying, while the fall XP that
-    #  Roll earns is paid to Parkour alone -- so gating Roll on Agility levelled it at a third rate
-    #  and only for players who also swam and flew. Moved 2026-08-03 (GitHub #4). If you tuned the
-    #  old `Skills.Agility.Roll` block, move your values here; mcMMO warns on boot if you have not.
+    #  Roll lives here because the fall XP it earns is paid to Parkour, so the level that gates it
+    #  is the level those falls raise. It used to be gated on the retired Agility skill, whose level
+    #  was the MEAN of Parkour, Swimming and Flying -- which levelled Roll at a third rate, and only
+    #  for players who also swam and flew. Moved 2026-08-03 (GitHub #4). A `Skills.Agility.Roll`
+    #  block left in your copy is relocated here automatically on load, and the log names the move.
     ###
     Parkour:
         Roll:
@@ -948,7 +948,7 @@ Skills:
             # backstab. 100 ticks = 5 seconds -- long enough that you cannot trade blows and keep
             # stabbing, short enough to break contact and re-enter stealth inside one fight.
             #
-            # Cannot stack with Agility's Smash: that one requires sprinting and this one requires
+            # Cannot stack with Parkour's Smash: that one requires sprinting and this one requires
             # sneaking, and you cannot do both at once.
             MaxBonusLevel:
                 Standard: 100

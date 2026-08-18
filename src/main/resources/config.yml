@@ -243,7 +243,7 @@ Skills:
         Level_Cap: 0
         # Item that triggers the Herdsman's Call super ability on right-click. Never consumed.
         #
-        # Must differ from Agility's Second_Wind_Item (FEATHER) and Stealth's Smoke_Bomb_Item
+        # Must differ from Skills.Movement.Second_Wind_Item (FEATHER) and Stealth's Smoke_Bomb_Item
         # (GUNPOWDER): all three actives listen on the same use-item event, so a shared item would
         # activate one of them and print another's refusal, which looks like a broken ability rather
         # than a config collision.
@@ -279,7 +279,7 @@ Skills:
     Stealth:
         Level_Cap: 0
         # Item that triggers the Smoke Bomb super ability on right-click. Never consumed.
-        # Must differ from Agility's Second_Wind_Item: both actives listen on the same use-item
+        # Must differ from Skills.Movement.Second_Wind_Item: both actives listen on the same use-item
         # event, so sharing an item would fire one and print the other's refusal message.
         Smoke_Bomb_Item: GUNPOWDER
     Swords:
