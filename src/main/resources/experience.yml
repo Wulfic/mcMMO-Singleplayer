@@ -235,7 +235,7 @@ Experience_Bars:
         Enable: true
         Color: BLUE
         BarStyle: SEGMENTED_6
-    # YELLOW is free: PURPLE is Repair/Salvage/Smelting, GREEN Woodcutting, PINK Agility/Stealth.
+    # YELLOW is free: PURPLE is Repair/Salvage/Smelting, GREEN Woodcutting, PINK Parkour/Stealth.
     Cooking:
         Enable: true
         Color: YELLOW
@@ -494,7 +494,7 @@ Experience_Values:
 
         # Movement XP (Land / Water / Air domains).
         #
-        # Agility pays XP per SECOND of qualifying travel, not per block, and each tick's distance is
+        # Movement pays XP per SECOND of qualifying travel, not per block, and each tick's distance is
         # clamped at that medium's reference speed before it counts. This is deliberate and it is the
         # load-bearing balance decision of the skill:
         #
@@ -1052,11 +1052,11 @@ Experience_Values:
     Stealth:
         # Sneak XP.
         #
-        # Stealth uses the SAME speed-normalised model as Agility's movement domains (see the long
-        # comment under Experience_Values.Agility.Movement): XP is paid per SECOND of qualifying
+        # Stealth uses the SAME speed-normalised model as the movement skills (see the long
+        # comment under Experience_Values.Movement.Travel): XP is paid per SECOND of qualifying
         # sneak-travel, with each tick's distance clamped at the reference speed below.
         #
-        # The clamp matters even more here than it does for Agility. Padfoot raises the vanilla
+        # The clamp matters even more here than it does for movement. Padfoot raises the vanilla
         # sneaking_speed attribute from 0.3 toward 1.0, so a maxed player sneaks more than THREE
         # TIMES faster than an unranked one (Fleet Footed, by comparison, is worth 20%). Paying per
         # block would make Padfoot a 3.3x multiplier on its own XP rate. Under the clamp a maxed
@@ -1069,7 +1069,7 @@ Experience_Values:
             # XP per second of qualifying sneak-travel.
             #
             # 50 XP/s maxes a RetroMode level-1000 skill in ~61 hours of continuous sneaking, versus
-            # ~204h for Agility on land -- deliberately the fastest continuous earner in the mod
+            # ~204h for movement on land -- deliberately the fastest continuous earner in the mod
             # (GitHub #6, doubled from 25). Sneaking is slow, tedious, halves your speed and is
             # something players do in short bursts rather than to get anywhere, so it is priced for
             # the attention it costs rather than the distance it covers.
@@ -1131,7 +1131,7 @@ Experience_Values:
         #
         # 100 XP/point needs 110,100 pre-armour damage for a RetroMode level-1000 skill. At a
         # sustained "lose a full health bar every minute and heal it back" that is roughly 92 hours
-        # -- in the same band as Stealth's ~122h and Agility land's ~204h. MEASURE THIS IN §G; it is
+        # -- in the same band as Stealth's ~122h and movement-on-land's ~204h. MEASURE THIS IN §G; it is
         # a starting point, not a derived number.
         Damage_Taken: 100
     Combat:
