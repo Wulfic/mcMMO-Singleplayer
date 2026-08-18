@@ -10,6 +10,7 @@ import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
+import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.text.TextUtils;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillAvailability;
@@ -57,6 +58,26 @@ import org.jetbrains.annotations.VisibleForTesting;
  * </ul>
  */
 public final class McMMOCommands {
+
+    /**
+     * Skills that mcMMO used to have, mapped to the locale key explaining where they went (A-5).
+     *
+     * <p><b>Why this exists.</b> A player who levelled a skill for weeks and then gets
+     * <em>"Unknown skill: agility"</em> concludes the mod broke, files an issue, and is right to.
+     * The token is not unknown — it is retired, and the answer to "where did my perks go" is a
+     * fact the mod holds and they do not.
+     *
+     * <p>⚠️ <b>Checked BEFORE {@code matchSkill}</b>, which logs a warning for a name it cannot
+     * resolve. A retired name is not operator error and must not be logged as such.
+     *
+     * <p>The locale keys are written out as literals rather than derived from the token, so
+     * {@code grep} finds them. A key built by concatenation is invisible to every catalogue guard
+     * in this repo — the {@code XPBar.<Skill>} family is the standing example.
+     */
+    private static final Map<String, String> RETIRED_SKILLS = Map.of(
+            // Retired 2026-08-17. Fleet Footed and Second Wind became six single-rank sub-skills,
+            // two under each of Parkour, Swimming and Flying.
+            "agility", "Commands.Skills.Retired.Agility");
 
     /** "all" targets every non-child skill in the level/xp admin commands. */
     private static final String ALL_TOKEN = "all";
@@ -139,6 +160,10 @@ public final class McMMOCommands {
      * {@code McMMOCommandsTest#everyRegisteredCommandIsAccountedFor} — which is the point: GitHub #8
      * happened because a cheat command was registered and nobody re-checked the list.
      */
+    static @NotNull Map<String, String> retiredSkills() {
+        return RETIRED_SKILLS;
+    }
+
     static @NotNull Map<String, Boolean> commandGating() {
         return Map.of(
                 "mcmmo", false,
@@ -214,6 +239,13 @@ public final class McMMOCommands {
         if (mmoPlayer == null) {
             source.sendError(Text.literal("Your mcMMO data has not loaded yet."));
             return 0;
+        }
+
+        // A-5. Ahead of matchSkill, which would both answer null and log the name as invalid.
+        final String retired = RETIRED_SKILLS.get(token.toLowerCase(Locale.ROOT));
+        if (retired != null) {
+            source.sendFeedback(() -> TextUtils.toText(LocaleLoader.getString(retired)), false);
+            return 1;
         }
 
         final PrimarySkillType skill = McMMOMod.getSkillTools().matchSkill(token);

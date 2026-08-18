@@ -646,6 +646,29 @@ conflict too, not just the Agility ones, and ~10 unpropagated commits is the exa
 made 11 of the last 12 forgotten fixes. **Mitigation, mandatory:** take **F as its own cherry-pick,
 after every behaviour commit**, on every band.
 
+**A-8 — the movement manager is keyed NOMINALLY on `PARKOUR`** (owner, 2026-08-18). `AgilityManager`
+extends `SkillManager`, which requires a `PrimarySkillType`; with `AGILITY` gone no single skill
+honestly owns a manager that hosts Parkour's, Swimming's and Flying's sub-skills. `PARKOUR` is named
+because it already holds the manager's `EPISODIC_XP_SKILL` and A-2's nominal `SECOND_WIND` binding.
+⚠️ **Verified inert before choosing it:** the manager never calls the inherited `getSkillLevel()`
+or the 2-arg `scaleToLevel` — all four ramps pass an explicit skill (phase C) and every XP award
+names its own destination.
+⚠️⚠️ **The failure mode got QUIETER, not rarer.** Keyed on `AGILITY`, a passive that reached for
+the inherited field scaled on the *mean* — wrong for everybody. Keyed on `PARKOUR` the same slip is
+**correct for a runner** and silently wrong for a swimmer and a flier. Pinned by
+`AgilityMovementTest#theNominalParkourKeyIsReadByNothing`, whose fixture is a swimmer at Parkour 0.
+**Rejected:** a standalone field on `McMMOPlayer` (does not dodge the question — the ctor still needs
+a skill) and a nullable `SkillManager#skill` (an NPE on a path no test walks, the exact Taming shape).
+
+**A-9 — F renames the `Managed` constants but FREEZES their modifier id strings** (owner,
+2026-08-18). `SkillAttributeService.Managed.AGILITY_FLEET_FOOTED_LAND/WATER` carry the ids
+`"agility_fleet_footed"` / `"agility_fleet_footed_water"`, and **those strings are written into
+player entity NBT**. `clearAll` removes only ids it still knows, so a renamed id **strands a
+permanent speed buff** on every existing player. The constants become `MOVEMENT_FLEET_FOOTED_*`; the
+id literals keep their old spelling forever, with a comment saying why they must never change.
+**Rejected:** new ids plus a one-time legacy sweep — a write to live player entity state bought
+purely for cosmetics, and the sweep needs its own guard and test or it *is* the stranding bug.
+
 ### Concrete target state
 
 `skillranks.yml` — delete the `Agility:` block; add to each of the three parents:
@@ -698,7 +721,7 @@ the Taming defect was.
       the medium's own constant. `Medium` gains `fleetFootedSubSkill()` / `secondWindSubSkill()` and
       **loses `fleetFootedRank()`** — delete it rather than leaving it unused, it is the thing that
       encoded the dissolved ladder.
-- [ ] **B — Second Wind's medium-aware binding** + the "all three unlock alike" guard (A-2).
+- [x] **B — Second Wind's medium-aware binding** — ✅ shipped `b7bfb4ba5`, suite 1809. + the "all three unlock alike" guard (A-2).
       ⚠️ **Two things the plan did not know, both found by reading the code after A landed:**
       **(B-i) The guard A-2 depends on does not exist.** `SuperAbilityType.java:191` carries the comment
       *"Pinned by `SuperAbilityTypeTest#allSecondWindSubSkillsUnlockAtTheSameLevel`"* and **there is no
@@ -717,9 +740,9 @@ the Taming defect was.
       🔑 This is the shape the plan warned about — *"a mechanical find-and-replace ships sub-skills that
       unlock at the wrong level and nothing fails"* — except it landed on the **duration**, which no
       gate test reads.
-- [ ] **C — config + locale + `ConfigRetunes` path moves.** ⚠️ ModMenu rows land with the code that
+- [x] **C — config + locale + `ConfigRetunes` path moves.** ✅ shipped `6d2a40d84`, suite 1813. ⚠️ ModMenu rows land with the code that
       READS the key, never with the key — `CatalogueKeysReachCodeTest` is right to refuse them early.
-- [ ] **D — renderers.** Delete `AgilityStatsRenderer`; Parkour/Swimming/Flying renderers each gain a
+- [x] **D — renderers.** ✅ shipped `38644b380`, suite 1814. Delete `AgilityStatsRenderer`; Parkour/Swimming/Flying renderers each gain a
       Fleet Footed row and a Second Wind row showing **that medium's** state.
       ⚠️ **A-4's advancement deletion MOVED OUT of D and into E** — tried in D, and
       `MilestoneAdvancementResourcesTest` correctly refused it. That guard derives the expected
@@ -730,7 +753,7 @@ the Taming defect was.
       🔑 Also: `SkillStatsRenderer#calculateLength` resolved the ability via `getSuperAbility(skill)`,
       a **one-to-one** map that answers `null` for two of the three movement skills — an NPE the
       moment a swimmer opened their stats screen, not a misprint. It now takes the ability by name.
-- [ ] **E — remove `PrimarySkillType.AGILITY`** — **now also carries A-4** (delete the Agility
+- [x] **E — remove `PrimarySkillType.AGILITY`** — ✅ shipped, suite **1813, 0 failures**. — **now also carries A-4** (delete the Agility
       advancement tree: `milestone/skill/agility`, `milestone/level/agility/*`,
       `milestone/maxed/agility`) **and A-5** (the `/mcstats agility` retirement message, which needs
       the command branch that only exists once the constant is gone).
@@ -741,8 +764,19 @@ the Taming defect was.
       Also remove and `SkillTools.AGILITY_PARENTS`, `isChildSkill`'s
       `AGILITY` arm, `MISC_SKILLS`, `getPrimarySkill(SECOND_WIND)`, `coreskills.yml`, `experience.yml`.
       🔑 **Audit against `PrimarySkillType.values()`, never against the diff.**
+- [ ] **F1 — the LIVE config paths off the retired skill's name.** Split out of E on 2026-08-18 and
+      given its own commit, because it is a **path migration**, not an enum removal, and it reuses
+      C's proven `SkillRenames.MovedPath` + `ConfigLoader#migrateOnePath` mechanism.
+      E deleted only what was **dead** (`coreskills.yml`'s `Agility:` row, `Experience_Bars.Agility`).
+      Still live and still named for a skill `/mcstats agility` now calls retired:
+      `Experience_Values.Agility.{Dodge,Roll,Fall,FeatherFall_Multiplier,Movement.*}`,
+      `ExploitFix.Agility`, `Skills.Agility.{Level_Cap,XP_After_Teleport_Cooldown,Second_Wind_Item}`.
+      ⚠️ Target the neutral **`Movement.*`** root C already established for Second Wind's locale
+      strings — not any one parent, which would read as a lie in the other two. Every move needs a
+      `MovedPath` entry (a changed shipped default reaches nobody who has run the mod once) and the
+      **converse** test A-6 demands: the orphan block must still be there afterwards.
 - [ ] **F — the rename (A-3), mechanical and behaviour-free.** Its own commit, so a band can take it
-      cleanly.
+      cleanly. ⚠️ Carries **A-9**: rename the `Managed` constants, freeze their id strings.
 - [ ] **G — gates, in this order:** `mixin-allow-audit.py --check` **before** `./gradlew build` (javac
       is blind to mixin selector breakage); then `classes testClasses` → `extract-mc-surface.py`;
       `config-id-audit.py --self-test` then the audit; `boot-check.sh`; `gameplay-smoke.sh` with
@@ -762,6 +796,18 @@ recoverable from the commit that removed them. **Nothing here touches a player's
 change is *not writing a key that was already dead*.
 ⚠️ The one unrecoverable-shaped step is **F, the rename** — `git mv` across ~30 files. It goes last,
 alone, on a clean tree, and is verified with `git status` showing renames rather than delete+add.
+
+**Destructive steps actually taken, with their verified rollback (E, 2026-08-18):**
+
+| Step | Blast radius | Rollback (verified available) |
+|---|---|---|
+| A-4 — deleted the Agility advancement tree | 7 tracked JSONs: `milestone/level/agility/{apprentice,adept,expert,master,grandmaster}.json`, `milestone/maxed/agility.json`, `milestone/skill/agility.json`. Nothing untracked, nothing outside `advancement/milestone`. | `git checkout 38644b380 -- src/main/resources/data/mcmmo/advancement/milestone/level/agility src/main/resources/data/mcmmo/advancement/milestone/maxed/agility.json src/main/resources/data/mcmmo/advancement/milestone/skill/agility.json` |
+
+All five gates were run before the `git rm`: target resolved by `find` (7 files, listed), every file
+proved tracked at `38644b380` by `git ls-files --error-unmatch`, `git rm -n` dry-run printed exactly
+those 7 and nothing else, scope narrowed to three named paths rather than a glob, and the undo above
+was written before the command ran. **No player save is touched anywhere in this phase** — the
+profile change is *not writing a key that was already dead*.
 
 ### What I am **not** doing
 

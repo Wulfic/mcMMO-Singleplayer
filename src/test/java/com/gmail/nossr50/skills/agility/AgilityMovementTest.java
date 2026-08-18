@@ -112,12 +112,19 @@ class AgilityMovementTest {
      * deliberately disagree.
      */
     private AgilityManager managerAtLevel(int level) {
-        return managerAtLevels(level, level, level, level);
+        return managerAtLevels(level, level, level);
     }
 
-    /** A manager whose four movement levels are set independently. */
-    private AgilityManager managerAtLevels(int agility, int parkour, int swimming, int flying) {
-        lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY)).thenReturn(agility);
+    /**
+     * A manager whose three movement levels are set independently.
+     *
+     * <p>A fourth {@code agility} stub stood first in this list until 2026-08-17. It was the wrong
+     * answer every test here existed to catch; the constant is gone, so reading the mean is now a
+     * compile error rather than a number. ⚠️ That makes the REMAINING discriminator the only one:
+     * the three parents must be set to <b>disagree</b>, or a test cannot tell which of them a gate
+     * or a ramp actually read. A fixture with all three equal proves nothing about routing.
+     */
+    private AgilityManager managerAtLevels(int parkour, int swimming, int flying) {
         lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR)).thenReturn(parkour);
         lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.SWIMMING)).thenReturn(swimming);
         lenient().when(mmoPlayer.getSkillLevel(PrimarySkillType.FLYING)).thenReturn(flying);
@@ -212,7 +219,7 @@ class AgilityMovementTest {
 
         // Level 0 is the discriminating case: without it this test would pass against a gate that
         // was simply always true.
-        final AgilityManager none = managerAtLevels(0, 0, 0, 0);
+        final AgilityManager none = managerAtLevels(0, 0, 0);
         for (Medium medium : Medium.values()) {
             assertFalse(none.canFleetFoot(medium), () -> medium + " is locked below level 1");
         }
@@ -223,7 +230,7 @@ class AgilityMovementTest {
         // A pure runner: Parkour maxed, never swum, never flown. Under the retired mean-of-three gate
         // this player's Agility 333 would have paid a water bonus to someone who has never been in
         // water.
-        final AgilityManager runner = managerAtLevels(333, 1000, 0, 0);
+        final AgilityManager runner = managerAtLevels(1000, 0, 0);
         assertEquals(0.0, runner.getFleetFootedBonus(Medium.WATER), EPSILON);
         assertEquals(0.0, runner.getFleetFootedBonus(Medium.AIR), EPSILON);
         assertTrue(runner.getFleetFootedBonus(Medium.LAND) > 0.0,
@@ -357,7 +364,7 @@ class AgilityMovementTest {
         // A runner at Parkour 1000 / Swimming 0 / Flying 0: Dart is live, the other two bodies are
         // not. Asserting a live one alongside the null ones is what stops this passing against a
         // computeSecondWind that returns null unconditionally.
-        final AgilityManager runner = managerAtLevels(333, 1000, 0, 0);
+        final AgilityManager runner = managerAtLevels(1000, 0, 0);
         assertNull(runner.computeSecondWind(Medium.WATER, 100));
         assertNull(runner.computeSecondWind(Medium.AIR, 100));
         assertNotNull(runner.computeSecondWind(Medium.LAND, 100));
@@ -485,33 +492,82 @@ class AgilityMovementTest {
      * {@code reParentedSubSkillsFollowTheirOwnParentNotTheAverage} above proves the gates and would
      * pass with every ramp still on the mean.
      *
-     * <p>The fixture is deliberately <b>inconsistent</b>: all three parents at 1000 while Agility is
-     * stubbed at 333. No real profile can be in that state — that is the point. It makes the two
-     * candidate answers maximally far apart, so a ramp reading the mean returns a third of the bonus
-     * rather than something merely a bit off.
+     * <p>⚠️ <b>The fixture had to be rebuilt when {@code AGILITY} was retired on 2026-08-17, and
+     * a mechanical edit here would have produced a VACUOUS test.</b> It used to set all three parents
+     * to 1000 while stubbing Agility at 333: the mean was the wrong answer and it was a third of the
+     * right one. With no Agility to stub, three equal parents make every ramp max out <em>whichever
+     * parent it reads</em> — the assertions would all pass against a manager that scaled everything
+     * on Parkour. So the parents are now made to <b>disagree</b>: one specialist per medium, each
+     * maxed in one skill and at zero in the other two. Only that discriminates.
      */
     @Test
-    void everyScaledPassiveRampsOnItsOwnParentNotTheAverage() {
-        final AgilityManager specialist = managerAtLevels(333, 1000, 1000, 1000);
+    void everyScaledPassiveRampsOnItsOwnParentNotAnotherMediums() {
+        final AgilityManager runner = managerAtLevels(1000, 0, 0);
+        assertEquals(0.20, runner.getFleetFootedBonus(Medium.LAND), EPSILON,
+                "land Fleet Footed must ramp on Parkour 1000 — the full 0.20");
+        assertEquals(0.0, runner.getFleetFootedBonus(Medium.WATER), EPSILON,
+                "a runner who has never swum must get nothing in water; 0.50 here means the water "
+                        + "ramp read Parkour");
+        assertEquals(0.0, runner.getFleetFootedBonus(Medium.AIR), EPSILON,
+                "0.15 here means the air ramp read Parkour");
+        assertEquals(0.5, runner.getAthleteExhaustionMultiplier(), EPSILON,
+                "Athlete must ramp on Parkour 1000 — the full 0.5 reduction");
+        assertEquals(0.0, runner.getLeadLungsAirTopUpPerTick(), EPSILON,
+                "Lead Lungs must ramp on Swimming, which is 0");
+        assertEquals(0.0, runner.getGlideDescentReduction(), EPSILON,
+                "Glide must ramp on Flying, which is 0");
 
-        assertEquals(0.20, specialist.getFleetFootedBonus(Medium.LAND), EPSILON,
-                "Fleet Footed on land must ramp on Parkour 1000 (full 0.20), not on Agility 333");
-        assertEquals(0.50, specialist.getFleetFootedBonus(Medium.WATER), EPSILON,
-                "Fleet Footed in water must ramp on Swimming 1000 (full 0.50), not on Agility 333");
-        assertEquals(0.15, specialist.getFleetFootedBonus(Medium.AIR), EPSILON,
-                "Fleet Footed in air must ramp on Flying 1000 (full 0.15), not on Agility 333");
-
-        assertEquals(0.5, specialist.getAthleteExhaustionMultiplier(), EPSILON,
-                "Athlete must ramp on Parkour 1000 — the full 0.5 reduction, not a third of it");
-        assertEquals(0.75, specialist.getLeadLungsAirTopUpPerTick(), EPSILON,
+        final AgilityManager swimmer = managerAtLevels(0, 1000, 0);
+        assertEquals(0.50, swimmer.getFleetFootedBonus(Medium.WATER), EPSILON,
+                "water Fleet Footed must ramp on Swimming 1000 — the full 0.50");
+        assertEquals(0.0, swimmer.getFleetFootedBonus(Medium.LAND), EPSILON);
+        assertEquals(0.75, swimmer.getLeadLungsAirTopUpPerTick(), EPSILON,
                 "Lead Lungs must ramp on Swimming 1000");
-        assertEquals(0.5, specialist.getGlideDescentReduction(), EPSILON,
+        assertEquals(1.0, swimmer.getAthleteExhaustionMultiplier(), EPSILON,
+                "Athlete is Parkour's and this player has none — no reduction at all");
+
+        final AgilityManager flier = managerAtLevels(0, 0, 1000);
+        assertEquals(0.15, flier.getFleetFootedBonus(Medium.AIR), EPSILON,
+                "air Fleet Footed must ramp on Flying 1000 — the full 0.15");
+        assertEquals(0.0, flier.getFleetFootedBonus(Medium.LAND), EPSILON);
+        assertEquals(0.5, flier.getGlideDescentReduction(), EPSILON,
                 "Glide must ramp on Flying 1000");
+        assertEquals(0.0, flier.getLeadLungsAirTopUpPerTick(), EPSILON,
+                "Lead Lungs is Swimming's and this player has none");
+    }
+
+    /**
+     * The movement manager is keyed <b>nominally</b> on {@code PARKOUR} (ruling A-8), and this pins
+     * that the inherited {@link com.gmail.nossr50.skills.SkillManager#skill} field is read by
+     * nothing in it.
+     *
+     * <p>⚠️ <b>Why this needs its own test.</b> Before 2026-08-17 the manager was keyed on the
+     * retired {@code AGILITY}, so a passive that reached for the inherited {@code getSkillLevel()}
+     * or the two-argument {@code scaleToLevel} scaled on the <em>mean</em> — wrong for everyone,
+     * which is how phase C caught four of them at once. Keyed on PARKOUR the same mistake scales a
+     * swimmer's and a flier's perks on their <b>Parkour</b> level, which is <em>correct for a
+     * runner</em> and silently wrong for the other two. The failure got quieter, not rarer.
+     *
+     * <p>A swimmer with Parkour 0 is the discriminator: every water number must be full.
+     */
+    @Test
+    void theNominalParkourKeyIsReadByNothing() {
+        final AgilityManager swimmer = managerAtLevels(0, 1000, 0);
+
+        assertEquals(0.50, swimmer.getFleetFootedBonus(Medium.WATER), EPSILON,
+                "a swimmer with Parkour 0 must still get the full water bonus; 0.0 here means "
+                        + "something scaled on the manager's nominal PARKOUR key");
+        assertEquals(0.75, swimmer.getLeadLungsAirTopUpPerTick(), EPSILON,
+                "Lead Lungs must be full for a maxed swimmer regardless of their Parkour");
+        assertTrue(swimmer.canFleetFoot(Medium.WATER),
+                "the water gate must read Swimming, not the manager's nominal key");
+        assertNotNull(swimmer.computeSecondWind(Medium.WATER, 100),
+                "Aquaman must unlock on Swimming 1000 with Parkour at 0");
     }
 
     @Test
     void reParentedSubSkillsFollowTheirOwnParentNotTheAverage() {
-        final AgilityManager runner = managerAtLevels(333, 1000, 0, 0);
+        final AgilityManager runner = managerAtLevels(1000, 0, 0);
 
         // Parkour's own: unlocked by running, despite Agility sitting at 333.
         assertTrue(runner.canDodge(), "Dodge is gated on Parkour 1 and this player has Parkour 1000");
@@ -548,7 +604,7 @@ class AgilityMovementTest {
      */
     @Test
     void movementSubSkillsFollowTheirOwnMediumsParentNotTheAverage() {
-        final AgilityManager flier = managerAtLevels(333, 0, 0, 1000);
+        final AgilityManager flier = managerAtLevels(0, 0, 1000);
 
         assertTrue(flier.canFleetFoot(Medium.AIR),
                 "air Fleet Footed is gated on Flying, which is maxed — under the retired mean gate "
@@ -576,25 +632,30 @@ class AgilityMovementTest {
      */
     @Test
     void eachSecondWindBodyIsUnlockedOnlyByItsOwnMediumsSkill() {
-        final AgilityManager runner = managerAtLevels(333, 1000, 0, 0);
+        final AgilityManager runner = managerAtLevels(1000, 0, 0);
         assertNotNull(runner.computeSecondWind(Medium.LAND, 100), "Parkour 1000 unlocks Dart");
         assertNull(runner.computeSecondWind(Medium.WATER, 100), "Swimming 0 denies Aquaman");
         assertNull(runner.computeSecondWind(Medium.AIR, 100), "Flying 0 denies Limitless");
 
-        final AgilityManager swimmer = managerAtLevels(333, 0, 1000, 0);
+        final AgilityManager swimmer = managerAtLevels(0, 1000, 0);
         assertNotNull(swimmer.computeSecondWind(Medium.WATER, 100), "Swimming 1000 unlocks Aquaman");
         assertNull(swimmer.computeSecondWind(Medium.LAND, 100), "Parkour 0 denies Dart");
         assertNull(swimmer.computeSecondWind(Medium.AIR, 100), "Flying 0 denies Limitless");
     }
 
-    // --- XP routing: each medium pays its own skill, never Agility -------------------------------
+    // --- XP routing: each medium pays its own skill and no other --------------------------------
 
+    /**
+     * ⚠️ The negative half used to be <em>"and never AGILITY"</em>. That constant was retired on
+     * 2026-08-17 and naming it is a compile error, so the negative is now asserted against the
+     * <b>other two mediums</b> — which is strictly stronger: paying the wrong medium is a mistake
+     * that still compiles, and it is the one the manager's nominal PARKOUR key makes easy.
+     */
     @Test
-    void everyMediumPaysItsOwnSkillAndNeverAgility() {
+    void everyMediumPaysItsOwnSkillAndNoOtherMediums() {
         for (Medium medium : Medium.values()) {
             final McMMOPlayer owner = mock(McMMOPlayer.class);
             lenient().when(owner.getPlayer()).thenReturn(player);
-            lenient().when(owner.getSkillLevel(PrimarySkillType.AGILITY)).thenReturn(1);
             final AgilityManager manager = new AgilityManager(owner);
             manager.setMovementXpSettings(defaultSettings());
 
@@ -605,9 +666,14 @@ class AgilityMovementTest {
 
             verify(owner, org.mockito.Mockito.atLeastOnce()).beginXpGain(
                     org.mockito.ArgumentMatchers.eq(medium.primarySkill()), anyFloat(), any(), any());
-            verify(owner, never()).beginXpGain(
-                    org.mockito.ArgumentMatchers.eq(PrimarySkillType.AGILITY), anyFloat(), any(),
-                    any());
+            for (Medium other : Medium.values()) {
+                if (other.primarySkill() == medium.primarySkill()) {
+                    continue;
+                }
+                verify(owner, never()).beginXpGain(
+                        org.mockito.ArgumentMatchers.eq(other.primarySkill()), anyFloat(), any(),
+                        any());
+            }
         }
     }
 
@@ -629,8 +695,8 @@ class AgilityMovementTest {
 
     @Test
     void fallAndDodgeXpGoToParkourRatherThanBeingSplitAcrossAllThreeDomains() {
-        // Landing well is a land-movement skill. Agility cannot hold the XP (a child skill earns
-        // nothing) and splitting it three ways would mean falling off a cliff trains your swimming.
+        // Landing well is a land-movement skill, and splitting the XP three ways would mean falling
+        // off a cliff trains your swimming.
         assertEquals(PrimarySkillType.PARKOUR, AgilityManager.EPISODIC_XP_SKILL);
 
         // The shipped fall multipliers, plus enough health to survive — without either the mocked
@@ -643,7 +709,12 @@ class AgilityMovementTest {
 
         verify(mmoPlayer, org.mockito.Mockito.atLeastOnce()).beginXpGain(
                 org.mockito.ArgumentMatchers.eq(PrimarySkillType.PARKOUR), anyFloat(), any(), any());
+        // ⚠️ The negative was "never AGILITY" until that constant was retired on 2026-08-17.
+        // Asserted against Swimming and Flying instead: "split across all three domains" is what the
+        // test name claims is NOT happening, and those two are the halves that would show it.
         verify(mmoPlayer, never()).beginXpGain(
-                org.mockito.ArgumentMatchers.eq(PrimarySkillType.AGILITY), anyFloat(), any(), any());
+                org.mockito.ArgumentMatchers.eq(PrimarySkillType.SWIMMING), anyFloat(), any(), any());
+        verify(mmoPlayer, never()).beginXpGain(
+                org.mockito.ArgumentMatchers.eq(PrimarySkillType.FLYING), anyFloat(), any(), any());
     }
 }

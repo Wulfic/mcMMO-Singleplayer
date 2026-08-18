@@ -221,10 +221,6 @@ Experience_Bars:
             Enable: false
             # You can make your own custom details in the locale file without having to use the ExtraDetails setting!
             ExtraDetails: false
-    Agility:
-        Enable: true
-        Color: PINK
-        BarStyle: SEGMENTED_6
     Alchemy:
         Enable: true
         Color: PURPLE
@@ -254,8 +250,8 @@ Experience_Bars:
         Enable: true
         Color: PURPLE
         BarStyle: SEGMENTED_6
-    # The three movement domains. Agility itself has a bar too, but it is a child skill and never
-    # earns XP directly, so in practice these three are the ones you will watch move.
+    # The three movement domains. Until 2026-08-17 a fourth, derived Agility bar sat above these
+    # and never moved on its own; it was retired with the skill.
     Flying:
         Enable: true
         Color: WHITE

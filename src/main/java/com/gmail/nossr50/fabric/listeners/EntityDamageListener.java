@@ -1821,7 +1821,11 @@ public final class EntityDamageListener {
         }
 
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
-                result.isGraceful() ? "Agility.Ability.Proc" : "Agility.Roll.Text");
+                // Moved off the retired Agility root 2026-08-17. Roll is a PARKOUR sub-skill and
+                // these two are LITERALS -- no enum-derived check would have caught a stale root.
+                result.isGraceful()
+                        ? "Parkour.SubSkill.GracefulRoll.Proc"
+                        : "Parkour.SubSkill.Roll.Proc");
         SoundManager.sendCategorizedSound(mmoPlayer.getPlayer(), SoundType.ROLL_ACTIVATED,
                 PlatformSoundCategory.PLAYERS, 0.5F);
         return (float) result.getModifiedDamage();

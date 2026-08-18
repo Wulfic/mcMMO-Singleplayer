@@ -80,11 +80,13 @@ public class ExperienceBarManager {
         // trained in short bursts alongside whatever produced the materials, and a bar for them
         // would mostly be crowding out the skill the player is actually watching.
         //
-        // Agility is deliberately NOT in this list even though it is also a child skill. It is the
-        // umbrella over Parkour, Swimming and Flying — the thing a player thinks of themselves as
-        // levelling while moving — so its bar is wanted, and it is only meaningful because
-        // McMMOPlayer#getProgressInCurrentSkillLevel now averages a child skill's parents instead of
-        // returning a flat 1.0. Suppress that averaging and this becomes a permanently full bar.
+        // ⚠️ Agility used to be deliberately ABSENT from this list -- it was the one child skill
+        // whose bar was wanted -- and it was retired outright on 2026-08-17. EVERY child skill that
+        // still exists is therefore suppressed here, which makes the child-propagation loop in
+        // updateExperienceBar inert: showBar returns early for every child it can reach.
+        // The loop is kept because it is the correct behaviour the day a child skill's bar is wanted
+        // again, but nothing exercises it today. ExperienceBarManagerTest says the same thing rather
+        // than pretending otherwise.
         disabledBars.add(PrimarySkillType.SALVAGE);
         disabledBars.add(PrimarySkillType.SMELTING);
     }
@@ -98,8 +100,11 @@ public class ExperienceBarManager {
         showBar(skill);
         // A child skill earns no XP of its own — its level is the mean of its parents' — so it would
         // never show a bar at all if it waited for a gain of its own. Training a parent IS training
-        // it, so a parent's gain refreshes the child's bar too. Salvage and Smelting are unaffected:
-        // their bars are suppressed below, and this is a no-op for them.
+        // it, so a parent's gain refreshes the child's bar too.
+        // 🔴 INERT as of 2026-08-17: every surviving child skill is in `disabledBars`, so this
+        // loop reaches showBar and showBar returns immediately. Retained on purpose -- see the
+        // constructor. It has no positive test because it has no live subject; do not add one that
+        // fakes a subject.
         for (PrimarySkillType child : McMMOMod.getSkillTools().getChildSkillsOf(skill)) {
             showBar(child);
         }

@@ -28,7 +28,6 @@ public class SkillTools {
     public final @NotNull ImmutableSet<String> EXACT_SUBSKILL_NAMES;
     public final @NotNull ImmutableList<PrimarySkillType> CHILD_SKILLS;
     public static final @NotNull ImmutableList<PrimarySkillType> NON_CHILD_SKILLS;
-    public static final @NotNull ImmutableList<PrimarySkillType> AGILITY_PARENTS;
     public static final @NotNull ImmutableList<PrimarySkillType> SALVAGE_PARENTS;
     public static final @NotNull ImmutableList<PrimarySkillType> SMELTING_PARENTS;
     public final @NotNull ImmutableList<PrimarySkillType> COMBAT_SKILLS;
@@ -56,15 +55,9 @@ public class SkillTools {
         }
         NON_CHILD_SKILLS = ImmutableList.copyOf(tempNonChildSkills);
 
-        // Agility is the movement skill's *derived* level: it owns all ten sub-skills but earns no XP
-        // of its own. Its level is the mean of the three domains a player actually travels through, so
-        // reaching Agility 1000 means reaching 1000 in all three (1000 Flying alone is Agility 333).
-        // That is deliberate — the perks are an all-rounder's reward, not a specialist's.
-        AGILITY_PARENTS = ImmutableList.of(
-                PrimarySkillType.PARKOUR,
-                PrimarySkillType.SWIMMING,
-                PrimarySkillType.FLYING
-        );
+        // AGILITY was retired 2026-08-17, so there is no AGILITY_PARENTS list any more. Parkour,
+        // Swimming and Flying are three ordinary non-child skills now: nothing derives a level from
+        // their mean, and each owns the movement perks specific to it.
         SALVAGE_PARENTS = ImmutableList.of(
                 PrimarySkillType.REPAIR,
                 PrimarySkillType.FISHING
@@ -120,7 +113,6 @@ public class SkillTools {
                 PrimarySkillType.WOODCUTTING
         );
         this.MISC_SKILLS = ImmutableList.of(
-                PrimarySkillType.AGILITY,
                 PrimarySkillType.ALCHEMY,
                 // Cooking sits with Smelting, Repair and Salvage rather than in GATHERING_SKILLS:
                 // it consumes what the gathering skills produce and makes something else out of it.
@@ -239,13 +231,21 @@ public class SkillTools {
             // Every skill's headline ability, used by /mcstats to name and time it.
             //
             // Blast Mining is excluded because Mining's headline ability is Super Breaker; Second
-            // Wind is NOT excluded — it is Agility's only ability and must show on the stats screen.
-            // Note that Agility is the mod's first super ability with no tool behind it, so it has no
-            // entry in primarySkillToolMap and getPrimarySkillToolType(AGILITY) is null. That is safe
-            // only because the tool-readying path (McMMOPlayer#processAbilityActivation /
-            // #checkAbilityActivation, both of which dereference that tool) is driven exclusively by
-            // SuperAbilityListener with the six hard-coded tool skills. Second Wind is triggered by a
-            // held item instead and must never be routed through those two methods.
+            // Wind is NOT excluded — it must show on the stats screen.
+            //
+            // ⚠️ THREE of these parents have no tool behind them: PARKOUR (Second Wind, nominally
+            // — see getSuperAbilityParent), STEALTH (Smoke Bomb) and HUSBANDRY (Herdsman's Call).
+            // getPrimarySkillToolType answers null for all three, and that is safe ONLY because the
+            // tool-readying path (McMMOPlayer#processAbilityActivation / #checkAbilityActivation,
+            // both of which dereference that tool) is driven exclusively by SuperAbilityListener
+            // with the six hard-coded tool skills. All three are triggered by a HELD ITEM instead
+            // and must never be routed through those two methods.
+            //
+            // ⚠️ SWIMMING and FLYING get no entry here at all, because Second Wind's one nominal
+            // parent is PARKOUR. That is deliberate, not an omission — a swimmer's Second Wind is
+            // the same ability with a different body. SkillStatsRenderer resolves it BY NAME rather
+            // than through this map for exactly that reason (phase D); resolving it through here
+            // NPE'd the moment a swimmer opened their stats screen.
             if (superAbilityType != SuperAbilityType.BLAST_MINING) {
                 tempMainActivatedAbilityChildMap.put(parent, superAbilityType);
             }
@@ -311,7 +311,15 @@ public class SkillTools {
             case EXPLOSIVE_SHOT -> PrimarySkillType.ARCHERY;
             case MACES_SUPER_ABILITY -> PrimarySkillType.MACES;
             case SPEARS_SUPER_ABILITY -> PrimarySkillType.SPEARS;
-            case SECOND_WIND -> PrimarySkillType.AGILITY;
+            // NOMINAL, and the same choice A-2 made for SECOND_WIND.subSkillTypeDefinition:
+            // Second Wind is ONE super ability whose body is resolved from the medium at
+            // activation, so it has no single parent. PARKOUR is named because the land body is
+            // the default one and because Second Wind is the only super ability any of the three
+            // movement skills has — so nothing is displaced from the headline-ability map.
+            // ⚠️ Do NOT read this as "Second Wind is a Parkour ability". SWIMMING and FLYING
+            // deliberately answer null from getSuperAbility(); SkillStatsRenderer#calculateLength
+            // resolves the ability BY NAME for exactly that reason (phase D).
+            case SECOND_WIND -> PrimarySkillType.PARKOUR;
             case SMOKE_BOMB -> PrimarySkillType.STEALTH;
             case HERDSMANS_CALL -> PrimarySkillType.HUSBANDRY;
         };
@@ -441,7 +449,7 @@ public class SkillTools {
 
     public static boolean isChildSkill(PrimarySkillType primarySkillType) {
         return switch (primarySkillType) {
-            case AGILITY, SALVAGE, SMELTING -> true;
+            case SALVAGE, SMELTING -> true;
             default -> false;
         };
     }
@@ -518,7 +526,6 @@ public class SkillTools {
                 new EnumMap<>(PrimarySkillType.class);
         for (PrimarySkillType child : childSkills) {
             for (PrimarySkillType parent : switch (child) {
-                case AGILITY -> AGILITY_PARENTS;
                 case SALVAGE -> SALVAGE_PARENTS;
                 case SMELTING -> SMELTING_PARENTS;
                 default -> ImmutableList.<PrimarySkillType>of();
@@ -536,7 +543,6 @@ public class SkillTools {
     public @NotNull ImmutableList<PrimarySkillType> getChildSkillParents(
             PrimarySkillType childSkill) throws IllegalArgumentException {
         return switch (childSkill) {
-            case AGILITY -> AGILITY_PARENTS;
             case SALVAGE -> SALVAGE_PARENTS;
             case SMELTING -> SMELTING_PARENTS;
             default -> throw new IllegalArgumentException(

@@ -328,15 +328,16 @@ class McMMOPlayerTest {
      * A child skill's gain is split to its parents before the XP path is reached, so the child has no
      * rolling total of its own and the parents are throttled instead. Agility shipped a
      * {@code Diminished_Returns.Threshold} row until 2026-08-06 that could never be read; this is the
-     * behaviour that made it dead.
+     * behaviour that made it dead. Exercised on {@code SALVAGE} since Agility was retired outright
+     * on 2026-08-17 — the property belongs to child skills as a class, not to that one skill.
      */
     @Test
     void aChildSkillIsNeverThrottledDirectly() {
         withDiminishedReturnsOn();
-        profile.registerXpGain(PrimarySkillType.AGILITY, 60_000f);
+        profile.registerXpGain(PrimarySkillType.SALVAGE, 60_000f);
 
-        assertEquals(100f, mmoPlayer.applyDiminishedReturns(PrimarySkillType.AGILITY, 100f),
-                "AGILITY is a child of Parkour/Swimming/Flying — the throttle applies to them");
+        assertEquals(100f, mmoPlayer.applyDiminishedReturns(PrimarySkillType.SALVAGE, 100f),
+                "SALVAGE is a child of Repair/Fishing — the throttle applies to them");
     }
 
     /** An admin grant is exact by definition, and must skip the throttle as well as the boost. */
@@ -378,26 +379,27 @@ class McMMOPlayerTest {
         // gain to its parents and returns — so a milestone hook that only tracks the skill that
         // literally levelled makes the child's plaques silently stop firing forever. That is what
         // would have happened to Agility's ten sub-skill plaques when it became a child of
-        // Parkour/Swimming/Flying, and the failure mode is silence, not an error.
+        // Parkour/Swimming/Flying, and the failure mode is silence, not an error. Agility itself was
+        // retired on 2026-08-17; SALVAGE carries the case now, and the property is unchanged.
         //
-        // Agility = (Parkour + Swimming + Flying) / 3, so Parkour 299 -> 300 takes Agility 99 -> 100
-        // and crosses the 100-level plaque interval for BOTH skills at once.
-        profile.addLevels(PrimarySkillType.PARKOUR, 299);
-        assertEquals(99, mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY));
+        // Salvage = (Repair + Fishing) / 2 and Fishing is 0, so Repair 599 -> 600 takes Salvage
+        // 299 -> 300 and crosses the 100-level plaque interval for BOTH skills in one gain.
+        profile.addLevels(PrimarySkillType.REPAIR, 599);
+        assertEquals(299, mmoPlayer.getSkillLevel(PrimarySkillType.SALVAGE));
 
-        final int levelCost = mmoPlayer.getXpToLevel(PrimarySkillType.PARKOUR);
-        final double modifier = experienceConfig.getFormulaSkillModifier(PrimarySkillType.PARKOUR)
+        final int levelCost = mmoPlayer.getXpToLevel(PrimarySkillType.REPAIR);
+        final double modifier = experienceConfig.getFormulaSkillModifier(PrimarySkillType.REPAIR)
                 * experienceConfig.getExperienceGainsGlobalMultiplier();
-        mmoPlayer.beginXpGain(PrimarySkillType.PARKOUR, (float) (levelCost / modifier) + 1f,
+        mmoPlayer.beginXpGain(PrimarySkillType.REPAIR, (float) (levelCost / modifier) + 1f,
                 XPGainReason.PVE, XPGainSource.SELF);
 
-        assertEquals(300, mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR));
-        assertEquals(100, mmoPlayer.getSkillLevel(PrimarySkillType.AGILITY));
+        assertEquals(600, mmoPlayer.getSkillLevel(PrimarySkillType.REPAIR));
+        assertEquals(300, mmoPlayer.getSkillLevel(PrimarySkillType.SALVAGE));
         // Each plaque is titled for the standing that skill actually reached, so the parent and the
-        // child land on different tiers off the same XP gain (Parkour 300 = Adept, Agility 100 =
-        // Apprentice) rather than sharing one vague "milestone" id.
-        verify(player).grantMilestoneAdvancement("level/parkour/adept", true);
-        verify(player).grantMilestoneAdvancement("level/agility/apprentice", true);
+        // child land on different tiers off the same XP gain (Repair 600 = Expert, Salvage 300 =
+        // Adept) rather than sharing one vague "milestone" id.
+        verify(player).grantMilestoneAdvancement("level/repair/expert", true);
+        verify(player).grantMilestoneAdvancement("level/salvage/adept", true);
     }
 
     @Test
@@ -642,35 +644,38 @@ class McMMOPlayerTest {
 
     @Test
     void aChildSkillsProgressIsTheMeanOfItsParents() {
-        // Agility earns no XP of its own, so there is no "progress through the current level" to
-        // read off its profile — its bar has to average the three skills its level is averaged from.
+        // A child skill earns no XP of its own, so there is no "progress through the current level"
+        // to read off its profile — its bar has to average the skills its level is averaged from.
         // Legacy returned a flat 1.0 here, which was invisible while every child bar was hidden but
-        // means a permanently full bar now that Agility shows one.
-        final double parkour = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.PARKOUR);
-        final double swimming = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.SWIMMING);
-        final double flying = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.FLYING);
+        // means a permanently full bar now that child skills show one.
+        //
+        // Carried by SALVAGE since Agility, the three-parent case, was retired on 2026-08-17. The
+        // divisor is read from the parent list rather than written as a literal, so this stays
+        // correct for a child skill with any number of parents.
+        final double repair = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.REPAIR);
+        final double fishing = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.FISHING);
 
-        assertEquals((parkour + swimming + flying) / 3.0,
-                mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.AGILITY), 1.0E-9);
+        assertEquals((repair + fishing) / 2.0,
+                mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.SALVAGE), 1.0E-9);
     }
 
     @Test
-    void trainingOneParentMovesTheChildBarByAThird() {
-        final double before = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.AGILITY);
+    void trainingOneParentMovesTheChildBarByItsShare() {
+        final double before = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.SALVAGE);
 
-        mmoPlayer.beginXpGain(PrimarySkillType.PARKOUR, 10F, XPGainReason.PVE, XPGainSource.SELF);
+        mmoPlayer.beginXpGain(PrimarySkillType.REPAIR, 10F, XPGainReason.PVE, XPGainSource.SELF);
 
-        final double after = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.AGILITY);
+        final double after = mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.SALVAGE);
         assertTrue(after > before, "the child bar must actually move when a parent gains XP");
-        // A third of the parent's own movement — one of three parents advanced.
-        assertEquals(mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.PARKOUR) / 3.0,
+        // Half of the parent's own movement — one of Salvage's two parents advanced.
+        assertEquals(mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.REPAIR) / 2.0,
                 after, 1.0E-9);
     }
 
     @Test
     void aChildSkillsProgressIsNotPinnedAtFull() {
         // The specific regression: a flat 1.0 would make this assertion fail and the bar useless.
-        assertTrue(mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.AGILITY) < 1.0,
-                "a fresh player's Agility bar must not read as full");
+        assertTrue(mmoPlayer.getProgressInCurrentSkillLevel(PrimarySkillType.SALVAGE) < 1.0,
+                "a fresh player's child-skill bar must not read as full");
     }
 }
