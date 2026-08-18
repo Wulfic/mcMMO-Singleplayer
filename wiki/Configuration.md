@@ -55,7 +55,7 @@ Only files that have actually been retuned carry a `Config_Version`. Today that 
 
 ### Turn a whole skill off
 
-`coreskills.yml` — one switch per skill:
+With **Mod Menu + Cloth Config** installed, the settings screen's **Skills** tab lists every skill with a switch — that is the same file, edited for you. Otherwise, `coreskills.yml` — one switch per skill:
 
 ```yaml
 Mining:
@@ -73,20 +73,11 @@ There is **no per-sub-skill switch.** (Earlier versions of this page said there 
 true in this port.) To remove one mechanic without removing its skill, set its chance or bonus to
 `0` in `advanced.yml`, or push its unlock level out of reach in `skillranks.yml`.
 
-#### Disabling one of Agility's parents
+#### Salvage and Smelting
 
-Agility earns no XP of its own — its level is the mean of Parkour, Swimming and Flying, and **the
-divisor stays at three**. Disabling one of those three freezes that parent's contribution at
-whatever level it had reached:
-
-> Parkour 300, Swimming 60, Flying 90 *(disabled)* → Agility = (300 + 60 + 90) / 3 = **150**
-
-The disabled parent is deliberately *not* dropped out of the average. Doing that would make Agility
-the mean of only what you still train, so switching off the two domains you never use would hand you
-up to 200 free Agility levels and every perk gated behind them. Turning a skill off must never be a
-way to get stronger.
-
-Agility itself can be switched off independently of its three parents, and vice versa.
+Both are **child skills**: they earn no XP of their own, so their level keeps rising from their
+parents (Repair and Fishing; Mining and Repair) even while switched off. What the switch stops is
+their mechanics and their `/mcstats` line — which is what "disabled" means for every other skill too.
 
 ### Make levelling faster or slower
 
