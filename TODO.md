@@ -764,7 +764,7 @@ the Taming defect was.
       Also remove and `SkillTools.AGILITY_PARENTS`, `isChildSkill`'s
       `AGILITY` arm, `MISC_SKILLS`, `getPrimarySkill(SECOND_WIND)`, `coreskills.yml`, `experience.yml`.
       🔑 **Audit against `PrimarySkillType.values()`, never against the diff.**
-- [ ] **F1 — the LIVE config paths off the retired skill's name.** Split out of E on 2026-08-18 and
+- [x] **F1 — the LIVE config paths off the retired skill's name.** ✅ shipped `03cacda3d`, suite 1815. Split out of E on 2026-08-18 and
       given its own commit, because it is a **path migration**, not an enum removal, and it reuses
       C's proven `SkillRenames.MovedPath` + `ConfigLoader#migrateOnePath` mechanism.
       E deleted only what was **dead** (`coreskills.yml`'s `Agility:` row, `Experience_Bars.Agility`).
@@ -775,15 +775,15 @@ the Taming defect was.
       strings — not any one parent, which would read as a lie in the other two. Every move needs a
       `MovedPath` entry (a changed shipped default reaches nobody who has run the mod once) and the
       **converse** test A-6 demands: the orphan block must still be there afterwards.
-- [ ] **F — the rename (A-3), mechanical and behaviour-free.** Its own commit, so a band can take it
+- [x] **F — the rename (A-3), mechanical and behaviour-free.** ✅ shipped `97b0e972f`, suite 1818; git reports all 14 as renames. Its own commit, so a band can take it
       cleanly. ⚠️ Carries **A-9**: rename the `Managed` constants, freeze their id strings.
-- [ ] **G — gates, in this order:** `mixin-allow-audit.py --check` **before** `./gradlew build` (javac
+- [x] **G — gates, ALL GREEN 2026-08-18** (mixin-allow 60 OK/61 → build → mc-surface 1415 records, **no diff** — a rename of our own classes does not move the MC contact surface → config-id self-test PASS + **0 dead-everywhere** → boot-check 1.21.11 exit 0, 0 ERROR, 0 mixin failures → gameplay-smoke **29/29** with the control failing as it must and the scorer self-test 8/8; `combat-sword` passed first try this run, against its stated ~1-in-3 cold flake rate). Original order: `mixin-allow-audit.py --check` **before** `./gradlew build` (javac
       is blind to mixin selector breakage); then `classes testClasses` → `extract-mc-surface.py`;
       `config-id-audit.py --self-test` then the audit; `boot-check.sh`; `gameplay-smoke.sh` with
       `GAMEPLAY_SMOKE_CONTROL=1` proving the control still fails.
       ⚠️ `gameplay-smoke.sh` scores a **super ability** — Second Wind's re-home is exactly the kind of
       change that breaks it, and its `combat-sword` leg is flaky 1-in-3 cold. State the base rate.
-- [ ] **H — mutation pass on every new guard.** 🔑🔑 The signal is *"the red I got is the red I
+- [x] **H — mutation pass, 6 mutations, 2026-08-18.** ✅ **5 of 6 predicted exactly; the 6th over-caught.** M1 (ramp reaches for the nominal PARKOUR key) reddened both A-8 guards and — as predicted — left `SkillStatsRendererTest#eachParentScreenShowsItsOwnMediumsFleetFootedNumber` GREEN, because its all-parents-at-1000 fixture cannot discriminate: that predicted green is the evidence A-8 needed its own guard. M2 (a live token in RETIRED_SKILLS), M3 (unfreezing a modifier id), M4 (dropping the nested-block MovedPath) and M5 ("tidying away" a key A-6 keeps) each reddened exactly their predicted set. M6 (un-suppressing a child bar) reddened one test MORE than predicted — `childSkillBarsAreSuppressed`, which reaches `disabledBars` by updating the CHILD directly rather than through the parent-propagation loop. Prediction error, not a defect: 13th sighting. Every mutation was proved to change bytes before its verdict was believed. Original note: 🔑🔑 The signal is *"the red I got is the red I
       predicted"*, not *"all caught"*. **Predict what each mutation should break before running it**,
       and confirm the mutation actually changed compiled behaviour before believing a red test.
 
@@ -820,6 +820,34 @@ profile change is *not writing a key that was already dead*.
 - **Not adding a `ParkourManager`/`SwimmingManager`/`FlyingManager` split.** One movement manager,
   as today — three managers would mean three lazy-construction sites for one behaviour family.
 - **Not migrating the orphan `skills.AGILITY` key.** Ruled above; there is nothing to migrate to.
+
+### 🔴 THE DOC PASS IS NOW THE TOP OF THE REMAINING WORK (audited 2026-08-18, NOT done)
+
+`/mcstats agility` now tells a player the skill was retired. **README.md and 13 wiki pages still
+document it as live** — 64 mentions. Three classes, and only the first is merely untidy:
+
+1. **Actively wrong and player-actionable.** `README.md:194` names `Skills.Agility.Second_Wind_Item`
+   as the config key to edit. That path moved in F1; a player following the README edits a dead key
+   and nothing happens. Same shape as the GitHub #7 defect.
+2. **Actively wrong about mechanics.** `README.md:139` and `wiki/Skills.md:31,35` describe Agility as
+   a live child skill whose perks carry *"one rank per medium"* gated on *"the three-skill mean"*, and
+   `README.md:191` still says *"Rank 1 unlocks land, 2 water, 3 air"*. A-1 deleted that ladder — Fleet
+   Footed is Parkour/Swimming/Flying 1 and Second Wind 250 in each, separately.
+3. **The A-1 sentence owed since phase A and still written nowhere.** Say in plain words that this is
+   a **buff for specialists** and the deliberate end of the all-rounder gate: a pure flier capped
+   Agility at 333 and could never reach the air ranks; they now get air Fleet Footed at Flying 1 and
+   Limitless at Flying 250. It is owed **five** consequences now — the flattened unlocks (A-1),
+   Second Wind's duration following the medium (B-ii), and the four ramps that stopped reading the
+   mean (phase C).
+
+⚠️ **Audit the roster against `PrimarySkillType.values()`, never against the diff.** A *removed*
+skill is invisible to every incremental doc edit, exactly as an *added* one was for Cooking.
+⚠️ **One wiki serves every band**, so say what a player does, never what version the build targets.
+
+Files with hits: `README.md` (12), `wiki/Movement-Skills.md` (16), `wiki/Configuration.md` (10),
+`wiki/Skills.md` (7), `wiki/Troubleshooting.md` (4), `wiki/XP-and-Levelling.md` (4),
+`wiki/Super-Abilities.md` (3), `wiki/Differences-from-mcMMO.md` (2), `wiki/Stealth.md` (2), and one
+each in `Commands.md`, `Home.md`, `Hunter.md`, `Husbandry.md`, `Optional-Integrations.md`.
 
 ### Then, and this is not optional
 
