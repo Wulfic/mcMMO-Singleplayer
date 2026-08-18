@@ -137,6 +137,67 @@ class ConfigLoaderTest {
         assertEquals(999, reloaded.config().getInt("General.MaxLevel"));
     }
 
+    // --- Renamed sections: the warn-only half ----------------------------------------------------
+
+    /**
+     * The behavioural half of {@code SkillRenamesTest}, and the coverage that table never had.
+     *
+     * <p>Until 2026-08-18 nothing in the suite executed {@code warnOnRenamedSections} at all, which
+     * is how {@code Acrobatics} came to point at {@code Agility} — a section retired the day before
+     * — and stay that way. A source-text guard over the table catches the destination being wrong;
+     * only this catches the detection never firing in the first place.
+     */
+    @Test
+    void anAcrobaticsSectionIsDetectedAndSentToALiveDestination(@TempDir Path dataFolder)
+            throws IOException {
+        // A config written before 2026-07-25, when Acrobatics still existed.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                Skills:
+                  Acrobatics:
+                    Roll:
+                      ChanceMax: 42.0
+                """);
+
+        final TestConfig loader = new TestConfig(dataFolder);
+
+        final Map<String, String> stranded = loader.strandedLegacySections();
+        assertTrue(stranded.containsKey("Acrobatics"),
+                "an Acrobatics section must be detected, or the player is never told their tuning "
+                        + "is being ignored");
+
+        final String destination = stranded.get("Acrobatics");
+        assertFalse(destination.contains("Agility"),
+                "the destination must not name Agility: it was retired on 2026-08-17, so this "
+                        + "warning would send a player into a section the very next boot migrates "
+                        + "away again. Actual destination: " + destination);
+        assertTrue(destination.contains("Parkour") && destination.contains("Swimming")
+                        && destination.contains("Flying"),
+                "the destination must name the three movement skills that actually own the "
+                        + "re-parented perks. Actual destination: " + destination);
+        assertTrue(destination.contains("Movement"),
+                "the destination must also name the neutral Movement root, which is where "
+                        + "Second_Wind_Item and XP_After_Teleport_Cooldown live. Actual "
+                        + "destination: " + destination);
+    }
+
+    @Test
+    void aFileWithNoLegacySectionStrandsNothing(@TempDir Path dataFolder) throws IOException {
+        // The co-assertion. Without it, a strandedLegacySections() that returned every rename
+        // unconditionally would pass the test above.
+        Files.writeString(dataFolder.resolve("test-config.yml"), """
+                Skills:
+                  Parkour:
+                    Roll:
+                      ChanceMax: 42.0
+                """);
+
+        final TestConfig loader = new TestConfig(dataFolder);
+
+        assertTrue(loader.strandedLegacySections().isEmpty(),
+                "a config using only current section names must produce no rename warning at all — "
+                        + "a warning that fires for everyone is a warning nobody reads");
+    }
+
     // --- Re-parented sub-skills: the automatic path migration ------------------------------------
 
     @Test
