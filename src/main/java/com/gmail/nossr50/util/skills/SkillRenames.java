@@ -259,6 +259,37 @@ public final class SkillRenames {
                 "Skills.Agility.Prevent_Dodge_Lightning",
                 "Skills.Parkour.Prevent_Dodge_Lightning"));
 
+        // 2026-08-18: the settings that belong to MOVEMENT AS A WHOLE move off the retired skill's
+        // name and onto a neutral `Movement` root. These are NOT sub-skill tuning -- that all moved
+        // in the 2026-08-17 block above. These are the keys that were only ever under `Agility`
+        // because Agility was the umbrella over all three domains, and they would read as a lie
+        // filed under any single one of Parkour, Swimming or Flying.
+        //
+        // ⚠️ Every one of them is read from a LITERAL path, which is why they survived the enum's
+        // removal at all. The enum-DERIVED siblings (`Skills.Agility.Level_Cap`,
+        // `.Enabled_For_PVP`, `.Enabled_For_PVE`, `Experience_Bars.Agility`) are dead rather than
+        // moved -- there is no skill left for a per-skill key to be about -- so they are absent here
+        // on purpose. A MovedPath for one would migrate a player's value into a path nothing reads.
+        MOVED_CONFIG_PATHS.add(new MovedPath("config.yml",
+                "Skills.Agility.XP_After_Teleport_Cooldown",
+                "Skills.Movement.XP_After_Teleport_Cooldown"));
+        MOVED_CONFIG_PATHS.add(new MovedPath("config.yml",
+                "Skills.Agility.Second_Wind_Item", "Skills.Movement.Second_Wind_Item"));
+        MOVED_CONFIG_PATHS.add(new MovedPath("experience.yml",
+                "ExploitFix.Agility", "ExploitFix.Movement"));
+        // ⚠️ Declared leaf-group by leaf-group, NOT as one `Experience_Values.Agility` sub-tree
+        // move, and the reason is a bug this caught: the old block nested a `Movement:` section
+        // INSIDE `Agility:`, so renaming only the outer segment yields
+        // `Experience_Values.Movement.Movement` -- a doubled path none of the getters read. The
+        // inner block is renamed to `Travel` at the same time, and saying so explicitly here is
+        // what keeps the two halves from being applied in the wrong order.
+        for (String leaf : new String[] {"Dodge", "Roll", "Fall", "FeatherFall_Multiplier"}) {
+            MOVED_CONFIG_PATHS.add(new MovedPath("experience.yml",
+                    "Experience_Values.Agility." + leaf, "Experience_Values.Movement." + leaf));
+        }
+        MOVED_CONFIG_PATHS.add(new MovedPath("experience.yml",
+                "Experience_Values.Agility.Movement", "Experience_Values.Movement.Travel"));
+
         // 2026-08-04 (GitHub #3): Husbandry's anti-exploit gate moved off the BREEDING and onto the
         // XP PAYOUT, which also moved it out of advanced.yml and into experience.yml. The old key is
         // not renamed so much as retired -- there is no longer any cap on how many animals one item

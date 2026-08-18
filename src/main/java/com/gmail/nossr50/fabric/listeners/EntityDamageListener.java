@@ -1883,7 +1883,7 @@ public final class EntityDamageListener {
 
     /** Whether {@code mob} has not yet hit the dodge-XP award cap. */
     private static boolean dodgeXpUncapped(MobEntity mob) {
-        if (!McMMOMod.getExperienceConfig().isAgilityExploitingPrevented()) {
+        if (!McMMOMod.getExperienceConfig().isMovementExploitingPrevented()) {
             return true; // exploit prevention off → uncapped.
         }
         final Integer count = MetadataStore.get(mob, DODGE_TRACKER_KEY, Integer.class);
@@ -1892,7 +1892,7 @@ public final class EntityDamageListener {
 
     /** Bump the per-mob dodge-XP counter after a successful, XP-paying dodge. */
     private static void incrementDodgeTracker(MobEntity mob) {
-        if (!McMMOMod.getExperienceConfig().isAgilityExploitingPrevented()) {
+        if (!McMMOMod.getExperienceConfig().isMovementExploitingPrevented()) {
             return;
         }
         final Integer count = MetadataStore.get(mob, DODGE_TRACKER_KEY, Integer.class);

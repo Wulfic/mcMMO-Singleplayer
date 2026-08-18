@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.util.skills.SkillRenames;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -338,6 +339,7 @@ class ConfigLoaderTest {
         final Map<String, YamlConfiguration> shipped = Map.of(
                 "advanced.yml", new AdvancedConfig(dataFolder).config,
                 "config.yml", new GeneralConfig(dataFolder).config,
+                "experience.yml", new ExperienceConfig(dataFolder).config,
                 "skillranks.yml", new RankConfig(dataFolder).config);
 
         for (SkillRenames.MovedPath move : SkillRenames.allMovedConfigPaths()) {
@@ -421,6 +423,102 @@ class ConfigLoaderTest {
                 "skillranks.yml did not migrate " + subSkill + " to " + newParent);
         assertFalse(ranks.contains("Agility." + subSkill),
                 "skillranks.yml kept the dead Agility." + subSkill);
+    }
+
+    /**
+     * F1 (2026-08-18): the settings that belong to <b>movement as a whole</b> move off the retired
+     * skill's name onto a neutral {@code Movement} root.
+     *
+     * <p>Written in the same shape as
+     * {@link #everyReParentedSubSkillMigratesInBothOfItsFiles(String, String, Path)} and for the same
+     * reason: driven by an <b>expectation list written out here</b>, never by
+     * {@code allMovedConfigPaths()}. A guard that iterates the table cannot detect a MISSING table
+     * entry — an empty table satisfies every statement about its contents — and a forgotten entry
+     * is precisely how a player's tuning gets silently ignored. Delete a move and one case here goes
+     * red.
+     *
+     * <p>⚠️ {@code Experience_Values.Agility.Movement} is the case worth staring at. Renaming only
+     * the outer segment would land it at {@code Experience_Values.Movement.Movement}, a doubled path
+     * none of the getters read — so the inner block is renamed to {@code Travel} in the same move.
+     * That bug was real and was caught by {@code McMMOSettingsTest}, not by this file.
+     */
+    @Test
+    void theMovementWideSettingsMigrateOffTheRetiredSkillsName(@TempDir Path dataFolder)
+            throws IOException {
+        Files.writeString(dataFolder.resolve("config.yml"), """
+                Skills:
+                  Agility:
+                    XP_After_Teleport_Cooldown: 42
+                    Second_Wind_Item: BLAZE_ROD
+                """);
+        Files.writeString(dataFolder.resolve("experience.yml"), """
+                ExploitFix:
+                  Agility: false
+                Experience_Values:
+                  Agility:
+                    Dodge: 111
+                    Roll: 222
+                    Fall: 333
+                    FeatherFall_Multiplier: 4.5
+                    Movement:
+                      Baseline_Xp_Per_Second: 77.5
+                """);
+
+        final YamlConfiguration general = new GeneralConfig(dataFolder).config;
+        assertEquals(42, general.getInt("Skills.Movement.XP_After_Teleport_Cooldown"));
+        assertEquals("BLAZE_ROD", general.getString("Skills.Movement.Second_Wind_Item"));
+        assertFalse(general.contains("Skills.Agility.XP_After_Teleport_Cooldown"),
+                "config.yml kept the dead teleport-cooldown key");
+        assertFalse(general.contains("Skills.Agility.Second_Wind_Item"),
+                "config.yml kept the dead Second Wind item key");
+
+        final YamlConfiguration xp = new ExperienceConfig(dataFolder).config;
+        assertFalse(xp.getBoolean("ExploitFix.Movement", true),
+                "the anti-exploit switch the player turned OFF must stay off after the rename");
+        assertEquals(111, xp.getInt("Experience_Values.Movement.Dodge"));
+        assertEquals(222, xp.getInt("Experience_Values.Movement.Roll"));
+        assertEquals(333, xp.getInt("Experience_Values.Movement.Fall"));
+        assertEquals(4.5, xp.getDouble("Experience_Values.Movement.FeatherFall_Multiplier"), 1e-9);
+        assertEquals(77.5,
+                xp.getDouble("Experience_Values.Movement.Travel.Baseline_Xp_Per_Second"), 1e-9,
+                "the nested block must land at Movement.Travel, not the doubled Movement.Movement");
+        assertFalse(xp.contains("Experience_Values.Movement.Movement"),
+                "a doubled path segment is the bug this move exists to avoid");
+        assertFalse(xp.contains("ExploitFix.Agility"), "experience.yml kept the dead exploit switch");
+        for (String leaf : new String[] {"Dodge", "Roll", "Fall", "FeatherFall_Multiplier",
+            "Movement"}) {
+            assertFalse(xp.contains("Experience_Values.Agility." + leaf),
+                    "experience.yml kept the dead Experience_Values.Agility." + leaf);
+        }
+    }
+
+    /**
+     * The converse F1 owes, and the half a migration test cannot give you: the player's own keys
+     * under the retired name are <b>kept</b>, not tidied away with the ones mcMMO just moved.
+     *
+     * <p>A-6 is a refusal to destroy, so what needs pinning is that nobody later adds a "remove the
+     * now-empty Agility block" step. Without this, that change passes every other test here.
+     */
+    @Test
+    void aPlayersOwnKeysUnderTheRetiredNameSurviveTheMovementMigration(@TempDir Path dataFolder)
+            throws IOException {
+        Files.writeString(dataFolder.resolve("config.yml"), """
+                Skills:
+                  Agility:
+                    XP_After_Teleport_Cooldown: 42
+                    Level_Cap: 900
+                """);
+
+        final YamlConfiguration general = new GeneralConfig(dataFolder).config;
+
+        assertEquals(42, general.getInt("Skills.Movement.XP_After_Teleport_Cooldown"),
+                "the key mcMMO claims still moves");
+        assertTrue(general.contains("Skills.Agility.Level_Cap"),
+                "A-6: Level_Cap was a per-SKILL key and there is no skill left, so no move claims "
+                        + "it -- and a key mcMMO has not written somewhere else is the player's to "
+                        + "keep, however dead it is");
+        assertEquals(900, general.getInt("Skills.Agility.Level_Cap"),
+                "and its value is untouched, not merely its key");
     }
 
     @Test
