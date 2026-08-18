@@ -1161,6 +1161,92 @@ M5 reporting red tests that could not possibly relate to the mutation.
 
 ---
 
+## Phase 13 — the version line restarts at `1.0.0` (owner-requested 2026-08-18)
+
+**This is the owner ruling Phase 10.0 defect 3 was left waiting on.** 10.6 deferred it as
+"silently re-identifying the mod is not in scope for a naming task". It is now in scope, and it
+is being done deliberately rather than silently.
+
+### 13.0 — the defect, stated precisely
+
+The complaint was *"the tag versioning doesn't properly update — the mcMMO version always stays
+2.2.050"*. That is exactly right, and the mechanism is:
+
+`mod_version` is a **hand-edited constant that nothing forces anybody to bump.** `release.yml`
+reads it, strips `-SNAPSHOT`, and tags `mc<MCVER>-v<version>`. Phase 10 deliberately removed the
+`-build.<run#>` suffix (defect 2: a repo-global number that stamped five bands with five
+incomparable numbers for identical code) and wrote *"releasing now requires BUMPING
+mod_version"* — **but shipped no gate that checks anybody did.** So every push to `master` lands
+on the same tag, and:
+
+1. The tag step force-deletes and re-pushes `mc1.21.11-v2.2.050`, so **every clone gets
+   `! [rejected] ... (would clobber existing tag)`** on its next fetch. Observed by the owner on
+   2026-08-18: `local f18cbef82` vs `origin 44e3dc1d0`.
+2. GitHub converts the superseded published release into a **draft on the same tag** — the
+   orphan pile-up of 11.1. The sweep now reaps those by ID, but it is treating a symptom.
+3. A player cannot tell two downloads apart. The commit sha in the release notes is the only
+   distinguishing mark, and nobody reads it.
+4. `2.2.050` is **upstream mcMMO's Bukkit plugin number**, not this fork's. This is a
+   singleplayer Fabric fork that shares no release cadence with it, and the shared number invites
+   the reader to compare two things that are not comparable.
+5. The padded patch is the 10.0-defect-3 mismatch: Fabric normalises `2.2.050` → `2.2.50`, so the
+   jar filename and ModMenu disagree today.
+
+### 13.1 — the ruling (owner, 2026-08-18)
+
+- **R-s — the fork takes its own version line, starting at `1.0.0`.** `mod_version=1.0.0-SNAPSHOT`.
+  Unpadded semver, so `Version.parse` round-trips it and the filename finally matches what ModMenu
+  shows. Defect 3 and defect 4 close together.
+- **R-t — CI refuses to release a version that already shipped different code.** The bump is not
+  left to memory. Before the tag is pushed, `release.yml` resolves the published release on
+  `mc<MCVER>-v<version>`; if one exists on a **different commit**, the run fails and names the
+  version to bump. Re-running the *same* commit stays idempotent, because that is a re-run, not a
+  release.
+
+  🔑 **The failure had to be made loud, not rare.** The whole defect is that forgetting to bump
+  produces a *successful-looking* release. Phase 10 wrote the requirement in a comment; a comment
+  is not a gate. This is the "every gate produces an artifact" rule applied to the release path.
+
+- **`mod_version` is NOT per-band.** It back-ports like any other fix (R-p keeps it identical
+  across branches). Only `supported_minecraft_versions` and `minecraft_version` are per-band. Each
+  band's tag prefix `mc<MCVER>-v` keeps the lines apart, so five branches on `1.0.0` never collide.
+
+### 13.2 — steps
+
+1. **Delete the 25 stale local tags.** The old `-build.<N>` series plus the mispointed
+   `mc1.21.11-v2.2.050`; all 25 are already gone from `origin`.
+   ⚠️ **Blast radius:** local `refs/tags` only — `origin` is not touched.
+   ⚠️ **Recoverable:** every one of the 25 shas is reachable from `master` or an `mc/**` branch
+   (verified, 2026-08-18), and `git fetch origin --tags --force` restores anything origin still has.
+   **Undo:** `git fetch origin --tags --force`.
+2. **`gradle.properties`** — `mod_version=1.0.0-SNAPSHOT`, with the comment stating this is the
+   fork's own line and why it is not upstream's `2.2.x`.
+3. **`release.yml`** — the refusal step, before the tag push. Its header comment currently asserts
+   *"re-running on the same version REPLACES that band's release"*; that becomes false and must be
+   rewritten in the same commit.
+4. **The guards** — a test that goes red if either half is reverted:
+   - `mod_version` is unpadded semver and round-trips through Fabric's own parser. Catches a
+     return to `2.2.050` **and** any future re-padding.
+   - `release.yml` still contains the refusal, **ordered before** the tag push. Deleting the step
+     turns this red. A guard with no test is decoration.
+5. **`.agent/memory/decisions.md`** — R-s and R-t, with the reasoning, not the diff.
+
+### 13.3 — what this is NOT doing
+
+- **Not deleting the six published `2.2.050` releases or their remote tags by hand.** The reap
+  sweep matches on the `mc<MCVER>-v` prefix, so each band's first `1.0.0` release retires that
+  band's `2.2.050` release *and* its tag automatically. Doing it by hand would be an
+  outward-facing destructive action bought nothing.
+- **Not reshaping the tag `mc<MCVER>-v<version>`.** It is load-bearing for the reap sweep and for
+  the one-branch-per-MC-line check (see the `release.yml` header).
+- **Not adopting an auto-derived patch number.** Considered and rejected: deriving the patch from
+  a per-band tag count reintroduces defect 2 — identical code carrying a different number on every
+  band.
+- **Not changing when a release fires.** The `paths:` filter is untouched, so docs-only pushes
+  still do not release and therefore never demand a bump.
+
+---
+
 ## Phase 9 — the `26.x` band
 
 **Its own mini-project (R-e). Do not absorb it into a sweep.** Gated behind Phase 8 delivering at
