@@ -2,7 +2,9 @@ package com.gmail.nossr50.commands.skills;
 
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.skills.agility.AgilityManager;
+import com.gmail.nossr50.skills.agility.Medium;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,10 +21,12 @@ import java.util.List;
  * <b>unreachable</b>, and the only way to unlock a flying perk was to go running and swimming. Same
  * numbers, read against Flying itself, are now earned by flying.
  *
- * <p>Fleet Footed and Second Wind still render under {@code /mcstats agility} even though both have
- * an air body: each carries one rank <em>per medium</em>, so no single parent's level could gate all
- * three ranks. A pure flier still caps Agility at 333 and cannot reach those air ranks — that is the
- * deliberate all-rounder reward, and it is exactly why the single-medium perks had to leave.
+ * <p><b>Fleet Footed and Second Wind moved here on 2026-08-17</b>, when Agility was retired. Each was
+ * one sub-skill carrying one rank per medium, gated on the mean of the three movement skills; each is
+ * now a single-rank sub-skill of the skill that earns it, so this screen shows the <em>air</em> body
+ * of both. ⚠️ This reverses what used to be documented here: a pure flier capped Agility at 333 and
+ * could <b>never</b> reach the air ranks — the deliberate all-rounder reward — and that gate is gone.
+ * A specialist now unlocks their own medium's perks at their own skill's level.
  */
 public final class FlyingStatsRenderer extends SkillStatsRenderer {
 
@@ -54,6 +58,22 @@ public final class FlyingStatsRenderer extends SkillStatsRenderer {
             messages.add(getStatMessage(SubSkillType.FLYING_SOLAR_WINGS,
                     agility.getSolarWingsRepairAmount(false) + " per "
                             + Math.max(1, agility.getSolarWingsIntervalTicks() / 20) + "s"));
+        }
+
+        // Fleet Footed and Second Wind arrived here on 2026-08-17 with the retirement of Agility.
+        // Both used to be one sub-skill carrying one rank per medium, gated on the MEAN of the three
+        // movement skills, so a Flying specialist could not reach the rank for the medium they had
+        // actually trained. Each is now a single-rank sub-skill of this skill, and each line below
+        // shows Flying's OWN body of it -- not a shared number repeated on three screens.
+        if (agility != null && agility.canFleetFoot(Medium.AIR)) {
+            messages.add(getStatMessage(SubSkillType.FLYING_FLEET_FOOTED,
+                    percent.format(agility.getFleetFootedBonus(Medium.AIR))));
+        }
+        // ⚠️ The length is asked for SECOND_WIND by name. getSuperAbility(skill) is one-to-one and
+        // answers null for two of the three movement skills, which would NPE rather than misprint.
+        if (agility != null && agility.canSecondWind(Medium.AIR)) {
+            messages.add(getStatMessage(SubSkillType.FLYING_SECOND_WIND,
+                    calculateLength(skillValue, SuperAbilityType.SECOND_WIND)));
         }
 
         return messages;
