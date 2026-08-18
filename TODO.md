@@ -1446,6 +1446,101 @@ live Taming play-test — that is the owner's, and it is still owed.
 
 ---
 
+## Phase 16 — `extract-mc-surface.py --check` reads the committed manifest (2026-08-18, before 8.3)
+
+Closes the carried debt filed at the end of Phase 15. **Scope ruled by the owner (P16-1): the
+diff-vs-committed half only.** Symbol-presence against the band's merged jar and the cross-branch
+byte-identity guard are explicitly deferred — see *What I am NOT doing*.
+
+**The defect, restated from the code rather than the note.** `main()` writes `--out`
+unconditionally at `extract-mc-surface.py:450`, then `--check` at `:471` validates the bytes it
+just generated. The committed manifest is never opened. So every acceptance criterion is an
+assertion about *this run's output*, and a committed file describing a different Minecraft passes.
+That is not a hypothetical: `mc/1.21.4` and `mc/1.21.3` both shipped the byte-identical blob
+`1c480efc4`, naming `CommandManager#requirePermissionLevel` and `AbstractCowEntity`, and `--check`
+was green on both.
+
+🔑 **The flag's name was already the specification.** A `--check` that *writes* has destroyed the
+evidence it exists to read, before it reads it. Making it read-only is the fix; the comparison is
+what read-only makes possible.
+
+### What changes
+
+| | |
+|---|---|
+| `render_manifest(lines)` | one function producing the exact bytes, so the writer and the comparator can never disagree about the header or the trailing newline |
+| `manifest_records(text)` | parses a manifest back to a `set` of `TYPE\tVALUE` lines. Skips `#` comments and blanks; normalises `\r\n` → `\n`, because the file is **CRLF on disk** (`.gitattributes` `text=auto`) and a line-ending-sensitive comparison would fail on every Windows run |
+| `manifest_diff(committed, generated)` | → `(only_committed, only_generated)`. **`only_committed` is the recorded defect's shape**: records in the file that this build does not reference — i.e. symbols describing some other Minecraft |
+| `--check` | **read-only.** Never writes. Missing file → FAIL. Record drift → FAIL, naming counts and up to 10 samples per side. Records equal but full text differs → FAIL separately, because that is header or ordering tampering of a `DO NOT EDIT BY HAND` file |
+| plain run (no `--check`) | unchanged — still regenerates and writes |
+
+⚠️ **This changes the ship gate's behaviour, and that is the point.** Gate step *"`classes
+testClasses` → `extract-mc-surface.py`"* currently regenerates silently. After this, `--check`
+**verifies** and a band that legitimately moved records must regenerate **deliberately** with a
+plain run and commit the diff. A band whose manifest is foreign now fails the gate instead of being
+overwritten by it.
+
+### The converse check — the new comparator gets the same treatment as the detectors
+
+`--self-test` gains a third block. A comparator hard-wired to return `([], [])` would satisfy every
+"no drift" case for free — the 11th sighting of the vacuous-guard shape — so the suite must contain
+cases that only a working comparator passes, and must assert it does:
+
+- ✅ must FIRE — a record the build produces that the file lacks (`only_generated`)
+- ✅ must FIRE — **a record the file carries that the build does not** (`only_committed`), the
+  `1c480efc4` shape, exercised with those two real symbol names
+- ✅ must FIRE — both directions at once, so a comparator that only ever fills one list is caught
+- ⬜ must STAY QUIET — identical input
+- ⬜ must STAY QUIET — **CRLF vs LF only**. This one is load-bearing on Windows, not decoration
+- ⬜ must STAY QUIET — differing `#` header comment text (records identical; the *text* check owns
+  that failure, and it must not be double-reported as record drift)
+- ⬜ must STAY QUIET — a comment line whose text looks exactly like a record (`# CLASS\tfoo`)
+- ⬜ must STAY QUIET — trailing blank lines
+- **Round-trip:** `manifest_records(render_manifest(sorted(recs))) == recs`, so writer and reader
+  cannot drift apart into a comparator that is always-quiet or always-loud
+- **Anti-vacuity floor:** ≥3 firing and ≥5 quiet cases, asserted by count, the way the source and
+  bytecode blocks already do
+
+### Verification
+
+1. `--self-test` PASS (new block included)
+2. `--check` on the **unmodified** working tree → PASS, and `git status` shows `mc-surface.txt`
+   **unchanged** — proof it no longer writes
+3. **Mutation 1** — delete one record line from `scripts/mc-surface.txt` → `--check` FAILs naming
+   it under `only_generated`. Restore with `git checkout`.
+4. **Mutation 2** — append `CLASS\tnet.minecraft.entity.passive.AbstractCowEntity` (the real
+   foreign symbol) → `--check` FAILs naming it under `only_committed`. Restore.
+5. **Mutation 3** — edit only the header comment → `--check` FAILs on the *text* check, with zero
+   record drift reported. Restore.
+6. **Mutation 4** — stub `manifest_diff` to return `([], [])` → `--self-test` FAILs. Restore.
+   *This is the one that proves the suite is not vacuous.*
+7. Full `./gradlew build` green — the script is not on the compile path, but the gate order is
+   `mixin-allow-audit --check` → build → this, and a green suite is the commit precondition.
+
+⚠️ Every restore is `git checkout -- <path>` against a **committed, pushed** file. Blast radius is
+one generated manifest and one script, both recoverable from `origin/master` at `5b4955454`.
+
+### Back-port
+
+`scripts/` is propagatable under **R9a**, so `drift-audit.py` will demand this on all five bands.
+⚠️ `scripts/` sits **outside `release.yml`'s `paths:` filter**, so neither this commit nor any of
+its five back-ports releases anything — `ci-watch.sh` will correctly report *"skipped, not passed"*.
+⚠️ Back-port the **script only**. `mc-surface.txt` is a generated per-band fact and is **never**
+cherry-picked (the rule the `1c480efc4` defect broke). On each band, run the new `--check` after the
+pick: it is now capable of failing, and a band whose committed manifest is wrong will say so.
+
+### What I am NOT doing
+
+- **Not** validating manifest symbols against the band's merged jar. That needs a Loom-cached jar
+  and `probe-bands.py`'s resolver; it is a separate, larger piece and the carried-debt entry keeps
+  it filed.
+- **Not** writing the cross-branch byte-identity guard. It has to see all six branches, so it is a
+  new script, not a flag on this one.
+- **Not** regenerating any band's `mc-surface.txt`. Phase 15 already fixed the two that were wrong.
+- **Not** starting 8.3.
+
+---
+
 ## Phase 9 — the `26.x` band
 
 **Its own mini-project (R-e). Do not absorb it into a sweep.** Gated behind Phase 8 delivering at
@@ -2331,21 +2426,31 @@ their correctness is checked instead by `BandDocsMatchRealityTest`, which runs i
 
 ## Carried debt
 
-- [ ] 🔴 **`extract-mc-surface.py --check` cannot detect a stale or foreign manifest** (found
-      2026-08-18, Phase 15). It **regenerates** the file — it *writes*, it is not read-only — and
-      then verifies its own **acceptance criteria**. It never reads the committed manifest, so a
-      committed file describing a *different Minecraft version* passes `--check` every time. That is
-      not hypothetical: `mc/1.21.4` and `mc/1.21.3` were both shipping the byte-identical blob
-      `1c480efc4`, naming `CommandManager#requirePermissionLevel` and `AbstractCowEntity` —
-      **neither symbol exists on either band**. Detection currently depends on a human noticing
-      `git diff` is non-empty after a regeneration, which is the *"somebody remembers to look"*
-      condition R8 exists to eliminate.
-      **The fix has a shape:** `--check` should fail when the regenerated content differs from what
-      is committed (the way `mixin-allow-audit --check` and `drift-audit --self-test` already fail
-      loudly), and separately refuse a manifest naming a symbol absent from this band's merged jar.
-      ⚠️ **Two bands with byte-identical manifests is the tell** — the generator back-ports, the
-      generated fact is re-derived per branch, so identical files are suspicious rather than
-      reassuring. A guard could assert exactly that across branches.
+- [x] ✅ **Half CLOSED 2026-08-18 (Phase 16, ruling P16-1) — `--check` now reads the committed
+      manifest.** It was writing `--out` unconditionally and then grading its own output, so a
+      committed file describing a *different Minecraft* passed every time. `--check` is now
+      **read-only**: it regenerates in memory, compares record sets against what is committed, and
+      fails naming up to 10 drifted records per direction; "same records, different bytes" is a
+      separate failure covering a hand-edited header of a `DO NOT EDIT BY HAND` file. `--self-test`
+      gained a third block (**3 firing / 5 quiet**, both directions asserted separately, plus a
+      render→parse round-trip), and a stubbed comparator was proved to redden all three firing cases.
+      ⚠️ **This flips the ship gate from *silently regenerates* to *verifies*.** A band that has
+      legitimately moved records must now regenerate deliberately (a plain run) and commit the diff.
+
+- [ ] 🔴 **The other half is still open, and it is the half that would have caught the actual
+      incident.** Two pieces, both deferred by P16-1:
+      1. **Validate manifest symbols against the band's merged jar** — refuse a manifest naming a
+         symbol the band does not have. Needs a Loom-cached jar and `probe-bands.py`'s resolver.
+      2. **A cross-branch byte-identity guard** — no two bands may carry a byte-identical
+         `mc-surface.txt`. Has to see all six branches, so it is a new script, not a flag.
+      🔑🔑 **Measured in Phase 16, not assumed:** an attempt to reproduce the incident on `master` by
+      injecting the two real `1c480efc4` symbols (`CommandManager#requirePermissionLevel`,
+      `AbstractCowEntity`) into the committed manifest was a **no-op — `master` already references
+      both**. 1.21.11 genuinely calls one and genuinely mixes into the other. That blob was **a
+      perfectly valid manifest, for the wrong branch**, which is exactly why it survived on
+      `mc/1.21.4` and `mc/1.21.3`. **No per-branch check, automated or human, can tell "correct
+      manifest" from "correct manifest belonging to a different branch"** — on the branch it came
+      from, every record is true. Only piece 2 above can. Until it exists, this row stays red.
 
 - [x] ✅ **The `.gitignore` hole — CLOSED 2026-08-13.** `mc/1.21.8` and `mc/1.21.10` lacked `.agent/`
       and `.github/`, so `git status` there listed `?? .agent/`, `?? .github/copilot-instructions.md`
