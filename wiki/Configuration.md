@@ -131,7 +131,7 @@ only, so an off-hand pickaxe readies nothing either way.
 
 ```yaml
 Skills:
-    Agility:
+    Movement:
         Second_Wind_Item: FEATHER
     Stealth:
         Smoke_Bomb_Item: GUNPOWDER
@@ -214,7 +214,7 @@ unattended.
 | `COTWBreeding` | Husbandry XP for breeding your own Call of the Wild summons. |
 | `PreventArmorStandInteraction` / `PreventMannequinInteraction` | Combat XP for hitting a decoration. |
 | `Fishing` (+ `Fishing_ExploitFix_Options`) | Re-casting into the same spot forever. |
-| `Agility` | Self-inflicted damage feeding Agility XP. |
+| `Movement` | Self-inflicted damage feeding fall and dodge XP in Parkour, Swimming and Flying. |
 | `TreeFellerReducedXP` | Full per-log XP when a whole tree comes down at once. |
 | `LimitTallPlantFarming` | XP from bone-mealed plants grown past natural height. |
 | `Combat.XPCeiling` | One enormous hit paying out a modded mob's whole health bar. |
@@ -259,17 +259,19 @@ A few things (`/mcability`, `/mcrefresh`) are runtime toggles and apply immediat
 
 Two different things can happen to a key between releases, and they are handled differently on purpose.
 
-### A renamed *skill* — warned, never rewritten
+### A renamed or retired *skill* — warned, never rewritten
 
-If mcMMO renames a whole skill, your config section is **not** silently rewritten — you get a **log warning** naming the old and new spelling instead. Your config file is yours, and a rewriter that quietly moves your tuning around is a worse failure mode than a line in the log.
+If a whole skill section is no longer read, your config is **not** silently rewritten — you get a **log warning** naming where those values belong now. Your config file is yours, and a rewriter that quietly moves your tuning around is a worse failure mode than a line in the log.
 
-Currently: `Acrobatics:` → `Agility:`.
+Currently that applies to an `Acrobatics:` section, from a config written before that skill was replaced.
+
+The same warn-don't-rewrite rule covers any single key whose destination **means something different** from the key it came from — a rank ladder that lost its upper ranks, or a threshold the code stopped reading. Migrating those would move your tuning somewhere it is just as ignored while implying it now works, so you are told instead.
 
 ### A *sub-skill* that changed parent — migrated for you
 
 When a sub-skill is re-parented, its config path moves with it, and the values you tuned would otherwise be stranded at a path nothing reads. Those **are** carried across, and the dead keys are deleted, with an INFO line per path saying so.
 
-Seven sub-skills moved out of Agility on 2026-08-10 — Dodge, Athlete and Smash to **Parkour**, Lead Lungs and Lake Raider to **Swimming**, Glide and Solar Wings to **Flying** ([why](Movement-Skills)). Your `advanced.yml`, `skillranks.yml` and `config.yml` are migrated on the next load.
+The movement skills are where most of this has happened: every perk now sits on the skill that earns it, so `advanced.yml`, `skillranks.yml`, `config.yml` and `experience.yml` all pick up moved paths on the next load. **[Troubleshooting](Troubleshooting#acrobatics-is-gone--agility-is-gone) has the key-by-key table** of what moves itself and what you have to move by hand.
 
 If you had tuned **both** the old and the new path, the value the game was already using wins and the old one is discarded — with a `WARN` naming both numbers, so the choice is never silent. The scan is driven by what your file actually contains rather than by a version stamp, so a migration that fails to save is simply retried next boot.
 

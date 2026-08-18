@@ -130,7 +130,7 @@ Mob Mastery has **no rank ladder and no `skillranks.yml` entry**, because it doe
 
 A **melee swing** or a **player-owned arrow, bolt or thrown trident**. Not lit TNT, not a Blast Mining charge, not a lingering potion cloud, not Thorns, and not your wolf's bite (Taming's Sharpened Claws and Gore already own that damage).
 
-It is applied **last** in the damage chain — after Agility's Sprint Smash and Stealth's Assassin — because Assassin multiplies the whole melee total. A ×3 backstab on a 10-damage hit with top-tier mastery is `10×3 + 3 = 33`, not `(10+3)×3 = 39`.
+It is applied **last** in the damage chain — after Parkour's Sprint Smash and Stealth's Assassin — because Assassin multiplies the whole melee total. A ×3 backstab on a 10-damage hit with top-tier mastery is `10×3 + 3 = 33`, not `(10+3)×3 = 39`.
 
 `advanced.yml` → `Skills.Hunter.MobMastery.Ranged_Damage_Multiplier` (default `1.0`) exists as cheap insurance. A melee bonus is already throttled by the vanilla attack-cooldown charge, so spam-clicking pays less than a charged swing — a bow shot has no equivalent throttle and collects the whole +3.0 every time. If ranged mastery turns out over-tuned, `0.5` halves it on projectiles and leaves melee exactly as ruled. Negative values are clamped to 0: earned mastery must never become a penalty.
 
