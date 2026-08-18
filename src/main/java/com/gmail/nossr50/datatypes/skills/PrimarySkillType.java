@@ -25,7 +25,7 @@ public enum PrimarySkillType {
     // parent is derived from its enum name PREFIX, so one constant could not span three parents.
     //
     // The movement manager survives the removal and is keyed NOMINALLY on PARKOUR -- see
-    // AgilityManager's constructor for why that field is load-bearing for nothing.
+    // MovementManager's constructor for why that field is load-bearing for nothing.
     //
     // An existing profile's `skills.AGILITY` / `experience.AGILITY` key is an ORPHAN, not a rename:
     // a child skill never had a stored level to migrate. FlatFileProfileStore drops it on the next

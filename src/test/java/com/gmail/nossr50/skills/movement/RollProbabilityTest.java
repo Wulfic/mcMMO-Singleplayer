@@ -1,4 +1,4 @@
-package com.gmail.nossr50.skills.agility;
+package com.gmail.nossr50.skills.movement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,7 +30,7 @@ import org.junit.jupiter.api.io.TempDir;
  * The defect was the <b>gate</b>: Roll's odds are {@code skillLevel / MaxBonusLevel * ChanceMax}, and
  * while Roll was an {@code AGILITY_*} sub-skill that {@code skillLevel} was the <em>mean</em> of
  * Parkour, Swimming and Flying — even though the fall XP that earns it is paid to Parkour alone
- * ({@link AgilityManager#EPISODIC_XP_SKILL}). The reporter's save read
+ * ({@link MovementManager#EPISODIC_XP_SKILL}). The reporter's save read
  * {@code PARKOUR 126 / SWIMMING 8 / FLYING 0}, i.e. Agility 44, i.e. a 4.4% roll and an 8.8% graceful
  * roll. Legacy Acrobatics had no such gap: it earned XP from the very falls Roll gates on.
  *

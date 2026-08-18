@@ -1,8 +1,8 @@
-package com.gmail.nossr50.datatypes.skills.subskills.agility;
+package com.gmail.nossr50.datatypes.skills.subskills.movement;
 
 /**
  * Immutable outcome of an Agility fall/roll evaluation (see
- * {@link com.gmail.nossr50.skills.agility.AgilityManager#rollCheck}).
+ * {@link com.gmail.nossr50.skills.movement.MovementManager#rollCheck}).
  *
  * <p>Port note (K2): the legacy builder took a Bukkit {@code EntityDamageEvent} and tracked
  * {@code eventDamage}/{@code isFatal}; both were only read for the never-shipped stats UI, so the

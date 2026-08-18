@@ -16,7 +16,7 @@ import com.gmail.nossr50.platform.ItemSpecBuilder;
 import com.gmail.nossr50.platform.Materials;
 import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.skills.BlockBreakXp;
-import com.gmail.nossr50.skills.agility.AgilityManager;
+import com.gmail.nossr50.skills.movement.MovementManager;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
 import com.gmail.nossr50.skills.herbalism.MultiBlockPlantTraversal;
@@ -797,7 +797,7 @@ public final class BlockBreakListener {
      *
      * <p>Reuses the Excavation treasure tables and the same {@link ItemSpecBuilder} spawn path as
      * {@link #awardExcavationTreasures} — see
-     * {@link AgilityManager#rollLakeRaiderTreasure(java.util.List, boolean, java.util.function.DoublePredicate)}
+     * {@link MovementManager#rollLakeRaiderTreasure(java.util.List, boolean, java.util.function.DoublePredicate)}
      * for why sharing the loot table is the right call rather than shipping a duplicate of it.
      *
      * <p>Two differences from the Excavation path, both deliberate. The treasures' Excavation
@@ -810,7 +810,7 @@ public final class BlockBreakListener {
         if (!breaker.isSubmergedInWater()) {
             return;
         }
-        final AgilityManager agility = mmoPlayer.getAgilityManager();
+        final MovementManager agility = mmoPlayer.getMovementManager();
         if (agility == null || !agility.canLakeRaider()) {
             return;
         }

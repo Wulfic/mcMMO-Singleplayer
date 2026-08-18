@@ -160,7 +160,7 @@ public final class SkillRenames {
         // ⚠️ GracefulRoll is warn-only, NOT migrated, and the difference is not an oversight.
         // `Skills.Parkour.GracefulRoll.DamageThreshold` has a getter but is deliberately absent from
         // the shipped advanced.yml: AdvancedConfig#getGracefulRollDamageThreshold is read by nothing
-        // except its own validator, because AgilityManager hardcodes the graceful threshold as
+        // except its own validator, because MovementManager hardcodes the graceful threshold as
         // getRollDamageThreshold() * 2 exactly as legacy did. Migrating a value into a key nothing
         // reads would move a player's tuning somewhere it is just as ignored, while implying it now
         // works. Tell them the truth instead.

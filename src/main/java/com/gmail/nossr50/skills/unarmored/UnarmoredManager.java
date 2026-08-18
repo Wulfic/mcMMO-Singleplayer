@@ -50,7 +50,7 @@ public class UnarmoredManager extends SkillManager {
      * <p>One full vanilla health bar. Without it a one-shot from a charged creeper or a
      * damage-boosted mob pays a jackpot proportional to a number the player never survives, and any
      * mod or command that deals absurd damage becomes an XP button. Legacy applies the same clamp,
-     * at the same value, to Roll's fall XP ({@code AgilityManager#calculateRollXP}).
+     * at the same value, to Roll's fall XP ({@code MovementManager#calculateRollXP}).
      */
     public static final double MAX_CREDITED_DAMAGE = 20.0;
 

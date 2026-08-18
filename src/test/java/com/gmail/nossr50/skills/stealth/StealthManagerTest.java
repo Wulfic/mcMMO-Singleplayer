@@ -277,7 +277,7 @@ class StealthManagerTest {
 
         // ...and it should still out-earn Agility on land, which is the slower, more passive skill.
         assertTrue(StealthXpSettings.DEFAULT_BASELINE_XP_PER_SECOND
-                        > com.gmail.nossr50.skills.agility.MovementXpSettings
+                        > com.gmail.nossr50.skills.movement.MovementXpSettings
                                 .DEFAULT_BASELINE_XP_PER_SECOND,
                 "sneaking is more tedious than sprinting and should pay more per second");
     }
