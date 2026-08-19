@@ -15,6 +15,7 @@ import com.gmail.nossr50.platform.BlockUtils.AgeableState;
 import com.gmail.nossr50.util.BlockRules;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.nio.file.Path;
+import java.util.function.BooleanSupplier;
 import java.util.List;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -156,21 +157,44 @@ class BlockUtilsTest {
     }
 
     /**
-     * ⚠️⚠️ Makes the test above non-vacuous.
+     * &#9888;&#9888; Makes the test above non-vacuous &mdash; and does it <b>without depending on how
+     * the harness treats an unbound tag</b>.
      *
-     * <p>{@code Bootstrap.initialize()} does not bind datapack tags, so {@code BlockState#isIn} blows
-     * up in this harness. That is exactly what makes the flower/bush assertions meaningful: they can
-     * only pass if the tag suppliers were never evaluated. But "the suppliers are lazy" and "the tags
-     * happen to be bound after all" produce the same green, so the harness's own precondition has to
-     * be asserted rather than assumed — otherwise this file would keep passing on the day a future
-     * harness starts binding tags, while silently testing nothing.
+     * <p>This used to assert that {@code BlockState#isIn} blows up under
+     * {@code Bootstrap.initialize()}, reasoning that "the suppliers are lazy" and "the tags happen to
+     * be bound after all" produce the same green, so the precondition must be asserted rather than
+     * assumed. <b>The reasoning is right; the proxy was not.</b> Whether an unbound tag throws or
+     * quietly answers {@code false} is a Minecraft behaviour and it differs across supported
+     * versions &mdash; on this band it does not throw, so the guard failed while nothing it guards
+     * had changed.
+     *
+     * <p>&#128273; The property is now proven directly, at the layer that owns it.
+     * {@link BlockRules#hylianTreasureGroup} takes the two tag checks as {@link BooleanSupplier}s, so
+     * a supplier that <b>throws if it is ever called</b> turns "was a tag consulted?" into something
+     * this test observes for itself &mdash; on every band, with no dependence on datapack state.
+     *
+     * <p>&#9888; What this does NOT cover: {@link BlockUtils#getHylianTreasureGroup} could still
+     * pre-compute the two booleans and hand back {@code () -> alreadyComputed}, which compiles and is
+     * eager. That was observable only on a band where an unbound tag throws, and it is not observable
+     * here. The sibling test above still pins the wrapper's answers; this one pins the rule's
+     * laziness.
      */
     @Test
-    void theHarnessGenuinelyHasNoBoundTagsSoTheLazinessIsWhatIsBeingProven() {
-        assertThrows(IllegalStateException.class,
-                () -> BlockUtils.getHylianTreasureGroup(Blocks.STONE.getDefaultState()),
-                "a block that reaches the tag check must throw here; if it stops throwing, the "
-                        + "hardcoded-member assertions above have quietly stopped proving laziness");
+    void theHardcodedMembersAreClassifiedWithoutConsultingATag() {
+        final BooleanSupplier mustNotBeCalled = () -> {
+            throw new AssertionError("a hardcoded Hylian member consulted a block tag — the "
+                    + "MaterialMapStore branches must return before any tag check, or the "
+                    + "classification silently depends on datapack state");
+        };
+
+        assertEquals("Flowers",
+                BlockRules.hylianTreasureGroup("poppy", mustNotBeCalled, mustNotBeCalled));
+        assertEquals("Bushes",
+                BlockRules.hylianTreasureGroup("fern", mustNotBeCalled, mustNotBeCalled));
+        assertEquals("Bushes",
+                BlockRules.hylianTreasureGroup("short_grass", mustNotBeCalled, mustNotBeCalled));
+        assertEquals("Bushes",
+                BlockRules.hylianTreasureGroup("dead_bush", mustNotBeCalled, mustNotBeCalled));
     }
 
     // --- Crop maturity (age state property) ---------------------------------

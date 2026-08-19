@@ -7,6 +7,7 @@ import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -49,8 +50,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * on another branch) would double-apply the bonus rather than fail loudly. {@code defaultRequire = 1}
  * alone does not catch that — {@code require} is a minimum.
  *
- * <p>No client guard is needed: {@code tick} is only ever handed a {@link ServerWorld}, and
- * {@code dropExperience} takes one.
+ * <p>⚠️ {@code tick}'s world parameter has been spelled both {@code World} and {@link ServerWorld}
+ * across versions, so the handlers narrow it explicitly rather than assuming a side. That narrowing is
+ * also the client guard. {@code dropExperience} takes a {@link ServerWorld} outright and needs none.
+ *
+ * <p>🔑 A handler whose parameter list does not match its target method is refused at apply time,
+ * exactly like an unresolvable {@code @At} — but {@code scripts/mixin-allow-audit.py} resolves only
+ * the {@code @At} target, so that failure hides behind a green row. Gate 2 passing is not permission
+ * to skip gate 1.
  */
 @Mixin(AbstractFurnaceBlockEntity.class)
 public abstract class AbstractFurnaceSmeltMixin {
@@ -63,12 +70,14 @@ public abstract class AbstractFurnaceSmeltMixin {
                     target = "Lnet/minecraft/block/entity/AbstractFurnaceBlockEntity;craftRecipe("
                             + "Lnet/minecraft/registry/DynamicRegistryManager;"
                             + "Lnet/minecraft/recipe/RecipeEntry;"
-                            + "Lnet/minecraft/recipe/input/SingleStackRecipeInput;"
                             + "Lnet/minecraft/util/collection/DefaultedList;I)Z"))
-    private static void mcmmo$onSmeltComplete(ServerWorld world, BlockPos pos, BlockState state,
+    private static void mcmmo$onSmeltComplete(World world, BlockPos pos, BlockState state,
             AbstractFurnaceBlockEntity blockEntity, CallbackInfo ci) {
+        if (!(world instanceof ServerWorld serverWorld)) {
+            return;
+        }
         final ItemStack input = blockEntity.getStack(0); // INPUT_SLOT_INDEX
-        SmeltingListener.onFurnaceSmelt(world, pos, input);
+        SmeltingListener.onFurnaceSmelt(serverWorld, pos, input);
     }
 
     @Inject(
@@ -78,7 +87,7 @@ public abstract class AbstractFurnaceSmeltMixin {
                     value = "INVOKE",
                     target = "Lnet/minecraft/block/entity/AbstractFurnaceBlockEntity;setLastRecipe("
                             + "Lnet/minecraft/recipe/RecipeEntry;)V"))
-    private static void mcmmo$onSecondSmelt(ServerWorld world, BlockPos pos, BlockState state,
+    private static void mcmmo$onSecondSmelt(World world, BlockPos pos, BlockState state,
             AbstractFurnaceBlockEntity blockEntity, CallbackInfo ci) {
         final ItemStack output = blockEntity.getStack(2); // OUTPUT_SLOT_INDEX
         SmeltingListener.onSmeltComplete(pos, output);
@@ -90,9 +99,8 @@ public abstract class AbstractFurnaceSmeltMixin {
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/block/entity/AbstractFurnaceBlockEntity;getFuelTime("
-                            + "Lnet/minecraft/item/FuelRegistry;"
                             + "Lnet/minecraft/item/ItemStack;)I"))
-    private static int mcmmo$applyFuelEfficiency(int burnTime, ServerWorld world, BlockPos pos,
+    private static int mcmmo$applyFuelEfficiency(int burnTime, World world, BlockPos pos,
             BlockState state, AbstractFurnaceBlockEntity blockEntity) {
         return SmeltingListener.boostFuelTime(burnTime, pos, blockEntity.getStack(0));
     }

@@ -15,7 +15,6 @@ import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ConsumableComponent;
 import net.minecraft.component.type.FoodComponent;
 import net.minecraft.entity.effect.StatusEffect;
 import net.minecraft.entity.effect.StatusEffects;
@@ -46,8 +45,7 @@ import org.junit.jupiter.api.io.TempDir;
  *       obvious spelling of this test passes {@code hunger}, {@code absorption}, {@code bad_omen}
  *       and {@code raid_omen} straight through;</li>
  *   <li>a misspelled effect name, which silently disables the row;</li>
- *   <li>a food that is not edible — the four fish buckets carry {@code FOOD} and no
- *       {@code CONSUMABLE}, so the eat seam can never fire for them;</li>
+ *   <li>a food that is not edible — the four fish buckets, which the eat seam can never fire for;</li>
  *   <li>a food vanilla already gives an effect to, which would stack two effects on one bite;</li>
  *   <li>Fire Resistance or Water Breathing, which are banned outright at any duration.</li>
  * </ul>
@@ -181,10 +179,12 @@ class PowerCookEffectTableTest {
         // four of nine and still summed to nine, which is why nobody re-counted it. An effect a food
         // grants can live on any of three components; this is the one the eat path walks.
         for (String food : table.getKeys(false)) {
-            final ConsumableComponent consumable =
-                    new ItemStack(item(food)).get(DataComponentTypes.CONSUMABLE);
-            assertNotNull(consumable, () -> food + " is not consumable");
-            assertTrue(consumable.onConsumeEffects().isEmpty(),
+            // ⚠️ Which component carries a food's granted effects is version-specific. Where eating
+            // is split onto a consumable component, they live there; at this version they are still
+            // on FOOD itself. Same question, different component.
+            final FoodComponent food_ = new ItemStack(item(food)).get(DataComponentTypes.FOOD);
+            assertNotNull(food_, () -> food + " is not edible");
+            assertTrue(food_.effects().isEmpty(),
                     () -> food + " already carries a vanilla consume effect; Power Cook must not"
                             + " stack a second one on the same bite");
         }
@@ -198,10 +198,10 @@ class PowerCookEffectTableTest {
             final ItemStack stack = new ItemStack(item(food));
             assertNotNull(stack.get(DataComponentTypes.FOOD),
                     () -> food + " has no FOOD component");
-            // ⚠️ FOOD is not edibility. Eating runs through ConsumableComponent#finishConsumption,
-            // which is what reaches FoodComponent#onConsume -- the seam Power Cook rides.
-            assertNotNull(stack.get(DataComponentTypes.CONSUMABLE),
-                    () -> food + " has no CONSUMABLE component, so the eat seam can never fire");
+            // ⚠️ On versions that split eating onto a separate consumable component, FOOD alone is
+            // NOT edibility and a second assertion is needed here. At this version there is no such
+            // component: FOOD is what LivingEntity#eatFood consumes, and it is the seam Power Cook
+            // rides, so the FOOD assertion above is the whole question.
         }
     }
 
@@ -221,8 +221,10 @@ class PowerCookEffectTableTest {
 
     @Test
     void theFishBucketsAreNotInTheTable() {
-        // They carry FOOD and no CONSUMABLE, so filtering the food domain on the wrong component
-        // adds four rows that can never fire and that nobody would notice were dead.
+        // ⚠️ The rationale is version-specific, the assertion is not. Where eating is split onto a
+        // consumable component these carry FOOD and no CONSUMABLE, so a food domain filtered on the
+        // wrong component gains four rows that can never fire. This version has no such split — but
+        // a bucket is still not something Power Cook may buff, so the row must still be absent.
         for (String bucket : FISH_BUCKETS) {
             assertFalse(table.contains(ConfigStringUtils.getMaterialConfigString(bucket)),
                     () -> bucket + " is not edible and must not be in the Power Cook table");
@@ -244,7 +246,7 @@ class PowerCookEffectTableTest {
     /** The registry item a config key names, e.g. {@code Cooked_Beef} → {@code cooked_beef}. */
     private static Item item(String foodConfigString) {
         final String path = foodConfigString.toLowerCase(Locale.ENGLISH);
-        final Item found = Registries.ITEM.getOptionalValue(Identifier.ofVanilla(path)).orElse(null);
+        final Item found = Registries.ITEM.getOrEmpty(Identifier.ofVanilla(path)).orElse(null);
         assertNotNull(found, () -> foodConfigString + " is not a vanilla item (" + path + ")");
         return found;
     }

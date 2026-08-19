@@ -3,7 +3,6 @@ package com.gmail.nossr50.fabric.mixin;
 import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.ParticleEffectUtils;
 import net.minecraft.entity.projectile.FireworkRocketEntity;
-import net.minecraft.server.world.ServerWorld;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -25,9 +24,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * <pre>
  *   sendEntityStatus(this, 17)   // the burst -- client-side visual + sound
  *   emitGameEvent(EXPLODE, ...)  // vibration
- *   explode(world)               // 100% damage, nothing else
+ *   explode(...)                 // 100% damage, nothing else
  *   discard()
  * </pre>
+ *
+ * <p>⚠⚠ <b>{@code explode}'s parameter list is NOT stable across supported versions</b> — it has
+ * been spelled both {@code explode()} and {@code explode(ServerWorld)}. The {@code method} selector
+ * matches on name and so binds either way, but an {@code @Inject} handler must mirror the target's
+ * own parameters exactly, and a mismatch is an {@code InvalidInjectionException} at class-load.
+ * Declaring only the {@link CallbackInfo} is correct wherever the target takes no arguments; this
+ * hook needs neither the world nor any argument, so it asks for nothing it does not use.
+ *
+ * <p>🔑 {@code scripts/mixin-allow-audit.py} <b>cannot catch that</b>: it resolves the injection
+ * point and counts sites, and this injector sat in an {@code OK ... computed=1} row while failing to
+ * apply. {@code MixinApplicationTest} is the gate that sees it, which is why this class is on its
+ * list.
  *
  * <p>The visual has already been sent to the client by the time {@code explode} is entered, so
  * cancelling {@code explode} outright keeps the whole firework show and removes only the harm. An
@@ -45,7 +56,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class FireworkRocketEntityMixin {
 
     @Inject(method = "explode", allow = 1, at = @At("HEAD"), cancellable = true)
-    private void mcmmo$skipCosmeticFireworkDamage(ServerWorld world, CallbackInfo ci) {
+    private void mcmmo$skipCosmeticFireworkDamage(CallbackInfo ci) {
         final FireworkRocketEntity self = (FireworkRocketEntity) (Object) this;
         if (MetadataStore.has(self, ParticleEffectUtils.COSMETIC_FIREWORK_KEY)) {
             MetadataStore.clear(self);

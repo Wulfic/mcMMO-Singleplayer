@@ -142,7 +142,7 @@ public final class PlatformLivingEntity {
      */
     public @NotNull List<PlatformItem> getArmorPieces() {
         final List<PlatformItem> pieces = new ArrayList<>(4);
-        for (EquipmentSlot slot : EquipmentSlot.VALUES) {
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
             if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) {
                 continue;
             }
@@ -177,7 +177,7 @@ public final class PlatformLivingEntity {
      * to ask a question with no state behind it would be allocation for its own sake.
      */
     public static boolean isUnarmored(@NotNull LivingEntity entity) {
-        for (EquipmentSlot slot : EquipmentSlot.VALUES) {
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
             if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR
                     && !entity.getEquippedStack(slot).isEmpty()) {
                 return false;
@@ -228,7 +228,7 @@ public final class PlatformLivingEntity {
     public void teleportTo(@NotNull PlatformPlayer owner) {
         final Vec3d dest = owner.getPos();
         handle.teleport(owner.getWorld(), dest.x, dest.y, dest.z,
-                EnumSet.noneOf(PositionFlag.class), handle.getYaw(), handle.getPitch(), false);
+                EnumSet.noneOf(PositionFlag.class), handle.getYaw(), handle.getPitch());
     }
 
     // --- World / position (Bukkit getLocation/getWorld) ---------------------
@@ -242,7 +242,7 @@ public final class PlatformLivingEntity {
     }
 
     public @NotNull Vec3d getPos() {
-        return handle.getEntityPos();
+        return handle.getPos();
     }
 
     // --- Custom name --------------------------------------------------------

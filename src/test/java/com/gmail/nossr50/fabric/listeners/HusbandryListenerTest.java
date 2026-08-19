@@ -39,8 +39,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.ArmadilloEntity;
@@ -662,16 +662,6 @@ class HusbandryListenerTest {
 
     // --- Shear and Bountiful Harvest ------------------------------------------------------------
 
-    /** Collects everything vanilla's own drop handler was asked to deliver. */
-    private static final class Dropper implements BiConsumer<ServerWorld, ItemStack> {
-        private final List<ItemStack> delivered = new ArrayList<>();
-
-        @Override
-        public void accept(ServerWorld world, ItemStack stack) {
-            delivered.add(stack);
-        }
-    }
-
     private PassiveEntity shearableSheep() {
         final SheepEntity sheep = mock(SheepEntity.class);
         Mockito.doReturn(EntityType.SHEEP).when(sheep).getType();
@@ -680,38 +670,61 @@ class HusbandryListenerTest {
         return sheep;
     }
 
+    /**
+     * One shear, driven the way the seam really runs it.
+     *
+     * <p>⚠️ There is no shear loot funnel on this band — no single {@code BiConsumer} sees every
+     * item a shear produces, because each species drops inline by its own route. The equivalent is an
+     * explicit window: {@code ShearPayoutMixin} opens it at {@code sheared}'s HEAD,
+     * {@code EntityShearDropMixin} runs once per dropped stack while it is open, and it closes at
+     * TAIL. Driving all three in that order is what keeps these tests a guard for the real call
+     * sequence rather than for three methods in isolation.
+     *
+     * @return what each stack actually became on its way out
+     */
+    private static List<ItemStack> shear(LivingEntity sheared, ItemStack... drops) {
+        final List<ItemStack> delivered = new ArrayList<>();
+        HusbandryListener.beginShear(sheared);
+        try {
+            for (ItemStack drop : drops) {
+                delivered.add(HusbandryListener.onShearDropStack(drop));
+            }
+        } finally {
+            HusbandryListener.endShear();
+        }
+        return delivered;
+    }
+
     @Test
     void shearingAnAnimalYouAreInteractingWithPaysTheShearVerb() {
         final PassiveEntity sheep = shearableSheep();
-        final Dropper dropper = new Dropper();
 
         HusbandryListener.beginPlayerInteraction(breeder(), sheep);
         try {
-            HusbandryListener.onShearedItems(sheep, dropper).accept(world, wool());
+            assertEquals(1, shear(sheep, wool()).get(0).getCount(),
+                    "a failed bonus roll must leave vanilla's own stack exactly as it was");
         } finally {
             HusbandryListener.endPlayerInteraction();
         }
 
         verify(husbandry).onShear();
-        assertEquals(1, dropper.delivered.size(), "a failed bonus roll must drop exactly once");
     }
 
     @Test
     void aDispenserShearingASheepPaysNothingAndDropsNothingExtra() {
         // ⚠️⚠️ THE row this whole seam was chosen for. ShearsDispenserBehavior calls the same
-        // Shearable#sheared that a player does, and reaches the same loot funnel this listener hooks
-        // — that IS the classic AFK wool farm, and it is the single most important thing shearing
-        // must never pay for. Nothing distinguishes the two calls except that a dispenser opens no
-        // player interaction, so this test is the gate.
+        // Shearable#sheared that a player does, so it opens this very window — that IS the classic
+        // AFK wool farm, and it is the single most important thing shearing must never pay for.
+        // Nothing distinguishes the two calls except that a dispenser opens no player interaction,
+        // so this test is the gate.
         final PassiveEntity sheep = shearableSheep();
-        final Dropper dropper = new Dropper();
 
         // No beginPlayerInteraction: this is exactly the state a dispenser fires in.
-        HusbandryListener.onShearedItems(sheep, dropper).accept(world, wool());
+        final List<ItemStack> delivered = shear(sheep, wool());
 
         verify(husbandry, never()).onShear();
         verify(husbandry, never()).rollBonusHarvestDrop();
-        assertEquals(1, dropper.delivered.size(),
+        assertEquals(1, delivered.get(0).getCount(),
                 "vanilla's drops must pass through a dispenser shear completely untouched");
     }
 
@@ -721,11 +734,10 @@ class HusbandryListenerTest {
         // a player's right-click would bill to that player.
         final PassiveEntity held = shearableSheep();
         final PassiveEntity elsewhere = shearableSheep();
-        final Dropper dropper = new Dropper();
 
         HusbandryListener.beginPlayerInteraction(breeder(), held);
         try {
-            HusbandryListener.onShearedItems(elsewhere, dropper).accept(world, wool());
+            shear(elsewhere, wool());
         } finally {
             HusbandryListener.endPlayerInteraction();
         }
@@ -734,47 +746,72 @@ class HusbandryListenerTest {
     }
 
     @Test
-    void bountifulHarvestDeliversVanillasOwnDropASecondTime() {
-        // The bonus is vanilla's handler called again rather than an item spawned by us, so a
-        // sheep's colour and a mooshroom's variant carry into it for free. Asserting on the
-        // delivered stacks -- not just that the roll happened -- is what pins that.
+    void bountifulHarvestDoublesVanillasOwnStackRatherThanSpawningItsOwn() {
+        // The bonus is vanilla's own stack handed back with twice the count, so a sheep's colour and
+        // a mooshroom's variant carry into it for free. Asserting on the returned stack -- not just
+        // that the roll happened -- is what pins that.
+        //
+        // ⚠️ ONE stack of 2, not two stacks of 1. Where a loot funnel exists the bonus is vanilla's
+        // handler invoked a second time; here it is a doubled count, which is one ItemEntity instead
+        // of two and cannot desynchronise from the first drop's position or pickup delay.
         final PassiveEntity sheep = shearableSheep();
-        final Dropper dropper = new Dropper();
         when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
 
         HusbandryListener.beginPlayerInteraction(breeder(), sheep);
+        final List<ItemStack> delivered;
         try {
-            HusbandryListener.onShearedItems(sheep, dropper).accept(world, wool());
+            delivered = shear(sheep, wool());
         } finally {
             HusbandryListener.endPlayerInteraction();
         }
 
-        assertEquals(2, dropper.delivered.size(), "a successful roll must double the yield");
-        assertEquals(Items.WHITE_WOOL, dropper.delivered.get(1).getItem(),
+        assertEquals(1, delivered.size(), "the bonus must not add a second delivery");
+        assertEquals(2, delivered.get(0).getCount(), "a successful roll must double the yield");
+        assertEquals(Items.WHITE_WOOL, delivered.get(0).getItem(),
                 "the bonus must be a copy of what vanilla actually dropped");
     }
 
     @Test
     void theBonusDropIsRolledOncePerShearNotOncePerItem() {
         // A shear that yields three wool must resolve the sub-skill once and then double all three,
-        // rather than rolling per item and producing a partial, noisy result.
+        // rather than rolling per item and producing a partial, noisy result. The roll is decided at
+        // beginShear and only READ per stack, which is what makes that structural rather than
+        // incidental.
         final PassiveEntity sheep = shearableSheep();
-        final Dropper dropper = new Dropper();
         when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
 
         HusbandryListener.beginPlayerInteraction(breeder(), sheep);
+        final List<ItemStack> delivered;
         try {
-            final BiConsumer<ServerWorld, ItemStack> wrapped =
-                    HusbandryListener.onShearedItems(sheep, dropper);
-            wrapped.accept(world, wool());
-            wrapped.accept(world, wool());
-            wrapped.accept(world, wool());
+            delivered = shear(sheep, wool(), wool(), wool());
         } finally {
             HusbandryListener.endPlayerInteraction();
         }
 
         verify(husbandry, times(1)).rollBonusHarvestDrop();
-        assertEquals(6, dropper.delivered.size());
+        assertEquals(6, delivered.stream().mapToInt(ItemStack::getCount).sum(),
+                "all three stacks must double, not just the one the roll happened on");
+    }
+
+    @Test
+    void aDropOutsideAnyShearWindowIsLeftAlone() {
+        // 🔑🔑 THE guard that makes a seam on Entity#dropStack safe at all. That method is how most
+        // of the game drops most of its items -- a mob's death loot, a broken block, a player
+        // emptying their inventory -- and the ONLY thing narrowing it back down to "items this shear
+        // produced" is the window being open. If endShear ever stopped clearing the flag, every drop
+        // in the world would silently double for the rest of the session.
+        final PassiveEntity sheep = shearableSheep();
+        when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
+
+        HusbandryListener.beginPlayerInteraction(breeder(), sheep);
+        try {
+            shear(sheep, wool());
+        } finally {
+            HusbandryListener.endPlayerInteraction();
+        }
+
+        assertEquals(1, HusbandryListener.onShearDropStack(wool()).getCount(),
+                "the window must close: an unrelated drop after a winning shear must not double");
     }
 
     @Test
@@ -1159,78 +1196,95 @@ class HusbandryListenerTest {
         allowHarvestCooldown();
         worldTime(0L);
         final Entity armadillo = harvestable(ArmadilloEntity.class);
-        final Dropper dropper = new Dropper();
 
-        HusbandryListener.onBrushedItems(armadillo, breeder(), dropper).accept(world, wool());
+        // `true` is what brushScute() returns when it really handed over a scute.
+        HusbandryListener.onBrushed(armadillo, breeder(), true);
 
         verify(husbandry).onBrush();
-        assertEquals(1, dropper.delivered.size());
     }
 
     @Test
     void aBrushThatDeliversNothingPaysNothing() {
         // ⚠️ The reason this verb pays on the DROP where shearing pays on the attempt. Shearing is
         // gated upstream by isShearable(); brushing is gated by nothing at all -- brushScute returns
-        // true for any adult armadillo and brush/armadillo.json carries no conditions -- so an
-        // item actually changing hands is the only available proof a harvest happened.
+        // true for any adult armadillo and refuses only a baby -- so an item actually changing hands
+        // is the only available proof a harvest happened.
+        //
+        // 🔑 That flag is a listener PARAMETER rather than an early return inside ArmadilloBrushMixin
+        // precisely so this test can reach it. A guard living in a mixin body is a guard nothing
+        // proves.
         allowHarvestCooldown();
         worldTime(0L);
         final Entity armadillo = harvestable(ArmadilloEntity.class);
 
-        // Wrapped, then never invoked: exactly what an empty loot roll looks like.
-        HusbandryListener.onBrushedItems(armadillo, breeder(), new Dropper());
+        // `false` is exactly what brushScute() returns for a baby armadillo.
+        assertFalse(HusbandryListener.onBrushed(armadillo, breeder(), false),
+                "a brush that delivered nothing must not owe a bonus scute either");
 
         verify(husbandry, never()).onBrush();
         verify(husbandry, never()).getHarvestCooldownSeconds();
     }
 
     @Test
-    void aDispenserBrushingAnArmadilloPaysNothingAndDropsNothingExtra() {
-        // ⚠️ Vanilla really does ship this (DispenserBehavior$5) and the plan did not mention it.
-        // It passes null for the brusher, so the exclusion is a property of the signature.
+    void aDispenserBrushingAnArmadilloPaysNothing() {
+        // ⚠️ Vanilla really does ship an armadillo-brushing dispenser (DispenserBehavior$5) and the
+        // plan did not mention it.
+        //
+        // ⚠️⚠️ THE REASON IT IS EXCLUDED IS NOT THE SIGNATURE HERE. Where vanilla routes brush loot
+        // through a forEachBrushedItem funnel, that funnel takes the brushing Entity and the
+        // dispenser passes null, so the exclusion falls out of the argument list. There is no funnel
+        // on this band: brushScute() takes no arguments and drops the scute inline. The real gate is
+        // the CALL SITE -- ArmadilloBrushMixin hangs off interactMob, which only a player reaches and
+        // which the dispenser behaviour never enters. Stricter, but a different reason, and it is
+        // MixinApplicationTest that proves the hook is still on interactMob.
+        //
+        // What this test pins is the listener's own half: a brusher who is not a real server player
+        // pays nothing, whatever route reached us.
         final Entity armadillo = harvestable(ArmadilloEntity.class);
-        final Dropper dropper = new Dropper();
 
-        HusbandryListener.onBrushedItems(armadillo, null, dropper).accept(world, wool());
+        assertFalse(HusbandryListener.onBrushed(armadillo, null, true));
 
         verify(husbandry, never()).onBrush();
         verify(husbandry, never()).rollBonusHarvestDrop();
-        assertEquals(1, dropper.delivered.size(),
-                "vanilla's own drop must pass through an automated brush untouched");
     }
 
     @Test
     void aBrushInsideTheCooldownStillDropsTheScuteButPaysNothing() {
         // The cooldown gates the REWARD, never the drop. A mod that withheld vanilla's own loot to
         // enforce its own balance would be breaking the game rather than tuning itself.
+        //
+        // 🔑 On this band the "still drops" half is structural rather than asserted: vanilla's scute
+        // is dropped by brushScute() BEFORE the hook is reached, and the listener only ever answers
+        // whether a BONUS is owed. There is no path by which mcMMO could withhold it. The half that
+        // could still regress -- the second brush must not pay -- is what this asserts.
         allowHarvestCooldown();
         worldTime(0L);
         final Entity armadillo = harvestable(ArmadilloEntity.class);
 
-        HusbandryListener.onBrushedItems(armadillo, breeder(), new Dropper()).accept(world, wool());
-        final Dropper second = new Dropper();
-        HusbandryListener.onBrushedItems(armadillo, breeder(), second).accept(world, wool());
+        HusbandryListener.onBrushed(armadillo, breeder(), true);
+        HusbandryListener.onBrushed(armadillo, breeder(), true);
 
         verify(husbandry, times(1)).onBrush();
-        assertEquals(1, second.delivered.size(), "the scute must still drop inside the cooldown");
     }
 
     @Test
-    void theBrushBonusIsRolledOncePerBrushNotOncePerItem() {
+    void oneBrushResolvesTheSubSkillExactlyOnce() {
+        // Renamed from "...NotOncePerItem". Where vanilla routes brush loot through a funnel the hook
+        // runs once per dropped item, and rolling per item would give a partial, noisy result. There
+        // is no funnel here -- brushScute drops the scute itself and the hook fires once per brush --
+        // so the per-item half of that guard has no subject on this band. What remains testable is
+        // that ONE brush resolves the sub-skill exactly once; the "exactly one injection point" half
+        // is now carried by allow = 1 on ArmadilloBrushMixin plus scripts/mixin-allow-audit.py.
         allowHarvestCooldown();
         worldTime(0L);
         final Entity armadillo = harvestable(ArmadilloEntity.class);
-        final Dropper dropper = new Dropper();
         when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
 
-        final BiConsumer<ServerWorld, ItemStack> wrapped =
-                HusbandryListener.onBrushedItems(armadillo, breeder(), dropper);
-        wrapped.accept(world, wool());
-        wrapped.accept(world, wool());
+        assertTrue(HusbandryListener.onBrushed(armadillo, breeder(), true),
+                "a winning roll must tell the caller a second scute is owed");
 
         verify(husbandry, times(1)).rollBonusHarvestDrop();
         verify(husbandry, times(1)).onBrush();
-        assertEquals(4, dropper.delivered.size());
     }
 
     @Test
@@ -1242,13 +1296,12 @@ class HusbandryListenerTest {
         final Entity armadillo = harvestable(ArmadilloEntity.class);
         lenient().when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
 
-        HusbandryListener.onBrushedItems(armadillo, breeder(), new Dropper()).accept(world, wool());
+        HusbandryListener.onBrushed(armadillo, breeder(), true);
         clearInvocations(husbandry);
-        final Dropper second = new Dropper();
-        HusbandryListener.onBrushedItems(armadillo, breeder(), second).accept(world, wool());
+        assertFalse(HusbandryListener.onBrushed(armadillo, breeder(), true),
+                "a brush inside the cooldown must owe no bonus scute");
 
         verify(husbandry, never()).rollBonusHarvestDrop();
-        assertEquals(1, second.delivered.size());
     }
 
     @Test

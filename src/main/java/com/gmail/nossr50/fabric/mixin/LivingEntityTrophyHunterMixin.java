@@ -3,8 +3,9 @@ package com.gmail.nossr50.fabric.mixin;
 import com.gmail.nossr50.fabric.listeners.HunterListener;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.server.world.ServerWorld;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -17,23 +18,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * introspection). A second roll respects Looting for free, needs no new data, and means "more of what
  * that creature drops" — more rotten flesh, but also more gunpowder and ender pearls.
  *
- * <h2>⚠️⚠️ The no-recursion property, and why it belongs to THESE TWO METHODS specifically</h2>
- * The injection is on the <b>3-argument</b> {@code dropLoot} and the bonus roll re-invokes the
- * <b>4-argument</b> one. That is not stylistic — it is the entire reason this class cannot loop.
- * Verified against the 1.21.11 merged jar:
+ * <h2>⚠️⚠️ The no-recursion property, and why it is an explicit guard here</h2>
+ * A second roll is made by re-invoking the creature's own loot drop, so this handler can re-enter
+ * itself. How that is prevented is <b>version-specific</b>, and getting it wrong produces an item
+ * bomb rather than a silent no-op — which is why it is spelled out rather than left to be re-derived.
  *
- * <pre>
- *   protected void dropLoot(ServerWorld, DamageSource, boolean)                 &lt;- injected here
- *       getLootTableKey(); if empty return; dropLoot(world, source, flag, key)
+ * <p>Where {@code dropLoot} is split into two overloads — a table-resolving one that delegates to a
+ * generating one whose entire body is a single {@code generateLoot} call — injecting into the
+ * <em>resolving</em> overload and re-invoking the <em>generating</em> one cannot loop, structurally
+ * and for free.
  *
- *   public    void dropLoot(ServerWorld, DamageSource, boolean, RegistryKey)    &lt;- re-invoked
- *       generateLoot(world, source, flag, key, this::dropStack)   // offsets 0-16, nothing else
- * </pre>
- *
- * The 4-arg overload's whole body is one {@code generateLoot} call, so it can never re-enter the 3-arg
- * one. <b>Move this injection to the 4-arg overload and it recurses until the stack dies, duplicating
- * the loot all the way down.</b> Getting this wrong produces an item bomb, not a silent no-op, which is
- * why the shape is spelled out here instead of left to be re-derived.
+ * <p><b>This version has no such split:</b> {@code dropLoot(DamageSource, boolean)} is the only
+ * overload, so re-invoking it from a {@code TAIL} injection on itself would recurse until the stack
+ * dies. The structural property is therefore replaced by an explicit one — {@link #mcmmo$inBonusRoll},
+ * a re-entrancy flag set around the bonus invocation and cleared in a {@code finally}. It is an
+ * instance field, so it cannot leak between two creatures dying in the same tick.
  *
  * <h2>The funnel, checked rather than assumed</h2>
  * A binary grep of the merged jar for {@code dropLoot} returns exactly two classes: {@link LivingEntity}
@@ -60,27 +59,45 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityTrophyHunterMixin {
 
+    /** Guards {@link #mcmmo$trophyHunterBonusRoll} against re-entering itself via the bonus roll. */
+    @Unique
+    private boolean mcmmo$inBonusRoll;
+
+    /**
+     * The creature's own loot drop. Shadowed rather than called on the cast reference because it is
+     * {@code protected} at this version; the bonus roll re-invokes it to produce a second roll.
+     */
+    @Shadow
+    protected abstract void dropLoot(DamageSource source, boolean causedByPlayer);
+
     /**
      * Offer the kill to Trophy Hunter once vanilla has finished dropping the creature's loot.
      *
-     * <p>⚠️ <b>{@code TAIL} rather than {@code RETURN}, and the difference is load-bearing:</b> the
-     * 3-arg method has <b>two</b> return instructions, and the first is the early-out taken when the
-     * creature has no loot table at all. {@code TAIL} binds to the last one, so a creature with nothing
-     * to drop never reaches the roll — correct, and free.
+     * <p>⚠️ {@code TAIL} binds to the last return instruction, so a creature that exits early with
+     * nothing to drop never reaches the roll. The bind count is a per-version bytecode fact — see
+     * {@code scripts/mixin-allow-audit.py}, which is a ship gate precisely because {@code allow = N}
+     * cannot be carried across versions by hand.
      *
-     * <p>Neither the 4-arg {@code dropLoot} nor {@code getLootTableKey} is {@code @Shadow}n: both are
-     * public API on {@code LivingEntity}/{@code Entity}, so an ordinary call on the cast reference does
-     * the same job with one less thing to drift.
+     * <p>The re-entrancy check is not belt-and-braces: at this version the bonus roll calls the very
+     * method this is injected into. See the class doc.
      */
-    @Inject(method = "dropLoot(Lnet/minecraft/server/world/ServerWorld;"
-                    + "Lnet/minecraft/entity/damage/DamageSource;Z)V", allow = 1,
+    @Inject(method = "dropLoot(Lnet/minecraft/entity/damage/DamageSource;Z)V", allow = 1,
             at = @At("TAIL"))
-    private void mcmmo$trophyHunterBonusRoll(ServerWorld world, DamageSource source,
-            boolean causedByPlayer, CallbackInfo ci) {
+    private void mcmmo$trophyHunterBonusRoll(DamageSource source, boolean causedByPlayer,
+            CallbackInfo ci) {
+        if (mcmmo$inBonusRoll) {
+            return;
+        }
         final LivingEntity self = (LivingEntity) (Object) this;
         // causedByPlayer is passed straight through so the bonus roll sees exactly the loot conditions
         // the first roll did -- Looting, player-kill-only drops and the killer's luck all included.
-        HunterListener.onLootDropped(self, source, () -> self.getLootTableKey()
-                .ifPresent(key -> self.dropLoot(world, source, causedByPlayer, key)));
+        HunterListener.onLootDropped(self, source, () -> {
+            mcmmo$inBonusRoll = true;
+            try {
+                dropLoot(source, causedByPlayer);
+            } finally {
+                mcmmo$inBonusRoll = false;
+            }
+        });
     }
 }

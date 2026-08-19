@@ -2,8 +2,6 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.platform.MobOrigins;
 import net.minecraft.entity.EntityType;
-import net.minecraft.entity.SpawnReason;
-import net.minecraft.entity.conversion.EntityConversionContext;
 import net.minecraft.entity.mob.MobEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -28,34 +26,25 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * genuinely new entity rather than transferring the old one, so nothing carries the attachment across
  * on its own.
  *
- * <h2>The four-argument overload is the funnel</h2>
- * {@code MobEntity} declares two {@code convertTo} methods and the three-argument one is a one-line
- * delegate — it pushes {@code SpawnReason.CONVERSION} and calls the four-argument one (bytecode
- * verified: {@code getstatic SpawnReason.CONVERSION} then {@code invokevirtual convertTo}). Injecting
- * into the four-argument overload therefore covers both, and injecting into both would double-write.
+ * <h2>There is one funnel at this version</h2>
+ * Where conversion is routed through a context object, {@code MobEntity} declares two {@code convertTo}
+ * methods and the shorter one is a delegate, so the longer one is the single funnel and injecting into
+ * both would double-write. <b>At this version there is no context object and no pair:</b>
+ * {@code convertTo(EntityType, boolean)} is the only declaration, so it is the funnel by default.
  *
  * <p>{@code RETURN} rather than {@code TAIL} because the method can return {@code null} on a failed
  * conversion; {@link MobOrigins#carryThroughConversion} handles that.
  *
- * <p>{@code allow = 3} is measured, not chosen: the compiled method has <b>three</b> return
- * instructions, so {@code RETURN} binds three times. That is one bind per exit path, not three
- * executions — a single call takes one path — which is exactly why {@code RETURN} is right here and
- * {@code TAIL} would silently miss the early exits. Re-measure per band with
- * {@code scripts/mixin-allow-audit.py}; a new guard clause upstream changes this number.
+ * <p>⚠️ {@code allow = N} is a per-version bytecode fact — one bind per return instruction, not per
+ * execution. Re-measure with {@code scripts/mixin-allow-audit.py} (ship gate 2); a guard clause added
+ * upstream changes the number, and the count from another version is not evidence about this one.
  */
 @Mixin(MobEntity.class)
 public abstract class MobConversionOriginMixin {
 
-    @Inject(
-            method = "convertTo(Lnet/minecraft/entity/EntityType;"
-                    + "Lnet/minecraft/entity/conversion/EntityConversionContext;"
-                    + "Lnet/minecraft/entity/SpawnReason;"
-                    + "Lnet/minecraft/entity/conversion/EntityConversionContext$Finalizer;)"
-                    + "Lnet/minecraft/entity/mob/MobEntity;", allow = 3,
-            at = @At("RETURN"))
-    private void mcmmo$carryOriginThroughConversion(EntityType<?> type,
-            EntityConversionContext context, SpawnReason reason,
-            EntityConversionContext.Finalizer<?> finalizer,
+    @Inject(method = "convertTo(Lnet/minecraft/entity/EntityType;Z)Lnet/minecraft/entity/mob/MobEntity;",
+            allow = 3, at = @At("RETURN"))
+    private void mcmmo$carryOriginThroughConversion(EntityType<?> type, boolean keepEquipment,
             CallbackInfoReturnable<MobEntity> cir) {
         MobOrigins.carryThroughConversion((MobEntity) (Object) this, cir.getReturnValue());
     }

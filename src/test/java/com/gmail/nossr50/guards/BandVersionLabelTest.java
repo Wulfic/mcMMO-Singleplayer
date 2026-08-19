@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -92,7 +93,25 @@ class BandVersionLabelTest {
     private static final Pattern MINECRAFT_DEPEND =
             Pattern.compile("\"minecraft\"\\s*:\\s*\"([^\"]+)\"");
 
-    private static final Pattern SEMVER = Pattern.compile("^(\\d+)\\.(\\d+)\\.(\\d+)$");
+    /**
+     * A Minecraft release version.
+     *
+     * <p>&#9888;&#9888; <b>The patch component is OPTIONAL, and that is not laxity.</b> Mojang ships
+     * the first release of a minor line with two components - {@code 1.21}, {@code 1.20},
+     * {@code 1.19} - and only the follow-ups carry a patch. {@code 1.21} is the real, literal
+     * version string; there is no {@code 1.21.0} to write instead, and {@code gradle.properties}
+     * must spell it the way the launcher and the loader do.
+     *
+     * <p>This pattern demanded all three components until 2026-08-19, which made every {@code x.y}
+     * band unshippable: {@code mc/1.21.1} declares {@code supported_minecraft_versions=1.21,1.21.1}
+     * and failed its own label guard on the correct value. Every version on the {@code 1.20} line
+     * (R-v) has the same shape, so this is a prerequisite for &sect;22, not a fix local to one band.
+     *
+     * <p>A missing patch reads as {@code 0}, which is what the loader's own semver does - but only
+     * for a genuinely well-formed {@code major.minor}. Anything else is still rejected; see
+     * {@link #theDetectorFiresOnADriftedListAndOnAGap()}.
+     */
+    private static final Pattern SEMVER = Pattern.compile("^(\\d+)\\.(\\d+)(?:\\.(\\d+))?$");
 
     // -----------------------------------------------------------------------------------------
     // The load-bearing direction: the filename must never advertise a version the loader refuses.
@@ -490,8 +509,21 @@ class BandVersionLabelTest {
         assertEquals("1.21.7", nextPatch("1.21.6"));
         assertFalse("1.21.8".equals(nextPatch("1.21.6")), "a skipped 1.21.7 must not read as adjacent");
 
-        // And a malformed version must be rejected rather than silently treated as zero.
-        assertThrows(IllegalArgumentException.class, () -> nextPatch("1.21"));
+        // ⚠️⚠️ THIS ASSERTION USED TO READ assertThrows(..., () -> nextPatch("1.21")), on
+        // the premise that a two-component version is malformed. THAT PREMISE IS FALSE: `1.21` is a
+        // real Minecraft release -- Mojang ships the head of every minor line with two components and
+        // adds a patch only to the follow-ups -- and the band cut for it declares exactly that, so
+        // the guard was failing the correct value. A two-component release is patch 0.
+        assertEquals("1.21.1", nextPatch("1.21"), "1.21 is a real release and precedes 1.21.1");
+        assertEquals("1.20.1", nextPatch("1.20"), "the whole 1.20 line (R-v) has this shape too");
+        assertNull(previousPatch("1.21"), "the head of a minor line has no previous patch to probe");
+
+        // The intent the old assertion was reaching for survives, aimed at input that really is
+        // malformed: a version must be rejected rather than silently treated as zero.
+        assertThrows(IllegalArgumentException.class, () -> nextPatch("1"));
+        assertThrows(IllegalArgumentException.class, () -> nextPatch("1.21.x"));
+        assertThrows(IllegalArgumentException.class, () -> nextPatch("1.21-pre1"));
+        assertThrows(IllegalArgumentException.class, () -> nextPatch(""));
 
         // ⚠️ Pins the trap that made the assertion above non-vacuous. Fabric does NOT reject a
         // nonsense version — it hands back a StringVersion that echoes the input, so a
@@ -606,10 +638,11 @@ class BandVersionLabelTest {
             throw new IllegalArgumentException(
                     "not a bare major.minor.patch version: \"" + version + "\"");
         }
+        // group(3) is null for a two-component release such as `1.21`, which is patch 0.
         return new int[] {
             Integer.parseInt(matcher.group(1)),
             Integer.parseInt(matcher.group(2)),
-            Integer.parseInt(matcher.group(3))
+            matcher.group(3) == null ? 0 : Integer.parseInt(matcher.group(3))
         };
     }
 

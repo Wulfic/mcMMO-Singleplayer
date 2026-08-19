@@ -68,7 +68,7 @@ public final class SkillAttributeService {
          * knows, so a renamed id strands the old modifier permanently: an unremovable speed buff on
          * everyone who has already played. Rename the constant, never the literal.
          */
-        MOVEMENT_FLEET_FOOTED_LAND(EntityAttributes.MOVEMENT_SPEED, "agility_fleet_footed",
+        MOVEMENT_FLEET_FOOTED_LAND(EntityAttributes.GENERIC_MOVEMENT_SPEED, "agility_fleet_footed",
                 Operation.ADD_MULTIPLIED_TOTAL),
 
         /**
@@ -82,7 +82,7 @@ public final class SkillAttributeService {
          * same attribute Depth Strider uses, so the two stack additively and the config cap is what
          * stops a max-Swimming Depth Strider III player from becoming silly.
          */
-        MOVEMENT_FLEET_FOOTED_WATER(EntityAttributes.WATER_MOVEMENT_EFFICIENCY,
+        MOVEMENT_FLEET_FOOTED_WATER(EntityAttributes.GENERIC_WATER_MOVEMENT_EFFICIENCY,
                 "agility_fleet_footed_water", Operation.ADD_VALUE),
 
         /**
@@ -107,7 +107,7 @@ public final class SkillAttributeService {
          * multiplicative operation would make the same config number mean different speeds as vanilla
          * retunes its default.
          */
-        STEALTH_PADFOOT(EntityAttributes.SNEAKING_SPEED, "stealth_padfoot", Operation.ADD_VALUE),
+        STEALTH_PADFOOT(EntityAttributes.PLAYER_SNEAKING_SPEED, "stealth_padfoot", Operation.ADD_VALUE),
 
         /**
          * Unarmored → Iron Skin. The innate "skin" armour, live only while all four armour slots are
@@ -143,7 +143,7 @@ public final class SkillAttributeService {
          * diamond skin (20/0) still takes noticeably more from a heavy blow than a diamond set
          * (20/8), which also keeps its enchantments.
          */
-        UNARMORED_IRON_SKIN(EntityAttributes.ARMOR, "unarmored_iron_skin", Operation.ADD_VALUE),
+        UNARMORED_IRON_SKIN(EntityAttributes.GENERIC_ARMOR, "unarmored_iron_skin", Operation.ADD_VALUE),
 
         /**
          * Taming → the pet combat mode's engage range. The <b>only managed buff that is not applied
@@ -172,7 +172,7 @@ public final class SkillAttributeService {
          * <p>⚠️ Cost is superlinear — 16 → 32 takes the search box from ~32³ to ~48³, about 3.4× the
          * volume, per repath, per pet. Hence the config cap, and hence "only while engaged".
          */
-        TAMING_PET_ENGAGE_RANGE(EntityAttributes.FOLLOW_RANGE, "taming_pet_engage",
+        TAMING_PET_ENGAGE_RANGE(EntityAttributes.GENERIC_FOLLOW_RANGE, "taming_pet_engage",
                 Operation.ADD_VALUE);
 
         private final RegistryEntry<EntityAttribute> attribute;

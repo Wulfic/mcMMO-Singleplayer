@@ -28,7 +28,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-import net.minecraft.util.PlayerInput;
 import net.minecraft.util.math.Vec3d;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -63,7 +62,7 @@ class PlayerMovementTrackerTest {
         lenient().when(handle.getName()).thenReturn(Text.literal("TestPlayer"));
         lenient().when(handle.hasVehicle()).thenReturn(false);
         lenient().when(handle.isSneaking()).thenReturn(false);
-        lenient().when(handle.isGliding()).thenReturn(false);
+        lenient().when(handle.isFallFlying()).thenReturn(false);
         lenient().when(handle.isTouchingWater()).thenReturn(false);
         lenient().when(handle.isSprinting()).thenReturn(false);
         return handle;
@@ -90,7 +89,7 @@ class PlayerMovementTrackerTest {
     @Test
     void glidingIsTheAirMedium() {
         final ServerPlayerEntity player = player();
-        lenient().when(player.isGliding()).thenReturn(true);
+        lenient().when(player.isFallFlying()).thenReturn(true);
 
         assertSame(Medium.AIR, PlayerMovementTracker.classifyMedium(player));
     }
@@ -109,7 +108,7 @@ class PlayerMovementTrackerTest {
     @Test
     void glidingIntoWaterPaysOnceAsAir() {
         final ServerPlayerEntity player = player();
-        lenient().when(player.isGliding()).thenReturn(true);
+        lenient().when(player.isFallFlying()).thenReturn(true);
         lenient().when(player.isTouchingWater()).thenReturn(true);
         lenient().when(player.isSprinting()).thenReturn(true);
 
@@ -149,7 +148,7 @@ class PlayerMovementTrackerTest {
             switch (medium) {
                 case LAND -> lenient().when(player.isSprinting()).thenReturn(true);
                 case WATER -> lenient().when(player.isTouchingWater()).thenReturn(true);
-                case AIR -> lenient().when(player.isGliding()).thenReturn(true);
+                case AIR -> lenient().when(player.isFallFlying()).thenReturn(true);
             }
 
             assertNull(PlayerMovementTracker.classifyMedium(player),
@@ -159,19 +158,29 @@ class PlayerMovementTrackerTest {
 
     // --- Stealth: the sneak-travel gate ----------------------------------------------------------
 
-    /** A player mid-sneak on dry ground with the forward key held — every gate satisfied. */
+    /**
+     * A per-tick horizontal delta that is unambiguously a player walking while crouched — vanilla
+     * crouch speed is about {@code 0.065} blocks a tick.
+     */
+    private static final double WALKING = 0.065;
+
+    /**
+     * A per-tick delta far below anything a player produces on foot: the jitter-macro case the
+     * anti-AFK gate exists to refuse.
+     */
+    private static final double JITTER = 0.001;
+
+    /** A player mid-sneak on dry ground — every positional gate satisfied. */
     private static ServerPlayerEntity sneakingPlayer() {
         final ServerPlayerEntity handle = player();
         lenient().when(handle.isSneaking()).thenReturn(true);
         lenient().when(handle.isOnGround()).thenReturn(true);
-        lenient().when(handle.getPlayerInput())
-                .thenReturn(new PlayerInput(true, false, false, false, false, true, false));
         return handle;
     }
 
     @Test
     void sneakingForwardOnDryGroundQualifies() {
-        assertTrue(PlayerMovementTracker.qualifiesAsSneakTravel(sneakingPlayer()));
+        assertTrue(PlayerMovementTracker.qualifiesAsSneakTravel(sneakingPlayer(), WALKING));
     }
 
     @Test
@@ -182,16 +191,16 @@ class PlayerMovementTrackerTest {
         final ServerPlayerEntity player = sneakingPlayer();
         lenient().when(player.isTouchingWater()).thenReturn(true);
 
-        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player));
+        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player, WALKING));
     }
 
     @Test
     void crouchGlidingDoesNotQualify() {
         final ServerPlayerEntity player = sneakingPlayer();
-        lenient().when(player.isGliding()).thenReturn(true);
+        lenient().when(player.isFallFlying()).thenReturn(true);
         lenient().when(player.isOnGround()).thenReturn(false);
 
-        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player));
+        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player, WALKING));
     }
 
     @Test
@@ -199,7 +208,7 @@ class PlayerMovementTrackerTest {
         final ServerPlayerEntity player = sneakingPlayer();
         lenient().when(player.hasVehicle()).thenReturn(true);
 
-        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player));
+        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player, WALKING));
     }
 
     @Test
@@ -207,7 +216,7 @@ class PlayerMovementTrackerTest {
         final ServerPlayerEntity player = sneakingPlayer();
         lenient().when(player.isOnGround()).thenReturn(false);
 
-        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player));
+        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player, WALKING));
     }
 
     @Test
@@ -223,39 +232,43 @@ class PlayerMovementTrackerTest {
         final ServerPlayerEntity falling = sneakingPlayer();
         lenient().when(falling.isOnGround()).thenReturn(false);
 
-        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(falling),
+        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(falling, WALKING),
                 "no Stealth credit while airborne, however long the fall");
         // ...and the landing tick itself is ordinary sneak-travel, worth one tick like any other.
-        assertTrue(PlayerMovementTracker.qualifiesAsSneakTravel(sneakingPlayer()),
+        assertTrue(PlayerMovementTracker.qualifiesAsSneakTravel(sneakingPlayer(), WALKING),
                 "touchdown is not special-cased either way");
     }
 
     @Test
-    void aStuckShiftKeyWithNoDirectionalInputDoesNotQualify() {
-        // The whole point of the skill's anti-AFK design: sneak held down, being pushed along by a
-        // water current or a piston loop, with nobody at the keyboard. Position moves; no movement
-        // key is down. Note sneak() is true here — a held shift must not qualify as travel.
-        final ServerPlayerEntity player = sneakingPlayer();
-        lenient().when(player.getPlayerInput())
-                .thenReturn(new PlayerInput(false, false, false, false, false, true, false));
-
-        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player));
+    void aStuckShiftKeyWithNoRealTravelDoesNotQualify() {
+        // The whole point of the skill's anti-AFK design: sneak held down with nobody at the
+        // keyboard. Every positional gate is satisfied and the player is technically "moving" — a
+        // jitter macro nudging them a fraction of a block a tick to keep the travel flag true. That
+        // is not travel, and it must not pay.
+        //
+        // ⚠️ This is the test that has to exist on THIS version. Where the server can see the
+        // client's movement keys the gate asks the stricter question directly; here it cannot — the
+        // input packet is not sent on foot — so displacement is the signal, and this pins the floor
+        // under it. Delete this and the band's Stealth gate is unguarded, not simplified.
+        assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(sneakingPlayer(), JITTER));
     }
 
     @Test
-    void everyDirectionalKeyCountsAsMovement() {
-        // Strafing and walking backwards while crouched are ordinary sneaking, not exploits.
-        final boolean[][] directions = {
-            {true, false, false, false}, {false, true, false, false},
-            {false, false, true, false}, {false, false, false, true},
-        };
-        for (boolean[] d : directions) {
-            final ServerPlayerEntity player = sneakingPlayer();
-            lenient().when(player.getPlayerInput())
-                    .thenReturn(new PlayerInput(d[0], d[1], d[2], d[3], false, true, false));
+    void crouchWalkingSpeedQualifies() {
+        // The other side of the same threshold: ordinary crouched travel must pay. Strafing and
+        // walking backwards cover the same ground per tick as walking forwards, so one delta covers
+        // all four directions -- direction is not observable on this version and is not the question.
+        assertTrue(PlayerMovementTracker.qualifiesAsSneakTravel(sneakingPlayer(), WALKING));
+    }
 
-            assertTrue(PlayerMovementTracker.qualifiesAsSneakTravel(player));
-        }
+    @Test
+    void theTravelFloorSitsWellUnderCrouchSpeed() {
+        // Guards the constant against being tuned up into ordinary play. Genuine travel dips below
+        // full crouch speed routinely -- a stair, a corner, the tick a jump lands -- so a third of
+        // crouch speed must still qualify. A floor that fails this starves the skill on rough ground,
+        // and it would do it silently.
+        assertTrue(PlayerMovementTracker.qualifiesAsSneakTravel(sneakingPlayer(), WALKING / 3.0),
+                "a third of crouch speed is still travel; the floor is too high");
     }
 
     // --- Stealth: the dispatch must survive the Agility early-return -----------------------------
@@ -274,7 +287,7 @@ class PlayerMovementTrackerTest {
         final UUID uuid = UUID.randomUUID();
         final ServerPlayerEntity player = sneakingPlayer();
         lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getEntityPos())
+        lenient().when(player.getPos())
                 .thenReturn(new Vec3d(0, 64, 0), new Vec3d(0.05, 64, 0));
 
         final StealthManager stealth = mock(StealthManager.class);
@@ -299,7 +312,7 @@ class PlayerMovementTrackerTest {
         final UUID uuid = UUID.randomUUID();
         final ServerPlayerEntity player = sneakingPlayer();
         lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getEntityPos()).thenReturn(new Vec3d(0, 64, 0));
+        lenient().when(player.getPos()).thenReturn(new Vec3d(0, 64, 0));
 
         final StealthManager stealth = mock(StealthManager.class);
         final McMMOPlayer mmoPlayer = trackedPlayer(uuid, stealth);
@@ -341,12 +354,12 @@ class PlayerMovementTrackerTest {
     private static ServerPlayerEntity unarmoredPlayerWithArmourAttribute(UUID uuid) {
         final ServerPlayerEntity handle = player();
         lenient().when(handle.getUuid()).thenReturn(uuid);
-        lenient().when(handle.getEntityPos()).thenReturn(new Vec3d(0, 64, 0));
-        for (EquipmentSlot slot : EquipmentSlot.VALUES) {
+        lenient().when(handle.getPos()).thenReturn(new Vec3d(0, 64, 0));
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
             lenient().when(handle.getEquippedStack(slot)).thenReturn(ItemStack.EMPTY);
         }
-        lenient().when(handle.getAttributeInstance(EntityAttributes.ARMOR))
-                .thenReturn(new EntityAttributeInstance(EntityAttributes.ARMOR, instance -> { }));
+        lenient().when(handle.getAttributeInstance(EntityAttributes.GENERIC_ARMOR))
+                .thenReturn(new EntityAttributeInstance(EntityAttributes.GENERIC_ARMOR, instance -> { }));
         return handle;
     }
 
@@ -430,7 +443,7 @@ class PlayerMovementTrackerTest {
 
             assertEquals(11.0, SkillAttributeService.appliedValue(player,
                     SkillAttributeService.Managed.UNARMORED_IRON_SKIN), 1.0E-6);
-            assertEquals(1, player.getAttributeInstance(EntityAttributes.ARMOR).getModifiers().size(),
+            assertEquals(1, player.getAttributeInstance(EntityAttributes.GENERIC_ARMOR).getModifiers().size(),
                     "a per-tick caller must never accumulate modifiers");
         } finally {
             UserManager.cleanupPlayer(mmoPlayer);

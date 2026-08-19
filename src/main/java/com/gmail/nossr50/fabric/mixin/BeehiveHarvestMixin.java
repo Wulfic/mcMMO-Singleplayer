@@ -7,7 +7,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.ActionResult;
+import net.minecraft.util.ItemActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
@@ -57,7 +57,8 @@ public abstract class BeehiveHarvestMixin {
             "onUseWithItem(Lnet/minecraft/item/ItemStack;Lnet/minecraft/block/BlockState;"
                     + "Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;"
                     + "Lnet/minecraft/entity/player/PlayerEntity;Lnet/minecraft/util/Hand;"
-                    + "Lnet/minecraft/util/hit/BlockHitResult;)Lnet/minecraft/util/ActionResult;";
+                    + "Lnet/minecraft/util/hit/BlockHitResult;)"
+                    + "Lnet/minecraft/util/ItemActionResult;";
 
     private static final String IS_LIT_CAMPFIRE_IN_RANGE =
             "Lnet/minecraft/block/CampfireBlock;isLitCampfireInRange("
@@ -74,13 +75,10 @@ public abstract class BeehiveHarvestMixin {
     @Inject(method = ON_USE_WITH_ITEM, allow = 1,
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/block/BeehiveBlock;dropHoneycomb("
-                            + "Lnet/minecraft/server/world/ServerWorld;Lnet/minecraft/item/ItemStack;"
-                            + "Lnet/minecraft/block/BlockState;"
-                            + "Lnet/minecraft/block/entity/BlockEntity;Lnet/minecraft/entity/Entity;"
-                            + "Lnet/minecraft/util/math/BlockPos;)V"))
+                            + "Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;)V"))
     private void mcmmo$onHoneycombHarvested(ItemStack stack, BlockState state, World world,
             BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit,
-            CallbackInfoReturnable<ActionResult> cir) {
+            CallbackInfoReturnable<ItemActionResult> cir) {
         HusbandryListener.onHoneycombHarvested(player, stack, state, world, pos);
     }
 
@@ -94,7 +92,7 @@ public abstract class BeehiveHarvestMixin {
             at = @At(value = "INVOKE", target = "Lnet/minecraft/item/ItemStack;decrement(I)V"))
     private void mcmmo$onHoneyBottled(ItemStack stack, BlockState state, World world, BlockPos pos,
             PlayerEntity player, Hand hand, BlockHitResult hit,
-            CallbackInfoReturnable<ActionResult> cir) {
+            CallbackInfoReturnable<ItemActionResult> cir) {
         HusbandryListener.onHoneyBottled(player);
     }
 

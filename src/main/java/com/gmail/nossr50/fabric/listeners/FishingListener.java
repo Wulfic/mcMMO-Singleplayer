@@ -37,7 +37,7 @@ import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.passive.SheepEntity;
 import net.minecraft.entity.projectile.FishingBobberEntity;
-import net.minecraft.entity.vehicle.AbstractBoatEntity;
+import net.minecraft.entity.vehicle.BoatEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
@@ -361,7 +361,7 @@ public final class FishingListener {
             ThreadLocalRandom rng) {
         final Map<String, RegistryEntry<Enchantment>> byId = new LinkedHashMap<>();
         for (RegistryEntry<Enchantment> entry : serverPlayer.getRegistryManager()
-                .getOrThrow(RegistryKeys.ENCHANTMENT).getIndexedEntries()) {
+                .get(RegistryKeys.ENCHANTMENT).getIndexedEntries()) {
             entry.getKey().ifPresent(key -> byId.put(key.getValue().getPath(), entry));
         }
         warnUnknownWhitelistedEnchantments(book, byId.keySet());
@@ -457,7 +457,7 @@ public final class FishingListener {
         }
 
         final Registry<Enchantment> enchantmentRegistry =
-                serverPlayer.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT);
+                serverPlayer.getRegistryManager().get(RegistryKeys.ENCHANTMENT);
         final Map<String, RegistryEntry<Enchantment>> resolved = new HashMap<>();
         final List<EnchantmentTreasure> candidates = new ArrayList<>();
 
@@ -787,7 +787,7 @@ public final class FishingListener {
             return null;
         }
 
-        final boolean boatBonus = serverPlayer.getVehicle() instanceof AbstractBoatEntity;
+        final boolean boatBonus = serverPlayer.getVehicle() instanceof BoatEntity;
         return fishingManager.resolveMasterAnglerWaitTimesFromLureTicks(minWaitTicks, maxWaitTicks,
                 RankUtils.getRank(mmoPlayer, SubSkillType.FISHING_MASTER_ANGLER), boatBonus,
                 lureReductionTicks);

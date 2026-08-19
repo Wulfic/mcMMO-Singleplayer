@@ -4,7 +4,9 @@ import com.gmail.nossr50.platform.MobOrigins;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.SpawnReason;
-import net.minecraft.world.World;
+import java.util.function.Consumer;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.math.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -43,15 +45,24 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * loads. That is why {@link MobOrigins#stampOnSpawn} writes nothing for a qualifying origin: the work
  * on the hot path is one switch and one boolean, and a mob whose marker is about to be restored from
  * NBT must not have it overwritten first.
+ * <h2>&#9888; On this band this injector is NOT the whole gate</h2>
+ * Where vanilla has a single reason-carrying factory, one injector covers every spawn. Where it does
+ * not — as here — this one reaches only the paths that <em>do</em> carry a {@code SpawnReason}: spawn
+ * eggs, dispensers, and nether portals. <b>Spawners and breeding do not come through it</b>, and are
+ * marked by {@code MobSpawnerOriginMixin}, {@code TrialSpawnerOriginMixin} and
+ * {@code AnimalBreedOriginMixin}. See {@link MobOrigins} for why relying on this one alone binds
+ * cleanly and silently leaves spawner-farmed mobs counting.
  */
 @Mixin(EntityType.class)
 public abstract class EntityTypeSpawnOriginMixin {
 
     @Inject(
-            method = "create(Lnet/minecraft/world/World;Lnet/minecraft/entity/SpawnReason;)"
-                    + "Lnet/minecraft/entity/Entity;", allow = 2,
+            method = "create(Lnet/minecraft/server/world/ServerWorld;"
+                    + "Ljava/util/function/Consumer;Lnet/minecraft/util/math/BlockPos;"
+                    + "Lnet/minecraft/entity/SpawnReason;ZZ)Lnet/minecraft/entity/Entity;", allow = 2,
             at = @At("RETURN"))
-    private void mcmmo$stampSpawnOrigin(World world, SpawnReason reason,
+    private void mcmmo$stampSpawnOrigin(ServerWorld world, Consumer<Entity> beforeSpawn,
+            BlockPos pos, SpawnReason reason, boolean alignPosition, boolean invertY,
             CallbackInfoReturnable<Entity> cir) {
         // The return value is null when the entity type sits behind a disabled feature flag;
         // stampOnSpawn handles that, along with the client-side and non-living cases.

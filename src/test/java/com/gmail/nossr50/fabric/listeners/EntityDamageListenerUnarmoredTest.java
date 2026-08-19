@@ -100,7 +100,7 @@ class EntityDamageListenerUnarmoredTest {
         lenient().when(player.getUuid()).thenReturn(uuid);
         lenient().when(player.getEntityWorld()).thenReturn(world);
         lenient().when(player.getMainHandStack()).thenReturn(ItemStack.EMPTY);
-        for (EquipmentSlot slot : EquipmentSlot.VALUES) {
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
             lenient().when(player.getEquippedStack(slot)).thenReturn(ItemStack.EMPTY);
         }
 
@@ -397,7 +397,7 @@ class EntityDamageListenerUnarmoredTest {
 
         EntityDamageListener.onModifyAppliedDamage(player, mobAttack(assailant), 6F);
 
-        verify(assailant).damage(any(ServerWorld.class), eq(stingSource), eq(1.0F));
+        verify(assailant).damage(eq(stingSource), eq(1.0F));
     }
 
     @Test
@@ -417,7 +417,7 @@ class EntityDamageListenerUnarmoredTest {
 
         EntityDamageListener.onModifyAppliedDamage(player, arrow, 6F);
 
-        verify(shooter, never()).damage(any(ServerWorld.class), any(), anyFloat());
+        verify(shooter, never()).damage(any(), anyFloat());
     }
 
     @Test
@@ -433,7 +433,7 @@ class EntityDamageListenerUnarmoredTest {
 
         EntityDamageListener.onModifyAppliedDamage(player, mobAttack(assailant), 6F);
 
-        verify(assailant, never()).damage(any(ServerWorld.class), any(), anyFloat());
+        verify(assailant, never()).damage(any(), anyFloat());
     }
 
     @Test
@@ -444,7 +444,7 @@ class EntityDamageListenerUnarmoredTest {
 
         EntityDamageListener.onModifyAppliedDamage(player, mobAttack(assailant), 6F);
 
-        verify(assailant, never()).damage(any(ServerWorld.class), any(), anyFloat());
+        verify(assailant, never()).damage(any(), anyFloat());
     }
 
     @Test

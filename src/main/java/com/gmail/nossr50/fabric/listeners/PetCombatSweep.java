@@ -164,7 +164,7 @@ public final class PetCombatSweep {
      */
     private static void applyEngageBoost(@NotNull WolfEntity pet, double engageRange) {
         final EntityAttributeInstance instance =
-                pet.getAttributeInstance(EntityAttributes.FOLLOW_RANGE);
+                pet.getAttributeInstance(EntityAttributes.GENERIC_FOLLOW_RANGE);
         final double base = instance == null ? ASSUMED_BASE_FOLLOW_RANGE : instance.getBaseValue();
         SkillAttributeService.set(pet, SkillAttributeService.Managed.TAMING_PET_ENGAGE_RANGE,
                 Math.max(0.0D, engageRange - base));

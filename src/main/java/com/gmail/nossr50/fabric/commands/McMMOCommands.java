@@ -99,22 +99,24 @@ public final class McMMOCommands {
      * Brigadier stores the predicate instance it is handed, so that test compares the same object.
      *
      * <p>⚠️ <b>Declared as a plain {@link java.util.function.Predicate}, deliberately.</b> Minecraft
-     * reworked the command permission API at the <code>1.21.10 → 1.21.11</code> boundary and the
-     * concrete return type is version-specific:
+     * reworked the command permission API more than once, and the helper that builds this predicate
+     * is version-specific in <em>three</em> ways — its return type, its parameter type, and whether
+     * it exists at all:
      *
      * <ul>
-     *   <li>{@code 1.21.11+}: {@code requirePermissionLevel(PermissionCheck)} returns a
+     *   <li>{@code requirePermissionLevel(PermissionCheck)} returning a
      *       {@code PermissionSourcePredicate} <i>record</i>;</li>
-     *   <li>{@code ≤1.21.10}: {@code requirePermissionLevel(int)} returns a
-     *       {@code PermissionLevelPredicate} <i>interface</i>.</li>
+     *   <li>{@code requirePermissionLevel(int)} returning a
+     *       {@code PermissionLevelPredicate} <i>interface</i>;</li>
+     *   <li>no such helper on {@code CommandManager} at all, where the predicate is written out.</li>
      * </ul>
      *
-     * Both implement {@code Predicate<T>}, so widening the declaration confines the entire band
-     * difference to the <em>argument</em> on the next line — one token instead of an import, a type
-     * and a call. Naming the concrete type here bought nothing and made this file diverge per band.
+     * All three are a {@code Predicate<T>}, so widening the declaration confines the entire band
+     * difference to the <em>initialiser</em> on the next line. Naming a concrete type here bought
+     * nothing and made this file diverge per band by more than it had to.
      */
     static final Predicate<ServerCommandSource> CHEAT_COMMAND =
-            CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK);
+            source -> source.hasPermissionLevel(2);
 
     @VisibleForTesting
     static void registerAll(CommandDispatcher<ServerCommandSource> dispatcher) {

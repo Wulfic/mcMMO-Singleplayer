@@ -15,8 +15,9 @@ import com.gmail.nossr50.util.sounds.SoundType;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.ActionResult;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.Hand;
+import net.minecraft.util.TypedActionResult;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 
@@ -61,23 +62,23 @@ public final class HerdsmansCallListener {
         UseItemCallback.EVENT.register(HerdsmansCallListener::onUseItem);
     }
 
-    private static ActionResult onUseItem(PlayerEntity player, World world, Hand hand) {
+    private static TypedActionResult<ItemStack> onUseItem(PlayerEntity player, World world, Hand hand) {
         if (hand != Hand.MAIN_HAND || world.isClient()
                 || !(player instanceof ServerPlayerEntity serverPlayer)) {
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
         if (mmoPlayer == null) {
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
         if (!mmoPlayer.getPlayer().isHoldingItem(triggerItem())) {
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
         tryActivate(mmoPlayer, serverPlayer);
         // Always PASS: the horn is never consumed and mcMMO is observing the click rather than
         // replacing it, so a goat horn still sounds exactly as vanilla intends. That is a large part of
         // why the horn was chosen — the ability comes with its own noise for free.
-        return ActionResult.PASS;
+        return TypedActionResult.pass(player.getStackInHand(hand));
     }
 
     private static String triggerItem() {

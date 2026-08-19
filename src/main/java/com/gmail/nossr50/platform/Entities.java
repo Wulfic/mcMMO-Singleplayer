@@ -34,7 +34,7 @@ public final class Entities {
         if (id == null) {
             return entityId;
         }
-        return Registries.ENTITY_TYPE.getOptionalValue(id)
+        return Registries.ENTITY_TYPE.getOrEmpty(id)
                 .map(type -> type.getName().getString())
                 .orElse(entityId);
     }

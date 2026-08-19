@@ -105,7 +105,7 @@ public final class CombatUtils {
         try {
             IN_MCMMO_DAMAGE.set(true);
             final DamageSource source = serverWorld.getDamageSources().playerAttack(attacker);
-            target.damage(serverWorld, source, (float) amount);
+            target.damage(source, (float) amount);
         } finally {
             IN_MCMMO_DAMAGE.set(false);
         }
@@ -131,7 +131,7 @@ public final class CombatUtils {
     public static boolean canCombatSkillsTrigger(@NotNull PrimarySkillType primarySkillType,
             @NotNull Entity target) {
         final boolean isPlayerOrTamed = target instanceof PlayerEntity
-                || (target instanceof Tameable tameable && tameable.getOwnerReference() != null);
+                || (target instanceof Tameable tameable && tameable.getOwnerUuid() != null);
 
         return isPlayerOrTamed
                 ? McMMOMod.getSkillTools().getPVPEnabled(primarySkillType)

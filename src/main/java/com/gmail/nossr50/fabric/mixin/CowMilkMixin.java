@@ -2,7 +2,7 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.passive.AbstractCowEntity;
+import net.minecraft.entity.passive.CowEntity;
 import net.minecraft.entity.passive.GoatEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.ActionResult;
@@ -16,14 +16,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * Husbandry's milk verb (Pass 2 stage 4): an animal milked into a bucket.
  *
  * <h2>⚠️ There is no single milking funnel — this mixin needs one target per family</h2>
- * {@code AbstractCowEntity#interactMob} carries the whole player path for the cow family, and
+ * {@code CowEntity#interactMob} carries the whole player path for the cow family, and
  * {@code MooshroomEntity#interactMob} calls {@code super} at the end of its own body — verified in
  * bytecode — so milking a mooshroom arrives here too, and only its stew-in-a-bowl route needs a mixin
  * of its own ({@link MooshroomStewMixin}).
  *
  * <p><b>{@code GoatEntity} is not in that family at all.</b> It extends {@code AnimalEntity} directly
  * and <b>re-implements the entire bucket-for-milk-bucket branch inline</b> in its own
- * {@code interactMob}, so a target list of {@code AbstractCowEntity} alone paid <b>zero</b> for every
+ * {@code interactMob}, so a target list of {@code CowEntity} alone paid <b>zero</b> for every
  * goat ever milked — silently, because nothing about a verb that simply never fires looks broken. The
  * tell was that goats already paid for breeding, raising and feeding: <b>an animal that pays for five
  * of six verbs is a wiring symptom, not a balance choice.</b>
@@ -31,7 +31,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * <p>🔑 <b>How the roster was settled, and how to re-settle it after a version bump:</b> not from a
  * species list and not from method names, but by binary-grepping the extracted Minecraft jar for the
  * item the verb actually produces — {@code MILK_BUCKET}. Across all 1040 entity classes in 1.21.11
- * that returns exactly three: {@code AbstractCowEntity}, {@code GoatEntity}, and
+ * that returns exactly three: {@code CowEntity}, {@code GoatEntity}, and
  * {@code WanderingTraderEntity} (a trade offer, not a milking, and correctly excluded). A method
  * listing cannot answer this question — {@code javap} shows a method where it is <em>declared</em>,
  * which is not the same as where it is reachable.
@@ -48,7 +48,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * per-animal harvest cooldown in the listener, not any game mechanic — and because that cooldown lives
  * inside {@code HusbandryListener#onMilked}, adding a target here puts it under the gate for free.
  */
-@Mixin({AbstractCowEntity.class, GoatEntity.class})
+@Mixin({CowEntity.class, GoatEntity.class})
 public abstract class CowMilkMixin {
 
     /**

@@ -139,7 +139,7 @@ public final class PlatformPlayer {
     }
 
     public @NotNull Vec3d getPos() {
-        return handle.getEntityPos();
+        return handle.getPos();
     }
 
     // --- Vitals -------------------------------------------------------------
@@ -258,7 +258,10 @@ public final class PlatformPlayer {
             case PLAYERS -> SoundCategory.PLAYERS;
             case AMBIENT -> SoundCategory.AMBIENT;
             case VOICE -> SoundCategory.VOICE;
-            case UI -> SoundCategory.UI;
+            // No dedicated UI mixer slider exists at this version, so UI sounds ride MASTER.
+            // MASTER rather than PLAYERS because a player who mutes "Players" is muting other
+            // players, not their own interface feedback.
+            case UI -> SoundCategory.MASTER;
         };
     }
 
@@ -346,8 +349,8 @@ public final class PlatformPlayer {
      */
     public boolean hasFeatherFallingBoots() {
         RegistryEntry<Enchantment> featherFalling = getWorld().getRegistryManager()
-                .getOrThrow(RegistryKeys.ENCHANTMENT)
-                .getOrThrow(Enchantments.FEATHER_FALLING);
+                .get(RegistryKeys.ENCHANTMENT)
+                .getEntry(Enchantments.FEATHER_FALLING).orElseThrow();
         return EnchantmentHelper.getEquipmentLevel(featherFalling, handle) > 0;
     }
 
@@ -520,7 +523,7 @@ public final class PlatformPlayer {
         if (!nbt.contains(SUPER_ABILITY_BOOST_KEY)) {
             return; // not a boosted stack.
         }
-        final int originalDigSpeed = nbt.getInt(SUPER_ABILITY_BOOST_KEY, 0);
+        final int originalDigSpeed = nbt.getInt(SUPER_ABILITY_BOOST_KEY);
         final RegistryEntry<Enchantment> efficiency = efficiencyEntry();
         if (originalDigSpeed > 0) {
             EnchantmentHelper.apply(stack, builder -> builder.set(efficiency, originalDigSpeed));
@@ -540,8 +543,8 @@ public final class PlatformPlayer {
     /** Resolve the {@code Efficiency} enchantment entry from the world's dynamic registry. */
     private @NotNull RegistryEntry<Enchantment> efficiencyEntry() {
         return getWorld().getRegistryManager()
-                .getOrThrow(RegistryKeys.ENCHANTMENT)
-                .getOrThrow(Enchantments.EFFICIENCY);
+                .get(RegistryKeys.ENCHANTMENT)
+                .getEntry(Enchantments.EFFICIENCY).orElseThrow();
     }
 
     // --- Stopgap raw accessors (pending dedicated adapters) ------------------

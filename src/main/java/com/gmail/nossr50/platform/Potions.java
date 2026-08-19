@@ -169,7 +169,7 @@ public final class Potions {
         }
 
         item.unwrap().set(DataComponentTypes.POTION_CONTENTS, new PotionContentsComponent(
-                Optional.of(base.get()), Optional.empty(), instances, Optional.empty()));
+                Optional.of(base.get()), Optional.empty(), instances));
         return true;
     }
 

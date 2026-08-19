@@ -41,6 +41,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
+import net.minecraft.util.TypedActionResult;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -321,17 +322,17 @@ public final class SuperAbilityListener {
     }
 
     /** Right-click the air → ready every tool skill, and fire Blast Mining's remote detonation. */
-    private static ActionResult onUseItem(PlayerEntity player, World world, Hand hand) {
+    private static TypedActionResult<ItemStack> onUseItem(PlayerEntity player, World world, Hand hand) {
         if (hand != Hand.MAIN_HAND) {
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
         final McMMOPlayer mmoPlayer = resolve(player);
         if (mmoPlayer == null) {
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
         if (offhandBlocksActivation((ServerPlayerEntity) player)) {
             hintOffhandBlockedTheReady(mmoPlayer, (ServerPlayerEntity) player);
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
 
         if (McMMOMod.getGeneralConfig().getAbilitiesEnabled()) {
@@ -344,7 +345,7 @@ public final class SuperAbilityListener {
         if (mmoPlayer.getMiningManager().canDetonate()) {
             BlastMiningListener.remoteDetonation(mmoPlayer, (ServerPlayerEntity) player);
         }
-        return ActionResult.PASS;
+        return TypedActionResult.pass(player.getStackInHand(hand));
     }
 
     /** Left-click (break) a block with a prepared tool on an eligible block → fire the super ability. */

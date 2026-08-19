@@ -28,7 +28,6 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.PlayerInput;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -108,6 +107,20 @@ public final class PlayerMovementTracker {
      * sub-pixel drift of a player pressed against a wall both land under it.
      */
     private static final double MIN_DELTA = 1.0E-4;
+
+    /**
+     * The per-tick horizontal distance below which crouched movement is not credited as sneak-travel.
+     *
+     * <p>Stealth's anti-AFK gate. {@link #MIN_DELTA} already refuses a player who is not moving at
+     * all, which closes plain AFK farming; this closes the variant that {@code MIN_DELTA} does not —
+     * a macro nudging the player a hair each tick to keep {@code travelled} true.
+     *
+     * <p>Set well under crouch-walk speed on purpose. A player walking while crouched covers roughly
+     * {@code 0.065} blocks a tick, and genuine travel dips below that routinely — climbing a stair,
+     * rounding a corner, the tick a jump lands. At about a third of crouch speed this passes all of
+     * those and still refuses sub-perceptible jitter.
+     */
+    private static final double SELF_DRIVEN_MIN_DELTA = 0.02;
 
     /** Last tick's position per player. Not a session field, so it can be reset independently. */
     private static final Map<UUID, Vec3d> LAST_POSITIONS = new HashMap<>();
@@ -219,7 +232,7 @@ public final class PlayerMovementTracker {
      */
     static void tickPlayer(@NotNull ServerPlayerEntity player) {
         final UUID uuid = player.getUuid();
-        final Vec3d current = player.getEntityPos();
+        final Vec3d current = player.getPos();
         final Vec3d previous = LAST_POSITIONS.put(uuid, current);
         // ⚠️ The cast is load-bearing on the older bands — do NOT "simplify" it away.
         // ServerPlayerEntity's covariant ServerWorld override of getEntityWorld() was added in
@@ -438,7 +451,7 @@ public final class PlayerMovementTracker {
         SkillAttributeService.set(player, SkillAttributeService.Managed.STEALTH_PADFOOT,
                 sneaking ? stealth.getPadfootSpeedBonus() : 0.0);
 
-        if (travelled && sneaking && qualifiesAsSneakTravel(player)) {
+        if (travelled && sneaking && qualifiesAsSneakTravel(player, distance)) {
             stealth.onSneakTick(distance);
         }
     }
@@ -464,12 +477,12 @@ public final class PlayerMovementTracker {
      *       or a bubble column, none of which need a hand on the keyboard.</li>
      * </ul>
      */
-    static boolean qualifiesAsSneakTravel(@NotNull ServerPlayerEntity player) {
-        if (player.hasVehicle() || player.isGliding() || player.isTouchingWater()
+    static boolean qualifiesAsSneakTravel(@NotNull ServerPlayerEntity player, double distance) {
+        if (player.hasVehicle() || player.isFallFlying() || player.isTouchingWater()
                 || !player.isOnGround()) {
             return false;
         }
-        return !requiresMovementInput() || isPressingMovementKey(player);
+        return !requiresMovementInput() || isSelfDrivenTravel(distance);
     }
 
     /** Whether the anti-AFK input gate is armed (the {@code ExploitFix} escape hatch). */
@@ -479,31 +492,32 @@ public final class PlayerMovementTracker {
     }
 
     /**
-     * Whether the player is holding a directional movement key <em>right now</em>.
+     * Whether this tick's crouched movement is fast enough to be the player actually travelling.
      *
-     * <p>{@code ServerPlayerEntity#getPlayerInput()} is a live server-side view of real key state:
-     * {@code ServerPlayNetworkHandler} writes it straight from the client's input packet
-     * (bytecode-verified), and {@code PlayerInput} is a record of
-     * {@code forward/backward/left/right/jump/sneak/sprint}. Jump and sneak are deliberately not
-     * consulted — a stuck shift key is the exploit, not the qualification.
+     * <p>⚠️ <b>This gate reads displacement, not key state, and that is version-forced.</b> Where the
+     * server keeps a live view of the client's movement keys, the stricter question — "is a
+     * directional key down <em>right now</em>" — is available and is the better one, because it can
+     * tell walking apart from being carried. <b>No such view exists at this version:</b>
+     * {@code ServerPlayerEntity#updateInput} is present with exactly the right signature, but its
+     * entire body sits inside {@code if (this.hasVehicle())} (bytecode-verified: {@code ifeq} to the
+     * method's only {@code return}), because the client sends no input packet while on foot. Reading
+     * it here would return all-{@code false} forever — and {@link #qualifiesAsSneakTravel} already
+     * refuses riders, so the one state it does record is the one state that never reaches this.
+     * A key-state probe on this version is not merely unreliable, it is <em>provably always false</em>.
      *
-     * <p>⚠️ <b>The known risk, and it is a silent one.</b> If a client turns out not to send input
-     * packets outside a vehicle, this returns all-{@code false} forever and Stealth earns exactly
-     * zero, which reads as a wiring bug rather than a tuning one. Hence
-     * {@code ExploitFix.Stealth.Require_Movement_Input} as an escape hatch, and hence the one-shot
-     * INFO line below: a §G session can confirm the gate is live from the log alone, instead of
-     * inferring it from XP that may be zero for some other reason.
+     * <p>What is lost: this cannot tell self-driven movement from being pushed. What is not lost is
+     * the exploit the gate exists for — a stuck crouch key produces no displacement, and
+     * {@link #SELF_DRIVEN_MIN_DELTA} refuses the jitter-macro variant. The three largest sources of
+     * passive movement are already excluded by {@link #qualifiesAsSneakTravel} itself: vehicles,
+     * water, and anything not on the ground.
      */
-    private static boolean isPressingMovementKey(@NotNull ServerPlayerEntity player) {
-        final PlayerInput input = player.getPlayerInput();
-        final boolean pressing =
-                input.forward() || input.backward() || input.left() || input.right();
-        if (pressing && MOVEMENT_INPUT_OBSERVED.compareAndSet(false, true)) {
+    private static boolean isSelfDrivenTravel(double distance) {
+        final boolean moving = distance >= SELF_DRIVEN_MIN_DELTA;
+        if (moving && MOVEMENT_INPUT_OBSERVED.compareAndSet(false, true)) {
             McMMOMod.LOGGER.info(
-                    "Stealth: server-side movement input observed for {} — the anti-AFK sneak gate "
-                            + "is live.", player.getName().getString());
+                    "Stealth: qualifying sneak-travel observed — the anti-AFK gate is live.");
         }
-        return pressing;
+        return moving;
     }
 
     /**
@@ -537,7 +551,7 @@ public final class PlayerMovementTracker {
         if (player.hasVehicle() || player.isSneaking()) {
             return null;
         }
-        if (player.isGliding()) {
+        if (player.isFallFlying()) {
             return Medium.AIR;
         }
         if (player.isTouchingWater()) {

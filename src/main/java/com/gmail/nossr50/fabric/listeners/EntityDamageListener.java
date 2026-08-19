@@ -329,10 +329,10 @@ public final class EntityDamageListener {
 
         // Mules & donkeys share the horse's jump/speed stats; llamas do not.
         if (target instanceof AbstractHorseEntity horse && !(target instanceof LlamaEntity)
-                && horse.getAttributeInstance(EntityAttributes.JUMP_STRENGTH) != null) {
+                && horse.getAttributeInstance(EntityAttributes.GENERIC_JUMP_STRENGTH) != null) {
             final double jumpStrength = TamingManager.beastLoreHorseJumpStrength(
-                    horse.getAttributeValue(EntityAttributes.JUMP_STRENGTH));
-            final double speed = horse.getAttributeValue(EntityAttributes.MOVEMENT_SPEED) * 43;
+                    horse.getAttributeValue(EntityAttributes.GENERIC_JUMP_STRENGTH));
+            final double speed = horse.getAttributeValue(EntityAttributes.GENERIC_MOVEMENT_SPEED) * 43;
             message += "\n" + LocaleLoader.getString("Combat.BeastLoreHorseSpeed", speed)
                     + "\n" + LocaleLoader.getString("Combat.BeastLoreHorseJumpStrength", jumpStrength);
         }

@@ -26,7 +26,7 @@ Every band needs Fabric Loader ≥ 0.19.3 and Java 21+. The `+mc…` suffix on t
 
 That label is only the half you read. Each jar also declares the same band as a dependency range in `fabric.mod.json`, which is the half Fabric Loader **enforces** — a mismatched install is stopped at startup with a clear message rather than misbehaving quietly. A test keeps the two in agreement, so a filename promising a version the loader would refuse fails the build instead of reaching this page.
 
-**Minecraft 1.21.1 and older are not supported**, and neither is the `26.x` line yet.
+**Minecraft 1.20.6 and older are not supported**, and neither is the `26.x` line yet.
 
 ### What differs between bands
 

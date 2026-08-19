@@ -7,6 +7,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.recipe.input.SingleStackRecipeInput;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -57,11 +58,23 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
  *       otherwise, so a future refactor that introduces a second one breaks the build instead of
  *       breaking the skill.</li>
  * </ul>
- * The two {@code argsOnly} captures are likewise the only {@code ServerWorld} and {@code BlockPos}
- * among {@code litServerTick}'s parameters. ({@code @ModifyArg} handlers do not receive the target's
- * own arguments, unlike {@code @Inject} — hence the sugar.)
+ * The two {@code argsOnly} captures are likewise the only {@code World} and {@code BlockPos} among
+ * {@code litServerTick}'s parameters. ({@code @ModifyArg} handlers do not receive the target's own
+ * arguments, unlike {@code @Inject} — hence the sugar.)
  *
- * <p>No client guard is needed: {@code litServerTick} only ever takes a {@link ServerWorld}.
+ * <h2>⚠️⚠️ Capture the world as {@code World} and narrow it here, never as {@code ServerWorld}</h2>
+ * {@code litServerTick}'s world parameter has been spelled both {@code World} and {@link ServerWorld}
+ * across supported versions, and an {@code argsOnly} capture is matched <b>by type</b>. Asking for a
+ * {@code ServerWorld} where the parameter is a {@code World} matches no argument, and MixinExtras then
+ * reports {@code "(0/1) succeeded. Scanned 0 target(s)"} — which reads like a <em>missing method</em>
+ * and sends you looking for a renamed {@code litServerTick} that is right where it always was.
+ *
+ * <p>🔑 <b>{@code scripts/mixin-allow-audit.py} cannot see this class of defect.</b> It resolves the
+ * injection point and counts sites; it does not type-check the handler's own parameter list. This
+ * injector sat in an {@code OK ... computed=1} row while failing at class-load — so a green ship gate
+ * 2 is necessary and not sufficient, and {@code MixinApplicationTest} is what actually catches it.
+ * Capturing the broadest type and narrowing in the body is correct on every band and costs one
+ * {@code instanceof}.
  */
 @Mixin(CampfireBlockEntity.class)
 public abstract class CampfireCookMixin {
@@ -72,6 +85,8 @@ public abstract class CampfireCookMixin {
      *
      * @param result the stack vanilla is about to throw on the floor; returned unchanged unless
      *               Master Chef procs
+     * @param world  captured as {@code World} and narrowed below — see the class note. Also the
+     *               client guard: a campfire ticked on a client world pays nothing.
      */
     @ModifyArg(
             method = "litServerTick",
@@ -83,9 +98,12 @@ public abstract class CampfireCookMixin {
                             + "Lnet/minecraft/world/World;DDD"
                             + "Lnet/minecraft/item/ItemStack;)V"))
     private static ItemStack mcmmo$onCampfireCook(ItemStack result,
-            @Local(argsOnly = true) ServerWorld world,
+            @Local(argsOnly = true) World world,
             @Local(argsOnly = true) BlockPos pos,
             @Local SingleStackRecipeInput cooked) {
-        return CookingListener.onCampfireCook(world, pos, cooked.item(), result);
+        if (!(world instanceof ServerWorld serverWorld)) {
+            return result;
+        }
+        return CookingListener.onCampfireCook(serverWorld, pos, cooked.item(), result);
     }
 }

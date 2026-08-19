@@ -87,7 +87,7 @@ public final class CallOfTheWildHandler {
         }
 
         final TransientEntityTracker tracker = McMMOMod.getTransientEntityTracker();
-        Vec3d spawnPos = player.getEntityPos().add(1.0, 0.0, 1.0);
+        Vec3d spawnPos = player.getPos().add(1.0, 0.0, 1.0);
         int amountSummoned = 0;
 
         for (int i = 0; i < summon.getEntitiesSummoned(); i++) {
@@ -154,10 +154,10 @@ public final class CallOfTheWildHandler {
 
     private static void applyOwnership(MobEntity entity, ServerPlayerEntity player) {
         if (entity instanceof TameableEntity tameable) {
-            tameable.setTamedBy(player); // wolves + cats: sets tamed and owner together
+            tameable.setOwner(player); // wolves + cats: sets tamed and owner together
         } else if (entity instanceof AbstractHorseEntity horse) {
             horse.setTame(true);
-            horse.setOwner(player);
+            horse.setOwnerUuid(player.getUuid());
         }
     }
 
@@ -173,7 +173,7 @@ public final class CallOfTheWildHandler {
                 final double jump = Math.max(McMMOMod.getAdvancedConfig().getMinHorseJumpStrength(),
                         Math.min(rolled, McMMOMod.getAdvancedConfig().getMaxHorseJumpStrength()));
                 final EntityAttributeInstance jumpAttr =
-                        entity.getAttributeInstance(EntityAttributes.JUMP_STRENGTH);
+                        entity.getAttributeInstance(EntityAttributes.GENERIC_JUMP_STRENGTH);
                 if (jumpAttr != null) {
                     jumpAttr.setBaseValue(jump);
                 }
@@ -186,7 +186,7 @@ public final class CallOfTheWildHandler {
     }
 
     private static void setMaxHealth(LivingEntity entity, double maxHealth) {
-        final EntityAttributeInstance attr = entity.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+        final EntityAttributeInstance attr = entity.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
         if (attr != null) {
             attr.setBaseValue(maxHealth);
         }

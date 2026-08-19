@@ -1,6 +1,7 @@
 package com.gmail.nossr50.fabric.listeners;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
@@ -406,11 +407,14 @@ class PetCombatSweepTest {
         PetCombatSweep.tick(player);
 
         final EntityAttributeInstance instance =
-                pet.getAttributeInstance(EntityAttributes.FOLLOW_RANGE);
+                pet.getAttributeInstance(EntityAttributes.GENERIC_FOLLOW_RANGE);
         assertTrue(instance.getModifiers().stream().anyMatch(m -> m.value() == 16.0D),
                 "precondition: the modifier is applied");
-        assertTrue(instance.getPersistentModifiers().stream().noneMatch(
-                        m -> m.idMatches(SkillAttributeService.Managed.TAMING_PET_ENGAGE_RANGE.id())),
+        // ⚠️ No persistent-modifier accessor at this version, and the map behind it is private.
+        // toNbt() serialises exactly the persistent set and nothing else, so round-tripping it asks
+        // the same question the accessor would: would this boost survive a save?
+        assertFalse(instance.toNbt().toString()
+                        .contains(SkillAttributeService.Managed.TAMING_PET_ENGAGE_RANGE.id().toString()),
                 "the engage-range boost reached the PERSISTENT map and will be written to the save");
     }
 
@@ -535,9 +539,9 @@ class PetCombatSweepTest {
         // and asserted through SkillAttributeService, so a mock returning 0 would make every reach
         // assertion here agree with itself and with nothing else.
         final EntityAttributeInstance followRange =
-                new EntityAttributeInstance(EntityAttributes.FOLLOW_RANGE, ignored -> { });
+                new EntityAttributeInstance(EntityAttributes.GENERIC_FOLLOW_RANGE, ignored -> { });
         followRange.setBaseValue(BASE_FOLLOW_RANGE);
-        lenient().when(pet.getAttributeInstance(EntityAttributes.FOLLOW_RANGE))
+        lenient().when(pet.getAttributeInstance(EntityAttributes.GENERIC_FOLLOW_RANGE))
                 .thenReturn(followRange);
 
         pets.add(pet);

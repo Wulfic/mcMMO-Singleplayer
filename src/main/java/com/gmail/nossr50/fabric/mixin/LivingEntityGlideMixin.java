@@ -1,52 +1,58 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.GlideListener;
-import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Agility's air domain: <b>Fleet Footed (air)</b> and <b>Glide</b>, applied to elytra flight.
+ * Agility's air-domain hook — <b>Fleet Footed (air)</b> and <b>Glide</b>. The maths lives in
+ * {@link GlideListener}; this file is only the seam.
  *
- * <p>Elytra flight is the one movement domain with no attribute behind it — bytecode-verified,
- * {@code LivingEntity#travelGliding} computes a velocity via {@code calcGlidingVelocity} and hands it
- * straight to {@code setVelocity}/{@code move}, consulting no {@code EntityAttribute} at all. So
- * unlike the land and water bodies there is nothing for
- * {@link com.gmail.nossr50.platform.SkillAttributeService} to manage, and the bonus has to be
- * written into the velocity itself.
+ * <h2>The seam: the tail of {@code travel}</h2>
+ * Where vanilla exposes a discrete gliding-velocity helper, this hook rides that helper's return
+ * value. Where it does not — the gliding maths is inlined into {@code travel} itself, with no
+ * intermediate call to intercept — the equivalent seam is the <b>end of {@code travel}</b>, gated on
+ * {@code isFallFlying()}, rewriting the velocity vanilla just stored.
  *
- * <p><b>Why a mixin rather than writing velocity from the tick sweep.</b> The obvious approach —
- * nudge {@code player.setVelocity(...)} once per tick in
- * {@link com.gmail.nossr50.fabric.listeners.PlayerMovementTracker} — does not work for a player's
- * own client. {@code EntityTrackerEntry} pushes velocity through
- * {@code TrackerPacketSender#sendToListeners}, and for a player entity the "listeners" are the
- * <em>other</em> nearby players; the moving player never receives their own velocity update
- * (bytecode-verified). Server-side velocity writes would therefore be silently overwritten by the
- * client's own flight simulation. Injecting into the shared movement code instead means the client
- * and the integrated server compute the identical velocity, so there is nothing to sync and nothing
- * to rubber-band.
+ * <p>🔑 <b>Bytecode-verified that {@code travel} has exactly one {@code return}</b> and that every
+ * branch, the gliding one included, converges on it. That is what makes {@code TAIL} reachable for a
+ * glider rather than silently dead, and it is the thing to re-check per band — a gliding branch that
+ * returned early would leave this injector bound, green, and never firing.
  *
- * <p>{@code calcGlidingVelocity}'s return value is the exact seam: it is the only call to that method
- * in {@code travelGliding}, and its result is what becomes the tick's velocity.
+ * <p>⚠️ <b>Deliberately not a {@code @Slice}.</b> Narrowing to the gliding region of {@code travel}
+ * would place the change nearer vanilla's own computation, but an unresolvable {@code @Slice} is
+ * <em>silently dropped and the injector still applies</em> — it would widen to the whole method
+ * instead of failing, which is the one outcome this hook cannot survive.
+ *
+ * <h2>⚠️ One tick of latency, and why the steady state still matches</h2>
+ * Riding the helper's return value modifies the velocity <em>before</em> {@code travel}'s own
+ * {@code move(…)} consumes it; injecting at the tail modifies it <em>after</em>. So the first gliding
+ * tick moves the player by vanilla's figure and the bonus lands from the following tick on. Beyond
+ * that the two are equivalent: both forms write the stored velocity that the next tick's gliding
+ * maths starts from, so the bonus compounds identically either way.
+ *
+ * <p>Runs on both logical sides, exactly as {@link GlideListener} documents — the client simulates
+ * its own flight, and applying the same factor on both is what makes the boost visible without a
+ * per-tick velocity packet.
  */
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityGlideMixin {
 
-    /**
-     * Scale the glide velocity vanilla just computed by the player's Agility bonuses — faster
-     * forward (Fleet Footed air), slower downward (Glide).
-     */
-    @ModifyExpressionValue(
-            method = "travelGliding",
-            at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/entity/LivingEntity;calcGlidingVelocity"
-                            + "(Lnet/minecraft/util/math/Vec3d;)Lnet/minecraft/util/math/Vec3d;"),
-            // One call site in this method; cap it so a future remap that widens the match is a
-            // build failure rather than a silent second injection.
-            allow = 1)
-    private Vec3d mcmmo$applyGlideBonus(Vec3d glideVelocity) {
-        return GlideListener.modifyGlideVelocity((LivingEntity) (Object) this, glideVelocity);
+    @Inject(method = "travel(Lnet/minecraft/util/math/Vec3d;)V", allow = 1, at = @At("TAIL"))
+    private void mcmmo$applyGlideBonus(Vec3d movementInput, CallbackInfo ci) {
+        final LivingEntity self = (LivingEntity) (Object) this;
+        if (!self.isFallFlying()) {
+            return;
+        }
+        final Vec3d vanilla = self.getVelocity();
+        final Vec3d boosted = GlideListener.modifyGlideVelocity(self, vanilla);
+        // modifyGlideVelocity returns the argument itself when nothing applies — the common case.
+        if (boosted != vanilla) {
+            self.setVelocity(boosted);
+        }
     }
 }

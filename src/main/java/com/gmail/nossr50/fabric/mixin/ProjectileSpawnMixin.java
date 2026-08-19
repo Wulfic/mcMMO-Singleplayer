@@ -1,48 +1,52 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.ProjectileListener;
-import java.util.function.Consumer;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.projectile.ProjectileEntity;
-import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * The projectile-launch hook: mcMMO's replacement for Bukkit's {@code ProjectileLaunchEvent}, which
- * legacy used to mark arrows for Archery's Arrow Retrieval (see {@code EntityListener#onProjectileLaunch}).
+ * Archery's launch mark: stamps a player-fired arrow with where it came from and how hard the bow was
+ * drawn, so {@code ArcheryManager} can pay distance and force XP when it lands. Vanilla fires no
+ * shoot event, so this rides the projectile's own ownership assignment.
  *
- * <p>Targets the four-argument {@code ProjectileEntity#spawn} static, which is vanilla's single
- * projectile-spawn funnel — bytecode-verified: the three-argument {@code spawn} and all three
- * {@code spawnWithVelocity} overloads delegate to it, and {@code RangedWeaponItem#shootAll} (the
- * shared bow/crossbow firing path) calls it once per arrow. That makes it the faithful analogue of
- * Bukkit's event, which likewise fired for every projectile from every source; the listener does the
- * narrowing (a player-owned {@code ArrowEntity}), exactly as legacy's handler did.
+ * <h2>The seam: {@code ProjectileEntity#setOwner(Entity)}</h2>
+ * The mod has also used a static {@code ProjectileEntity#spawn(…)} funnel where one exists. It does
+ * not on every supported version, and {@code setOwner} is the seam that does — bytecode-verified
+ * against the merged jar:
  *
- * <p>Injected at {@code TAIL} rather than {@code HEAD}: {@code spawn} runs the caller's
- * {@code Consumer} (which is what applies the shot's velocity) and then {@code world.spawnEntity}
- * before returning, so only at the tail is the projectile both fully initialised and actually in the
- * world — the point at which Bukkit fired its event.
+ * <ul>
+ *   <li>It is the <b>only</b> way a projectile acquires an owner at launch. The owner-taking
+ *       {@code PersistentProjectileEntity(EntityType, LivingEntity, World, …)} constructor positions
+ *       the arrow from the shooter and then calls {@code setOwner} — so position and UUID are both
+ *       live by the time this runs, which is all {@link ProjectileListener#onProjectileSpawn} reads.</li>
+ *   <li>🔑 <b>NBT load does not come through here.</b> {@code readCustomDataFromNbt} assigns the
+ *       {@code owner} and {@code ownerUuid} <em>fields directly</em>, never calling this method, so a
+ *       chunk reload cannot re-mark arrows that were already fired. That property is what makes this
+ *       seam safe rather than merely convenient, and it is worth re-checking per band.</li>
+ * </ul>
  *
- * <p>The {@link ItemStack} parameter here is the <em>projectile</em> stack (the arrow item), not the
- * bow: {@code shootAll} passes the ammo stack. The firing weapon is read off the arrow itself via
- * {@code PersistentProjectileEntity#getWeaponStack()} in the listener.
+ * <p>It is declared on {@code ProjectileEntity} itself, so no projectile subclass can dodge it by
+ * failing to call {@code super} — the same property the mob-origin stamp is chosen for.
+ *
+ * <p>The narrowing to a player-owned {@code ArrowEntity} is deliberately left to
+ * {@link ProjectileListener#onProjectileSpawn}, which is where legacy's
+ * {@code getShooter() instanceof Player} check lived; this side stays a plain funnel.
  */
 @Mixin(ProjectileEntity.class)
 public abstract class ProjectileSpawnMixin {
 
-    @Inject(
-            method = "spawn(Lnet/minecraft/entity/projectile/ProjectileEntity;"
-                    + "Lnet/minecraft/server/world/ServerWorld;"
-                    + "Lnet/minecraft/item/ItemStack;"
-                    + "Ljava/util/function/Consumer;)"
-                    + "Lnet/minecraft/entity/projectile/ProjectileEntity;", allow = 1,
-            at = @At("TAIL"))
-    private static void mcmmo$onProjectileSpawn(ProjectileEntity projectile, ServerWorld world,
-            ItemStack projectileStack, Consumer<ProjectileEntity> beforeSpawn,
-            CallbackInfoReturnable<ProjectileEntity> cir) {
-        ProjectileListener.onProjectileSpawn(projectile, world);
+    @Inject(method = "setOwner(Lnet/minecraft/entity/Entity;)V", allow = 1, at = @At("TAIL"))
+    private void mcmmo$onProjectileSpawn(Entity owner, CallbackInfo ci) {
+        final ProjectileEntity projectile = (ProjectileEntity) (Object) this;
+        // Client-side projectiles run this too; Archery's marks are server state only.
+        if (!(projectile.getWorld() instanceof ServerWorld serverWorld)) {
+            return;
+        }
+        ProjectileListener.onProjectileSpawn(projectile, serverWorld);
     }
 }

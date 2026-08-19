@@ -50,8 +50,8 @@ public final class BlockDrops {
             return false;
         }
         final RegistryEntry<Enchantment> silkTouch = world.getRegistryManager()
-                .getOrThrow(RegistryKeys.ENCHANTMENT)
-                .getOrThrow(Enchantments.SILK_TOUCH);
+                .get(RegistryKeys.ENCHANTMENT)
+                .getEntry(Enchantments.SILK_TOUCH).orElseThrow();
         return EnchantmentHelper.getLevel(silkTouch, tool) > 0;
     }
 

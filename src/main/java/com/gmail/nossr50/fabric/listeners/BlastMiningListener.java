@@ -170,7 +170,10 @@ public final class BlastMiningListener {
             return false;
         }
 
-        final ServerWorld world = explosion.getWorld();
+        // No accessor for the explosion's world at this version, and the field is private. The
+        // detonating entity is the same world's, and it is already known non-null — the
+        // detonatorMiningManager check above returns early otherwise.
+        final ServerWorld world = (ServerWorld) explosion.getEntity().getEntityWorld();
         final ServerPlayerEntity detonator = world.getServer()
                 .getPlayerManager().getPlayer(detonatorUuid(explosion.getEntity()));
         if (detonator == null) {

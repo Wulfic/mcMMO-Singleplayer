@@ -42,7 +42,7 @@ startup with a clear message instead of misbehaving quietly. The two are kept in
 (`BandVersionLabelTest`), so a filename that promises a version the loader would refuse fails the
 build rather than reaching a download page.
 
-Minecraft **1.21.1 and older are not supported**, and neither is the `26.x` line yet.
+Minecraft **1.20.6 and older are not supported**, and neither is the `26.x` line yet.
 
 ### What differs between bands
 

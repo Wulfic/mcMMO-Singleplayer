@@ -16,39 +16,48 @@ import org.slf4j.LoggerFactory;
  * gate. {@link MobOrigin} owns the vocabulary and the "does it count" predicate; this owns the mapping
  * from vanilla's {@link SpawnReason} and the attachment access.
  *
- * <h2>The seam: {@code EntityType#create(World, SpawnReason)}</h2>
+ * <h2>The seam: whatever carries the spawn reason on this version</h2>
  * The plan implied {@code MobEntity#initialize(ServerWorldAccess, LocalDifficulty, SpawnReason,
  * EntityData)}, which is where both spawner logics hand a reason to a freshly built mob. <b>It is not
- * safe.</b> Of the 57 classes that override {@code initialize} in 1.21.11, exactly one does not call
- * {@code super} — {@code CaveSpiderEntity}, whose override is a bare {@code return entityData} that
- * deliberately skips {@code SpiderEntity}'s jockey and effect logic. A mixin there would therefore
- * have missed cave spiders entirely, and a mineshaft cave-spider spawner is one of the two or three
- * most-built grinders in the game. The one seam that cannot be dodged like that is the factory those
- * paths all bottom out in, verified against the merged jar:
+ * safe on any version.</b> {@code CaveSpiderEntity} overrides {@code initialize} with a bare
+ * {@code return entityData} that deliberately skips {@code SpiderEntity}'s jockey logic and never
+ * calls {@code super} — so a mixin there misses cave spiders entirely, and a mineshaft cave-spider
+ * spawner is one of the two or three most-built grinders in the game.
+ *
+ * <p>Where vanilla funnels every creation through <b>one</b> factory that carries the reason
+ * ({@code EntityType#create(World, SpawnReason)}), that factory is the seam and one injector covers
+ * everything: it is an instance method on {@code EntityType}, a class with no vanilla subclasses, so
+ * no mob can override it, and it ignores its own {@code SpawnReason} parameter, so reading the reason
+ * there perturbs nothing.
+ *
+ * <h2>&#128273;&#128273; Where that funnel does not exist, ONE injector is a TRAP</h2>
+ * On versions without it the reason-carrying entry points do <b>not</b> converge, verified against the
+ * merged jar:
  *
  * <ul>
- *   <li>{@code MobSpawnerLogic} and {@code TrialSpawnerLogic} →
- *       {@code EntityType.loadEntityWithPassengers(…, SpawnReason, …)} → {@code loadEntityFromData} →
- *       {@code getEntityFromData} → {@code create(World, SpawnReason)}</li>
- *   <li>{@code SpawnEggItem} → {@code spawnFromItemStack} → {@code spawn} →
- *       {@code create(ServerWorld, Consumer, BlockPos, SpawnReason, boolean, boolean)} →
- *       {@code create(World, SpawnReason)}</li>
- *   <li>{@code NetherPortalBlock} → {@code spawn(ServerWorld, BlockPos, SpawnReason)} → the same</li>
- *   <li>roughly forty {@code createChild} implementations → {@code create(World, SpawnReason)}
- *       directly, with {@code SpawnReason.BREEDING}</li>
+ *   <li>{@code MobSpawnerLogic}/{@code TrialSpawnerLogic} reach
+ *       {@code EntityType.loadEntityWithPassengers(NbtCompound, World, Function)}, which <b>takes no
+ *       {@code SpawnReason} at all</b> — the spawner's own {@code SpawnReason.SPAWNER} goes only to
+ *       {@code canSpawn} and {@code initialize}, never to entity creation</li>
+ *   <li>{@code AnimalEntity#breed} reaches {@code createChild} → {@code EntityType.create(World)} —
+ *       also no reason</li>
+ *   <li>only spawn eggs, dispensers and portals reach
+ *       {@code create(ServerWorld, Consumer, BlockPos, SpawnReason, boolean, boolean)}</li>
  * </ul>
  *
- * <p>It is an instance method on {@code EntityType}, a class with no vanilla subclasses, so no mob can
- * override it. And it <b>ignores its own {@code SpawnReason} parameter</b> (the body is a feature-flag
- * check and a factory call), which makes it a safe place to read the reason: nothing else in vanilla
- * depends on that value here, so there is no behaviour to perturb.
+ * <p><b>That last method exists on those versions, so retargeting to it BINDS</b> — the mixin audit
+ * goes green while spawner-farmed and bred mobs are silently left unmarked. That is strictly worse
+ * than an injector that resolves to nothing, because a dead injector is at least loud. So on those
+ * versions the stamp is split per origin, one injector at each real spawn site, and
+ * {@link #stampOnSpawn(Entity, SpawnReason)} is the entry they share.
  *
  * <h2>Never write a qualifying origin</h2>
  * {@link #stampOnSpawn} returns without touching the entity when the reason maps to
- * {@link MobOrigin#NATURAL}. That is required, not tidy — {@code SpawnReason.LOAD} and
- * {@code DIMENSION_TRAVEL} both reach this seam for mobs that already carry a marker from a previous
- * session or from the far side of a portal, and a write would erase it. See
- * {@code McMMOAttachments#MOB_ORIGIN}.
+ * {@link MobOrigin#NATURAL}. That is required, not tidy: some spawn reasons re-introduce a mob that
+ * <em>already carries a marker</em> — restored from a previous session, or arriving from the far
+ * side of a portal — and a write here would erase it. Which reasons those are is version-specific
+ * and some do not exist on every supported version; the invariant that does not change is
+ * <b>never write a qualifying origin</b>. See {@code McMMOAttachments#MOB_ORIGIN}.
  */
 public final class MobOrigins {
 
@@ -115,12 +124,31 @@ public final class MobOrigins {
         }
         final MobOrigin origin = classify(reason);
         if (origin.countsTowardMastery()) {
-            // See the class doc: writing here would clobber a marker LOAD or DIMENSION_TRAVEL is
-            // about to restore.
+            // See the class doc: writing here would clobber a marker that a re-introducing spawn
+            // reason is about to restore.
             return;
         }
         entity.setAttached(McMMOAttachments.MOB_ORIGIN, origin.storageKey());
         announceFirstMark(origin, reason);
+    }
+
+    /**
+     * Stamps an origin onto a mob whose spawn site knows the reason but does not carry it as a
+     * parameter — a spawner's mob, or a bred child.
+     *
+     * <p>The world is read off the entity rather than passed in, because these call sites have the
+     * finished entity and not always a separate world reference. Everything else — the client guard,
+     * the {@code LivingEntity} narrowing, and the "never write a qualifying origin" rule — is
+     * delegated, so there is exactly one place that decides what gets written.
+     *
+     * @param entity the newly created entity, or {@code null} if creation failed
+     * @param reason the reason its spawn site knows it to be
+     */
+    public static void stampOnSpawn(@Nullable Entity entity, @NotNull SpawnReason reason) {
+        if (entity == null) {
+            return;
+        }
+        stampOnSpawn(entity.getWorld(), reason, entity);
     }
 
     /**
@@ -197,7 +225,7 @@ public final class MobOrigins {
             // here: /summon and a dispenser firing a spawn egg are the same cheese as using the egg
             // by hand, and the ruling that put spawn eggs in this bucket was about closing exactly
             // that. BUCKET is NOT here — releasing an axolotl you caught is not free mob generation.
-            case SPAWN_ITEM_USE, COMMAND, DISPENSER -> MobOrigin.PLAYER_PLACED;
+            case SPAWN_EGG, COMMAND, DISPENSER -> MobOrigin.PLAYER_PLACED;
 
             // Structure generation, and — the reason this arm exists at all — NetherPortalBlock,
             // which spawns portal zombified piglins with STRUCTURE. That is the modern spelling of
@@ -206,13 +234,10 @@ public final class MobOrigins {
 
             // Everything below counts.
             //
-            // LOAD and DIMENSION_TRAVEL are the two that must count and must not be written: they
-            // reach this seam carrying mobs that already own a marker. See stampOnSpawn.
-            //
             // CONVERSION counts here and is then overwritten by carryThroughConversion, which is what
             // stops a zombie-spawner drowned farm from laundering its origin.
             case NATURAL, CHUNK_GENERATION, MOB_SUMMONED, JOCKEY, EVENT, CONVERSION, REINFORCEMENT,
-                    TRIGGERED, BUCKET, PATROL, LOAD, DIMENSION_TRAVEL -> MobOrigin.NATURAL;
+                    TRIGGERED, BUCKET, PATROL -> MobOrigin.NATURAL;
         };
     }
 }

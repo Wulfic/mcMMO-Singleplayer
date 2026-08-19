@@ -73,11 +73,11 @@ public final class MobTiers {
             @SuppressWarnings("unchecked")
             final DefaultAttributeContainer attributes =
                     DefaultAttributeRegistry.get((EntityType<? extends LivingEntity>) type);
-            maxHealth = attributes.getBaseValue(EntityAttributes.MAX_HEALTH);
+            maxHealth = attributes.getBaseValue(EntityAttributes.GENERIC_MAX_HEALTH);
             // has() first: ATTACK_DAMAGE is genuinely absent on several types (the ender dragon has
             // none at all), and getBaseValue on a missing attribute is not a question worth asking.
-            if (attributes.has(EntityAttributes.ATTACK_DAMAGE)) {
-                attackDamage = attributes.getBaseValue(EntityAttributes.ATTACK_DAMAGE);
+            if (attributes.has(EntityAttributes.GENERIC_ATTACK_DAMAGE)) {
+                attackDamage = attributes.getBaseValue(EntityAttributes.GENERIC_ATTACK_DAMAGE);
             }
         }
 

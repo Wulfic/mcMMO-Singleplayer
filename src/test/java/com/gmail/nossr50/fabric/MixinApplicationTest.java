@@ -13,13 +13,16 @@ import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.block.entity.BrewingStandBlockEntity;
 import net.minecraft.block.entity.CampfireBlockEntity;
-import net.minecraft.component.type.FoodComponent;
+import net.minecraft.block.spawner.MobSpawnerLogic;
+import net.minecraft.block.spawner.TrialSpawnerLogic;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.BoggedEntity;
 import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.passive.AbstractCowEntity;
+import net.minecraft.entity.passive.CowEntity;
 import net.minecraft.entity.passive.AnimalEntity;
+import net.minecraft.entity.passive.ArmadilloEntity;
 import net.minecraft.entity.passive.GoatEntity;
 import net.minecraft.entity.passive.MooshroomEntity;
 import net.minecraft.entity.passive.PassiveEntity;
@@ -33,7 +36,7 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.BowItem;
 import net.minecraft.item.HoeItem;
 import net.minecraft.screen.slot.FurnaceOutputSlot;
-import net.minecraft.world.explosion.ExplosionImpl;
+import net.minecraft.world.explosion.Explosion;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -43,7 +46,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>This exists because a boot smoke-test <i>cannot</i> prove it for every mixin. Mixins apply
  * lazily, when their target class is first loaded, so a bad injection surfaces as a crash at the
- * moment of first use rather than at startup. {@link ExplosionImpl} is the case in point: nothing
+ * moment of first use rather than at startup. {@link Explosion} is the case in point: nothing
  * loads it during server boot, so the first creeper in a live world would be the first thing to find
  * out. Loading the class here, under the same Knot classloader the mod runs on, forces Mixin to
  * apply and throw ({@code InvalidInjectionException}) if a target has drifted.
@@ -64,18 +67,18 @@ class MixinApplicationTest {
 
     @Test
     void blastMiningExplosionMixinApplies() {
-        // Class-loading ExplosionImpl is what triggers mixin application: if either injection in
+        // Class-loading Explosion is what triggers mixin application: if either injection in
         // ExplosionDropsMixin (the destroyBlocks HEAD hook, or the onExploded drop-collector arg)
         // no longer matches, this throws rather than silently no-op'ing.
-        assertDoesNotThrow(() -> Class.forName(ExplosionImpl.class.getName(), true,
+        assertDoesNotThrow(() -> Class.forName(Explosion.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
 
         // ...and prove the mixin was really applied, rather than the class merely loading: the
-        // @Unique flag ExplosionDropsMixin adds only exists on a transformed ExplosionImpl.
-        final boolean hasMixinField = Arrays.stream(ExplosionImpl.class.getDeclaredFields())
+        // @Unique flag ExplosionDropsMixin adds only exists on a transformed Explosion.
+        final boolean hasMixinField = Arrays.stream(Explosion.class.getDeclaredFields())
                 .anyMatch(field -> field.getName().contains("blastMiningHandled"));
         assertTrue(hasMixinField,
-                "ExplosionDropsMixin did not apply to ExplosionImpl — its blast-mining drop "
+                "ExplosionDropsMixin did not apply to Explosion — its blast-mining drop "
                         + "replacement would silently never run in-game");
     }
 
@@ -115,7 +118,7 @@ class MixinApplicationTest {
     /**
      * ⚠️ The mixin whose failure is a <em>gameplay</em> failure, not a missing cosmetic.
      *
-     * <p>{@code FireworkRocketEntityMixin} cancels the private {@code explode(ServerWorld)} for
+     * <p>{@code FireworkRocketEntityMixin} cancels the private {@code explode} for
      * mcMMO's own fireworks. That method deals {@code 5 + 2 × explosions} damage to everything within
      * five blocks, and mcMMO spawns its fireworks at the player's feet — so if this injection ever
      * stops binding, levelling up starts hurting the player instead of congratulating them, and the
@@ -124,6 +127,12 @@ class MixinApplicationTest {
      * <p>With {@code defaultRequire=1} an unbound injector throws at class-load, so loading
      * {@code FireworkRocketEntity} is the whole test: a renamed or refactored {@code explode} fails
      * here rather than in someone's world.
+     *
+     * <p>&#9888;&#9888; {@code explode}'s PARAMETER LIST is not stable across bands — it has been both
+     * {@code explode()} and {@code explode(ServerWorld)}. The {@code method} selector matches on name
+     * and binds either way, but an {@code @Inject} handler must mirror the target's own parameters
+     * exactly, so a mismatch is an {@code InvalidInjectionException} here. That is precisely what this
+     * test caught on 2026-08-19, while {@code mixin-allow-audit.py} reported the injector {@code OK}.
      */
     @Test
     void fireworkRocketMixinApplies() {
@@ -259,14 +268,25 @@ class MixinApplicationTest {
 
     @Test
     void foodComponentMixinApplies() {
-        // Class-loading is not the test here: Items' static init builds food components during
-        // McTestRegistries.bootstrap(), so FoodComponent is already transformed by now. An applied
-        // @Inject leaves its handler method on the target, and its absence is the failure that
-        // matters — both diet sub-skills would silently do nothing on every meal in-game.
-        final boolean hasConsumeHook = Arrays.stream(FoodComponent.class.getDeclaredMethods())
+        // Class-loading is not the test here: bootstrap already loads the entity hierarchy, so the
+        // target is transformed by now. An applied @Inject leaves its handler method on the target,
+        // and its absence is the failure that matters — both diet sub-skills would silently do
+        // nothing on every meal in-game.
+        //
+        // ⚠️ THE TARGET CLASS IS NOT FIXED ACROSS BANDS, and this assertion named the wrong one until
+        // 2026-08-19. Where the consumption logic has been lifted onto the item-data components, the
+        // seam is the component's own consume callback; where it has not, it is
+        // LivingEntity#eatFood. FoodComponentMixin keeps its name because the HOOK is the same one,
+        // not because the target class is — so assert against whichever class the mixin actually
+        // names, and re-check this whenever that @Mixin target moves.
+        //
+        // 🔑 This is the third reflective mixin-application assertion found pointing at a class its
+        // mixin no longer targets. Such an assertion COMPILES — it is reflection — so nothing but a
+        // suite run catches it, and a red compileTestJava hides the suite entirely.
+        final boolean hasConsumeHook = Arrays.stream(LivingEntity.class.getDeclaredMethods())
                 .anyMatch(method -> method.getName().contains("onFoodConsumed"));
         assertTrue(hasConsumeHook,
-                "FoodComponentMixin did not apply to FoodComponent — Farmer's Diet and Fisherman's "
+                "FoodComponentMixin did not apply to its target — Farmer's Diet and Fisherman's "
                         + "Diet would silently never restore their extra hunger in-game");
     }
 
@@ -369,21 +389,76 @@ class MixinApplicationTest {
     }
 
     @Test
-    void husbandryShearDropMixinApplies() {
-        assertDoesNotThrow(() -> Class.forName(LivingEntity.class.getName(), true,
+    void husbandryShearMixinsApply() {
+        // ⚠️⚠️ THE reason this test is per-seam rather than one assertion. Where vanilla routes shear
+        // loot through a shared forEachShearedItem funnel, one hook on LivingEntity covers every
+        // species at once and this test is a one-liner. THERE IS NO SUCH FUNNEL HERE: each species
+        // drops inline by its own route, so the verb is split across three mixins and a miss in any
+        // one of them is a silent, partial shortfall rather than a loud total one.
+
+        // Half 1 — the once-per-shear window. Named per species for the same reason
+        // bountifulHarvestDurabilitySaveAppliesToEveryShearableItNames is: ShearPayoutMixin lists
+        // four classes explicitly, and a renamed or restructured `sheared` on any single one would
+        // otherwise leave that animal paying nothing while the other three paid normally.
+        for (Class<?> shearable : List.of(SheepEntity.class, MooshroomEntity.class,
+                SnowGolemEntity.class, BoggedEntity.class)) {
+            assertDoesNotThrow(() -> Class.forName(shearable.getName(), true,
+                    MixinApplicationTest.class.getClassLoader()));
+            final var methods = Arrays.stream(shearable.getDeclaredMethods())
+                    .map(java.lang.reflect.Method::getName)
+                    .toList();
+            assertTrue(methods.stream().anyMatch(name -> name.contains("beginShear")),
+                    "ShearPayoutMixin's HEAD injector did not apply to " + shearable.getSimpleName()
+                            + " — shearing it would pay no XP and roll no Bountiful Harvest");
+            // HEAD and TAIL are a pair. Losing TAIL is the worse half: the window would stay open
+            // past the shear, and EntityShearDropMixin sits on Entity#dropStack — which is how most
+            // of the game drops most of its items — so every later drop would double.
+            assertTrue(methods.stream().anyMatch(name -> name.contains("endShear")),
+                    "ShearPayoutMixin's TAIL injector did not apply to " + shearable.getSimpleName()
+                            + " — the bonus window would outlive its shear and double unrelated drops");
+        }
+
+        // Half 2 — the per-item bonus, for the three species that do bottom out in dropStack.
+        assertDoesNotThrow(() -> Class.forName(Entity.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+        assertTrue(Arrays.stream(Entity.class.getDeclaredMethods())
+                        .anyMatch(method -> method.getName().contains("doubleShearDrop")),
+                "EntityShearDropMixin did not apply to Entity — Bountiful Harvest would be inert "
+                        + "for sheep, snow golems and bogged while still paying their shear XP");
+
+        // Half 3 — the one species that never reaches dropStack at all. MooshroomEntity converts
+        // itself to a cow and builds ItemEntity instances directly in a fixed-count loop, so the
+        // Entity hook above cannot see it and a separate seam is the only way it is covered.
+        assertTrue(Arrays.stream(MooshroomEntity.class.getDeclaredMethods())
+                        .anyMatch(method -> method.getName().contains("mooshroomBonusMushrooms")),
+                "MooshroomShearDropsMixin did not apply to MooshroomEntity — Bountiful Harvest "
+                        + "would be inert for the one shearable that bypasses the shared drop path");
+    }
+
+    @Test
+    void husbandryBrushMixinApplies() {
+        // 🔑 The dispenser exclusion for brushing IS this injection point, on this band. Where
+        // vanilla exposes a forEachBrushedItem funnel, that funnel takes the brushing entity and
+        // vanilla's armadillo-brushing dispenser (DispenserBehavior$5) passes null, so the exclusion
+        // is a property of the signature and nothing here could break it. There is no funnel here:
+        // brushScute() takes no arguments, so the gate is that ArmadilloBrushMixin hangs off
+        // interactMob — which only a player reaches and the dispenser never enters.
+        //
+        // ⚠️ That makes this test load-bearing in a way its sibling on other bands is not: if the
+        // hook ever drifted onto brushScute itself, an AFK brush farm would start paying and no unit
+        // test could see it, because the listener's own gate (a real ServerPlayerEntity) would pass.
+        assertDoesNotThrow(() -> Class.forName(ArmadilloEntity.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
 
-        // The shear verb and Bountiful Harvest's bonus drop, both on the shared loot funnel rather
-        // than on four per-species interactMob hooks. Worth stating why: 1.21.11 has a FIFTH
-        // Shearable (CopperGolemEntity) that the plan's species list never had, and hand-maintained
-        // lists are how the previous four seam misses in this skill happened. forEachShearedItem is
-        // also what excludes the copper golem for free — it is the one shearable that rolls no loot
-        // table, and it can be re-flowered and re-sheared indefinitely.
-        final boolean hasShearHook = Arrays.stream(LivingEntity.class.getDeclaredMethods())
-                .anyMatch(method -> method.getName().contains("onShearedItems"));
-        assertTrue(hasShearHook,
-                "LivingEntityShearDropsMixin did not apply to LivingEntity — shearing would pay "
-                        + "nothing for every species at once and Bountiful Harvest would be inert");
+        final var methods = Arrays.stream(ArmadilloEntity.class.getDeclaredMethods())
+                .map(java.lang.reflect.Method::getName)
+                .toList();
+        assertTrue(methods.stream().anyMatch(name -> name.contains("onBrushedItems")),
+                "ArmadilloBrushMixin did not apply to ArmadilloEntity — brushing would pay nothing "
+                        + "and Bountiful Harvest's second scute would never drop");
+        assertTrue(methods.stream().anyMatch(name -> name.contains("saveBrushDurability")),
+                "ArmadilloBrushMixin's durability save did not apply — worth 16 of a brush's 64, so "
+                        + "a quarter of the tool per use silently stops being saved");
     }
 
     @Test
@@ -430,16 +505,52 @@ class MixinApplicationTest {
         // initialize is what the plan implied and what both spawner logics visibly call:
         // CaveSpiderEntity#initialize is a bare `return entityData` with no super call, so an
         // injection there would have missed every cave spider — and a mineshaft cave-spider spawner is
-        // one of the most-built grinders in the game. create(World, SpawnReason) is the factory all
-        // four verified spawn chains bottom out in, on a class with no vanilla subclasses.
+        // one of the most-built grinders in the game.
+        //
+        // 🔑🔑 AND WHY THERE ARE FOUR SEAMS HERE RATHER THAN ONE. Where the game exposes a
+        // create(World, SpawnReason) factory, every spawn chain bottoms out in it and no subclass can
+        // dodge it, so one hook covers the lot. THAT METHOD DOES NOT EXIST ON THIS BAND and nothing
+        // single replaces it: spawners reach loadEntityWithPassengers, which carries no SpawnReason
+        // parameter at all, and breeding reaches create(World). Only egg, dispenser and portal spawns
+        // reach the 6-arg create.
+        //
+        // ⚠️⚠️ THE 6-ARG create DOES EXIST, so a mixin scoped to it BINDS — mixin-allow-audit reports
+        // OK, the boot smoke-test passes, and spawner-farmed and bred mobs go silently unmarked. That
+        // is strictly worse than the missing injection it replaced, because a missing injection is a
+        // load-time failure and this is nothing at all. A per-seam assertion is the ONLY thing that
+        // can see it, which is exactly why the four are named individually below.
         assertDoesNotThrow(() -> Class.forName(EntityType.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
         assertTrue(Arrays.stream(EntityType.class.getDeclaredMethods())
                         .anyMatch(method -> method.getName().contains("stampSpawnOrigin")),
-                "EntityTypeSpawnOriginMixin did not apply to EntityType — no mob would ever be "
-                        + "marked, so every spawner, bred, egg-placed and portal-spawned mob would "
-                        + "count toward Hunter mastery and the whole anti-farm gate would be absent "
-                        + "while looking present");
+                "EntityTypeSpawnOriginMixin did not apply to EntityType — egg-placed, dispenser-"
+                        + "spawned and portal-spawned mobs would go unmarked and count toward Hunter "
+                        + "mastery");
+
+        // The spawner half, and the whole reason this test grew: a mob spawner is the single most
+        // farmed source of kills in the game, and its chain never touches EntityType#create here.
+        assertDoesNotThrow(() -> Class.forName(MobSpawnerLogic.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+        assertTrue(Arrays.stream(MobSpawnerLogic.class.getDeclaredMethods())
+                        .anyMatch(method -> method.getName().contains("stampSpawnerOrigin")),
+                "MobSpawnerOriginMixin did not apply to MobSpawnerLogic — every mob-spawner grinder "
+                        + "in the world would count toward Hunter mastery while the gate looked "
+                        + "present and every other origin stayed marked");
+
+        assertDoesNotThrow(() -> Class.forName(TrialSpawnerLogic.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+        assertTrue(Arrays.stream(TrialSpawnerLogic.class.getDeclaredMethods())
+                        .anyMatch(method -> method.getName().contains("stampTrialSpawnerOrigin")),
+                "TrialSpawnerOriginMixin did not apply to TrialSpawnerLogic — trial-chamber mobs "
+                        + "would count toward Hunter mastery");
+
+        // Breeding reaches create(World), not the 6-arg create, so it needs its own seam. AnimalEntity
+        // is loaded by EntityType's static init during bootstrap, so class-loading proves nothing
+        // here; the handler does.
+        assertTrue(Arrays.stream(AnimalEntity.class.getDeclaredMethods())
+                        .anyMatch(method -> method.getName().contains("stampBredOrigin")),
+                "AnimalBreedOriginMixin did not apply to AnimalEntity — a bred animal would count "
+                        + "toward Hunter mastery, which is the cheapest farm of the four");
 
         // MobEntity is loaded by EntityType's static init during bootstrap, so class-loading proves
         // nothing; the handler does. Losing this one leaves a narrower but very real hole: a zombie
@@ -480,17 +591,17 @@ class MixinApplicationTest {
         // ⚠️ THERE IS NO MILKING FUNNEL, so CowMilkMixin names its targets explicitly and this test is
         // the only thing standing between that list and a silent shortfall.
         //
-        // GoatEntity is why it exists. It extends AnimalEntity directly rather than AbstractCowEntity
+        // GoatEntity is why it exists. It extends AnimalEntity directly rather than CowEntity
         // and re-implements the entire bucket-for-milk-bucket branch inline in its own interactMob, so
-        // the original @Mixin(AbstractCowEntity.class) paid ZERO for every goat ever milked — while
+        // the original @Mixin(CowEntity.class) paid ZERO for every goat ever milked — while
         // goats went on paying for breeding, raising and feeding, which is what made it invisible.
         //
         // 🔑 The roster was settled by binary-grepping the extracted 1.21.11 jar for MILK_BUCKET across
         // all 1040 entity classes, NOT from a species list and NOT from method names: javap shows a
         // method where it is DECLARED, which is not where it is reachable. That grep returns exactly
-        // three — AbstractCowEntity (carrying cow and mooshroom), GoatEntity, and WanderingTraderEntity
+        // three — CowEntity (carrying cow and mooshroom), GoatEntity, and WanderingTraderEntity
         // (a trade offer, not a milking). Re-run it after a version bump; add any new hit here.
-        for (Class<?> milkable : List.of(AbstractCowEntity.class, GoatEntity.class)) {
+        for (Class<?> milkable : List.of(CowEntity.class, GoatEntity.class)) {
             assertDoesNotThrow(() -> Class.forName(milkable.getName(), true,
                     MixinApplicationTest.class.getClassLoader()));
             final boolean hasMilkHook = Arrays.stream(milkable.getDeclaredMethods())

@@ -6,6 +6,7 @@
   "mixins": [
     "AbstractFurnaceSmeltMixin",
     "AbstractHorseBondMixin",
+    "AnimalBreedOriginMixin",
     "AnimalLovePlayerMixin",
     "ArmadilloBrushMixin",
     "BeehiveHarvestMixin",
@@ -19,6 +20,7 @@
     "CraftingResultSlotMixin",
     "EggHatchMixin",
     "EndermanEndermiteLureMixin",
+    "EntityShearDropMixin",
     "EntityTypeSpawnOriginMixin",
     "ExplosionDropsMixin",
     "FireworkRocketEntityMixin",
@@ -33,19 +35,22 @@
     "LavaFluidStoneFormationMixin",
     "LivingEntityDamageMixin",
     "LivingEntityGlideMixin",
-    "LivingEntityShearDropsMixin",
     "LivingEntityTrophyHunterMixin",
     "MobConversionOriginMixin",
+    "MobSpawnerOriginMixin",
+    "MooshroomShearDropsMixin",
     "MooshroomStewMixin",
     "PassiveEntityGrowthMixin",
     "PistonMoveFlagsMixin",
     "PlayerEntityInteractMixin",
     "PowderSnowBlockMixin",
     "ProjectileSpawnMixin",
+    "ShearPayoutMixin",
     "ShearableInteractMixin",
     "SnowGolemTrailMixin",
     "TameableEntityTameMixin",
-    "TntExplodeMixin"
+    "TntExplodeMixin",
+    "TrialSpawnerOriginMixin"
   ],
   "injectors": {
     "defaultRequire": 1

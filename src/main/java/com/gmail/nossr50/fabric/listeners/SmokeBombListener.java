@@ -17,8 +17,9 @@ import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.ActionResult;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.Hand;
+import net.minecraft.util.TypedActionResult;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 
@@ -55,22 +56,22 @@ public final class SmokeBombListener {
         UseItemCallback.EVENT.register(SmokeBombListener::onUseItem);
     }
 
-    private static ActionResult onUseItem(PlayerEntity player, World world, Hand hand) {
+    private static TypedActionResult<ItemStack> onUseItem(PlayerEntity player, World world, Hand hand) {
         if (hand != Hand.MAIN_HAND || world.isClient()
                 || !(player instanceof ServerPlayerEntity serverPlayer)) {
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
         if (mmoPlayer == null) {
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
         if (!mmoPlayer.getPlayer().isHoldingItem(triggerItem())) {
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
         tryActivate(mmoPlayer, serverPlayer);
         // Always PASS: the trigger item is never consumed and mcMMO is observing the click, not
         // replacing it. Gunpowder has no vanilla use action to suppress anyway.
-        return ActionResult.PASS;
+        return TypedActionResult.pass(player.getStackInHand(hand));
     }
 
     private static String triggerItem() {

@@ -3,6 +3,7 @@ package com.gmail.nossr50.fabric.listeners;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -188,9 +189,17 @@ class SuperAbilityListenerTillingTest {
 
         final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
         when(player.getStackInHand(Hand.MAIN_HAND)).thenReturn(held);
-        // ItemUsageContext's public constructor reads the world off the player (getEntityWorld, not
-        // getWorld — verified with javap), and vanilla's predicates read it back off the context.
-        when(player.getEntityWorld()).thenReturn(world);
+        // ItemUsageContext's public constructor reads the world off the player, and vanilla's
+        // predicates read it back off the context.
+        //
+        // ⚠️⚠️ WHICH ACCESSOR IT CALLS DIFFERS BY VERSION -- it has been both
+        // getWorld() and getEntityWorld() (javap-verified on this band's merged jar: the 3-arg
+        // constructor calls getWorld). Stubbing only one leaves the context holding a null world, and
+        // the failure surfaces far downstream as "Cannot invoke World.getBlockState() because
+        // ItemUsageContext.getWorld() is null" -- which reads like a bug in the code under test
+        // rather than a gap in the harness. Both are stubbed so this harness does not care.
+        lenient().when(player.getWorld()).thenReturn(world);
+        lenient().when(player.getEntityWorld()).thenReturn(world);
 
         final BlockHitResult hit =
                 new BlockHitResult(Vec3d.ofCenter(POS), side, POS, false);

@@ -410,8 +410,10 @@ public final class SmeltingListener {
      * deprecated in this version.
      */
     private static boolean hasOreBlockInput(SmeltingRecipe recipe, List<RegistryEntry<Item>> ores) {
-        final Ingredient ingredient = recipe.ingredient();
-        return ores.stream().anyMatch(ingredient::acceptsItem);
+        // A cooking recipe has exactly one input; it is reached through the ingredient list at
+        // this version, and Ingredient tests a stack rather than a registry entry.
+        final Ingredient ingredient = recipe.getIngredients().getFirst();
+        return ores.stream().anyMatch(ore -> ingredient.test(new ItemStack(ore.value())));
     }
 
     /**

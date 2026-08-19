@@ -24,7 +24,9 @@ import net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.Hand;
+import net.minecraft.util.TypedActionResult;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -77,22 +79,22 @@ public final class SecondWindListener {
         UseItemCallback.EVENT.register(SecondWindListener::onUseItem);
     }
 
-    private static ActionResult onUseItem(PlayerEntity player, World world, Hand hand) {
+    private static TypedActionResult<ItemStack> onUseItem(PlayerEntity player, World world, Hand hand) {
         if (hand != Hand.MAIN_HAND || world.isClient()
                 || !(player instanceof ServerPlayerEntity serverPlayer)) {
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
         if (mmoPlayer == null) {
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
         if (!mmoPlayer.getPlayer().isHoldingItem(triggerItem())) {
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
         tryActivate(mmoPlayer, serverPlayer);
         // Always PASS: the trigger item is never consumed and mcMMO is observing the click, not
         // replacing it. A feather has no vanilla use action to suppress anyway.
-        return ActionResult.PASS;
+        return TypedActionResult.pass(player.getStackInHand(hand));
     }
 
     private static String triggerItem() {
@@ -198,7 +200,7 @@ public final class SecondWindListener {
         setVelocity(player, player.getVelocity().add(lunge.x, Math.max(0.1, lunge.y * 0.5), lunge.z));
 
         final ServerWorld world = (ServerWorld) player.getEntityWorld();
-        final Vec3d from = player.getEntityPos();
+        final Vec3d from = player.getPos();
         final Vec3d to = from.add(look.multiply(result.dartRange()));
         final Box path = new Box(from, to).expand(DART_HIT_RADIUS);
 
@@ -206,7 +208,7 @@ public final class SecondWindListener {
                 entity -> entity instanceof LivingEntity && entity.isAlive());
         for (Entity entity : hits) {
             final LivingEntity target = (LivingEntity) entity;
-            target.damage(world, world.getDamageSources().playerAttack(player),
+            target.damage(world.getDamageSources().playerAttack(player),
                     (float) result.dartDamage());
             // Knock the target away from the player, along the horizontal lunge direction.
             target.takeKnockback(result.dartKnockback(), -look.x, -look.z);

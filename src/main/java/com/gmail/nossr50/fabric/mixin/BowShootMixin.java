@@ -9,7 +9,7 @@ import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * mcMMO's replacement for Bukkit's {@code EntityShootBowEvent}, which legacy used to read the bow's
@@ -34,10 +34,10 @@ public abstract class BowShootMixin {
 
     @Inject(
             method = "onStoppedUsing(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;"
-                    + "Lnet/minecraft/entity/LivingEntity;I)Z", allow = 1,
+                    + "Lnet/minecraft/entity/LivingEntity;I)V", allow = 1,
             at = @At("HEAD"))
     private void mcmmo$captureBowForce(ItemStack stack, World world, LivingEntity user,
-            int remainingUseTicks, CallbackInfoReturnable<Boolean> cir) {
+            int remainingUseTicks, CallbackInfo ci) {
         if (!(user instanceof PlayerEntity)) {
             return;
         }
@@ -48,10 +48,10 @@ public abstract class BowShootMixin {
 
     @Inject(
             method = "onStoppedUsing(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;"
-                    + "Lnet/minecraft/entity/LivingEntity;I)Z", allow = 4,
+                    + "Lnet/minecraft/entity/LivingEntity;I)V", allow = 4,
             at = @At("RETURN"))
     private void mcmmo$clearBowForce(ItemStack stack, World world, LivingEntity user,
-            int remainingUseTicks, CallbackInfoReturnable<Boolean> cir) {
+            int remainingUseTicks, CallbackInfo ci) {
         Archery.endBowShot();
     }
 }

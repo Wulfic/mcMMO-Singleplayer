@@ -63,34 +63,40 @@ class MobOriginsTest {
         assertSame(MobOrigin.SPAWNER, MobOrigins.classify(SpawnReason.SPAWNER));
         assertSame(MobOrigin.SPAWNER, MobOrigins.classify(SpawnReason.TRIAL_SPAWNER));
         assertSame(MobOrigin.BRED, MobOrigins.classify(SpawnReason.BREEDING));
-        assertSame(MobOrigin.PLAYER_PLACED, MobOrigins.classify(SpawnReason.SPAWN_ITEM_USE));
+        assertSame(MobOrigin.PLAYER_PLACED, MobOrigins.classify(SpawnReason.SPAWN_EGG));
         assertSame(MobOrigin.PLAYER_PLACED, MobOrigins.classify(SpawnReason.COMMAND));
         assertSame(MobOrigin.PLAYER_PLACED, MobOrigins.classify(SpawnReason.DISPENSER));
 
-        // ⚠️ STRUCTURE, not DIMENSION_TRAVEL. Legacy's flag was called NETHER_PORTAL_MOB and the
-        // modern name for a portal-spawned zombified piglin is STRUCTURE — NetherPortalBlock's
-        // randomTick calls EntityType.spawn(world, pos, SpawnReason.STRUCTURE), bytecode verified.
-        // DIMENSION_TRAVEL is the unrelated case of an existing mob being re-created on the far side
-        // of a portal, and flagging it would disqualify any mob a player lured through one.
+        // ⚠️ A portal-spawned zombified piglin is STRUCTURE, not a travel reason. Legacy's flag was
+        // called NETHER_PORTAL_MOB and NetherPortalBlock's randomTick calls
+        // EntityType.spawn(world, pos, SpawnReason.STRUCTURE), bytecode verified.
+        //
+        // ⚠️ The companion assertion — that re-creating an EXISTING mob on the far side of a portal
+        // stays NATURAL — cannot be written on this version: it has no such SpawnReason constant, so
+        // there is no value to pass. It is asserted on the bands that do. Do not read its absence
+        // here as the case being unhandled; read it as the case being unreachable.
         assertSame(MobOrigin.STRUCTURE, MobOrigins.classify(SpawnReason.STRUCTURE));
-        assertSame(MobOrigin.NATURAL, MobOrigins.classify(SpawnReason.DIMENSION_TRAVEL));
     }
 
     @Test
     void aQualifyingOriginIsNeverWritten() {
         // ⚠️⚠️ THE test in this file. EntityType#create(World, SpawnReason) — where the stamp happens
-        // — is also the path taken by SpawnReason.LOAD, i.e. every mob in every chunk that loads, and
-        // by DIMENSION_TRAVEL. Both arrive carrying mobs that already own a marker from a previous
-        // session or from the other side of a portal. Writing "NATURAL" for them would erase it, and
-        // the symptom would be that a spawner farm quietly starts counting again after a world reload
-        // — indistinguishable from the gate never having worked.
+        // — is also the path taken by the reasons that RE-INTRODUCE a mob rather than create one:
+        // chunk load, and travel through a portal. Those arrive carrying mobs that already own a
+        // marker from a previous session or from the other side. Writing "NATURAL" for them would
+        // erase it, and the symptom would be that a spawner farm quietly starts counting again after
+        // a world reload — indistinguishable from the gate never having worked.
+        //
+        // ⚠️ Which constants those are is version-specific and this version names neither of them,
+        // so they cannot appear in the array below. The invariant under test does not change, and
+        // NATURAL below still carries the mutation check.
         //
         // Mutation check: make stampOnSpawn write unconditionally and this test, and only this test,
         // goes red.
         final LivingEntity zombie = mock(ZombieEntity.class);
         for (SpawnReason qualifying : new SpawnReason[] {
-                SpawnReason.LOAD, SpawnReason.DIMENSION_TRAVEL, SpawnReason.NATURAL,
-                SpawnReason.CHUNK_GENERATION, SpawnReason.CONVERSION, SpawnReason.EVENT }) {
+                SpawnReason.NATURAL, SpawnReason.CHUNK_GENERATION, SpawnReason.CONVERSION,
+                SpawnReason.EVENT }) {
             MobOrigins.stampOnSpawn(serverWorld(), qualifying, zombie);
         }
         verify(zombie, never()).setAttached(eq(McMMOAttachments.MOB_ORIGIN), any());

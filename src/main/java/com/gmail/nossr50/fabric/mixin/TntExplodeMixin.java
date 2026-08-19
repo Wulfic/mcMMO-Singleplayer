@@ -31,7 +31,8 @@ public abstract class TntExplodeMixin {
                             + "Lnet/minecraft/entity/damage/DamageSource;"
                             + "Lnet/minecraft/world/explosion/ExplosionBehavior;"
                             + "DDDFZ"
-                            + "Lnet/minecraft/world/World$ExplosionSourceType;)V"),
+                            + "Lnet/minecraft/world/World$ExplosionSourceType;)"
+                            + "Lnet/minecraft/world/explosion/Explosion;"),
             index = 6)
     private float mcmmo$applyBiggerBombs(float power) {
         return BlastMiningListener.applyBiggerBombs((TntEntity) (Object) this, power);
