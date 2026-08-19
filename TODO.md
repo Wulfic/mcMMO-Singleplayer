@@ -2061,6 +2061,135 @@ the recipe refuses to proceed on a dirty tree.
 3 per failure class, per the standing rule. On exhaustion: stop, write all three attempts to
 `gotchas.md`, report. Specifically **do not** widen the path set to make a failure disappear.
 
+## Phase 20 — the two gates the Phase-18 workaround silently disabled (2026-08-18, before 8.3)
+
+**Status: planned.** Supersedes the §19.9 record, which is **wrong about the cause** and **too narrow
+about the scope**. Diagnosed 2026-08-18 before the first code edit.
+
+### 20.1 — what §19.9 got wrong
+
+§19.9 recorded `ci-watch.sh --mutate` as *"cannot run under git-bash on this machine, and evidently
+never could"*. **Both halves are false.** Measured on this machine, this session, unchanged script:
+
+| env | `ci-watch.sh --mutate` | `release-sweep-selftest.sh` |
+|---|---|---|
+| default git-bash | **exit 0** — 8/8 cases, 4/4 mutations caught | **exit 0** — 6/6 |
+| `MSYS2_ARG_CONV_EXCL='*'` | **exit 1** — `FileNotFoundError` at `:157` | **exit 2** — `FileNotFoundError` at `:57` |
+| `MSYS_NO_PATHCONV=1` | **exit 1** — same | — |
+
+The mechanism §19.9 named (a bash path handed to Windows Python) is right. The **cause** is not:
+those paths normally arrive intact because **MSYS converts them on the way to a native binary**. They
+only break when that conversion is switched off.
+
+🔑🔑 **And this repo tells you to switch it off.** `.agent/memory/gotchas.md:1483` — written the same
+day, by Phase 18 — prescribes `export MSYS2_ARG_CONV_EXCL='*'` as the fix for the `git rev-parse
+<ref>:<path>` mangling. **That export is the cause.** The documented workaround for gate 18 disables
+gates 8 and 12, in the same shell, with no warning from either.
+
+⚠️ **This is the failure mode the repo keeps re-finding, one level up.** A guard did not go quietly
+wrong — a *fix for another guard* turned it off, and the resulting `FileNotFoundError` reads as a
+broken script rather than a hostile environment. §19.9 then recorded it as an unconditional defect,
+which would have sent the next session hunting inside `ci-watch.sh` for a bug that is not there.
+
+### 20.2 — the true scope: three scripts, not one
+
+The defect is *"an absolute bash path passed as argv to Windows Python"*. Every site:
+
+| script | lines | path passed | verified |
+|---|---|---|---|
+| `scripts/ci-watch.sh` | 88, 157, 232 | `$root/$WORKFLOW_FILE`, `$work/*.sh`, `$SUT` | ✅ reproduced |
+| `scripts/release-sweep-selftest.sh` | 57, 160 | `$WORKFLOW`, `$WORK/sweep.sh` | ✅ reproduced |
+| `scripts/gameplay-smoke.sh` | 63, 199, 222 | `$SCENARIO`, `$LOG`, `$PROFILE` | ⚠️ inspection only — full run needs a server |
+
+⚠️ `release-sweep-selftest.sh` is the **worse** of the two reproduced: it fails on the **repo path
+itself** (`/c/Users/.../release.yml`), not just a `/tmp` scratch dir. §19.9's `/tmp`-centred framing
+would have hidden that.
+
+✅ **The `.py` scripts are immune, and it was measured, not assumed.** `drift-audit.py --self-test`
+and `branch-file-identity-audit.py --self-test` both exit **0** under `MSYS2_ARG_CONV_EXCL='*'`.
+They spawn `git.exe` through `subprocess.run` with an argument **list** — no shell, so no conversion
+to disable. Same reason `manifest-identity-audit.py` was immune to the Phase-18 trap.
+✅ `scripts/boot-check.sh` invokes no Python. Unaffected.
+
+### 20.3 — the fix
+
+A `to_native()` helper in each affected script, converting a bash path to native form **explicitly**
+via `cygpath -w`, so the script stops depending on the conversion setting instead of depending on it
+being on:
+
+```sh
+to_native() {  # a path bash understands -> a path a native child understands
+  if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi
+}
+```
+
+**Verified in all three environments before being written down** (default, `MSYS2_ARG_CONV_EXCL='*'`,
+`MSYS_NO_PATHCONV=1`): `cygpath` is an MSYS binary, so the env vars do not affect it, and its output
+is already Windows-form so nothing re-mangles it on the way out. On Linux CI `cygpath` is absent and
+the helper is a pass-through — the branch is taken, not assumed.
+
+⚠️ **Duplicated into three scripts on purpose, not extracted to a lib.** `boot-check.sh` and
+`gameplay-smoke.sh` are run standalone on a server box; a sourced `scripts/lib-*.sh` adds a resolve
+step and a new failure mode to buy four lines of de-duplication. Reconsider only if a fourth site
+appears.
+
+### 20.4 — the guard, and why the obvious one is vacuous
+
+**A test that merely runs the self-test proves nothing** — it already passes today, in the default
+shell, with the bug present. The regression only exists in a *different environment*, so the test
+must **force that environment**:
+
+- New self-test case in `ci-watch.sh` and `release-sweep-selftest.sh`: spawn Python with a
+  `to_native()`-converted temp path under **`MSYS2_ARG_CONV_EXCL='*' MSYS_NO_PATHCONV=1` forced**,
+  and assert the child can read the file.
+- It must **fail if `to_native()` is reverted to a bare `"$path"`** — that is the mutation, and it is
+  asserted rather than claimed.
+- Runs in the default env too, where it also passes. On a machine with no `cygpath` it reports
+  **skipped, not passed** — an untestable case rendered as a pass is the R11 shape again.
+
+### 20.5 — blast radius and rollback
+
+| step | touches | lost if wrong | comes back from |
+|---|---|---|---|
+| edit 3 scripts on `master` | `scripts/*.sh` | nothing — additive helper + new self-test case | `git revert <sha>`; tree clean at `2e78de972` |
+| back-port to 5 bands | same 3 paths per band | a band's gate 10 goes red | `git revert` on that band; bands clean at the shas in `state.md` |
+
+⚠️ No Gradle in this phase, like 18 and 19 — shell and Python only, `build/classes` is not an input.
+⚠️ Nothing here releases: `scripts/` sits outside `release.yml`'s `paths:` filter, so `ci-watch.sh`
+will correctly report *"Skipped, not passed"*.
+
+### 20.6 — order of work
+
+1. `master`: `to_native()` + the forced-env self-test case in all three scripts. **Failing baseline
+   first** — run each self-test under the export, capture the exit, *then* fix.
+2. Full gate run on `master`: both self-tests under **both** envs, `--mutate` 4/4, plus gates 9/10.
+3. Push `master`, then the path-restricted back-port to `mc/1.21.10`, `mc/1.21.8`, `mc/1.21.5`,
+   `mc/1.21.4`, `mc/1.21.3` — `git checkout <sha> -- <paths>`, `Backport-of:` trailer, blob identity
+   asserted against `master` **before** each commit.
+4. Gates 9/10 + `drift-audit.py` green on all six. Gate 10 is the one that *must* move: it reads red
+   between step 3's first commit and its last.
+5. Correct §19.9 in place and amend `gotchas.md:1483` so the `rev-parse` workaround carries the
+   warning that it disables two other gates.
+
+### 20.7 — what I am NOT doing
+
+- **Not changing `git rev-parse` usage or Phase 18's finding.** The mangling is real; only the
+  prescribed workaround is dangerous.
+- **Not making the scripts set or unset the conversion vars themselves.** Fighting the user's
+  deliberate export is a second hidden coupling, not a fix for the first.
+- **Not rewriting `ci-watch.sh`'s exit-code contract**, its `paths:` filter logic, or any mutation.
+  The four states are right; this is a path-passing bug and nothing else.
+- **Not end-to-end running `gameplay-smoke.sh`** — needs a server; owner track. Its line-63 scorer
+  self-test **is** directly verifiable and will be.
+- **Not cutting `mc/1.21.1`** (8.3). Still next.
+
+### 20.8 — attempt budget
+
+3 per failure class. On exhaustion: stop, write all three attempts to `gotchas.md`, report.
+Specifically **do not** make a failing case pass by removing the forced-env wrapper.
+
+---
+
 ---
 
 ## Phase 9 — the `26.x` band
