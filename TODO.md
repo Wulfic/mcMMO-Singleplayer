@@ -262,13 +262,17 @@ of the six rulings the honest answer was *nowhere*.
       pack pick its own fight. Every claim in the reach fix is bytecode plus unit tests and **none of
       it has been watched in a world**. §G debt is real: the repair-anvil fix shipped green and
       unwatched. Budget 3 attempts on any failure, then stop and report.
-- [ ] **Push, then `python scripts/drift-audit.py --self-test && … --master master`** — it audits
-      `origin/master`, so an unpushed commit reads as clean.
-- [ ] **Back-port all four commits to all five `mc/**` branches** with `Backport-of:` trailers. This
-      is a **version-agnostic logic change** — the exact class that made up 11 of the last 12
-      forgotten fixes. ⚠️ `mc-surface.txt` is a generated per-branch artifact: **regenerate it on
-      each band, never cherry-pick it.**
-- [ ] **Caveat-expiry pass.** Grep `README.md` and `wiki/` for the **symptom**, not the files
+- [x] ✅ **Pushed, and the audit ran.** `drift-audit.py` reports **0 MISSING** on all five bands.
+      (This box and the one below were still unticked on 2026-08-19 while the work was long done —
+      the record lagged reality, which is its own small instance of the defect Phase 21 is about.)
+- [x] ✅ **Back-ported to all five `mc/**` branches.** Verified 2026-08-19 by
+      `git log <band> --grep='Backport-of: 920f2d140'` — a hit on every one of the five
+      (`a38f58e2d` · `d326ba05f` · `d9a001634` · `54fc094b6` · `c7e0b49c6`). This was a
+      **version-agnostic logic change**, the exact class that made up 11 of the last 12 forgotten
+      fixes, and the mechanism held. ⚠️ `mc-surface.txt` is a generated per-branch artifact:
+      **regenerated** on each band, never cherry-picked.
+- [ ] 🔴 **Caveat-expiry pass — NOT DONE, and the gap is total. This is Phase 21 defect A.**
+      Grep `README.md` and `wiki/` for the **symptom**, not the files
       touched: *"wolves"*, *"pets"*, *"sic"*, *"Call of the Wild"*, *"sitting"*. The wiki Taming page
       needs the new gesture, **the sit-toggle cost** (while a bone is in your main hand, sneak +
       right-click changes the stance instead of sitting the pet) and both stances. ⚠️ One wiki serves
@@ -2217,6 +2221,178 @@ will correctly report *"Skipped, not passed"*.
 Specifically **do not** make a failing case pass by removing the forced-env wrapper.
 
 ---
+
+---
+
+## Phase 21 — the Taming docs, and the docs-only back-port hole (2026-08-19, before 8.3)
+
+Found while running the Taming track's outstanding **caveat-expiry pass**. Two defects, and they are
+**not one problem** — one is a missing page, the other is a propagation blind spot with a clean
+mechanical signature. Named separately so neither fix is credited with closing the other.
+
+### 21.0 — the two defects
+
+- 🔴 **A — the pet combat stance shipped to six branches with no player-facing documentation at
+  all.** Not a stale caveat: a *total* absence. `wiki/Skills.md`'s Taming section lists ten
+  sub-skills and never mentions the stance, the gesture, the sit-toggle cost, or either mode.
+  Grepping `README.md` and all 19 wiki pages for *"stance"*, *"aggressive"*, *"passive"* and *"pet
+  combat"* returns nothing about the feature. Four live `config.yml` knobs and four ModMenu sliders
+  are undocumented. This is the unchecked caveat-expiry box on the Taming track, and it is exactly
+  the blind spot the Definition of Done calls out: **a page that was never created is invisible to
+  every incremental doc edit.**
+- 🔴 **B — two docs-only `master` commits never reached any band, and the bands now document a skill
+  their own jar does not have.** `90031c9df` (README, Agility retired + three wrong counts) and
+  `3a07bcba6` (Agility retired across twelve wiki pages) are on `master` alone. The Agility *code*
+  retirement **did** back-port — `PrimarySkillType` on `mc/1.21.10` and `mc/1.21.3` both carry the
+  `AGILITY -- RETIRED` tombstone — so every band ships a build with no Agility while its README and
+  twelve wiki pages present Agility as a live skill.
+
+### 21.1 — 🔑🔑 why B was invisible, and why it is not the "docs are noisy" argument
+
+`drift-audit.py` deliberately excludes docs from `PROPAGATABLE_PREFIXES` (R9), on the stated ground
+that per-push docs failures train people to ignore the audit. **That reasoning is sound and the
+exclusion has a hole it does not cover**, with a signature sharp enough to state mechanically:
+
+> **A docs edit rides along for free when its commit also touches `src/`, and vanishes when it does
+> not.**
+
+Measured, not inferred. Four `master` commits touched `README.md`/`wiki/` since 2026-08-14:
+
+| Commit | Touches `src/`? | Reached the bands? |
+|---|---|---|
+| `ac5251e41` (ModMenu Skills tab) | ✅ yes | ✅ yes — **with** its `wiki/Configuration.md` + `wiki/Optional-Integrations.md` edits |
+| `4108711c6` (fork links) | ✅ yes | ✅ yes — **with** its README + three wiki edits |
+| `90031c9df` (Agility, README) | ❌ **no** | 🔴 **no** |
+| `3a07bcba6` (Agility, 12 wiki pages) | ❌ **no** | 🔴 **no** |
+
+The two that vanished are **exactly** the two with no `src/` half. The auditor never demanded them
+because it cannot see them; the other two were demanded for their code and their docs came as
+cargo. So the effective policy today is not *"docs are not propagated"* — it is *"docs are
+propagated if and only if someone happened to edit code in the same commit"*, which is a coin flip
+dressed as a rule.
+
+⚠️ **This does not contradict `BandDocsMatchRealityTest`, and that guard cannot catch it.** R9 was
+split into two for a reason: that test answers *"is what this branch's docs say true **here**?"*,
+and it stays green on all five bands, correctly — *"Agility exists"* is not a claim about which
+Minecraft the band supports, which is the only thing it reads. **Cross-branch equality is not
+correctness (R9b), and correctness-per-branch is not equality (this).** Both instruments are
+needed; today only one exists.
+
+### 21.2 — the fix on `master` (defect A)
+
+Docs only. No code, no test, no config change — the feature is already shipped and gated.
+
+- [ ] **21.2a** `wiki/Skills.md` — a stance block in the Taming section, in the shape of the
+      existing *"Pets follow you through a teleport"* callout it sits beside. Must carry: the
+      gesture (**sneak + right-click a pet you own, holding a bone, main hand**), the documented
+      cost (**while a bone is in your main hand that gesture changes the stance instead of sitting
+      the pet**; a plain right-click, or any other item, still sits it), both stances with their
+      real in-game wording, and the **"a new way to lose a pet"** warning that `PetCombatMode`'s
+      javadoc explicitly says belongs in the wiki in plain words.
+      🔑 **Every string says "your pets", never "this wolf"** (ruling R-2, pinned by
+      `PetCombatModeLocaleTest`). The gesture is per-pet; the stance is player-wide. Getting this
+      wrong in the docs produces the same bug report the code was written to avoid.
+      ⚠️ **A bone is quadruple-booked** — Call of the Wild (sneak + **left**-click a block), Beast
+      Lore (**left**-click a tameable), Hunter's Quarry Sense (sneak + **left**-click a creature)
+      and now this (sneak + **right**-click a pet). The page must disambiguate or it creates
+      support load rather than removing it.
+- [ ] **21.2b** `README.md` — one line in the Taming area near the existing Call of the Wild gesture
+      note.
+- [ ] **21.2c** `wiki/Configuration.md` — a config section for the four
+      `Skills.Taming.Pet_Combat_Mode.*` knobs, beside the existing *"Stop pets following you through
+      a teleport"* section. Include the **64 cap** on `Engage_Range` and that exceeding it warns in
+      the log, and that `Toggle_Item` must differ from `Second_Wind_Item`, `Smoke_Bomb_Item` and
+      `Herdsmans_Call_Item`.
+      🔑 **`Aggressive_Radius` and `Engage_Range` share the default `32` by design, not by
+      coincidence** (R-5): a mob found at 32 is only worth targeting if a pet can *path* 32. Say so,
+      or the next editor moves one and not the other.
+- [ ] **21.2d** `wiki/Differences-from-mcMMO.md` — a row in the same table that already carries
+      *"Tamed pets follow you through a teleport"*. This is new in this port, not upstream mcMMO.
+- [ ] **21.2e** `wiki/Optional-Integrations.md` — the **Abilities** tab row is now incomplete. The
+      four pet knobs live on `CAT_ABILITIES`, and the row currently reads *"Super-ability master
+      switch, activation rules, tool durability, a cooldown slider per ability."*
+      ⚠️ Note in the page that **`Toggle_Item` is deliberately absent from the editor** —
+      `ConfigSetting.Kind` has no string kind, the same reason `Second_Wind_Item`,
+      `Smoke_Bomb_Item` and `Herdsmans_Call_Item` are missing. A player hunting for it in the GUI
+      must be told it is a `config.yml` edit, or the omission reads as a bug.
+
+⚠️ **One wiki serves every band.** State what a *player does*, never what version the build targets.
+The stance is on all six branches, so it needs no version qualifier at all — and must not be given
+one.
+
+### 21.3 — the back-port (defect B), and why it is one commit rather than two cherry-picks
+
+- [ ] **21.3a** Equalize `README.md` and `wiki/` from `master` onto each of the five bands as **one
+      commit per band**, carrying `Backport-of:` naming the `master` commits it settles
+      (`90031c9df`, `3a07bcba6`, and 21.2's new one).
+      🔑 **Deliberately not three cherry-picks.** The five bands are **byte-identical to each other**
+      on docs (measured: `git diff --name-only mc/1.21.10 <band> -- README.md wiki/` is empty for all
+      four others), and `master` is strictly ahead. So the end state is *"docs equal `master`"*, and
+      taking it in one step makes the post-condition an **assertion** — an empty diff — rather than
+      three chances to half-apply.
+      ⚠️ **`git checkout master -- README.md wiki/` overwrites tracked files.** Gate 1: run
+      `git status --short README.md wiki/` on the band first and require empty. Gate 2: the
+      overwritten content is the band's own committed HEAD, recoverable by
+      `git checkout HEAD -- README.md wiki/` before commit, or `git revert` after. Gate 4: the two
+      paths named, never `.` and never `-f`.
+- [ ] **21.3b** Verify the floor sentence survives. It reads *"1.21.1 and older are not supported"*
+      **identically on all six branches today** (checked in `README.md:45` and
+      `wiki/Installation.md:29`), and `wiki/Installation.md` is **already** byte-identical across
+      branches — it is not in the drift set. So equalization cannot move the floor. Assert it anyway
+      after the copy, per band: the whole defect class here is a docs change nobody re-read.
+- [ ] **21.3c** Run `BandDocsMatchRealityTest` on each band after the copy — it is the guard that
+      owns the floor claim, and it is per-band by construction.
+
+### 21.4 — verification
+
+- [ ] **21.4a** `git diff --name-only master <band> -- README.md wiki/` prints **nothing**, on all
+      five bands. This is §8.2′'s stated invariant, and it is **currently violated on all five** —
+      which is how this phase was found.
+- [ ] **21.4b** Grep the **symptom**, not the files edited. `master` and one band each:
+      `Agility`, `agility` → expect hits only in the deliberate tombstone/rename-table prose, never
+      as a live skill. This is the caveat-expiry rule, and the Agility rename table has already
+      rotted once (its *destination* went stale).
+- [ ] **21.4c** Full build green on `master`. Docs-only, but `ModContactLinksTest` and
+      `BandDocsMatchRealityTest` both read these files, so "docs cannot break the build" is false
+      here.
+- [ ] **21.4d** 🔑 A docs-only push **does not release** — `README.md` and `wiki/` are outside
+      `release.yml`'s `paths:` filter (verified 2026-08-14, `release.yml:75-83`). Expect
+      `ci-watch.sh` to report a **stated skip**, not a pass, and read which of the four states it
+      returns. Do not treat exit 3 as success.
+
+### 21.5 — blast radius and rollback
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| 21.2 | 5 files on `master` | nothing — additive prose | `git revert` of one commit |
+| 21.3a | `README.md` + `wiki/` on 5 bands | the band's current docs | the band's own HEAD (`git checkout HEAD -- …` pre-commit; `git revert` post-commit) |
+| push | 6 branches | nothing destructive | no release fires (21.4d) |
+
+**Nothing here is irreversible.** No tag is moved, no release is touched, no history is rewritten.
+
+### 21.6 — what I am NOT doing
+
+- **Not** adding `README.md`/`wiki/` to `drift-audit.py`'s `PROPAGATABLE_PREFIXES`. R9's reasoning
+  against it stands and this phase does not refute it — a per-push docs failure in the window
+  between *"fix lands on master"* and *"fix is back-ported"* is exactly the noise that gets an audit
+  ignored.
+- **Not** adding docs to `branch-file-identity-audit.py` either, **yet** — and that one is a genuine
+  open question rather than a settled no. It is a *ship-gate* instrument, not a per-push one, so
+  R9's noise argument does not transfer cleanly, and byte-identity is precisely the property
+  violated here. But it changes a rule written into `AGENTS.md`, which is byte-identical on six
+  branches (P19-1), so it is a six-branch operation and an owner call. **Raised, not taken.**
+- **Not** rewriting the Agility rename table. It was audited in its own pass; re-opening it here
+  widens a docs sync into a content review.
+- **Not** touching `wiki/Installation.md`. It is already identical everywhere and carries the floor
+  sentence — the one file where an unnecessary edit has a real downside.
+- **Not** starting 8.3. Next, immediately after this.
+
+### 21.7 — attempt budget
+
+3 per failure class. On exhaustion: stop, write all three attempts to `gotchas.md`, report.
+Specifically **do not** resolve a band's docs failure by editing that band's docs directly — that is
+a fix authored on a band branch, which AGENTS.md calls a defect, and it is how the divergence
+started.
 
 ---
 
