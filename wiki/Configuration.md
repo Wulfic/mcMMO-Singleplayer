@@ -163,6 +163,35 @@ On by default. `false` restores vanilla behaviour exactly — pets left outside 
 
 The radius was **32** before, and was raised to 128 because a pet pathing after a sprinting or flying owner is routinely further back than 32 blocks at the moment the teleport lands — so it simply wasn't collected. If your `config.yml` still says 32, it is updated for you on the next load; a value you typed yourself is left alone.
 
+### Change how your pets pick their fights
+
+```yaml
+Skills:
+    Taming:
+        Pet_Combat_Mode:
+            Enabled: true
+            Toggle_Item: BONE
+            Aggressive_Radius: 32
+            Engage_Range: 32
+            Sweep_Interval_Ticks: 20
+```
+
+Your pets have a **combat stance** — *passive* (they fight only what you fight) or *aggressive* (idle pets pick the nearest hostile to you). It's player-wide, not per-pet, and you switch it by sneaking and right-clicking any pet you own while holding `Toggle_Item`. The full player-facing description is on the [Taming section of Skills](Skills#taming).
+
+`Enabled: false` turns off the gesture, the aggressive sweep **and** the chase-range fix below, restoring vanilla pet pathing exactly.
+
+**`Toggle_Item`** is what you must hold to switch stance. While it's in your main hand, sneak + right-click changes the stance *instead of* sitting the pet. It must differ from `Second_Wind_Item`, `Smoke_Bomb_Item` and `Herdsmans_Call_Item`. A name that doesn't resolve to a real item makes the gesture inert — your pet just sits, as vanilla intends — rather than breaking every entity interaction in the game.
+
+**`Aggressive_Radius`** is how far **from you** — not from each pet — an aggressive-mode pet looks for a fight. Measuring from the player means the whole pack shares one search, and a pet that lagged behind can't drag something home from somewhere you've never been.
+
+**`Engage_Range`** is how far a pet will chase a target it *already has*. This is the fix for "my pets ignore what I shoot": a wolf's natural follow range is 16, and past that it can't compute a path at all, so it stands next to you holding a target it will never reach. It applies in **both** stances, and only while a pet actually has a target.
+
+> ⚠️ **Raise `Engage_Range` with care.** Path-search cost grows with the **cube** of this number, and it applies per pet and per repath. Values above **64** are clamped to 64 with a warning in the log.
+
+> 🔑 **`Aggressive_Radius` and `Engage_Range` share the default `32` on purpose, not by coincidence.** A mob found at 32 blocks is only worth targeting if a pet can actually *path* 32 blocks to it. If you move one, re-check the other — a search radius larger than the chase range just produces pets that acquire targets they then refuse to walk to, which is the exact bug the chase range was added to fix.
+
+**`Sweep_Interval_Ticks`** is how often aggressive pets look for a new fight. 20 ticks is one second, which is well inside what you'd notice; lowering it buys nothing and costs a box query every tick.
+
 ### Change what cooked food does when you eat it
 
 ```yaml

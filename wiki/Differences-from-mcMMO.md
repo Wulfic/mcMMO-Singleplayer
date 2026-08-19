@@ -82,6 +82,7 @@ Stored in `<world save>/mcmmo/players/`, not in a global profile or a database. 
 | **Placed blocks are tracked across restarts** | Place → quit → reopen → mine still pays nothing. |
 | **Old Acrobatics progress zeroes out** | Child skills have no save key, so there's nothing to migrate to. See [Movement Skills](Movement-Skills). |
 | **Tamed pets follow you through a teleport** | An override of *vanilla*, not of upstream mcMMO — a pet outside your simulation distance stops being ticked and never runs its follow goal. Same world only; sitting pets stay. `Skills.Taming.Pets_Follow_Teleport: false` restores vanilla. |
+| **Tamed pets have a combat stance** | New in this port, not upstream mcMMO. Sneak + right-click a pet you own while holding a bone to switch **all** your pets between *passive* (fight only what you fight) and *aggressive* (idle pets pick the nearest hostile to you). The cost is that the same gesture no longer sits the pet while a bone is in your main hand. Also fixes "my pets ignore what I shoot" — a wolf could not path past its natural 16-block follow range. `Skills.Taming.Pet_Combat_Mode.Enabled: false` restores vanilla. |
 
 ---
 

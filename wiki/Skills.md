@@ -232,6 +232,25 @@ Earn XP by taming animals and fighting alongside your wolves.
 | Environmentally Aware | 1 | Cactus/lava phobia, fall-damage immunity. |
 | Pummel | 1 | Wolves have a chance to knock foes back. |
 
+> **Your pets have a combat stance.** *New in this port, and not a sub-skill* — no level gate, no rank, and it belongs to **you**, not to any one animal.
+>
+> | Stance | What your pets do |
+> |---|---|
+> | **Passive** *(the default)* | Your pets fight only what you fight. |
+> | **Aggressive** | Idle pets pick the nearest hostile to **you** and go for it. |
+>
+> **To switch: sneak and right-click any pet you own while holding a bone in your main hand.** You'll get a chat message telling you which stance your pets are now in. The animal you click is only proving it's yours — **the stance changes for all of your pets**, including the ones back at base.
+>
+> ⚠️ **The cost of the gesture, stated plainly:** while a bone is in your main hand, sneak + right-click **changes the stance instead of sitting the pet**. A plain right-click, or any other item in hand, still sits it exactly as vanilla does. That trade exists because vanilla already owns the plain right-click on a wolf, so the gesture has to take the click rather than merely watch it.
+>
+> ⚠️ **Aggressive is a new way to lose a pet.** Your wolves will start fights you didn't, including ones they can't win. Creepers and ghasts are excluded (vanilla already refuses those), and so is the warden — a pack cannot kill one, and the noise brings it to you. Everything else hostile is fair game.
+>
+> **Toggling back to passive mid-fight lets the current fight finish.** Passive stops your pets *picking* new targets; it doesn't call them off something already chewing on them.
+>
+> 🔑 **"My pets ignore what I shoot" is fixed, and it was never about the stance.** A wolf's natural follow range is 16 blocks, and past that it simply can't work out a path — so it stood next to you holding a target it would never walk to. A melee kill happens at about 3 blocks and a bow kill at 20–40, which is the whole of what players saw. Pets you sic by shooting something now chase it properly **in both stances**.
+>
+> Tune or disable all of it under `Skills.Taming.Pet_Combat_Mode` — see [Configuration](Configuration#change-how-your-pets-pick-their-fights).
+
 > **Pets follow you through a teleport.** *New in this port, and not a sub-skill* — it has no level gate and no rank. Make a long jump inside one world (an ender pearl, a `/tp`, a chorus fruit, a respawn) and your tamed wolves, cats and parrots come with you.
 >
 > This is a deliberate override of vanilla, not a port fix. Vanilla *means* to do this — a wolf's follow goal teleports it to you from any distance once you're 12+ blocks away — but a pet outside your simulation distance stops being ticked, so it never runs the goal and is simply left behind. Turn it off with `Skills.Taming.Pets_Follow_Teleport: false` in `config.yml` to get vanilla behaviour back exactly.

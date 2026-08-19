@@ -211,6 +211,13 @@ use‑item event, so sharing an item fires one and prints the other's refusal me
 Sneak‑left‑clicking *air* is the one gesture that isn't wired — Fabric has no left‑click‑air
 callback.
 
+**Pet combat stance** (Taming) is a **sneak + right‑click on a pet you own** while holding a bone.
+It flips your pets between *passive* (they fight only what you fight) and *aggressive* (idle pets
+pick the nearest hostile to you). The stance is **player‑wide** — the animal you click only proves
+it's yours. ⚠️ The documented cost: while a bone is in your main hand that gesture changes the
+stance **instead of sitting the pet**; a plain right‑click, or any other item, still sits it. See
+[Taming](../../wiki/Skills#taming).
+
 ---
 
 ## In‑game feedback
