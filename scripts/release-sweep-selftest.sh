@@ -42,6 +42,19 @@
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
+# --- Hand a path to a NATIVE child process -----------------------------------
+# ⚠️⚠️ Under git-bash `python` is the native Windows interpreter and cannot see
+# `/c/Users/...` or `/tmp/...`. Those paths normally survive only because MSYS
+# rewrites a path-shaped argv element on the way to a native binary -- a favour,
+# not a rule. `MSYS2_ARG_CONV_EXCL='*'` (this repo's prescribed fix for the
+# `git rev-parse <ref>:<path>` mangling, Phase 18) turns that favour OFF, and
+# this script then died at the FIRST python call with a FileNotFoundError on
+# .github/workflows/release.yml -- a file plainly on disk. See TODO §20.
+# Convert explicitly instead of depending on the setting either way.
+to_native() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi
+}
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW="$REPO_ROOT/.github/workflows/release.yml"
 STEP_NAME="Delete previous release on this Minecraft line"
@@ -54,7 +67,7 @@ if [ ! -f "$WORKFLOW" ]; then
 fi
 
 # --- Extract the step's shell body straight out of the workflow -------------
-python - "$WORKFLOW" "$STEP_NAME" "$WORK/sweep.sh" <<'PY' || exit 2
+python - "$(to_native "$WORKFLOW")" "$STEP_NAME" "$(to_native "$WORK/sweep.sh")" <<'PY' || exit 2
 import sys, yaml
 wf, step_name, out = sys.argv[1], sys.argv[2], sys.argv[3]
 doc = yaml.safe_load(open(wf, encoding="utf-8"))
@@ -121,6 +134,44 @@ LIVE=$'999\tmc1.21.11-v2.2.050\tfalse\n370315399\tmc1.21.11-v2.2.050\ttrue\n3702
 # A predecessor on a DIFFERENT tag (the -build.<N> era) must take its tag with it.
 OLDTAG=$'999\tmc1.21.11-v2.2.050\tfalse\n888\tmc1.21.11-v2.2.050-build.26\tfalse\n370323008\tmc1.21.4-v2.2.050\tfalse\n'
 
+# --- The case this shell's own environment cannot test -----------------------
+# ⚠️ Every other case here passes with the path bridge broken, because a default
+# git-bash converts the argv for us. The regression exists ONLY when MSYS
+# conversion is off. So force it off -- and prove the forcing worked.
+#
+# 🔑 THE CONTROL IS THE POINT. Asserting only that the converted path works would
+# pass just as happily if the forced env never took effect, which is a vacuous
+# assertion wearing a tick (this repo has found twelve). So the RAW path must
+# FAIL in the same breath. Guard and control, or neither means anything.
+check_path_bridge() {
+  local name="path bridge holds with MSYS conversion OFF" probe raw_rc conv
+  if ! command -v cygpath >/dev/null 2>&1; then
+    # Not git-bash: nothing to convert, nothing to regress. SKIPPED, never PASS --
+    # an untestable case rendered as a pass is the failure this repo keeps finding.
+    [ "${QUIET:-0}" = "1" ] || echo "  SKIP  $name (no cygpath - not git-bash)"
+    return
+  fi
+  probe="$WORK/bridge probe.txt"   # the space is deliberate: the other argv trap
+  printf 'bridge-ok' > "$probe"
+
+  # CONTROL: the raw bash path must NOT reach a native child in this environment.
+  MSYS2_ARG_CONV_EXCL='*' MSYS_NO_PATHCONV=1     python -c 'import sys;sys.stdout.write(open(sys.argv[1],encoding="utf-8").read())' "$probe" >/dev/null 2>&1
+  raw_rc=$?
+  # GUARD: the converted path must.
+  conv="$(MSYS2_ARG_CONV_EXCL='*' MSYS_NO_PATHCONV=1 python -c 'import sys;sys.stdout.write(open(sys.argv[1],encoding="utf-8").read())' "$(to_native "$probe")" 2>/dev/null)"
+
+  if [ "$raw_rc" = "0" ]; then
+    [ "${QUIET:-0}" = "1" ] || echo "  FAIL  $name: CONTROL DID NOT FIRE - the raw path worked, so this case proves nothing"
+    fail=$((fail+1))
+  elif [ "$conv" = "bridge-ok" ]; then
+    [ "${QUIET:-0}" = "1" ] || echo "  PASS  $name (control fired: raw path exit $raw_rc)"
+    pass=$((pass+1))
+  else
+    [ "${QUIET:-0}" = "1" ] || echo "  FAIL  $name: converted path read '$conv', wanted 'bridge-ok'"
+    fail=$((fail+1))
+  fi
+}
+
 run_all() {
   pass=0; fail=0
   run_case "same-tag orphans reaped, LIVE TAG KEPT" "$LIVE" 999 1.21.11 0 \
@@ -134,6 +185,7 @@ run_all() {
   run_case "empty release listing -> refuse" "" 999 1.21.11 1 ""
   run_case "no keeper id -> refuse"          "$LIVE" "" 1.21.11 1 ""
   run_case "no minecraft version -> refuse"  "$LIVE" 999 "" 1 ""
+  check_path_bridge
 }
 
 echo "release.yml reaping sweep — self-test"
@@ -157,7 +209,7 @@ mut_fail=0
 mutate() {
   local name="$1" old="$2" new="$3"
   cp "$WORK/sweep.orig.sh" "$WORK/sweep.sh"
-  python - "$WORK/sweep.sh" "$old" "$new" <<'PY'
+  python - "$(to_native "$WORK/sweep.sh")" "$old" "$new" <<'PY'
 import sys
 path, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
 s = open(path, encoding="utf-8").read()

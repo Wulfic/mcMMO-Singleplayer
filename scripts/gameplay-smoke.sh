@@ -35,6 +35,25 @@
 # load-bearing on Windows and each one cost a debugging session.
 set -uo pipefail
 
+# --- Hand a path to a NATIVE child process -----------------------------------
+# ⚠️⚠️ Under git-bash `python` is the native Windows interpreter: it cannot see
+# `/c/Users/...` or `/tmp/...`. Those paths normally survive only because MSYS
+# rewrites a path-shaped argv element on the way to a native binary -- a favour,
+# not a rule. `MSYS2_ARG_CONV_EXCL='*'` (this repo's prescribed fix for the
+# `git rev-parse <ref>:<path>` mangling, Phase 18) turns that favour OFF, and
+# every python call below then fails on a path that is plainly on disk. Two
+# sibling gates were measured dying exactly that way -- see TODO §20.
+#
+# ⚠️ PARTIALLY DEMONSTRATED, and the split matters. The scorer self-test call
+# below needs no server and WAS measured: with the raw path it exits 2
+# ("can't open file") under a forced-off env and 0 with to_native(). The other
+# three call sites need a running server, so for those this is identical defect,
+# identical remedy, NOT identically demonstrated. Do not read the measured line
+# as covering the unmeasured ones.
+to_native() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi
+}
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 JAR="${1:-}"
 [[ -n "$JAR" && -f "$JAR" ]] || { echo "usage: scripts/gameplay-smoke.sh <mcmmo.jar> [mcversion] [loader] [fabricapi]" >&2; exit 2; }
@@ -60,7 +79,7 @@ command -v sha256sum >/dev/null && sha256sum "$JAR"
 # passed" and "the scorer cannot detect anything" render identically, so a green run means nothing
 # until the scorer has been shown to still fail on a known defect.
 echo "=== scorer self-test"
-python "$SCENARIO" --self-test || { echo "❌ the scorer's self-test failed — its verdict is worthless" >&2; exit 1; }
+python "$(to_native "$SCENARIO")" --self-test || { echo "❌ the scorer's self-test failed — its verdict is worthless" >&2; exit 1; }
 
 # --- server launcher -------------------------------------------------------------------------
 LAUNCH="$REPO/build/boot-check/$MC/fabric-server-launch.jar"
@@ -196,7 +215,7 @@ while IFS= read -r line; do
             sleep 0.6   # one command per ~12 ticks: the server must apply each before the next.
             ;;
     esac
-done < <(python "$SCENARIO" --commands)
+done < <(python "$(to_native "$SCENARIO")" --commands)
 
 # Disconnect the bot before stopping, so PlayerSessionListener#onQuit writes its profile through
 # the ordinary quit path rather than relying on the shutdown hook.
@@ -219,9 +238,9 @@ mixf=$(grep -icE "mixin apply failed|InvalidInjectionException|Critical injectio
 
 echo "=== results ($MC) ==="
 if [[ -n "$PROFILE" ]]; then
-    python "$SCENARIO" --check "$LOG" --profile "$PROFILE" || fail=1
+    python "$(to_native "$SCENARIO")" --check "$(to_native "$LOG")" --profile "$(to_native "$PROFILE")" || fail=1
 else
-    python "$SCENARIO" --check "$LOG" || fail=1
+    python "$(to_native "$SCENARIO")" --check "$(to_native "$LOG")" || fail=1
 fi
 
 echo "  ERROR/FATAL lines: $errs"
