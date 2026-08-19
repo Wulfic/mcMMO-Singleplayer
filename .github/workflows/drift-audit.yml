@@ -95,7 +95,15 @@ env:
   # never over-strict -- with 5 bands and a floor of 4 the audit still passes -- so
   # nothing will ever remind you. That is the trade: it cannot false-alarm, and it
   # cannot nag.
-  BAND_COUNT: '5'
+  #
+  # ⚠️ That trade has now been paid once, so treat it as measured rather than
+  # theoretical: mc/1.21.1 was cut, gated, pushed AND RELEASED with this still at
+  # '5' against six bands on origin. Nothing went red, because nothing can.
+  #
+  # Counts mc/** branches only, master excluded -- the same meaning for all three
+  # scripts below. Six bands on origin as of 2026-08-19: 1.21.1, 1.21.3, 1.21.4,
+  # 1.21.5, 1.21.8, 1.21.10.
+  BAND_COUNT: '6'
 
 jobs:
   audit:
