@@ -110,7 +110,7 @@ every non‑child skill.
 
 ## Skills
 
-**27 skills** — **24 primary** skills that earn XP directly, plus **3 child skills** whose level is
+**25 skills** — **23 primary** skills that earn XP directly, plus **2 child skills** whose level is
 the average of their parents and which earn no XP of their own.
 
 | Category | Skills |
@@ -119,7 +119,7 @@ the average of their parents and which earn no XP of their own.
 | **Combat** | Swords, Axes, Unarmed, Archery, Crossbows, Tridents, Maces, Spears\*, Taming, **Hunter** |
 | **Movement** | **Parkour**, **Swimming**, **Flying** |
 | **Misc** | **Stealth**, **Unarmored**, Repair, Alchemy, **Cooking** |
-| **Child skills** | **Agility** (avg. of Parkour + Swimming + Flying), **Salvage** (avg. of Repair + Fishing), **Smelting** (avg. of Mining + Repair) |
+| **Child skills** | **Salvage** (avg. of Repair + Fishing), **Smelting** (avg. of Mining + Repair) |
 
 \* **Spears needs Minecraft 1.21.11+** — spear items don't exist below it, so on older bands the
 skill is switched off entirely and does not appear in `/mcstats`. See
@@ -127,21 +127,33 @@ skill is switched off entirely and does not appear in `/mcstats`. See
 
 ### New in this port
 
-Eight primary skills that upstream mcMMO does not have. **Acrobatics was renamed to Agility** and
-restructured: it earns no XP itself and is instead the mean of three new primary skills, one per
-medium you travel through, keeping only the two perks that work in all three.
+Eight primary skills that upstream mcMMO does not have. **Acrobatics is replaced by three movement
+skills**, one per medium you travel through. Each earns its own XP and owns the perks belonging to
+its medium.
 
 | Skill | How you train it | What it gives you |
 |---|---|---|
-| **Parkour** | Sprinting and falling on land | Feeds Agility. Owns **Dodge**, **Roll** (hold sneak on landing for a Graceful Roll at double odds), **Athlete** (sprinting costs less hunger), **Smash** (harder sprint attacks) and **Snow Walker**. |
-| **Swimming** | Swimming | Feeds Agility. Owns **Lead Lungs** (far longer breath) and **Lake Raider** (underwater digging turns up treasure). |
-| **Flying** | Elytra gliding | Feeds Agility. Owns **Glide** (descend more slowly) and **Solar Wings** (a worn elytra mends in daylight). |
-| **Agility** *(child)* | — derived — | The two perks that work in every medium: **Fleet Footed** and the **Second Wind** super ability. Each carries one rank per medium, so the three-skill mean is what unlocks them. |
+| **Parkour** | Sprinting and falling on land | **Dodge**, **Roll** (hold sneak on landing for a Graceful Roll at double odds), **Athlete** (sprinting costs less hunger), **Smash** (harder sprint attacks) and **Snow Walker**. |
+| **Swimming** | Swimming | **Lead Lungs** (far longer breath) and **Lake Raider** (underwater digging turns up treasure). |
+| **Flying** | Elytra gliding | **Glide** (descend more slowly) and **Solar Wings** (a worn elytra mends in daylight). |
 | **Stealth** | Sneaking under your own power | **Padfoot** (sneak nearly at walking speed), **Assassin** (backstab damage), **Smoke Bomb** super ability. |
 | **Unarmored** | Taking damage with **every armour slot empty** | **Iron Skin** (real armour points at four tiers — leather/gold/iron/diamond) and **Thorny Skin** (reflect a sting at melee attackers). |
 | **Husbandry** | Breeding, taming, shearing, milking, feeding and robbing hives | Nine sub-skills across six XP verbs — **Multi-Breed**, **Twins**, **Selective Breeding**, **Accelerated Growth**, **Brood**, **Bountiful Harvest**, **Hidden Bounty**, **Beekeeper** and the **Herdsman's Call** super ability. |
 | **Hunter** | Killing creatures — **not** a weapon skill | Two independent axes. **Mob Mastery**: kill 500 / 2,500 / 10,000 of *one* creature for +1.0 / +2.0 / +3.0 damage against **that creature only**, forever. **Trophy Hunter**: a second roll of a kill's own loot table, unlocked one mob tier per rank. **Quarry Sense**: crouch and hit a creature with a bone to read your hunt log against it. Farmed creatures — spawner, bred, player-placed — count for nothing. |
 | **Cooking** | Cooking food in a furnace, smoker, blast furnace or campfire, and crafting food at a bench | **Smelting's other half** — the two share the furnace and split it by input, ore paying Smelting and food paying Cooking, never both. **Master Chef** (a second helping out of a finished cook), **Power Cook** (cooked food carries a lingering effect when eaten, always amplifier 0), **Kitchen Efficiency** (fuel burns up to 4× longer on food). An item has no spawn origin, so its only anti-farm gate is a cap of 1,200 paid items per hour. |
+
+All three movement skills additionally get their **own** copy of **Fleet Footed** (a movement-speed
+bonus that scales with the skill) and their own body of the **Second Wind** super ability. Fleet
+Footed unlocks at level **1** and Second Wind at **250**, separately in each of the three.
+
+> **This is deliberately a buff for specialists.** Those two perks used to be gated on the *average*
+> of Parkour, Swimming and Flying, which meant a player who only flew could never reach them at all —
+> flying alone capped that average at 333, and the air ranks sat at 400 and 750. Now a pure flier
+> gets air Fleet Footed at Flying 1 and the air Second Wind at Flying 250, and a pure swimmer the
+> same in water. Being an all-rounder still earns *more* — all six perks instead of two — but it is
+> no longer a **gate** on any one of them. Second Wind's strength and duration follow the medium you
+> are actually moving through, and Dodge, Roll, Fall XP and Fleet Footed's scaling all read the skill
+> that earns them rather than a three-skill average.
 
 Movement and sneak XP are **speed-normalised**: you are paid per *second* of travel, with each tick's
 distance clamped at that medium's reference speed. Travelling faster than the reference pays no more,
@@ -188,16 +200,23 @@ holding a configured item, which is **never consumed**:
 
 | Ability | Skill | Trigger item | Effect |
 |---|---|---|---|
-| **Second Wind** | Agility | `FEATHER` | One ability, three bodies, chosen by how you are moving — a forward **lunge** on land, a **water buff** while swimming, a **speed burst** while gliding. Rank 1 unlocks land, 2 water, 3 air. |
+| **Second Wind** | Parkour / Swimming / Flying | `FEATHER` | One ability, three bodies, chosen by how you are moving — a forward **lunge** on land, a **water buff** while swimming, a **speed burst** while gliding. One cooldown shared across all three. Each medium unlocks its own body at level **250** in that skill, independently of the other two. |
 | **Smoke Bomb** | Stealth | `GUNPOWDER` | Vanilla Invisibility for 5 s. Note that vanilla invisibility does **not** hide armour or held items. |
 
-Both items are configurable in `config.yml` (`Skills.Agility.Second_Wind_Item`,
+Both items are configurable in `config.yml` (`Skills.Movement.Second_Wind_Item`,
 `Skills.Stealth.Smoke_Bomb_Item`) and **must differ from each other** — they listen on the same
 use‑item event, so sharing an item fires one and prints the other's refusal message.
 
 **Call of the Wild** (Taming) is a **sneak + left‑click a block** while holding the summon item.
 Sneak‑left‑clicking *air* is the one gesture that isn't wired — Fabric has no left‑click‑air
 callback.
+
+**Pet combat stance** (Taming) is a **sneak + right‑click on a pet you own** while holding a bone.
+It flips your pets between *passive* (they fight only what you fight) and *aggressive* (idle pets
+pick the nearest hostile to you). The stance is **player‑wide** — the animal you click only proves
+it's yours. ⚠️ The documented cost: while a bone is in your main hand that gesture changes the
+stance **instead of sitting the pet**; a plain right‑click, or any other item, still sits it. See
+[Taming](../../wiki/Skills#taming).
 
 ---
 
@@ -359,18 +378,20 @@ clean, but it is **young** — expect rough edges and please [file issues](https
 > ⚠️ **File them on *this* repo, not upstream mcMMO.** This is a fork; upstream
 > maintains the Bukkit/Spigot plugin and cannot act on a single‑player Fabric bug.
 
-> ⚠️ **The six new skills are code‑complete but lightly play‑tested.** Parkour, Swimming, Flying,
-> the restructured Agility, Stealth and Unarmored all pass the unit suite and boot clean, but their
-> XP rates and reference speeds are **starting estimates, not measured numbers** — the tuning
+> ⚠️ **The five new skills are code‑complete but lightly play‑tested.** Parkour, Swimming, Flying,
+> Stealth and Unarmored all pass the unit suite and boot clean, but their XP rates and reference
+> speeds are **starting estimates, not measured numbers** — the tuning
 > comments in `experience.yml` say so explicitly. Balance feedback on these is especially welcome.
 > The in‑game verification plan lives in [`plans/PLAYTEST_G.md`](plans/PLAYTEST_G.md).
 
-> ⚠️ **Existing Acrobatics progress does not carry over.** Acrobatics was renamed Agility, and
-> Agility then became a *child* skill — child skills have no save key at all, their level is
-> recomputed from their parents on every load. There is nothing for old progress to migrate *to*, so
-> it is deliberately allowed to zero out; train Parkour, Swimming and Flying instead. If you had
-> tuned an `Acrobatics:` section in a config, mcMMO logs a warning telling you to rename it to
-> `Agility:` rather than silently rewriting your file.
+> ⚠️ **Existing Acrobatics or Agility progress does not carry over.** Movement is three skills now —
+> Parkour, Swimming and Flying — and neither of the names that came before them has a save key left
+> to read, so old progress is deliberately allowed to zero out. Train the three instead. Your
+> *tuning* is a different matter and is not thrown away: mcMMO relocates a stranded `Agility:` block
+> to whichever movement skill now owns each setting, on the next load, and logs what it moved. For
+> anything it cannot move safely — and for an older `Acrobatics:` section — it logs a warning naming
+> where the values belong rather than silently rewriting a file you own. See
+> [Troubleshooting](../../wiki/Troubleshooting) for the full picture.
 
 Deliberately **not** ported (and not coming back):
 

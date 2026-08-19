@@ -46,7 +46,7 @@ These require **permission level 2** — op level 2 on a server, or a single-pla
 | `/addlevels <skill\|all> <amount>` | Grant skill levels directly. |
 | `/addxp <skill\|all> <amount>` | Grant raw XP through the **real gain pipeline**. |
 
-`all` targets every **non-child** skill — you cannot grant levels to Agility, Salvage or Smelting directly, because their level is computed from their parents. Grant to the parents instead.
+`all` targets every **non-child** skill — you cannot grant levels to Salvage or Smelting directly, because their level is computed from their parents. Grant to the parents instead.
 
 **The difference between the two matters when you're testing.** `/addlevels` sets the number. `/addxp` pushes XP through the genuine gain path, so level-ups, milestone advancements and the XP bar all fire exactly as they would in play. If you're checking that a feature works, `/addxp` exercises more of the code.
 

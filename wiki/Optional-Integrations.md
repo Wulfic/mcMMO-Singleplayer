@@ -41,7 +41,7 @@ These are the versions each mcMMO band is built and tested against. Mod Menu's o
 | **Skills** | **A master switch per skill** — turn a whole skill off. See [Configuration](Configuration#turn-a-whole-skill-off) for what "off" means. |
 | **Experience** | Global XP multiplier, early-game boost, curve shape, the movement and Stealth per-second rates. |
 | **XP Multipliers** | A per-skill XP multiplier for all 24 earning skills. |
-| **Abilities** | Super-ability master switch, activation rules, tool durability, a cooldown slider per ability. |
+| **Abilities** | Super-ability master switch, activation rules, tool durability, a cooldown slider per ability — and the four **pet combat** knobs (stance on/off, aggressive search radius, chase range, check interval). |
 | **Anti-Cheat** | Every anti-farm gate — see [Configuration](Configuration#anti-cheat-the-exploit-gates). |
 | **Effects** | Particle and firework switches, per effect. |
 | **Skill Level Caps** | A cap per skill; 0 means no cap. |
@@ -51,6 +51,23 @@ These are the versions each mcMMO band is built and tested against. Mod Menu's o
 Edits are written **straight back to the YAML on disk** — this is a real config editor, not a parallel settings store — and take effect on the **next world load**, not instantly. Most mcMMO values are read once at load time.
 
 ⚠️ That applies to the **Skills** tab too, and it is the one place it is easy to misread as a bug: switch a skill off from the pause menu and it keeps paying XP until you leave the world and come back. Nothing is wrong — the file has been written. Each row's tooltip says so.
+
+### What the editor cannot offer: item-name settings
+
+A handful of `config.yml` keys name an **item** rather than a number or a switch, and none of them appear on any tab. That is a limitation of the editor, not an oversight — its settings come in on/off, whole-number and decimal kinds only, and there is no text kind for an item id.
+
+| Key | Default | What you hold it for |
+|---|---|---|
+| `Skills.Movement.Second_Wind_Item` | `FEATHER` | Trigger Second Wind. |
+| `Skills.Stealth.Smoke_Bomb_Item` | `GUNPOWDER` | Trigger Smoke Bomb. |
+| `Skills.Husbandry.Herdsmans_Call_Item` | `GOAT_HORN` | Trigger Herdsman's Call. |
+| `Skills.Taming.Pet_Combat_Mode.Toggle_Item` | `BONE` | Switch your pets' combat stance. |
+
+Change these by editing `config.yml` directly — the **Open Config Folder** shortcut on the mod's info screen gets you there.
+
+⚠️ **Give all four different items.** The first three collide outright: they share one use-item event, so two on the same item means one fires and the other prints its refusal message. The pet stance toggle is on a *different* event and so doesn't collide in the same way — it's worse. Sharing its item with one of the other three means a single press both fires that active **and** flips your pets' stance.
+
+A name that doesn't resolve to a real item makes its gesture inert rather than throwing — so a typo here costs you the feature silently, and it's worth checking the spelling against the item's in-game id.
 
 ### A skill your Minecraft version cannot furnish
 
