@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Minecraft** | 1.21.2 – 1.21.11 — see [Supported versions](#supported-versions) |
+| **Minecraft** | 1.21 – 1.21.11 — see [Supported versions](#supported-versions) |
 | **Fabric Loader** | ≥ 0.19.3 |
 | **Fabric API** | required |
 | **Java** | 21 or newer |
@@ -21,6 +21,7 @@ mcMMO-SP ships **one build per version band**. A band is a run of Minecraft vers
 | **1.21.5** | `mcmmo-<version>+mc1.21.5.jar` | `0.128.2+1.21.5` | `14.0.2` | `18.0.145` |
 | **1.21.4** | `mcmmo-<version>+mc1.21.4.jar` | `0.119.4+1.21.4` | `13.0.4` | `17.0.144` |
 | **1.21.2 – 1.21.3** | `mcmmo-<version>+mc1.21.2-1.21.3.jar` | `0.114.1+1.21.3` | `12.0.1` | `16.0.143` |
+| **1.21 – 1.21.1** | `mcmmo-<version>+mc1.21-1.21.1.jar` | `0.116.15+1.21.1` | `11.0.4` | `15.0.140` |
 
 Every band needs Fabric Loader ≥ 0.19.3 and Java 21+. The `+mc…` suffix on the filename is the band that jar serves — a single version (`+mc1.21.5`) or a range written out at both ends (`+mc1.21.6-1.21.8`, which covers `1.21.7` too). On the [Releases page](https://github.com/Wulfic/mcMMO-Singleplayer/releases), pick the jar whose label contains your Minecraft version; the filename is the whole answer, so there is nothing to cross-reference.
 
