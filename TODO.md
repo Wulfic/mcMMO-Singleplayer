@@ -34,9 +34,9 @@ own `fabric.mod.json`.
 | `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v1.1.0` |
 | `mc/1.21.4` | `1.21.4` | `>=1.21.4 <1.21.5` | `mc1.21.4-v1.1.0` |
 | `mc/1.21.3` | `1.21.2`, `1.21.3` | `>=1.21.2 <1.21.4` | `mc1.21.3-v1.1.0` |
-| `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | 🔴 **in flight — see §8.3** |
+| `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | `mc1.21.1-v1.1.0` |
 
-**Coverage is continuous `1.21.2` → `1.21.11`.** `mod_version` is `1.1.0-SNAPSHOT` on all seven
+**Coverage is continuous `1.21` → `1.21.11` — the whole `1.21` line, 12 of 12.** `mod_version` is `1.1.0-SNAPSHOT` on all seven
 branches; six releases are published at `v1.1.0`, 0 drafts, one per band.
 
 ⚠️ One dangling tag survives: `mc1.21.11-v2.2.050-build.3` (`afb2a6a6a`) has **no release attached**,
@@ -110,7 +110,7 @@ Generalise the probe to a **skill → required-id-paths** map; do not special-ca
 
 | Band | MC versions | Probe rows (absent · sig-changed) | Status |
 |---|---|---|---|
-| `1.21.1` | `1.21`, `1.21.1` | 65 · 60 = **125** | 🔴 **cut, in flight** — §8.3 |
+| `1.21.1` | `1.21`, `1.21.1` | 65 · 60 = **125** | ✅ **SHIPPED** `mc1.21.1-v1.1.0` — §8.3 |
 | `1.20.x` | `1.20` … `1.20.6` (7 versions) | ⬜ **unmeasured** — no `1.20` jar is cached | ⬜ §22 |
 | `26.x` | `26.1`, `26.1.1`, `26.1.2`, `26.2` | n/a — **full yarn→official rename** | ⬜ §9 |
 
@@ -212,7 +212,9 @@ the branch does not.
       `.github/workflows/drift-audit.yml` goes to the **new** band count, on `master` first and then
       on every band. The floor is what makes *"found no bands"* fail instead of reading as a clean
       audit. Leaving it stale is under-strict rather than noisy — the audit still passes — which is
-      exactly why nothing will remind you to do it. **Currently 5; goes to 6 with 8.3.**
+      exactly why nothing will remind you to do it. ⚠️ **Still 5. 8.3 shipped on 2026-08-19 without
+      raising it** — six bands now exist on `origin` and the committed floor admits five, so a run
+      that found only five would pass. Verified green at `6` locally; the commit is outstanding.
 - [ ] **x.10** ⚠️ **Move the documented support floor in the SAME commit.** `README.md:45` and
       `wiki/Installation.md:29` both read *"Minecraft **1.21.1 and older are not supported**"*. That
       sentence is **false on any band below it** and `BandDocsMatchRealityTest` will fail there. Both
@@ -395,12 +397,47 @@ disables the Hunter anti-farm gate *silently* — spawner mobs quietly start cou
 `MobOriginsTest` covers the **classifier**, not the **binding**, so the suite is green either way.
 That is the `[[smelting-furnace-arm]]` shape: invisible by construction.
 
-### ⬜ Finish 8.3
+### ✅ 8.3 SHIPPED (2026-08-19) — `mc1.21.1-v1.1.0`
 
-- [ ] Resolve the remaining 44 (table above), inside `fabric/`/`platform/` only.
-- [ ] Recipe steps **x.7 → x.10**: mixin-allow audit first, then the full ship gate, push, release,
-      back-port, `--require-bands` **5 → 6**, and move the docs floor sentence to *"below `1.21`"*.
-- [ ] Then **`1.21.x` coverage is complete: 12 of 12.**
+- [x] Resolve the remaining 44, inside `fabric/`/`platform/` only.
+- [x] Recipe steps **x.7** (gates), **x.10** (docs floor + this band's row, `40cf1b218`), push,
+      release. Run `32308459500` green; release published, **not** draft; the other six releases
+      re-checked and **none orphaned** by the tag-reaping sweep.
+- [x] **`1.21.x` coverage is complete: 12 of 12.**
+- [ ] **x.8 back-port — NOT STARTED, paused by owner ruling.** ⚠️ Two items, and the second will not
+      remind you: (1) nothing in the `fix` commit belongs on `master` — it carries an explicit
+      `Backport-not-needed:` because `master`'s `loadEntityWithPassengers` takes the `SpawnReason`;
+      (2) 🔴 **the docs commit `40cf1b218` is docs-ONLY, so `drift-audit.py` structurally cannot see
+      it** (Phase 21, defect B). Five branches still head their version tables at *"1.21.2 –
+      1.21.11"* and carry no `1.21 – 1.21.1` row, and the audit will keep printing *"No drift"*.
+      One wiki serves every band, so that header currently reads as *"your version is unsupported"*
+      to a player on the band we just shipped. **Carry it by hand.**
+- [ ] **x.9 — `--require-bands` 5 → 6 in `.github/workflows/drift-audit.yml`, `master` first then
+      every band. NOT DONE.** Verified green at 6 locally (gates 7/9/10 all pass with six bands), but
+      the committed floor is still `5`, which is under-strict rather than noisy — the audit passes
+      either way, which is exactly why nothing will remind you.
+
+#### The one defect the ship gate caught — and what it says about the other gates
+
+`combat-egg-control`: a `/summon`-ed cow paid UNARMED `(0,0) -> (0,610)`. At `1.21.1`
+`loadEntityWithPassengers` carries **no `SpawnReason`** (at `1.21.11` it does), so `/summon` reached
+no reason-carrying factory and `EntityTypeSpawnOriginMixin`'s 6-arg `create` was never on its path.
+Fixed by `SummonCommandOriginMixin` (`e7fae0d91`), the fifth origin seam, same shape as the two
+spawner halves.
+
+🔑🔑 **Every structural gate was green while this was broken.** `mixin-allow-audit` reported OK on
+all 67 injectors; `MixinApplicationTest` named four origin seams that all genuinely applied;
+`boot-check` was clean. **Only a live mob dying to a live player found it** — the §8.3 prediction
+that a bound-but-inert retarget is *"strictly worse than the ZERO it replaced"*, confirmed in the
+one way the cheap gates cannot reach.
+⚠️ **And the severity was nearly misread.** *"The egg-farm guard is off on this band"* is **false**:
+`SpawnEggItem → spawnFromItemStack → spawn → create(…SpawnReason,ZZ)` **is** the injected method, so
+eggs, dispensers and portals were always marked. Only `/summon` — an operator command — leaked.
+Which is also why the hole looked impossible: every path a person would check by hand was covered.
+⚠️ **The phase is named `combat-egg-control` and argues about `Eggs.Multiplier`, yet drives
+`/summon`.** On `master` both stamp, so the proxy was invisible; here the test and its stated subject
+came apart. Worth pointing it at a real spawn egg on `master` — a `scripts/**` change, so master-first
+across all seven branches.
 
 #### The test port — the last blocker before the ship gate (planned 2026-08-19)
 
