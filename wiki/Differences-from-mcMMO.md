@@ -10,7 +10,7 @@ This is a **port**, not a fork that tracks upstream. It targets single-player, a
 
 ### The movement group
 
-**Acrobatics was renamed Agility** and turned into a **child skill** — it earns no XP of its own, and its level is the mean of three brand-new primary skills:
+**Acrobatics is replaced by three brand-new primary skills**, one per medium you travel through:
 
 | New skill | Trained by |
 |---|---|
@@ -20,7 +20,7 @@ This is a **port**, not a fork that tracks upstream. It targets single-player, a
 
 Seven sub-skills are new: **Fleet Footed, Athlete, Smash, Lead Lungs, Glide, Lake Raider, Solar Wings**, plus the **Second Wind** super ability.
 
-Agility itself keeps only **Fleet Footed** and **Second Wind** — the two that work in all three mediums. Every single-medium perk is gated on its own parent, so you earn it by doing that one thing rather than by dragging up a three-skill average. Full details: [Movement Skills](Movement-Skills).
+**Every perk is gated on the skill that pays for it.** Two of them — Fleet Footed and Second Wind — work in all three mediums, so each of the three skills gets its own copy rather than all three sharing one gated on the average. That average was the problem: it made some perks literally unreachable for a player who committed to one medium. Full details: [Movement Skills](Movement-Skills#why-every-perk-sits-on-the-skill-that-earns-it).
 
 ### Stealth
 
@@ -82,6 +82,7 @@ Stored in `<world save>/mcmmo/players/`, not in a global profile or a database. 
 | **Placed blocks are tracked across restarts** | Place → quit → reopen → mine still pays nothing. |
 | **Old Acrobatics progress zeroes out** | Child skills have no save key, so there's nothing to migrate to. See [Movement Skills](Movement-Skills). |
 | **Tamed pets follow you through a teleport** | An override of *vanilla*, not of upstream mcMMO — a pet outside your simulation distance stops being ticked and never runs its follow goal. Same world only; sitting pets stay. `Skills.Taming.Pets_Follow_Teleport: false` restores vanilla. |
+| **Tamed pets have a combat stance** | New in this port, not upstream mcMMO. Sneak + right-click a pet you own while holding a bone to switch **all** your pets between *passive* (fight only what you fight) and *aggressive* (idle pets pick the nearest hostile to you). The cost is that the same gesture no longer sits the pet while a bone is in your main hand. Also fixes "my pets ignore what I shoot" — a wolf could not path past its natural 16-block follow range. `Skills.Taming.Pet_Combat_Mode.Enabled: false` restores vanilla. |
 
 ---
 
