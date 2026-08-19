@@ -2224,7 +2224,7 @@ Specifically **do not** make a failing case pass by removing the forced-env wrap
 
 ---
 
-## Phase 21 — the Taming docs, and the docs-only back-port hole (2026-08-19, before 8.3)
+## Phase 21 — the Taming docs, and the docs-only back-port hole ✅ COMPLETE (2026-08-19)
 
 Found while running the Taming track's outstanding **caveat-expiry pass**. Two defects, and they are
 **not one problem** — one is a missing page, the other is a propagation blind spot with a clean
@@ -2282,7 +2282,7 @@ needed; today only one exists.
 
 Docs only. No code, no test, no config change — the feature is already shipped and gated.
 
-- [ ] **21.2a** `wiki/Skills.md` — a stance block in the Taming section, in the shape of the
+- [x] **21.2a** `wiki/Skills.md` — a stance block in the Taming section, in the shape of the
       existing *"Pets follow you through a teleport"* callout it sits beside. Must carry: the
       gesture (**sneak + right-click a pet you own, holding a bone, main hand**), the documented
       cost (**while a bone is in your main hand that gesture changes the stance instead of sitting
@@ -2296,9 +2296,9 @@ Docs only. No code, no test, no config change — the feature is already shipped
       Lore (**left**-click a tameable), Hunter's Quarry Sense (sneak + **left**-click a creature)
       and now this (sneak + **right**-click a pet). The page must disambiguate or it creates
       support load rather than removing it.
-- [ ] **21.2b** `README.md` — one line in the Taming area near the existing Call of the Wild gesture
+- [x] **21.2b** `README.md` — one line in the Taming area near the existing Call of the Wild gesture
       note.
-- [ ] **21.2c** `wiki/Configuration.md` — a config section for the four
+- [x] **21.2c** `wiki/Configuration.md` — a config section for the four
       `Skills.Taming.Pet_Combat_Mode.*` knobs, beside the existing *"Stop pets following you through
       a teleport"* section. Include the **64 cap** on `Engage_Range` and that exceeding it warns in
       the log, and that `Toggle_Item` must differ from `Second_Wind_Item`, `Smoke_Bomb_Item` and
@@ -2306,9 +2306,9 @@ Docs only. No code, no test, no config change — the feature is already shipped
       🔑 **`Aggressive_Radius` and `Engage_Range` share the default `32` by design, not by
       coincidence** (R-5): a mob found at 32 is only worth targeting if a pet can *path* 32. Say so,
       or the next editor moves one and not the other.
-- [ ] **21.2d** `wiki/Differences-from-mcMMO.md` — a row in the same table that already carries
+- [x] **21.2d** `wiki/Differences-from-mcMMO.md` — a row in the same table that already carries
       *"Tamed pets follow you through a teleport"*. This is new in this port, not upstream mcMMO.
-- [ ] **21.2e** `wiki/Optional-Integrations.md` — the **Abilities** tab row is now incomplete. The
+- [x] **21.2e** `wiki/Optional-Integrations.md` — the **Abilities** tab row is now incomplete. The
       four pet knobs live on `CAT_ABILITIES`, and the row currently reads *"Super-ability master
       switch, activation rules, tool durability, a cooldown slider per ability."*
       ⚠️ Note in the page that **`Toggle_Item` is deliberately absent from the editor** —
@@ -2322,7 +2322,7 @@ one.
 
 ### 21.3 — the back-port (defect B), and why it is one commit rather than two cherry-picks
 
-- [ ] **21.3a** Equalize `README.md` and `wiki/` from `master` onto each of the five bands as **one
+- [x] **21.3a** Equalize `README.md` and `wiki/` from `master` onto each of the five bands as **one
       commit per band**, carrying `Backport-of:` naming the `master` commits it settles
       (`90031c9df`, `3a07bcba6`, and 21.2's new one).
       🔑 **Deliberately not three cherry-picks.** The five bands are **byte-identical to each other**
@@ -2335,27 +2335,27 @@ one.
       overwritten content is the band's own committed HEAD, recoverable by
       `git checkout HEAD -- README.md wiki/` before commit, or `git revert` after. Gate 4: the two
       paths named, never `.` and never `-f`.
-- [ ] **21.3b** Verify the floor sentence survives. It reads *"1.21.1 and older are not supported"*
+- [x] **21.3b** Verify the floor sentence survives. It reads *"1.21.1 and older are not supported"*
       **identically on all six branches today** (checked in `README.md:45` and
       `wiki/Installation.md:29`), and `wiki/Installation.md` is **already** byte-identical across
       branches — it is not in the drift set. So equalization cannot move the floor. Assert it anyway
       after the copy, per band: the whole defect class here is a docs change nobody re-read.
-- [ ] **21.3c** Run `BandDocsMatchRealityTest` on each band after the copy — it is the guard that
+- [x] **21.3c** Run `BandDocsMatchRealityTest` on each band after the copy — it is the guard that
       owns the floor claim, and it is per-band by construction.
 
 ### 21.4 — verification
 
-- [ ] **21.4a** `git diff --name-only master <band> -- README.md wiki/` prints **nothing**, on all
+- [x] **21.4a** `git diff --name-only master <band> -- README.md wiki/` prints **nothing**, on all
       five bands. This is §8.2′'s stated invariant, and it is **currently violated on all five** —
       which is how this phase was found.
-- [ ] **21.4b** Grep the **symptom**, not the files edited. `master` and one band each:
+- [x] **21.4b** Grep the **symptom**, not the files edited. `master` and one band each:
       `Agility`, `agility` → expect hits only in the deliberate tombstone/rename-table prose, never
       as a live skill. This is the caveat-expiry rule, and the Agility rename table has already
       rotted once (its *destination* went stale).
-- [ ] **21.4c** Full build green on `master`. Docs-only, but `ModContactLinksTest` and
+- [x] **21.4c** Full build green on `master`. Docs-only, but `ModContactLinksTest` and
       `BandDocsMatchRealityTest` both read these files, so "docs cannot break the build" is false
       here.
-- [ ] **21.4d** 🔑 A docs-only push **does not release** — `README.md` and `wiki/` are outside
+- [x] **21.4d** 🔑 A docs-only push **does not release** — `README.md` and `wiki/` are outside
       `release.yml`'s `paths:` filter (verified 2026-08-14, `release.yml:75-83`). Expect
       `ci-watch.sh` to report a **stated skip**, not a pass, and read which of the four states it
       returns. Do not treat exit 3 as success.
@@ -2386,6 +2386,45 @@ one.
 - **Not** touching `wiki/Installation.md`. It is already identical everywhere and carries the floor
   sentence — the one file where an unnecessary edit has a real downside.
 - **Not** starting 8.3. Next, immediately after this.
+
+### 21.8 — what actually happened
+
+**Shipped.** `master` `94c8bf04e` (the docs) + `98c85fe7d` (this plan), and one docs commit per band:
+`mc/1.21.10` `f6cccd8be` · `mc/1.21.8` `9629d69bf` · `mc/1.21.5` `06f3ce097` · `mc/1.21.4`
+`046ea7c9b` · `mc/1.21.3` `e8e1d2bec`. All six pushed.
+
+| Gate | Result |
+|---|---|
+| `git diff --name-only master <band> -- README.md wiki/` | **empty on all five** (was 13 files each) |
+| `BandDocsMatchRealityTest`, re-run per band | **5/5, 0 failures**, `5 actionable tasks: 5 executed` on every band |
+| `ModContactLinksTest` + `BandDocsMatchRealityTest` on `master` | 5/5 and 5/5, force-run |
+| `drift-audit.py --self-test` then `--require-bands 5` | self-test passed; **0 MISSING**, counts **unchanged** at 43/23/30/31/34 |
+| `branch-file-identity-audit.py --require-bands 5` | exit 0, 23 shared paths identical |
+| `manifest-identity-audit.py --require-bands 5` | exit 0, six distinct manifests |
+| `ci-watch.sh HEAD` | exit 0 — *"no run exists … Skipped, not passed"*. The **stated skip**, as predicted; no release fired |
+
+🔑🔑 **The drift audit printed "No drift" with its counts UNCHANGED while five docs commits landed.**
+That is defect B visible in the auditor's own output rather than a bug in it, and it is exactly why
+the problem survived undetected.
+
+⚠️⚠️ **`BUILD SUCCESSFUL` on the `master` docs change was worthless and nearly accepted.**
+`./gradlew build` returned green in 34s with `1 executed, 2 from cache, 7 up-to-date` — **the `test`
+task never ran.** `BandDocsMatchRealityTest` and `ModContactLinksTest` read `README.md`/`wiki/` at
+runtime through `Path.of(...)`, so those files are **not declared Gradle inputs** and a docs-only edit
+cannot invalidate the task. The two guards that exist to police these files are precisely the two a
+docs change cannot wake. `--rerun-tasks` gave the real answer. **Read the `N executed` line, never the
+SUCCESSFUL line.** Same family as Phase 17's `compileJava` `FROM-CACHE` on every band.
+
+⚠️ **The first back-port commits were missing a trailer.** They named `90031c9df` and `3a07bcba6` but
+not `94c8bf04e`, whose content they also carried — the helper was written before that commit existed.
+Amended on all five while still unpushed, with the **tree hash asserted byte-identical before and
+after** so the amend provably touched only the message. A `Backport-of:` trailer is the mechanical
+answer to *"did this reach every band?"*, so a missing one is a real defect even where no tool reads it.
+
+🔑 **The one-off helper stayed OUT of `scripts/`.** That tree is in `branch-file-identity-audit.py`'s
+shared set, which takes the **union** of every branch's tree — so a helper committed to `master` alone
+is an instant ship-gate failure, and committing it to all six is permanent shared surface for a script
+with one use. **Adding a tool to `scripts/` is a six-branch commitment, not a convenience.**
 
 ### 21.7 — attempt budget
 
