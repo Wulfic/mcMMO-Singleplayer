@@ -1823,7 +1823,80 @@ failure to investigate.
 
 ---
 
-## Phase 19 — `AGENTS.md` is byte-identical on every branch (owner-ruled 2026-08-18, before 8.3)
+## Phase 19 — `AGENTS.md` is byte-identical on every branch ✅ COMPLETE (2026-08-18)
+
+**Shipped to all six branches, pushed, all gates green.**
+`master` `bf7f734fa` · `mc/1.21.10` `e721cedac` · `mc/1.21.8` `ce1ea6a98` · `mc/1.21.5` `3fc27d0f6`
+· `mc/1.21.4` `61f580bae` · `mc/1.21.3` `ccb31ac58`.
+
+| gate | result |
+|---|---|
+| `branch-file-identity-audit.py --require-bands 5` | **exit 0** — 23 shared paths byte-identical on all six |
+| `manifest-identity-audit.py --require-bands 5` | **exit 0** — six distinct manifests, **unperturbed** |
+| `drift-audit.py --master master --require-bands 5` | **0 MISSING** on all five; propagated counts 42/22/29/30/33, each **+1** |
+| `ci-watch.sh HEAD` | exit 0 — *"Skipped, not passed"*: nothing in the push matches `release.yml`'s `paths:` filter |
+
+🔑 **The failing baseline is what makes the green run mean anything.** Run *before* the fix, the
+guard exited **1** naming `AGENTS.md` with **5 distinct versions** across 22 audited paths. After the
+`master` commit it exited 1 with **three** violations — `AGENTS.md`, `drift-audit.yml`, and
+`branch-file-identity-audit.py` **ABSENT on all five bands**, that last one produced by union
+expansion catching the guard's own new file. Only after the back-port did it reach 0.
+
+⚠️ **`--local` before the push, `origin/**` after.** The five band commits read as still-broken to a
+default run until pushed; the guard says so rather than reading clean.
+
+### 19.9 — a defect in a DIFFERENT gate, found while running this one
+
+🔴 **`scripts/ci-watch.sh --mutate` cannot run under git-bash on this machine, and evidently never
+could.** It exits 1 with `FileNotFoundError: '/tmp/tmp.XXXX/orig.sh'` at `ci-watch.sh:157`, where a
+bash `mktemp -d` path is handed to **Windows** Python. Measured: `mktemp -d` yields
+`/tmp/tmp.otHnszhYak`; `python -c "os.path.exists(...)"` on that same string returns **False**, and
+`tempfile.gettempdir()` is `C:\Users\tyler\AppData\Local\Temp`. Two different filesystems.
+
+⚠️ **Not caused by Phase 19** — `ci-watch.sh` is untouched here (last change `f9a0e0f2c`) and is
+byte-identical on all six branches. The gate's **real** run is fine; only the mutation harness that
+proves it can fail is broken.
+
+🔑 **Why it matters more than it looks.** Ship gate step 8 is *"`--mutate` **then** `HEAD`"*, and the
+whole point of the first half is that *"could not see a run"* and *"the run passed"* are the two
+states R11 conflates. With the self-test unable to execute, step 8's ability to fail is **asserted,
+not demonstrated** — the exact condition every other script here carries a `--self-test` to avoid.
+Likely a one-line `cygpath -w` fix, but it is a different gate and deserves its own diagnosis rather
+than a drive-by patch. **Deliberately not fixed in this phase.**
+
+### 19.10 — what the build of this guard taught
+
+- 🔑🔑 **The membership test for a shared file is *who reads which copy*.** `FUNDING.yml` is read by
+  GitHub from the **default branch alone**, so the five bands still carrying upstream's `nossr50`
+  blob are a correctly-reasoned `Backport-not-needed:` (`3d5e2b681`), **not drift** — and
+  `drift-audit.py` reporting 0 MISSING was right. `AGENTS.md` is read from the **checkout**, so the
+  band's copy is the only one that matters. Identity is the invariant for one and a false alarm for
+  the other, and only that question separates them.
+- ⚠️⚠️ **The first mutation written for the absence case was itself wrong, and the self-test caught
+  it.** It mapped an absence to a sentinel that still differed from `master`'s real sha, so the path
+  stayed a violation for the wrong reason and never went green. Fixing it falsified a claim in this
+  plan: **"absent on every branch reads as identical because `None == None`" is unreachable here** —
+  union expansion never selects a path no branch has. The reachable trap is more ordinary and worse:
+  a path absent on **some** branches being silently dropped, by a selector that **intersects** the
+  trees or a builder that records only the branches having the file. Both are now asserted.
+  🔑 **A mutation that fails to flip a case green is evidence about the mutation, not only the
+  guard** — the natural reading ("good, it's still caught") is exactly backwards.
+- 🔑 **Two guards, opposite invariants, one directory.** `scripts/mc-surface.txt` must be **distinct**
+  on every branch (gate 9) and is therefore **excluded** from gate 10. If it ever enters both sets,
+  **no state satisfies both and nothing can ship.** Stated in three places on purpose: the script's
+  `EXCLUDE` comment, the workflow header, and gate 10.
+- ⚠️ **`manifest-identity-audit.py` was never written into `AGENTS.md`'s tooling table.** Phase 18
+  added the script and the ship-gate step, but not the row in the only doc that reaches a band —
+  the same class of gap this phase closes. Added here.
+- ⚠️ **The `R-` series is exhausted** (`R-a`…`R-u`, already double-booked). New rulings take a
+  phase-scoped label: this one is **P19-1**, after `P15-1` / `P16-1`.
+- ⚠️ Working tree is **CRLF** (`text=auto` + `core.autocrlf=true`); blobs are LF. Every splice
+  normalises to LF in memory and writes back CRLF. The first splicer **refused** on the mismatch
+  rather than mangling the file, which is the behaviour to keep.
+
+---
+
+## Phase 19 — the original plan (owner-ruled 2026-08-18, before 8.3)
 
 Closes the open question left standing at the end of Phase 18 (*"`AGENTS.md` is 420 lines divergent
 on every band, yet it is the repo's only tracked agent-facing doc"*). It was tabled deliberately in
@@ -2847,6 +2920,11 @@ have no automation whatsoever.
    certify a build that has not shipped yet; step 8 is the only one that looks at what actually did.
    §10.7 is what happens without it: four band releases red for a day behind five green ship gates.
 
+   ⚠️⚠️ **`--mutate` is BROKEN under git-bash on the Windows dev machine and evidently always was**
+   (§19.9, 2026-08-18). It exits 1 at `ci-watch.sh:157` handing a bash `mktemp -d` path to Windows
+   Python, which sees a different filesystem entirely. The gate's real run is unaffected; the
+   mutation harness that proves it can fail is not. **Until that is fixed, step 8's ability to fail
+   is asserted rather than demonstrated.** Not a `ci-watch` logic defect and not caused by Phase 19.
    ⚠️ **Run it FROM the branch you pushed.** §12.1 made it resolve the push range from that branch's
    remote-tracking reflog, so `ci-watch.sh <band-sha>` invoked while sitting on `master` cannot
    establish a range and fails closed at **exit 3 (cannot tell)** — correct, but not the answer you
@@ -2921,6 +2999,14 @@ their correctness is checked instead by `BandDocsMatchRealityTest`, which runs i
       render→parse round-trip), and a stubbed comparator was proved to redden all three firing cases.
       ⚠️ **This flips the ship gate from *silently regenerates* to *verifies*.** A band that has
       legitimately moved records must now regenerate deliberately (a plain run) and commit the diff.
+
+- [ ] 🔴 **NEW 2026-08-18 (Phase 19, §19.9) — `ci-watch.sh --mutate` cannot run on this machine.**
+      Ship gate step 8's self-test dies at `ci-watch.sh:157` (`FileNotFoundError` on a bash
+      `mktemp -d` path handed to Windows Python). The gate's real run works; the harness proving it
+      can **fail** does not, so step 8 is the one gate whose failure mode is unverified — in the
+      guard-heavy discipline this repo runs on, that is the whole point of a self-test. Likely a
+      `cygpath -w`, but it is a different gate and gets its own diagnosis. Byte-identical on all six
+      branches, so the fix back-ports to five.
 
 - [ ] 🟡 **DOWNGRADED 2026-08-18 (Phase 18) — piece 2 shipped, piece 1 is still open.** The two
       pieces deferred by P16-1:
