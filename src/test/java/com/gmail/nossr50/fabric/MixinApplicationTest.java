@@ -36,6 +36,7 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.BowItem;
 import net.minecraft.item.HoeItem;
 import net.minecraft.screen.slot.FurnaceOutputSlot;
+import net.minecraft.server.command.SummonCommand;
 import net.minecraft.world.explosion.Explosion;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -559,6 +560,25 @@ class MixinApplicationTest {
                         .anyMatch(method -> method.getName().contains("carryOriginThroughConversion")),
                 "MobConversionOriginMixin did not apply to MobEntity — a spawner mob would shed its "
                         + "marker the moment it converted, which is exactly how drowned farms work");
+
+        // 🔑 The FIFTH seam, and the one no structural gate could have predicted. /summon also
+        // reaches loadEntityWithPassengers, so on this band it carries no SpawnReason either — but
+        // unlike the spawner halves nothing here even hinted at a gap: mixin-allow-audit reported
+        // OK on every injector, this test named four seams that all genuinely applied, and the boot
+        // check was clean. It took a live kill in gameplay-smoke.sh (combat-egg-control, UNARMED
+        // moved 0 -> 610 beating a summoned cow) to expose it.
+        //
+        // ⚠️ Do NOT "simplify" this away on the theory that EntityTypeSpawnOriginMixin covers it.
+        // It does not, and the reason is worth keeping: a spawn EGG reaches the 6-arg create
+        // (SpawnEggItem -> spawnFromItemStack -> spawn -> create), which is why eggs, dispensers and
+        // portals stayed correctly marked and made this hole look like it could not exist.
+        assertDoesNotThrow(() -> Class.forName(SummonCommand.class.getName(), true,
+                MixinApplicationTest.class.getClassLoader()));
+        assertTrue(Arrays.stream(SummonCommand.class.getDeclaredMethods())
+                        .anyMatch(method -> method.getName().contains("stampSummonOrigin")),
+                "SummonCommandOriginMixin did not apply to SummonCommand — a /summon-ed mob would "
+                        + "count toward Hunter mastery, and MobOrigins' documented COMMAND -> "
+                        + "PLAYER_PLACED mapping would be declared but not true");
     }
 
     @Test

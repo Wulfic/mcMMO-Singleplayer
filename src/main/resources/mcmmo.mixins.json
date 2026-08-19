@@ -48,6 +48,7 @@
     "ShearPayoutMixin",
     "ShearableInteractMixin",
     "SnowGolemTrailMixin",
+    "SummonCommandOriginMixin",
     "TameableEntityTameMixin",
     "TntExplodeMixin",
     "TrialSpawnerOriginMixin"
