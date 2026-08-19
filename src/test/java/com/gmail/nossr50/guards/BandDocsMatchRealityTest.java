@@ -43,8 +43,14 @@ import org.junit.jupiter.api.Test;
  * the sentence is right in general; it is evidence it is right <em>from this branch</em>, which is
  * the only claim a reader of this branch's docs can act on.
  *
- * <p>⚠️ <b>Next cut this fires on:</b> {@code mc/1.21.3} (TODO 8.2). The floor sentence must move to
- * {@code 1.21.1} in the same commit, in both files.
+ * <p>⚠️ <b>Next cut this fires on:</b> the first {@code 1.20.x} band (TODO §22, ruling R-v). The
+ * floor sentence must move in the same commit, in both files. It reads {@code 1.20.6} today, moved
+ * there when {@code mc/1.21.1} was cut; 8.2 and 8.3 have both shipped.
+ *
+ * <p>⚠️ <b>This pointer is a dated note, and it rots.</b> It has already been stale once — it named
+ * {@code mc/1.21.3} through two completed band cuts, because nothing here reads a javadoc. Treat it
+ * as a hint about where to look, never as the current state; {@code gradle.properties} and the two
+ * documents are the facts, and the assertions below read those.
  */
 class BandDocsMatchRealityTest {
 
