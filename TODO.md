@@ -271,8 +271,9 @@ of the six rulings the honest answer was *nowhere*.
       **version-agnostic logic change**, the exact class that made up 11 of the last 12 forgotten
       fixes, and the mechanism held. ⚠️ `mc-surface.txt` is a generated per-branch artifact:
       **regenerated** on each band, never cherry-picked.
-- [ ] 🔴 **Caveat-expiry pass — NOT DONE, and the gap is total. This is Phase 21 defect A.**
-      Grep `README.md` and `wiki/` for the **symptom**, not the files
+- [x] ✅ **Caveat-expiry pass — DONE 2026-08-19 by Phase 21 (defect A).** The gap was total
+      rather than stale: the feature had no player-facing documentation on any branch, so there was
+      no wrong sentence to grep for. Grep `README.md` and `wiki/` for the **symptom**, not the files
       touched: *"wolves"*, *"pets"*, *"sic"*, *"Call of the Wild"*, *"sitting"*. The wiki Taming page
       needs the new gesture, **the sit-toggle cost** (while a bone is in your main hand, sneak +
       right-click changes the stance instead of sitting the pet) and both stances. ⚠️ One wiki serves
