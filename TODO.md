@@ -34,9 +34,9 @@ own `fabric.mod.json`.
 | `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v1.1.0` |
 | `mc/1.21.4` | `1.21.4` | `>=1.21.4 <1.21.5` | `mc1.21.4-v1.1.0` |
 | `mc/1.21.3` | `1.21.2`, `1.21.3` | `>=1.21.2 <1.21.4` | `mc1.21.3-v1.1.0` |
-| `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | 🔴 **in flight — see §8.3** |
+| `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | `mc1.21.1-v1.1.0` |
 
-**Coverage is continuous `1.21.2` → `1.21.11`.** `mod_version` is `1.1.0-SNAPSHOT` on all seven
+**Coverage is continuous `1.21` → `1.21.11` — the whole `1.21` line, 12 of 12.** `mod_version` is `1.1.0-SNAPSHOT` on all seven
 branches; six releases are published at `v1.1.0`, 0 drafts, one per band.
 
 ⚠️ One dangling tag survives: `mc1.21.11-v2.2.050-build.3` (`afb2a6a6a`) has **no release attached**,
@@ -110,7 +110,7 @@ Generalise the probe to a **skill → required-id-paths** map; do not special-ca
 
 | Band | MC versions | Probe rows (absent · sig-changed) | Status |
 |---|---|---|---|
-| `1.21.1` | `1.21`, `1.21.1` | 65 · 60 = **125** | 🔴 **cut, in flight** — §8.3 |
+| `1.21.1` | `1.21`, `1.21.1` | 65 · 60 = **125** | ✅ **SHIPPED** `mc1.21.1-v1.1.0` — §8.3 |
 | `1.20.x` | `1.20` … `1.20.6` (7 versions) | ⬜ **unmeasured** — no `1.20` jar is cached | ⬜ §22 |
 | `26.x` | `26.1`, `26.1.1`, `26.1.2`, `26.2` | n/a — **full yarn→official rename** | ⬜ §9 |
 
@@ -212,9 +212,12 @@ the branch does not.
       `.github/workflows/drift-audit.yml` goes to the **new** band count, on `master` first and then
       on every band. The floor is what makes *"found no bands"* fail instead of reading as a clean
       audit. Leaving it stale is under-strict rather than noisy — the audit still passes — which is
-      exactly why nothing will remind you to do it. **Currently 5; goes to 6 with 8.3.**
-- [ ] **x.10** ⚠️ **Move the documented support floor in the SAME commit.** `README.md:45` and
-      `wiki/Installation.md:29` both read *"Minecraft **1.21.1 and older are not supported**"*. That
+      exactly why nothing will remind you to do it. ✅ **At `6` since 2026-08-19** — raised as 8.3's
+      x.9, one release cycle late, which is itself the evidence: 8.3 shipped and released with the
+      floor still admitting five bands, and every gate stayed green throughout.
+- [ ] **x.10** ⚠️ **Move the documented support floor in the SAME commit.** `README.md` and
+      `wiki/Installation.md` both carry a *"Minecraft **&lt;version&gt; and older are not supported**"*
+      sentence — `1.20.6` as of 8.3. That
       sentence is **false on any band below it** and `BandDocsMatchRealityTest` will fail there. Both
       files, on every branch.
 
@@ -251,22 +254,65 @@ scripted and every name was resolved from `javap` on the `1.21.1` merged jar.
 **Measured effect: 67 compile errors → 44.** Every affected file is in `fabric/` or `platform/` —
 Phase 2's boundary cap held, no skill logic touched.
 
-### ⬜ The remaining 44
+### ⬜ The remaining 44 — RE-MEASURED 2026-08-19 against the `1.21.1` merged jar
 
-| Remaining | Count | Note |
+⚠️ **The table this replaces was an estimate, and it was wrong in both directions.** It named rows
+that do not appear in the compiler's output (`AbstractCowEntity`/`AbstractBoatEntity` counted 8; they
+are 4) and it **missed six signature changes entirely** — `NbtCompound#getInt`, `LivingEntity#damage`,
+`Entity#teleport`, `PotionContentsComponent`'s constructor, `BeehiveBlock#dropHoneycomb`, and the
+`UseItemCallback` return type. **Work from `compileJava`, never from this table.**
+Every signature below was resolved with `scripts/javap-mc.sh` against the `1.21.1` merged jar.
+
+#### Group 1 — mechanical, signature resolved (28 errors)
+
+| Symbol on `master` | `1.21.1` form | Sites |
 |---|---|---|
-| owner accessors, `setTamedBy`, `setOwner` | ~12 | `TameableEntity` on `1.21.1` has `getOwnerUuid()`/`setOwnerUuid()`/`setOwner(PlayerEntity)`; `getOwnerReference()` does **not** exist. Semantic, not mechanical — read each call site |
-| `AbstractCowEntity` / `AbstractBoatEntity` | 8 | absent |
-| `ConsumableComponent` | 4 | 🔴 **the eating seam.** Re-point `FoodComponentMixin` from `FoodComponent#onConsume` to **`LivingEntity#eatFood(World, ItemStack, FoodComponent)`**. Keep `allow = 1` |
-| `PlayerInput` | 4 | 🔴 **the sneak seam.** Re-point `PlayerMovementTracker` to **`ServerPlayerEntity#updateInput(float, float, boolean, boolean)`**, 4th flag = sneaking. ⚠️ It is a **setter called by the packet handler**, not a getter — confirm the read shape before writing the injector |
-| `ExplosionImpl` | 4 | absent |
-| `EntityConversionContext` | 2 | absent — `MobConversionOriginMixin` |
-| `VALUES`, `UI`, `SPAWN_ITEM_USE`, `LOAD`, `GAMEMASTERS_CHECK`, `DIMENSION_TRAVEL` | 12 | enum/registry constants — resolve each against `javap` |
-| `getLootTableKey()`, `acceptsItem(T)` | 4 | |
+| `DynamicRegistryManager#getOrThrow(k)` | `#get(k)` — returns the registry directly | 5 |
+| `UseItemCallback` returns `ActionResult` | returns **`TypedActionResult<ItemStack>`** (`class_1271<class_1799>`, verified in `fabric-events-interaction-v0-0.116.15`) | 4 |
+| `LivingEntity#damage(ServerWorld, src, amt)` | `#damage(src, amt)` | 2 |
+| `Entity#teleport(…, yaw, pitch, boolean)` | 7-arg, **no trailing flag** | 2 |
+| `EquipmentSlot.VALUES` | `EquipmentSlot.values()` | 2 |
+| `AbstractBoatEntity` | `BoatEntity` (`ChestBoatEntity` extends it, so the `instanceof` still covers both) | 2 |
+| `AbstractCowEntity` | `CowEntity` (`MooshroomEntity` extends it) | 2 |
+| `ExplosionImpl` | `Explosion` — the concrete class at this version | 2 |
+| `NbtCompound#getInt(key, default)` | `#getInt(key)` — already returns `0` when absent | 1 |
+| `BeehiveBlock#dropHoneycomb(6 args)` | `#dropHoneycomb(World, BlockPos)` | 1 |
+| `PotionContentsComponent(4 args)` | `(Optional<RegistryEntry<Potion>>, Optional<Integer>, List<StatusEffectInstance>)` | 1 |
+| `LivingEntity#getLootTableKey()` | `#getLootTable()` | 1 |
+| `Tameable#getOwnerReference()` | `#getOwnerUuid()` — still null-checkable | 1 |
+| `SmeltingRecipe#ingredient()` | `AbstractCookingRecipe#getIngredients().getFirst()` | 1 |
+| `Ingredient#acceptsItem(RegistryEntry<Item>)` | `Ingredient#test(ItemStack)` — the arg shape changes, not just the name | 1 |
 
-🔴 **The eating-seam row is the boot-failure row.** An unresolvable `@At` does **not** degrade
+#### Group 2 — absent, needs a decision recorded (7 errors)
+
+| Symbol | Finding | Resolution |
+|---|---|---|
+| `SoundCategory.UI` | **absent** below `1.21.2` | 🔑 an exhaustive platform→MC mapping; the arm cannot be deleted. Map to the nearest slider and say so in the code |
+| `CommandManager.requirePermissionLevel` + `.GAMEMASTERS_CHECK` | **both absent** at `1.21.1`. ⚠️ `mc/1.21.8`'s fix (`requirePermissionLevel(2)`) does **not** transfer — only the constant was missing there, the method existed | `source -> source.hasPermissionLevel(2)`. Same permission, this version's spelling |
+| `SpawnReason.SPAWN_ITEM_USE` | renamed — is `SPAWN_EGG` at `1.21.1` | rename the switch label |
+| `SpawnReason.LOAD`, `.DIMENSION_TRAVEL` | **absent** at `1.21.1` | drop both labels; the switch stays exhaustive at this version's 17 constants. ⚠️ `MobOrigins`' class doc explains `stampOnSpawn`'s early return *by naming these two* — the code fact holds, the named reasons do not. Restate without pinning them |
+| `TameableEntity#setTamedBy(p)` | absent; `setOwner(PlayerEntity)` is the predecessor | `setOwner(player)` |
+| `AbstractHorseEntity#setOwner(p)` | absent — horses are `Tameable` but not `TameableEntity` here | `setTame(true)` + `setOwnerUuid(player.getUuid())` |
+
+#### Group 3 — the four seams (9 errors) 🔴
+
+✅ **Measured: all four have a real `1.21.1` predecessor, so R-m′ holds and nothing ships disabled.**
+The `ExplosionImpl` row is a **fourth** seam the old table did not identify as one.
+
+| Seam | `1.21.1` target | Shape change |
+|---|---|---|
+| **Eating** — `FoodComponentMixin`, `ConsumableComponent` | `LivingEntity#eatFood(World, ItemStack, FoodComponent)` | food data still lives on `FoodComponent`; there is no `ConsumableComponent` to split off |
+| **Sneak** — `PlayerMovementTracker`, `PlayerInput` | `ServerPlayerEntity#updateInput(float, float, boolean, boolean)` | ⚠️ a **setter the packet handler calls**, not a getter. 4th flag is sneaking |
+| **Conversion** — `MobConversionOriginMixin` | `MobEntity#convertTo(EntityType<T>, boolean)` | the 4-arg context funnel collapses to a **single** 2-arg method — the "two overloads, inject the funnel" reasoning in the javadoc does not apply here |
+| **Explosion** — `ExplosionDropsMixin` | `Explosion#affectWorld(boolean)` + `AbstractBlockState#onExploded(World, BlockPos, Explosion, BiConsumer)` | 🔴 **the real redesign.** `destroyBlocks(List<BlockPos>)` does not exist; its body is inside `affectWorld`. `Explosion#getWorld()` is also gone — `world` is a **private field**, so `BlastMiningListener` needs a `@Accessor`/`@Shadow` route, and it is a `World`, not a `ServerWorld` |
+
+🔴 **The eating-seam row is still the boot-failure row.** An unresolvable `@At` does **not** degrade
 gracefully: on `mc/1.21.5` two of them took out `Blocks.<clinit>`, then `Items.<clinit>`, and cascaded
 into **302 failing tests across 34 unrelated classes**. Read the root cause, never the count.
+
+⚠️ **Every `allow = N` in Group 3 is now unmeasured.** The counts in those javadocs were measured on
+a different version's bytecode. `scripts/mixin-allow-audit.py` is ship-gate 2 and must run **before**
+gate 1 — see `Finish 8.3` below.
 
 ⚠️ **`EntityNavigation#setMaxFollowRange` does not exist below `1.21.2`.** That absence is *why* the
 Taming reach fix uses the attribute rather than the navigation setter — nothing to port here, but do
@@ -276,12 +322,278 @@ not "simplify" it back on `master` either.
 `BUILD FAILED` with 67 errors, and `tail -60` truncated those 67 down to the 11 that happened to be
 last. Redirect to a file and check `$?`.
 
-### ⬜ Finish 8.3
+### 🟢 Ship-gate 2 PASSES — was 15 ZERO, now 0 (2026-08-19)
 
-- [ ] Resolve the remaining 44 (table above), inside `fabric/`/`platform/` only.
-- [ ] Recipe steps **x.7 → x.10**: mixin-allow audit first, then the full ship gate, push, release,
-      back-port, `--require-bands` **5 → 6**, and move the docs floor sentence to *"below `1.21`"*.
-- [ ] Then **`1.21.x` coverage is complete: 12 of 12.**
+`python scripts/mixin-allow-audit.py --check` now exits **0**:
+`SLICE=1  OK=66  (total 67)` — *"every declared allow reproduces, and no injector resolves to 0
+sites."* The single SLICE (`FishingWaitTimeMixin`) is **pre-existing** and the gate accepts it.
+`./gradlew compileJava` exits 0.
+
+🔴 **`compileTestJava` is now the blocker, and that is expected.** 13 errors, all in
+`HusbandryListenerTest`, calling the `onShearedItems`/`onBrushedItems` API this work replaced.
+⚠️⚠️ **Those tests are the guard for exactly the behaviour that changed — port them, never delete
+them.** The mapping and the two stale assertions to restate are in `.agent/memory/state.md`.
+
+Originally 15 of 61 injectors bound to **nothing**. Per §8.3 that is the boot-failure class, not a
+warning — an unresolvable `@At` does not degrade gracefully.
+
+⚠️⚠️ **`| tail` masked this and produced a wrong "gate 2 passed" call.**
+`python … --check 2>&1 | tail -40; echo "EXIT=$?"` reports **`tail`'s** status, which is always 0.
+§8.3 already documents this for `./gradlew`; it applies to **every** piped command. Redirect, then
+read `$?`. The script's own banner (`FAIL: 15 injector(s) need attention`) was the tell.
+
+#### 🔴 A second defect class gate 2 CANNOT see — the handler's own signature
+
+`AbstractFurnaceBlockEntity#tick` takes **`World`** at `1.21.1`, not `ServerWorld`. Three handlers in
+`AbstractFurnaceSmeltMixin` declare `ServerWorld world`, and **two of the three are reported `OK` by
+gate 2** — because the audit resolves the **`@At` target**, not the handler's parameter list. A
+handler whose descriptor does not match its target method is refused at apply time, exactly like a
+ZERO binding, and it hides behind a green row.
+
+🔑 **So `ZERO=0` is necessary, not sufficient.** Gate 1 (the mixin-application test) is what actually
+catches this class, which is why gate 2 passing is not permission to skip it. The mixin's javadoc
+also asserts *"`tick` is only ever handed a `ServerWorld`"* — a version-pinned claim, false here.
+
+#### Resolutions — every one measured against the `1.21.1` merged jar
+
+**Group A — mechanical (11 injectors).** A rename or a descriptor, no design choice.
+
+| Mixin | Injectors | `1.21.1` form |
+|---|---|---|
+| `TameableEntityTameMixin` | 1 | `setTamedBy` → **`setOwner(PlayerEntity)`**, the rename already applied in `CallOfTheWildHandler` |
+| `AbstractFurnaceSmeltMixin` | 2 | `craftRecipe(DynamicRegistryManager, RecipeEntry, DefaultedList, int)` — **no `SingleStackRecipeInput`**; `getFuelTime(ItemStack)` — **no `FuelRegistry`**. Plus the `World` fix above, which also touches the two `OK` rows |
+| `BowShootMixin` | 2 | `onStoppedUsing(ItemStack, World, LivingEntity, int)` returns **`void`**, not `boolean` → `CallbackInfo`, not `CallbackInfoReturnable<Boolean>` |
+| `TntExplodeMixin` | 1 | `explode()` and the 9-arg `createExplosion` both exist; the call **returns `Explosion`, not `void`** — only the descriptor's return type moved. `index = 6` still selects the power |
+| `BeehiveHarvestMixin` | 4 | `onUseWithItem` returns **`ItemActionResult`**, not `ActionResult`; `dropHoneycomb(World, BlockPos)` is the 2-arg static |
+| `EntityTypeSpawnOriginMixin` | 1 | `create(World, SpawnReason)` is absent, but **`create(ServerWorld, Consumer, BlockPos, SpawnReason, boolean, boolean)` exists** and is the spawn funnel. Retarget, do not redesign |
+
+**Group B — absent seams, owner-ruled 2026-08-19. ✅ ALL BUILT, all binding.** Each was measured
+absent *and* its predecessor measured present, so **nothing ships disabled** and R-m′ still holds.
+
+🔴 **`EntityTypeSpawnOriginMixin` was misfiled as Group A on a first read, and that was the most
+dangerous call of the session.** `MobOrigins` rests on `EntityType#create(World, SpawnReason)` being
+the one factory no subclass can dodge. At `1.21.1` it does not exist and **nothing single replaces
+it**: spawners reach `loadEntityWithPassengers(NbtCompound, World, Function)`, which has **no
+`SpawnReason` parameter at all**, and breeding reaches `create(World)`. Only egg/dispenser/portal
+reach the 6-arg `create`. **That 6-arg method DOES exist, so retargeting to it BINDS — the audit goes
+green while spawner-farmed and bred mobs are silently unmarked.** Strictly worse than the ZERO it
+replaces, because a ZERO is at least loud. Ruled: **per-origin injectors** —
+`MobSpawnerOriginMixin` (`serverTick`), `TrialSpawnerOriginMixin` (`trySpawnMob`),
+`AnimalBreedOriginMixin` (`breed`), plus the 6-arg `create` for the paths that do carry a reason.
+
+🔑 **Three gate lessons worth keeping:** `allow` is evaluated **per target class**, so a 4-target
+mixin with one site each needs `allow = 1`; a bare injector is reported **MISSING**; and
+**`@ModifyConstant` is invisible to the gate** (`computed=0`), so it must not be used here — an
+injector the ship gate cannot verify defeats the gate.
+
+| Seam | Why it is absent | 🔑 Ruled resolution |
+|---|---|---|
+| `ArmadilloBrushMixin` — brush loot | No `LivingEntity#forEachBrushedItem`. `brushScute()` drops the scute **inline** via `dropStack`, with no loot table, no `BiConsumer` funnel and **no brusher parameter** | Inject at the **`brushScute()` call inside `interactMob`**, where the `PlayerEntity` is in scope. ⚠️ The existing javadoc claims the dispenser exclusion is *"a property of the signature"* — **that is false on this band**, the parameter it relies on does not exist. `interactMob` is a **stricter** gate (a dispenser never calls it), so the behaviour is preserved, but the *reason* must be restated |
+| `LivingEntityShearDropsMixin` — Bountiful Harvest bonus | No `forEachShearedItem`. Each `Shearable` drops **inline in its own `sheared(SoundCategory)`** — `SheepEntity` loops `dropItem(ItemConvertible, int)` | Port **per-implementor**: `@Mixin({SheepEntity, MooshroomEntity, SnowGolemEntity, BoggedEntity})` on `sheared` — the same four targets `ShearableInteractMixin` already proves. Four `allow = N` counts, each measured separately |
+| `LivingEntityGlideMixin` — glide bonus | No `travelGliding`, no `calcGlidingVelocity`. The glide math is **inlined in `travel`** (`isFallFlying` at offset 565), with no discrete helper call to intercept | `@Inject` at **`travel`'s TAIL, gated on `isFallFlying()`**. ⚠️ Deliberately **not** a `@Slice` — an unresolvable `@Slice` is *silently dropped and the injector still applies*, which is the one failure this band cannot afford. ⚠️ The application point moves from an intermediate to the resulting velocity; **verify the numbers against `master` before calling it done** |
+| `ProjectileSpawnMixin` — Archery arrow mark | No static `ProjectileEntity#spawn(…)` funnel at this version | Inject on **`ProjectileEntity#setOwner(Entity)`** — public, universal, one target. ⚠️ **Verify NBT load restores the owner by uuid rather than through `setOwner`**, or a chunk reload re-marks old arrows |
+
+🔑 **`EntityTypeSpawnOriginMixin` is still the one to be most careful with.** A dead binding there
+disables the Hunter anti-farm gate *silently* — spawner mobs quietly start counting — and
+`MobOriginsTest` covers the **classifier**, not the **binding**, so the suite is green either way.
+That is the `[[smelting-furnace-arm]]` shape: invisible by construction.
+
+### ✅ 8.3 SHIPPED (2026-08-19) — `mc1.21.1-v1.1.0`
+
+- [x] Resolve the remaining 44, inside `fabric/`/`platform/` only.
+- [x] Recipe steps **x.7** (gates), **x.10** (docs floor + this band's row, `40cf1b218`), push,
+      release. Run `32308459500` green; release published, **not** draft; the other six releases
+      re-checked and **none orphaned** by the tag-reaping sweep.
+- [x] **`1.21.x` coverage is complete: 12 of 12.**
+- [x] **x.8 back-port — DONE 2026-08-19.** ⚠️ It was **larger than the commit it is named after**,
+      and the extra half was invisible from the ticket: `40cf1b218` moved the three table headers and
+      added this band's row, but the **floor sentence** (*"Minecraft `1.21.1` and older are not
+      supported"* → *"`1.20.6` and older"*) had moved in an **earlier** band commit, at cut time,
+      because `BandDocsMatchRealityTest` fires then by design. Cherry-picking `40cf1b218` alone would
+      have left six branches with a header reading `1.21 – 1.21.11` three paragraphs above a sentence
+      denying `1.21` — a half-fix that reads **correct in the diff** and is wrong on the page.
+      🔑 **The unit that propagates is the cumulative state of the file, not the commit that last
+      touched it.** Carried as the full delta: the three docs files made byte-identical to this
+      band's, on `master` and all five other bands.
+- [x] **x.8b — `TODO.md` had diverged AGAIN, 602 lines vs 882, and this was not in the ticket at
+      all.** Phase 21 closed the "five blobs" divergence; **two band-authored docs-only `TODO.md`
+      commits re-opened it within the same session** — `c12624569` (which carries the **R-v ruling
+      and the whole §22 plan**) and `b2ac4824f` (the 8.3 shipped record). Both are docs-only, so
+      defect B swallowed both.
+      🔴 **`master` was still describing §8.3 as "IN FLIGHT / UNPUSHED"** for a band that had shipped
+      and released. 🔑🔑 **The hole re-opens on its own the moment anyone writes plan text on a band
+      branch** — closing it once does not keep it closed, because nothing fails when it re-opens.
+      All seven now carry one blob again.
+- [x] **x.9 — `--require-bands` 5 → 6.** `BAND_COUNT` in `.github/workflows/drift-audit.yml`, which
+      the workflow's own comments confirm counts `mc/**` only, `master` excluded — six bands on
+      `origin`, so `6`. `master` first, then byte-identical to every band (gate 10's shared layer).
+
+#### How x.8 was executed — and the one deliberate choice in it
+
+1. `master` first (rule 1), taking `README.md`, `wiki/Home.md`, `wiki/Installation.md` and `TODO.md`
+   from `mc/1.21.1`, **plus** a refresh of `BandDocsMatchRealityTest`'s stale javadoc pointer
+   (*"next cut this fires on `mc/1.21.3` (TODO 8.2)"* — both 8.2 and 8.3 have shipped).
+2. That javadoc refresh is **not padding, and it is the deliberate choice**: it is owed under the
+   caveat-expiry rule regardless, and putting it in the same commit gives the docs change a `src/`
+   half — which is the **only** thing that makes `drift-audit.py` able to see it (Phase 21, defect
+   B: a docs edit propagates iff its commit also touched `src/`).
+   ⚠️ **Named here so it does not silently become a habit.** "Add a `src/` edit so the auditor sees
+   the commit" is a correct move only when the `src/` edit was independently owed. When it is not,
+   the honest fix is to teach the auditor about docs — not to dress the commit up.
+3. Cherry-picked to all five remaining bands with `Backport-of:` trailers; `mc/1.21.1` took only the
+   parts it lacked.
+
+**What this explicitly did NOT do:** no jar was rebuilt, no smoke harness run, no release cut.
+Verified rather than assumed — `release.yml`'s `paths:` filter lists only `src/**`, the gradle files
+and `release.yml` itself, so a docs or `drift-audit.yml` push cannot fire a release run, and there is
+no tag-reaping exposure. **Rollback** for every step is `git revert <sha>` on the branch in question;
+nothing was rewritten, deleted, or force-pushed.
+
+#### The one defect the ship gate caught — and what it says about the other gates
+
+`combat-egg-control`: a `/summon`-ed cow paid UNARMED `(0,0) -> (0,610)`. At `1.21.1`
+`loadEntityWithPassengers` carries **no `SpawnReason`** (at `1.21.11` it does), so `/summon` reached
+no reason-carrying factory and `EntityTypeSpawnOriginMixin`'s 6-arg `create` was never on its path.
+Fixed by `SummonCommandOriginMixin` (`e7fae0d91`), the fifth origin seam, same shape as the two
+spawner halves.
+
+🔑🔑 **Every structural gate was green while this was broken.** `mixin-allow-audit` reported OK on
+all 67 injectors; `MixinApplicationTest` named four origin seams that all genuinely applied;
+`boot-check` was clean. **Only a live mob dying to a live player found it** — the §8.3 prediction
+that a bound-but-inert retarget is *"strictly worse than the ZERO it replaced"*, confirmed in the
+one way the cheap gates cannot reach.
+⚠️ **And the severity was nearly misread.** *"The egg-farm guard is off on this band"* is **false**:
+`SpawnEggItem → spawnFromItemStack → spawn → create(…SpawnReason,ZZ)` **is** the injected method, so
+eggs, dispensers and portals were always marked. Only `/summon` — an operator command — leaked.
+Which is also why the hole looked impossible: every path a person would check by hand was covered.
+⚠️ **The phase is named `combat-egg-control` and argues about `Eggs.Multiplier`, yet drives
+`/summon`.** On `master` both stamp, so the proxy was invisible; here the test and its stated subject
+came apart. Worth pointing it at a real spawn egg on `master` — a `scripts/**` change, so master-first
+across all seven branches.
+
+#### The test port — the last blocker before the ship gate (planned 2026-08-19)
+
+`compileJava` and ship-gate 2 are green; `compileTestJava` is **red on 13 errors**, all in
+`HusbandryListenerTest`, and the suite carries **two further failures that compile fine**. Both were
+found by reading the seams rather than the error list, which is the point: a reflective assertion
+about a **deleted** mixin is a green compile and a red run.
+
+⚠️⚠️ **These tests are the guard for exactly the behaviour this band changed. They get PORTED, never
+deleted** (`[[deleting-a-tests-wrong-answer]]`).
+
+**Step 1 — main code: `onBrushed` takes the delivery flag** (owner-ruled 2026-08-19).
+`ArmadilloBrushMixin` currently owns the *"vanilla delivered no scute, so pay nothing"* guard in its
+own `if (!brushed) return false;`. That is unreachable from a unit test, and it is the guard the verb
+rests on — brushing has **no** upstream gate the way `isShearable()` gates shearing, so *"an item
+actually changed hands"* is the only proof a harvest happened. Move it down:
+`onBrushed(Entity armadillo, Entity brusher, boolean brushed)` returns early on `!brushed`, and the
+mixin becomes a pass-through. The adapter gets dumber and the guard gets a test.
+
+**Step 2 — port the 13 errors.** The shear verb's `BiConsumer` funnel does not exist on this band, so
+the `Dropper` double-delivery assertions have no subject:
+
+| Old | New |
+|---|---|
+| `onShearedItems(sheared, dropper).accept(world, stack)` | `beginShear(sheared)` → `onShearDropStack(stack)` → `endShear()` |
+| `onBrushedItems(armadillo, brusher, dropper).accept(...)` | `onBrushed(armadillo, brusher, brushed)` → `boolean` |
+
+⚠️ **`delivered.size() == 2` becomes "the returned stack's count doubled".** The bonus is now one
+`ItemStack` of 2, not two deliveries — one `ItemEntity` that cannot desynchronise from the first
+drop's position or pickup delay.
+⚠️ **Two brush comments assert the dispenser exclusion is *"a property of the signature"*. That is
+false on this band** — there is no funnel and no brusher argument to inspect, so the gate is the call
+site (`interactMob`, which a dispenser never reaches). **Restate the reason; do not just re-point the
+call.** A comment naming the wrong gate is the `[[version-pinned-comments-rot]]` shape.
+⚠️ `theBonusDropIsRolledOncePerShearNotOncePerItem` keeps its subject — the roll is still decided
+once, at `beginShear`, and read by every `onShearDropStack`. Its brush sibling loses its per-item
+subject entirely and restates as *"one brush resolves the sub-skill exactly once"*.
+
+**Step 3 — `MixinApplicationTest`, which compiles and lies** (owner-ruled: both halves, this commit).
+
+- 🔴 `husbandryShearDropMixinApplies` asserts `LivingEntity` carries an `onShearedItems` handler.
+  **That mixin was deleted this session.** Replace with the three seams that actually ship here:
+  `ShearPayoutMixin` (`beginShear`/`endShear` on all **four** species — a per-species assertion, same
+  reason `bountifulHarvestDurabilitySaveAppliesToEveryShearableItNames` has one), `EntityShearDropMixin`
+  (`doubleShearDrop` on `Entity`) and `MooshroomShearDropsMixin` (`mooshroomBonusMushrooms`).
+- 🔴 **Zero coverage for four mixins**, three of them new this session: `ArmadilloBrushMixin`,
+  `MobSpawnerOriginMixin`, `TrialSpawnerOriginMixin`, `AnimalBreedOriginMixin`. Extend
+  `mobOriginMixinsApply` to name all four origin seams.
+
+🔑🔑 **This is the structural guard for the session's worst finding.** `MobOrigins` rested on
+`EntityType#create(World, SpawnReason)` being the one factory no subclass can dodge; **at `1.21.1`
+that method does not exist and nothing single replaces it.** The 6-arg `create` *does* exist, so
+retargeting to it **binds** — ship-gate 2 goes green while spawner-farmed and bred mobs go silently
+unmarked, which is strictly worse than the ZERO it replaced. Only a per-seam assertion sees that.
+
+**Step 4 — gates, in order.** `compileTestJava` → `./gradlew test` (⚠️ read the **`N executed`** line,
+not `SUCCESSFUL` — `[[gradle-skips-doc-guard-tests]]`) → re-run `mixin-allow-audit.py --check`, because
+step 1 touches a mixin body.
+
+**Step 5 — close out.** Caveat-expiry pass (grep `README.md` + `wiki/` for the **symptoms**, not the
+files touched), then this section, then **ONE commit. Do not push** — `de34dcf3b` touches
+`gradle.properties`, which is inside `release.yml`'s `paths:` filter, so the first push fires a release
+run on this band.
+
+**What this is NOT doing:** no new seams, no `master`-side change (R-m′ ruled none is needed), no
+recipe steps x.7+ — those start once the suite is green.
+
+#### ✅ DONE (2026-08-19) — and the suite found six things the compile error was hiding
+
+`./gradlew test`: **1844 executed, 0 failures, 0 errors, 0 skipped.**
+`python scripts/mixin-allow-audit.py --check`: **PASS** (`SLICE=1 OK=66`, total 67).
+
+Steps 1–3 landed as planned. What the plan did **not** anticipate is that a red `compileTestJava`
+runs **no tests at all**, and mixins apply *lazily* — so nothing had ever class-loaded a target on
+this band. The moment the suite ran it reported **9 failures across 6 classes**, none of them in the
+ported file:
+
+| Was | Actually |
+|---|---|
+| `CampfireCookMixin` did not apply | `@Local(argsOnly) ServerWorld`, but `litServerTick` takes `World`. Fixed by capturing `World` and narrowing — the pattern `AbstractFurnaceSmeltMixin` already uses |
+| `FireworkRocketEntityMixin` did not apply | `@Inject` handler declared a `ServerWorld` param; `explode()` takes none |
+| `foodComponentMixinApplies` | asserted the handler on `FoodComponent`; the mixin was retargeted to `LivingEntity` this port. **Third** reflective assertion found naming a class its mixin no longer targets |
+| `SuperAbilityListenerTillingTest` ×3 | harness stubbed only `getEntityWorld()`; `ItemUsageContext`'s constructor calls `getWorld()` here. Both are stubbed now, so the harness is band-agnostic |
+| `PlatformPlayerTest` | `SoundCategory.UI` does not exist here. Production already maps `UI → MASTER` deliberately; the **test** demanded a same-name mapping for every constant. Now band-aware, with a count check so "skip what vanilla lacks" cannot become "skip everything", plus a new test pinning the fallback |
+| `BlockUtilsTest` | asserted an unbound tag **throws**. Whether it throws or quietly answers `false` is a per-version MC behaviour. Laziness is now proven **directly** on `BlockRules` with a supplier that throws if called — stronger, and true on every band |
+
+🔑🔑 **Ship-gate 2's `ZERO=0` is necessary and NOT sufficient.** Both non-applying injectors sat in
+`OK ... computed=1` rows: the audit resolves the injection point and counts sites, and never
+type-checks the handler's own parameter list. `MixinApplicationTest` is the gate that sees this
+class of defect — which is why the four previously-uncovered mixins were added to it.
+✅ Non-vacuity checked by mutation: removing `MobSpawnerOriginMixin` from `mcmmo.mixins.json` turns
+`mobOriginMixinsApply` red with the right message. Restored from a backup, not from `git checkout`.
+
+⚠️⚠️ **`BandVersionLabelTest` rejected `"1.21"` as "not a bare major.minor.patch version" — and its
+own self-test asserted that rejection was correct.** It is not: Mojang ships the head of every minor
+line with two components, so `1.21`, `1.20` and `1.19` are real, literal version strings with no
+`1.21.0` to write instead. The parser now treats a missing patch as `0`, and the self-test's wrong
+answer was **corrected in place** (still asserting that genuinely malformed input is rejected) rather
+than deleted. **Every version on the `1.20` line has this shape, so §22 was blocked on this too.**
+
+🔴 **FIVE of these changes are version-agnostic and are owed to `master`.** The band port itself is
+correctly authored here — a port is not a fix — but these were *found* here and are true everywhere,
+and AGENTS.md is explicit that a fix authored directly on a band branch is a defect. **They must be
+re-authored on `master` and propagated, not left to be re-discovered band by band:**
+
+| Change | Why it is not band-local |
+|---|---|
+| `BandVersionLabelTest` — optional patch component | `1.21`, `1.20`, `1.19` are real version strings. **Blocks every `x.y` band, so §22's whole `1.20` line is gated on it** |
+| `PlatformPlayerTest` — band-aware category mapping + fallback test | The mirror enum is a superset on *every* older band, not just this one |
+| `BlockUtilsTest` — laziness proven on `BlockRules` directly | The old proxy depended on a per-version MC behaviour; the replacement is stronger everywhere |
+| `SuperAbilityListenerTillingTest` — stub both world accessors | Makes the harness band-agnostic; costs `master` nothing |
+| `wiki/Husbandry.md` — *"a copy of whatever the harvest handed over"* | One wiki serves every band, and *"the loot roll run a second time"* is false on this one |
+
+⚠️ The two mixin fixes (`CampfireCookMixin`, `FireworkRocketEntityMixin`) are **genuinely band-local**
+— on `master` those targets take the parameters the handlers already declare. Do **not** propagate
+them; a `Backport-not-needed:` reason is the right record if they ever look like drift.
+
+⬜ **Left for recipe step x.7 (release), deliberately:** `README.md` and `wiki/Installation.md` still
+head their tables with *"Minecraft 1.21.2 – 1.21.11"* and carry no row for this band. The **floor**
+sentence had to move now (`BandDocsMatchRealityTest` fires at *cut* time, by design — a floor above
+what the branch ships tells this band's players their jar does not exist), but the table row needs
+the released jar's Fabric API and Loader versions, which do not exist until the band ships. Move the
+header's lower bound to `1.21` and add the row **in the same commit as the release**, or the docs
+promise a download that is not there.
 
 ---
 
@@ -555,7 +867,7 @@ test run in the shell that hides the bug proves nothing.**
 - [ ] 🔴 **Manifest debt piece 1** — see *Other open work*. Piece 2 shipped as
       `scripts/manifest-identity-audit.py` (Phase 18).
 - [ ] 🟡 **The `--require-bands` floors are hand-maintained** in `.github/workflows/drift-audit.yml`
-      and in ship-gate steps 9 and 10. Currently **5**; must reach **6** with 8.3 and climb once per
+      and in ship-gate steps 9 and 10. **Now 6** (8.3's x.9, raised one cycle late); climbs once per
       `1.20` cut. Nothing reminds you — a stale floor is under-strict and the audit still passes.
 
 ---
