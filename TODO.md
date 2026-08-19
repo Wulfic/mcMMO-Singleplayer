@@ -1847,6 +1847,16 @@ default run until pushed; the guard says so rather than reading clean.
 
 ### 19.9 — a defect in a DIFFERENT gate, found while running this one
 
+> 🔴 **CORRECTED 2026-08-18 by Phase 20 — this section's diagnosis is WRONG. Read §20.1.**
+> `ci-watch.sh --mutate` runs fine in a default git-bash: **exit 0, 8/8 cases, 4/4 mutations**,
+> on the very blob this section calls broken. *"Evidently never could"* is false. It fails **only**
+> when MSYS argv conversion is switched off — and the cause is `MSYS2_ARG_CONV_EXCL='*'`, the export
+> **this repo prescribes** two files away, in `gotchas.md`, for the Phase-18 `rev-parse` mangling.
+> The scope was wrong too: `release-sweep-selftest.sh` dies the same way on the **repo path itself**.
+> **Fixed in Phase 20** (`ca0fcd0ed`, back-ported to all five bands).
+> ⚠️ **Kept, not deleted.** The mistake is the lesson: an environment-dependent failure was recorded
+> as an unconditional one, which would have sent the next session hunting a bug that is not there.
+
 🔴 **`scripts/ci-watch.sh --mutate` cannot run under git-bash on this machine, and evidently never
 could.** It exits 1 with `FileNotFoundError: '/tmp/tmp.XXXX/orig.sh'` at `ci-watch.sh:157`, where a
 bash `mktemp -d` path is handed to **Windows** Python. Measured: `mktemp -d` yields
@@ -2061,7 +2071,25 @@ the recipe refuses to proceed on a dirty tree.
 3 per failure class, per the standing rule. On exhaustion: stop, write all three attempts to
 `gotchas.md`, report. Specifically **do not** widen the path set to make a failure disappear.
 
-## Phase 20 — the two gates the Phase-18 workaround silently disabled (2026-08-18, before 8.3)
+## Phase 20 — the two gates the Phase-18 workaround silently disabled ✅ COMPLETE (2026-08-18)
+
+**Shipped to all six branches, pushed, all gates green.**
+`master` `ca0fcd0ed` · `mc/1.21.10` `a85d42555` · `mc/1.21.8` `66e5590a2` · `mc/1.21.5` `141ff78b4`
+· `mc/1.21.4` `96a7efe5b` · `mc/1.21.3` `0a3b19cd0`.
+
+| gate | result |
+|---|---|
+| `ci-watch.sh --mutate` | **exit 0** — 9/9 cases, **5/5** mutations, in **all three** envs (default, `MSYS2_ARG_CONV_EXCL='*'`, `MSYS_NO_PATHCONV=1`) |
+| `release-sweep-selftest.sh --mutate` | **exit 0** — 7/7 cases, 4/4 mutations, same three envs; the new case's **control fires** (raw path exit 1) |
+| `branch-file-identity-audit.py --require-bands 5` | **exit 0** — 23 shared paths byte-identical on all six |
+| `manifest-identity-audit.py --require-bands 5` | **exit 0** — six distinct manifests, unperturbed |
+| `drift-audit.py --master master --require-bands 5` | **0 MISSING** on all five; counts 43/23/30/31/34, each **+1** |
+| `ci-watch.sh HEAD` | exit 0 — *"Skipped, not passed"*, as predicted: `scripts/` is outside `release.yml`'s `paths:` filter |
+
+🔑 **The failing baseline is what makes the green run mean anything.** Gate 10 was run *after* the
+`master` commit and exited **1**, naming exactly `ci-watch.sh`, `gameplay-smoke.sh` and
+`release-sweep-selftest.sh` as having 2 distinct versions each — five bands on one blob, `master` on
+another. It reached 0 only after the fifth back-port.
 
 **Status: planned.** Supersedes the §19.9 record, which is **wrong about the cause** and **too narrow
 about the scope**. Diagnosed 2026-08-18 before the first code edit.
@@ -3129,7 +3157,12 @@ their correctness is checked instead by `BandDocsMatchRealityTest`, which runs i
       ⚠️ **This flips the ship gate from *silently regenerates* to *verifies*.** A band that has
       legitimately moved records must now regenerate deliberately (a plain run) and commit the diff.
 
-- [ ] 🔴 **NEW 2026-08-18 (Phase 19, §19.9) — `ci-watch.sh --mutate` cannot run on this machine.**
+- [x] ✅ **CLOSED 2026-08-18 by Phase 20 — and the diagnosis below is wrong; see §20.1.**
+      ~~🔴 NEW 2026-08-18 (Phase 19, §19.9) — `ci-watch.sh --mutate` cannot run on this machine.~~
+      It runs fine in a default shell (8/8, 4/4). It broke only under `MSYS2_ARG_CONV_EXCL='*'` —
+      the export this repo's own `gotchas.md` prescribes for the Phase-18 `rev-parse` trap. Two
+      other gates were affected. Fixed by an explicit `cygpath -w` bridge in all three scripts,
+      each with a self-test case that **forces conversion off**. `ca0fcd0ed` + 5 back-ports.
       Ship gate step 8's self-test dies at `ci-watch.sh:157` (`FileNotFoundError` on a bash
       `mktemp -d` path handed to Windows Python). The gate's real run works; the harness proving it
       can **fail** does not, so step 8 is the one gate whose failure mode is unverified — in the
