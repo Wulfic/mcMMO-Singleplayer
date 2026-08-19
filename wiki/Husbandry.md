@@ -4,7 +4,7 @@
 
 **How you train it:** work livestock. Six separate verbs pay XP — **breed**, **raise**, **feed a baby**, **shear**, **harvest a hive**, and **milk or brush**.
 
-Nine sub-skills and a super ability, the largest set in the mod after Agility's.
+Nine sub-skills and a super ability, the largest set of any skill in the mod.
 
 > ⚠️ **Code-complete, never play-tested.** Every number on this page is a starting estimate. Balance feedback is genuinely wanted.
 

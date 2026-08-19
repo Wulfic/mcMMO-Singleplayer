@@ -8,7 +8,7 @@
 | **Combat** | [Swords](#swords), [Axes](#axes), [Unarmed](#unarmed), [Archery](#archery), [Crossbows](#crossbows), [Tridents](#tridents), [Maces](#maces), [Spears](#spears), [Taming](#taming), [Hunter](#hunter) |
 | **Movement** | [Parkour](#parkour), [Swimming](#swimming), [Flying](#flying) |
 | **Misc** | [Stealth](#stealth), [Unarmored](#unarmored), [Repair](#repair), [Alchemy](#alchemy), [Cooking](#cooking) |
-| **Child** | [Agility](#agility-child), [Salvage](#salvage-child), [Smelting](#smelting-child) |
+| **Child** | [Salvage](#salvage-child), [Smelting](#smelting-child) |
 
 Your **power level** is the sum of all skill levels.
 
@@ -28,11 +28,10 @@ A child skill has **no save key and earns no XP**. Its level is recomputed from 
 
 | Child skill | Level is the average of |
 |---|---|
-| **Agility** | Parkour + Swimming + Flying |
 | **Salvage** | Repair + Fishing |
 | **Smelting** | Mining + Repair |
 
-Because it's a **mean**, Agility 1000 requires 1000 in all three parents. 1000 Flying on its own is Agility **333**. That's deliberate: Agility's perks are an all-rounder's reward, not a specialist's.
+Because it's a **mean**, a child skill needs both parents raised: Repair 1000 on its own is Salvage **500**.
 
 ---
 
@@ -233,6 +232,25 @@ Earn XP by taming animals and fighting alongside your wolves.
 | Environmentally Aware | 1 | Cactus/lava phobia, fall-damage immunity. |
 | Pummel | 1 | Wolves have a chance to knock foes back. |
 
+> **Your pets have a combat stance.** *New in this port, and not a sub-skill* — no level gate, no rank, and it belongs to **you**, not to any one animal.
+>
+> | Stance | What your pets do |
+> |---|---|
+> | **Passive** *(the default)* | Your pets fight only what you fight. |
+> | **Aggressive** | Idle pets pick the nearest hostile to **you** and go for it. |
+>
+> **To switch: sneak and right-click any pet you own while holding a bone in your main hand.** You'll get a chat message telling you which stance your pets are now in. The animal you click is only proving it's yours — **the stance changes for all of your pets**, including the ones back at base.
+>
+> ⚠️ **The cost of the gesture, stated plainly:** while a bone is in your main hand, sneak + right-click **changes the stance instead of sitting the pet**. A plain right-click, or any other item in hand, still sits it exactly as vanilla does. That trade exists because vanilla already owns the plain right-click on a wolf, so the gesture has to take the click rather than merely watch it.
+>
+> ⚠️ **Aggressive is a new way to lose a pet.** Your wolves will start fights you didn't, including ones they can't win. Creepers and ghasts are excluded (vanilla already refuses those), and so is the warden — a pack cannot kill one, and the noise brings it to you. Everything else hostile is fair game.
+>
+> **Toggling back to passive mid-fight lets the current fight finish.** Passive stops your pets *picking* new targets; it doesn't call them off something already chewing on them.
+>
+> 🔑 **"My pets ignore what I shoot" is fixed, and it was never about the stance.** A wolf's natural follow range is 16 blocks, and past that it simply can't work out a path — so it stood next to you holding a target it would never walk to. A melee kill happens at about 3 blocks and a bow kill at 20–40, which is the whole of what players saw. Pets you sic by shooting something now chase it properly **in both stances**.
+>
+> Tune or disable all of it under `Skills.Taming.Pet_Combat_Mode` — see [Configuration](Configuration#change-how-your-pets-pick-their-fights).
+
 > **Pets follow you through a teleport.** *New in this port, and not a sub-skill* — it has no level gate and no rank. Make a long jump inside one world (an ender pearl, a `/tp`, a chorus fruit, a respawn) and your tamed wolves, cats and parrots come with you.
 >
 > This is a deliberate override of vanilla, not a port fix. Vanilla *means* to do this — a wolf's follow goal teleports it to you from any distance once you're 12+ blocks away — but a pet outside your simulation distance stops being ticked, so it never runs the goal and is simply left behind. Turn it off with `Skills.Taming.Pets_Follow_Teleport: false` in `config.yml` to get vanilla behaviour back exactly.
@@ -257,7 +275,9 @@ Earn XP by taming animals and fighting alongside your wolves.
 
 # Movement
 
-Three skills, one per medium you travel through. Each feeds **[Agility](#agility-child)** and owns the perks specific to its own medium.
+Three skills, one per medium you travel through. Each owns the perks specific to its own medium, plus its own copy of the two that work in every medium — **Fleet Footed** and the **Second Wind** super ability.
+
+Those two appear once under each skill below and unlock separately, but Second Wind is still **one ability on one cooldown**: it picks its body from how you are actually moving. Reaching Swimming 250 gets you the water body whether or not you have ever flown.
 
 Movement XP is **speed-normalised**: you're paid per *second* of travel with each tick's distance clamped at the medium's reference speed. Going faster than the reference pays nothing extra. Full explanation on **[Movement Skills](Movement-Skills)**.
 
@@ -272,8 +292,10 @@ Earn XP by **sprinting on land**. Falling, rolling and dodging pay into Parkour 
 | Athlete | 1 | Sprinting costs less hunger. Unlocks at Parkour 50 (RetroMode). |
 | Smash | 1 | Sprint attacks hit harder and send targets flying. Unlocks at Parkour 150. |
 | Snow Walker | 1 | Cross **powder snow** without sinking into it. Unlocks at Parkour 100 (RetroMode). |
+| Fleet Footed | 1 | Move faster on land. Available from level 1. |
+| Second Wind | 1 | **Lunge** forward, striking whatever you land on. Super ability, triggered by holding a **feather** and right-clicking. Unlocks at Parkour 250 (RetroMode). |
 
-All five are deliberately parented to Parkour rather than Agility, so you earn them by running, jumping and landing — not by a swimmer and a flier dragging the three-skill average up. Roll and Dodge matter most: falling and dodging pay their XP into Parkour, so gating them on Agility's mean meant the very hits that earn them levelled their own unlock at a third rate.
+Every one of them is gated on Parkour itself, so you earn them by running, jumping and landing rather than by a swimmer and a flier dragging an average up. Roll and Dodge matter most: falling and dodging pay their XP *into* Parkour, so the very hits that earn them now level their own unlock at full rate.
 
 Roll has no rank ladder — it is available from level 1 and its odds scale linearly with Parkour, reaching the configured maximum at Parkour 1000 (RetroMode). `/mcstats parkour` shows both the plain and the Graceful figure.
 
@@ -285,6 +307,8 @@ Earn XP by **swimming**.
 |---|---|---|
 | Lead Lungs | 1 | Hold your breath far longer underwater. Unlocks at Swimming 250 (RetroMode). |
 | Lake Raider | 1 | Underwater digging turns up treasure. Unlocks at Swimming 500. |
+| Fleet Footed | 1 | Move faster through water. Available from level 1. |
+| Second Wind | 1 | **Surge** through the water for a while. Super ability, same feather trigger. Unlocks at Swimming 250 (RetroMode). |
 
 ## Flying
 
@@ -294,8 +318,10 @@ Earn XP by **elytra gliding**.
 |---|---|---|
 | Glide | 1 | Descend more slowly while gliding. Unlocks at Flying 350 (RetroMode). |
 | Solar Wings | 1 | A worn elytra slowly mends in daylight. Unlocks at Flying 750. |
+| Fleet Footed | 1 | Move faster while gliding. Available from level 1. |
+| Second Wind | 1 | **Soar** with a burst of forward speed. Super ability, same feather trigger. Unlocks at Flying 250 (RetroMode). |
 
-Both were Agility sub-skills until 2026-08-10. Read against Agility's three-skill mean their unlocks needed Flying **1050** and **2250** from a player who only flew — past the level cap, so a specialist could never reach them at all.
+Both are gated on Flying itself, and for these two that is the difference between slow and impossible. Read against an average of Parkour, Swimming and Flying, their unlocks needed Flying **1050** and **2250** from a player who only flew — past the level cap, so a specialist could never reach them at all. [Why](Movement-Skills#why-every-perk-sits-on-the-skill-that-earns-it).
 
 ---
 
@@ -362,19 +388,6 @@ Earn XP by brewing potions.
 ---
 
 # Child skills
-
-## Agility (child)
-
-Level = mean of **Parkour + Swimming + Flying**. Earns no XP itself. Super ability: **Second Wind**.
-
-It keeps exactly the two perks that work in **all three** mediums — both carry one rank per medium, so no single parent's level could gate them. Everything single-medium moved to its own parent on 2026-08-10.
-
-Full page: **[Movement Skills](Movement-Skills)**.
-
-| Sub-skill | Ranks | Effect |
-|---|---|---|
-| Fleet Footed | 3 | Move faster through whatever you're travelling through. Rank 1 = land, 2 = water, 3 = air. |
-| Second Wind | 3 | Lunge, surge or soar. Super ability, triggered by holding a **feather** and right-clicking. Rank 1 = land, 2 = water, 3 = air. |
 
 ## Salvage (child)
 

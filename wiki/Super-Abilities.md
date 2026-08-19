@@ -66,7 +66,7 @@ The three Pass-2 abilities are **not gated on holding a tool**. They fire immedi
 
 | Ability | Skill | Trigger item | Config key |
 |---|---|---|---|
-| **Second Wind** | [Agility](Movement-Skills#second-wind--the-super-ability) | `FEATHER` | `Skills.Agility.Second_Wind_Item` |
+| **Second Wind** | [Parkour / Swimming / Flying](Movement-Skills#second-wind--the-super-ability) | `FEATHER` | `Skills.Movement.Second_Wind_Item` |
 | **Smoke Bomb** | [Stealth](Stealth#smoke-bomb--unlocks-at-250) | `GUNPOWDER` | `Skills.Stealth.Smoke_Bomb_Item` |
 | **Herdsman's Call** | [Husbandry](Husbandry#herdsmans-call--the-super-ability) | `GOAT_HORN` | `Skills.Husbandry.Herdsmans_Call_Item` |
 
@@ -74,13 +74,15 @@ The three Pass-2 abilities are **not gated on holding a tool**. They fire immedi
 
 ### Second Wind
 
-**One ability, three bodies, dispatched on how you're moving** — so from the player's seat it's simply "the Agility button", with one cooldown slot, one config block and one locale block.
+**One ability, three bodies, dispatched on how you're moving** — so from the player's seat it is one button with one cooldown slot and one locale block, whichever medium you are in.
 
-| Rank | Unlocks (RetroMode) | While… | You get |
-|---|---|---|---|
-| 1 | 250 | sprinting | a forward **lunge** — 6 blocks, 6 damage, 1.5 knockback |
-| 2 | 500 | in water | a **water buff** (amplifier 1) |
-| 3 | 750 | gliding | a **1.2× speed burst** |
+| While… | You get | Unlocks at (RetroMode) |
+|---|---|---|
+| sprinting | a forward **lunge** — 6 blocks, 6 damage, 1.5 knockback | **Parkour** 250 |
+| in water | a **water buff** (amplifier 1) | **Swimming** 250 |
+| gliding | a **1.2× speed burst** | **Flying** 250 |
+
+Each body is gated on its own skill and nothing else, so they arrive in whatever order you actually travel in. The strength and duration you get follow the medium's own skill. There is no shared ladder and no ordering: this used to be ranks 1/2/3 of one sub-skill read against the average of all three skills, which made the air body unreachable for a player who only flew. [Why it changed](Movement-Skills#why-every-perk-sits-on-the-skill-that-earns-it).
 
 ### Smoke Bomb
 
@@ -165,7 +167,7 @@ Upstream mcMMO never shipped a behaviour for any of the five — they are named 
 
 **There is nothing to level toward and nothing to see.** None of the five has a rank ladder in `skillranks.yml`, a tuning block in `advanced.yml`, or a `/mcstats` line. Apart from their locale strings they are invisible from inside the game.
 
-Separately, **any skill not named in the tables above has no super ability at all**, by design rather than by omission — the ranged skills, the processing skills (Repair, Alchemy, [Cooking](Cooking), Salvage, Smelting), Fishing, Taming, [Hunter](Hunter), [Unarmored](Unarmored), and the three movement skills, whose burst is Agility's shared [Second Wind](#second-wind). None is planned.
+Separately, **any skill not named in the tables above has no super ability at all**, by design rather than by omission — the ranged skills, the processing skills (Repair, Alchemy, [Cooking](Cooking), Salvage, Smelting), Fishing, Taming, [Hunter](Hunter), [Unarmored](Unarmored), and the child skills. The three movement skills do have one — the shared [Second Wind](#second-wind) — and it is counted above. None of the rest is planned.
 
 > **Correction (GitHub #7).** This page used to say Spears' super ability "is not coming" because it depended on a custom item and a `spear` damage type that Minecraft didn't have. That was wrong, and the same belief had been written into the combat code, where it kept the entire Spears skill from paying anything. All seven spears (`minecraft:wooden_spear` … `minecraft:netherite_spear`), the `minecraft:spears` item tag and the `minecraft:spear` damage type are vanilla **from Minecraft 1.21.11**. Spears is a working skill there — see [Skills](Skills#spears).
 >
