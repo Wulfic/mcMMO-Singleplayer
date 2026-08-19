@@ -87,7 +87,7 @@ there is no `1.21.12`.
 | # | Question | Ruling |
 |---|---|---|
 | **R-l** | Support floor (2026-08-12) | ✅ **RULED (owner, 2026-08-12) — supersedes R-b's `1.21.5` floor.** Floor moves to **`1.21`**; ship all 12 `1.21.x` + all 4 `26.x`. R-b dropped `1.21`–`1.21.4` to dodge the component-API cliff; that cliff is real but it is confined to band `1.21.1`, and `1.21.4`/`1.21.3` were never touched by it. *Was recorded PROPOSED; ruled when the owner directed Phase 8 to start, which exists only under this floor.* |
-| **R-m** | Band `1.21.1`'s three absent subsystems | ✅ **RULED (owner, 2026-08-12): capability-probe and disable.** Ship the band with Farmer's/Fisherman's Diet, Unarmored, Agility and Stealth switched off rather than reimplemented. Reimplementing three seams against the 2024 API is larger than the other three bands combined, and 6.4's stop-loss would have justified dropping the versions entirely — this keeps them shipping. |
+| **R-m** | Band `1.21.1`'s three absent subsystems | 🔴 **SUPERSEDED by R-m′ (owner, 2026-08-19) — its premise was measured FALSE; nothing is disabled. See R-m′ below.** ~~RULED (owner, 2026-08-12): capability-probe and disable.~~ Ship the band with Farmer's/Fisherman's Diet, Unarmored, Agility and Stealth switched off rather than reimplemented. Reimplementing three seams against the 2024 API is larger than the other three bands combined, and 6.4's stop-loss would have justified dropping the versions entirely — this keeps them shipping. |
 | **R-o** | Push the Phase 10 work? (2026-08-13) | ✅ **RULED (owner): push all five branches.** Four bands push = **four real GitHub releases**, under the new `+mc…` jar names and the de-suffixed `mc<VER>-v<mod version>` tags. ⚠️ `gh` is unauthenticated in this working copy and the `github` MCP has never connected, so the **push** is all that can be confirmed from here — the releases themselves must be read off the Actions tab. Land every pending change *before* pushing, or each band releases twice. |
 | **R-p** | `2.2.050` vs `2.2.50` (§10.6.1) | ✅ **RULED (owner): keep `2.2.050`.** It mirrors upstream mcMMO's padded patch, and silently re-identifying the mod was never in scope for a naming task. The consequence is accepted and permanent: Fabric's semver parser normalises the padding away, so the **filename says `2.2.050+mc…` while ModMenu displays `2.2.50+mc…`**. Pre-existing — `2.2.050-build.28` already displayed as `2.2.50-build.28`. **§10.6.1 is closed.** |
 | **R-q** | The `f73031ed9` drift (§8.1a.E) | ✅ **RULED (owner): a band-appropriate equivalent on each band**, carrying `Backport-of: f73031ed9`. Not a waiver file, not a retroactive `Backport-not-needed:` — the trailer stays the single mechanical answer to *"did this reach every band?"*, and `drift-audit.py` needs no new concept. ⚠️ **"Equivalent" is per band and had to be measured, not assumed** — see the ladder in 8.x.6: two bands take `master`'s expression verbatim, and `mc/1.21.8` provably **cannot**. |
@@ -126,6 +126,70 @@ never changes. Here the absent things are **types, static fields and mixin targe
 🔑 That last row is the dangerous one. An unresolvable `@At` target does not degrade gracefully — on
 `mc/1.21.5` **two** of them took out `Blocks.<clinit>`, then `Items.<clinit>`, and cascaded into
 **302 failing tests across 34 unrelated classes**. Read the root cause, never the count.
+
+### R-m′ — 🔴 R-m's PREMISE IS MEASURABLY WRONG. No skill is disabled on `mc/1.21.1` (owner-ruled 2026-08-19)
+
+**R-m (2026-08-12) ruled *"capability-probe and disable"* for Farmer's/Fisherman's Diet, Unarmored,
+Agility and Stealth.** Measured against the real `1.21.1` merged jar on 2026-08-19 with
+`scripts/javap-mc.sh`, **one of its three rows is false and the other two have direct replacement
+seams.** The owner's call on being shown this: *"unlike Spears it's not item specific, so let's fix
+that."* **Nothing ships disabled.**
+
+| R-m's claim | Measured on the `1.21.1` merged jar | Verdict |
+|---|---|---|
+| *"The entire `EntityAttributes#*` family (8 records) is **absent**"* | **All present**, under a prefix. 31 fields. `ARMOR`→`GENERIC_ARMOR`, `MOVEMENT_SPEED`→`GENERIC_MOVEMENT_SPEED`, `MAX_HEALTH`→`GENERIC_MAX_HEALTH`, `ATTACK_DAMAGE`→`GENERIC_ATTACK_DAMAGE`, `JUMP_STRENGTH`→`GENERIC_JUMP_STRENGTH`, `FOLLOW_RANGE`→`GENERIC_FOLLOW_RANGE`, `WATER_MOVEMENT_EFFICIENCY`→`GENERIC_WATER_MOVEMENT_EFFICIENCY` | 🔴 **WRONG — a rename, not an absence** |
+| *"`FoodComponent#onConsume` … the eating seam, whole"* | `FoodComponent` exists as a **pure data record** with no behaviour. The eat path is `LivingEntity#eatFood(World, ItemStack, FoodComponent)`, with `tryEatFood(World, ItemStack)` above it | ✅ absent **as named**, but a **better** seam exists |
+| *"`PlayerInput` + `ServerPlayerEntity#getPlayerInput`"* | Both absent. Predecessor present: `ServerPlayerEntity#updateInput(float, float, boolean, boolean)` — sideways, forward, jumping, **sneaking**. `Entity#isSneaking()`/`isInSneakingPose()` also present | ✅ absent, **direct predecessor available** |
+
+⚠️⚠️ **`SNEAKING_SPEED` → `PLAYER_SNEAKING_SPEED`, not `GENERIC_SNEAKING_SPEED`.** The prefix is **not
+uniform** — most take `GENERIC_`, a few take `PLAYER_` (`PLAYER_SNEAKING_SPEED`,
+`PLAYER_BLOCK_BREAK_SPEED`, `PLAYER_MINING_EFFICIENCY`, `PLAYER_ENTITY_INTERACTION_RANGE`, …). A
+sed-style `s/EntityAttributes\./EntityAttributes.GENERIC_/` **compiles for four of five `Managed`
+records and fails on the fifth**, which is the shape that produces a "nearly done" band. Resolve each
+field against `javap`, one at a time.
+
+🔑🔑 **Why R-m reached the wrong conclusion, and the lesson that outlives this band.** R-m was a
+**cost** re-scope, not a feasibility finding: stop-loss 6.4 fired because `1.21.1` shows **125 probe
+rows** against the largest completed band's 32 (**3.9×**), and the rule says re-scope rather than push
+through. That was the right rule to apply — but **a probe-row count measures SYMBOLS THAT MOVED, not
+WORK.** Most of those 125 rows are one mechanical rename apiece, and the two genuinely absent
+subsystems each have a direct predecessor. **Row count is a proxy for effort, and this is the band
+where the proxy broke.** Re-derive the work from the symbols before trusting a multiplier.
+
+⚠️ **R-m's skill list had also gone stale on its own terms.** It names **Agility**, retired
+2026-08-17; its perks (Fleet Footed) now sit on Parkour, Swimming and Flying. And it predates the
+Taming reach fix (2026-08-17), so `TAMING_PET_ENGAGE_RANGE` → `FOLLOW_RANGE` appears nowhere in it.
+Neither error is visible from the ruling itself — this is the *"a decision recorded as the reason for
+code, which stopped being true and was never re-checked"* shape behind GitHub #7.
+
+#### What this changes about 8.3
+
+- ❌ **The `SkillGating` work is CANCELLED.** It existed only to disable four skills. Nothing is
+  disabled, so **8.3 needs no `master`-side change at all.**
+- ✅ **8.3 therefore stops being "the only band that changes `master`"**, which was the entire reason
+  it was ordered last. It is now an **ordinary band cut**, the same shape as 8.2.
+- ✅ **R6 (component-API cliff) does not require reimplementation** — it requires two seam swaps and a
+  rename sweep, all inside `fabric/` and `platform/`, which is where 8.x.5 already confines band work.
+  `PlatformBoundaryGuardTest` stays green.
+
+#### The three pieces of band-local work
+
+1. **The attribute rename sweep** — `SkillAttributeService` (5 `Managed` records), plus
+   `CallOfTheWildHandler`, `EntityDamageListener`, `MobTiers`, `PetCombatSweep`. Every one resolved
+   against `javap`, never by prefix rule (see the `PLAYER_` warning above).
+2. **The eating seam** — re-point `FoodComponentMixin` from `FoodComponent#onConsume` to
+   `LivingEntity#eatFood`. 🔴 **This is the boot-failure row: an unresolvable `@At` does not degrade
+   gracefully.** On `mc/1.21.5` two of them took out `Blocks.<clinit>` then `Items.<clinit>` and
+   cascaded into **302 failing tests across 34 unrelated classes** — read the root cause, never the
+   count. Keep `allow = 1`.
+3. **The sneak seam** — re-point `PlayerMovementTracker` from `getPlayerInput()` to `updateInput`'s
+   sneaking flag. ⚠️ `updateInput` is a *setter called by the packet handler*, not a getter: confirm
+   the read shape before writing the injector, and do not assume it is a drop-in.
+
+⚠️ **Every one of these claims is a dated observation about `1.21.1`, which stays true.** Do not
+restate any of it as a claim about what the build targets — that is the comment-rot rule.
+
+---
 
 **So R-m is two pieces of work, not one:**
 
@@ -225,10 +289,13 @@ of `1.21.3`'s, so the second cut should be fast.
       `bf2676292`; `combat-egg-control` now pays 0 where `combat-fist` pays 610.
       🔴 **The cut's real lesson is 8.2.5b: "20 compile errors → 0" was NOT the finish line.** Four
       more injectors were broken and *compiled perfectly*. Run gate 2 **before** gate 1 next time.
-- [ ] **8.3 — `mc/1.21.1`** (`1.21`, `1.21.1`; 125 rows). Per **R-m**, two pieces: the `SkillGating`
-      switches land on **`master` first**, then the band branch resolves the compile/mixin absences.
-      ✅ **Unblocked — 8.4 shipped.** Do this band **last** — it is the only one that changes
-      `master`.
+- [ ] **8.3 — `mc/1.21.1`** (`1.21`, `1.21.1`; 125 rows). 🔴 **RE-SCOPED BY R-m′ (2026-08-19) — read
+      that section before starting.** R-m's *"disable four skills"* premise was measured **false**
+      against the `1.21.1` jar: the `EntityAttributes` family is a **rename**, not an absence, and the
+      two genuinely absent seams have direct predecessors. **Nothing ships disabled**, the
+      `SkillGating` work is **cancelled**, and there is **no `master`-side piece at all** — so this
+      is now an **ordinary band cut** and no longer needs to go last.
+      ✅ **Unblocked — 8.4 shipped.**
       🔴 **Two extra renames now, from the Taming work below.** Record them here while the evidence
       is fresh, because both are *compile* failures on that band rather than checks that answer
       wrong:
@@ -3350,7 +3417,7 @@ their correctness is checked instead by `BandDocsMatchRealityTest`, which runs i
 | R3 | Version-specific code leaks into skill logic | ✅ **CLOSED** — 26 → 0 leak sites; `PlatformBoundaryGuardTest` held on two real API breaks |
 | R4 | Silent mixin misbinding via dropped `@Slice` | ✅ **CLOSED** — `allow = N` on all 61 injectors, measured from bytecode |
 | R5 | Item-ID drift silently disables config rows | ✅ **CLOSED (2026-08-13, §8.4)** — `config-id-audit.py` covers all 12 versions off a committed registry manifest, plus two per-band tests (`ConfigItemIdResolutionTest` at runtime, `ConfigIdManifestTest` on the manifest). ⚠️ It stays closed only while the manifest is **cherry-picked, never regenerated per band** |
-| R6 | Component-API cliff needs reimplementation | 🔴 **NOW IN SCOPE under R-l.** Confined to band `1.21.1`; it is what R-m decides |
+| R6 | Component-API cliff needs reimplementation | ✅ **DOWNGRADED 2026-08-19 (R-m′).** Confined to band `1.21.1`, and measurement against that jar shows it needs **no reimplementation**: the `EntityAttributes` family is a **rename**, not an absence, and the two genuinely absent seams each have a direct predecessor (`LivingEntity#eatFood`, `ServerPlayerEntity#updateInput`). Two seam swaps and a rename sweep, all inside `fabric/`/`platform/` |
 | R7 | Live playtest disrupted | ✅ Phase 0 tag + instance backup |
 | **R8** | **A fix lands on `master` and is silently never back-ported** | 🟡 **DOWNGRADED, not closed (R-r, 2026-08-13).** All three legs exist again: the convention, `drift-audit.py`, and the weekly run — restored to `master`, the only branch GitHub fires `schedule` from, and its band floor fixed from a vacuous `0` to a real `4`. ⚠️ **The unattended leg is weekly and reports to a tab nobody opens (R11)**, so between a commit and the next Monday detection is still *"somebody remembers"*. **Each new band multiplies this** — 5 bands today, 9 after Phase 9 — and the floor must be raised per cut (8.x.9) or it silently stops counting. The one open instance (`f73031ed9`) is closed by **R-q**. ✅ **2026-08-17 (§11.3b): the weekly leg has now fired UNATTENDED for the first time** — run `32005557735`, `event: schedule`, success. The leg is no longer theoretical; the reporting gap (R11) is all that is left of this row |
 | **R9** | **A fix outside `src/` never reaches a band, and the docs deny a band that ships** | ✅ **CLOSED 2026-08-13 (`d6080f028`), as TWO fixes — it was never one problem.** **R9a (propagation):** `PROPAGATABLE_PREFIXES` gains **`scripts/`** and **`.github/`**. It had been only `src/`, `gradle.properties`, `build.gradle`, `settings.gradle`, so a band could silently lack the tooling its own gates need, and a divergent `release.yml` could change how it *ships*. Exercised live: the R-r floor fix reached four bands while the auditor printed **"No drift" identically before and after**, because it could not see the commit at all. Self-test extended both directions for both prefixes and mutation-proven (dropping either makes it fail, naming that prefix). Real audit after: still **0 MISSING**, propagated counts up 12→18/4→5/5→6/6→9 — the manual discipline *had* held; it is mechanical now. **R9b (correctness):** new per-band `BandDocsMatchRealityTest` asserts the documented support floor sits strictly below every version *this* branch ships, both docs state the same floor, and this band's versions appear in the README. ⚠️⚠️ **A propagation check could never have caught the recorded instance** — `mc/1.21.4` shipped while six pages said *"1.21.4 and older are not supported"*, and those pages were **byte-identical on all five branches and identically wrong**, so both the audit and `git diff master <band> -- README.md wiki/` read clean and were right to. **Cross-branch equality is not correctness.** 🔑 Docs stay deliberately OUT of the propagatable set: per-push docs failures train people to ignore the audit, and propagation is the wrong instrument anyway. ⚠️ **Next fires on `mc/1.21.3` (8.2)** — the floor sentence must move to `1.21.1` in the same commit, in **both** files |
