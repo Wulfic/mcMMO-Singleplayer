@@ -29,11 +29,28 @@ Skill data is stored **per world** in `<world save>/mcmmo/players/`. A different
 
 If it's the *same* world, check the log for a warning about a renamed skill section.
 
-## "Acrobatics is gone / Agility is 0"
+## "Acrobatics is gone / Agility is gone"
 
-Working as intended. Acrobatics was renamed **Agility**, and Agility then became a **child skill** — its level is the mean of Parkour, Swimming and Flying, which all start at 0.
+Working as intended, and this page is the one place the whole story is written down.
 
-Child skills have no save key at all, so there was nothing for old progress to migrate to. Train the three parents. See [Movement Skills](Movement-Skills).
+Movement is **three skills** now — [Parkour, Swimming and Flying](Movement-Skills) — and it got there in two steps. Upstream mcMMO's Acrobatics was first renamed Agility; Agility was then retired on 2026-08-17 and its last two perks, **Fleet Footed** and **Second Wind**, given to each of the three separately. `/mcstats agility` tells you the same thing in-game rather than answering "unknown skill".
+
+**Your old levels are gone and that is deliberate.** Neither name has a save key left for the profile loader to read, so there is nothing for old progress to migrate *to*. Train the three instead — and they level fast, because Fleet Footed now unlocks at level 1 in each of them.
+
+**Your tuning is mostly not gone.** On the next load mcMMO relocates what it safely can and logs every move:
+
+| What you had | What happens |
+|---|---|
+| `Skills.Agility.<sub-skill>` in `advanced.yml` | **Moved automatically** to the movement skill that now owns that perk. |
+| `Agility.<sub-skill>` in `skillranks.yml` | **Moved automatically**, same rule. |
+| `Skills.Agility.Second_Wind_Item`, `.XP_After_Teleport_Cooldown` | **Moved automatically** to `Skills.Movement` — a neutral root, not a skill. |
+| `Experience_Values.Agility.*` | **Moved automatically** to `Experience_Values.Movement.*`; the inner travel block is now `Travel`. |
+| `ExploitFix.Agility` | **Moved automatically** to `ExploitFix.Movement`. |
+| `Agility.FleetFooted` / `Agility.SecondWind` rank ladders | **Not moved — you are warned instead.** They were three ranks on one ladder and are now a single rank in each of three skills, so `Rank_2` and `Rank_3` no longer mean anything. Set the new `Rank_1` values yourself if you had tuned them. |
+| `Skills.Agility.Level_Cap`, `.Enabled_For_PVP`, `.Enabled_For_PVE` | **Gone.** Those are per-skill keys and there is no skill. Cap `Skills.Parkour`, `Skills.Swimming` and `Skills.Flying` individually. |
+| An `Acrobatics:` section (a config older than 2026-07-25) | **Not moved — you are warned instead**, naming where each value belongs. mcMMO does not rewrite a file you hand-authored. |
+
+Why any of this happened is on [Movement Skills](Movement-Skills#why-every-perk-sits-on-the-skill-that-earns-it) — short version, gating a perk on the average of three skills made some of them literally unreachable for a specialist.
 
 ## "Stealth earns no XP at all"
 
@@ -82,7 +99,7 @@ They're configured to the same item. Both listen on the same use-item event, so 
 
 ```yaml
 Skills:
-    Agility:
+    Movement:
         Second_Wind_Item: FEATHER
     Stealth:
         Smoke_Bomb_Item: GUNPOWDER
@@ -110,7 +127,7 @@ Working as intended — `Skills.Herbalism.Prevent_AFK_Leveling` is shipped on. U
 
 Likely real, and likely the reference speeds. Land's is the known vanilla sprint speed, but **Water (3.16) and Air (30.0) are estimates that have not been measured in-game**.
 
-Correcting them in `experience.yml` → `Experience_Values.Agility.Movement.Reference_Speed` is the intended fix. If you measure a better number, **please [open an issue](https://github.com/Wulfic/mcMMO-Singleplayer/issues) with it** — that's genuinely useful data.
+Correcting them in `experience.yml` → `Experience_Values.Movement.Travel.Reference_Speed` is the intended fix. If you measure a better number, **please [open an issue](https://github.com/Wulfic/mcMMO-Singleplayer/issues) with it** — that's genuinely useful data.
 
 ---
 

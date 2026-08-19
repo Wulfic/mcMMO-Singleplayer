@@ -131,7 +131,7 @@ only, so an off-hand pickaxe readies nothing either way.
 
 ```yaml
 Skills:
-    Agility:
+    Movement:
         Second_Wind_Item: FEATHER
     Stealth:
         Smoke_Bomb_Item: GUNPOWDER
@@ -162,6 +162,35 @@ Skills:
 On by default. `false` restores vanilla behaviour exactly — pets left outside your simulation distance stop being ticked and never catch up. The radius is measured from where you *left*, not where you arrived. A sitting, leashed or ridden pet is never moved either way, and cross-world moves are not covered.
 
 The radius was **32** before, and was raised to 128 because a pet pathing after a sprinting or flying owner is routinely further back than 32 blocks at the moment the teleport lands — so it simply wasn't collected. If your `config.yml` still says 32, it is updated for you on the next load; a value you typed yourself is left alone.
+
+### Change how your pets pick their fights
+
+```yaml
+Skills:
+    Taming:
+        Pet_Combat_Mode:
+            Enabled: true
+            Toggle_Item: BONE
+            Aggressive_Radius: 32
+            Engage_Range: 32
+            Sweep_Interval_Ticks: 20
+```
+
+Your pets have a **combat stance** — *passive* (they fight only what you fight) or *aggressive* (idle pets pick the nearest hostile to you). It's player-wide, not per-pet, and you switch it by sneaking and right-clicking any pet you own while holding `Toggle_Item`. The full player-facing description is on the [Taming section of Skills](Skills#taming).
+
+`Enabled: false` turns off the gesture, the aggressive sweep **and** the chase-range fix below, restoring vanilla pet pathing exactly.
+
+**`Toggle_Item`** is what you must hold to switch stance. While it's in your main hand, sneak + right-click changes the stance *instead of* sitting the pet. It must differ from `Second_Wind_Item`, `Smoke_Bomb_Item` and `Herdsmans_Call_Item`. A name that doesn't resolve to a real item makes the gesture inert — your pet just sits, as vanilla intends — rather than breaking every entity interaction in the game.
+
+**`Aggressive_Radius`** is how far **from you** — not from each pet — an aggressive-mode pet looks for a fight. Measuring from the player means the whole pack shares one search, and a pet that lagged behind can't drag something home from somewhere you've never been.
+
+**`Engage_Range`** is how far a pet will chase a target it *already has*. This is the fix for "my pets ignore what I shoot": a wolf's natural follow range is 16, and past that it can't compute a path at all, so it stands next to you holding a target it will never reach. It applies in **both** stances, and only while a pet actually has a target.
+
+> ⚠️ **Raise `Engage_Range` with care.** Path-search cost grows with the **cube** of this number, and it applies per pet and per repath. Values above **64** are clamped to 64 with a warning in the log.
+
+> 🔑 **`Aggressive_Radius` and `Engage_Range` share the default `32` on purpose, not by coincidence.** A mob found at 32 blocks is only worth targeting if a pet can actually *path* 32 blocks to it. If you move one, re-check the other — a search radius larger than the chase range just produces pets that acquire targets they then refuse to walk to, which is the exact bug the chase range was added to fix.
+
+**`Sweep_Interval_Ticks`** is how often aggressive pets look for a new fight. 20 ticks is one second, which is well inside what you'd notice; lowering it buys nothing and costs a box query every tick.
 
 ### Change what cooked food does when you eat it
 
@@ -214,7 +243,7 @@ unattended.
 | `COTWBreeding` | Husbandry XP for breeding your own Call of the Wild summons. |
 | `PreventArmorStandInteraction` / `PreventMannequinInteraction` | Combat XP for hitting a decoration. |
 | `Fishing` (+ `Fishing_ExploitFix_Options`) | Re-casting into the same spot forever. |
-| `Agility` | Self-inflicted damage feeding Agility XP. |
+| `Movement` | Self-inflicted damage feeding fall and dodge XP in Parkour, Swimming and Flying. |
 | `TreeFellerReducedXP` | Full per-log XP when a whole tree comes down at once. |
 | `LimitTallPlantFarming` | XP from bone-mealed plants grown past natural height. |
 | `Combat.XPCeiling` | One enormous hit paying out a modded mob's whole health bar. |
@@ -259,17 +288,19 @@ A few things (`/mcability`, `/mcrefresh`) are runtime toggles and apply immediat
 
 Two different things can happen to a key between releases, and they are handled differently on purpose.
 
-### A renamed *skill* — warned, never rewritten
+### A renamed or retired *skill* — warned, never rewritten
 
-If mcMMO renames a whole skill, your config section is **not** silently rewritten — you get a **log warning** naming the old and new spelling instead. Your config file is yours, and a rewriter that quietly moves your tuning around is a worse failure mode than a line in the log.
+If a whole skill section is no longer read, your config is **not** silently rewritten — you get a **log warning** naming where those values belong now. Your config file is yours, and a rewriter that quietly moves your tuning around is a worse failure mode than a line in the log.
 
-Currently: `Acrobatics:` → `Agility:`.
+Currently that applies to an `Acrobatics:` section, from a config written before that skill was replaced.
+
+The same warn-don't-rewrite rule covers any single key whose destination **means something different** from the key it came from — a rank ladder that lost its upper ranks, or a threshold the code stopped reading. Migrating those would move your tuning somewhere it is just as ignored while implying it now works, so you are told instead.
 
 ### A *sub-skill* that changed parent — migrated for you
 
 When a sub-skill is re-parented, its config path moves with it, and the values you tuned would otherwise be stranded at a path nothing reads. Those **are** carried across, and the dead keys are deleted, with an INFO line per path saying so.
 
-Seven sub-skills moved out of Agility on 2026-08-10 — Dodge, Athlete and Smash to **Parkour**, Lead Lungs and Lake Raider to **Swimming**, Glide and Solar Wings to **Flying** ([why](Movement-Skills)). Your `advanced.yml`, `skillranks.yml` and `config.yml` are migrated on the next load.
+The movement skills are where most of this has happened: every perk now sits on the skill that earns it, so `advanced.yml`, `skillranks.yml`, `config.yml` and `experience.yml` all pick up moved paths on the next load. **[Troubleshooting](Troubleshooting#acrobatics-is-gone--agility-is-gone) has the key-by-key table** of what moves itself and what you have to move by hand.
 
 If you had tuned **both** the old and the new path, the value the game was already using wins and the old one is discarded — with a `WARN` naming both numbers, so the choice is never silent. The scan is driven by what your file actually contains rather than by a version stamp, so a migration that fails to save is simply retried next boot.
 

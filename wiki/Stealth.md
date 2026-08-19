@@ -74,7 +74,7 @@ The 5-second window is tuned so you **cannot trade blows and keep stabbing**, bu
 
 > ⚠️ **The damage bonus is multiplicative**, so it compounds with your weapon skill's own on-hit bonus *and* with a vanilla crit. That's the point of the sub-skill — and it's also the single most likely thing in this skill to be over-tuned. **Test it against an armoured mob before trusting it.**
 
-**Assassin cannot stack with Agility's Smash.** Smash requires sprinting and Assassin requires sneaking, and you can't do both at once.
+**Assassin cannot stack with Parkour's Smash.** Smash requires sprinting and Assassin requires sneaking, and you can't do both at once.
 
 ### Smoke Bomb — unlocks at 250
 
@@ -86,7 +86,7 @@ Right-click while holding **gunpowder** (`Skills.Stealth.Smoke_Bomb_Item`, never
 
 Because it's item-triggered rather than tool-readied, it does **not** use the two-step ready/activate gesture — see [Super Abilities](Super-Abilities#item-triggered-abilities).
 
-> ⚠️ The Smoke Bomb item **must differ from Agility's Second Wind item**. Both actives listen on the same use-item event, so sharing an item fires one and prints the other's refusal message.
+> ⚠️ The Smoke Bomb item **must differ from the Second Wind item** (`Skills.Movement.Second_Wind_Item`) and from Herdsman's Call's. All three actives listen on the same use-item event, so sharing an item fires one and prints another's refusal message.
 
 ---
 

@@ -105,7 +105,7 @@ This is the most unusual XP model in the mod, and it exists so speed buffs aren'
 | `SnowGolemExcavation` | Snow golem snow farms. |
 | `EndermanEndermiteFarms` | Endermite-based enderman farms. |
 | `LimitTallPlantFarming` | Bone-mealed unnaturally tall plants. |
-| `Agility` | Various movement XP abuses. |
+| `Movement` | Self-inflicted damage feeding fall and dodge XP. |
 | `Stealth.Require_Movement_Input` | Earning sneak XP while being *carried*. [Details](Stealth#the-anti-afk-gate). |
 | `Unarmored.Require_Living_Attacker` | Cactus/fire/drowning damage farms. [Details](Unarmored#the-two-exploit-gates). |
 | `Unarmored.Max_Awards_Per_Attacker` | One zombie hitting you through a slab forever. |
@@ -149,13 +149,13 @@ Boss bars stack downward over the hotbar, so an unbounded number eventually cove
 Per-skill colour and style are configurable too:
 
 ```yaml
-    Agility:
+    Parkour:
         Enable: true
         Color: PINK
         BarStyle: SEGMENTED_6
 ```
 
-> **Child skills show bars too.** Agility's bar appears while you're moving, even though Agility itself earns no XP — its progress is the average of its parents'.
+> **Child skills show no bar.** Salvage and Smelting earn no XP of their own — their level is the average of their parents' — so a bar for them would be a bar that never moves on its own. Train Repair and you see Repair's bar.
 
 > ⚠️ **Changing a default in a new release won't reach your existing config.** `Enable`, `Max_Visible` and friends are only written when *absent*. Delete the key to pick up a new default.
 
@@ -193,4 +193,4 @@ Skills:
         Level_Cap: 0
 ```
 
-Capping a **child** skill (Agility, Salvage, Smelting) caps what its sub-skills can reach, since they gate on the derived level.
+Capping a **child** skill (Salvage, Smelting) caps what its sub-skills can reach, since they gate on the derived level.
