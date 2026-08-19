@@ -212,11 +212,12 @@ the branch does not.
       `.github/workflows/drift-audit.yml` goes to the **new** band count, on `master` first and then
       on every band. The floor is what makes *"found no bands"* fail instead of reading as a clean
       audit. Leaving it stale is under-strict rather than noisy — the audit still passes — which is
-      exactly why nothing will remind you to do it. ⚠️ **Still 5. 8.3 shipped on 2026-08-19 without
-      raising it** — six bands now exist on `origin` and the committed floor admits five, so a run
-      that found only five would pass. Verified green at `6` locally; the commit is outstanding.
-- [ ] **x.10** ⚠️ **Move the documented support floor in the SAME commit.** `README.md:45` and
-      `wiki/Installation.md:29` both read *"Minecraft **1.21.1 and older are not supported**"*. That
+      exactly why nothing will remind you to do it. ✅ **At `6` since 2026-08-19** — raised as 8.3's
+      x.9, one release cycle late, which is itself the evidence: 8.3 shipped and released with the
+      floor still admitting five bands, and every gate stayed green throughout.
+- [ ] **x.10** ⚠️ **Move the documented support floor in the SAME commit.** `README.md` and
+      `wiki/Installation.md` both carry a *"Minecraft **&lt;version&gt; and older are not supported**"*
+      sentence — `1.20.6` as of 8.3. That
       sentence is **false on any band below it** and `BandDocsMatchRealityTest` will fail there. Both
       files, on every branch.
 
@@ -404,18 +405,49 @@ That is the `[[smelting-furnace-arm]]` shape: invisible by construction.
       release. Run `32308459500` green; release published, **not** draft; the other six releases
       re-checked and **none orphaned** by the tag-reaping sweep.
 - [x] **`1.21.x` coverage is complete: 12 of 12.**
-- [ ] **x.8 back-port — NOT STARTED, paused by owner ruling.** ⚠️ Two items, and the second will not
-      remind you: (1) nothing in the `fix` commit belongs on `master` — it carries an explicit
-      `Backport-not-needed:` because `master`'s `loadEntityWithPassengers` takes the `SpawnReason`;
-      (2) 🔴 **the docs commit `40cf1b218` is docs-ONLY, so `drift-audit.py` structurally cannot see
-      it** (Phase 21, defect B). Five branches still head their version tables at *"1.21.2 –
-      1.21.11"* and carry no `1.21 – 1.21.1` row, and the audit will keep printing *"No drift"*.
-      One wiki serves every band, so that header currently reads as *"your version is unsupported"*
-      to a player on the band we just shipped. **Carry it by hand.**
-- [ ] **x.9 — `--require-bands` 5 → 6 in `.github/workflows/drift-audit.yml`, `master` first then
-      every band. NOT DONE.** Verified green at 6 locally (gates 7/9/10 all pass with six bands), but
-      the committed floor is still `5`, which is under-strict rather than noisy — the audit passes
-      either way, which is exactly why nothing will remind you.
+- [x] **x.8 back-port — DONE 2026-08-19.** ⚠️ It was **larger than the commit it is named after**,
+      and the extra half was invisible from the ticket: `40cf1b218` moved the three table headers and
+      added this band's row, but the **floor sentence** (*"Minecraft `1.21.1` and older are not
+      supported"* → *"`1.20.6` and older"*) had moved in an **earlier** band commit, at cut time,
+      because `BandDocsMatchRealityTest` fires then by design. Cherry-picking `40cf1b218` alone would
+      have left six branches with a header reading `1.21 – 1.21.11` three paragraphs above a sentence
+      denying `1.21` — a half-fix that reads **correct in the diff** and is wrong on the page.
+      🔑 **The unit that propagates is the cumulative state of the file, not the commit that last
+      touched it.** Carried as the full delta: the three docs files made byte-identical to this
+      band's, on `master` and all five other bands.
+- [x] **x.8b — `TODO.md` had diverged AGAIN, 602 lines vs 882, and this was not in the ticket at
+      all.** Phase 21 closed the "five blobs" divergence; **two band-authored docs-only `TODO.md`
+      commits re-opened it within the same session** — `c12624569` (which carries the **R-v ruling
+      and the whole §22 plan**) and `b2ac4824f` (the 8.3 shipped record). Both are docs-only, so
+      defect B swallowed both.
+      🔴 **`master` was still describing §8.3 as "IN FLIGHT / UNPUSHED"** for a band that had shipped
+      and released. 🔑🔑 **The hole re-opens on its own the moment anyone writes plan text on a band
+      branch** — closing it once does not keep it closed, because nothing fails when it re-opens.
+      All seven now carry one blob again.
+- [x] **x.9 — `--require-bands` 5 → 6.** `BAND_COUNT` in `.github/workflows/drift-audit.yml`, which
+      the workflow's own comments confirm counts `mc/**` only, `master` excluded — six bands on
+      `origin`, so `6`. `master` first, then byte-identical to every band (gate 10's shared layer).
+
+#### How x.8 was executed — and the one deliberate choice in it
+
+1. `master` first (rule 1), taking `README.md`, `wiki/Home.md`, `wiki/Installation.md` and `TODO.md`
+   from `mc/1.21.1`, **plus** a refresh of `BandDocsMatchRealityTest`'s stale javadoc pointer
+   (*"next cut this fires on `mc/1.21.3` (TODO 8.2)"* — both 8.2 and 8.3 have shipped).
+2. That javadoc refresh is **not padding, and it is the deliberate choice**: it is owed under the
+   caveat-expiry rule regardless, and putting it in the same commit gives the docs change a `src/`
+   half — which is the **only** thing that makes `drift-audit.py` able to see it (Phase 21, defect
+   B: a docs edit propagates iff its commit also touched `src/`).
+   ⚠️ **Named here so it does not silently become a habit.** "Add a `src/` edit so the auditor sees
+   the commit" is a correct move only when the `src/` edit was independently owed. When it is not,
+   the honest fix is to teach the auditor about docs — not to dress the commit up.
+3. Cherry-picked to all five remaining bands with `Backport-of:` trailers; `mc/1.21.1` took only the
+   parts it lacked.
+
+**What this explicitly did NOT do:** no jar was rebuilt, no smoke harness run, no release cut.
+Verified rather than assumed — `release.yml`'s `paths:` filter lists only `src/**`, the gradle files
+and `release.yml` itself, so a docs or `drift-audit.yml` push cannot fire a release run, and there is
+no tag-reaping exposure. **Rollback** for every step is `git revert <sha>` on the branch in question;
+nothing was rewritten, deleted, or force-pushed.
 
 #### The one defect the ship gate caught — and what it says about the other gates
 
@@ -835,7 +867,7 @@ test run in the shell that hides the bug proves nothing.**
 - [ ] 🔴 **Manifest debt piece 1** — see *Other open work*. Piece 2 shipped as
       `scripts/manifest-identity-audit.py` (Phase 18).
 - [ ] 🟡 **The `--require-bands` floors are hand-maintained** in `.github/workflows/drift-audit.yml`
-      and in ship-gate steps 9 and 10. Currently **5**; must reach **6** with 8.3 and climb once per
+      and in ship-gate steps 9 and 10. **Now 6** (8.3's x.9, raised one cycle late); climbs once per
       `1.20` cut. Nothing reminds you — a stale floor is under-strict and the audit still passes.
 
 ---
