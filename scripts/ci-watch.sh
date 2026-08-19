@@ -49,6 +49,27 @@ APPEAR_SECONDS="${CI_WATCH_APPEAR_SECONDS:-90}"
 die()  { echo "ci-watch: $*" >&2; exit 2; }
 note() { echo "ci-watch: $*"; }
 
+# --- Hand a path to a NATIVE child process -----------------------------------
+# ⚠️⚠️ NOT COSMETIC, AND NOT ONLY ABOUT WINDOWS. Under git-bash, `python` is the
+# native Windows interpreter: it cannot see `/tmp/...` or `/c/Users/...`. Those
+# paths normally survive only because MSYS rewrites an argv element that LOOKS
+# like a path on the way to a native binary -- an implicit favour, not a rule.
+#
+# 🔑 AND THIS REPO TELLS YOU TO TURN THAT FAVOUR OFF. `MSYS2_ARG_CONV_EXCL='*'`
+# is the prescribed fix for `git rev-parse <ref>:<path>` being mangled (Phase 18,
+# gotchas 2026-08-18). Exporting it fixes gate 18 and SILENTLY BREAKS this gate
+# and `release-sweep-selftest.sh` -- `FileNotFoundError` on a path that is right
+# there on disk. TODO §19.9 then recorded that as "this script never worked",
+# which is false: it passes 8/8 and 4/4 in a default shell. See TODO §20.1.
+#
+# So convert explicitly and stop depending on the setting either way. `cygpath`
+# is an MSYS binary, so the conversion vars do not affect IT, and its output is
+# already native so nothing re-mangles it. Off git-bash there is no cygpath and
+# the path is already native -- pass it through.
+to_native() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi
+}
+
 # --- Which commits did GitHub actually evaluate? -----------------------------
 # GitHub applies `paths:` to EVERY commit in a push and then stamps the run with
 # the push's HEAD sha -- so the head sha of a real run can itself sit outside the
@@ -85,7 +106,7 @@ push_triggers_release() {
   root="$(git rev-parse --show-toplevel 2>/dev/null)" || return 2
   [ -f "$root/$WORKFLOW_FILE" ] || return 2
 
-  patterns="$(python - "$root/$WORKFLOW_FILE" <<'PY' 2>/dev/null
+  patterns="$(python - "$(to_native "$root/$WORKFLOW_FILE")" <<'PY' 2>/dev/null
 import sys, yaml
 doc = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
 # `on` is parsed as the boolean True by YAML 1.1 -- look for both spellings.
@@ -154,7 +175,7 @@ EOF
   # implausible. Cutting the function makes each pattern unique in the mutant,
   # and the uniqueness assertion below makes a future collision loud.
   cp "${BASH_SOURCE[0]}" "$work/orig.sh"
-  python - "$work/orig.sh" "$work/base.sh" <<'PY' || { echo "self-test: could not build the mutant base" >&2; return 1; }
+  python - "$(to_native "$work/orig.sh")" "$(to_native "$work/base.sh")" <<'PY' || { echo "self-test: could not build the mutant base" >&2; return 1; }
 import sys, re
 src, out = sys.argv[1], sys.argv[2]
 lines = open(src, encoding="utf-8").read().split("\n")
@@ -187,6 +208,33 @@ PY
   fail_run='[{"databaseId":2,"headSha":"deadbeef","status":"completed","conclusion":"failure","workflowName":"Build & Release","url":"u"}]'
   running='[{"databaseId":3,"headSha":"deadbeef","status":"in_progress","conclusion":"","workflowName":"Build & Release","url":"u"}]'
 
+  # THE CASE THIS SHELL'S OWN ENVIRONMENT CANNOT TEST.
+  # Every check above already passes with the path bridge broken, because a
+  # default git-bash converts the argv for us. The regression exists only when
+  # MSYS conversion is OFF -- which is precisely what MSYS2_ARG_CONV_EXCL='*'
+  # (this repo's prescribed fix for the rev-parse mangling) does. So FORCE that
+  # environment; testing in the ambient one proves nothing. TODO 20.4.
+  check_path_bridge() {
+    local name="path bridge holds with MSYS conversion OFF" probe got
+    if ! command -v cygpath >/dev/null 2>&1; then
+      # Not git-bash: paths are already native, nothing to convert and nothing
+      # to regress. Report SKIPPED -- an untestable case rendered as a pass is
+      # the exact R11 shape this whole script exists to refuse.
+      [ "${QUIET:-0}" = "1" ] || echo "  SKIP  $name (no cygpath - not git-bash)"
+      return
+    fi
+    probe="$work/bridge probe.txt"   # the space is deliberate: the other argv trap
+    printf 'bridge-ok' > "$probe"
+    got="$(MSYS2_ARG_CONV_EXCL='*' MSYS_NO_PATHCONV=1 bash "$SUT" --internal-native-read "$probe" 2>/dev/null)"
+    if [ "$got" = "bridge-ok" ]; then
+      [ "${QUIET:-0}" = "1" ] || echo "  PASS  $name"
+      pass=$((pass+1))
+    else
+      [ "${QUIET:-0}" = "1" ] || echo "  FAIL  $name: child read '$got', wanted 'bridge-ok'"
+      fail=$((fail+1))
+    fi
+  }
+
   run_all() {
     pass=0; fail=0
     check "successful run -> 0"                      "$ok"       0 0 0
@@ -204,6 +252,7 @@ PY
     # same lie one level down.
     check "no run and the pushed range is UNKNOWN -> 3, never skipped" \
                                                      '[]'        0 2 3
+    check_path_bridge
   }
 
   echo "ci-watch self-test"
@@ -229,7 +278,7 @@ PY
   mutate() {
     local name="$1" old="$2" new="$3" rc
     cp "$work/base.sh" "$SUT"
-    python - "$SUT" "$old" "$new" <<'PY'
+    python - "$(to_native "$SUT")" "$old" "$new" <<'PY'
 import sys
 path, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
 s = open(path, encoding="utf-8").read()
@@ -276,6 +325,13 @@ PY
   # M4 calls every completed run a success.
   mutate "M4 any conclusion counts as success" \
     'if [ "$conclusion" = "success" ]; then' 'if true; then'
+  # M5 reverts the path bridge: hand the raw bash path to a native child. This
+  # is the ONLY mutation the ambient shell cannot catch -- all eight cases above
+  # still pass, because a default git-bash converts the argv for us. It is caught
+  # solely by check_path_bridge, which forces the conversion OFF. TODO 20.4.
+  mutate "M5 hand the raw bash path to a native child" \
+    'if command -v cygpath >/dev/null 2>&1; then cygpath -w' \
+    'if false; then cygpath -w'
 
   cp "$work/base.sh" "$SUT"
   echo
@@ -422,6 +478,14 @@ case "${1:-}" in
                   self_test; exit $? ;;
   --mutate)       MUTATE=1; self_test; exit $? ;;
   --internal-run) shift; watch "${1:-HEAD}"; exit $? ;;
+  # Used only by the self-test path-bridge case: read a file through the SAME
+  # to_native() the real code uses, so a mutation of that helper is observable.
+  --internal-native-read)
+                  shift
+                  python - "$(to_native "${1:-}")" <<'PY' ; exit $? ;;
+import sys
+sys.stdout.write(open(sys.argv[1], encoding="utf-8").read())
+PY
   -h|--help)      sed -n '2,41p' "${BASH_SOURCE[0]}"; exit 0 ;;
   *)              watch "${1:-HEAD}"; exit $? ;;
 esac
