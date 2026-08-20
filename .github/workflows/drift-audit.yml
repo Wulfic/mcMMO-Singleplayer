@@ -47,12 +47,25 @@
 #                             doc in the repo, and two bands were found
 #                             carrying a stub with no Destructive Actions
 #                             section at all.
+#   gradle-key-identity-audit.py  the key-level guard (R-w'): gradle.properties
+#                             is the one shared file BOTH guards above must
+#                             look away from, because mod_version has to be
+#                             IDENTICAL on every branch while minecraft_version
+#                             has to DIFFER. Neither a per-file identity check
+#                             nor a per-band exclusion can express that, so the
+#                             gap between them was exactly one key wide -- and
+#                             a band left behind on mod_version silently STOPS
+#                             RELEASING.
 #
-# ⚠️⚠️ The last two hold OPPOSITE invariants over the same directory, and
+# ⚠️⚠️ Guards 2 and 3 hold OPPOSITE invariants over the same directory, and
 # mc-surface.txt must appear in exactly one of them. If it ever lands in both,
 # no state satisfies both guards and nothing can ship.
 #
-# The last two live here only because this job already has the full history
+# ⚠️ Guard 4 holds BOTH invariants at once, over different KEYS of one file.
+# That is not a contradiction and must not be "simplified" into either of the
+# other two -- it is the only shape that fits gradle.properties.
+#
+# The last three live here only because this job already has the full history
 # and every band ref, which is what any cross-branch check needs.
 # ---------------------------------------------------------------------------
 name: Band drift audit
@@ -192,6 +205,33 @@ jobs:
             --require-bands "${{ github.event.inputs.require_bands || env.BAND_COUNT }}" \
             --json branch-file-identity.json
 
+      # ---------------------------------------------------------------------
+      # The fourth guard (R-w'). It is NOT redundant with the two above: they
+      # compare whole files, and gradle.properties is the one shared file that
+      # can never be compared whole -- mod_version must match on every branch,
+      # minecraft_version must differ, same file. drift-audit.py excludes it
+      # for the second reason and therefore cannot see the first.
+      #
+      # ⚠️ Same weak leg as everything else in this job: weekly, from the
+      # default branch only, into a tab nobody opens (R11). The ship gate is
+      # where this actually gets run; this is the backstop.
+      # ---------------------------------------------------------------------
+      - name: Prove the per-key guard can still detect a divergence
+        if: ${{ !cancelled() }}
+        # First, on its own synthetic repositories, for the same reason as
+        # every self-test above: "no violations" is what a working guard prints
+        # and also what a completely broken one prints.
+        run: python scripts/gradle-key-identity-audit.py --self-test
+
+      - name: Refuse a divergent mod_version or a colliding minecraft_version
+        if: ${{ !cancelled() }}
+        # BAND_COUNT means the same thing to all four scripts -- mc/** branches,
+        # master excluded -- so the one declared number governs every floor.
+        # Without it this guard passes trivially on a shallow clone: zero pairs
+        # to compare reads exactly like zero divergences.
+        run: |
+          python scripts/gradle-key-identity-audit.py             --require-bands "${{ github.event.inputs.require_bands || env.BAND_COUNT }}"             --json gradle-key-identity.json
+
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@v4
@@ -201,4 +241,5 @@ jobs:
             drift-audit.json
             manifest-identity.json
             branch-file-identity.json
+            gradle-key-identity.json
           if-no-files-found: ignore
