@@ -7,6 +7,9 @@
 #   scripts/brew-smoke.sh                                   # the default discriminating brew
 #   scripts/brew-smoke.sh mcmmo   <ingredient> <base>       # one side only
 #   scripts/brew-smoke.sh vanilla <ingredient> <base>       # the control
+#   scripts/brew-smoke.sh --self-test                       # prove the jar-resolution refusal
+#
+#   BREW_SMOKE_JAR=<path>   the jar under test, when build/libs holds more than one
 #
 # 🔑🔑 WHY THE CONTROL RUN EXISTS, AND WHY IT IS NOT OPTIONAL.
 # The obvious smoke test — brew water + sugar and check you get mundane — proves nothing: vanilla
@@ -41,7 +44,89 @@ BASE="${3:-minecraft:awkward}"
 prop() { grep -E "^$1=" "$REPO/gradle.properties" | head -n1 | cut -d= -f2- | tr -d '[:space:]'; }
 MC="$(prop minecraft_version)"; LOADER="$(prop loader_version)"; FAPI="$(prop fabric_version)"
 INSTALLER="1.1.2"
-MOD_JAR="$(find "$REPO/build/libs" -name 'mcmmo-*.jar' ! -name '*-sources.jar' ! -name '*baseline*' 2>/dev/null | head -1)"
+
+# --- which jar is under test ---------------------------------------------------------------------
+# 🔑 THIS USED TO BE `find ... | head -1`, AND THAT IS A GATE CERTIFYING AN ARBITRARY ARTIFACT.
+# `build/libs` legitimately holds more than one jar -- a band switch, an interrupted release build,
+# or a stale `mcmmo-1.0.0+mc1.21.8.jar` left behind by yesterday's checkout. `head -1` takes
+# whichever `find` happened to walk first and says nothing, so the harness prints a confident PASS
+# for a jar that is not the one you just built. Its two sibling harnesses (boot-check.sh,
+# gameplay-smoke.sh) take the jar as `$1` precisely so this cannot happen; this script cannot,
+# because `$1..$3` are already mode/ingredient/base. So it resolves, and REFUSES WHEN AMBIGUOUS.
+#
+# Override with BREW_SMOKE_JAR=path (an env var, not a 4th positional, so the most important
+# argument is not buried behind two optional ones). BREW_SMOKE_LIBS exists for the self-test.
+resolve_mod_jar() {
+    local libs="${BREW_SMOKE_LIBS:-$REPO/build/libs}"
+    if [[ -n "${BREW_SMOKE_JAR:-}" ]]; then
+        if [[ ! -f "$BREW_SMOKE_JAR" ]]; then
+            echo "error: BREW_SMOKE_JAR=$BREW_SMOKE_JAR is not a file" >&2
+            return 2
+        fi
+        echo "$BREW_SMOKE_JAR"
+        return 0
+    fi
+    local -a found=()
+    while IFS= read -r line; do [[ -n "$line" ]] && found+=("$line"); done < <(
+        find "$libs" -maxdepth 1 -name 'mcmmo-*.jar' ! -name '*-sources.jar' ! -name '*baseline*'\
+            2>/dev/null | sort)
+    case "${#found[@]}" in
+        0)  echo "error: no built mcMMO jar in $libs -- run ./gradlew build" >&2
+            return 2 ;;
+        1)  echo "${found[0]}"
+            return 0 ;;
+        *)  # Refuse. Picking one here is exactly the bug: the run would pass or fail against an
+            # artifact nobody chose, and the report would not say which.
+            echo "error: ${#found[@]} candidate mcMMO jars in $libs -- refusing to guess which one" >&2
+            printf '         %s\n' "${found[@]}" >&2
+            echo "  Fix: BREW_SMOKE_JAR=<path> scripts/brew-smoke.sh ...   (or clear $libs and rebuild)" >&2
+            return 2 ;;
+    esac
+}
+
+# --- self-test -----------------------------------------------------------------------------------
+# ⚠️ The converse cases are not decoration. A resolver that refused EVERYTHING would satisfy the
+# ambiguity assertion perfectly and break the harness for every real run.
+if [[ "$MODE" == "--self-test" ]]; then
+    tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+    pass=0; fail=0
+    chk() { # name, libs_dir, jar_override, want_rc, want_stdout ("" = do not care)
+        local name="$1" libs="$2" override="$3" want_rc="$4" want_out="$5" out rc
+        out="$( ( export BREW_SMOKE_LIBS="$libs"; [[ -n "$override" ]] && export BREW_SMOKE_JAR="$override"
+                  resolve_mod_jar ) 2>"$tmp/err" )"; rc=$?
+        if [[ "$rc" == "$want_rc" ]] && { [[ -z "$want_out" ]] || [[ "$out" == "$want_out" ]]; }; then
+            echo "  PASS  $name (exit $rc)"; pass=$((pass+1))
+        else
+            echo "  FAIL  $name: exit=$rc (want $want_rc) out='$out' (want '$want_out')"
+            sed 's/^/        | /' "$tmp/err"; fail=$((fail+1))
+        fi
+    }
+
+    mkdir -p "$tmp/none"
+    mkdir -p "$tmp/one";  : > "$tmp/one/mcmmo-1.1.0+mc1.21.11.jar"
+    mkdir -p "$tmp/noise"; : > "$tmp/noise/mcmmo-1.1.0+mc1.21.11.jar"
+    : > "$tmp/noise/mcmmo-1.1.0+mc1.21.11-sources.jar"; : > "$tmp/noise/mcmmo-baseline.jar"
+    mkdir -p "$tmp/two";  : > "$tmp/two/mcmmo-1.1.0+mc1.21.11.jar"; : > "$tmp/two/mcmmo-1.1.0+mc1.21.8.jar"
+
+    echo "brew-smoke self-test: jar resolution"
+    chk "exactly one jar      -> resolves it"                "$tmp/one"   "" 0 "$tmp/one/mcmmo-1.1.0+mc1.21.11.jar"
+    chk "sources/baseline     -> ignored, still one"         "$tmp/noise" "" 0 "$tmp/noise/mcmmo-1.1.0+mc1.21.11.jar"
+    chk "no jar at all        -> exit 2, never a guess"      "$tmp/none"  "" 2 ""
+    chk "TWO jars             -> exit 2, REFUSES to guess"   "$tmp/two"   "" 2 ""
+    chk "override wins over ambiguity"                       "$tmp/two"   "$tmp/one/mcmmo-1.1.0+mc1.21.11.jar" 0 "$tmp/one/mcmmo-1.1.0+mc1.21.11.jar"
+    chk "override at a missing path -> exit 2"               "$tmp/one"   "$tmp/nope.jar" 2 ""
+    echo
+    echo "  $pass passed, $fail failed"
+    [[ "$fail" -eq 0 ]]; exit $?
+fi
+
+# Resolved eagerly, and only when a run will actually need it -- a `vanilla` control run stages no
+# mcMMO jar, so an ambiguous build/libs must not stop it. It cannot be resolved inside run_one():
+# that function's STDOUT is captured as the brew result, so a path echoed there would corrupt it.
+MOD_JAR=""
+if [[ "$MODE" != "vanilla" ]]; then
+    MOD_JAR="$(resolve_mod_jar)" || exit 2
+fi
 
 run_one() {
     local mode="$1"
@@ -63,7 +148,9 @@ run_one() {
         -name "fabric-api-${FAPI}.jar" 2>/dev/null | head -1)"
     [[ -n "$fapi_jar" ]] && cp "$fapi_jar" "$work/mods/"
     if [[ "$mode" == "mcmmo" ]]; then
-        [[ -n "$MOD_JAR" ]] || { echo "error: no built mcMMO jar in build/libs — run ./gradlew build" >&2; return 1; }
+        # Already resolved (and proven unambiguous) at startup; this is the belt to that braces.
+        [[ -n "$MOD_JAR" && -f "$MOD_JAR" ]]\
+            || { echo "error: no mcMMO jar resolved -- run ./gradlew build" >&2; return 2; }
         cp "$MOD_JAR" "$work/mods/"
     fi
     echo "=== $mode: $BASE + $INGREDIENT   mods: $(ls "$work/mods" | tr '\n' ' ')" >&2
