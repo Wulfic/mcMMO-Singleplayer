@@ -265,7 +265,8 @@ public final class McMMOCommands {
             final int level = mmoPlayer.getSkillLevel(skill);
             // Two different reasons, and pointing at coreskills.yml for the wrong one sends the
             // player to edit a key that will not help: a skill this Minecraft version cannot furnish
-            // (no spear items exist here) stays off however that file is set.
+            // (no spear items, or no mace, exists here) stays off however that file is set. The set
+            // of gated skills lives in SkillAvailability.GATED -- do not re-list it here.
             final String why = SkillAvailability.isSkillSupported(skill)
                     ? " Your level (" + level + ") is saved and will come back untouched — re-enable "
                             + "it under '" + CoreSkillsConfig.enabledPath(skill) + "' in coreskills.yml."
