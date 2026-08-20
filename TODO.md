@@ -728,7 +728,10 @@ this size; a branch is the only honest representation.
       Temurin **25.0.4+7** is installed. 🔴 **Java 25 collides with gate 10** — `release.yml`
       pins `java-version: '21'` and must stay byte-identical on every branch. Detail + the control
       run in §27.
-- [ ] **9.3 Translate the tooling, not just the source.** `scripts/mc-surface.txt` is yarn-named and
+- [ ] **9.3 Translate the tooling, not just the source.** ➡️ **Now the critical path** — §9.2 is
+      closed and `master` is pinned to `26.2` (§27), so this is what stands between here and a green
+      `master`. Sized 2026-08-20: **2,639 compile errors across 96 files**, all inside `fabric/` (74)
+      and `platform/` (22), **zero** in the other 189 source files. 42 of the 96 are `fabric/mixin`. `scripts/mc-surface.txt` is yarn-named and
       **does not apply to this band**, so `probe-bands.py` cannot probe it at all until 9.1 lands.
       `mixin-allow-audit.py` and `extract-mc-surface.py` read the same names. **The band cannot run its
       own gates until its tooling speaks official names.**
@@ -1395,19 +1398,130 @@ compiled nothing looks identical to one that passed correctly, and this repo has
 guards. Verified the artifact by hand — class file on disk, jar in `build/libs`, `javap` output —
 rather than trusting exit 0.
 
-### ⚠️ §9.4's band assumption looks wrong — flagged, not resolved
+### ⚠️ §9.4's band assumption looks wrong — first flag
 
 §9.4 says "`depends.minecraft` covers `26.1`–`26.2`", i.e. one band. Fabric API disagrees:
 `0.155.2+26.1.2` declares `[26.1, 26.1.1, 26.1.2]`, and the `+26.2` line declares `[26.2]` **alone**.
-That reads as **two** bands. It is not settled here: the band question is whether *this mod's* MC
-contact surface is stable across the four versions, which needs `probe-bands.py` against an
-official-name manifest — i.e. **§9.3 first**. Do not pin a range from this note.
+That reads as **two** bands.
+➡️ **Escalated below from one source to three** — ModMenu and Cloth Config draw the identical line.
+See *"the band split is now EVIDENCED"*. `master` is pinned at `26.2` on that basis.
 
 ### 🔴 What this does NOT price
 
 §9.2 is the *build system*. It says nothing about the ~1,389-symbol rename, the 42 mixins, the 44
 method selectors or the 19 `@At` descriptors. A green probe jar with three imports is not evidence
 about any of them. **Same warning as §25's 100%: do not quote "the toolchain works" as a §9 estimate.**
+
+➡️ **The rename now HAS a real price, measured on the real codebase, not extrapolated:** 2,639
+compile errors across 96 files, all of them inside `fabric/` and `platform/`. See the blast-radius
+table below. That number is `compileJava` only and says nothing about whether a mixin still *applies*.
+
+### ✅ APPLIED — `master` is pinned to `26.2` (2026-08-20, `fcb2d4bbf`)
+
+Owner-ruled the same day, after being shown the hazard below: **`26.x` becomes `master`; the
+`1.21.11` line is cut to `mc/1.21.11`** — honouring **R-f** over §9.4's original `mc/26.x` wording,
+which had contradicted it unnoticed ever since `26.1 > 1.21.11` became true.
+
+| | before | after |
+|---|---|---|
+| plugin id | `fabric-loom` | `net.fabricmc.fabric-loom` |
+| `mappings` | `net.fabricmc:yarn:1.21.11+build.6:v2` | **removed entirely** |
+| loader / API / ModMenu / Cloth | `mod*` configurations | plain `implementation` / `compileOnly` / `localRuntime` |
+| Java | 21 | **25** |
+| `minecraft_version` | `1.21.11` | `26.2` |
+| `fabric_version` | `0.141.4+1.21.11` | `0.158.0+26.2` |
+| ModMenu / Cloth | `17.0.0` / `21.11.153` | `20.0.1` / `26.2.155` |
+| `depends.minecraft` / `java` | `~1.21.11` / `>=21` | `~26.2` / `>=25` |
+
+✅ **Resolution SUCCEEDS.** Minecraft, Fabric API, ModMenu and Cloth Config all resolve and the build
+reaches `compileJava` — on **Loom 1.17.13, the version already pinned**. The toolchain half of §9 is
+done, and it needed no Loom bump at all.
+
+### 🔑🔑 THE FINDING — Phase 2's platform boundary held on the hardest case there is
+
+`compileJava` fails with **2,639 errors across 96 files**. Where those files are is the whole story:
+
+| Package | Files in error | Errors |
+|---|---|---|
+| `fabric/` | 74 | 1,915 |
+| `platform/` | 22 | 724 |
+| **everything else** | **0** | **0** |
+
+Of **295** main source files, **106** are MC-facing (`fabric/` 80 + `platform/` 26). The rename
+touches **96 of those 106 — and 0 of the other 189.**
+
+⚠️ Measured with `-Xmaxerrs` lifted via an init script; javac's default 100-error cap had truncated
+the first run to 5 files and would have made this look like a `platform/`-only problem.
+
+**This is the R-c / P2-a…e platform seal paying out.** Recipe **x.5** predicted it — *"fix inside
+`fabric/` and `platform/` only"* — on the evidence of two ordinary MC API breaks. It has now held
+against a **wholesale rename of the entire Minecraft API surface**, which is the largest input it
+will ever be given. The "~1,389-symbol rename" is real, but it is bounded by the boundary: it is a
+96-file job in two packages, not a 295-file job across the codebase.
+
+🔑 **42 of the 96 are `fabric/mixin`** — exactly the "42 mixins" §9 predicted from the surface
+manifest, arrived at independently. The other counts: `fabric/listeners` 24, `platform` 20,
+`fabric` 4, `fabric/client/modmenu` 3, `fabric/commands` 1, `platform/skills` 1, `platform/text` 1.
+
+⚠️ **This is `compileJava` only.** `compileTestJava` has not been run and will add more; and a mixin
+that *compiles* is not a mixin that *applies* — ship-gate 2 (`mixin-allow-audit.py`) is the check that
+matters there, and 8.2.5b's lesson is that "0 compile errors" is not the finish line.
+
+### 🎉 The band split is now EVIDENCED, not guessed — `26.1.x` and `26.2` are TWO bands
+
+§27 first flagged this off Fabric API alone. **Three independent ecosystem projects draw the identical
+line**, which is far stronger than one:
+
+| Project | `26.1` band | `26.2` band |
+|---|---|---|
+| Fabric API | `0.155.2+26.1.2` → `[26.1, 26.1.1, 26.1.2]` | `0.158.0+26.2` → `[26.2]` |
+| ModMenu | `18.0.0` → `[26.1, 26.1.1, 26.1.2]` | `20.0.1` → `[26.2]` |
+| Cloth Config | `26.1.154+fabric` → `[26.1, 26.1.1, 26.1.2]` | `26.2.155+fabric` → `[26.2]` |
+
+So `master` takes **`26.2`** (newest band, per R-f) and **`26.1.x` becomes a future band**, not part of
+this one. §9.4's *"`depends.minecraft` covers `26.1`–`26.2`"* is **wrong** and is corrected there.
+⚠️ Still not proof about *this mod's* surface — the definitive check is `probe-bands.py` across the
+four versions, which needs §9.3's official-name manifest first. But three ecosystem projects agreeing
+is enough to pin `master` at `26.2` rather than guess a range.
+
+### 🔴 `master` is RED, on purpose, and MUST NOT be pushed
+
+The owner was shown both options and chose to convert `master` in place. The consequence is explicit:
+**`master` does not compile until the rename lands**, which is several sessions of work.
+
+- ✅ `fcb2d4bbf` and `e3b356c0b` are **local only**. `origin/master` is still `368affb05` and green.
+- ✅ **`mc/1.21.11` is cut and held unpushed**, at `e3b356c0b` — byte-identical to `master` before the
+  toolchain commit, band pins (`minecraft_version` / `supported_minecraft_versions` = `1.21.11`)
+  already correct because `master` *was* the `1.21.11` band. It needed no x.2 toolchain commit; this
+  is a "master sheds its band" cut, not an ordinary backward one.
+- 🔴 **Why it is held:** pushing it while `origin/master` is still `1.21.11` puts **two branches on one
+  `minecraft_version`** — a gate-11 violation, a gate-9 violation, and **R10**, where each release run
+  reaps the other's release. `mc1.21.11-v1.2.0` is live. The two must diverge *before* either is pushed.
+- **Push order, when `master` is finally green:** `master` (now `26.2`) and `mc/1.21.11` together,
+  after gates 7/9/10/11 pass at `--local`. Not before.
+
+### ⬜ Still open, carried into §9.3
+
+- 🔴 **The gate-10 Java-25 collision is NOT fixed** — `release.yml` still pins `java-version: '21'` on
+  all eight branches. Deliberately deferred: `.github/workflows/release.yml` is in `release.yml`'s own
+  `paths:` filter, so changing it on the six live bands would fire six release runs that R-t's
+  stale-version gate refuses. Bundle it with the `mod_version` bump when `26.2` actually ships.
+- ⬜ **`build.gradle:2`'s bare `fabric-loom` id is now resolved on `master`** (it is the explicit
+  non-remap id), but what the **bare** id does on the `1.21.x` branches is still inferred, not
+  measured. It matters the next time a band's toolchain is touched.
+- ⬜ **`TODO.md` has drifted from the seven bands again** by §27 — expected, and it cannot be fixed by
+  propagation this time: `master` is no longer describing the same product as the bands. Decide at
+  §9.5 whether the one-blob-on-every-branch invariant survives the `26.x` split at all.
+
+### Rollback
+
+Nothing is pushed and no history is rewritten, so the undo is local and complete:
+
+- `git reset --hard e3b356c0b` on `master` — drops the toolchain pin, restores the `1.21.11` build.
+- `git reset --hard 368affb05` on `master` — additionally drops §27's plan commit.
+- `git branch -D mc/1.21.11` — removes the held band label. It carries no unique work: it is a label
+  on `e3b356c0b`, which is itself `368affb05` (on `origin`) plus one docs commit.
+- `origin` is untouched throughout. All seven `v1.2.0` releases and their tags are as §26 left them.
 
 ---
 
