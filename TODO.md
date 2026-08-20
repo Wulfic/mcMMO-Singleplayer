@@ -16,7 +16,7 @@ manifest — a lookup, not a judgment call.
 
 ---
 
-## What ships today — 6 branches, **10 of 12** `1.21.x`
+## What ships today — 7 branches, **12 of 12** `1.21.x`
 
 ✅ **Read 2026-08-19 from `gh release list` and from each branch's own `gradle.properties` /
 `fabric.mod.json` — not retyped.** The previous edition of this table was stale in three columns at
@@ -75,7 +75,15 @@ prove a skill *fires*. The per-band evidence for "it fires" is gate 1's suite co
 6's `gameplay-smoke.sh` 29/29 — both have run on the six shipped bands, neither has run on
 `mc/1.21.1`.
 
-### 🔴 MACES is the next SPEARS, and nothing has noticed yet
+### ✅ MACES was the next SPEARS — gated 2026-08-19 (§22.1)
+
+**Measured, after the fact, and the premise below was wrong in one detail that matters:** `Items.MACE`
+is **ABSENT `1.20` – `1.20.4` and PRESENT from `1.20.5`** — the mace is not a `1.21` item. The section
+as originally written implied it postdated the whole `1.20` line. See §22 for the measurement and for
+why that boundary coinciding with the DataComponents cliff re-prices this risk.
+
+The reasoning below is kept because it is still the argument for the mechanism:
+
 
 `SkillAvailability`'s javadoc states the load-bearing assumption in its own words:
 
@@ -106,7 +114,7 @@ Generalise the probe to a **skill → required-id-paths** map; do not special-ca
 
 ---
 
-## What is genuinely missing — **2 `1.21.x` + all 7 `1.20.x` + all 4 `26.x`**
+## What is genuinely missing — **all 7 `1.20.x` + all 4 `26.x`** — `1.21.x` is COMPLETE
 
 | Band | MC versions | Probe rows (absent · sig-changed) | Status |
 |---|---|---|---|
@@ -223,18 +231,19 @@ the branch does not.
 
 ---
 
-## §8.3 — `mc/1.21.1` (`1.21`, `1.21.1`) 🔴 IN FLIGHT
+## §8.3 — `mc/1.21.1` (`1.21`, `1.21.1`) ✅ SHIPPED
 
-The last `1.21.x` band. **Re-scoped by R-m′ — nothing ships disabled, and there is no `master`-side
-piece**, so this is an ordinary band cut.
+The last `1.21.x` band, released as `mc1.21.1-v1.1.0`. **Re-scoped by R-m′ — nothing ships disabled,
+and there was no `master`-side piece**, so it was an ordinary band cut.
 
-**Branch exists, 2 commits, UNPUSHED:** `de34dcf3b` (toolchain pin) and `972ec85f0`
-(`depends.minecraft` = `>=1.21 <1.21.2`). `.github` inheritance verified — exactly the three expected
-paths.
+⚠️ **This heading read `🔴 IN FLIGHT`, and the body below it described an uncommitted red working
+tree, for a band that had shipped AND released.** The checklist items underneath were all ticked
+correctly; only the prose above them rotted. That is the third instance of the same shape in this
+file — a status sentence is not updated by the commit that changes the status, because nothing reads
+it. **When a phase closes, grep this file for its heading, not just its checkboxes.**
 
-🔴 **The working tree is UNCOMMITTED and red.** That is correct: "never commit red" means the band
-port lands as one commit when it compiles. Every edit is **fully reproducible** — both sweeps were
-scripted and every name was resolved from `javap` on the `1.21.1` merged jar.
+The port itself is fully reproducible: both rename sweeps were scripted and every name was resolved
+from `javap` on the `1.21.1` merged jar.
 
 - [x] **Attribute rename sweep** — 14 replacements across `SkillAttributeService`,
       `CallOfTheWildHandler`, `EntityDamageListener`, `PetCombatSweep`, `MobTiers`:
@@ -622,7 +631,32 @@ registry-key rework — are **NOT yet verified against a jar** and must not be w
 docs until 22.0 measures them. That is the version-pinned-comment rule; this repo has already shipped
 four claims that rotted, one of them cited as the *reason* for absent code (GitHub #7).
 
-### The band hypothesis — ⬜ to be CONFIRMED by 22.0, never assumed
+### ✅ MEASURED 2026-08-19 — the jars are cached and two boundaries are pinned
+
+All **seven** `1.20.x` yarn-mapped merged jars are now in the Loom cache and resolve under `javap`
+(`1.20` … `1.20.6`; yarn builds looked up per version from `meta.fabricmc.net`, never derived).
+
+⚠️ **Loom FAILS on these versions** at its post-merge transform step (`Failed to apply transformation
+to net/minecraft/client/model/Model.class`). **The merged jar is written before that step and is
+complete**, so a non-zero gradle exit is expected here and is not evidence of a bad jar — verify by
+resolving a class with `javap`, never by the exit code.
+
+| Symbol | `1.20` – `1.20.4` | `1.20.5` – `1.21.11` |
+|---|---|---|
+| `net.minecraft.item.Items#MACE` | **ABSENT** | PRESENT |
+| `net.minecraft.component.DataComponentTypes` | **ABSENT** | PRESENT |
+
+🔑🔑 **The two boundaries COINCIDE exactly, and that re-prices R12.** The `MACES` gate can only ever
+fire on the same five versions that need the NBT item-data backend — so R12 is **not** an independent
+risk, and if the §22 stop-loss fires and the floor re-scopes to `1.20.5`, **the gate never fires at
+all**. The gate is still worth having (it removes a hardcoded special case and generalises the
+mechanism), but the risk register overstated it as separate work.
+
+⚠️ **The mace is NOT a `1.21` item.** The plan assumed it postdated the whole `1.20` line; it ships
+from `1.20.5`. That assumption was never measured before being written down — the exact shape of
+GitHub #7.
+
+### The band hypothesis — ⬜ still to be CONFIRMED by the full 22.0 probe, never assumed
 
 A band is *measured* (R-a). The working hypothesis, to be replaced by the probe's answer:
 
@@ -650,7 +684,7 @@ and `1.21.5` refused to; both were surprises. **Do not cut a branch off this tab
       Deliverable: the real absent · sig-changed counts, and the **measured** band boundaries.
       🔑 Expect the row count to over-predict 3–6× per the calibration table — but expect it to
       **under**-predict here, because a row count cannot price a re-implementation.
-- [ ] **22.1 — `master`-side: generalise `SkillAvailability` and gate `MACES`.** See the skill-coverage
+- [x] **22.1 — DONE 2026-08-19. `SkillAvailability` generalised; `MACES` gated.** See the skill-coverage
       section above. A **skill → required-id-paths** map, not a second hardcoded field. Ship with a
       `setSupportedForTesting`-driven test proving **both** directions on every band.
       ⚠️ Per `ConfigRetunes`, **flipping a shipped config default cannot implement this**:
@@ -738,6 +772,63 @@ obstacle was never the version string.
 ---
 
 ## Other open work
+
+### ✅ Harness fixes landed 2026-08-19 (`scripts/**` — gate-10 shared layer, so all seven branches)
+
+- [x] **`brew-smoke.sh` no longer GUESSES its jar.** It picked `find ... | head -1`, so with two jars
+      in `build/libs` — a band switch, an interrupted release build, a stale jar from yesterday's
+      checkout — it certified whichever one `find` walked first and said nothing. It now **refuses an
+      ambiguous glob** (exit 2), takes `BREW_SMOKE_JAR=<path>` as the override, and carries a
+      `--self-test` (6 cases) covering both directions. Mutation-checked: restoring `head -1` reddens
+      exactly the two-jar case and nothing else.
+      🔑 Its two sibling harnesses take the jar as `$1`; this one cannot, because `$1..$3` are already
+      mode/ingredient/base — hence an env var rather than a fourth positional.
+- [x] **`combat-egg-control` renamed to `combat-summon-control`, and it now asserts the ORIGIN STAMP
+      directly.** The old name argued about `Experience_Formula.Eggs.Multiplier` while driving
+      `/summon`; on `mc/1.21.1` the two came apart — `loadEntityWithPassengers` lost its `SpawnReason`
+      parameter there, so `/summon`-ed mobs went unstamped while spawn eggs were stamped correctly
+      throughout.
+      🔑 The phase now asserts `execute if data ... "mcmmo:mob_origin"` instead of inferring the
+      origin from XP staying flat. The `1.21.1` defect surfaced as *"UNARMED moved"*, which reads as
+      *"combat XP is broken"* and cost a debugging session to trace. **A regression now names itself.**
+      ✅ Verified in-world on `1.21.11`: the phase passes with its new `summontarget-stamped` marker.
+      ⚠️ **A test standing in for its subject is only safe while the two agree.**
+
+- [ ] 🔴 **THE SPAWN-EGG HALF IS NOT DONE — attempt budget exhausted, phase withdrawn.**
+      A `combat-spawn-egg-control` phase was written and **removed before commit** rather than ship a
+      red ship-gate to seven branches. Its text is not lost — it is the one thing the next attempt
+      should start from, and the three refuted hypotheses are worth more than the code:
+
+      **Symptom:** `player Tester use once` holding `minecraft:cow_spawn_egg` spawns nothing, and logs
+      nothing — no error, no effect. `Summoned new Cow` appears exactly once per run (the `/summon`
+      phase). Measured twice, identically.
+
+      **Refuted, each with log evidence — do NOT re-test these:**
+      1. *Wrong item id* — `Replaced a slot on Tester with [Cow Spawn Egg]`, so it IS in mainhand.
+      2. *Bad aim / nothing to click* — first draft aimed into the ground block's interior at
+         `(2.5, -60.5, 0.5)` and the ray clips the column edge at x=2.03; rewritten to the idiom
+         `cook-campfire` and `super-ability` both use successfully (`setblock 2 -60 0`, then
+         `_look(2.0, -59.5, 0.5)` — AT the face plane). Rotation dumps confirm both aims took.
+      3. *Gamemode restriction* — `Set Tester's game mode to Survival Mode`, `spawn-protection=0`.
+
+      **Where to look next:** whether fabric-carpet's `use once` reaches `ItemStack#useOnBlock` at all,
+      or only the block's own `onUse`. Every `use once` phase that works (anvil, campfire, pickaxe
+      ready) is a **block** interaction; placing an entity is an **item** interaction, and no phase in
+      this harness has ever proven that path. If carpet cannot drive it, a **dispenser** loaded with
+      the egg reaches the same `spawnFromItemStack` seam with no player raycast at all.
+
+      ⚠️ Until then the `SPAWN_ITEM_USE` origin is **covered by unit tests only**, and the harness
+      covers `COMMAND` alone. That is a real gap, and it is the gap `mc/1.21.1` fell through.
+- [x] **The scorer's version-gate check is gate-agnostic.** It grepped `"has spear items"` — a
+      hardcoded single skill that would have kept passing while saying nothing about `MACES`. It now
+      discovers the gated skills from the boot log by regex, cross-checks each against `/mcstats`, and
+      reports UNKNOWN when it finds **no** gate line at all (a reworded log message used to make the
+      whole check a silent no-op).
+      ⚠️ **The log wording in `SkillAvailability#probe` is now an INTERFACE**, not prose — see the
+      comment there before editing it.
+- [x] **The anti-vacuity floor was carrying one assertion of slack** (`3 + sum(...)`, counting no
+      gates), so any single assertion could disappear unseen. Now derived and exact: **30**.
+      Mutation-checked — regressing the gate loop to one skill reddens the clean run at 29 vs 30.
 
 - [ ] 🔴 **THE LIVE PLAY-TEST — owner only. Oldest debt in the queue.**
       **Taming:** shoot a zombie at ~25 blocks with a wolf at your heels in **passive** mode and watch
@@ -858,7 +949,7 @@ test run in the shell that hides the bug proves nothing.**
 | R9 | A fix outside `src/` never reaches a band, and the docs deny a band that ships | 🟡 **RE-OPENED IN PART by Phase 21.** R9a (propagation of `scripts/`+`.github/`) and R9b (`BandDocsMatchRealityTest`) both hold. But Phase 21 found a **third** hole: **a docs edit propagates iff its commit also touched `src/`** — the effective policy was never *"docs are not propagated"*, it was a coin flip that reads as a deliberate exclusion in every document describing it. ⚠️ `BandDocsMatchRealityTest` is not broken and **could never catch it**: it asks *"is what this branch's docs say true HERE?"* and was correctly green on all five. **Cross-branch equality is not correctness; correctness-per-branch is not equality.** The open owner call in *Other open work* is the candidate fix |
 | R10 | Two branches resolving to the same `minecraft_version` | 🔴 **LIVE.** The tag-reaping sweep is back on `master`, so every branch releases on push and two branches on one version means **each run deletes the other's release**. `release.yml` detects the collision and emits a `::warning::` — deliberately not a failure, which also means **nothing stops it**. ⚠️ **R-v adds 7 more versions and up to 4 more branches**; the one-band-one-version rule is load-bearing, not tidy |
 | R11 | A band's release fails and nobody finds out | 🟡 **DOWNGRADED, still open.** It has happened once: §10.7 failed **four** band releases and was invisible for a day behind green local builds, a green ship gate, a green drift audit and a clean `git status`. `scripts/ci-watch.sh` (gate 8) reports four states rather than a boolean, because *"I could not see a run"* and *"the run passed"* are the two R11 conflates. ⚠️ **It is still a person running a command. A real close needs a notification, not a workflow** |
-| **R12** | **A skill is inert on a band and nothing says so** | 🔴 **NEW 2026-08-19.** `SkillAvailability` gates exactly one skill, and its javadoc asserts every other skill's subject matter *"predates the floor of the supported range"* — true at a `1.21` floor, **false under R-v**. `MACES` is the known instance (§22.1). ⚠️ **The failure is silent by construction**: an inert skill logs nothing, fails no test, and is simply stuck at level 0 for the player. ⚠️ **And it is vacuity-prone** — every band that exists today has maces, so the disabling half of any test is unreachable from the branch the code is written on. Closed by 22.1 *plus* a `setSupportedForTesting`-driven both-directions test |
+| **R12** | **A skill is inert on a band and nothing says so** | 🟡 **MITIGATED 2026-08-19 (§22.1).** `SkillAvailability` now carries a **skill → required-id-paths** map rather than one field per skill; `MACES` is gated alongside `SPEARS`, and gating the next one is a single `GATED` entry with no call-site edit. The javadoc claim that every other skill *"predates the floor of the supported range"* is gone — it was load-bearing prose and R-v falsified it. Proven by 21 tests (was 15), and by mutation: making the gate dead (`return true`) reddens exactly the 4 wiring tests. ⚠️ **The registry-driven test did NOT fail under that mutation** — this band has both items, so only the `setSupportedForTesting` seam reaches the disabling half. Vacuity confirmed empirically, not argued. ⚠️ **Residual:** the map is still a hand-maintained list; a NEW skill whose items postdate the floor is added to `PrimarySkillType` and to nothing else, and nothing goes red. Auditing skills against required ids is not yet mechanical |
 
 ---
 

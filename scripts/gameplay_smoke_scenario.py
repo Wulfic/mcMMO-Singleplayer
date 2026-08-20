@@ -261,26 +261,40 @@ PHASES: list[Phase] = [
         requires_markers=["mine-placed-placed", "mine-placed-broke"],
     ),
     Phase(
-        name="combat-egg-control",
+        name="combat-summon-control",
         note="A mob the PLAYER put there pays nothing. Beating a /summon-ed cow to death must move "
         "no combat skill at all -- Experience_Formula.Eggs.Multiplier is 0, which is mcMMO's "
         "egg-farm exploit guard. Runs BEFORE the two positive combat phases so its flat assertion "
         "is read against a still-zero baseline, and it is the combat twin of mine-placed: the mod "
-        "declining to pay is as much a behaviour as the mod paying.",
+        "declining to pay is as much a behaviour as the mod paying. "
+        "RENAMED from `combat-egg-control` on 2026-08-19: it drives /summon (SpawnReason COMMAND), "
+        "never a spawn egg, and the old name hid that. On mc/1.21.1 the two came apart -- "
+        "loadEntityWithPassengers lost its SpawnReason parameter, so /summon-ed mobs went unstamped "
+        "while spawn eggs were stamped correctly throughout. ⚠️ SPAWN_ITEM_USE IS THEREFORE NOT "
+        "COVERED HERE: a spawn-egg phase was attempted and withdrawn (carpet's `use once` will not "
+        "place an egg -- see TODO.md and .agent/memory/gotchas.md). This phase covers COMMAND only.",
         commands=[
             _CLEAR_EAST,
             _give("weapon.mainhand", "minecraft:air"),
-            'summon minecraft:cow 2.5 -60 0.5 {NoAI:1b,PersistenceRequired:1b,Tags:["eggtarget"]}',
+            'summon minecraft:cow 2.5 -60 0.5 {NoAI:1b,PersistenceRequired:1b,Tags:["summontarget"]}',
             *_look(2.5, -59.3, 0.5),
-            "execute if entity @e[tag=eggtarget] run say ===MARK eggtarget-acquired===",
+            "execute if entity @e[tag=summontarget] run say ===MARK summontarget-acquired===",
+            # ⚠️ THE ORIGIN ITSELF, asserted directly instead of inferred from the XP staying flat.
+            # On mc/1.21.1 this phase failed as "UNARMED moved", which reads as "combat XP is broken"
+            # and cost a debugging session to trace back to an unstamped mob. The stamp is the actual
+            # subject, so it is now the actual assertion, and a regression names itself.
+            # mcMMO writes `mcmmo:mob_origin` ONLY for an origin that does not count, so a
+            # player-placed mob must HAVE the path -- `if`, the converse of the natural-target probe.
+            'execute if data entity @e[tag=summontarget,limit=1] '
+            '"fabric:attachments"."mcmmo:mob_origin" run say ===MARK summontarget-stamped===',
             STRIKE,
             "SLEEP 25",
             HALT,
-            "execute unless entity @e[tag=eggtarget] run say ===MARK eggtarget-killed===",
+            "execute unless entity @e[tag=summontarget] run say ===MARK summontarget-killed===",
         ],
         up=[],
         flat=["UNARMED", "SWORDS", "AXES"],
-        requires_markers=["eggtarget-acquired", "eggtarget-killed"],
+        requires_markers=["summontarget-acquired", "summontarget-stamped", "summontarget-killed"],
     ),
     Phase(
         name="combat-fist",
@@ -629,29 +643,46 @@ def check_profile(
         v.bad("cooldowns.SUPER_BREAKER is 0 -- Super Breaker never activated")
 
 
-def check_spears_agrees_with_boot_log(v: Verdict, log: str, snaps: dict) -> None:
-    """The Spears capability probe, re-checked through gameplay rather than through its own log line.
+#: `Version support: SPEARS is available -- ...` / `... is disabled -- ...`, emitted once per gated
+#: skill by SkillAvailability#probe. ⚠️ The wording is a contract with that class; see its comment.
+_GATE_RE = re.compile(r"Version support: ([A-Z_]+) is (available|disabled)\b")
+
+
+def check_version_gates_agree_with_boot_log(v: Verdict, log: str, snaps: dict) -> None:
+    """Every version-capability gate, re-checked through gameplay rather than its own log line.
 
     Version-agnostic BY CONSTRUCTION: it does not know which band it is on. It reads the decision
-    the probe logged at boot and asserts /mcstats agrees with it. On a band with spears the skill
+    the probe logged at boot and asserts /mcstats agrees with it. On a band with the items the skill
     must be listed; on one without, it must be absent from the listing.
+
+    🔑 GATE-AGNOSTIC TOO, and that is the point of the regex. The gated set lives in Java
+    (`SkillAvailability.GATED`) and grew from one skill to two the moment the support floor moved;
+    a hardcoded `["SPEARS"]` here would have kept passing while saying nothing about Maces. Reading
+    the skills out of the log means a gate added on the Java side is cross-checked here with nobody
+    remembering to update this file.
+
+    ⚠️ The converse guard is the first thing checked. "Every gate agreed" and "no gate line was
+    found, so nothing was compared" render identically -- and a reworded log message on some future
+    band is exactly how the second one happens silently.
     """
-    v.lines.append("--- spears-gate")
-    has = "has spear items" in log
-    hasnt = "has none of the spear items" in log
-    if has == hasnt:
-        v.unknown("the boot log states no spear-capability decision -- cannot cross-check /mcstats")
+    v.lines.append("--- version-gates")
+    decisions = {skill: verdict for skill, verdict in _GATE_RE.findall(log)}
+    if not decisions:
+        v.unknown("the boot log states no version-capability decision at all -- nothing was "
+                  "cross-checked against /mcstats (has SkillAvailability's log wording changed?)")
         return
-    listed = "SPEARS" in (snaps.get("baseline") or {})
-    if has and listed:
-        v.ok("this version has spears and /mcstats lists Spears")
-    elif hasnt and not listed:
-        v.ok("this version has no spear items and /mcstats correctly omits Spears")
-    else:
-        v.bad(
-            f"the boot log says spears are {'available' if has else 'absent'} but /mcstats "
-            f"{'lists' if listed else 'omits'} the skill"
-        )
+    baseline = snaps.get("baseline") or {}
+    for skill, verdict in sorted(decisions.items()):
+        listed = skill in baseline
+        if verdict == "available" and listed:
+            v.ok(f"this version has the items {skill} works on and /mcstats lists it")
+        elif verdict == "disabled" and not listed:
+            v.ok(f"this version cannot furnish {skill} and /mcstats correctly omits it")
+        else:
+            v.bad(
+                f"the boot log says {skill} is {verdict} but /mcstats "
+                f"{'lists' if listed else 'omits'} the skill"
+            )
 
 
 def main() -> int:
@@ -677,7 +708,7 @@ def main() -> int:
 
     v = check(log, profile_text)
     snaps = parse_snapshots(log)
-    check_spears_agrees_with_boot_log(v, log, snaps)
+    check_version_gates_agree_with_boot_log(v, log, snaps)
     print("\n".join(v.lines))
     passes = sum(1 for line in v.lines if "[PASS]" in line)
     print(f"=== {passes} passed, {v.failed} failed, {v.inconclusive} inconclusive")
@@ -701,7 +732,14 @@ def _synthetic_log(mutate: str = "") -> str:
     """
     skills = ["Mining", "Excavation", "Woodcutting", "Unarmed", "Swords", "Axes", "Repair", "Cooking"]
     xp = {s.upper(): 0 for s in skills}
-    out = ["mcMMO (Fabric) initializing", "this Minecraft version has spear items"]
+    out = ["mcMMO (Fabric) initializing"]
+    # The boot-log gate lines the scorer discovers its gated skills from. TWO of them deliberately:
+    # a single-gate synthetic log cannot tell a per-skill check apart from one hardcoded to SPEARS,
+    # which is exactly the shape the old scorer had.
+    if mutate != "drop-gate-lines":
+        for gated in ("SPEARS", "MACES"):
+            out.append(f"Version support: {gated} is available -- this Minecraft version has the "
+                       "items it works on.")
     marks = {m for p in PHASES for m in p.requires_markers}
     if mutate == "drop-marker":
         marks.discard("mine-placed-placed")
@@ -711,9 +749,11 @@ def _synthetic_log(mutate: str = "") -> str:
         out.append("--- mcMMO Stats ---")
         for s in skills:
             out.append(f"{s}: Lv.0 ({xp[s.upper()]}/1020 XP)")
-        # Spears is listed separately so one mutation can remove it without touching the rest.
+        # The gated skills are listed separately so one mutation can remove one of them without
+        # touching the rest.
         if mutate != "hide-spears-listing":
             out.append("Spears: Lv.0 (0/1020 XP)")
+        out.append("Maces: Lv.0 (0/1020 XP)")
 
     snap("baseline")
     for phase in PHASES:
@@ -732,7 +772,7 @@ def _synthetic_log(mutate: str = "") -> str:
 
 _GOOD_PROFILE = "\n".join(
     ["uuid: 0-0-0-0-0", "name: Tester", "skills:"]
-    + [f"  {s}: 0" for s in ["MINING", "EXCAVATION", "WOODCUTTING", "UNARMED", "SWORDS", "AXES", "REPAIR", "COOKING", "SPEARS"]]
+    + [f"  {s}: 0" for s in ["MINING", "EXCAVATION", "WOODCUTTING", "UNARMED", "SWORDS", "AXES", "REPAIR", "COOKING", "SPEARS", "MACES"]]
     + ["cooldowns:", "  SUPER_BREAKER: 1770000000"]
 )
 
@@ -745,6 +785,9 @@ def self_test() -> int:
         ("XP leaking into a skill that must stay flat", "leak-xp", _GOOD_PROFILE, True),
         ("a phase whose action was never confirmed", "drop-marker", _GOOD_PROFILE, True),
         ("/mcstats omitting a skill the boot log says exists", "hide-spears-listing", _GOOD_PROFILE, True),
+        # The converse guard. Without it, a reworded log message on some future band silently turns
+        # the whole version-gate check into a no-op that still reports the run clean.
+        ("no version-gate line in the boot log at all", "drop-gate-lines", _GOOD_PROFILE, True),
         (
             "the super ability never firing",
             "",
@@ -781,13 +824,21 @@ def self_test() -> int:
         log = _synthetic_log(mutation)
         v = check(log, profile)
         snaps = parse_snapshots(log)
-        check_spears_agrees_with_boot_log(v, log, snaps)
+        check_version_gates_agree_with_boot_log(v, log, snaps)
         flagged = bool(v.failed or v.inconclusive)
         passes = sum(1 for line in v.lines if "[PASS]" in line)
         # Anti-vacuity: a scorer that asserts almost nothing also reports "clean" on a clean run.
         # The floor is the count of real assertions the phase table implies, so adding a phase
         # without its assertions moving this number is caught here rather than shipping quietly.
-        expected = 3 + sum(len(p.up) + len(p.flat) for p in PHASES)
+        # THREE fixed assertions (the baseline /mcstats render, profile-vs-mcstats, the super
+        # ability), one per version gate the boot log declares, and one per up/flat assertion in the
+        # phase table.
+        # ⚠️ The gate term is DERIVED, not a constant. This was `3 + sum(...)`, which counted no
+        # gates at all and so ran with one assertion of slack -- and slack is the whole problem: a
+        # floor that sits one below the truth cannot see any single assertion disappearing, which is
+        # precisely what "anti-vacuity" is supposed to catch. Measured exact at 30 on 2026-08-19.
+        gates = {skill for skill, _verdict in _GATE_RE.findall(log)}
+        expected = 3 + len(gates) + sum(len(p.up) + len(p.flat) for p in PHASES)
         if not should_flag and passes < expected:
             print(f"  [BROKEN] {label}: only {passes} assertions passed, expected {expected}")
             failures += 1
