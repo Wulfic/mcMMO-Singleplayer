@@ -177,6 +177,7 @@ withdrew R-v, so R-l's 16-version target is LIVE again and is the current scope.
 | **R-v** | **Extend the floor to `1.20` (owner-ruled 2026-08-19)** | 🔴 **WITHDRAWN BY R-x (2026-08-20) — one day live, nothing built under it.** It had ruled: **support the FULL `1.20` line — `1.20` through `1.20.6`, all 7 versions.** Asked explicitly because of the cost cliff: the DataComponents API does not exist below `1.20.5`, and the mod's item-data, enchantment, food and potion layers are written entirely against it. The owner was shown that this is a **data-layer re-implementation, not a rename sweep**, and chose the full line anyway. **Superseded R-l's floor and deleted the "versions below `1.21`: not requested" line from Deferred.** Target rose 16 → 23 versions. **All of that is reversed.** |
 | **R-x** | **Drop the `1.20` line (owner-ruled 2026-08-20)** | ✅ **RULED (owner): the supported range is `1.21` – `1.21.11` plus `26.x`. No `1.20.x` version is supported.** Withdraws R-v and restores R-l's **16-version** target. ⚠️⚠️ **This is a SCOPE ruling, not a feasibility finding.** 22.0 never ran to completion — it was stopped mid-run — so **the `1.20` line was never priced**, and nothing may be written anywhere claiming it was found too expensive. §9 (`26.x`) is explicitly **unaffected** and remains the next project. |
 | **R-w** | **`mod_version` for this cycle (owner-ruled 2026-08-20)** | ✅ **RULED (owner): `1.2.0-SNAPSHOT`, minor not patch.** §22.1's `MACES` gate is a user-visible behaviour change — a skill can now vanish on a band — not a bug fix. Nothing has released since `v1.1.0`, and R-t's gate has been refusing every push on all seven branches since. Per R-p the value is identical on every branch; per **R-w′** below, no gate checks that. |
+| **R-y** | **Does the identity guard cover `README.md`/`wiki/`? (owner-ruled 2026-08-20)** | ✅ **RULED (owner): YES — both are IN `branch-file-identity-audit.py`.** Closes the call carried from §21.6. R9's noise argument is about a *per-push* audit and does not transfer to a **ship gate**. 🔑 **It found a real defect on its first run**: `mc/1.21.1` had corrected a `wiki/Husbandry.md` sentence that is false on that band, **on that band only** — a rule-1 violation, invisible to `drift-audit.py` by design (it asks whether a `master` commit reached a band, never whether a band holds a fix `master` lacks), so six branches served wrong text to a shipped band's players with every gate green. 🔴 **Depends on R-x.** `BandDocsMatchRealityTest` needs the documented floor strictly below every version a branch ships; `1.20.6` covers all seven **only because no band ships below `1.21`**. Reopen the `1.20` line and these two files must leave the set in the same change, or no state satisfies both guards. |
 
 ### 🔑 What R-m′ taught, and why it is written down here
 
@@ -843,6 +844,95 @@ throughout. That is R-t working as designed, and it is why the bump had to be a 
 
 ---
 
+## §24 — the docs layer joins the identity guard (owner-ruled 2026-08-20, R-y)
+
+**Owner ruled `README.md` and `wiki/` IN to `branch-file-identity-audit.py`**, closing the call
+carried from §21.6. The ruling immediately paid for itself: the very first measurement found a real
+violation that had been sitting on a shipped band.
+
+### What the measurement found, before a line of code was written
+
+`README.md` is byte-identical on all seven branches. `wiki/` is not — **`mc/1.21.1` carries a
+different `wiki/Husbandry.md`**, and it is the *band* that is right:
+
+```
+master, and 5 bands:  "The bonus is the animal's own loot roll run a second time"
+mc/1.21.1:            "The bonus is a copy of whatever the harvest actually handed over"
+```
+
+`mc/1.21.1` commit `72de23ad7` states the reason outright — *"restates the Bountiful Harvest wiki
+sentence that described the bonus as the loot roll run a second time — **false here, and one wiki
+serves every band**"*. That band has no shear loot funnel; its seam doubles the returned stack's
+count. So the sentence on `master` is **false for `1.21.1` players**, and the band's replacement is
+the band-agnostic statement that is true on both implementations — exactly what AGENTS.md's
+*"state the code fact that holds on every band"* rule asks for.
+
+🔑🔑 **This is the docs-propagation hole running BACKWARDS, and it is a rule-1 violation.** Rule 1 is
+*fixes land on `master` FIRST, always* — and the reason is visible here: a correction authored on a
+band reaches exactly one branch, while the wrong text keeps serving the other six. `drift-audit.py`
+is structurally blind to it (it asks whether a `master` commit reached a band, never whether a band
+holds a fix `master` lacks), and it was right to stay quiet. **Every existing guard was green while a
+shipped page was wrong.**
+
+### 🔴 The latent collision — checked BEFORE implementing, and it is why this is safe
+
+The R-w′ shape: ruling a file identical is unshippable if another guard requires it to **differ**.
+`BandDocsMatchRealityTest` reads `README.md` and `wiki/Installation.md` and asserts the documented
+support floor sits **strictly below every version this branch ships**. If any band ever ships a
+version at or under the floor, the floor sentence must go per-band — and the two guards would then
+have no state that satisfies both.
+
+Measured, not assumed:
+
+| | value |
+|---|---|
+| documented floor (both files, all seven branches) | `1.20.6` |
+| oldest version shipped by ANY branch (`mc/1.21.1`) | `1.21` |
+
+`1.20.6 < 1.21`, so **one floor value satisfies every band**, which is precisely why `README.md` is
+already identical everywhere. ⚠️ **This holds because of R-x.** R-v's `1.20` line would have put a
+band's shipped versions *below* the floor and forced the collision open. If the `1.20` floor is ever
+revisited, **this ruling must be revisited in the same breath** — `README.md` and `wiki/Installation.md`
+would have to leave the identity set, or the repo stops being shippable.
+
+### The work
+
+- [x] **24.1** Fix `wiki/Husbandry.md` on `master`: adopt `mc/1.21.1`'s band-agnostic wording.
+      `master` first, per rule 1, even though the text originated on a band.
+- [x] **24.2** Add `README.md` and `wiki/**` to `INCLUDE` in `scripts/branch-file-identity-audit.py`.
+      Record the ruling, this incident, and the `BandDocsMatchRealityTest` collision in the docstring
+      — the collision warning belongs next to `EXCLUDE`'s `mc-surface.txt` note, in the same voice.
+- [x] **24.3** Extend `--self-test` with a firing case over a docs path, so the widened set is proved
+      to be *audited* and not merely *listed*. A path added to `INCLUDE` that no test exercises is a
+      path that can be dropped by a refactor with nothing going red.
+- [x] **24.4** Update `AGENTS.md`: the gate-10 tooling row now names the docs layer, and the
+      *"docs are deliberately NOT tracked"* paragraph must be narrowed to what it actually means —
+      that is a statement about `drift-audit.py`, and left as-is it now reads as *"no guard covers
+      docs"*, which is the doc-argues-against-the-guard failure P19-1 exists to stop.
+- [ ] **24.5** Verify: `--self-test`, then `--require-bands 6`. Expect **red** between 24.1 and the
+      back-port — five bands then hold the old sentence. That is the gate working, not a regression.
+- [ ] **24.6** Back-port the cumulative **file state** to all six bands with `Backport-of:` trailers,
+      then push all seven and re-run gates 7/9/10/11.
+
+### What I am NOT doing
+
+- **Not** adding `TODO.md` to the identity set. The owner ruled `README.md`/`wiki/`, and this file is
+  a live plan edited on `master` mid-sweep by construction — it is red for the duration of every
+  sweep, including this one. Separate call, not folded in silently.
+- **Not** touching the floor sentence. It is correct on every branch and moving it is what would
+  *open* the collision above.
+- **Not** rewriting the six wiki pages the caveat-expiry pass would cover. 24.1 is one sentence with
+  a measured defect behind it; a general docs sweep is not this ruling.
+
+### Rollback
+
+Every step is an ordinary commit on an existing branch; the undo is `git revert <sha>` per branch.
+Nothing outward-facing: no `src/**` and no `gradle.properties`, so `release.yml`'s `paths:` filter
+does not fire and no release is touched. The live GitHub wiki is never pushed (R-k), so 24.1 changes
+a tracked page only.
+
+---
+
 ## Other open work
 
 - [x] ✅ **DONE 2026-08-20 — `scripts/gradle-key-identity-audit.py` closes R-w′.** Ship-gate **11**,
@@ -926,8 +1016,9 @@ throughout. That is R-t working as designed, and it is why the bump had to be a 
       it close; then sneak-right-click it with a bone. **Skills tab:** neither the tab, nor a locked
       row, nor the greyed state has ever been seen rendered. Next suspect if a boosted wolf still will
       not close: `FollowOwnerGoal` outranking `MeleeAttackGoal`. **Budget: 3 attempts.**
-- [ ] ⬜ **Owner call, carried from §21.6:** should `branch-file-identity-audit.py` cover
-      `README.md`/`wiki/`? R9's noise argument is about a *per-push* audit and does not transfer
+- [x] ✅ **CLOSED 2026-08-20 by R-y — owner ruled BOTH IN.** See §24; the first run found
+      `wiki/Husbandry.md` wrong on six of seven branches. Original call: should
+      `branch-file-identity-audit.py` cover `README.md`/`wiki/`? R9's noise argument is about a *per-push* audit and does not transfer
       cleanly to a *ship-gate* one, and byte-identity is exactly the property Phase 21 found violated.
       But it changes a rule written into `AGENTS.md`, byte-identical on seven branches (P19-1) — a
       seven-branch operation.
@@ -1010,7 +1101,15 @@ inert on every band by construction. **The other six have no automation whatsoev
    🔑 **Distinct is not correct.** Six manifests that all differ can all six be wrong.
 10. `python scripts/branch-file-identity-audit.py --self-test` **then** `--require-bands <count>` —
     **0 differing paths**. The **inverse** of gate 9: `AGENTS.md`, `.gitignore`,
-    `.github/workflows/*.yml` and `scripts/**` are one artifact every branch shares.
+    `.github/workflows/*.yml`, `scripts/**` and — since **R-y** — `README.md` + `wiki/**` are one
+    artifact every branch shares.
+    ⚠️ **A gate-10 failure names a difference, not a culprit.** Decide which side is *correct* before
+    converging: rule 1 says `master` usually is, but R-y's first run found the opposite — `master`
+    and five bands carrying a wiki sentence that was **false**, fixed on `mc/1.21.1` alone.
+    ⚠️ **`README.md` and `wiki/Installation.md` also carry the support-floor sentence that
+    `BandDocsMatchRealityTest` requires to sit strictly below every version the branch ships.** One
+    value (`1.20.6`) satisfies all seven **only while no band ships below `1.21`** (R-x). If that
+    changes, those two files leave gate 10 in the same change — see the R-w′/gate-9 shape.
     ⚠️⚠️ **Gates 9 and 10 hold opposite invariants over `scripts/`.** `mc-surface.txt` must be
     **distinct** (gate 9) and is therefore **excluded** from gate 10. If it ever appears in both sets,
     no state satisfies both and nothing can ship. **Do not resolve a gate-10 failure by widening its
