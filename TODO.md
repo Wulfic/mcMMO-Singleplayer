@@ -157,6 +157,7 @@ line)* · **R-q** band-appropriate equivalents carry `Backport-of:` · **R-s/R-t
 | **R-m** | Band `1.21.1`'s "three absent subsystems" | 🔴 **SUPERSEDED by R-m′ — its premise was measured FALSE. Nothing is disabled.** |
 | **R-m′** | What band `1.21.1` really needs (2026-08-19) | ✅ **RULED (owner).** Measured against the real `1.21.1` merged jar with `scripts/javap-mc.sh`: the `EntityAttributes` family is a **rename**, not an absence (all 31 fields present, under a prefix); the eating seam and the sneak seam are absent **as named** but each has a direct predecessor. **Nothing ships disabled**, the `SkillGating` work is **cancelled**, and 8.3 needs **no `master`-side change**. Detail in §8.3. |
 | **R-v** | **Extend the floor to `1.20` (owner-ruled 2026-08-19)** | ✅ **RULED (owner): support the FULL `1.20` line — `1.20` through `1.20.6`, all 7 versions.** Asked explicitly because of the cost cliff: the DataComponents API does not exist below `1.20.5`, and the mod's item-data, enchantment, food and potion layers are written entirely against it. The owner was shown that this is a **data-layer re-implementation, not a rename sweep**, and chose the full line anyway. **Supersedes R-l's floor and deletes the "versions below `1.21`: not requested" line from Deferred.** Target rises 16 → **23 versions**. |
+| **R-w** | **`mod_version` for this cycle (owner-ruled 2026-08-20)** | ✅ **RULED (owner): `1.2.0-SNAPSHOT`, minor not patch.** §22.1's `MACES` gate is a user-visible behaviour change — a skill can now vanish on a band — not a bug fix. Nothing has released since `v1.1.0`, and R-t's gate has been refusing every push on all seven branches since. Per R-p the value is identical on every branch; per **R-w′** below, no gate checks that. |
 
 ### 🔑 What R-m′ taught, and why it is written down here
 
@@ -771,7 +772,100 @@ obstacle was never the version string.
 
 ---
 
+## §23 — back-port §22.1, and ship `v1.2.0` (owner-ruled 2026-08-20, R-w) ⬜ IN FLIGHT
+
+**Two `master` commits are drifted on all six bands, and nothing can release until `mod_version`
+moves off `1.1.0`.** `616f69298` (the `MACES` gate) and `6f3fd63cc` (the `brew-smoke.sh` jar-glob
+refusal), confirmed MISSING on all six by `drift-audit.py --master master --require-bands 6` after
+its `--self-test` passed.
+
+### 🔴 R-w′ — a `mod_version` bump is INVISIBLE to gate 7, and the hole is in the auditor's design
+
+`scripts/drift-audit.py` lists `gradle.properties` in **`BAND_LOCAL_PATHS`** — correctly, because
+`minecraft_version` and `supported_minecraft_versions` are per-band by construction (R-a) and a
+`master` toolchain bump must never be reported as missing on a band. But `mod_version` lives in that
+same file and is explicitly **NOT** per-band (R-p): it is identical on every branch, or R-p is broken.
+
+So a commit touching `gradle.properties` **and nothing else** is dropped by the auditor exactly the
+way a docs-only commit is — the **third** instance of this shape (Phase 21's docs exclusion, then the
+commit-shape variant, now a path exclusion). This one bites harder than either:
+
+- A band left behind **cannot release at all**. R-t's gate refuses an already-shipped version, so the
+  band silently stops shipping — and red is now the normal outcome of any `src/**` push, so nothing
+  distinguishes it.
+- A band bumped to a *different* number breaks R-p, and the version starts meaning different content
+  depending on which branch you read it from.
+
+⚠️ **Gate 10 cannot cover it either.** `branch-file-identity-audit.py` cannot demand a byte-identical
+`gradle.properties` — `minecraft_version` **must** differ, and gate 9 is the guard that says so.
+**No gate in the ten watches `mod_version` across branches.** For this sweep it is done by hand and
+verified per branch against the table below; the standing guard is filed under Other open work.
+
+### The work
+
+- [ ] **23.1 — `master`: bump to `1.2.0-SNAPSHOT`.** `gradle.properties` + this plan text.
+      ⚠️ There is no `src/` half to ride with, so this commit is invisible to gate 7 twice over.
+      `BandVersionLabelTest` reads `mod_version` off disk and asserts plain unpadded semver that
+      round-trips through Fabric's own parser — confirm `1.2.0-SNAPSHOT` still passes it.
+- [ ] **23.2 — ship-gate `master`, then push.** Gate 2 before gate 1 (x.7). Read the `N executed`
+      line, not `BUILD SUCCESSFUL`; expect ~1846 executed, 0 failures.
+- [ ] **23.3 — back-port to all six bands.** Per band, cherry-pick `616f69298` then `6f3fd63cc`, then
+      bump `mod_version`. Each `master` sha gets its own `Backport-of:` trailer — the auditor's
+      `TRAILER` regex is `re.M` and reads every line, so one commit may legitimately carry several.
+      ⚠️ **Never cut a band branch here**; these six already exist (AGENTS.md, no-new-branches).
+- [ ] **23.4 — verify per band BEFORE pushing:** gate 2 at that band's `minecraft_version`, then
+      gate 1. A band whose count comes in under `master`'s had something disabled to get there.
+- [ ] **23.5 — push, then gates 7 / 9 / 10 at `--require-bands 6`.** `--self-test` each first. Gate 7
+      audits `origin/master`, and gates 9/10 default to `origin/**` — **push first, then audit.**
+      Expect 0 MISSING, 7 distinct manifests, 0 differing shared paths.
+- [ ] **23.6 — read all seven release runs, by STEP not by colour.** With the bump they should
+      publish `mc<VER>-v1.2.0` per branch. Then update the *"What ships today"* tag column above from
+      `v1.1.0` to `v1.2.0` — that column is a claim about what actually shipped, so it moves only
+      after `gh release list` says so, never in anticipation.
+
+### `mod_version` — verified per branch (R-w′ has no automated leg; this table IS the check)
+
+| Branch | bumped to `1.2.0-SNAPSHOT` | back-ports applied | gates | pushed | released `v1.2.0` |
+|---|---|---|---|---|---|
+| `master` | ⬜ | n/a | ⬜ | ⬜ | ⬜ |
+| `mc/1.21.10` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `mc/1.21.8` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `mc/1.21.5` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `mc/1.21.4` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `mc/1.21.3` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `mc/1.21.1` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+
+### What I am NOT doing
+
+- **Not** building the standing `mod_version`-identity gate inside this sweep. It is a `scripts/**`
+  change, which is a seven-branch operation in its own right, and folding it in would mean the
+  back-port commits no longer match what they claim to back-port. Filed under Other open work.
+- **Not** touching `README.md` / `wiki/`. No documented claim names `mod_version`, and the support
+  floor is unchanged by this work — so the caveat-expiry pass has nothing to grep for here.
+- **Not** starting §22.0. It is next, and it is gated on this landing.
+
+### Rollback
+
+Nothing here is irreversible: every step is an ordinary commit on an existing branch, and the undo is
+`git revert <sha>` per branch. The one outward-facing step is 23.6's **releases** — those publish
+under a *new* tag `mc<VER>-v1.2.0`, so they cannot overwrite `v1.1.0`, which stays fetchable
+throughout. That is R-t working as designed, and it is why the bump had to be a real bump.
+
+---
+
 ## Other open work
+
+- [ ] ⬜ **A standing `mod_version` identity gate — the hole R-w′ names.** `gradle.properties` is in
+      `drift-audit.py`'s `BAND_LOCAL_PATHS`, so a `mod_version` bump is invisible to gate 7; and gate
+      10 cannot demand the file be byte-identical, because gate 9's whole point is that
+      `minecraft_version` must differ. **The two existing guards leave exactly this one key
+      uncovered**, and its failure mode is silent: the band simply stops releasing, in a world where
+      a red release run is already the normal outcome of an ordinary push.
+      🔑 The cheap shape is a **per-key** check rather than a per-file one — assert `mod_version` is
+      equal across every branch while `minecraft_version` is distinct — which makes it the natural
+      home for **both** invariants instead of a third script. Whichever script it lands in, it is
+      `scripts/**`, therefore a seven-branch cherry-pick under gate 10, and it needs the usual
+      `--self-test` proving it reddens when one branch is left behind.
 
 ### ✅ Harness fixes landed 2026-08-19 (`scripts/**` — gate-10 shared layer, so all seven branches)
 
