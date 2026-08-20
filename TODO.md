@@ -718,14 +718,27 @@ this size; a branch is the only honest representation.
       🔴 **Two caveats that bound it, and neither is zero:** **33** records map to several mojmap
       names and need the call-site descriptor to choose; and the table is **`1.21.11`→`1.21.11`**, so
       it prices the TRANSLATION, never the `26.1` API delta. Do not quote the 100% as a §9 estimate.
-- [ ] **9.2 Toolchain.** `26.x` needs a newer Loom than our **1.17.13**, and `build.gradle:30` pins
-      `net.fabricmc:yarn:${yarn_mappings}:v2`, which 404s for every `26.x`. ⚠️ **Confirm exact plugin
-      coordinates at the time of the attempt — do not pin from this note, it will be stale.**
+- [x] **9.2 Toolchain.** ✅ **ANSWERED 2026-08-20 (§27) — and its premise was MEASURED FALSE.**
+      It claimed `26.x` needs a newer Loom than our **1.17.13**. It does not: a probe built **both
+      `26.1` and `26.2` green on `1.17.13`**, our current pin. The yarn half was right —
+      `net.fabricmc:yarn:<v>:v2` 404s for every `26.x` (meta returns `[]`) — but the fix is **no
+      `mappings` line at all**, not a different artifact. What really changes: the plugin id
+      (`net.fabricmc.fabric-loom`, the non-remap one), `modImplementation` → `implementation`, and
+      **Java 21 → 25**, which is Mojang's own manifest requirement. Gradle `9.6.0` already suffices;
+      Temurin **25.0.4+7** is installed. 🔴 **Java 25 collides with gate 10** — `release.yml`
+      pins `java-version: '21'` and must stay byte-identical on every branch. Detail + the control
+      run in §27.
 - [ ] **9.3 Translate the tooling, not just the source.** `scripts/mc-surface.txt` is yarn-named and
       **does not apply to this band**, so `probe-bands.py` cannot probe it at all until 9.1 lands.
       `mixin-allow-audit.py` and `extract-mc-surface.py` read the same names. **The band cannot run its
       own gates until its tooling speaks official names.**
-- [ ] **9.4** Cut `mc/26.x` per the recipe; `depends.minecraft` covers `26.1`–`26.2`.
+- [ ] **9.4** Cut the band per the recipe. ⚠️ **Two open questions, both raised in §27 — do not
+      pin from this line.** (a) *Which branch?* R-f (`master` = newest supported band) and this
+      bullet's original `mc/26.x` wording contradict each other, because `26.1 > 1.21.11`; the owner
+      ruled 2026-08-20 that **`26.x` becomes `master` and `1.21.11` is cut to `mc/1.21.11`**, which
+      creates the sequencing hazard in §27. (b) *One band or two?* Fabric API declares
+      `[26.1, 26.1.1, 26.1.2]` and `[26.2]` **separately**, so `depends.minecraft` covering
+      `26.1`–`26.2` as a single band is unproven. Settle (b) with `probe-bands.py` after 9.3.
 - [ ] **9.5** Full ship gate. Expect `boot-check.sh` and `gameplay-smoke.sh` to need version-specific
       fixture work (Carpet build, command syntax).
 
@@ -1302,6 +1315,99 @@ release is touched, and no remote branch is deleted.
 **Pre-sweep tips (the rollback targets):** `master` `e15c72c05` · `mc/1.21.10` `a956e9cfd` ·
 `mc/1.21.8` `26214c02c` · `mc/1.21.5` `de78860fa` · `mc/1.21.4` `6c3520802` · `mc/1.21.3` `6551f9a52`
 · `mc/1.21.1` `7bf2a16ee`
+
+---
+
+## §27 — §9.2: the `26.x` toolchain, MEASURED (2026-08-20)
+
+**§9.2's premise was measured FALSE — the same shape as §25 and 9.1 before it.** It claimed `26.x`
+"needs a newer Loom than our **1.17.13**". It does not. A probe project compiled **both `26.1` and
+`26.2` green on `fabric-loom` `1.17.13`**, our current pin, unchanged. The Loom *version* was never
+the obstacle; the *plugin id* and the *Java level* are.
+
+⚠️ The half of 9.2 that WAS right: `net.fabricmc:yarn:<v>:v2` really does 404 for every `26.x`.
+`meta.fabricmc.net/v2/versions/yarn/26.1` and `/26.2` both return `[]`. But the fix is not a different
+mappings artifact — it is **no mappings artifact at all**.
+
+### What actually changes — read off Fabric's own `fabric-example-mod`
+
+That repo carries a branch per Minecraft version (`26.1`, `26.1.1`, `26.1.2`, `26.2` all exist —
+incidental independent support for **R-a**). Diffing its `1.21.11` branch against its `26.2` branch
+isolates the toolchain delta to exactly four lines:
+
+| | `1.21.11` | `26.x` |
+|---|---|---|
+| plugin id | `net.fabricmc.fabric-loom-remap` | **`net.fabricmc.fabric-loom`** |
+| mappings | `loom.officialMojangMappings()` | **absent — no `mappings` line at all** |
+| loader + API | `modImplementation` | **`implementation`** |
+| Java release / compat | `21` | **`25`** |
+
+All three plugin markers — `fabric-loom`, `net.fabricmc.fabric-loom`, `net.fabricmc.fabric-loom-remap`
+— publish the identical version set on `maven.fabricmc.net`, `1.17.13` included. They are three ids
+for one plugin version, selecting different behaviour, **not** three release lines.
+
+⚠️ **Unmeasured, and it matters at §9.4:** this repo's `build.gradle:2` uses the bare `fabric-loom`
+id, which is neither of the two the example mod uses. That it remaps today is *inferred* from the
+build working against yarn — it was not proven. Resolve it by measurement before the pin moves.
+
+### 🔴 Java 25 is a Mojang requirement, not a Fabric preference
+
+Straight from the version manifest, so no toolchain choice can negotiate it away:
+
+| MC | `javaVersion.component` | major |
+|---|---|---|
+| `1.21.11` | `java-runtime-delta` | 21 |
+| `26.1` | `java-runtime-epsilon` | **25** |
+| `26.2` | `java-runtime-epsilon` | **25** |
+
+✅ **Gradle needs no bump** — the wrapper is already `9.6.0`, which runs and targets 25.
+✅ **JDK installed 2026-08-20:** Temurin **25.0.4+7**, alongside the existing 11 / 17 / 21. Temurin
+deliberately, to match `release.yml`'s `distribution: temurin`. The `1.21.x` branches stay on 21.
+
+### 🔴🔴 The gate-10 collision this creates — the R-x/R-y shape, again
+
+`release.yml:117` pins `java-version: '21'`. `.github/workflows/*.yml` is in gate 10's include set
+(**P19-1**), so it must be **byte-identical on every branch**. A `26.x` branch needs `'25'`.
+
+**No state satisfies both** — exactly the collision R-y has with R-x, and it must be resolved in the
+same change that moves any branch to `26.x`, not after. Two ways out, neither chosen yet:
+
+- have `setup-java` install **both** 21 and 25 on every branch, and let the Gradle toolchain pick; or
+- read the level from `gradle.properties` (a new per-band key) so the workflow text stays identical.
+
+**Do not resolve it by dropping `release.yml` from gate 10.** That is the "weaken the test" move R-y
+explicitly refuses.
+
+### The proof — and its control, which is the half that makes it mean anything
+
+Probe project outside the repo (scratchpad; no repo build file was touched, so no release run could
+fire). `net.fabricmc.fabric-loom` `1.17.13`, no `mappings` line, `release = 25`, a `ModInitializer`
+importing **official** names — `world.item.ItemStack`, `world.item.Items`, `server.level.ServerPlayer`.
+
+| Run | Result |
+|---|---|
+| `26.2`, official names | ✅ `BUILD SUCCESSFUL` — jar produced, `major version: 69` (Java 25), official names confirmed **in the bytecode** by `javap` |
+| `26.1`, official names | ✅ `BUILD SUCCESSFUL` |
+| **CONTROL** — `26.2`, *yarn* names | ✅ **FAILS**, `package net.minecraft.item does not exist` |
+
+🔑 **The control is why this is a finding rather than a green tick.** A build that passes because it
+compiled nothing looks identical to one that passed correctly, and this repo has found eleven such
+guards. Verified the artifact by hand — class file on disk, jar in `build/libs`, `javap` output —
+rather than trusting exit 0.
+
+### ⚠️ §9.4's band assumption looks wrong — flagged, not resolved
+
+§9.4 says "`depends.minecraft` covers `26.1`–`26.2`", i.e. one band. Fabric API disagrees:
+`0.155.2+26.1.2` declares `[26.1, 26.1.1, 26.1.2]`, and the `+26.2` line declares `[26.2]` **alone**.
+That reads as **two** bands. It is not settled here: the band question is whether *this mod's* MC
+contact surface is stable across the four versions, which needs `probe-bands.py` against an
+official-name manifest — i.e. **§9.3 first**. Do not pin a range from this note.
+
+### 🔴 What this does NOT price
+
+§9.2 is the *build system*. It says nothing about the ~1,389-symbol rename, the 42 mixins, the 44
+method selectors or the 19 `@At` descriptors. A green probe jar with three imports is not evidence
+about any of them. **Same warning as §25's 100%: do not quote "the toolchain works" as a §9 estimate.**
 
 ---
 
