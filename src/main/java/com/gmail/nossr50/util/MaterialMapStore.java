@@ -903,6 +903,18 @@ public class MaterialMapStore {
         return Collections.unmodifiableSet(spears);
     }
 
+    /**
+     * The registry-id paths of every mace, as an unmodifiable view.
+     *
+     * <p>Same contract and same reason as {@link #getSpears()}: {@link
+     * com.gmail.nossr50.util.skills.SkillAvailability} asks the item registry whether this Minecraft
+     * version furnishes any of them, and reads the list {@link #isMace} classifies from rather than
+     * keeping a second copy that can drift out of agreement with it.
+     */
+    public @NotNull Set<String> getMaces() {
+        return Collections.unmodifiableSet(maces);
+    }
+
     public boolean isLeatherArmor(@NotNull String id) {
         return leatherArmor.contains(id);
     }

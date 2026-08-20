@@ -3,8 +3,13 @@ package com.gmail.nossr50.util.skills;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.Materials;
+import com.gmail.nossr50.util.MaterialMapStore;
 import com.google.common.annotations.VisibleForTesting;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -25,6 +30,23 @@ import org.jetbrains.annotations.Nullable;
  * never fires. The ruling is that inert is not good enough: the skill is still listed by
  * {@code /mcstats}, still in the configs, and can never leave level 0. It is to be <b>disabled</b>,
  * and not dropped from {@link PrimarySkillType}.
+ *
+ * <h2>⚠️ Why this is a MAP and not one field per skill</h2>
+ *
+ * Spears was the first skill to need this and, for one release, the only one — so the gate was a
+ * single {@code spearsSupported} field, justified in this javadoc by the claim that <i>"every other
+ * skill's subject matter — ores, crops, mobs, the anvil — predates the floor of the supported
+ * range."</i>
+ *
+ * <p><b>That sentence was load-bearing prose, and lowering the floor falsified it.</b>
+ * {@code MACES} matches exactly one registry-id path, {@code "mace"}, so on a version without the
+ * mace it is inert in precisely the way the Spears ruling exists to reject: listed by
+ * {@code /mcstats}, present in the configs, permanently stuck at level 0.
+ *
+ * <p>A second hardcoded field would have made the next one a third, so the shape is a
+ * <b>skill → required-id-paths</b> map instead. Adding a gate is one entry in {@link #GATED} and
+ * nothing else: every consumer ({@code /mcstats}, the ModMenu master switches, {@link SkillGating})
+ * already reads this through {@link #isSkillSupported} rather than by naming a skill.
  *
  * <h2>⚠️⚠️ Why this asks the registry instead of naming a version</h2>
  *
@@ -61,16 +83,34 @@ public final class SkillAvailability {
     }
 
     /**
-     * The probed answer for {@link PrimarySkillType#SPEARS}, or {@code null} if {@link #probe()} has
-     * not run — mod init before the server starts, and every unit test.
+     * Every version-gated skill, and where its required registry-id paths come from.
      *
-     * <p>{@code volatile} because {@link #probe()} runs on the server thread while
-     * {@link SkillGating#isSkillEnabled} is read from anything that awards XP.
+     * <p>⚠️ The value is an <em>accessor</em>, not a captured {@code Set}. The paths are read from
+     * the live {@link MaterialMapStore} at probe time, so this map cannot become the second copy of
+     * a list that {@link MaterialMapStore#isSpear}/{@link MaterialMapStore#isMace} classify from —
+     * the drift {@link MaterialMapStore#getSpears()} exists to prevent.
+     *
+     * <p>🔑 <b>To gate the next skill, add one entry here.</b> {@link #isSkillSupported} treats every
+     * skill absent from this map as supported, so nothing else needs an edit.
      */
-    private static volatile Boolean spearsSupported;
+    private static final Map<PrimarySkillType, Function<MaterialMapStore, Set<String>>> GATED =
+            Map.of(PrimarySkillType.SPEARS, MaterialMapStore::getSpears,
+                    PrimarySkillType.MACES, MaterialMapStore::getMaces);
 
     /**
-     * Ask this Minecraft version what it can furnish. Idempotent; safe to call on every server start.
+     * The probed answer per gated skill, or {@code null} if {@link #probe()} has not run — mod init
+     * before the server starts, and every unit test.
+     *
+     * <p>{@code volatile}, and replaced wholesale rather than mutated in place, because
+     * {@link #probe()} runs on the server thread while {@link SkillGating#isSkillEnabled} is read
+     * from anything that awards XP. A reader therefore sees either the whole previous answer or the
+     * whole new one, never a half-filled map.
+     */
+    private static volatile Map<PrimarySkillType, Boolean> probed;
+
+    /**
+     * Ask this Minecraft version what it can furnish, for every skill in {@link #GATED}. Idempotent;
+     * safe to call on every server start.
      *
      * <p>⚠️⚠️ <b>Refuses to answer from an empty registry.</b> "This version has no spears" and
      * "the registry has not populated" are the same observation from the outside, so an absence is
@@ -79,109 +119,149 @@ public final class SkillAvailability {
      * <em>every</em> version, and would look exactly as correct in the log.
      */
     public static void probe() {
-        final Set<String> spearIdPaths = McMMOMod.getMaterialMapStore().getSpears();
+        final MaterialMapStore materials = McMMOMod.getMaterialMapStore();
         final boolean populated;
         try {
             populated = Materials.itemRegistryIsPopulated();
         } catch (Throwable probeFailed) {
             // Not expected from a running server -- the registry is up long before SERVER_STARTING --
             // but a skill silently switching off is precisely the failure this gate must not cause,
-            // so it is logged loudly and the skill is left on.
+            // so it is logged loudly and every skill is left on.
             McMMOMod.LOGGER.error("Could not read the item registry to decide which skills this "
                     + "Minecraft version supports; leaving every skill enabled.", probeFailed);
-            spearsSupported = null;
+            probed = null;
             return;
         }
 
         if (!populated) {
             McMMOMod.LOGGER.warn("The item registry was empty when mcMMO probed it, so version "
                     + "support could not be decided; leaving every skill enabled.");
-            spearsSupported = null;
+            probed = null;
             return;
         }
 
-        final boolean supported = decide(true, spearIdPaths, Materials::isItem);
-        spearsSupported = supported;
-        if (supported) {
-            // Logged in both directions on purpose. A gate that is silent when it decides "on" cannot
-            // be told apart, from a boot log, from a probe that never ran -- and this one is called
-            // from exactly one place, which is the sort of wiring that gets dropped in a back-port.
-            McMMOMod.LOGGER.info("Version support: this Minecraft version has spear items, so the "
-                    + "Spears skill is available.");
-        } else {
-            McMMOMod.LOGGER.info("Version support: this Minecraft version has none of the spear "
-                    + "items ({}), so the Spears skill is disabled -- it gains no XP, procs nothing, "
-                    + "and is not listed by /mcstats. Existing Spears levels are kept.",
-                    String.join(", ", spearIdPaths));
+        final Map<PrimarySkillType, Boolean> answers = new EnumMap<>(PrimarySkillType.class);
+        for (Map.Entry<PrimarySkillType, Function<MaterialMapStore, Set<String>>> gate
+                : GATED.entrySet()) {
+            final PrimarySkillType skill = gate.getKey();
+            final Set<String> requiredIdPaths = gate.getValue().apply(materials);
+            final boolean supported = decide(true, requiredIdPaths, Materials::isItem);
+            answers.put(skill, supported);
+            // ⚠️ THE WORDING IS AN INTERFACE, NOT PROSE. scripts/gameplay_smoke_scenario.py greps
+            // `Version support: <SKILL> is available|disabled` out of the boot log and cross-checks
+            // it against what /mcstats lists, which is how ship-gate 6 proves the gate agrees with
+            // gameplay on a band nobody can reproduce locally. It discovers the gated skills FROM
+            // these lines rather than from a second hardcoded list, so the skill name must stay the
+            // enum name and the two verbs must stay `available` and `disabled`.
+            if (supported) {
+                // Logged in both directions on purpose. A gate that is silent when it decides "on"
+                // cannot be told apart, from a boot log, from a probe that never ran -- and this is
+                // called from exactly one place, the sort of wiring that gets dropped in a back-port.
+                McMMOMod.LOGGER.info("Version support: {} is available -- this Minecraft version "
+                        + "has the items it works on.", skill.name());
+            } else {
+                McMMOMod.LOGGER.info("Version support: {} is disabled -- this Minecraft version has "
+                        + "none of the items it works on ({}). It gains no XP, procs nothing, and is "
+                        + "not listed by /mcstats. Existing levels are kept.",
+                        skill.name(), String.join(", ", requiredIdPaths));
+            }
         }
+        probed = Collections.unmodifiableMap(answers);
     }
 
     /**
      * Whether {@code skill} has anything to act on in this Minecraft version.
      *
      * @param skill the skill to check; {@code null} is treated as supported
-     * @return {@code false} only for a skill this version cannot furnish — currently just
-     *         {@code SPEARS}, on a version with no spear items
+     * @return {@code false} only for a skill in {@link #GATED} that this version cannot furnish
      */
     public static boolean isSkillSupported(@Nullable PrimarySkillType skill) {
-        if (skill != PrimarySkillType.SPEARS) {
-            // Every other skill's subject matter -- ores, crops, mobs, the anvil -- predates the floor
-            // of the supported range. Adding a case here is the intended way to gate the next one.
+        if (skill == null || !GATED.containsKey(skill)) {
+            // Not gated: this skill's subject matter exists on every version this build runs on.
+            // Gating the next one is a GATED entry, not an edit here.
             return true;
         }
-        final Boolean probed = spearsSupported;
-        // Not probed yet ⇒ no opinion ⇒ on, matching SkillGating's failure direction. Failing the
-        // other way would switch a skill off in exactly the situations where nobody asked.
-        return probed == null || probed;
+        final Map<PrimarySkillType, Boolean> answers = probed;
+        if (answers == null) {
+            // Not probed yet ⇒ no opinion ⇒ on, matching SkillGating's failure direction. Failing the
+            // other way would switch a skill off in exactly the situations where nobody asked.
+            return true;
+        }
+        return answers.getOrDefault(skill, Boolean.TRUE);
     }
 
     /**
      * The decision itself, separated from where its inputs come from so that both of its directions
      * are testable on every band.
      *
-     * <p>That separation is the point. On the newest band the registry <em>does</em> have spears, so
-     * a test driven only by the live registry can never once exercise the disabling half — and a gate
-     * that has never been observed to fire is not known to work.
+     * <p>That separation is the point. On the newest band the registry <em>does</em> have spears and
+     * maces, so a test driven only by the live registry can never once exercise the disabling half —
+     * and a gate that has never been observed to fire is not known to work.
      *
      * @param itemRegistryPopulated whether the registry has proven it populated; when it has not,
      *        an absence is not evidence and the answer is "supported"
-     * @param spearIdPaths the spear registry-id paths to look for; empty means there is nothing to
+     * @param requiredIdPaths the registry-id paths to look for; empty means there is nothing to
      *        conclude from, so again "supported"
      * @param itemExists whether a vanilla item exists for a given id path
      */
     @VisibleForTesting
     static boolean decide(boolean itemRegistryPopulated,
-                          @NotNull Set<String> spearIdPaths,
+                          @NotNull Set<String> requiredIdPaths,
                           @NotNull Predicate<String> itemExists) {
-        if (!itemRegistryPopulated || spearIdPaths.isEmpty()) {
+        if (!itemRegistryPopulated || requiredIdPaths.isEmpty()) {
             return true;
         }
-        return spearIdPaths.stream().anyMatch(itemExists);
+        return requiredIdPaths.stream().anyMatch(itemExists);
     }
 
     /**
-     * Forget the probed answer, so support reads as undecided again.
+     * The gated skills and their required-id-path accessors, for tests.
      *
-     * <p>For tests only: the answer is process-wide, and one test class probing a bootstrapped
-     * registry would otherwise decide it for every test that runs after it in the same fork.
+     * <p>Exposed so a test can drive <em>every</em> gate rather than the two that existed when it was
+     * written. A new {@link #GATED} entry with no matching assertion is exactly the failure a
+     * hand-listed test cannot see.
+     */
+    @VisibleForTesting
+    static @NotNull Map<PrimarySkillType, Function<MaterialMapStore, Set<String>>> gatedSkills() {
+        return GATED;
+    }
+
+    /**
+     * Forget every probed answer, so support reads as undecided again.
+     *
+     * <p>For tests only: the answers are process-wide, and one test class probing a bootstrapped
+     * registry would otherwise decide them for every test that runs after it in the same fork.
      */
     @VisibleForTesting
     static void resetForTesting() {
-        spearsSupported = null;
+        probed = null;
     }
 
     /**
-     * Stand in for a probe result, so a test can hold this version at "no spears" whatever this
-     * version really has.
+     * Stand in for a probe result for one skill, so a test can hold this version at "no maces"
+     * whatever this version really has.
      *
-     * <p>⚠️ Not a convenience. Every band above the spear boundary <em>has</em> spears, so a test
-     * asserting "the gate switches the skill off when they are missing" would pass there with no gate
+     * <p>⚠️ Not a convenience. Every band that exists today has both spears and maces, so a test
+     * asserting "the gate switches the skill off when they are missing" would pass here with no gate
      * present at all — vacuous exactly where the code is developed, and load-bearing only on the band
      * nobody is looking at. This seam is what lets the wiring from {@link #isSkillSupported} through
      * {@link SkillGating#isSkillEnabled} be proven on every band instead.
+     *
+     * @param skill the gated skill to hold at a fixed answer
+     * @param supported the answer to hold it at, or {@code null} to leave it undecided again
      */
     @VisibleForTesting
-    static void setSupportedForTesting(@Nullable Boolean supported) {
-        spearsSupported = supported;
+    static void setSupportedForTesting(@NotNull PrimarySkillType skill, @Nullable Boolean supported) {
+        final Map<PrimarySkillType, Boolean> answers = new EnumMap<>(PrimarySkillType.class);
+        final Map<PrimarySkillType, Boolean> current = probed;
+        if (current != null) {
+            answers.putAll(current);
+        }
+        if (supported == null) {
+            answers.remove(skill);
+        } else {
+            answers.put(skill, supported);
+        }
+        probed = Collections.unmodifiableMap(answers);
     }
 }
