@@ -909,10 +909,42 @@ would have to leave the identity set, or the repo stops being shippable.
       *"docs are deliberately NOT tracked"* paragraph must be narrowed to what it actually means —
       that is a statement about `drift-audit.py`, and left as-is it now reads as *"no guard covers
       docs"*, which is the doc-argues-against-the-guard failure P19-1 exists to stop.
-- [ ] **24.5** Verify: `--self-test`, then `--require-bands 6`. Expect **red** between 24.1 and the
-      back-port — five bands then hold the old sentence. That is the gate working, not a regression.
-- [ ] **24.6** Back-port the cumulative **file state** to all six bands with `Backport-of:` trailers,
-      then push all seven and re-run gates 7/9/10/11.
+- [x] **24.5 — DONE.** `--self-test` OK (2 quiet, **8** firing, 1 warning, 4 detector mutations);
+      the pre-fix run against `origin` fired on exactly the one known row, exit 1. Suite forced with
+      `--rerun-tasks`: **1846 executed, 0 failures, 0 errors, 0 skipped** — read off the JUnit XML,
+      not off `BUILD SUCCESSFUL`.
+- [x] **24.6 — DONE.** `master` `a99e93d05`; back-ported as the cumulative **file state** to all six
+      bands, each with `Backport-of: a99e93d05`. All seven pushed. 🔑 On `mc/1.21.1` the checkout
+      staged **three** files, not four — `wiki/Husbandry.md` was already correct there, which is the
+      proof that `master` adopted that band's exact bytes rather than a retyped equivalent.
+
+### Gates after the push — all four green against `origin`
+
+| Gate | Result |
+|---|---|
+| 7 `drift-audit.py` | self-test passed, then **0 MISSING** on all six bands |
+| 9 `manifest-identity-audit.py` | no collisions — every manifest distinct |
+| 10 `branch-file-identity-audit.py` | **44 paths** × 7 branches, byte-identical (was 24 paths pre-R-y) |
+| 11 `gradle-key-identity-audit.py` | 12 keys — 10 shared agree, 2 distinct differ |
+
+✅ **No release run fired, and this was CHECKED, not assumed** — `gh run list` filtered by all seven
+new SHAs returns empty. The `paths:` filter (`src/**`, the gradle files, `release.yml`) matches
+nothing in this push. That check exists because a recorded *"no release run fired"* was once **false
+on all seven branches**; the claim is only worth writing when it has been measured.
+
+### Three defects found IN THE GUARD while widening it
+
+1. 🔴 **The remediation hint was actively dangerous.** It said *"bring the bands to master's
+   version"* — and in the very case R-y found, `master` was the wrong one. An agent following it
+   would have overwritten the **correct** sentence on all seven branches. It now states that the
+   guard reports difference, never authorship, and cites this case as the counter-example.
+2. **The self-test's summary was already wrong.** Hardcoded `4 detector mutations` when only **3**
+   existed — the guard overstating its own coverage, and nothing could catch it. `check()` now
+   records each `"<CASE>:"` label and the summary is computed. A number describing the code it sits
+   in must be derived.
+3. **The fixture used `README.md` as base-commit filler**, which R-y silently promoted to an audited
+   path and broke QUIET1's count. Renamed `.fixture-base` (matches no include glob) rather than
+   patching the number — patching it would have left the same landmine for the next `INCLUDE` change.
 
 ### What I am NOT doing
 
