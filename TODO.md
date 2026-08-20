@@ -178,6 +178,8 @@ withdrew R-v, so R-l's 16-version target is LIVE again and is the current scope.
 | **R-x** | **Drop the `1.20` line (owner-ruled 2026-08-20)** | ✅ **RULED (owner): the supported range is `1.21` – `1.21.11` plus `26.x`. No `1.20.x` version is supported.** Withdraws R-v and restores R-l's **16-version** target. ⚠️⚠️ **This is a SCOPE ruling, not a feasibility finding.** 22.0 never ran to completion — it was stopped mid-run — so **the `1.20` line was never priced**, and nothing may be written anywhere claiming it was found too expensive. §9 (`26.x`) is explicitly **unaffected** and remains the next project. |
 | **R-w** | **`mod_version` for this cycle (owner-ruled 2026-08-20)** | ✅ **RULED (owner): `1.2.0-SNAPSHOT`, minor not patch.** §22.1's `MACES` gate is a user-visible behaviour change — a skill can now vanish on a band — not a bug fix. Nothing has released since `v1.1.0`, and R-t's gate has been refusing every push on all seven branches since. Per R-p the value is identical on every branch; per **R-w′** below, no gate checks that. |
 | **R-y** | **Does the identity guard cover `README.md`/`wiki/`? (owner-ruled 2026-08-20)** | ✅ **RULED (owner): YES — both are IN `branch-file-identity-audit.py`.** Closes the call carried from §21.6. R9's noise argument is about a *per-push* audit and does not transfer to a **ship gate**. 🔑 **It found a real defect on its first run**: `mc/1.21.1` had corrected a `wiki/Husbandry.md` sentence that is false on that band, **on that band only** — a rule-1 violation, invisible to `drift-audit.py` by design (it asks whether a `master` commit reached a band, never whether a band holds a fix `master` lacks), so six branches served wrong text to a shipped band's players with every gate green. 🔴 **Depends on R-x.** `BandDocsMatchRealityTest` needs the documented floor strictly below every version a branch ships; `1.20.6` covers all seven **only because no band ships below `1.21`**. Reopen the `1.20` line and these two files must leave the set in the same change, or no state satisfies both guards. |
+| **R-z** | **Which branch becomes `26.x`? (owner-ruled 2026-08-20)** | ✅ **RULED (owner): `26.x` becomes `master`, and `1.21.11` is cut to `mc/1.21.11`.** Follows from R-f (master = newest supported band) once `26.1 > 1.21.11` is granted. 🔴 **It trips R10 for as long as the cut is held**: `mc/1.21.11` and `origin/master` both sit at `minecraft_version=1.21.11`, and two branches on one value means each release run reaps the other's release. The mitigation is that the cut stays **unpushed** until `master` compiles — so **R-z is the reason nothing may be pushed**, not merely a topology note. ⚠️ Recorded here on 2026-08-20 because it had been ruled in §27 and written only to `.agent/memory/`, which is not committed (R-n) and therefore invisible to a fresh clone. |
+| **R-aa** | **Java 25 vs gate 10 (owner-ruled 2026-08-20)** | ✅ **RULED (owner): read the Java level from a new per-band `gradle.properties` key.** `26.x` needs Java 25 (Mojang’s own manifest requirement, §27) while `release.yml:117` pins `'21'` and must stay byte-identical on every branch under **P19-1** — no single state satisfies both. The workflow text becomes identical again by referring to the key; the **value** is per-band, exactly like `minecraft_version`. Classifies as `BAND_LOCAL` in `gradle-key-identity-audit.py`, so it needs **no new mechanism** — the existing per-key guard already covers it. **Rejected:** installing both JDKs on every branch — it keeps the text identical too, but selects the level *implicitly* via toolchain resolution instead of declaring it, and R-y’s precedent is that a shared file states its per-band facts rather than inferring them. ⚠️ **Ruled, not built.** It lands in the same change that makes `master` pushable; building it earlier would put a `25` in a workflow on six branches that need `21`. |
 
 ### 🔑 What R-m′ taught, and why it is written down here
 
@@ -740,9 +742,10 @@ this size; a branch is the only honest representation.
       that renames two ways**, down from 33, residual 0. What is still open is the rest of 9.3:
       `probe-bands.py` and `mixin-allow-audit.py` still read yarn names and are still blind on this
       branch, and `master`'s own `mc-surface.txt` cannot be regenerated until the source compiles.
-      ➡️ **Next is the rename script** — table-driven, dry-run default (owner-ruled), and driven by
+      ➡️ **The rename script is PLANNED IN §29** — dry-run default (owner-ruled), and driven by
       **call sites** rather than a name→name map, because `Registry#getEntry` needs both `get` and
-      `wrapAsHolder`.
+      `wrapAsHolder`. The call sites come from **javac itself** (`location:` = receiver type,
+      `symbol:` = signature), which is why §29 needs no green-tree descriptor harvest.
 - [ ] **9.4** Cut the band per the recipe. ⚠️ **Two open questions, both raised in §27 — do not
       pin from this line.** (a) *Which branch?* R-f (`master` = newest supported band) and this
       bullet's original `mc/26.x` wording contradict each other, because `26.1 > 1.21.11`; the owner
@@ -1722,6 +1725,232 @@ All local, origin untouched, no history rewritten.
   `--descriptors` cannot regenerate from a green tree.
 * `mc/1.21.11` is only **read** here. If 28.1 leaves it dirty, `git status --short` first — the tree
   must be clean before checking back out.
+
+---
+
+## §29 — §9.3, the rename: a COMPILER-DRIVEN rename script (owner-ruled 2026-08-20)
+
+§28 closed the *table*. This closes the *application*. Three owner rulings on 2026-08-20 set the
+shape, and all three are recorded here rather than in `.agent/memory/` because `.agent/` does not
+survive a clone (R-n):
+
+| | Ruled |
+|---|---|
+| **Scope of §29** | Build the script, apply it in a **disposable worktree**, measure the error delta there. Commit **the script and the measurement**; `master`'s `src/` is **not** renamed in this section. |
+| **Member renames** | **Compiler-driven loop.** Not a name→name map, not a "globally unambiguous only" pass. |
+| **Java 25 vs gate 10** | **A new per-band `gradle.properties` key.** `release.yml` stays byte-identical; the *value* is per-band. Recorded as **R-aa**; built when `master` is pushable, not here. |
+
+### The two measurements that decide the design
+
+Both taken 2026-08-20 off the derived `1.21.11` table (104,531 rows: 10,275 `CLASS`, 94,255 `MEMBER`):
+
+- **8,305 of 10,275 MC classes change their SIMPLE name** — 81%. `ServerPlayerEntity` → `ServerPlayer`,
+  `World` → `Level`, `DrawContext` → `GuiGraphics`. The type-name rewrite is therefore the *bulk* of
+  the job, not a tidy-up after the imports. A rename that fixed imports alone would leave essentially
+  every method body broken.
+- **4,090 of 58,351 yarn member simple names are globally ambiguous** — 7%. A member rename keyed on
+  the bare name would be **silently wrong once in fourteen**, and silently is the operative word:
+  it compiles whenever the wrong target happens to exist. This is why the loop is keyed on the
+  **owner type**, which only the compiler can supply.
+
+🔑🔑 **javac hands over exactly the two facts a regex cannot compute.** Verified against the real red
+tree on 2026-08-20, not assumed:
+
+```
+McMMOInfoScreen.java:51: error: cannot find symbol
+    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+                       ^
+  symbol:   class DrawContext
+  location: class McMMOInfoScreen
+```
+
+`location:` is the **receiver's static type** and `symbol:` carries the **call-site signature**, at a
+real `file:line`. That is the definition of call-site-driven, produced by the only tool in the repo
+that can actually resolve a Java type.
+
+🔑 **Consequence: the scratch descriptor `.tsv` from §28 is NOT needed here, and must not be rebuilt
+for this.** §28 harvested descriptors to *measure* the table's ambiguity from bytecode. The rename
+gets the same fact from javac directly and better — real source sites with line numbers, rather than
+call sites recovered from a build of a *different* Minecraft. §28's regeneration recipe stays valid
+for re-measuring the table; it is simply not on this critical path. **Do not spend a green
+`mc/1.21.11` worktree build on it.**
+
+### The script — `scripts/rename-to-official.py`
+
+**Pass 1 — imports and fully-qualified names.** Pure `CLASS`-table substitution, no inference:
+`import net.minecraft.item.ItemStack;` → `net.minecraft.world.item.ItemStack`; static imports; the
+`net/minecraft/...` internal names inside mixin `@At(target = ...)` descriptors; the dotted form
+inside `@Mixin` string targets and `mcmmo.mixins.json`.
+
+**Pass 2 — simple type names.** Token-boundary rewrite, **scoped per file to the classes that file
+actually imports**, and only where the simple name changed. Two refusals, both hard: skip the file if
+the incoming mojmap simple name already denotes something else in it (another import, a local class,
+a field), and never rewrite inside a string literal or a comment except the mixin forms pass 1 owns.
+
+**Pass 3 — the compiler loop.** To fixpoint, with a budget:
+
+```
+1. ./gradlew compileJava compileTestJava -Xmaxerrs <large>
+2. parse `cannot find symbol` + `symbol:` + `location:`
+3. key (mojOwner, yarnMember) -> mojMember   via the MEMBER table, walking supertypes
+4. rewrite that exact file:line token
+5. goto 1 while the error count strictly falls
+```
+
+Owner resolution reuses `derive-official-names.py`'s `Hierarchy` and `Table` (loaded through
+`importlib` — the filename is hyphenated), so the inheritance walk is the one already covered by that
+script's 58-check self-test rather than a second implementation of it.
+
+**Multi-target rows stay unguessed.** `Registry#getEntry` is `get|wrapAsHolder` in the table. The
+loop attempts to split it on the arity and argument types javac printed; if that does not decide it,
+the site goes to the worklist untouched. §28's whole point was that this row has no right answer
+derivable from a name — it does not acquire one here either.
+
+### Guards — this script rewrites source in place, so it is rule-zero material
+
+- **`--dry-run` is the default; `--write` is the opt-in** (owner-ruled).
+- **Refuses on an empty target set.** No files matched ⇒ exit non-zero, not a cheerful "0 renamed".
+- **Refuses on a dirty tree** unless `--allow-dirty`; refuses to touch anything outside `src/`.
+- **Counts in every confirmation** — files, sites, and the before/after error count.
+- **`--self-test`** over fixtures, with mutations **watched go red** before the numbers are believed:
+  a collision fixture (mojmap name already taken ⇒ file skipped), an ambiguous-member fixture
+  (⇒ worklist, not a guess), and a string-literal fixture (⇒ untouched).
+- The loop **stops when the error count stops falling**, so a bad rule cannot grind.
+
+### Deliverables
+
+- [x] **29.1** `scripts/rename-to-official.py`, passes 1–3, dry-run default, `--write` opt-in.
+- [x] **29.2** `--self-test` with the three mutations above, each watched fail first.
+- [x] **29.3** A disposable worktree of `master`; `-Xmaxerrs` raised **there** so the 100-cap cannot
+      truncate the measurement. ⚠️ The cap is live on `master` today — the baseline run on
+      2026-08-20 stopped at exactly `100 errors`, the same trap that made §27's first sizing look
+      `platform/`-only.
+- [x] **29.4** Measure: baseline **2,639** errors → after pass 1+2 → after the loop. Report what is
+      left and **classify the residue** — mechanical miss vs. genuine `26.1` API delta. That
+      classification is the first real price anyone has put on the `26.x` delta; §25 and §28 both
+      priced only the translation.
+- [x] **29.5** Commit the script + this section's measured numbers. **`master`'s `src/` untouched.**
+- [x] **29.6** Worktree removed. ⚠️ `git worktree remove` failed with *"Filename too long"* on Gradle
+      output in §28 — finish with PowerShell `Remove-Item -LiteralPath` on the `\\?\` form, then
+      `git worktree prune`.
+
+### MEASURED 2026-08-20 — `compileJava`, in the worktree, cap lifted
+
+| Stage | Errors |
+|---|---|
+| baseline (`26.2`, untouched) | **2,643** |
+| after pass 1+2 (imports, FQNs, simple type names) | **702** (−73.4%) |
+| after pass 3 (the javac loop) | **126** (−95.2% from baseline) |
+
+144 files changed, 1,122 qualified names, 1,901 simple names. Passes 1+2 are **idempotent** — a
+second run reports 0 changes.
+
+⚠️ **Two numbers, not one.** §27's *"2,639"* is the count of `error:` TEXT LINES; javac's own total
+is **2,643**. Both are `compileJava` ONLY. The test tree has its own MC surface — 18 of the 144
+changed files are outside `fabric/`+`platform/`, nearly all tests — so a `compileTestJava` figure
+exists and has not been taken. Quote which one you mean.
+
+### 🔑🔑 THE FINDING: the compiler loop is NECESSARY BUT NOT SUFFICIENT
+
+Pass 3 only ever learns about a member javac reports as `cannot find symbol` — one that is **absent**
+after the rename. A yarn member name that **also exists on the mojmap owner, meaning something else**,
+produces no error at all. The rename silently does not happen and the call silently binds to the
+wrong member.
+
+This is not hypothetical. **All 27 surviving `int cannot be dereferenced` errors are one row:**
+
+```java
+BuiltInRegistries.BLOCK.getId(state.getBlock()).getPath()   // yarn getId -> mojmap getKey
+```
+
+`Registry#getId` → `getKey` is in the table and was never applied, because mojmap's `Registry`
+**inherits `getId(T):int` from `IdMap`**. javac resolved it happily. It was caught **only because the
+wrong member's return type happened to be incompatible** — `int` cannot be dereferenced. Had the
+types lined up, it would have compiled, passed every gate, and shipped.
+
+🔑 This is the 7% global member ambiguity measured above, made concrete. It is a **twelfth** entry in
+this repo's vacuous-guard ledger in spirit: a check that cannot see the failure it exists to prevent.
+
+**So `--collisions` was added** — the audit for exactly this class, which no compiler can perform:
+275 yarn member names also exist on their own mojmap owner. Scoped to the MC types each file
+actually imports, **575 surviving call sites over 37 names** in this source, `getId` among them at
+the very lines javac independently flagged. ⚠️ Unscoped it reports **4,811 sites over 74 names** —
+`add` matches every `List.add()` in the repo — which is an audit nobody reads. The import scoping is
+what makes it a guard rather than noise. It exits **1** when any survive, so it can gate §30.
+⚠️ It is a **review list, not a rewrite**: without javac's typing, `.get(` on a file that imports
+`Registry` may be `Registry.get` or `Map.get`. Never let it rewrite.
+
+### What the 126 survivors actually are — the first `26.x` API delta price in this repo
+
+§25 and §28 both said, correctly, that a `1.21.11`→`1.21.11` table prices the TRANSLATION and never
+the `26.1` delta. These 126 are the first measurement of that delta.
+
+| Class | Count | Nature |
+|---|---|---|
+| `cannot find symbol` | 71 | 60 worklist sites — see below |
+| `int cannot be dereferenced` | 27 | **one row**, the `getId` collision above |
+| `incompatible types` / `no suitable method` / arity | ~27 | **genuine `26.x` signature changes** |
+| `package ... does not exist` | 1 | **genuine `26.x` package move** |
+
+The 60 worklist sites break down as:
+
+- **34 MULTI-TARGET sites → only 14 DISTINCT decisions.** Each is a one-line human judgement, e.g.
+  `Block#dropStack` → `popResource` vs `popResourceFromFace` (decided by whether the call passes a
+  face), `Identifier#of` → `fromNamespaceAndPath` vs `parse`, `LivingEntity#getYaw` → `getViewYRot`
+  vs `getYRot`, and §28's own `Registry#getEntry` → `get|wrapAsHolder`. **34 sites, 14 choices** —
+  that is the real size of the hand work, not 34.
+- **16 owner-ambiguous** — a closable TOOLING gap, not hand work. javac prints `location:` as a
+  SIMPLE name, and `imported_types()` indexes only top-level imports, so nested owners
+  (`BlockPos.Mutable`, `Registry.Reference`) and same-simple-name types (`Level`, `Block`) do not
+  resolve. Fix it in §30.
+- **5 no-location-type** (javac gave no `location:` line) and **5 member-absent** over 3 distinct
+  members: `MinecraftServer#getPlayers`, `ServerPlayer#wasUnderwater`,
+  `EnchantmentHelper#keySetForCrafting`.
+
+🔑 **The package move, verified against the real `26.2` merged jar rather than inferred:**
+the table maps `net.minecraft.advancement.criterion.BredAnimalsCriterion` →
+`net.minecraft.advancements.criterion.BredAnimalsTrigger`, which is right for `1.21.11` mojmap. In
+`26.2` the class is `net/minecraft/advancements/triggers/BredAnimalsTrigger` — **same simple name,
+moved package**. The table translated the name perfectly and put it in a package that no longer
+exists. That is precisely the shape §25 warned the table cannot price, now seen once for real.
+
+### ⚠️ Two environment traps that cost three runs
+
+- **`gradlew.bat` launched from Python hangs forever unless `stdin=subprocess.DEVNULL`.** It blocks
+  before it ever starts a JVM. The tell is exact: no `java` process younger than the "build". The
+  identical command from a shell took 31s. A hang with captured output is indistinguishable from a
+  slow build.
+- 🔴 **Lifting `-Xmaxerrs` OOMs the daemon at `gradle.properties`' `-Xmx4G`.** javac attributes the
+  whole tree instead of stopping at 100, Gradle 9 retains every diagnostic for its problems report,
+  and the daemon dies with `OutOfMemoryError` **mid-report** — hanging on a half-dead connection
+  rather than failing. `compile_once` now forces `-Xmx8G` and drops `HeapDumpOnOutOfMemoryError`,
+  which was writing multi-gigabyte `.hprof` files into the repo root. **Two such files
+  (`java_pid30352.hprof`, `java_pid35564.hprof`) are sitting untracked in the repo root right now**
+  from earlier runs of this same measurement — they are disposable, but deleting them is the owner's
+  call.
+
+### Deviation from the plan above, and why
+
+`--collisions` was **not** in the plan. It was added because the measurement found a defect class the
+planned design is structurally blind to, and shipping §30 without it would mean shipping silent
+wrongness. Everything else went as written. `--self-test` is **42 checks**, not the three fixtures
+the plan named.
+
+### What I am NOT doing
+
+* **Not renaming `master`'s `src/`.** That is §30, and it is a separate reviewable commit.
+* **Not rebuilding the §28 descriptor `.tsv`** — superseded on this path, see above.
+* **Not building the R-aa `java_version` key.** It is ruled, not implemented; it lands with the push.
+* **Not touching `probe-bands.py` or `mixin-allow-audit.py`.** They are still yarn-named and still
+  blind on this branch — the rest of 9.3, after the rename exists.
+* **Not pushing.** `master` stays red and local; gate 10 still owes a sweep for §28's two
+  `scripts/**` files, and this section adds a third file to that same owed sweep.
+
+### Rollback
+
+* `git reset --hard 0544e396b` on `master` — drops everything in §29.
+* The worktree is disposable and its build output is gitignored; nothing in it is a source of truth.
+* No band branch is read or written in this section at all.
 
 ---
 
