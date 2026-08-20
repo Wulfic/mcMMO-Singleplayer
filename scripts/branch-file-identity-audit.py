@@ -47,6 +47,51 @@ This is the distinction the whole script rests on, and it was nearly got wrong:
     the band's copy is the only one that matters there, and `master` being correct buys the band
     nothing. INCLUDED.
 
+R-y (owner-ruled 2026-08-20): the docs layer is IN
+--------------------------------------------------
+Apply the "who reads which copy" test above and the answer is NOT the same as `.github/FUNDING.yml`,
+which is the objection to get out of the way first. GitHub renders the repo-home README from the
+default branch alone, so on that reading `README.md` looks like another inert band copy. It is not,
+for two reasons that FUNDING.yml has neither of:
+
+  * `BandDocsMatchRealityTest` READS BOTH FROM THE CHECKOUT -- `README.md` and
+    `wiki/Installation.md` -- and asserts against THIS branch's shipped versions. A band's copy is
+    live input to that band's own gate.
+  * The LIVE wiki is a single GitHub wiki serving every band (R-k). A page's claim is read by the
+    players of all seven branches at once, while the tracked copy anyone edits is whichever branch
+    they happened to be standing on. That asymmetry is the whole defect: the text is shared, the
+    editing is not.
+
+`drift-audit.py` cannot see this. It asks whether a `master` COMMIT reached a band, never whether a
+band holds a correction `master` lacks -- and it was right to stay quiet; that is not its question.
+
+The first run after this ruling found one, and it had been live on a shipped band:
+
+    master + 5 bands   wiki/Husbandry.md  "the animal's own loot roll run a second time"
+    mc/1.21.1          wiki/Husbandry.md  "a copy of whatever the harvest actually handed over"
+
+The BAND was right. `mc/1.21.1` has no shear loot funnel -- its seam doubles the returned stack's
+count -- so the other six carried a sentence that is FALSE for that band's players, and commit
+72de23ad7 says so in its own message. It is a rule-1 violation (fixes land on `master` FIRST), and
+the cost of it is visible: a correction authored on a band reaches one branch while the wrong text
+keeps serving six. Every other guard was green throughout.
+
+🔴 THE COLLISION THIS RULING LIVES NEXT TO -- check it before touching the floor sentence
+------------------------------------------------------------------------------------------
+`BandDocsMatchRealityTest` reads `README.md` and `wiki/Installation.md` and requires the documented
+support floor to sit STRICTLY BELOW every version the branch ships. That is a per-branch assertion
+over two files this guard now demands be IDENTICAL -- the `mc-surface.txt` shape exactly, and it is
+survivable for one measured reason only:
+
+    documented floor, all seven branches        1.20.6
+    oldest version shipped by ANY branch        1.21     (mc/1.21.1)
+
+One floor value satisfies every band, which is WHY these files are already identical. This depends
+entirely on R-x keeping the `1.20` line out of scope. If a band is ever cut shipping a version at or
+below the floor, the floor sentence must go per-band, and `README.md` and `wiki/Installation.md`
+must LEAVE this set in the same change -- otherwise no state satisfies both guards and the repo
+cannot ship. Do not resolve that report by weakening the test.
+
 Incidental identity is NOT an invariant. 1210 of 1271 paths were byte-identical across all six
 branches when this was written; freezing that in would turn a coincidence into a false failure the
 first time a band legitimately needs a different `build.gradle`. The set is the governance and
@@ -111,6 +156,8 @@ INCLUDE = (
     ".gitignore",                 # protects .agent/ per R-n; a hole here already cost a near-miss
     ".github/workflows/*.yml",    # R-i; a divergent release.yml changes how a band SHIPS (R9a)
     "scripts/**",                 # R9a: tooling is what a band needs to run its own gates
+    "README.md",                  # R-y. One wiki serves every band -- see the R-y note below
+    "wiki/**",                    # R-y. Found mc/1.21.1's Husbandry.md wrong on the OTHER six
 )
 
 EXCLUDE = (
@@ -358,12 +405,27 @@ def format_report(result: AuditResult) -> list[str]:
                 "              This file is one artifact shared by every branch, not a per-band"
             )
             lines.append(
-                "              fact. Bring the bands to master's version by path-restricted"
+                "              fact. Decide WHICH version is correct FIRST -- this guard"
             )
             lines.append(
-                "              checkout -- `git checkout <master-sha> -- <path>` -- with a"
+                "              reports difference, never authorship. Usually master is right"
             )
-            lines.append("              Backport-of: trailer. NEVER `git checkout <sha> -- .`")
+            lines.append(
+                "              (rule 1: fixes land there first), but a band can hold the"
+            )
+            lines.append(
+                "              correct text: R-y's very first run found master and 5 bands"
+            )
+            lines.append(
+                "              carrying a wiki claim that was FALSE, corrected on mc/1.21.1"
+            )
+            lines.append(
+                "              alone. Then converge every branch on the winner by"
+            )
+            lines.append(
+                "              path-restricted checkout -- `git checkout <sha> -- <path>` --"
+            )
+            lines.append("              with a Backport-of: trailer. NEVER `git checkout <sha> -- .`")
         if a.absent_on:
             lines.append(
                 f"[ABSENT]    {a.path} is missing on: {', '.join(a.absent_on)}"
@@ -416,7 +478,10 @@ def _make_repo(tmp: Path, branches: dict[str, dict[str, str | None]]) -> Path:
         return git(*env, *a, cwd=repo)
 
     g("init", "-q", "-b", "master")
-    (repo / "README.md").write_text("base\n")
+    # ⚠️ Must match NO include glob. This file exists only to give the base commit content;
+    # when it was README.md, R-y made it an audited path and every len(r.audits) assertion
+    # below silently started counting scaffolding.
+    (repo / ".fixture-base").write_text("base\n")
     g("add", "-A")
     g("commit", "-qm", "base")
 
@@ -448,8 +513,13 @@ def self_test() -> int:
     still looks green.
     """
     failures: list[str] = []
+    # Every check labels itself "<CASE>: ...". Recording the labels lets the summary be COMPUTED
+    # rather than asserted -- a hardcoded "7 firing" is a self-description that rots the moment a
+    # case is added, which is the exact defect class this repo keeps finding in its own docs.
+    seen: set[str] = set()
 
     def check(cond: bool, msg: str) -> None:
+        seen.add(msg.split(":", 1)[0].strip())
         if not cond:
             failures.append(msg)
 
@@ -680,6 +750,51 @@ def self_test() -> int:
         not matches(".github/workflows/x.yaml", (".github/workflows/*.yml",)),
         "FIRING7: yml glob matched .yaml",
     )
+    check(matches("wiki/Husbandry.md", ("wiki/**",)), "FIRING7: wiki/** missed a direct child")
+    check(not matches("wikifoo/a.md", ("wiki/**",)), "FIRING7: wiki/** leaked to a sibling")
+    check(matches("README.md", ("README.md",)), "FIRING7: README.md literal did not match")
+    check(not matches("wiki/README.md", ("README.md",)), "FIRING7: README.md matched a nested copy")
+
+    # -- FIRING 8: the docs layer (R-y) -- the real mc/1.21.1 incident, replayed ------------------
+    # 🔑 A path added to INCLUDE that no test exercises is a path a refactor can drop with nothing
+    # going red. This case exists so the R-y widening is proved AUDITED, not merely LISTED -- and
+    # the mutation is the pre-R-y INCLUDE, so the assertion can only pass BECAUSE of the widening.
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = _make_repo(
+            Path(tmp),
+            {
+                # The band is the one that is RIGHT here; the guard reports difference, not who
+                # is correct. That judgement is always a human's -- see the R-y note at the top.
+                "master": {AG: "rules\n", "wiki/Husbandry.md": "loot roll run a second time\n"},
+                "mc/1.21.10": {},
+                "mc/1.21.1": {"wiki/Husbandry.md": "a copy of what the harvest handed over\n"},
+            },
+        )
+        refs = audit_refs(local=True, cwd=repo)
+        r = run_audit(refs, cwd=repo)
+        check(len(r.violations) == 1, f"FIRING8: expected 1 violation, got {len(r.violations)}")
+        if r.violations:
+            check(
+                r.violations[0].path == "wiki/Husbandry.md",
+                f"FIRING8: wrong path named: {r.violations[0].path}",
+            )
+        check(not r.ok, "FIRING8: a wiki page differing on one band still reported ok")
+
+        # MUTATION 8: the pre-R-y path set. If this does NOT go green, the case above was passing
+        # on something other than the docs layer and proves nothing about R-y.
+        pre_ry = ("AGENTS.md", ".gitignore", ".github/workflows/*.yml", "scripts/**")
+        stub = run_audit(
+            refs, cwd=repo, selector=lambda trees: select_paths(trees, pre_ry, EXCLUDE)
+        )
+        check(
+            stub.ok,
+            "MUTATION8: the pre-R-y INCLUDE did NOT flip FIRING8 to green -- the docs assertion "
+            "does not actually depend on README.md/wiki/** being in the set",
+        )
+        check(
+            "README.md" in INCLUDE and "wiki/**" in INCLUDE,
+            "MUTATION8: R-y's paths are missing from INCLUDE entirely",
+        )
 
     # -- WARN 1: an unpushed local change is NOT covered by a remote audit -----------------------
     with tempfile.TemporaryDirectory() as tmp:
@@ -722,7 +837,12 @@ def self_test() -> int:
         for f in failures:
             print(f"  - {f}", file=sys.stderr)
         return 1
-    print("self-test OK: 2 quiet, 7 firing, 1 warning, 4 detector mutations.")
+    tally = {kind: sum(1 for c in seen if c.startswith(kind))
+             for kind in ("QUIET", "FIRING", "MUTATION", "WARN")}
+    print(
+        "self-test OK: {QUIET} quiet, {FIRING} firing, {WARN} warning, "
+        "{MUTATION} detector mutations.".format(**tally)
+    )
     return 0
 
 

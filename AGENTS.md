@@ -175,12 +175,25 @@ python scripts/drift-audit.py --self-test && python scripts/drift-audit.py --mas
 Tooling is exactly what a band needs to run its own gates, and a divergent `release.yml` changes how
 a band *ships* — both used to be invisible, and the auditor reported a confident *"No drift"* either
 way. Cherry-picking tooling to each band is now enforced rather than remembered.
-⚠️ **Docs are still deliberately NOT tracked.** Per-push docs failures between *"fix lands on
-master"* and *"fix is back-ported"* train people to ignore the audit — and propagation is the wrong
-instrument anyway, because the docs defect that actually happened was byte-identical on all five
-branches and identically **wrong**. Cross-branch equality is not correctness. That half is covered by
-`BandDocsMatchRealityTest`, which asserts the documented support floor sits below every version *this*
-branch ships.
+⚠️ **Docs are still deliberately NOT tracked *by `drift-audit.py`*.** Per-push docs failures between
+*"fix lands on master"* and *"fix is back-ported"* train people to ignore the audit — and **commit
+propagation** is the wrong instrument anyway, because the docs defect that actually happened was
+byte-identical on all five branches and identically **wrong**. Cross-branch equality is not
+correctness. That half is covered by `BandDocsMatchRealityTest`, which asserts the documented support
+floor sits below every version *this* branch ships.
+✅ **But equality is not *nothing*, and R-y (2026-08-20) put `README.md` and `wiki/**` under the
+identity guard** — `scripts/branch-file-identity-audit.py`, a **ship gate run before a push**, not a
+per-push CI job, which is exactly why the noise argument above does not transfer to it. It paid for
+itself on the first run: `mc/1.21.1` had corrected a `wiki/Husbandry.md` sentence that is **false on
+that band** (no shear loot funnel there), on that band alone — so `master` and five others kept
+serving wrong text to the players of a shipped band, and every other guard stayed green. A fix
+authored on a band is a **rule-1 violation**; this is what it costs.
+🔴 **Do not read that as "docs are covered".** Identity still cannot see six copies of one wrong claim.
+🔴 **R-y depends on R-x, and the two guards collide if that changes.** `BandDocsMatchRealityTest`
+needs the documented floor **strictly below** every version the branch ships; one value (`1.20.6`)
+satisfies all seven only because no band ships below `1.21`. Reopen the `1.20` line and
+`README.md`/`wiki/Installation.md` must **leave** the identity set in the same change — otherwise no
+state satisfies both guards and the repo cannot ship. Do not resolve it by weakening the test.
 ⚠️ It audits **`origin/master`**, so an unpushed `master` commit reads as clean — push first, then
 audit.
 
@@ -231,7 +244,7 @@ Tooling (all converse-checked; run them, don't trust them because they printed s
 | `scripts/config-id-audit.py` | which of the 689 **config** item/block ids are absent per band, and which are dead on *every* version (a defect, not drift). `--self-test` + a control floor. Ids come from the committed `scripts/mc-ids.txt`, **never** from `javap` field names, lang keys, or `models/item/` — all three were measured and all three fail silently |
 | `scripts/extract-mc-ids.py` | regenerates `scripts/mc-ids.txt` (every vanilla item/block registry id, per MC version) from each version's **data-generator dump**, offline, using the server bundler jar Loom already caches. ⚠️ Dry-run by default; `--write` to apply. ⚠️⚠️ **The manifest is a fact about Minecraft, not about a branch — cherry-pick it, never regenerate it per band.** That is the *inverse* of the `mc-surface.txt` rule above; do not carry that one over |
 | `scripts/manifest-identity-audit.py` | whether two branches carry a **byte-identical** `mc-surface.txt`. That manifest is a per-band generated fact, so identical bytes mean at least one branch describes a Minecraft it does not ship — and **no per-branch check can ever see it**, because on the branch it came from every record is true. ⚠️ Its real target is a **build-cache hit**, not a copy-paste: post-P16-1 a copied manifest already fails `--check` *unless the two bands generate the same one*, which is exactly what a cache hit produces. ⚠️ **Exit 2 is not a pass** — fewer than two branches means zero pairs compared |
-| `scripts/branch-file-identity-audit.py` | the **inverse** guard (P19-1): the shared governance/tooling layer — `AGENTS.md`, `.gitignore`, `.github/workflows/*.yml`, `scripts/**` — must be byte-identical on every branch. ⚠️⚠️ **`mc-surface.txt` is excluded and must stay excluded**: the other guard requires it to *differ*, and a file in both sets makes the repo unshippable. Paths come from the **union** of every branch's tree, so a file present on one branch and absent on another is a violation — that is how a new shared tool that never reached a band gets caught. ⚠️ **Exit 2 is not a pass** — an empty path set compared nothing |
+| `scripts/branch-file-identity-audit.py` | the **inverse** guard (P19-1): the shared governance/tooling/docs layer — `AGENTS.md`, `.gitignore`, `.github/workflows/*.yml`, `scripts/**`, and since **R-y** `README.md` + `wiki/**` — must be byte-identical on every branch. ⚠️⚠️ **`mc-surface.txt` is excluded and must stay excluded**: the other guard requires it to *differ*, and a file in both sets makes the repo unshippable. Paths come from the **union** of every branch's tree, so a file present on one branch and absent on another is a violation — that is how a new shared tool that never reached a band gets caught. ⚠️ **Exit 2 is not a pass** — an empty path set compared nothing. ⚠️ **`README.md`/`wiki/Installation.md` carry the support-floor sentence that `BandDocsMatchRealityTest` requires to sit below every version the branch ships** — one value covers all seven only while no band ships below `1.21` (R-x). If that stops holding, those two files leave this set |
 | `scripts/gradle-key-identity-audit.py` | the **per-KEY** guard (**R-w'**), for the one shared file the other two can never compare whole. `gradle.properties` needs `mod_version` **identical** on every branch (R-p) and `minecraft_version` **different** (R-a) — so `drift-audit.py` excludes the file and the identity guard cannot demand it, leaving a gap exactly one key wide. 🔴 **A band left behind on `mod_version` silently STOPS RELEASING**, because it trips R-t's stale-version gate in a repo where a red release run is already the normal outcome of an ordinary push. Carries **R10** too: two branches on one `minecraft_version` means each release run reaps the other's release. ⚠️ It fails closed on an unclassified key **only when that key differs** between branches — a rule demanding every tuning knob be classified is one nobody maintains. ⚠️ **Exit 2 is not a pass**; ⚠️ **agreement is not correctness** — it proves the branches say the same thing, not that the value is right or that anything released |
 | `scripts/boot-check.sh` | that a **built jar** boots a real server on a given version |
 | `scripts/gameplay-smoke.sh` | that the **earning paths** still fire on a given version, driving a real player (fabric-carpet `/player`) through mining, digging, combat, repair, cooking and a super ability, scored from `/mcstats` + the profile YAML. `--self-test` on the scorer runs first; `GAMEPLAY_SMOKE_CONTROL=1` re-runs the scenario with mcMMO **removed** and must FAIL |
