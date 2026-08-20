@@ -28,20 +28,26 @@ own `fabric.mod.json`.
 
 | Branch | MC versions covered | `depends.minecraft` | Released tag |
 |---|---|---|---|
-| `master` | `1.21.11` | `~1.21.11` | `mc1.21.11-v1.1.0` |
-| `mc/1.21.10` | `1.21.9`, `1.21.10` | `>=1.21.9 <1.21.11` | `mc1.21.10-v1.1.0` |
-| `mc/1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | `>=1.21.6 <1.21.9` | `mc1.21.8-v1.1.0` |
-| `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v1.1.0` |
-| `mc/1.21.4` | `1.21.4` | `>=1.21.4 <1.21.5` | `mc1.21.4-v1.1.0` |
-| `mc/1.21.3` | `1.21.2`, `1.21.3` | `>=1.21.2 <1.21.4` | `mc1.21.3-v1.1.0` |
-| `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | `mc1.21.1-v1.1.0` |
+| `master` | `1.21.11` | `~1.21.11` | `mc1.21.11-v1.2.0` |
+| `mc/1.21.10` | `1.21.9`, `1.21.10` | `>=1.21.9 <1.21.11` | `mc1.21.10-v1.2.0` |
+| `mc/1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | `>=1.21.6 <1.21.9` | `mc1.21.8-v1.2.0` |
+| `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v1.2.0` |
+| `mc/1.21.4` | `1.21.4` | `>=1.21.4 <1.21.5` | `mc1.21.4-v1.2.0` |
+| `mc/1.21.3` | `1.21.2`, `1.21.3` | `>=1.21.2 <1.21.4` | `mc1.21.3-v1.2.0` |
+| `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | `mc1.21.1-v1.2.0` |
 
-**Coverage is continuous `1.21` → `1.21.11` — the whole `1.21` line, 12 of 12.** `mod_version` is `1.1.0-SNAPSHOT` on all seven
-branches; six releases are published at `v1.1.0`, 0 drafts, one per band.
+**Coverage is continuous `1.21` → `1.21.11` — the whole `1.21` line, 12 of 12.** `mod_version` is `1.2.0-SNAPSHOT` on all seven
+branches; **seven** releases are published at `v1.2.0` (2026-08-20, §23), 0 drafts, one per band — read from `gh release list`
+and `git ls-remote --tags`, not inferred from the seven green runs.
 
-⚠️ One dangling tag survives: `mc1.21.11-v2.2.050-build.3` (`afb2a6a6a`) has **no release attached**,
-and the reaping sweep enumerates `gh release list`, so a bare tag is invisible to it. **R-t leaves it
-standing deliberately** — no sweep can reach it, so it needs its own decision.
+✅ **The dangling `mc1.21.11-v2.2.050-build.3` tag is GONE.** `git ls-remote --tags origin` on
+2026-08-20 returns the seven `v1.2.0` tags and `v1.21.11-baseline`, and nothing else. This paragraph
+used to say that tag *survives deliberately* and that no sweep could reach it — true when written,
+false now, and nothing reported the change.
+🔑 **Nothing in the ten gates reads the remote TAG list.** Gates 9 and 10 compare branches; the
+release sweep enumerates `gh release list`, which a bare tag is invisible to *by the same argument
+this paragraph made*. So the claim was checkable only by hand, and only because §23 happened to look.
+**Re-read `git ls-remote --tags` before repeating any statement about which tags exist.**
 
 ---
 
@@ -118,7 +124,7 @@ Generalise the probe to a **skill → required-id-paths** map; do not special-ca
 
 | Band | MC versions | Probe rows (absent · sig-changed) | Status |
 |---|---|---|---|
-| `1.21.1` | `1.21`, `1.21.1` | 65 · 60 = **125** | ✅ **SHIPPED** `mc1.21.1-v1.1.0` — §8.3 |
+| `1.21.1` | `1.21`, `1.21.1` | 65 · 60 = **125** | ✅ **SHIPPED** `mc1.21.1-v1.2.0` — §8.3, re-released §23 |
 | `1.20.x` | `1.20` … `1.20.6` (7 versions) | ⬜ **unmeasured** — no `1.20` jar is cached | ⬜ §22 |
 | `26.x` | `26.1`, `26.1.1`, `26.1.2`, `26.2` | n/a — **full yarn→official rename** | ⬜ §9 |
 
@@ -234,7 +240,7 @@ the branch does not.
 
 ## §8.3 — `mc/1.21.1` (`1.21`, `1.21.1`) ✅ SHIPPED
 
-The last `1.21.x` band, released as `mc1.21.1-v1.1.0`. **Re-scoped by R-m′ — nothing ships disabled,
+The last `1.21.x` band, released as `mc1.21.1-v1.2.0` (shipped at `v1.1.0`; re-released by §23). **Re-scoped by R-m′ — nothing ships disabled,
 and there was no `master`-side piece**, so it was an ordinary band cut.
 
 ⚠️ **This heading read `🔴 IN FLIGHT`, and the body below it described an uncommitted red working
@@ -772,7 +778,7 @@ obstacle was never the version string.
 
 ---
 
-## §23 — back-port §22.1, and ship `v1.2.0` (owner-ruled 2026-08-20, R-w) ⬜ IN FLIGHT
+## §23 — back-port §22.1, and ship `v1.2.0` (owner-ruled 2026-08-20, R-w) ✅ DONE
 
 **Two `master` commits are drifted on all six bands, and nothing can release until `mod_version`
 moves off `1.1.0`.** `616f69298` (the `MACES` gate) and `6f3fd63cc` (the `brew-smoke.sh` jar-glob
@@ -803,37 +809,73 @@ verified per branch against the table below; the standing guard is filed under O
 
 ### The work
 
-- [ ] **23.1 — `master`: bump to `1.2.0-SNAPSHOT`.** `gradle.properties` + this plan text.
+- [x] **23.1 — DONE. `master` `0d8bc0490`: bump to `1.2.0-SNAPSHOT`.** `gradle.properties` + this plan text.
       ⚠️ There is no `src/` half to ride with, so this commit is invisible to gate 7 twice over.
       `BandVersionLabelTest` reads `mod_version` off disk and asserts plain unpadded semver that
       round-trips through Fabric's own parser — confirm `1.2.0-SNAPSHOT` still passes it.
-- [ ] **23.2 — ship-gate `master`, then push.** Gate 2 before gate 1 (x.7). Read the `N executed`
+- [x] **23.2 — DONE. 61/61 injectors; 1846 executed, 0 failures, 162 classes. Ship-gate `master`, then push.** Gate 2 before gate 1 (x.7). Read the `N executed`
       line, not `BUILD SUCCESSFUL`; expect ~1846 executed, 0 failures.
-- [ ] **23.3 — back-port to all six bands.** Per band, cherry-pick `616f69298` then `6f3fd63cc`, then
+- [x] **23.3 — DONE. All six, three trailers each.** Per band, cherry-pick `616f69298` then `6f3fd63cc`, then
       bump `mod_version`. Each `master` sha gets its own `Backport-of:` trailer — the auditor's
       `TRAILER` regex is `re.M` and reads every line, so one commit may legitimately carry several.
       ⚠️ **Never cut a band branch here**; these six already exist (AGENTS.md, no-new-branches).
-- [ ] **23.4 — verify per band BEFORE pushing:** gate 2 at that band's `minecraft_version`, then
+- [x] **23.4 — DONE. Every band green; see the count table below.** gate 2 at that band's `minecraft_version`, then
       gate 1. A band whose count comes in under `master`'s had something disabled to get there.
-- [ ] **23.5 — push, then gates 7 / 9 / 10 at `--require-bands 6`.** `--self-test` each first. Gate 7
+- [x] **23.5 — DONE. 0 MISSING, 7 distinct manifests, 23 identical shared paths.** Push, then gates 7 / 9 / 10 at `--require-bands 6`.** `--self-test` each first. Gate 7
       audits `origin/master`, and gates 9/10 default to `origin/**` — **push first, then audit.**
       Expect 0 MISSING, 7 distinct manifests, 0 differing shared paths.
-- [ ] **23.6 — read all seven release runs, by STEP not by colour.** With the bump they should
+- [x] **23.6 — DONE. Seven green, seven releases at `v1.2.0`, 0 drafts, every `v1.1.0` tag reaped.** Read all seven release runs, by STEP not by colour.** With the bump they should
       publish `mc<VER>-v1.2.0` per branch. Then update the *"What ships today"* tag column above from
       `v1.1.0` to `v1.2.0` — that column is a claim about what actually shipped, so it moves only
       after `gh release list` says so, never in anticipation.
 
 ### `mod_version` — verified per branch (R-w′ has no automated leg; this table IS the check)
 
-| Branch | bumped to `1.2.0-SNAPSHOT` | back-ports applied | gates | pushed | released `v1.2.0` |
+| Branch | tip | `mod_version` | injectors | tests executed | released |
 |---|---|---|---|---|---|
-| `master` | ⬜ | n/a | ⬜ | ⬜ | ⬜ |
-| `mc/1.21.10` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| `mc/1.21.8` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| `mc/1.21.5` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| `mc/1.21.4` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| `mc/1.21.3` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| `mc/1.21.1` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `master` | `0d8bc0490` | ✅ `1.2.0-SNAPSHOT` | 61/61 | **1846** (162 cls) | ✅ `mc1.21.11-v1.2.0` |
+| `mc/1.21.10` | `2938b1583` | ✅ | 61/61 | **1846** (162 cls) | ✅ `mc1.21.10-v1.2.0` |
+| `mc/1.21.8` | `751be9107` | ✅ | 61/61 | **1846** (162 cls) | ✅ `mc1.21.8-v1.2.0` |
+| `mc/1.21.5` | `49cc7e034` | ✅ | 61/61 | **1847** (162 cls) | ✅ `mc1.21.5-v1.2.0` |
+| `mc/1.21.4` | `f3d970546` | ✅ | 61/61 | **1854** (164 cls) | ✅ `mc1.21.4-v1.2.0` |
+| `mc/1.21.3` | `ab566f55d` | ✅ | 61/61 | **1848** (163 cls) | ✅ `mc1.21.3-v1.2.0` |
+| `mc/1.21.1` | `fb6091fae` | ✅ | **67/68** (SLICE=1) | **1850** (162 cls) | ✅ `mc1.21.1-v1.2.0` |
+
+🔑 **Every band's count is HIGHER than `master`'s, and each surplus was traced rather than waved
+through.** The gate's wording — *"a lower count means something was disabled"* — says nothing about a
+higher one, so the check had to be per-CLASS, not per-total. Four bands carry extra tests that are
+band adaptations pre-dating §23:
+
+- `mc/1.21.4` +2 classes (`ArmadilloBrushDispenserExclusionTest`, `MobOriginRestampSeamTest`),
+  `mc/1.21.3` +1 (the first of those).
+- `mc/1.21.5` +1 test in `PlatformPlayerTest`: vanilla has no `UI` sound category below `1.21.6`, so
+  the same-name mapping loop exempts it and a second test asserts the exemption is *justified*.
+- `mc/1.21.1` +4, one each in `MixinApplicationTest`, `HusbandryListenerTest`,
+  `PlayerMovementTrackerTest`, `PlatformPlayerTest`.
+
+⚠️ **The comparison that mattered was `comm -23` — is any `master` test MISSING on the band.** It was
+empty on every band. A total-vs-total check would have read all six as "fine, more tests", and a
+band that had silently *lost* a `master` test while gaining two of its own would have passed it.
+
+### ⚠️ What §23 nearly shipped — a back-port helper that printed OK and wrote nothing
+
+`MSYS_NO_PATHCONV=1` — this repo's own prescribed remedy for the Phase-18 `rev-parse <ref>:<path>`
+trap — stops git translating `/tmp/msg.txt` to a Windows path. So `git commit --amend -F /tmp/msg.txt`
+failed on `mc/1.21.8`, **all three `Backport-of:` trailers were silently dropped**, and the helper
+printed `OK` three times because it checked the cherry-pick's exit code and never the amend's.
+
+🔑🔑 **This is Phase 20's lesson a second time: nothing checks that REMEDIES compose.** The same
+env var that fixes one gate turned another off, in a different tool, four months later. Two fixes,
+both required:
+
+- The message now goes in via **stdin** (`git commit -F -`), which no path translation can touch.
+- The helper **verifies its own post-condition** — it re-reads the trailer off `HEAD` and exits 3 if
+  it does not match — and refuses on `master` or a dirty tree. A helper that reports success it did
+  not verify is worse than no helper: it produces six branches of plausible-looking commits.
+
+⚠️ Gate 7 would have caught the two `src/`-touching commits on the next audit. It would **not** have
+caught the third: `gradle.properties` is in `BAND_LOCAL_PATHS`, so the bump's missing trailer was
+invisible by construction — R-w′ and this defect intersecting on the one commit neither guard covers.
 
 ### What I am NOT doing
 
