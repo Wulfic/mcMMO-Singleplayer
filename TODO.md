@@ -845,17 +845,24 @@ throughout. That is R-t working as designed, and it is why the bump had to be a 
 
 ## Other open work
 
-- [ ] ⬜ **A standing `mod_version` identity gate — the hole R-w′ names.** `gradle.properties` is in
-      `drift-audit.py`'s `BAND_LOCAL_PATHS`, so a `mod_version` bump is invisible to gate 7; and gate
-      10 cannot demand the file be byte-identical, because gate 9's whole point is that
-      `minecraft_version` must differ. **The two existing guards leave exactly this one key
-      uncovered**, and its failure mode is silent: the band simply stops releasing, in a world where
-      a red release run is already the normal outcome of an ordinary push.
-      🔑 The cheap shape is a **per-key** check rather than a per-file one — assert `mod_version` is
-      equal across every branch while `minecraft_version` is distinct — which makes it the natural
-      home for **both** invariants instead of a third script. Whichever script it lands in, it is
-      `scripts/**`, therefore a seven-branch cherry-pick under gate 10, and it needs the usual
-      `--self-test` proving it reddens when one branch is left behind.
+- [x] ✅ **DONE 2026-08-20 — `scripts/gradle-key-identity-audit.py` closes R-w′.** Ship-gate **11**,
+      and a fourth step-pair in `.github/workflows/drift-audit.yml`, so it has the same weekly
+      unattended leg as gates 7/9/10 rather than living on somebody's memory.
+      It is **per-KEY**, which is the only shape that fits: `SHARED` (identical everywhere —
+      `mod_version`, `maven_group`, `archives_base_name`, the toolchain/test pins, the `org.gradle.*`
+      tuning), `DISTINCT` (must differ — `minecraft_version`, `supported_minecraft_versions`, so it
+      carries **R10** as well), and `BAND_LOCAL` (may differ or agree — `yarn_mappings`,
+      `loader_version`, `fabric_version`, the client-integration pins). All **17** keys of the real
+      file are classified; none is fictional.
+      🔑 **It fails closed on the direction that can hurt.** An unclassified key is reported only if
+      it **differs** between branches — a new key that agrees everywhere passes quietly. Demanding
+      classification of every tuning knob is a rule nobody maintains; this one holds.
+      ✅ **Proven, not asserted.** `--self-test` = 3 quiet, 8 firing, 1 warning, **5 detector
+      mutations**, 1 parser case — every firing case is re-run with its detector stubbed and must go
+      green, or the assertion was never testing the detector. And it was then mutated against the
+      **real seven branches** in a throwaway clone: leaving `mc/1.21.5` at `1.1.0-SNAPSHOT` exits 1
+      and names it; colliding it onto `minecraft_version=1.21.4` exits 1 as an R10 collision.
+      ⚠️ **A green run on the real repo proves the branches agree, not that the value is right.**
 
 ### ✅ Harness fixes landed 2026-08-19 (`scripts/**` — gate-10 shared layer, so all seven branches)
 
@@ -948,11 +955,11 @@ every branch including `master`, so a push now *builds and runs the suite* again
 **1 only**, it runs **after** the push rather than before it, and a red run reports to a tab nobody
 watches (**R11**). Run the list first; the workflow is a backstop, never the check.
 
-⚠️ **Only gates 1, 7, 9 and 10 have any unattended leg at all, and three of those are weekly.** Gate 1
-fires per push via `release.yml`; gates **7**, **9** and **10** run from
+⚠️ **Only gates 1, 7, 9, 10 and 11 have any unattended leg at all, and four of those are weekly.**
+Gate 1 fires per push via `release.yml`; gates **7**, **9**, **10** and **11** run from
 `.github/workflows/drift-audit.yml`, which GitHub fires **weekly and only from the default branch** —
 inert on every band by construction. **The other six have no automation whatsoever.**
-⚠️ **Ten gates are listed. Update this sentence when you add one; nothing else counts them.**
+⚠️ **Eleven gates are listed. Update this sentence when you add one; nothing else counts them.**
 
 1. `./gradlew --no-daemon --stacktrace build -Pmod_version=$(grep -E '^mod_version=' gradle.properties | cut -d= -f2 | sed 's/-SNAPSHOT$//')`
    — exit 0, suite green, count matching `master` (~1719). A lower count means something was disabled
@@ -1011,6 +1018,23 @@ inert on every band by construction. **The other six have no automation whatsoev
     ⚠️ **Exit 2 is not a pass**, and this gate has an extra way to hit it: an empty path set means the
     include globs matched nothing.
     🔑 **Identical is not correct.** Six copies that agree can be six copies of the same wrong file.
+11. `python scripts/gradle-key-identity-audit.py --self-test` **then** `--require-bands <count>` —
+    **0 violations**. The **per-KEY** guard (**R-w'**), and the reason it is a third script rather
+    than a flag on gate 9 or 10: `gradle.properties` is the one shared file that can never be
+    compared whole. `mod_version` must be **identical** on every branch (R-p) while
+    `minecraft_version` must **differ** (R-a) — so gate 7 excludes the file and gate 10 cannot demand
+    it, and the gap between them was exactly one key wide.
+    🔴 **The failure it catches is silent:** a band left behind on `mod_version` hits R-t's stale-
+    version gate and simply **stops releasing**, in a repo where a red release run is already the
+    normal outcome of an ordinary push. §23 found it by hand; a table in this file was the only check.
+    ⚠️ **Defaults to `origin/**`, so push first — or pass `--local`.**
+    ⚠️ **Exit 2 is not a pass** — fewer than two branches means zero pairs compared.
+    ⚠️ **It fails closed on an UNCLASSIFIED key only when that key DIFFERS between branches.** A new
+    key that agrees everywhere is not reported, deliberately: a rule demanding every tuning knob be
+    classified is one nobody maintains.
+    🔑 **Agreement is not correctness.** Seven branches agreeing on `mod_version` proves they agree —
+    not that the number is right, and not that anything released. `gh release list` is still the only
+    thing that answers that.
 
 ⚠️⚠️ **Nothing checks that these REMEDIES compose.** Phase 20: `MSYS2_ARG_CONV_EXCL='*'` — prescribed
 by this repo's own gotchas for the Phase-18 `rev-parse` trap — silently turned two gate steps off. **A
