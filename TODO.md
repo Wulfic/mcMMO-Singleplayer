@@ -1155,7 +1155,7 @@ Real call sites that no mapping carries, so they translate to themselves:
 
 ### ➡️ Follow-ups this created (NOT done here)
 
-- [ ] **The gate-10 sweep.** `scripts/derive-official-names.py` is a new file under `scripts/**`,
+- [x] ✅ **DONE 2026-08-20 (§26) — the gate-10 sweep.** `scripts/derive-official-names.py` is a new file under `scripts/**`,
       which `branch-file-identity-audit.py` requires byte-identical on every branch. Until it is
       cherry-picked to all six bands, **gate 10 will report it MISSING on six branches** — expected,
       not a regression. ⚠️ It audits `origin/master`, so push first.
@@ -1239,17 +1239,49 @@ and `scripts/**` only, so **none of the seven pushes triggers a build or a relea
 ⚠️ The filter matches the **whole push**, not a commit — that is why this is checked against the full
 set of commits being pushed, not just the tip.
 
-### The work
+### ✅ OUTCOME — 2026-08-20, all four cross-branch gates green
 
-- [ ] **A.** Commit this plan on `master`.
-- [ ] **B.** Cherry-pick `e15c72c05^..master` onto each of the six bands (two commits: §25 and this
-      plan), each band commit carrying `Backport-of: e15c72c05b2be40ed6e58d75916bf80b9d8c0448`.
-- [ ] **C.** Verify with all four cross-branch gates at `--local` / `--master master` **before
-      pushing** — every one of them defaults to `origin/**`, and an unpushed `master` reads as clean.
-      Each `--self-test` runs first, and each carries `--require-bands 6` (exit 2 is not a pass).
-- [ ] **D.** `derive-official-names.py --self-test` on at least one band — gate 10 proves the bytes
-      match, it does not prove the file runs there. The self-test is hermetic (43 checks, no network).
-- [ ] **E.** Record the outcome here, propagate that commit too, then push all seven.
+Verified **before** the push, with `--local` / `--master master`, because every one of these guards
+defaults to `origin/**` and an unpushed `master` reads as clean. Each `--self-test` ran first.
+
+| Gate | Command | Result |
+|---|---|---|
+| 7 `drift-audit.py` | `--master master --branch …×6 --require-bands 6` | 0 MISSING on all six bands; 197 propagated, 20 waived |
+| 9 `manifest-identity-audit.py` | `--local --require-bands 6` | 7 distinct `mc-surface.txt` — no collisions |
+| 10 `branch-file-identity-audit.py` | `--local --require-bands 6` | **45** shared paths byte-identical on 7 branches (44 → 45) |
+| 11 `gradle-key-identity-audit.py` | `--local --require-bands 6` | 12 keys, 10 SHARED / 2 DISTINCT, no violations |
+
+✅ **All six band commits verified by BLOB, not by exit code.** Each band's `TODO.md` and
+`scripts/derive-official-names.py` were compared to `master`'s blob after the cherry-pick and matched
+exactly — the file-state assertion, which is the thing gate 10 actually enforces.
+
+✅ **Step D found nothing, and was still the right check.** `derive-official-names.py --self-test`
+passes **43 checks on every one of the six bands**. Gate 10 proves the bytes agree; it cannot prove
+the file *runs* there, and a shared script that imports fine on `master` and dies on a band would sail
+straight through an identity audit. The self-test is hermetic — no network, no `build/classes`.
+
+🔑 **The one trap worth writing down: `drift-audit.py --master master` is NOT a local audit.**
+Its `band_branches()` **prefers remote refs** and only falls back to local ones when `origin/mc/**`
+matches nothing. With six bands on `origin`, a plain `--master master` run compares the new local
+`master` against the **stale remote bands** and prints a confident *"No drift"* — a vacuous pass of
+exactly the shape this repo keeps finding. Forcing the local refs with repeated `--branch` is what
+makes the pre-push run mean anything. The other three guards have an explicit `--local` flag; this one
+does not, and the asymmetry is easy to miss.
+
+⚠️ **`Backport-of:` was belt-and-braces here, not the mechanism.** Gate 7 was already satisfied without
+it: `e15c72c05` is `waived` by its own `Backport-not-needed:` trailer, and the plan commit touches
+`TODO.md` only, which is not in `PROPAGATABLE_PREFIXES` and is therefore not propagatable at all. The
+trailers were checked against `unmatched_trailers` — `master_shas` spans the whole `base..master`
+range regardless of waiver, so both resolve and neither is flagged as a typo'd sha.
+
+### The work — done
+
+- [x] **A.** Plan committed on `master` — `03ae2806c`.
+- [x] **B.** `e15c72c05^..master` cherry-picked onto all six bands, one squashed commit each carrying
+      both `Backport-of:` trailers.
+- [x] **C.** Gates 7 / 9 / 10 / 11 green at `--local`, self-tests first, `--require-bands 6` throughout.
+- [x] **D.** `derive-official-names.py --self-test` — 43 checks on each of the six bands.
+- [x] **E.** Outcome recorded here and propagated; all seven branches pushed.
 
 ### What I am NOT doing
 
