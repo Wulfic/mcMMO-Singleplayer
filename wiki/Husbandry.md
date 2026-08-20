@@ -129,7 +129,7 @@ The harvest family's shared reward, driving **all four** harvest verbs — shear
 | `ChanceMax` | **50.0** | A second helping of whatever the harvest just dropped. |
 | `DurabilitySaveChanceMax` | **25.0** | The harvest costs the tool no durability at all. |
 
-The bonus is the animal's own loot roll run a second time, so a sheep's colour and a mooshroom's variant carry into it for free. Rolled **once per harvest, not once per item** — a shear either doubles or it doesn't.
+The bonus is a copy of whatever the harvest actually handed over, so a sheep's colour and a mooshroom's variant carry into it for free. Rolled **once per harvest, not once per item** — a shear either doubles or it doesn't.
 
 The durability save is deliberately the smaller number: a bonus drop is a windfall you notice, a durability save is only ever felt as "my shears last longer", and at 100 it would quietly turn shears into an infinite tool.
 
