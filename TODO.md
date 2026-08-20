@@ -1200,6 +1200,79 @@ ProGuard download lands in the scratch dir, never in the repo.
 
 ---
 
+## §26 — the gate-10 sweep: `derive-official-names.py` reaches the six bands
+
+**The one piece of live debt §25 created, and it is logged in §25's own follow-ups.**
+`scripts/derive-official-names.py` landed on `master` in `e15c72c05` and exists nowhere else.
+`scripts/**` is gate 10's include set, and gate 10 expands over the **union** of every branch's tree —
+so a file present on one branch and absent on six **is a violation**, not an omission. Gate 10 is red
+by construction until this sweep lands.
+
+⚠️ `e15c72c05` carries `Backport-not-needed:` — that trailer is about **`drift-audit.py` (gate 7)**,
+and it is correct: 9.1 measured `master`'s own contact surface, so the *measurement* does not
+propagate. It never said the *file* stays on `master`. Gate 7 and gate 10 want different things from
+the same commit, and both are satisfied here.
+
+### Measured first — the gap is exactly one file wide
+
+Every gate-10 path, on all seven branches, blob-compared before a line was written
+(`git ls-tree -r` per branch, `scripts/mc-surface.txt` excluded per gate 10's own `EXCLUDE`):
+
+| Result | Count |
+|---|---|
+| gate-10 path/branch rows compared | 309 |
+| paths NOT present on all 7 branches | **1** — `scripts/derive-official-names.py` (1/7) |
+| paths with more than one distinct blob | **0** |
+
+So R-w′'s and R-y's scripts **already reached the bands**; this is not a backlog, it is one file.
+
+✅ **`TODO.md` is byte-identical on all six bands (`48c0f959e`) and equals `e15c72c05^:TODO.md`.**
+That is what makes a whole-commit cherry-pick clean rather than a conflict: applying `e15c72c05` to a
+band reproduces `master`'s exact `TODO.md` blob, so the one-blob-on-seven-branches state that
+§21 restored is preserved rather than re-broken.
+
+### Why no release run fires — checked, not assumed
+
+`release.yml`'s `paths:` filter is `src/**`, `build.gradle`, `settings.gradle`, `gradle.properties`,
+`gradle/**`, `gradlew`, `gradlew.bat`, `.github/workflows/release.yml`. This sweep touches `TODO.md`
+and `scripts/**` only, so **none of the seven pushes triggers a build or a release**.
+⚠️ The filter matches the **whole push**, not a commit — that is why this is checked against the full
+set of commits being pushed, not just the tip.
+
+### The work
+
+- [ ] **A.** Commit this plan on `master`.
+- [ ] **B.** Cherry-pick `e15c72c05^..master` onto each of the six bands (two commits: §25 and this
+      plan), each band commit carrying `Backport-of: e15c72c05b2be40ed6e58d75916bf80b9d8c0448`.
+- [ ] **C.** Verify with all four cross-branch gates at `--local` / `--master master` **before
+      pushing** — every one of them defaults to `origin/**`, and an unpushed `master` reads as clean.
+      Each `--self-test` runs first, and each carries `--require-bands 6` (exit 2 is not a pass).
+- [ ] **D.** `derive-official-names.py --self-test` on at least one band — gate 10 proves the bytes
+      match, it does not prove the file runs there. The self-test is hermetic (43 checks, no network).
+- [ ] **E.** Record the outcome here, propagate that commit too, then push all seven.
+
+### What I am NOT doing
+
+- **Not** running the derivation on a band. The script is shared tooling; its **output** is per-branch
+  and must never be committed (§25). Presence + a green self-test is the whole requirement.
+- **Not** touching `src/**`, `gradle.properties`, or any toolchain file. §9.2 is untouched.
+- **Not** regenerating any band's `mc-surface.txt` — that is the §25 descriptor follow-up, a separate
+  §9.3-sized job.
+- **Not** bumping `mod_version`. Nothing releases; the seven `v1.2.0` releases stay exactly as they are.
+
+### Rollback
+
+Every step is a commit on a named branch and nothing is pushed until C and D are green. Before the
+push the undo is `git reset --hard <recorded tip>` per branch — the pre-sweep tips are recorded below.
+After the push it is `git revert <sha>` on the affected branch; no history is rewritten, no tag or
+release is touched, and no remote branch is deleted.
+
+**Pre-sweep tips (the rollback targets):** `master` `e15c72c05` · `mc/1.21.10` `a956e9cfd` ·
+`mc/1.21.8` `26214c02c` · `mc/1.21.5` `de78860fa` · `mc/1.21.4` `6c3520802` · `mc/1.21.3` `6551f9a52`
+· `mc/1.21.1` `7bf2a16ee`
+
+---
+
 ## Other open work
 
 - [x] ✅ **DONE 2026-08-20 — `scripts/gradle-key-identity-audit.py` closes R-w′.** Ship-gate **11**,
