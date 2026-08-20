@@ -395,6 +395,24 @@ class Hierarchy:
         return order
 
 
+_DESC_CLS_RE = re.compile(r"L([^;]+);")
+
+
+def remap_desc(desc: str, obf2named: dict) -> str:
+    """An OBF JVM descriptor -> the same descriptor in YARN-NAMED terms.
+
+    This is `ProGuardMap.type_desc` pointed the other way, and it is the bridge that makes a
+    call-site descriptor comparable to a mapping entry. tiny records a member's descriptor in obf
+    types; our bytecode records the call site in yarn-named types, because Loom remapped Minecraft
+    before javac ever saw it. Neither is usable against the other until one side is translated.
+
+    A type with no entry in the class table is left alone -- that is the correct answer for
+    java/lang/String and for primitives, which have no obf name to translate.
+    """
+    return _DESC_CLS_RE.sub(
+        lambda m: "L" + obf2named.get(m.group(1), m.group(1)) + ";", desc)
+
+
 class Table:
     def __init__(self) -> None:
         self.classes: dict[str, str] = {}                       # yarn a/b/C -> moj a.b.C
@@ -403,6 +421,9 @@ class Table:
         self.yarn2obf: dict[str, str] = {}                      # yarn a/b/C -> obf
         self.obf2moj: dict[str, str] = {}                       # obf -> moj a.b.C
         self.by_obf: dict[str, dict[str, set[str]]] = {}        # obf owner -> yarn name -> moj names
+        # obf owner -> (yarn name, YARN-NAMED desc) -> moj names. The same data one key wider, and
+        # the extra key is the only thing that can separate two overloads yarn spells identically.
+        self.by_obf_desc: dict[str, dict[tuple[str, str], set[str]]] = {}
         self.hierarchy: Hierarchy | None = None
 
     @property
@@ -423,6 +444,23 @@ class Table:
             if hit:
                 return hit, cls
         return None, None
+
+    def narrow(self, declared_on: str, member: str, descs) -> "set[str] | None":
+        """Cut a multi-name hit down using the CALL-SITE descriptors. None = could not narrow.
+
+        Returning None rather than an empty set matters: no descriptor and a descriptor that does
+        not match are both "the name-only answer stands", and a caller that treated an empty set as
+        the answer would DELETE a real mapping on a miss.
+
+        The union over descs is deliberate. Code that calls two overloads of one yarn name needs
+        BOTH mojmap names, and that is a decided answer, not an ambiguous one.
+        """
+        if not descs:
+            return None
+        got: set[str] = set()
+        for d in descs:
+            got |= self.by_obf_desc.get(declared_on, {}).get((member, d), set())
+        return got or None
 
 
 def join(pg: ProGuardMap, tiny: TinyMap, remap: bool = True,
@@ -451,6 +489,9 @@ def join(pg: ProGuardMap, tiny: TinyMap, remap: bool = True,
                 continue
             tab.members.setdefault((yarn_owner.replace("/", "."), yarn_name), set()).add(hit[1])
             tab.by_obf.setdefault(obf_owner, {}).setdefault(yarn_name, set()).add(hit[1])
+            yarn_desc = remap_desc(key[2], tiny.class_obf2named)
+            tab.by_obf_desc.setdefault(obf_owner, {}).setdefault(
+                (yarn_name, yarn_desc), set()).add(hit[1])
     return tab
 
 
@@ -516,7 +557,18 @@ def _class(tab: Table, owner_dots: str) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _member(kind: str, owner_dots: str, member: str, tab: Table) -> tuple[bool, str, str]:
+def _member(kind: str, owner_dots: str, member: str, tab: Table,
+            descs=None) -> tuple[bool, str, str]:
+    """Translate one member. `cat` on a SUCCESS says how confident the answer is:
+
+        ""       exactly one mojmap name
+        AMBIG    several, and nothing could choose -- no call-site descriptor reached here
+        MULTI    several, and the descriptors say all of them are genuinely used
+
+    AMBIG and MULTI cost completely different things. AMBIG is an open question; MULTI is a decided
+    answer that happens to rename two ways, and the rename must then be applied PER CALL SITE.
+    Collapsing them into one "ambiguous" bucket is what made the budget read as 33 open questions.
+    """
     moj_owner, owner_slash = _class(tab, owner_dots)
     if moj_owner is None:
         return (False, "owner class unresolved", "CLASS-MISS")
@@ -527,7 +579,15 @@ def _member(kind: str, owner_dots: str, member: str, tab: Table) -> tuple[bool, 
         via = ""
         if declared_on and declared_on != tab.yarn2obf.get(owner_slash):
             via = f"  (inherited from {tab.obf2moj.get(declared_on, '?')})"
-        return (True, f"{moj_owner}#{'|'.join(sorted(names))}{via}", "")
+        cat = ""
+        if len(names) > 1:
+            narrowed = tab.narrow(declared_on, member, descs) if declared_on else None
+            if narrowed:
+                names = narrowed
+                cat = "" if len(names) == 1 else "MULTI"
+            else:
+                cat = "AMBIG"
+        return (True, f"{moj_owner}#{'|'.join(sorted(names))}{via}", cat)
     # Only POSITIVE identification may leave the denominator. Both of these are decided by name
     # alone, so they hold whether or not a hierarchy was loaded.
     if member in OBJECT_METHODS:
@@ -544,8 +604,24 @@ def _member(kind: str, owner_dots: str, member: str, tab: Table) -> tuple[bool, 
     return (False, "declared nowhere in the MC hierarchy (injected interface?)", NOT_MC)
 
 
-def resolve(kind: str, value: str, tab: Table) -> tuple[bool, str, str]:
-    """Translate one surface record. Returns (resolved, detail, category)."""
+def embedded_desc(tail: str) -> "set[str] | None":
+    """A mixin selector's OWN descriptor, when it carries a complete one.
+
+    Selectors are frequently TRUNCATED -- mixin prefix-matches, so
+    `place(Lnet/minecraft/item/ItemPlacementContext;` is a legal selector. A truncated one matches
+    no mapping entry, narrow() returns None, and the name-only answer stands. So this can be tried
+    unconditionally: it either decides the record or changes nothing.
+    """
+    return {tail} if tail.startswith("(") and ")" in tail else None
+
+
+def resolve(kind: str, value: str, tab: Table, descmap=None) -> tuple[bool, str, str]:
+    """Translate one surface record. Returns (resolved, detail, category).
+
+    `descmap` is {(TYPE, VALUE): {descriptors}} from extract-mc-surface.py --descriptors. It is
+    optional on purpose: with no descriptors every multi-name hit falls back to AMBIG, which is
+    exactly the behaviour before this existed.
+    """
     if kind in CLASS_TYPES:
         moj, _ = _class(tab, value)
         return (moj is not None, moj or "no mojmap class", "" if moj else "CLASS-MISS")
@@ -555,26 +631,75 @@ def resolve(kind: str, value: str, tab: Table) -> tuple[bool, str, str]:
         m = re.match(r"^L([^;]+);([^(]+)", value)
         if not m:
             return (False, "unparseable ATTARGET", "PARSE")
-        return _member(kind, m.group(1).replace("/", "."), m.group(2), tab)
+        # A mixin selector often embeds the FULL descriptor, and when it does it disambiguates
+        # itself -- no bytecode map needed. Selectors are frequently TRUNCATED though
+        # ("dropExperience(Lnet/minecraft/server/world/ServerWorld;"), and a truncated one simply
+        # fails to match any mapping entry, so narrow() returns None and the name-only answer
+        # stands. That is why this is safe to try unconditionally.
+        return _member(kind, m.group(1).replace("/", "."), m.group(2), tab,
+                       embedded_desc(value[m.end():]))
     if kind in MEMBER_TYPES:
         owner, _, member = value.partition("#")
-        return _member(kind, owner, member.split("(", 1)[0], tab)
+        name = member.split("(", 1)[0]
+        # The bytecode map first; a mixin `method =` selector then falls back to its OWN descriptor,
+        # which is the same rule ATTARGET gets. Only the three bytecode record types appear in the
+        # map at all, so for METHOD/ACCESSOR this is the only descriptor there will ever be.
+        descs = (descmap or {}).get((kind, value)) or embedded_desc(member[len(name):])
+        return _member(kind, owner, name, tab, descs)
     return (False, f"unknown record type {kind}", "PARSE")
 
 
-def report_surface(tab: Table, records: list[tuple[str, str]], show_residual: bool) -> int:
+def load_descriptors(path: Path) -> dict:
+    """{(TYPE, VALUE): {descriptor, ...}} from extract-mc-surface.py --descriptors.
+
+    Fails loudly on an empty or headers-only file. A silently empty descriptor map does not error
+    anywhere downstream -- every record just falls back to the name-only path and the ambiguity
+    count returns to what it was, which reads as "the descriptors did not help" rather than as
+    "the descriptors were never loaded".
+    """
+    out: dict = {}
+    malformed = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(chr(9))
+        if len(parts) != 3:
+            # Never silent. A skipped line is a descriptor that does not reach the join, and the
+            # only symptom would be a record that stays AMBIG for no visible reason.
+            malformed += 1
+            if malformed <= 5:
+                print(f"  WARNING: {path.name}: not TYPE<TAB>VALUE<TAB>DESC: {line[:100]!r}",
+                      file=sys.stderr)
+            continue
+        kind, value, desc = parts
+        out.setdefault((kind, value), set()).add(desc)
+    if malformed:
+        print(f"  WARNING: {malformed} malformed descriptor line(s) skipped in {path}",
+              file=sys.stderr)
+    if not out:
+        raise SystemExit("FATAL: no descriptor records in " + str(path) + ". Regenerate with:"
+                         + chr(10) +
+                         "       python scripts/extract-mc-surface.py --descriptors -o <path>")
+    return out
+
+
+def report_surface(tab: Table, records: list[tuple[str, str]], show_residual: bool,
+                   descmap=None) -> int:
     by_kind: dict[str, list[int]] = {}
     residual: list[tuple[str, str, str]] = []
     not_mc: list[tuple[str, str, str]] = []
     ambiguous: list[tuple[str, str, str]] = []
+    multisite: list[tuple[str, str, str]] = []
     for kind, value in records:
-        ok, detail, cat = resolve(kind, value, tab)
+        ok, detail, cat = resolve(kind, value, tab, descmap)
         c = by_kind.setdefault(kind, [0, 0, 0])
         c[1] += 1
         if ok:
             c[0] += 1
-            if "|" in detail:
+            if cat == "AMBIG":
                 ambiguous.append((kind, value, detail))
+            elif cat == "MULTI":
+                multisite.append((kind, value, detail))
         elif cat == NOT_MC:
             c[2] += 1
             not_mc.append((kind, value, detail))
@@ -605,11 +730,21 @@ def report_surface(tab: Table, records: list[tuple[str, str]], show_residual: bo
     print(f"  NOT-MC ({total_nmc}) are real call sites that no mapping carries -- Object methods,")
     print(f"  synthetic enum methods, and Fabric-injected interfaces. They need NO rename.")
     print()
-    print(f"  AMBIGUOUS (one yarn name -> several mojmap names): {len(ambiguous)}")
-    print("  Picking one needs the CALL-SITE DESCRIPTOR, which mc-surface.txt does not record.")
-    print("  This -- not the record count -- is the hand-work budget for the rename.")
+    print(f"  AMBIGUOUS (several mojmap names, nothing could choose): {len(ambiguous)}")
+    if descmap is None:
+        print("  No descriptor map loaded -- pass --descriptors to cut this down. Without it every")
+        print("  multi-name hit lands here, which is what made the budget read as 33 open questions.")
+    else:
+        print("  These are the ones the call-site descriptors could NOT decide. This -- not the")
+        print("  record count -- is the hand-work budget for the rename.")
     if ambiguous and show_residual:
         for kind, value, detail in ambiguous:
+            print(f"    {kind:<14} {value}  ->  {detail}")
+    print(f"  MULTI-SITE (decided, but the code calls SEVERAL overloads): {len(multisite)}")
+    print("  Not hand work and not ambiguity: the descriptors named every one. It does mean the")
+    print("  rename is PER CALL SITE for these, because one yarn name becomes two mojmap names.")
+    if multisite and show_residual:
+        for kind, value, detail in multisite:
             print(f"    {kind:<14} {value}  ->  {detail}")
     if not_mc and show_residual:
         print(f"  --- NOT-AN-MC-SYMBOL ({len(not_mc)}) ---")
@@ -635,6 +770,8 @@ com.example.Foo -> a:
     int bar -> b
     com.example.Foo baz(int) -> c
     com.example.Foo baz(com.example.Foo) -> d
+    com.example.Foo drop(int) -> h
+    com.example.Foo dropFromFace(com.example.Foo) -> i
     12:15:void tick(com.example.Qux[]) -> e
     16:17:void <init>() -> <init>
 com.example.Qux -> f:
@@ -652,6 +789,8 @@ FIXTURE_TINY = "\n".join([
     "\tm\t(I)La;\tc\tmethod_1\tyBaz",
     "\tm\t(La;)La;\td\tmethod_2\tyBaz",
     "\tm\t([Lf;)V\te\tmethod_3\tyTick",
+    "\tm\t(I)La;\th\tmethod_5\tyDrop",
+    "\tm\t(La;)La;\ti\tmethod_6\tyDrop",
     "\tc\tsome javadoc comment",
     "c\tf\tnet/minecraft/class_2\tnet/example/YQux",
     "\tf\tLjava/lang/String;\ta\tfield_2\tyName",
@@ -719,13 +858,13 @@ def self_test() -> int:
 
     check("proguard: 4 classes parsed", len(pg.class_moj2obf) == 4, pg.class_moj2obf)
     check("proguard: 3 fields parsed", len(pg.fields) == 3, pg.fields)
-    check("proguard: 5 methods parsed (incl <init>)", len(pg.methods) == 5, pg.methods)
+    check("proguard: 7 methods parsed (incl <init>)", len(pg.methods) == 7, pg.methods)
     check("proguard: comment line ignored", "# a comment line" not in pg.class_moj2obf)
     check("proguard: an UNOBFUSCATED class is stored slash-separated, like tiny",
           pg.class_moj2obf.get("net.example.Unobf") == "net/example/Unobf",
           pg.class_moj2obf.get("net.example.Unobf"))
     check("tiny: 5 classes parsed", len(tiny.class_obf2named) == 5, tiny.class_obf2named)
-    check("tiny: 4 methods parsed", len(tiny.methods) == 4, tiny.methods)
+    check("tiny: 6 methods parsed", len(tiny.methods) == 6, tiny.methods)
     check("tiny: nested comment row skipped", len(tiny.fields) == 3, tiny.fields)
 
     tab = join(pg, tiny)
@@ -751,6 +890,64 @@ def self_test() -> int:
           tab.members.get(("net.example.YFoo", "yBar")) == {"bar"})
     check("join: non-MC type (java.lang.String) descriptor built correctly",
           tab.members.get(("net.example.YQux", "yName")) == {"name"})
+
+    # -- 28.3: the DESCRIPTOR disambiguates what the name cannot. -------------------------------
+    # `yDrop` is the fixture's `Block#dropStack`: ONE yarn name, TWO obf methods, TWO different
+    # mojmap names. No amount of name-only lookup can choose, and 33 real records were in this
+    # state. Everything below is the machinery that ends that, so it is asserted end to end.
+    D_INT = "(I)Lnet/example/YFoo;"
+    D_FOO = "(Lnet/example/YFoo;)Lnet/example/YFoo;"
+
+    drop = tab.members.get(("net.example.YFoo", "yDrop"))
+    check("28.3 PREMISE: yDrop is genuinely ambiguous by name alone",
+          drop == {"drop", "dropFromFace"}, drop)
+
+    check("remap_desc: obf types become yarn-named",
+          remap_desc("(I)La;", tiny.class_obf2named) == D_INT,
+          remap_desc("(I)La;", tiny.class_obf2named))
+    check("remap_desc: a type with no mapping is left alone (String, primitives)",
+          remap_desc("(Ljava/lang/String;)I", tiny.class_obf2named) == "(Ljava/lang/String;)I",
+          remap_desc("(Ljava/lang/String;)I", tiny.class_obf2named))
+
+    check("narrow: one descriptor picks exactly ONE name",
+          tab.narrow("a", "yDrop", {D_INT}) == {"drop"}, tab.narrow("a", "yDrop", {D_INT}))
+    check("narrow: the OTHER descriptor picks the OTHER name",
+          tab.narrow("a", "yDrop", {D_FOO}) == {"dropFromFace"}, tab.narrow("a", "yDrop", {D_FOO}))
+    check("narrow: BOTH call sites -> both names, which is DECIDED, not ambiguous",
+          tab.narrow("a", "yDrop", {D_INT, D_FOO}) == {"drop", "dropFromFace"})
+    check("narrow: no descriptors -> None, not an empty set",
+          tab.narrow("a", "yDrop", None) is None)
+    # An empty set here would be read as "the answer is nothing" and DELETE a real mapping.
+    check("narrow: an UNMATCHED descriptor -> None, so the name-only answer survives",
+          tab.narrow("a", "yDrop", {"(Lnope/Nope;)V"}) is None,
+          tab.narrow("a", "yDrop", {"(Lnope/Nope;)V"}))
+
+    dmap = {("CALLEDMETHOD", "net.example.YFoo#yDrop"): {D_INT}}
+    with_d = resolve("CALLEDMETHOD", "net.example.YFoo#yDrop", tab, dmap)
+    without_d = resolve("CALLEDMETHOD", "net.example.YFoo#yDrop", tab)
+    check("resolve: WITH the descriptor the record is decided",
+          with_d[0] and with_d[2] == "" and with_d[1].endswith("#drop"), with_d)
+    check("resolve: a record the descriptors decide BOTH ways is MULTI, not AMBIG",
+          resolve("CALLEDMETHOD", "net.example.YFoo#yDrop", tab,
+                  {("CALLEDMETHOD", "net.example.YFoo#yDrop"): {D_INT, D_FOO}})[2] == "MULTI")
+    # -- THE MUTATION for this leg. Drop the descriptor map and the ambiguity MUST come back. If
+    # -- this goes green, --descriptors is decoration and the 33 were never actually resolved.
+    check("MUTATION: without the descriptor map the SAME record is AMBIG again",
+          without_d[0] and without_d[2] == "AMBIG" and "|" in without_d[1], without_d)
+
+    # An @At selector carries its own descriptor, so it disambiguates with no bytecode map at all.
+    at_full = resolve("ATTARGET", "Lnet/example/YFoo;yDrop(I)Lnet/example/YFoo;", tab)
+    check("ATTARGET: a FULL selector descriptor disambiguates itself",
+          at_full[0] and at_full[2] == "" and at_full[1].endswith("#drop"), at_full)
+    at_trunc = resolve("ATTARGET", "Lnet/example/YFoo;yDrop(", tab)
+    check("ATTARGET: a TRUNCATED selector falls back to the name-only answer, not to a wrong one",
+          at_trunc[0] and at_trunc[2] == "AMBIG", at_trunc)
+    m_full = resolve("METHOD", "net.example.YFoo#yDrop(I)Lnet/example/YFoo;", tab)
+    check("METHOD: a mixin selector's OWN full descriptor disambiguates it -- no bytecode map",
+          m_full[0] and m_full[2] == "" and m_full[1].endswith("#drop"), m_full)
+    m_trunc = resolve("METHOD", "net.example.YFoo#yDrop(I", tab)
+    check("METHOD: a TRUNCATED selector stays AMBIG rather than matching the wrong overload",
+          m_trunc[0] and m_trunc[2] == "AMBIG", m_trunc)
 
     # -- 25.2, the DETECTOR MUTATION. --
     # Disable the descriptor remap. Every key whose descriptor names an MC class must now MISS.
@@ -889,6 +1086,12 @@ def main() -> int:
                     help="report coverage against scripts/mc-surface.txt")
     ap.add_argument("--residual", action="store_true",
                     help="with --surface, name every unresolved record")
+    ap.add_argument("--descriptors", metavar="PATH",
+                    help="call-site descriptors from extract-mc-surface.py --descriptors; "
+                         "resolves overloads one yarn name cannot")
+    ap.add_argument("--ignore-descriptors", action="store_true",
+                    help="load them and then IGNORE them -- the on-real-data mutation for the "
+                         "disambiguation leg. The ambiguity count must go back UP.")
     ap.add_argument("-o", "--out", help="write the table here (default: stdout; never scripts/)")
     ap.add_argument("--no-hierarchy", action="store_true",
                     help="declared-only lookup; the on-real-data mutation for the inheritance leg")
@@ -941,7 +1144,15 @@ def main() -> int:
             raise SystemExit(f"FATAL: {SURFACE} missing")
         recs = surface_records(SURFACE)
         print(f"  surface:  {len(recs):,} records from {SURFACE.name}", file=sys.stderr)
-        residual = report_surface(tab, recs, args.residual)
+        descmap = None
+        if args.descriptors:
+            descmap = load_descriptors(Path(args.descriptors))
+            print(f"  descs:    {sum(len(v) for v in descmap.values()):,} over "
+                  f"{len(descmap):,} members", file=sys.stderr)
+            if args.ignore_descriptors:
+                print("  MUTATION: descriptors loaded and DISCARDED", file=sys.stderr)
+                descmap = None
+        residual = report_surface(tab, recs, args.residual, descmap)
         return 1 if residual else 0
 
     lines = [f"# yarn <-> Mojang official, Minecraft {mc}. Generated; DO NOT COMMIT (see TODO section 25)."]

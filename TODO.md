@@ -735,6 +735,14 @@ this size; a branch is the only honest representation.
       **does not apply to this band**, so `probe-bands.py` cannot probe it at all until 9.1 lands.
       `mixin-allow-audit.py` and `extract-mc-surface.py` read the same names. **The band cannot run its
       own gates until its tooling speaks official names.**
+      🟡 **The TRANSLATION half is done (§28, 2026-08-20).** The yarn→mojmap table is complete enough
+      to drive a rename: **4 ambiguous** (truncated mixin selectors, hand decisions) and **1 record
+      that renames two ways**, down from 33, residual 0. What is still open is the rest of 9.3:
+      `probe-bands.py` and `mixin-allow-audit.py` still read yarn names and are still blind on this
+      branch, and `master`'s own `mc-surface.txt` cannot be regenerated until the source compiles.
+      ➡️ **Next is the rename script** — table-driven, dry-run default (owner-ruled), and driven by
+      **call sites** rather than a name→name map, because `Registry#getEntry` needs both `get` and
+      `wrapAsHolder`.
 - [ ] **9.4** Cut the band per the recipe. ⚠️ **Two open questions, both raised in §27 — do not
       pin from this line.** (a) *Which branch?* R-f (`master` = newest supported band) and this
       bullet's original `mc/26.x` wording contradict each other, because `26.1 > 1.21.11`; the owner
@@ -1175,9 +1183,16 @@ Real call sites that no mapping carries, so they translate to themselves:
       which `branch-file-identity-audit.py` requires byte-identical on every branch. Until it is
       cherry-picked to all six bands, **gate 10 will report it MISSING on six branches** — expected,
       not a regression. ⚠️ It audits `origin/master`, so push first.
-- [ ] **Emit the descriptor in `extract-mc-surface.py`'s member records** — takes the 33 ambiguous
-      rows to 0 and helps `probe-bands.py` too. Per-branch manifest regeneration; a §9.3-sized job.
-- [ ] **Normalise nested-type spelling in `extract-mc-surface.py`** — same commit as the above.
+- [x] ✅ **DONE 2026-08-20 (§28), but NOT the way this line says.** Emitting the descriptor *in the
+      member records* was measured to be the wrong design: it changes the manifest format, so all
+      seven committed `mc-surface.txt` files fail `--check` until regenerated — six band rebuilds
+      plus a seventh that is **impossible**, because `master` is pinned to `26.2` and cannot compile.
+      Shipped instead as a **scratch side-output** (`--descriptors`), manifest format untouched.
+      Result: **33 → 4**, and the 4 are truncated mixin selectors no tool can decide. It did NOT take
+      the rows to 0, and one row turned out to need **both** names. See §28.
+- [ ] **Normalise nested-type spelling in `extract-mc-surface.py`** — deliberately NOT done in §28:
+      identical seven-branch blast radius, and `derive-official-names.py` already compensates via
+      `name_candidates`. Bundle it with the post-rename manifest regeneration.
 
 ### 🔴 Why the derived table is NOT committed
 
@@ -1522,6 +1537,191 @@ Nothing is pushed and no history is rewritten, so the undo is local and complete
 - `git branch -D mc/1.21.11` — removes the held band label. It carries no unique work: it is a label
   on `e3b356c0b`, which is itself `368affb05` (on `origin`) plus one docs commit.
 - `origin` is untouched throughout. All seven `v1.2.0` releases and their tags are as §26 left them.
+
+---
+
+## §28 — §9.3, the tooling half: drive the 33 ambiguous records to 0 (owner-ruled 2026-08-20)
+
+**§9.3 is the critical path to a green `master`.** `master` is pinned to `26.2` and red (2,639 errors,
+96 files). Nothing downstream can start until the yarn→mojmap table is *complete*, and §25 left it
+with **33 records that no name-only join can decide** — a yarn name covering several overloads maps
+to several mojmap names, and choosing needs the **call-site descriptor**.
+
+### The owner's three answers, and what each one closes
+
+1. **Scope: the tooling half only.** Descriptors harvested, 33 → 0, table complete and self-tested.
+   **No `src/` edits this session.** The table is the input to everything downstream; it is worth
+   more finished than the rename is worth started.
+2. **The descriptor is a SCRATCH SIDE-OUTPUT, not a manifest field.** See the blast-radius note
+   below — this is the whole reason the design looks the way it does.
+3. **The rename, when it runs, is a table-driven script with a dry-run default.** Recorded here as
+   the standing method; not built in this section.
+
+### 🔴 Why the descriptor must NOT become a manifest field
+
+The obvious data model — put the descriptor in the `CALLEDMETHOD` record — is the wrong one, and the
+reason is cross-branch:
+
+* It changes the record format, so **every branch's committed `mc-surface.txt` fails `--check`**
+  until regenerated.
+* Regenerating needs a green `build/classes` **per branch** — the bytecode leg is not optional
+  (hole 3). That is six band rebuilds…
+* …and a **seventh that is impossible**: `master` cannot compile, so `master`'s manifest cannot be
+  regenerated at all until the rename lands. The format change would leave `--check` permanently red
+  on the branch that needs it most.
+
+So the manifest format is **untouched**. `--check` stays green on all seven branches, the gate-10
+sweep gains nothing to carry, and the descriptor follows the precedent §25 already set for the
+derived table itself: **the script is the shared artifact, the output is scratch.**
+
+### 🔴 The harvest cannot happen on `master`, and that is not a detail
+
+`extract-mc-surface.py`'s bytecode leg reads `build/classes`. `master` is red, so on this branch it
+can produce nothing. Descriptors are harvested on **`mc/1.21.11` (`e3b356c0b`)** — the green tree,
+`origin/master` plus one docs commit — and carried back as scratch.
+
+⚠️ This is correct precisely *because* the table is `1.21.11`→`1.21.11` (§25). The descriptors
+describe the **yarn side** of the translation, which is the side that still exists. They say nothing
+about `26.2`'s API, and must not be read as if they did.
+
+### The mechanism — where the ambiguity is actually born
+
+`join()` reduces tiny's `(obf_owner, obf_name, obf_desc) -> yarn_name` to
+`by_obf[obf_owner][yarn_name] -> {mojmap names}`. **The collapse to a set is the ambiguity.** Two obf
+methods that yarn spells identically land in one bucket, and ProGuard names them differently.
+
+The fix keys straight through that collapse:
+
+* Remap tiny's **obf** descriptor into **yarn-named** terms via `class_obf2named` — the same shape as
+  `ProGuardMap.type_desc`, in the opposite direction.
+* Index `(obf_owner, yarn_name, yarn_desc) -> moj_name` beside the existing name-only index.
+* Our own bytecode is compiled against the **yarn-remapped** MC jar, so a javap `Methodref`
+  descriptor is already in yarn-named terms and compares directly. Both sides are erased; no
+  generics problem.
+* On a >1 candidate lookup, filter by the call-site descriptor. The name-only path stays as the
+  fallback, so a record with no harvested descriptor degrades to today's behaviour rather than
+  vanishing.
+
+### The work
+
+- [ ] **28.1** Harvest on `mc/1.21.11`: `./gradlew classes testClasses`, then the new
+      `extract-mc-surface.py --descriptors -o <scratch>`. Return to `master`.
+- [ ] **28.2** `extract-mc-surface.py`: new READ-ONLY `--descriptors` mode. `TYPE<TAB>owner#name<TAB>desc`,
+      stdout by default, `-o` to write, **never** into `scripts/`. Manifest path untouched.
+- [ ] **28.3** `derive-official-names.py`: `--descriptors <path>`; the yarn-desc index; descriptor
+      filtering in `Table.lookup`.
+- [ ] **28.4** Self-test both, each with a **mutation that must go red**. For 28.3 the mutation is
+      "ignore the descriptor" and it must restore the ambiguity count — a disambiguator that cannot
+      be shown to fail is the 13th vacuous guard.
+- [ ] **28.5** Measure: ambiguous **33 → 0**, residual **stays 0**, coverage does not fall.
+
+### ✅ OUTCOME — 2026-08-20: **33 → 4**, and the 4 are not the shape §25 predicted
+
+```
+                              AMBIGUOUS   MULTI-SITE   RESIDUAL   coverage (ALL / MC)
+  baseline, no descriptors           33            0          0    98.2% / 100.0%
+  + bytecode descriptor map           6            1          0    98.2% / 100.0%
+  + selector self-descriptor          4            1          0    98.2% / 100.0%
+```
+
+Harvest: **854 descriptor triples over 842 members**, from **536 class files** on a green
+`1.21.11` tree. Coverage never moved — the descriptors decide *which* mojmap name, they never add
+or lose a record, and a change in the headline would have meant a bug.
+
+**Where the 29 went:** 26 were decided by the bytecode descriptor map; 2 more by the mixin
+selector's own descriptor (`METHOD` selectors got the same rule `ATTARGET` had); 1 was
+**reclassified, not resolved** — see below.
+
+### 🔑 The 4 survivors are all TRUNCATED MIXIN SELECTORS, and no tool will ever fix them
+
+```
+ATTARGET  ExperienceOrbEntity;spawn(                  -> award | awardWithDirection
+ATTARGET  ItemStack;damage(ILnet/minecraft/entity/    -> hurtAndBreak | hurtAndConvertOnBreak | hurtWithoutBreaking
+ATTARGET  ItemScatterer;spawn(                        -> dropContents | dropItemStack
+METHOD    BlockItem#place(Lnet/minecraft/item/ItemPlacementContext;  -> place | placeBlock
+```
+
+Not one is a bytecode record — **every** `CALLEDMETHOD` / `ACCESSEDFIELD` / `CALLEDCTOR` in the
+surface is now decided. These four are mixin selectors that are **deliberately truncated**, because
+mixin prefix-matches; the descriptor is not missing from our tooling, it was never written. So the
+budget is 4 short decisions made by *reading the mixin body*, and it cannot be automated away.
+
+### 🔑🔑 One record was RECLASSIFIED, and it corrects §25's framing
+
+`Registry#getEntry` → `get` **and** `wrapAsHolder`. The descriptors decide it completely: the code
+calls **both** overloads. That is not ambiguity and not hand work — it is a record that **renames two
+ways**, and the rename must therefore be applied **per call site**, not per record.
+
+⚠️ §25 counted "33 ambiguous" on the assumption that one surface record means one rename. It does
+not, and no name-keyed table can express the difference. **The rename script (answer 3) must be
+driven by CALL SITES, not by a name→name map** — a table lookup on `getEntry` has no right answer.
+`--descriptors` reports this as its own `MULTI-SITE` line for exactly that reason.
+
+### The mutation, and precisely what it proves
+
+`--ignore-descriptors` (load them, then discard) moves **4 → 31**, not 4 → 33. That is correct and
+worth stating: it disables the **bytecode-map leg only**, so the 2 records decided by a selector's
+own embedded descriptor stay decided. The two legs are independent and are mutated independently —
+`--self-test` covers the selector leg with a truncated-vs-full fixture pair.
+
+### Controls run before believing any of the above
+
+- **`extract-mc-surface.py --check` PASSED on the green tree** — 1,415 records, all ten counts
+  matching §25 exactly. Two things at once: the build really was a complete `1.21.11` build
+  (provenance), and refactoring `pool_refs` into a projection of `pool_refs_detailed` changed the
+  committed manifest **not at all** (regression).
+- **The partial-tree trap fired for real.** `master`'s `build/classes` held **181** class files —
+  a half-finished `26.2` attempt. The floor rejected it. Had it not, the harvest would have been
+  quietly thin and the ambiguity count quietly high.
+- Self-tests: `extract-mc-surface.py` gains the overload pair (1 manifest record / 2 triples) and a
+  blinding mutation, **watched fail** before being trusted; `derive-official-names.py` **43 → 58
+  checks**, including a `yDrop` fixture whose two overloads map to two *different* mojmap names.
+
+### 🔴 Carried debt
+
+- **Gate 10 is owed a sweep.** `scripts/extract-mc-surface.py` and `scripts/derive-official-names.py`
+  are in the byte-identical set and changed here. The sweep cannot run until `master` is pushable
+  (`branch-file-identity-audit.py` audits `origin/master`), so it bundles with the `26.2` push.
+  Expected-missing on six bands until then — not a regression.
+- **The descriptor file is SCRATCH and session-local.** Regenerate on any green band tree:
+  ```
+  ./gradlew classes testClasses
+  python scripts/extract-mc-surface.py --descriptors -o <outside-the-repo>.tsv
+  ```
+  Everything else runs from `master`, which cannot build, via the version override:
+  ```
+  python scripts/derive-official-names.py --surface --mc 1.21.11 --descriptors <path> --residual
+  ```
+  ⚠️ `--mc` is **required** on this branch: yarn publishes nothing for `26.x`, so the default
+  (`gradle.properties` = `26.2`) refuses cleanly rather than guessing.
+- **Still 1.21.11 → 1.21.11.** Nothing here prices the `26.1` API delta. §25's caveat stands in full.
+
+- [x] **28.1** Harvested on a disposable `mc/1.21.11` worktree; removed, branch unharmed.
+- [x] **28.2** `--descriptors`, read-only, refuses to write into `scripts/`. Both guards watched fire.
+- [x] **28.3** `remap_desc` + `by_obf_desc` + `narrow()`; `--descriptors` / `--ignore-descriptors`.
+- [x] **28.4** Both self-tests extended and both mutations watched go red.
+- [x] **28.5** Measured: 33 → 4 ambiguous + 1 multi-site, residual 0, coverage unchanged.
+
+### What I am NOT doing
+
+* **Not touching `src/`.** No rename this session (answer 1).
+* **Not changing the manifest record format** — the seven-branch reason above.
+* **Not fixing nested-type spelling in the manifest** (§25's second follow-up). Identical blast
+  radius, and `derive-official-names.py` already compensates through `name_candidates`. It belongs in
+  the post-rename regeneration, where the manifest is being rewritten anyway.
+* **Not writing the rename script.** Method is ruled; construction is the next section.
+* **Not pushing.** `master` stays red and local. The gate-10 sweep for these `scripts/**` changes
+  cannot run until `master` is pushable — carried debt, logged below, not a regression.
+
+### Rollback
+
+All local, origin untouched, no history rewritten.
+
+* `git reset --hard 84b216237` on `master` — drops everything in §28.
+* The harvested descriptor file is **scratch, outside the repo**; deleting it loses nothing that
+  `--descriptors` cannot regenerate from a green tree.
+* `mc/1.21.11` is only **read** here. If 28.1 leaves it dirty, `git status --short` first — the tree
+  must be clean before checking back out.
 
 ---
 
