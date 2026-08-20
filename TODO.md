@@ -707,10 +707,17 @@ method selectors, 19 `@At` descriptors, plus every MC type named in a method bod
 🔑🔑 **This is what vindicated R-a.** No preprocessor directive can bridge an identifier rename of
 this size; a branch is the only honest representation.
 
-- [ ] **9.1 Derive the yarn→official translation table.** Yarn's `v2` mappings carry
-      `official → intermediary → named` columns, so the table can be **derived** for `1.21.11` and
-      largely reused rather than hand-written. **Confirm this before budgeting the rename as manual** —
-      it is the difference between a script and a month.
+- [ ] **9.1 Derive the yarn→official translation table.** 🔴 **Its original premise was MEASURED
+      FALSE on 2026-08-20 — see §25.** It claimed yarn's `v2` mappings carry an `official` column
+      holding Mojang names, so the table was a two-column read. The columns exist, but for any pre-`26`
+      version yarn's `official` namespace holds the **obfuscated** name (`a`, `b`, `c`), not
+      `net/minecraft/world/item/ItemStack`. As written, 9.1 derived nothing.
+      ✅ **ANSWERED 2026-08-20 (§25): it IS derivable — a script, not a month.** A three-way join
+      through Mojang's own ProGuard map covers **100% of the 1,389 MC symbols** in
+      `scripts/mc-surface.txt` (`scripts/derive-official-names.py`, 43-check self-test).
+      🔴 **Two caveats that bound it, and neither is zero:** **33** records map to several mojmap
+      names and need the call-site descriptor to choose; and the table is **`1.21.11`→`1.21.11`**, so
+      it prices the TRANSLATION, never the `26.1` API delta. Do not quote the 100% as a §9 estimate.
 - [ ] **9.2 Toolchain.** `26.x` needs a newer Loom than our **1.17.13**, and `build.gradle:30` pins
       `net.fabricmc:yarn:${yarn_mappings}:v2`, which 404s for every `26.x`. ⚠️ **Confirm exact plugin
       coordinates at the time of the attempt — do not pin from this note, it will be stale.**
@@ -962,6 +969,307 @@ Every step is an ordinary commit on an existing branch; the undo is `git revert 
 Nothing outward-facing: no `src/**` and no `gradle.properties`, so `release.yml`'s `paths:` filter
 does not fire and no release is touched. The live GitHub wiki is never pushed (R-k), so 24.1 changes
 a tracked page only.
+
+---
+
+## §25 — §9.1: is the yarn→official table derivable? (owner-ruled 2026-08-20: §9.1 only, then report)
+
+**The gated first step of §9, and nothing more.** R-e makes `26.x` its own mini-project; this
+section answers one question and stops, so the ~164-import rename gets budgeted from a measurement
+instead of a guess.
+
+### 🔴 The defect in the plan, found before a line of code
+
+§9.1 as written says the table is a two-column read of yarn's `v2` mappings. **It is not.** Measured
+against the cached `1.21.11+build.6` mappings:
+
+```
+tiny 2 0  official  intermediary  named
+c    a    net/minecraft/class_7833   net/minecraft/util/math/RotationAxis
+```
+
+The `official` namespace is the **obfuscated** name. Yarn calls it *official* because it is the name
+Mojang **shipped**, not the name Mojang **wrote** — and for every version below `26.1` those are
+different things. The `26.x` premise (unobfuscated ship) is exactly what collapses the distinction,
+which is why the mistake is easy: it is true on the target band and false on every source band.
+
+🔑 **Same shape as GitHub #7 and R-m′**: a plan step whose stated *reason* was never re-checked
+against the artifact. It would not have failed loudly — a two-column read of tiny v2 **succeeds** and
+emits a table of `class_7833 → RotationAxis`, which is a real mapping, just not the one §9 needs.
+
+### The derivation that does work — a three-way join
+
+| Input | Gives | Where |
+|---|---|---|
+| Mojang ProGuard maps, `1.21.11` | mojmap → obf | URL sits in the **already-cached** `mojang_minecraft_info.json` (`client_mappings` 11.8 MB, `server_mappings` 8.7 MB) — no version-manifest lookup |
+| yarn `1.21.11+build.6` v2 `mappings.tiny` | obf → intermediary → named | already cached by Loom |
+
+Join on the **obf** name ⇒ `yarn-named ↔ mojmap`, for classes, methods and fields alike.
+
+⚠️ **The join is not a string match on members.** ProGuard writes member descriptors in *mojmap*
+types (`net.minecraft.world.item.ItemStack foo(int)`); yarn writes them in *obf* types (`(I)Lcso;`).
+A member key is only comparable once the ProGuard descriptor's types are themselves remapped through
+the class table. Skipping that silently drops every overload — and an overload-only loss reads as a
+coverage number a few percent low, not as an error.
+
+### What §25 must actually answer
+
+Derivability is not the deliverable; **coverage of OUR surface** is. The table is only worth anything
+if it translates the 1,418 records in `scripts/mc-surface.txt`:
+
+| Record type | Count | Needs |
+|---|---|---|
+| `CALLEDMETHOD` | 508 | member join (descriptor remap) |
+| `ACCESSEDFIELD` | 307 | member join |
+| `STATICFIELD` | 289 | member join |
+| `CLASS` / `MIXINCLASS` | 180 / 37 | class join |
+| `METHOD` | 44 | member join |
+| `CALLEDCTOR` | 27 | member join |
+| `ATTARGET` | 19 | descriptor rewrite |
+| `STATICMEMBER` / `ACCESSOR` | 2 / 2 | member join |
+
+**The number that decides §9's budget is the residual** — records that resolve to no mojmap name.
+Every one is hand work, and the report must name them rather than count them.
+
+🔴 **A high coverage figure is NOT the same as "the rename is a script."** This table is
+`1.21.11`-to-`1.21.11`. `26.1` official names are `1.21.11` mojmap names **only where the API did not
+change between them**, and that delta is unmeasured and out of §25's scope. Nothing written here may
+be read as pricing the rename against `26.x` itself.
+
+### The work
+
+- [x] **25.1** `scripts/derive-official-names.py`. Reads the Loom-cached tiny v2 + the Mojang
+      ProGuard map; emits `yarn-named ↔ mojmap` for classes and members.
+- [x] **25.2** The self-test proves the **detectors**, not just the parsers — **43 checks**, of which
+      **6 are mutations** that must go red.
+- [x] **25.3** The control fires: a class present in tiny and absent from ProGuard is *reported*
+      unmatched, not dropped.
+- [x] **25.4** Run against `scripts/mc-surface.txt`. Numbers below.
+- [x] **25.5** §9.1 updated in place.
+
+### ✅ THE ANSWER: derivable, and it covers **100%** of the MC symbols we touch
+
+```
+RECORD TYPE       MAPPED  NOT-MC  RESIDUAL  TOTAL
+CALLEDMETHOD         482      26         0    508
+ACCESSEDFIELD        307       0         0    307
+STATICFIELD          289       0         0    289
+CLASS                180       0         0    180
+METHOD                44       0         0     44
+MIXINCLASS            37       0         0     37
+CALLEDCTOR            27       0         0     27
+ATTARGET              19       0         0     19
+ACCESSOR               2       0         0      2
+STATICMEMBER           2       0         0      2
+-------------------------------------------------
+ALL                 1389      26         0   1415
+
+Coverage of ALL records:  1389/1415 = 98.2%   <- headline
+Coverage of MC symbols:   1389/1389 = 100.0%
+```
+
+Underlying table: **10,275 classes joined, 0 unmatched**; 94,255 yarn member names, 95,185 pairs.
+
+**§9.1 is answered: the rename table is a SCRIPT, not a month.** But read the next two sections
+before turning that into a budget — neither number below is zero.
+
+### The real hand-work budget: **33 ambiguous**, not 1,415 renames
+
+A yarn name that covers several overloads can map to **several different mojmap names**, and
+choosing needs the **call-site descriptor** — which `mc-surface.txt` does not record. 33 records are
+in this state. They are not guesses; each is a short, named decision:
+
+| yarn | mojmap candidates |
+|---|---|
+| `Block#dropStack` | `popResource` \| `popResourceFromFace` |
+| `BlockState#get` / `#with` | `getValue`\|`getValueOrElse` / `setValue`\|`setValueInternal` |
+| `ItemStack#copy` | `copy` \| `copyFrom` |
+| `Identifier#of` / `#tryParse` | `fromNamespaceAndPath`\|`parse` / `tryBuild`\|`tryParse` |
+| `Vec3d#add` / `#multiply` / `#ofCenter` | `add`\|`atLowerCornerWithOffset` / `multiply`\|`scale` / `atCenterOf`\|`upFromBottomCenterOf` |
+| `BlockPos#offset` | `offset` \| `relative` |
+| `Entity#getRotationVector` | `calculateViewVector` \| `getLookAngle` |
+| `LivingEntity#getPitch` / `#getYaw` | `getViewXRot`\|`getXRot` / `getViewYRot`\|`getYRot` |
+| `ServerWorld#playSound` | `playSeededSound` \| `playSound` |
+| `PlayerInventory#removeStack` | `removeItem` \| `removeItemNoUpdate` |
+| `NbtCompound#getInt` | `getInt` \| `getIntOr` |
+| `Registry#getEntry` | `get` \| `wrapAsHolder` |
+| `PlayerManager#getPlayer` | `getPlayer` \| `getPlayerByName` |
+| `ItemStack#damage` (`@At`) | `hurtAndBreak`\|`hurtAndConvertOnBreak`\|`hurtWithoutBreaking` |
+| `ExperienceOrbEntity#spawn` | `award` \| `awardWithDirection` |
+| `ItemScatterer#spawn` | `dropContents` \| `dropItemStack` |
+| `NbtComponent#set` | `set` \| `update` |
+| `StatusEffectInstance#equals` | `equals` \| `is` |
+| `DefaultedList#ofSize` | `createWithCapacity` \| `withSize` |
+| `Util$OperatingSystem#open` | `openFile`\|`openPath`\|`openUri` |
+| `BlockItem#place` | `place` \| `placeBlock` |
+| `CraftingResultSlot`/`FurnaceOutputSlot#onCrafted` | `checkTakeAchievements` \| `onQuickCraft` |
+
+🔑 **The fix is cheap and belongs in `extract-mc-surface.py`, not here.** The bytecode scan
+already has the descriptor — it is discarded when the record is written. Emitting it would take
+this list to zero and would cost nothing at the call site. That is a §9.3 item, logged below.
+
+### The 26 that are NOT Minecraft symbols, and need no rename at all
+
+Real call sites that no mapping carries, so they translate to themselves:
+
+* **12 Fabric attachment calls** — `getAttached` / `setAttached` / `removeAttached` on `Entity`,
+  `LivingEntity`, `ZombieEntity`, `PassiveEntity`, `ArmorStandEntity`. Interface injection, not MC.
+* **6 injected/interface defaults** — `Text#getString`, `MutableText#getString`,
+  `DefaultedRegistry#iterator`, `IndexedIterable#iterator`, `DefaultedList#size`.
+* **4 `java.lang.Object`** — `EntityType#toString`, `ItemStack#toString`, `Identifier#toString`,
+  `RegistryEntry#equals`.
+* **4 synthetic enum** — `values`/`ordinal`/`valueOf` on `SpawnReason`, `SoundCategory`,
+  `Formatting`, `Direction`, `BossBar$Color`.
+
+### 🔴 What this does NOT price — read before quoting 100% at anybody
+
+1. **It is `1.21.11` → `1.21.11`.** It proves yarn names can be mechanically turned into the Mojang
+   names **of the same Minecraft**. `26.1`'s API is not `1.21.11`'s. Every symbol that MOVED between
+   them is invisible here and is the actual §9 risk.
+2. **Class + member names only.** Mixin `@At` descriptors, `@Accessor` targets and method signatures
+   still need the *type* names inside them rewritten — mechanical, but not counted above.
+3. **The toolchain is untouched** (§9.2), and `probe-bands.py` still cannot read a `26.x` band at
+   all until its manifest speaks official names (§9.3).
+
+### Three defects found while building it — two mine, one in the manifest
+
+- 🔴 **The coverage metric could not detect its own broken leg.** First real-data run of the
+  `--no-hierarchy` mutation printed **`1146/1146 = 100.0%`**. Without a hierarchy every INHERITED
+  member is "declared nowhere", which the classifier filed as *NOT-AN-MC-SYMBOL* — so the misses
+  left the **denominator** and the percentage stayed perfect while a quarter of the surface went
+  unmapped. **A metric whose denominator shrinks when a leg breaks reports a smaller 100%, not a
+  failure.** Fixed by making the headline `MAPPED/TOTAL` and by refusing to infer "not an MC symbol"
+  when no hierarchy was loaded. The mutation now reads **98.2% → 81.0%, residual 0 → 256**.
+  🔑 This is the **12th vacuous-guard sighting** in this repo and the first where the laundering
+  was done by a *classifier* rather than an assertion.
+- ⚠️ **Identity-mapped classes were being silently dropped.** ProGuard writes both sides
+  dot-separated; tiny writes obf slash-separated. A truly obfuscated name (`cgk`) has no separator,
+  so the join worked *by accident* — and failed on the handful Mojang ships UNOBFUSCATED.
+  `net.minecraft.server.MinecraftServer` is one; it cost 7 surface records and **74** table classes.
+  Fixed by normalising at parse time. **74 → 0 unmatched.**
+- ⚠️ **`mc-surface.txt` spells nested types TWO ways.** `EntityAttributeModifier$Operation` on
+  line 106 (bytecode scan) and `EntityAttributeModifier.Operation` on line 917 (source scan) — same
+  type, same generated file. `probe-bands.py:name_candidates` already compensates, so this script
+  applies the identical rule rather than a second one. **Not fixed here** — fixing the generator
+  regenerates a per-branch manifest on seven branches, which is not this section's scope.
+
+### ➡️ Follow-ups this created (NOT done here)
+
+- [ ] **The gate-10 sweep.** `scripts/derive-official-names.py` is a new file under `scripts/**`,
+      which `branch-file-identity-audit.py` requires byte-identical on every branch. Until it is
+      cherry-picked to all six bands, **gate 10 will report it MISSING on six branches** — expected,
+      not a regression. ⚠️ It audits `origin/master`, so push first.
+- [ ] **Emit the descriptor in `extract-mc-surface.py`'s member records** — takes the 33 ambiguous
+      rows to 0 and helps `probe-bands.py` too. Per-branch manifest regeneration; a §9.3-sized job.
+- [ ] **Normalise nested-type spelling in `extract-mc-surface.py`** — same commit as the above.
+
+### 🔴 Why the derived table is NOT committed
+
+It would collide the two cross-branch guards, the same way `mc-surface.txt` does:
+
+* The table is derived **from `scripts/mc-surface.txt`**, which is a **per-branch** fact that gate 9
+  (`manifest-identity-audit.py`) requires to **differ** between branches.
+* Anything under `scripts/**` is in gate 10 (`branch-file-identity-audit.py`), which requires
+  **byte-identity** on every branch.
+
+A per-branch-derived file inside the byte-identical set is unshippable by construction — exactly the
+R-x/R-y collision, and exactly why `mc-surface.txt` is excluded from gate 10. So the **script** is
+committed (shared layer, byte-identical, correct) and the **output is scratch**. The durable evidence
+is the self-test plus the numbers recorded above, not a checked-in artifact.
+
+⚠️ The script must therefore **not** write into the repo by default. Dry-run/stdout default, an
+explicit `-o <path>` to write, per `extract-mc-ids.py`'s `--write` convention.
+
+### What I am NOT doing
+
+- **Not** touching the toolchain (§9.2). No Loom bump, no `build.gradle` edit, no `gradle.properties`
+  change — so `release.yml`'s `paths:` filter never fires and no release is touched.
+- **Not** renaming a single import. §25 measures; §9.3+ acts.
+- **Not** cutting `mc/26.x`, and not translating `probe-bands.py` / `mixin-allow-audit.py` /
+  `extract-mc-surface.py` (§9.3).
+- **Not** pricing `26.x` itself — see the `1.21.11`-to-`1.21.11` caveat above.
+- **Not** back-porting. A new `scripts/**` file is gate-10 shared and must reach all seven branches,
+  but that is a push-time sweep, and this session was scoped **9.1 only, then report**. The sweep is
+  logged as the follow-up rather than done half-way.
+
+### Rollback
+
+One new untracked file until it is committed; the undo before commit is deleting it, and after commit
+is `git revert <sha>`. No existing script is modified, no `src/**`, no `gradle.properties`. The Mojang
+ProGuard download lands in the scratch dir, never in the repo.
+
+---
+
+## §26 — the gate-10 sweep: `derive-official-names.py` reaches the six bands
+
+**The one piece of live debt §25 created, and it is logged in §25's own follow-ups.**
+`scripts/derive-official-names.py` landed on `master` in `e15c72c05` and exists nowhere else.
+`scripts/**` is gate 10's include set, and gate 10 expands over the **union** of every branch's tree —
+so a file present on one branch and absent on six **is a violation**, not an omission. Gate 10 is red
+by construction until this sweep lands.
+
+⚠️ `e15c72c05` carries `Backport-not-needed:` — that trailer is about **`drift-audit.py` (gate 7)**,
+and it is correct: 9.1 measured `master`'s own contact surface, so the *measurement* does not
+propagate. It never said the *file* stays on `master`. Gate 7 and gate 10 want different things from
+the same commit, and both are satisfied here.
+
+### Measured first — the gap is exactly one file wide
+
+Every gate-10 path, on all seven branches, blob-compared before a line was written
+(`git ls-tree -r` per branch, `scripts/mc-surface.txt` excluded per gate 10's own `EXCLUDE`):
+
+| Result | Count |
+|---|---|
+| gate-10 path/branch rows compared | 309 |
+| paths NOT present on all 7 branches | **1** — `scripts/derive-official-names.py` (1/7) |
+| paths with more than one distinct blob | **0** |
+
+So R-w′'s and R-y's scripts **already reached the bands**; this is not a backlog, it is one file.
+
+✅ **`TODO.md` is byte-identical on all six bands (`48c0f959e`) and equals `e15c72c05^:TODO.md`.**
+That is what makes a whole-commit cherry-pick clean rather than a conflict: applying `e15c72c05` to a
+band reproduces `master`'s exact `TODO.md` blob, so the one-blob-on-seven-branches state that
+§21 restored is preserved rather than re-broken.
+
+### Why no release run fires — checked, not assumed
+
+`release.yml`'s `paths:` filter is `src/**`, `build.gradle`, `settings.gradle`, `gradle.properties`,
+`gradle/**`, `gradlew`, `gradlew.bat`, `.github/workflows/release.yml`. This sweep touches `TODO.md`
+and `scripts/**` only, so **none of the seven pushes triggers a build or a release**.
+⚠️ The filter matches the **whole push**, not a commit — that is why this is checked against the full
+set of commits being pushed, not just the tip.
+
+### The work
+
+- [ ] **A.** Commit this plan on `master`.
+- [ ] **B.** Cherry-pick `e15c72c05^..master` onto each of the six bands (two commits: §25 and this
+      plan), each band commit carrying `Backport-of: e15c72c05b2be40ed6e58d75916bf80b9d8c0448`.
+- [ ] **C.** Verify with all four cross-branch gates at `--local` / `--master master` **before
+      pushing** — every one of them defaults to `origin/**`, and an unpushed `master` reads as clean.
+      Each `--self-test` runs first, and each carries `--require-bands 6` (exit 2 is not a pass).
+- [ ] **D.** `derive-official-names.py --self-test` on at least one band — gate 10 proves the bytes
+      match, it does not prove the file runs there. The self-test is hermetic (43 checks, no network).
+- [ ] **E.** Record the outcome here, propagate that commit too, then push all seven.
+
+### What I am NOT doing
+
+- **Not** running the derivation on a band. The script is shared tooling; its **output** is per-branch
+  and must never be committed (§25). Presence + a green self-test is the whole requirement.
+- **Not** touching `src/**`, `gradle.properties`, or any toolchain file. §9.2 is untouched.
+- **Not** regenerating any band's `mc-surface.txt` — that is the §25 descriptor follow-up, a separate
+  §9.3-sized job.
+- **Not** bumping `mod_version`. Nothing releases; the seven `v1.2.0` releases stay exactly as they are.
+
+### Rollback
+
+Every step is a commit on a named branch and nothing is pushed until C and D are green. Before the
+push the undo is `git reset --hard <recorded tip>` per branch — the pre-sweep tips are recorded below.
+After the push it is `git revert <sha>` on the affected branch; no history is rewritten, no tag or
+release is touched, and no remote branch is deleted.
+
+**Pre-sweep tips (the rollback targets):** `master` `e15c72c05` · `mc/1.21.10` `a956e9cfd` ·
+`mc/1.21.8` `26214c02c` · `mc/1.21.5` `de78860fa` · `mc/1.21.4` `6c3520802` · `mc/1.21.3` `6551f9a52`
+· `mc/1.21.1` `7bf2a16ee`
 
 ---
 
