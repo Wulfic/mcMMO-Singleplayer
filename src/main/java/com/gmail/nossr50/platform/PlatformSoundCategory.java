@@ -2,7 +2,7 @@ package com.gmail.nossr50.platform;
 
 /**
  * The volume-slider category a sound obeys — mcMMO's platform-neutral mirror of vanilla's
- * {@code net.minecraft.sound.SoundCategory}.
+ * {@code net.minecraft.sounds.SoundSource}.
  *
  * <p><b>Why this exists (Phase 2, multi-version support).</b> Sound playback is the one MC concept
  * that reaches deep into skill logic: {@code MacesManager}, {@code RepairManager},

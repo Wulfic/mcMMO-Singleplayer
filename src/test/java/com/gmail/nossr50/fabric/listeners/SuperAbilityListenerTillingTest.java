@@ -10,20 +10,20 @@ import com.gmail.nossr50.fabric.mixin.HoeTillingActionsAccessor;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Set;
 import java.util.stream.Collectors;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.item.HoeItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.item.HoeItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -73,7 +73,7 @@ class SuperAbilityListenerTillingTest {
         // the moment it appears instead of quietly re-opening the issue for that one block.
         for (Block tillable : HoeTillingActionsAccessor.getTillingActions().keySet()) {
             assertTrue(tills(new ItemStack(Items.DIAMOND_HOE), tillable),
-                    "a hoe click on " + Registries.BLOCK.getId(tillable) + " tills, so it must not "
+                    "a hoe click on " + BuiltInRegistries.BLOCK.getId(tillable) + " tills, so it must not "
                             + "re-ready the hoe");
         }
     }
@@ -100,7 +100,7 @@ class SuperAbilityListenerTillingTest {
         for (ItemStack held : notHoes) {
             for (Block tillable : HoeTillingActionsAccessor.getTillingActions().keySet()) {
                 assertFalse(tills(held, tillable),
-                        held.getItem() + " on " + Registries.BLOCK.getId(tillable) + " is not a till "
+                        held.getItem() + " on " + BuiltInRegistries.BLOCK.getId(tillable) + " is not a till "
                                 + "— vanilla only consults the tilling table for a HoeItem. Calling "
                                 + "it one suppresses the ready, and right-clicking the ground is how "
                                 + "the pickaxe/shovel/axe/sword/fist super abilities arm.");
@@ -154,7 +154,7 @@ class SuperAbilityListenerTillingTest {
         // through Item.Settings#hoe), so if a version bump ever turns the vanilla hoes into plain
         // Items carrying a component, isTillAction would answer "not a hoe" for every real hoe and
         // GitHub #1 would silently reopen with no other test noticing.
-        for (net.minecraft.item.Item hoe : Set.of(Items.WOODEN_HOE, Items.STONE_HOE, Items.IRON_HOE,
+        for (net.minecraft.world.item.Item hoe : Set.of(Items.WOODEN_HOE, Items.STONE_HOE, Items.IRON_HOE,
                 Items.GOLDEN_HOE, Items.DIAMOND_HOE, Items.NETHERITE_HOE)) {
             assertTrue(hoe instanceof HoeItem,
                     hoe + " is no longer a HoeItem — isTillAction's held-item gate is now dead and "
@@ -169,7 +169,7 @@ class SuperAbilityListenerTillingTest {
         // mandatory rather than belt-and-braces. If this list changes, re-read that argument — a
         // future table of rare blocks would not need the same care, and a wider one needs more.
         final Set<String> tillable = HoeTillingActionsAccessor.getTillingActions().keySet().stream()
-                .map(block -> Registries.BLOCK.getId(block).getPath())
+                .map(block -> BuiltInRegistries.BLOCK.getId(block).getPath())
                 .collect(Collectors.toSet());
         assertEquals(Set.of("grass_block", "dirt", "coarse_dirt", "dirt_path", "rooted_dirt"),
                 tillable);
@@ -183,18 +183,18 @@ class SuperAbilityListenerTillingTest {
     }
 
     private static boolean tills(ItemStack held, Block target, Direction side, BlockState above) {
-        final ServerWorld world = mock(ServerWorld.class);
+        final ServerLevel world = mock(ServerLevel.class);
         when(world.getBlockState(ABOVE)).thenReturn(above);
 
-        final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
-        when(player.getStackInHand(Hand.MAIN_HAND)).thenReturn(held);
+        final ServerPlayer player = mock(ServerPlayer.class);
+        when(player.getStackInHand(InteractionHand.MAIN_HAND)).thenReturn(held);
         // ItemUsageContext's public constructor reads the world off the player (getEntityWorld, not
         // getWorld — verified with javap), and vanilla's predicates read it back off the context.
         when(player.getEntityWorld()).thenReturn(world);
 
         final BlockHitResult hit =
-                new BlockHitResult(Vec3d.ofCenter(POS), side, POS, false);
-        return SuperAbilityListener.isTillAction(player, Hand.MAIN_HAND, hit,
+                new BlockHitResult(Vec3.ofCenter(POS), side, POS, false);
+        return SuperAbilityListener.isTillAction(player, InteractionHand.MAIN_HAND, hit,
                 target.getDefaultState());
     }
 }

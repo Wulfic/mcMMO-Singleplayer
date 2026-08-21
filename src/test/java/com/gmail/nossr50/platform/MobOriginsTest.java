@@ -13,11 +13,11 @@ import static org.mockito.Mockito.when;
 import com.gmail.nossr50.datatypes.mobs.MobOrigin;
 import com.gmail.nossr50.fabric.McMMOAttachments;
 import com.gmail.nossr50.util.McTestRegistries;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.SpawnReason;
-import net.minecraft.entity.decoration.ArmorStandEntity;
-import net.minecraft.entity.mob.ZombieEntity;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -38,8 +38,8 @@ class MobOriginsTest {
     }
 
     /** A server-side world — the only kind the gate acts on. */
-    private static World serverWorld() {
-        final World world = mock(World.class);
+    private static Level serverWorld() {
+        final Level world = mock(Level.class);
         when(world.isClient()).thenReturn(false);
         return world;
     }
@@ -51,7 +51,7 @@ class MobOriginsTest {
         // runtime companion for the case that guard cannot see — running against a newer Minecraft
         // than the mod was compiled against, where an unmatched constant throws MatchException on the
         // very first mob spawn rather than at startup.
-        for (SpawnReason reason : SpawnReason.values()) {
+        for (EntitySpawnReason reason : EntitySpawnReason.values()) {
             final MobOrigin origin = MobOrigins.classify(reason);
             assertNotNull(origin, reason + " has no MobOrigin mapping");
         }
@@ -60,20 +60,20 @@ class MobOriginsTest {
     @Test
     void theDisqualifyingReasonsAreTheRuledOnes() {
         // The truth table, named reason by reason. Each line is a farm.
-        assertSame(MobOrigin.SPAWNER, MobOrigins.classify(SpawnReason.SPAWNER));
-        assertSame(MobOrigin.SPAWNER, MobOrigins.classify(SpawnReason.TRIAL_SPAWNER));
-        assertSame(MobOrigin.BRED, MobOrigins.classify(SpawnReason.BREEDING));
-        assertSame(MobOrigin.PLAYER_PLACED, MobOrigins.classify(SpawnReason.SPAWN_ITEM_USE));
-        assertSame(MobOrigin.PLAYER_PLACED, MobOrigins.classify(SpawnReason.COMMAND));
-        assertSame(MobOrigin.PLAYER_PLACED, MobOrigins.classify(SpawnReason.DISPENSER));
+        assertSame(MobOrigin.SPAWNER, MobOrigins.classify(EntitySpawnReason.SPAWNER));
+        assertSame(MobOrigin.SPAWNER, MobOrigins.classify(EntitySpawnReason.TRIAL_SPAWNER));
+        assertSame(MobOrigin.BRED, MobOrigins.classify(EntitySpawnReason.BREEDING));
+        assertSame(MobOrigin.PLAYER_PLACED, MobOrigins.classify(EntitySpawnReason.SPAWN_ITEM_USE));
+        assertSame(MobOrigin.PLAYER_PLACED, MobOrigins.classify(EntitySpawnReason.COMMAND));
+        assertSame(MobOrigin.PLAYER_PLACED, MobOrigins.classify(EntitySpawnReason.DISPENSER));
 
         // ⚠️ STRUCTURE, not DIMENSION_TRAVEL. Legacy's flag was called NETHER_PORTAL_MOB and the
         // modern name for a portal-spawned zombified piglin is STRUCTURE — NetherPortalBlock's
         // randomTick calls EntityType.spawn(world, pos, SpawnReason.STRUCTURE), bytecode verified.
         // DIMENSION_TRAVEL is the unrelated case of an existing mob being re-created on the far side
         // of a portal, and flagging it would disqualify any mob a player lured through one.
-        assertSame(MobOrigin.STRUCTURE, MobOrigins.classify(SpawnReason.STRUCTURE));
-        assertSame(MobOrigin.NATURAL, MobOrigins.classify(SpawnReason.DIMENSION_TRAVEL));
+        assertSame(MobOrigin.STRUCTURE, MobOrigins.classify(EntitySpawnReason.STRUCTURE));
+        assertSame(MobOrigin.NATURAL, MobOrigins.classify(EntitySpawnReason.DIMENSION_TRAVEL));
     }
 
     @Test
@@ -87,10 +87,10 @@ class MobOriginsTest {
         //
         // Mutation check: make stampOnSpawn write unconditionally and this test, and only this test,
         // goes red.
-        final LivingEntity zombie = mock(ZombieEntity.class);
-        for (SpawnReason qualifying : new SpawnReason[] {
-                SpawnReason.LOAD, SpawnReason.DIMENSION_TRAVEL, SpawnReason.NATURAL,
-                SpawnReason.CHUNK_GENERATION, SpawnReason.CONVERSION, SpawnReason.EVENT }) {
+        final LivingEntity zombie = mock(Zombie.class);
+        for (EntitySpawnReason qualifying : new EntitySpawnReason[] {
+                EntitySpawnReason.LOAD, EntitySpawnReason.DIMENSION_TRAVEL, EntitySpawnReason.NATURAL,
+                EntitySpawnReason.CHUNK_GENERATION, EntitySpawnReason.CONVERSION, EntitySpawnReason.EVENT }) {
             MobOrigins.stampOnSpawn(serverWorld(), qualifying, zombie);
         }
         verify(zombie, never()).setAttached(eq(McMMOAttachments.MOB_ORIGIN), any());
@@ -98,8 +98,8 @@ class MobOriginsTest {
 
     @Test
     void aDisqualifyingOriginIsStampedOnce() {
-        final LivingEntity zombie = mock(ZombieEntity.class);
-        MobOrigins.stampOnSpawn(serverWorld(), SpawnReason.SPAWNER, zombie);
+        final LivingEntity zombie = mock(Zombie.class);
+        MobOrigins.stampOnSpawn(serverWorld(), EntitySpawnReason.SPAWNER, zombie);
         verify(zombie).setAttached(McMMOAttachments.MOB_ORIGIN, MobOrigin.SPAWNER.storageKey());
     }
 
@@ -109,24 +109,24 @@ class MobOriginsTest {
         // disabled feature flag. Neither should reach the attachment: a client-side write is dead
         // weight on a copy of the entity that is never saved, and a null dereference here would crash
         // every spawn of a feature-flagged mob.
-        final World clientWorld = mock(World.class);
+        final Level clientWorld = mock(Level.class);
         when(clientWorld.isClient()).thenReturn(true);
-        final LivingEntity zombie = mock(ZombieEntity.class);
+        final LivingEntity zombie = mock(Zombie.class);
 
-        MobOrigins.stampOnSpawn(clientWorld, SpawnReason.SPAWNER, zombie);
+        MobOrigins.stampOnSpawn(clientWorld, EntitySpawnReason.SPAWNER, zombie);
         verify(zombie, never()).setAttached(eq(McMMOAttachments.MOB_ORIGIN), any());
 
-        MobOrigins.stampOnSpawn(serverWorld(), SpawnReason.SPAWNER, null);
+        MobOrigins.stampOnSpawn(serverWorld(), EntitySpawnReason.SPAWNER, null);
     }
 
     @Test
     void anUnmarkedMobCountsAndAMarkedOneDoesNot() {
-        final LivingEntity unmarked = mock(ZombieEntity.class);
+        final LivingEntity unmarked = mock(Zombie.class);
         when(unmarked.getAttached(McMMOAttachments.MOB_ORIGIN)).thenReturn(null);
         assertSame(MobOrigin.NATURAL, MobOrigins.of(unmarked));
         assertTrue(MobOrigins.countsTowardMastery(unmarked));
 
-        final LivingEntity fromSpawner = mock(ZombieEntity.class);
+        final LivingEntity fromSpawner = mock(Zombie.class);
         when(fromSpawner.getAttached(McMMOAttachments.MOB_ORIGIN))
                 .thenReturn(MobOrigin.SPAWNER.storageKey());
         assertSame(MobOrigin.SPAWNER, MobOrigins.of(fromSpawner));
@@ -137,7 +137,7 @@ class MobOriginsTest {
     void anUnreadableMarkerReadsAsUnknownRatherThanNatural() {
         // getType() is stubbed because it is a format argument on the warn this path logs, and an
         // unstubbed call on a strict mock is its own failure — the MetadataStore null-key lesson.
-        final LivingEntity odd = mock(ZombieEntity.class);
+        final LivingEntity odd = mock(Zombie.class);
         when(odd.getAttached(McMMOAttachments.MOB_ORIGIN)).thenReturn("PLAYER_TAMED_MOB");
         assertSame(MobOrigin.UNKNOWN, MobOrigins.of(odd),
                 "a marker this build cannot parse must stay disqualified, not silently become "
@@ -149,10 +149,10 @@ class MobOriginsTest {
         // ⚠️ The drowned-farm hole. A zombie spawner over water produces drowned through
         // EntityType.create(world, SpawnReason.CONVERSION), which qualifies — so without this the
         // farm launders its own origin one conversion later.
-        final LivingEntity spawnerZombie = mock(ZombieEntity.class);
+        final LivingEntity spawnerZombie = mock(Zombie.class);
         when(spawnerZombie.getAttached(McMMOAttachments.MOB_ORIGIN))
                 .thenReturn(MobOrigin.SPAWNER.storageKey());
-        final LivingEntity drowned = mock(ZombieEntity.class);
+        final LivingEntity drowned = mock(Zombie.class);
 
         MobOrigins.carryThroughConversion(spawnerZombie, drowned);
 
@@ -164,9 +164,9 @@ class MobOriginsTest {
         // The converse, and it is not symmetry for its own sake: writing NATURAL onto the product of
         // a legitimate conversion would put a marker on a mob that has no business carrying one, and
         // the next reader of that marker is a chunk load.
-        final LivingEntity naturalZombie = mock(ZombieEntity.class);
+        final LivingEntity naturalZombie = mock(Zombie.class);
         when(naturalZombie.getAttached(McMMOAttachments.MOB_ORIGIN)).thenReturn(null);
-        final LivingEntity drowned = mock(ZombieEntity.class);
+        final LivingEntity drowned = mock(Zombie.class);
 
         MobOrigins.carryThroughConversion(naturalZombie, drowned);
 
@@ -180,8 +180,8 @@ class MobOriginsTest {
         // Hunter counts mob kills, so an item frame or a boat spawned from a dispenser has no reason
         // to carry a marker into the region file. ArmorStandEntity is a LivingEntity and therefore
         // does get one — harmless, and not worth a second predicate.
-        final ArmorStandEntity stand = mock(ArmorStandEntity.class);
-        MobOrigins.stampOnSpawn(serverWorld(), SpawnReason.DISPENSER, stand);
+        final ArmorStand stand = mock(ArmorStand.class);
+        MobOrigins.stampOnSpawn(serverWorld(), EntitySpawnReason.DISPENSER, stand);
         verify(stand).setAttached(McMMOAttachments.MOB_ORIGIN,
                 MobOrigin.PLAYER_PLACED.storageKey());
     }

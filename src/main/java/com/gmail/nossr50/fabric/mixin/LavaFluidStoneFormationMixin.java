@@ -1,14 +1,14 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.platform.BlockUtils;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.fluid.FluidState;
-import net.minecraft.fluid.LavaFluid;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.WorldAccess;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.material.LavaFluid;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.LevelAccessor;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -35,17 +35,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class LavaFluidStoneFormationMixin {
 
     @Inject(
-            method = "flow(Lnet/minecraft/world/WorldAccess;Lnet/minecraft/util/math/BlockPos;"
-                    + "Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/Direction;"
-                    + "Lnet/minecraft/fluid/FluidState;)V",
+            method = "flow(Lnet/minecraft/world/level/LevelAccessor;Lnet/minecraft/core/BlockPos;"
+                    + "Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/Direction;"
+                    + "Lnet/minecraft/world/level/material/FluidState;)V",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/WorldAccess;setBlockState"
-                            + "(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;I)Z"),
+                    target = "Lnet/minecraft/world/level/LevelAccessor;setBlockState"
+                            + "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z"),
             allow = 1)
-    private void mcmmo$onLavaFormedStone(WorldAccess world, BlockPos pos, BlockState state,
+    private void mcmmo$onLavaFormedStone(LevelAccessor world, BlockPos pos, BlockState state,
             Direction direction, FluidState fluidState, CallbackInfo ci) {
-        if (world instanceof ServerWorld serverWorld) {
+        if (world instanceof ServerLevel serverWorld) {
             BlockUtils.markLavaFormed(serverWorld, pos, Blocks.STONE);
         }
     }

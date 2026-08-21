@@ -2,14 +2,14 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
 import java.util.function.BiConsumer;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.passive.ArmadilloEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.loot.LootTable;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.armadillo.Armadillo;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.storage.loot.LootTable;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -40,7 +40,7 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
  * D-H5's cooldown covers brushing as well as milking, and why the XP hangs off an item actually being
  * delivered rather than off the attempt.
  */
-@Mixin(ArmadilloEntity.class)
+@Mixin(Armadillo.class)
 public abstract class ArmadilloBrushMixin {
 
     /**
@@ -61,13 +61,13 @@ public abstract class ArmadilloBrushMixin {
      */
     @ModifyArg(method = "brushScute", allow = 1, index = 4,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/entity/passive/ArmadilloEntity;forEachBrushedItem("
-                            + "Lnet/minecraft/server/world/ServerWorld;"
-                            + "Lnet/minecraft/registry/RegistryKey;Lnet/minecraft/entity/Entity;"
-                            + "Lnet/minecraft/item/ItemStack;Ljava/util/function/BiConsumer;)Z"))
-    private BiConsumer<ServerWorld, ItemStack> mcmmo$onBrushedItems(ServerWorld world,
-            RegistryKey<LootTable> lootTable, Entity brusher, ItemStack brush,
-            BiConsumer<ServerWorld, ItemStack> dropper) {
+                    target = "Lnet/minecraft/world/entity/animal/armadillo/Armadillo;forEachBrushedItem("
+                            + "Lnet/minecraft/server/level/ServerLevel;"
+                            + "Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/entity/Entity;"
+                            + "Lnet/minecraft/world/item/ItemStack;Ljava/util/function/BiConsumer;)Z"))
+    private BiConsumer<ServerLevel, ItemStack> mcmmo$onBrushedItems(ServerLevel world,
+            ResourceKey<LootTable> lootTable, Entity brusher, ItemStack brush,
+            BiConsumer<ServerLevel, ItemStack> dropper) {
         return HusbandryListener.onBrushedItems((Entity) (Object) this, brusher, dropper);
     }
 
@@ -82,11 +82,11 @@ public abstract class ArmadilloBrushMixin {
      * {@code interactMob}, after {@code brushScute} has returned — so it hangs off that call instead.
      * There is exactly one {@code damage} call in the method.
      */
-    @ModifyArg(method = "interactMob(Lnet/minecraft/entity/player/PlayerEntity;"
-            + "Lnet/minecraft/util/Hand;)Lnet/minecraft/util/ActionResult;", allow = 1, index = 0,
+    @ModifyArg(method = "interactMob(Lnet/minecraft/world/entity/player/Player;"
+            + "Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;", allow = 1, index = 0,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/item/ItemStack;damage(ILnet/minecraft/entity/"
-                            + "LivingEntity;Lnet/minecraft/entity/EquipmentSlot;)V"))
+                    target = "Lnet/minecraft/world/item/ItemStack;damage(ILnet/minecraft/entity/"
+                            + "LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;)V"))
     private int mcmmo$saveBrushDurability(int damageAmount, LivingEntity holder,
             EquipmentSlot slot) {
         return HusbandryListener.onBrushToolDamaged((Entity) (Object) this, damageAmount);

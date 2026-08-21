@@ -1,12 +1,12 @@
 package com.gmail.nossr50.util;
 
 import java.util.Optional;
-import net.minecraft.Bootstrap;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.SharedConstants;
-import net.minecraft.entity.EntityType;
-import net.minecraft.item.Item;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.Item;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 
 /**
  * Shared one-time Minecraft bootstrap for unit tests that touch live vanilla registries (item/block
@@ -52,7 +52,7 @@ public final class McTestRegistries {
      */
     public static Optional<Item> optionalVanillaItem(String path) {
         final Identifier id = Identifier.ofVanilla(path);
-        return Registries.ITEM.containsId(id) ? Optional.of(Registries.ITEM.get(id)) : Optional.empty();
+        return BuiltInRegistries.ITEM.containsId(id) ? Optional.of(BuiltInRegistries.ITEM.get(id)) : Optional.empty();
     }
 
     /**
@@ -64,8 +64,8 @@ public final class McTestRegistries {
      * every band.
      */
     public static boolean itemRegistryIsPopulated() {
-        return Registries.ITEM.containsId(Identifier.ofVanilla("iron_sword"))
-                && Registries.ITEM.containsId(Identifier.ofVanilla("stone"));
+        return BuiltInRegistries.ITEM.containsId(Identifier.ofVanilla("iron_sword"))
+                && BuiltInRegistries.ITEM.containsId(Identifier.ofVanilla("stone"));
     }
 
     /**
@@ -88,8 +88,8 @@ public final class McTestRegistries {
      */
     public static Optional<EntityType<?>> optionalVanillaEntityType(String path) {
         final Identifier id = Identifier.ofVanilla(path);
-        return Registries.ENTITY_TYPE.containsId(id)
-                ? Optional.of(Registries.ENTITY_TYPE.get(id))
+        return BuiltInRegistries.ENTITY_TYPE.containsId(id)
+                ? Optional.of(BuiltInRegistries.ENTITY_TYPE.get(id))
                 : Optional.empty();
     }
 
@@ -102,7 +102,7 @@ public final class McTestRegistries {
      * {@code cow} are chosen because they predate every version in scope by roughly a decade.
      */
     public static boolean entityTypeRegistryIsPopulated() {
-        return Registries.ENTITY_TYPE.containsId(Identifier.ofVanilla("zombie"))
-                && Registries.ENTITY_TYPE.containsId(Identifier.ofVanilla("cow"));
+        return BuiltInRegistries.ENTITY_TYPE.containsId(Identifier.ofVanilla("zombie"))
+                && BuiltInRegistries.ENTITY_TYPE.containsId(Identifier.ofVanilla("cow"));
     }
 }

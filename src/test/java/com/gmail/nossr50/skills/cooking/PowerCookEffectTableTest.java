@@ -14,16 +14,16 @@ import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ConsumableComponent;
-import net.minecraft.component.type.FoodComponent;
-import net.minecraft.entity.effect.StatusEffect;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.Consumable;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Holder;
+import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -139,7 +139,7 @@ class PowerCookEffectTableTest {
         // canApplyUpdateEffect. Asserted at duration 1 AND at 20: an effect that declines to fire
         // at 1 tick but fires at every tick thereafter would pass the cheaper check alone.
         for (String food : table.getKeys(false)) {
-            final StatusEffect effect = resolve(food).value();
+            final MobEffect effect = resolve(food).value();
             assertFalse(effect.canApplyUpdateEffect(1, 0),
                     () -> food + " maps to a status effect that applies EVERY TICK. Three seconds of"
                             + " one of those is sixty applications; Saturation would fill the hunger"
@@ -153,11 +153,11 @@ class PowerCookEffectTableTest {
     void theCadenceCheckActuallyCatchesAPerTickEffect() {
         // The reference point for the test above. Without it, a canApplyUpdateEffect that always
         // answered false -- or a loop over an empty section -- would look identical to a clean table.
-        assertTrue(StatusEffects.SATURATION.value().canApplyUpdateEffect(1, 0),
+        assertTrue(MobEffects.SATURATION.value().canApplyUpdateEffect(1, 0),
                 "Saturation must still be per-tick, or the check above is measuring nothing");
         // ⚠️ And the reason the check is not `instanceof InstantStatusEffect`: four of the seven
         // per-tick effects are not subclasses of it. Hunger is one of them.
-        assertTrue(StatusEffects.HUNGER.value().canApplyUpdateEffect(1, 0));
+        assertTrue(MobEffects.HUNGER.value().canApplyUpdateEffect(1, 0));
     }
 
     // --- The bans and the exclusions --------------------------------------------------------------
@@ -167,10 +167,10 @@ class PowerCookEffectTableTest {
         // Banned outright, at any duration: 15 seconds of either is a lava-lake shortcut and a
         // monument shortcut, and both are Alchemy's to sell.
         for (String food : table.getKeys(false)) {
-            final RegistryEntry<StatusEffect> effect = resolve(food);
-            assertFalse(effect.equals(StatusEffects.FIRE_RESISTANCE),
+            final Holder<MobEffect> effect = resolve(food);
+            assertFalse(effect.equals(MobEffects.FIRE_RESISTANCE),
                     () -> food + " grants Fire Resistance, which is banned from this table");
-            assertFalse(effect.equals(StatusEffects.WATER_BREATHING),
+            assertFalse(effect.equals(MobEffects.WATER_BREATHING),
                     () -> food + " grants Water Breathing, which is banned from this table");
         }
     }
@@ -181,8 +181,8 @@ class PowerCookEffectTableTest {
         // four of nine and still summed to nine, which is why nobody re-counted it. An effect a food
         // grants can live on any of three components; this is the one the eat path walks.
         for (String food : table.getKeys(false)) {
-            final ConsumableComponent consumable =
-                    new ItemStack(item(food)).get(DataComponentTypes.CONSUMABLE);
+            final Consumable consumable =
+                    new ItemStack(item(food)).get(DataComponents.CONSUMABLE);
             assertNotNull(consumable, () -> food + " is not consumable");
             assertTrue(consumable.onConsumeEffects().isEmpty(),
                     () -> food + " already carries a vanilla consume effect; Power Cook must not"
@@ -196,11 +196,11 @@ class PowerCookEffectTableTest {
     void everyRowIsARealEdibleItem() {
         for (String food : table.getKeys(false)) {
             final ItemStack stack = new ItemStack(item(food));
-            assertNotNull(stack.get(DataComponentTypes.FOOD),
+            assertNotNull(stack.get(DataComponents.FOOD),
                     () -> food + " has no FOOD component");
             // ⚠️ FOOD is not edibility. Eating runs through ConsumableComponent#finishConsumption,
             // which is what reaches FoodComponent#onConsume -- the seam Power Cook rides.
-            assertNotNull(stack.get(DataComponentTypes.CONSUMABLE),
+            assertNotNull(stack.get(DataComponents.CONSUMABLE),
                     () -> food + " has no CONSUMABLE component, so the eat seam can never fire");
         }
     }
@@ -211,7 +211,7 @@ class PowerCookEffectTableTest {
         // so a zero-nutrition food is unreachable for Power Cook no matter how it is configured.
         // Today no row is affected; this is what would say so if one ever were.
         for (String food : table.getKeys(false)) {
-            final FoodComponent component = new ItemStack(item(food)).get(DataComponentTypes.FOOD);
+            final FoodProperties component = new ItemStack(item(food)).get(DataComponents.FOOD);
             assertNotNull(component);
             assertTrue(component.nutrition() >= 1,
                     () -> food + " restores no hunger, so the nutrition guard above the chain would"
@@ -232,9 +232,9 @@ class PowerCookEffectTableTest {
     // --- Helpers ----------------------------------------------------------------------------------
 
     /** Resolve a row's configured effect name the same way the eat seam does. */
-    private RegistryEntry<StatusEffect> resolve(String foodConfigString) {
+    private Holder<MobEffect> resolve(String foodConfigString) {
         final String name = table.getString(foodConfigString);
-        final RegistryEntry<StatusEffect> effect = Potions.matchEffect(name);
+        final Holder<MobEffect> effect = Potions.matchEffect(name);
         // A name that does not resolve disables its row silently -- the failure mode a typo has.
         assertNotNull(effect,
                 () -> foodConfigString + " maps to '" + name + "', which is not a status effect");
@@ -244,7 +244,7 @@ class PowerCookEffectTableTest {
     /** The registry item a config key names, e.g. {@code Cooked_Beef} → {@code cooked_beef}. */
     private static Item item(String foodConfigString) {
         final String path = foodConfigString.toLowerCase(Locale.ENGLISH);
-        final Item found = Registries.ITEM.getOptionalValue(Identifier.ofVanilla(path)).orElse(null);
+        final Item found = BuiltInRegistries.ITEM.getOptionalValue(Identifier.ofVanilla(path)).orElse(null);
         assertNotNull(found, () -> foodConfigString + " is not a vanilla item (" + path + ")");
         return found;
     }

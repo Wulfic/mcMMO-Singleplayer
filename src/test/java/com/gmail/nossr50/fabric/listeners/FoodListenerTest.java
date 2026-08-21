@@ -18,19 +18,19 @@ import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.UUID;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.FoodComponent;
-import net.minecraft.entity.effect.StatusEffect;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.player.HungerManager;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.food.FoodData;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Holder;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,9 +70,9 @@ class FoodListenerTest {
      */
     private static final int POWER_COOK_TICKS = 137;
 
-    private ServerWorld world;
-    private ServerPlayerEntity player;
-    private HungerManager hunger;
+    private ServerLevel world;
+    private ServerPlayer player;
+    private FoodData hunger;
     private McMMOPlayer mmoPlayer;
     private HerbalismManager herbalism;
     private FishingManager fishing;
@@ -80,17 +80,17 @@ class FoodListenerTest {
 
     @BeforeEach
     void setUp() {
-        world = mock(ServerWorld.class);
+        world = mock(ServerLevel.class);
         lenient().when(world.isClient()).thenReturn(false);
 
         // A real HungerManager, not a mock: the bonus is applied through vanilla's own clamping
         // setters, and a mock would happily record a food level of 40 on a 20-point bar.
-        hunger = new HungerManager();
+        hunger = new FoodData();
         hunger.setFoodLevel(START_FOOD_LEVEL);
         hunger.setSaturationLevel(0.0f);
 
         final UUID uuid = UUID.randomUUID();
-        player = mock(ServerPlayerEntity.class);
+        player = mock(ServerPlayer.class);
         lenient().when(player.getUuid()).thenReturn(uuid);
         lenient().when(player.getHungerManager()).thenReturn(hunger);
 
@@ -202,7 +202,7 @@ class FoodListenerTest {
 
         assertEquals(START_FOOD_LEVEL + nutritionOf(Items.BREAD) + DIET_BONUS, hunger.getFoodLevel(),
                 "the Farmer's Diet bonus must survive Cooking joining this seam");
-        assertEffectApplied(StatusEffects.SPEED, POWER_COOK_TICKS);
+        assertEffectApplied(MobEffects.SPEED, POWER_COOK_TICKS);
     }
 
     @Test
@@ -211,7 +211,7 @@ class FoodListenerTest {
 
         eat(Items.COOKED_BEEF);
 
-        assertEffectApplied(StatusEffects.STRENGTH, POWER_COOK_TICKS);
+        assertEffectApplied(MobEffects.STRENGTH, POWER_COOK_TICKS);
     }
 
     @Test
@@ -262,11 +262,11 @@ class FoodListenerTest {
         // is the assumption about SOMEBODY ELSE'S code -- if a future MC version changes
         // StatusEffectInstance#upgrade, eating a steak starts cutting a 3:00 Strength II down to
         // 15 seconds of Strength I and nothing else in this suite would notice.
-        final StatusEffectInstance brewedPotion =
-                new StatusEffectInstance(StatusEffects.STRENGTH, 3600, 1);
+        final MobEffectInstance brewedPotion =
+                new MobEffectInstance(MobEffects.STRENGTH, 3600, 1);
 
         final boolean changed = brewedPotion.upgrade(
-                new StatusEffectInstance(StatusEffects.STRENGTH, POWER_COOK_TICKS, 0));
+                new MobEffectInstance(MobEffects.STRENGTH, POWER_COOK_TICKS, 0));
 
         assertFalse(changed, "a weaker, shorter effect must not replace a brewed potion");
         assertEquals(3600, brewedPotion.getDuration(), "the potion's duration must be untouched");
@@ -277,11 +277,11 @@ class FoodListenerTest {
     void powerCookStillExtendsAnEffectOfItsOwnStrength() {
         // The other direction, or the test above is equally consistent with an effect that can never
         // be applied at all. Equal amplifier and longer duration IS accepted by vanilla.
-        final StatusEffectInstance running =
-                new StatusEffectInstance(StatusEffects.STRENGTH, 20, 0);
+        final MobEffectInstance running =
+                new MobEffectInstance(MobEffects.STRENGTH, 20, 0);
 
         final boolean changed = running.upgrade(
-                new StatusEffectInstance(StatusEffects.STRENGTH, POWER_COOK_TICKS, 0));
+                new MobEffectInstance(MobEffects.STRENGTH, POWER_COOK_TICKS, 0));
 
         assertTrue(changed, "a longer effect at the same strength must extend the running one");
         assertEquals(POWER_COOK_TICKS, running.getDuration());
@@ -300,14 +300,14 @@ class FoodListenerTest {
      */
     private void powerCooked(Item item, String effectName, int ticks) {
         final String key = ConfigStringUtils.getMaterialConfigString(
-                Registries.ITEM.getId(item).getPath());
+                BuiltInRegistries.ITEM.getId(item).getPath());
         when(cooking.powerCookEffect(key))
                 .thenReturn(new CookingManager.PowerCookEffect(effectName, ticks));
     }
 
     /** Assert exactly one effect was applied, and that it is this one. */
-    private void assertEffectApplied(RegistryEntry<StatusEffect> expected, int expectedTicks) {
-        final StatusEffectInstance applied = captureEffect();
+    private void assertEffectApplied(Holder<MobEffect> expected, int expectedTicks) {
+        final MobEffectInstance applied = captureEffect();
         assertTrue(applied.equals(expected),
                 "expected " + expected.getIdAsString() + " but got "
                         + applied.getEffectType().getIdAsString());
@@ -315,9 +315,9 @@ class FoodListenerTest {
     }
 
     /** The single status effect the listener handed to vanilla. */
-    private StatusEffectInstance captureEffect() {
-        final ArgumentCaptor<StatusEffectInstance> captor =
-                ArgumentCaptor.forClass(StatusEffectInstance.class);
+    private MobEffectInstance captureEffect() {
+        final ArgumentCaptor<MobEffectInstance> captor =
+                ArgumentCaptor.forClass(MobEffectInstance.class);
         verify(player).addStatusEffect(captor.capture());
         return captor.getValue();
     }
@@ -344,7 +344,7 @@ class FoodListenerTest {
      */
     private void eat(Item item) {
         final ItemStack stack = new ItemStack(item);
-        final FoodComponent food = stack.get(DataComponentTypes.FOOD);
+        final FoodProperties food = stack.get(DataComponents.FOOD);
         if (food == null) {
             throw new AssertionError(item + " has no FOOD component; the seam can never fire for it");
         }
@@ -356,7 +356,7 @@ class FoodListenerTest {
 
     /** The food's own nutrition, read off the registry rather than recalled. */
     private static int nutritionOf(Item item) {
-        final FoodComponent food = new ItemStack(item).get(DataComponentTypes.FOOD);
+        final FoodProperties food = new ItemStack(item).get(DataComponents.FOOD);
         if (food == null) {
             throw new AssertionError(item + " has no FOOD component");
         }

@@ -10,10 +10,10 @@ import com.gmail.nossr50.platform.text.TextUtils;
 import com.gmail.nossr50.util.player.PlayerLevelUtils;
 import com.gmail.nossr50.util.text.StringUtils;
 import java.util.Locale;
-import net.minecraft.entity.boss.BossBar;
-import net.minecraft.entity.boss.ServerBossBar;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
+import net.minecraft.world.BossEvent;
+import net.minecraft.server.level.ServerBossEvent;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.chat.Component;
 
 /**
  * The concrete, {@code ServerBossBar}-backed {@link ExperienceBar}: mcMMO's on-screen XP progress
@@ -31,7 +31,7 @@ public final class ExperienceBarWrapper implements ExperienceBar {
 
     private final PrimarySkillType primarySkillType;
     private final McMMOPlayer mmoPlayer;
-    private final ServerBossBar bossBar;
+    private final ServerBossEvent bossBar;
 
     /** Capitalised skill name used for the {@code XPBar.<Skill>} locale key (e.g. "Mining"). */
     private final String niceSkillName;
@@ -46,7 +46,7 @@ public final class ExperienceBarWrapper implements ExperienceBar {
         this.lastLevelRendered = mmoPlayer.getSkillLevel(primarySkillType);
 
         final ExperienceConfig config = McMMOMod.getExperienceConfig();
-        this.bossBar = new ServerBossBar(
+        this.bossBar = new ServerBossEvent(
                 renderTitle(),
                 mapColor(config.getExperienceBarColorName(primarySkillType)),
                 mapStyle(config.getExperienceBarStyleName(primarySkillType)));
@@ -76,7 +76,7 @@ public final class ExperienceBarWrapper implements ExperienceBar {
 
     @Override
     public void show() {
-        final ServerPlayerEntity current = mmoPlayer.getPlayer().unwrap();
+        final ServerPlayer current = mmoPlayer.getPlayer().unwrap();
         // Re-point at the live handle: after a respawn/End-exit the entity captured previously is
         // stale, and the bar must follow the current one (see the class javadoc). In the steady
         // state the handle is already subscribed and this is a no-op.
@@ -94,7 +94,7 @@ public final class ExperienceBarWrapper implements ExperienceBar {
 
     // --- title ---------------------------------------------------------------
 
-    private Text renderTitle() {
+    private Component renderTitle() {
         return TextUtils.toText(renderTitleText());
     }
 
@@ -148,7 +148,7 @@ public final class ExperienceBarWrapper implements ExperienceBar {
                         mmoPlayer.getSkillLevel(primarySkillType));
     }
 
-    private BossBar.Color resolveColor() {
+    private BossEvent.BossBarColor resolveColor() {
         return resolveColor(isEarlyGameBoosted(),
                 McMMOMod.getExperienceConfig().getExperienceBarColorName(primarySkillType));
     }
@@ -160,9 +160,9 @@ public final class ExperienceBarWrapper implements ExperienceBar {
      * <p>Static and package-private so both branches are testable without a live boss bar — building
      * a real wrapper needs a bound config, a tracked player and a server.
      */
-    static BossBar.Color resolveColor(boolean earlyGameBoosted, String configuredColorName) {
+    static BossEvent.BossBarColor resolveColor(boolean earlyGameBoosted, String configuredColorName) {
         if (earlyGameBoosted) {
-            return BossBar.Color.YELLOW;
+            return BossEvent.BossBarColor.YELLOW;
         }
         return mapColor(configuredColorName);
     }
@@ -174,12 +174,12 @@ public final class ExperienceBarWrapper implements ExperienceBar {
      * (PINK/BLUE/RED/GREEN/YELLOW/PURPLE/WHITE) are identical to vanilla's, so this is a direct
      * {@code valueOf} with a PINK fallback for an unrecognised config value.
      */
-    static BossBar.Color mapColor(String barColorName) {
+    static BossEvent.BossBarColor mapColor(String barColorName) {
         try {
-            return BossBar.Color.valueOf(barColorName.trim().toUpperCase(Locale.ROOT));
+            return BossEvent.BossBarColor.valueOf(barColorName.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             McMMOMod.LOGGER.warn("Unknown XP bar color '{}', defaulting to PINK", barColorName);
-            return BossBar.Color.PINK;
+            return BossEvent.BossBarColor.PINK;
         }
     }
 
@@ -188,17 +188,17 @@ public final class ExperienceBarWrapper implements ExperienceBar {
      * {@code PROGRESS} and {@code SEGMENTED_n} becomes {@code NOTCHED_n}. Falls back to
      * {@code NOTCHED_6} (the bundled default) for an unrecognised value.
      */
-    static BossBar.Style mapStyle(String barStyleName) {
+    static BossEvent.BossBarOverlay mapStyle(String barStyleName) {
         return switch (barStyleName.trim().toUpperCase(Locale.ROOT)) {
-            case "SOLID", "PROGRESS" -> BossBar.Style.PROGRESS;
-            case "SEGMENTED_6", "NOTCHED_6" -> BossBar.Style.NOTCHED_6;
-            case "SEGMENTED_10", "NOTCHED_10" -> BossBar.Style.NOTCHED_10;
-            case "SEGMENTED_12", "NOTCHED_12" -> BossBar.Style.NOTCHED_12;
-            case "SEGMENTED_20", "NOTCHED_20" -> BossBar.Style.NOTCHED_20;
+            case "SOLID", "PROGRESS" -> BossEvent.BossBarOverlay.PROGRESS;
+            case "SEGMENTED_6", "NOTCHED_6" -> BossEvent.BossBarOverlay.NOTCHED_6;
+            case "SEGMENTED_10", "NOTCHED_10" -> BossEvent.BossBarOverlay.NOTCHED_10;
+            case "SEGMENTED_12", "NOTCHED_12" -> BossEvent.BossBarOverlay.NOTCHED_12;
+            case "SEGMENTED_20", "NOTCHED_20" -> BossEvent.BossBarOverlay.NOTCHED_20;
             default -> {
                 McMMOMod.LOGGER.warn("Unknown XP bar style '{}', defaulting to NOTCHED_6",
                         barStyleName);
-                yield BossBar.Style.NOTCHED_6;
+                yield BossEvent.BossBarOverlay.NOTCHED_6;
             }
         };
     }

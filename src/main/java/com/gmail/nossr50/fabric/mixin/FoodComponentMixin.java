@@ -1,11 +1,11 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.FoodListener;
-import net.minecraft.component.type.ConsumableComponent;
-import net.minecraft.component.type.FoodComponent;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.world.World;
+import net.minecraft.world.item.component.Consumable;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -27,12 +27,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * {@link FoodListener}, rather than modifying the component's nutrition on the way in: {@code FoodComponent}
  * is a record shared by every stack of that item, so it must never be rewritten per-player.
  */
-@Mixin(FoodComponent.class)
+@Mixin(FoodProperties.class)
 public abstract class FoodComponentMixin {
 
     @Inject(method = "onConsume", allow = 1, at = @At("TAIL"))
-    private void mcmmo$onFoodConsumed(World world, LivingEntity user, ItemStack stack,
-            ConsumableComponent consumable, CallbackInfo ci) {
-        FoodListener.onFoodConsumed(world, user, stack, (FoodComponent) (Object) this);
+    private void mcmmo$onFoodConsumed(Level world, LivingEntity user, ItemStack stack,
+            Consumable consumable, CallbackInfo ci) {
+        FoodListener.onFoodConsumed(world, user, stack, (FoodProperties) (Object) this);
     }
 }

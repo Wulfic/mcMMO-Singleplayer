@@ -17,8 +17,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -89,12 +89,12 @@ class ConfigIdManifestTest {
 
     @Test
     void theManifestListsExactlyTheItemsThisMinecraftVersionHas() throws IOException {
-        assertRegistryMatchesManifest(ITEM, vanillaIds(Registries.ITEM.getIds()));
+        assertRegistryMatchesManifest(ITEM, vanillaIds(BuiltInRegistries.ITEM.getIds()));
     }
 
     @Test
     void theManifestListsExactlyTheBlocksThisMinecraftVersionHas() throws IOException {
-        assertRegistryMatchesManifest(BLOCK, vanillaIds(Registries.BLOCK.getIds()));
+        assertRegistryMatchesManifest(BLOCK, vanillaIds(BuiltInRegistries.BLOCK.getIds()));
     }
 
     private void assertRegistryMatchesManifest(String kind, Set<String> live) throws IOException {

@@ -1,11 +1,11 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.platform.BlockUtils;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.FluidBlock;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,7 +21,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * — nobody placed it — and it is manufactured for free, on demand, forever. At the shipped Mining
  * prices a basalt generator is 40 XP per block and fully automatable.
  *
- * <p><b>The seam</b> ({@code javap -c -p net.minecraft.block.FluidBlock}):
+ * <p><b>The seam</b> ({@code javap -c -p net.minecraft.world.level.block.LiquidBlock}):
  * {@code receiveNeighborFluids(World, BlockPos, BlockState)} is the single funnel for all three
  * formations, and each one writes to {@code pos} — the lava block's own position, the second
  * argument — via {@code World#setBlockState}. Its boolean return is the unambiguous marker:
@@ -35,19 +35,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *
  * @see BlockUtils#markLavaFormed
  */
-@Mixin(FluidBlock.class)
+@Mixin(LiquidBlock.class)
 public abstract class FluidBlockFormationMixin {
 
     @Inject(
-            method = "receiveNeighborFluids(Lnet/minecraft/world/World;"
-                    + "Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)Z", allow = 3,
+            method = "receiveNeighborFluids(Lnet/minecraft/world/level/Level;"
+                    + "Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z", allow = 3,
             at = @At("RETURN"))
-    private void mcmmo$onFluidFormedBlock(World world, BlockPos pos, BlockState state,
+    private void mcmmo$onFluidFormedBlock(Level world, BlockPos pos, BlockState state,
             CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValueZ()) {
             return; // true = nothing formed; the lava is still lava.
         }
-        if (!(world instanceof ServerWorld)) {
+        if (!(world instanceof ServerLevel)) {
             return; // the client world runs this too; the tracker is server-side session state.
         }
         // Read the block back rather than re-deriving which branch ran: the state at pos is now

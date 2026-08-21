@@ -3,8 +3,8 @@ package com.gmail.nossr50.platform;
 import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -37,7 +37,7 @@ public final class ItemUtils {
      * is {@code minecraft:air}, i.e. path {@code air}, which is in none of the tool/armor sets.
      */
     private static @NotNull String idPath(@NotNull ItemStack item) {
-        return Registries.ITEM.getId(item.getItem()).getPath();
+        return BuiltInRegistries.ITEM.getId(item.getItem()).getPath();
     }
 
     // --- Weapons ------------------------------------------------------------

@@ -2,11 +2,11 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.RepairSalvageListener;
 import com.gmail.nossr50.platform.BlockUtils;
-import net.minecraft.block.BlockState;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemPlacementContext;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -36,16 +36,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BlockPlaceMixin {
 
     @Inject(
-            method = "place(Lnet/minecraft/item/ItemPlacementContext;"
-                    + "Lnet/minecraft/block/BlockState;)Z", allow = 1,
+            method = "place(Lnet/minecraft/world/item/context/BlockPlaceContext;"
+                    + "Lnet/minecraft/world/level/block/state/BlockState;)Z", allow = 1,
             at = @At("RETURN"))
-    private void mcmmo$onBlockPlaced(ItemPlacementContext context, BlockState state,
+    private void mcmmo$onBlockPlaced(BlockPlaceContext context, BlockState state,
             CallbackInfoReturnable<Boolean> cir) {
         if (!cir.getReturnValueZ()) {
             return; // setBlockState reported no change: nothing was placed.
         }
-        final World world = context.getWorld();
-        if (world instanceof ServerWorld serverWorld) {
+        final Level world = context.getWorld();
+        if (world instanceof ServerLevel serverWorld) {
             BlockUtils.markPlaced(serverWorld, context.getBlockPos());
             // Legacy fired both of these from the same BlockPlaceEvent handler.
             RepairSalvageListener.onAnvilPlaced(serverWorld, context.getBlockPos(),

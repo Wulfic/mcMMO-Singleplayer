@@ -16,7 +16,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.commands.CommandSourceStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -35,18 +35,18 @@ class McMMOCommandsTest {
         McTestRegistries.bootstrap();
     }
 
-    private static CommandDispatcher<ServerCommandSource> registered() {
-        final CommandDispatcher<ServerCommandSource> dispatcher = new CommandDispatcher<>();
+    private static CommandDispatcher<CommandSourceStack> registered() {
+        final CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
         McMMOCommands.registerAll(dispatcher);
         return dispatcher;
     }
 
     @Test
     void everyCheatCommandCarriesTheOpGateAndNoOtherCommandDoes() {
-        final CommandDispatcher<ServerCommandSource> dispatcher = registered();
+        final CommandDispatcher<CommandSourceStack> dispatcher = registered();
 
         for (Map.Entry<String, Boolean> entry : McMMOCommands.commandGating().entrySet()) {
-            final CommandNode<ServerCommandSource> node =
+            final CommandNode<CommandSourceStack> node =
                     dispatcher.getRoot().getChild(entry.getKey());
             assertNotNull(node, "/" + entry.getKey() + " is not registered at all");
 
@@ -72,7 +72,7 @@ class McMMOCommandsTest {
         // command got registered and the gating question was never asked. A new command that is not
         // in commandGating() fails here, which forces the question to be asked exactly once.
         final Set<String> registeredNames = new TreeSet<>();
-        for (CommandNode<ServerCommandSource> node : registered().getRoot().getChildren()) {
+        for (CommandNode<CommandSourceStack> node : registered().getRoot().getChildren()) {
             registeredNames.add(node.getName());
         }
 

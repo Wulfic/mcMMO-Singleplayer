@@ -5,14 +5,14 @@ import com.gmail.nossr50.platform.text.TextUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.LoreComponent;
-import net.minecraft.component.type.PotionContentsComponent;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.potion.Potion;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.text.Text;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.ItemLore;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.alchemy.Potion;
+import net.minecraft.core.Holder;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +66,7 @@ public final class ItemSpecBuilder {
 
         final ItemSpec.PotionSpec potion = spec.getPotion();
         if (potion != null) {
-            final Optional<RegistryEntry<Potion>> base = Potions.matchPotion(
+            final Optional<Holder<Potion>> base = Potions.matchPotion(
                     potion.potionType(), potion.upgraded(), potion.extended());
             if (base.isEmpty()) {
                 LOGGER.warn("Could not resolve potion type '{}' (upgraded={}, extended={}) for"
@@ -75,20 +75,20 @@ public final class ItemSpecBuilder {
                         spec.getMaterialId());
                 return Optional.empty();
             }
-            stack.set(DataComponentTypes.POTION_CONTENTS, new PotionContentsComponent(base.get()));
+            stack.set(DataComponents.POTION_CONTENTS, new PotionContents(base.get()));
         }
 
         if (spec.getCustomName() != null) {
-            stack.set(DataComponentTypes.CUSTOM_NAME, TextUtils.toText(spec.getCustomName()));
+            stack.set(DataComponents.CUSTOM_NAME, TextUtils.toText(spec.getCustomName()));
         }
 
         final List<String> lore = spec.getLore();
         if (!lore.isEmpty()) {
-            final List<Text> lines = new ArrayList<>(lore.size());
+            final List<Component> lines = new ArrayList<>(lore.size());
             for (String line : lore) {
                 lines.add(TextUtils.toText(line));
             }
-            stack.set(DataComponentTypes.LORE, new LoreComponent(lines));
+            stack.set(DataComponents.LORE, new ItemLore(lines));
         }
 
         return Optional.of(stack);

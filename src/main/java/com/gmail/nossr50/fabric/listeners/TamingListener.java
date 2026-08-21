@@ -4,10 +4,10 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerPlayer;
 
 /**
  * The K7 Taming XP hook: awards Taming XP when a player tames an animal (CONVERSION_TODO §B). Replaces
@@ -37,8 +37,8 @@ public final class TamingListener {
      * @param owner the player who tamed the animal (mixin passes the vanilla {@code PlayerEntity})
      * @param tamed the entity that was tamed
      */
-    public static void onEntityTamed(PlayerEntity owner, Entity tamed) {
-        if (!(owner instanceof ServerPlayerEntity serverPlayer)) {
+    public static void onEntityTamed(Player owner, Entity tamed) {
+        if (!(owner instanceof ServerPlayer serverPlayer)) {
             return; // client-side / null owner — the authoritative award happens on the server.
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
@@ -51,7 +51,7 @@ public final class TamingListener {
         }
 
         final String entityConfigString = ConfigStringUtils.getConfigEntityTypeString(
-                Registries.ENTITY_TYPE.getId(tamed.getType()).getPath());
+                BuiltInRegistries.ENTITY_TYPE.getId(tamed.getType()).getPath());
         taming.awardTamingXP(entityConfigString);
     }
 }

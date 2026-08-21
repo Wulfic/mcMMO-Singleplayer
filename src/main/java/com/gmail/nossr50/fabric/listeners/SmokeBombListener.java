@@ -13,13 +13,13 @@ import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.world.World;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -55,22 +55,22 @@ public final class SmokeBombListener {
         UseItemCallback.EVENT.register(SmokeBombListener::onUseItem);
     }
 
-    private static ActionResult onUseItem(PlayerEntity player, World world, Hand hand) {
-        if (hand != Hand.MAIN_HAND || world.isClient()
-                || !(player instanceof ServerPlayerEntity serverPlayer)) {
-            return ActionResult.PASS;
+    private static InteractionResult onUseItem(Player player, Level world, InteractionHand hand) {
+        if (hand != InteractionHand.MAIN_HAND || world.isClient()
+                || !(player instanceof ServerPlayer serverPlayer)) {
+            return InteractionResult.PASS;
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
         if (mmoPlayer == null) {
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
         if (!mmoPlayer.getPlayer().isHoldingItem(triggerItem())) {
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
         tryActivate(mmoPlayer, serverPlayer);
         // Always PASS: the trigger item is never consumed and mcMMO is observing the click, not
         // replacing it. Gunpowder has no vanilla use action to suppress anyway.
-        return ActionResult.PASS;
+        return InteractionResult.PASS;
     }
 
     private static String triggerItem() {
@@ -80,7 +80,7 @@ public final class SmokeBombListener {
     }
 
     private static void tryActivate(@NotNull McMMOPlayer mmoPlayer,
-            @NotNull ServerPlayerEntity player) {
+            @NotNull ServerPlayer player) {
         if (mmoPlayer.getAbilityMode(SuperAbilityType.SMOKE_BOMB)) {
             return; // Already vanished.
         }
@@ -127,7 +127,7 @@ public final class SmokeBombListener {
         return Math.max(seconds * Misc.TICK_CONVERSION_FACTOR, stealth.getSmokeBombDurationTicks());
     }
 
-    private static void activate(@NotNull McMMOPlayer mmoPlayer, @NotNull ServerPlayerEntity player,
+    private static void activate(@NotNull McMMOPlayer mmoPlayer, @NotNull ServerPlayer player,
             int durationTicks) {
         if (mmoPlayer.useChatNotifications()) {
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUPER_ABILITY,
@@ -144,7 +144,7 @@ public final class SmokeBombListener {
 
         // (effect, duration, amplifier, ambient, showParticles, showIcon) — particles off so the
         // effect cannot betray the player it is hiding; icon on, since only they can see it.
-        player.addStatusEffect(new StatusEffectInstance(StatusEffects.INVISIBILITY, durationTicks,
+        player.addStatusEffect(new MobEffectInstance(MobEffects.INVISIBILITY, durationTicks,
                 0, false, false, true));
     }
 }

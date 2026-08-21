@@ -10,16 +10,16 @@ import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.util.player.UserManager;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.attribute.EntityAttributeInstance;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.mob.Monster;
-import net.minecraft.entity.mob.WardenEntity;
-import net.minecraft.entity.passive.WolfEntity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.Box;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.warden.Warden;
+import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -82,7 +82,7 @@ public final class PetCombatSweep {
      *
      * <p>Package-private so the test can drive the whole body rather than the predicates alone.
      */
-    static void tick(@NotNull ServerPlayerEntity player) {
+    static void tick(@NotNull ServerPlayer player) {
         final GeneralConfig config = McMMOMod.getGeneralConfig();
         if (config == null || !config.isPetCombatModeEnabled()) {
             // ⚠️ Returns without teardown, and that is safe rather than sloppy: every modifier this
@@ -95,7 +95,7 @@ public final class PetCombatSweep {
             return;
         }
 
-        final World world = player.getEntityWorld();
+        final Level world = player.getEntityWorld();
         if (world == null) {
             return;
         }
@@ -107,7 +107,7 @@ public final class PetCombatSweep {
         // something at the engage range still has to be found, or its boost would never be taken
         // back off.
         final double petSearch = Math.max(engageRange, aggressiveRadius);
-        final List<WolfEntity> pets = world.getEntitiesByClass(WolfEntity.class,
+        final List<Wolf> pets = world.getEntitiesByClass(Wolf.class,
                 player.getBoundingBox().expand(petSearch),
                 wolf -> wolf.isTamed() && wolf.isOwner(player));
         if (pets.isEmpty()) {
@@ -118,9 +118,9 @@ public final class PetCombatSweep {
 
         // The candidate query is paid for once for the whole pack, and only when it can be used:
         // in PASSIVE nothing acquires, and a pack that is already fully engaged acquires nothing.
-        List<MobEntity> candidates = null;
+        List<Mob> candidates = null;
 
-        for (WolfEntity pet : pets) {
+        for (Wolf pet : pets) {
             if (pet.isSitting()) {
                 // "Sit" is an explicit order to stay. A sitting pet fights nothing and chases
                 // nothing, so it gets no boost either.
@@ -162,9 +162,9 @@ public final class PetCombatSweep {
      * a zero or negative one — a "boost" that de-buffs would be a config edit quietly making pets
      * worse than vanilla.
      */
-    private static void applyEngageBoost(@NotNull WolfEntity pet, double engageRange) {
-        final EntityAttributeInstance instance =
-                pet.getAttributeInstance(EntityAttributes.FOLLOW_RANGE);
+    private static void applyEngageBoost(@NotNull Wolf pet, double engageRange) {
+        final AttributeInstance instance =
+                pet.getAttributeInstance(Attributes.FOLLOW_RANGE);
         final double base = instance == null ? ASSUMED_BASE_FOLLOW_RANGE : instance.getBaseValue();
         SkillAttributeService.set(pet, SkillAttributeService.Managed.TAMING_PET_ENGAGE_RANGE,
                 Math.max(0.0D, engageRange - base));
@@ -176,11 +176,11 @@ public final class PetCombatSweep {
      * <p>Measured from the player, so one query serves the whole pack and a pet that lagged behind
      * cannot drag something home from where it happens to be standing.
      */
-    private static @NotNull List<MobEntity> findCandidates(@NotNull World world,
-            @NotNull ServerPlayerEntity player, double radius) {
-        return world.getEntitiesByClass(MobEntity.class,
+    private static @NotNull List<Mob> findCandidates(@NotNull Level world,
+            @NotNull ServerPlayer player, double radius) {
+        return world.getEntitiesByClass(Mob.class,
                 player.getBoundingBox().expand(radius),
-                mob -> mob instanceof Monster && mob.isAlive() && !isWarden(mob));
+                mob -> mob instanceof Enemy && mob.isAlive() && !isWarden(mob));
     }
 
     /**
@@ -190,8 +190,8 @@ public final class PetCombatSweep {
      * pack, and the noise of them trying summons it onto the player who never chose the fight. This
      * is the one exclusion {@code canAttackWithOwner} does not make for us.
      */
-    private static boolean isWarden(@NotNull MobEntity mob) {
-        return mob instanceof WardenEntity;
+    private static boolean isWarden(@NotNull Mob mob) {
+        return mob instanceof Warden;
     }
 
     /**
@@ -206,13 +206,13 @@ public final class PetCombatSweep {
      * the zombie currently hitting the player, and that zombie has a target by definition. Excluding
      * it would make aggressive mode ignore precisely the threat the player most wants handled.
      */
-    private static void acquire(@NotNull WolfEntity pet, @NotNull ServerPlayerEntity player,
-            @NotNull List<MobEntity> candidates) {
-        final List<MobEntity> eligible = candidates.stream()
+    private static void acquire(@NotNull Wolf pet, @NotNull ServerPlayer player,
+            @NotNull List<Mob> candidates) {
+        final List<Mob> eligible = candidates.stream()
                 .filter(candidate -> pet.canAttackWithOwner(candidate, player))
                 .toList();
 
-        final Optional<MobEntity> chosen =
+        final Optional<Mob> chosen =
                 PetTargeting.nearestToPlayer(eligible, player::squaredDistanceTo);
         chosen.ifPresent(pet::setTarget);
     }
@@ -225,7 +225,7 @@ public final class PetCombatSweep {
      * that starts fights during a join window the player cannot yet control is a way to lose pets,
      * while a pack that waits a tick for its profile is invisible.
      */
-    private static @NotNull PetCombatMode resolveMode(@NotNull ServerPlayerEntity player) {
+    private static @NotNull PetCombatMode resolveMode(@NotNull ServerPlayer player) {
         final @Nullable McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
         if (mmoPlayer == null) {
             return PetCombatMode.PASSIVE;

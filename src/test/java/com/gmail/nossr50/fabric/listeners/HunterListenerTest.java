@@ -32,18 +32,18 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.mob.CreeperEntity;
-import net.minecraft.entity.mob.ZombieEntity;
-import net.minecraft.entity.passive.ChickenEntity;
-import net.minecraft.entity.passive.IronGolemEntity;
-import net.minecraft.entity.passive.SnowGolemEntity;
-import net.minecraft.entity.passive.WolfEntity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.entity.animal.chicken.Chicken;
+import net.minecraft.world.entity.animal.golem.IronGolem;
+import net.minecraft.world.entity.animal.golem.SnowGolem;
+import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -87,7 +87,7 @@ class HunterListenerTest {
     private PlayerProfile profile;
     private McMMOPlayer mmoPlayer;
     private PlatformPlayer platformPlayer;
-    private ServerPlayerEntity killer;
+    private ServerPlayer killer;
 
     @BeforeEach
     void setUp() {
@@ -124,7 +124,7 @@ class HunterListenerTest {
         lenient().when(mmoPlayer.getHunterManager()).thenReturn(new HunterManager(mmoPlayer));
         UserManager.track(mmoPlayer);
 
-        killer = mock(ServerPlayerEntity.class);
+        killer = mock(ServerPlayer.class);
         lenient().when(killer.getUuid()).thenReturn(playerId);
     }
 
@@ -146,15 +146,15 @@ class HunterListenerTest {
 
     // --- fixtures -------------------------------------------------------------------------------
 
-    private ZombieEntity zombie() {
-        final ZombieEntity zombie = mock(ZombieEntity.class);
+    private Zombie zombie() {
+        final Zombie zombie = mock(Zombie.class);
         Mockito.doReturn(EntityType.ZOMBIE).when(zombie).getType();
         lenient().when(zombie.getUuid()).thenReturn(UUID.randomUUID());
         return zombie;
     }
 
-    private CreeperEntity creeper() {
-        final CreeperEntity creeper = mock(CreeperEntity.class);
+    private Creeper creeper() {
+        final Creeper creeper = mock(Creeper.class);
         Mockito.doReturn(EntityType.CREEPER).when(creeper).getType();
         lenient().when(creeper.getUuid()).thenReturn(UUID.randomUUID());
         return creeper;
@@ -220,7 +220,7 @@ class HunterListenerTest {
     void aKillByThePlayersWolfCountsNothing() {
         // The attacker is the wolf, not its owner. Taming's Sharpened Claws already owns that hit;
         // paying Hunter for it too would make a wolf pack the fastest mastery farm in the game.
-        HunterListener.onDeath(zombie(), killedBy(mock(WolfEntity.class)));
+        HunterListener.onDeath(zombie(), killedBy(mock(Wolf.class)));
 
         assertEquals(0, killsOf(ZOMBIE_ID));
     }
@@ -243,7 +243,7 @@ class HunterListenerTest {
 
     @Test
     void aCallOfTheWildSummonCountsNothing() {
-        final ZombieEntity summon = zombie();
+        final Zombie summon = zombie();
         // Read off the mock BEFORE opening a stubbing on another one: resolving summon.getUuid()
         // inside when(...).thenReturn(...) is a mock call made mid-stubbing, which Mockito rejects
         // with UnfinishedStubbingException pointing at the wrong line.
@@ -266,7 +266,7 @@ class HunterListenerTest {
     void aPlayerBuiltIronGolemCountsNothingButAVillageOneDoes() {
         // Asserted on BOTH sides deliberately: a gate written as `instanceof IronGolemEntity` with
         // the isPlayerCreated() half dropped would pass the first assertion on its own.
-        final IronGolemEntity built = mock(IronGolemEntity.class);
+        final IronGolem built = mock(IronGolem.class);
         Mockito.doReturn(EntityType.IRON_GOLEM).when(built).getType();
         lenient().when(built.getUuid()).thenReturn(UUID.randomUUID());
         when(built.isPlayerCreated()).thenReturn(true);
@@ -274,7 +274,7 @@ class HunterListenerTest {
         HunterListener.onDeath(built, killedBy(killer));
         assertEquals(0, killsOf("minecraft:iron_golem"));
 
-        final IronGolemEntity villageGolem = mock(IronGolemEntity.class);
+        final IronGolem villageGolem = mock(IronGolem.class);
         Mockito.doReturn(EntityType.IRON_GOLEM).when(villageGolem).getType();
         lenient().when(villageGolem.getUuid()).thenReturn(UUID.randomUUID());
         when(villageGolem.isPlayerCreated()).thenReturn(false);
@@ -294,7 +294,7 @@ class HunterListenerTest {
             if (origin.countsTowardMastery()) {
                 continue;
             }
-            final ZombieEntity farmed = zombie();
+            final Zombie farmed = zombie();
             markOrigin(farmed, origin);
 
             HunterListener.onDeath(farmed, killedBy(killer));
@@ -307,7 +307,7 @@ class HunterListenerTest {
     void anUnmarkedMobCounts() {
         // The companion to the test above, and the reason it is not vacuous: an unmarked mob is
         // MobOrigin.NATURAL, which is every mob the world spawned by its own rules.
-        final ZombieEntity wild = zombie();
+        final Zombie wild = zombie();
         when(wild.getAttached(McMMOAttachments.MOB_ORIGIN)).thenReturn(null);
 
         HunterListener.onDeath(wild, killedBy(killer));
@@ -384,7 +384,7 @@ class HunterListenerTest {
         // The gates run before the counter, so a farmed mob cannot even announce a threshold it did
         // not move. Cheap to assert and it pins the ordering of the two halves.
         seedKills(ZOMBIE_ID, HunterManager.MASTERY_THRESHOLDS[0] - 1);
-        final ZombieEntity farmed = zombie();
+        final Zombie farmed = zombie();
         markOrigin(farmed, MobOrigin.SPAWNER);
 
         HunterListener.onDeath(farmed, killedBy(killer));
@@ -435,12 +435,12 @@ class HunterListenerTest {
                 // gate 1: nothing killed it but the world.
                 () -> HunterListener.onDeath(zombie(), killedBy(null)),
                 // gate 1: the wolf's kill, which is Taming's.
-                () -> HunterListener.onDeath(zombie(), killedBy(mock(WolfEntity.class))),
+                () -> HunterListener.onDeath(zombie(), killedBy(mock(Wolf.class))),
                 // gate 3: a golem the player stacked out of blocks.
                 () -> HunterListener.onDeath(snowGolem(), killedBy(killer)),
                 // gate 4: stage 1's spawn-origin marker.
                 () -> {
-                    final ZombieEntity farmed = zombie();
+                    final Zombie farmed = zombie();
                     markOrigin(farmed, MobOrigin.SPAWNER);
                     HunterListener.onDeath(farmed, killedBy(killer));
                 });
@@ -516,15 +516,15 @@ class HunterListenerTest {
         assertEquals(1, killsOf("minecraft:chicken"));
     }
 
-    private ChickenEntity chicken() {
-        final ChickenEntity chicken = mock(ChickenEntity.class);
+    private Chicken chicken() {
+        final Chicken chicken = mock(Chicken.class);
         Mockito.doReturn(EntityType.CHICKEN).when(chicken).getType();
         lenient().when(chicken.getUuid()).thenReturn(UUID.randomUUID());
         return chicken;
     }
 
-    private SnowGolemEntity snowGolem() {
-        final SnowGolemEntity golem = mock(SnowGolemEntity.class);
+    private SnowGolem snowGolem() {
+        final SnowGolem golem = mock(SnowGolem.class);
         Mockito.doReturn(EntityType.SNOW_GOLEM).when(golem).getType();
         lenient().when(golem.getUuid()).thenReturn(UUID.randomUUID());
         return golem;
@@ -631,7 +631,7 @@ class HunterListenerTest {
             if (origin.countsTowardMastery()) {
                 continue;
             }
-            final ZombieEntity farmed = zombie();
+            final Zombie farmed = zombie();
             markOrigin(farmed, origin);
 
             HunterListener.onLootDropped(farmed, killedBy(killer), rolls::incrementAndGet);

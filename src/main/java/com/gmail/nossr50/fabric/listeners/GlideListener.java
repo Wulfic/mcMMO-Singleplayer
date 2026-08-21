@@ -4,9 +4,9 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.skills.movement.MovementManager;
 import com.gmail.nossr50.skills.movement.Medium;
 import com.gmail.nossr50.util.player.UserManager;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -36,9 +36,9 @@ public final class GlideListener {
      * @param glideVelocity vanilla's computed velocity for this tick
      * @return the modified velocity, or {@code glideVelocity} unchanged when nothing applies
      */
-    public static @NotNull Vec3d modifyGlideVelocity(@NotNull LivingEntity entity,
-            @NotNull Vec3d glideVelocity) {
-        if (!(entity instanceof PlayerEntity)) {
+    public static @NotNull Vec3 modifyGlideVelocity(@NotNull LivingEntity entity,
+            @NotNull Vec3 glideVelocity) {
+        if (!(entity instanceof Player)) {
             return glideVelocity;
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(entity.getUuid());
@@ -62,6 +62,6 @@ public final class GlideListener {
         final double y = glideVelocity.y < 0
                 ? glideVelocity.y * (1.0 - descentReduction)
                 : glideVelocity.y;
-        return new Vec3d(glideVelocity.x * scale, y, glideVelocity.z * scale);
+        return new Vec3(glideVelocity.x * scale, y, glideVelocity.z * scale);
     }
 }

@@ -2,8 +2,8 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.FishingListener;
 import java.util.Collection;
-import net.minecraft.entity.projectile.FishingBobberEntity;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.entity.projectile.FishingHook;
+import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -36,21 +36,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * {@code getHookedEntity()} (still set at this point; only {@code remove} clears it), which keeps the
  * mixin free of local capture.
  */
-@Mixin(FishingBobberEntity.class)
+@Mixin(FishingHook.class)
 public abstract class FishingBobberUseMixin {
 
     @ModifyArg(
             method = "use", allow = 2,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/advancement/criterion/FishingRodHookedCriterion;trigger("
-                            + "Lnet/minecraft/server/network/ServerPlayerEntity;"
-                            + "Lnet/minecraft/item/ItemStack;"
-                            + "Lnet/minecraft/entity/projectile/FishingBobberEntity;"
+                    target = "Lnet/minecraft/advancements/criterion/FishingRodHookedTrigger;trigger("
+                            + "Lnet/minecraft/server/level/ServerPlayer;"
+                            + "Lnet/minecraft/world/item/ItemStack;"
+                            + "Lnet/minecraft/world/entity/projectile/FishingHook;"
                             + "Ljava/util/Collection;)V"),
             index = 3)
     private Collection<ItemStack> mcmmo$onFishCaught(Collection<ItemStack> caught) {
-        FishingListener.onFishCaught((FishingBobberEntity) (Object) this, caught);
+        FishingListener.onFishCaught((FishingHook) (Object) this, caught);
         return caught;
     }
 
@@ -58,12 +58,12 @@ public abstract class FishingBobberUseMixin {
             method = "use",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/entity/projectile/FishingBobberEntity;pullHookedEntity("
-                            + "Lnet/minecraft/entity/Entity;)V"),
+                    target = "Lnet/minecraft/world/entity/projectile/FishingHook;pullHookedEntity("
+                            + "Lnet/minecraft/world/entity/Entity;)V"),
             require = 1,
             allow = 1)
     private void mcmmo$onEntityHooked(ItemStack usedItem, CallbackInfoReturnable<Integer> cir) {
-        FishingListener.onEntityHooked((FishingBobberEntity) (Object) this);
+        FishingListener.onEntityHooked((FishingHook) (Object) this);
     }
 
     /**
@@ -76,7 +76,7 @@ public abstract class FishingBobberUseMixin {
      */
     @Inject(method = "use", allow = 1, at = @At("HEAD"))
     private void mcmmo$tryIceFishing(ItemStack usedItem, CallbackInfoReturnable<Integer> cir) {
-        FishingListener.tryIceFishing((FishingBobberEntity) (Object) this);
+        FishingListener.tryIceFishing((FishingHook) (Object) this);
     }
 
     /**
@@ -97,12 +97,12 @@ public abstract class FishingBobberUseMixin {
             method = "use",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/entity/ExperienceOrbEntity;<init>("
-                            + "Lnet/minecraft/world/World;DDDI)V"),
+                    target = "Lnet/minecraft/world/entity/ExperienceOrb;<init>("
+                            + "Lnet/minecraft/world/level/Level;DDDI)V"),
             index = 4,
             require = 1,
             allow = 1)
     private int mcmmo$boostVanillaFishingXp(int experience) {
-        return FishingListener.boostVanillaXp((FishingBobberEntity) (Object) this, experience);
+        return FishingListener.boostVanillaXp((FishingHook) (Object) this, experience);
     }
 }

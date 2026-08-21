@@ -2,12 +2,12 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.platform.BlockUtils;
 import com.llamalad7.mixinextras.sugar.Local;
-import net.minecraft.block.PistonBlock;
-import net.minecraft.block.piston.PistonHandler;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.piston.PistonBaseBlock;
+import net.minecraft.world.level.block.piston.PistonStructureResolver;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -22,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * <em>place → push → mine</em> launders a hand-placed block into a rewarding one, which is the loop
  * the tracker exists to stop.
  *
- * <p><b>The seam</b> ({@code javap -c -p net.minecraft.block.PistonBlock}): the private
+ * <p><b>The seam</b> ({@code javap -c -p net.minecraft.world.level.block.piston.PistonBaseBlock}): the private
  * {@code move(World, BlockPos, Direction, boolean)} is where both directions bottom out. It builds a
  * {@link PistonHandler} (one such local, slot 6, stored before any return) and asks it for
  * {@code getMovedBlocks()} / {@code getBrokenBlocks()} / {@code getMotionDirection()} — the exact
@@ -33,19 +33,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * than once by design and pinning it to one would fail to apply. The {@code false} return (the push
  * was refused, nothing moved) is filtered on the return value instead.
  */
-@Mixin(PistonBlock.class)
+@Mixin(PistonBaseBlock.class)
 public abstract class PistonMoveFlagsMixin {
 
     @Inject(
-            method = "move(Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;"
-                    + "Lnet/minecraft/util/math/Direction;Z)Z", allow = 2,
+            method = "move(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;"
+                    + "Lnet/minecraft/core/Direction;Z)Z", allow = 2,
             at = @At("RETURN"))
-    private void mcmmo$onPistonMoved(World world, BlockPos pos, Direction dir, boolean retract,
-            CallbackInfoReturnable<Boolean> cir, @Local PistonHandler handler) {
+    private void mcmmo$onPistonMoved(Level world, BlockPos pos, Direction dir, boolean retract,
+            CallbackInfoReturnable<Boolean> cir, @Local PistonStructureResolver handler) {
         if (!cir.getReturnValueZ()) {
             return; // the push was refused; nothing moved.
         }
-        if (!(world instanceof ServerWorld)) {
+        if (!(world instanceof ServerLevel)) {
             return;
         }
         BlockUtils.movePlacedFlags(world, handler.getMovedBlocks(), handler.getBrokenBlocks(),

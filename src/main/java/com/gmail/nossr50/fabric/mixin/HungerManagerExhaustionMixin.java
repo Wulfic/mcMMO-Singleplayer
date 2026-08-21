@@ -1,7 +1,7 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.AthleteListener;
-import net.minecraft.entity.player.HungerManager;
+import net.minecraft.world.food.FoodData;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
@@ -17,11 +17,11 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  * <p>The hunger manager does not know whose it is, which is why the owning player is resolved by
  * identity in {@link AthleteListener#scaleExhaustion} rather than being read off {@code this}.
  */
-@Mixin(HungerManager.class)
+@Mixin(FoodData.class)
 public abstract class HungerManagerExhaustionMixin {
 
     @ModifyVariable(method = "addExhaustion", allow = 1, at = @At("HEAD"), argsOnly = true)
     private float mcmmo$applyAthlete(float exhaustion) {
-        return AthleteListener.scaleExhaustion((HungerManager) (Object) this, exhaustion);
+        return AthleteListener.scaleExhaustion((FoodData) (Object) this, exhaustion);
     }
 }

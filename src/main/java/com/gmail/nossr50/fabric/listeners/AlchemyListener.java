@@ -13,16 +13,16 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.minecraft.block.entity.BrewingStandBlockEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.collection.DefaultedList;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.entity.BrewingStandBlockEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.core.NonNullList;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 
 /**
  * The K7 Alchemy XP hook: awards Alchemy XP when a brewing stand the player owns completes an mcMMO
@@ -72,23 +72,23 @@ public final class AlchemyListener {
     }
 
     /** Right-click a brewing stand → remember this player as its owner for XP-award purposes. */
-    private static ActionResult onUseBlock(PlayerEntity player, World world, Hand hand,
+    private static InteractionResult onUseBlock(Player player, Level world, InteractionHand hand,
             BlockHitResult hitResult) {
-        if (!(player instanceof ServerPlayerEntity)) {
-            return ActionResult.PASS; // client-side fire — the server copy does the bookkeeping.
+        if (!(player instanceof ServerPlayer)) {
+            return InteractionResult.PASS; // client-side fire — the server copy does the bookkeeping.
         }
         final BlockPos pos = hitResult.getBlockPos();
         if (world.getBlockEntity(pos) instanceof BrewingStandBlockEntity) {
             BREWING_STAND_OWNERS.put(pos.asLong(), player.getUuid());
         }
-        return ActionResult.PASS; // observe only; never cancel opening the brewing stand.
+        return InteractionResult.PASS; // observe only; never cancel opening the brewing stand.
     }
 
     /**
      * Whether the brewing stand's contents form a valid mcMMO brew. Called from the {@code canCraft}
      * mixin to force vanilla to start/continue a brew for recipes it does not itself recognise.
      */
-    public static boolean isValidBrew(DefaultedList<ItemStack> slots) {
+    public static boolean isValidBrew(NonNullList<ItemStack> slots) {
         return AlchemyPotionBrewer.isValidBrew(new PlatformInventory(slots));
     }
 
@@ -101,7 +101,7 @@ public final class AlchemyListener {
      * @param pos   the brewing stand position
      * @param slots the brewing-stand inventory to transform in place
      */
-    public static void onBrewCraft(World world, BlockPos pos, DefaultedList<ItemStack> slots) {
+    public static void onBrewCraft(Level world, BlockPos pos, NonNullList<ItemStack> slots) {
         McMMOPlayer owner = null;
         final UUID ownerId = BREWING_STAND_OWNERS.get(pos.asLong());
         if (ownerId != null) {

@@ -1,18 +1,18 @@
 package com.gmail.nossr50.platform;
 
 import java.util.List;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.enchantment.Enchantments;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.core.Holder;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -45,12 +45,12 @@ public final class BlockDrops {
      * @param tool the tool to inspect (an empty/null stack is never enchanted)
      * @return whether {@code tool} has Silk Touch at level ≥ 1
      */
-    public static boolean hasSilkTouch(@NotNull ServerWorld world, @Nullable ItemStack tool) {
+    public static boolean hasSilkTouch(@NotNull ServerLevel world, @Nullable ItemStack tool) {
         if (tool == null || tool.isEmpty()) {
             return false;
         }
-        final RegistryEntry<Enchantment> silkTouch = world.getRegistryManager()
-                .getOrThrow(RegistryKeys.ENCHANTMENT)
+        final Holder<Enchantment> silkTouch = world.getRegistryManager()
+                .getOrThrow(Registries.ENCHANTMENT)
                 .getOrThrow(Enchantments.SILK_TOUCH);
         return EnchantmentHelper.getLevel(silkTouch, tool) > 0;
     }
@@ -68,9 +68,9 @@ public final class BlockDrops {
      * @param tool the tool used to break it (enchantment/loot context)
      * @param rounds how many extra copies of the loot to spawn
      */
-    public static void dropBonusLoot(@NotNull ServerWorld world, @NotNull BlockPos pos,
+    public static void dropBonusLoot(@NotNull ServerLevel world, @NotNull BlockPos pos,
             @NotNull BlockState state, @Nullable BlockEntity blockEntity,
-            @NotNull ServerPlayerEntity breaker, @Nullable ItemStack tool, int rounds) {
+            @NotNull ServerPlayer breaker, @Nullable ItemStack tool, int rounds) {
         for (int round = 0; round < rounds; round++) {
             final List<ItemStack> loot =
                     Block.getDroppedStacks(state, world, pos, blockEntity, breaker, tool);

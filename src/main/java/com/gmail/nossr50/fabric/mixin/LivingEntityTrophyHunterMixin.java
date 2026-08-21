@@ -1,9 +1,9 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HunterListener;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.server.level.ServerLevel;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -72,10 +72,10 @@ public abstract class LivingEntityTrophyHunterMixin {
      * public API on {@code LivingEntity}/{@code Entity}, so an ordinary call on the cast reference does
      * the same job with one less thing to drift.
      */
-    @Inject(method = "dropLoot(Lnet/minecraft/server/world/ServerWorld;"
-                    + "Lnet/minecraft/entity/damage/DamageSource;Z)V", allow = 1,
+    @Inject(method = "dropLoot(Lnet/minecraft/server/level/ServerLevel;"
+                    + "Lnet/minecraft/world/damagesource/DamageSource;Z)V", allow = 1,
             at = @At("TAIL"))
-    private void mcmmo$trophyHunterBonusRoll(ServerWorld world, DamageSource source,
+    private void mcmmo$trophyHunterBonusRoll(ServerLevel world, DamageSource source,
             boolean causedByPlayer, CallbackInfo ci) {
         final LivingEntity self = (LivingEntity) (Object) this;
         // causedByPlayer is passed straight through so the bonus roll sees exactly the loot conditions

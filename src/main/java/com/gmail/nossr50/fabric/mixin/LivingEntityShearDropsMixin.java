@@ -2,9 +2,9 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
 import java.util.function.BiConsumer;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.server.level.ServerLevel;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
@@ -53,8 +53,8 @@ public abstract class LivingEntityShearDropsMixin {
      * {@code BiConsumer} in the signature, so the match is unambiguous.
      */
     @ModifyVariable(method = "forEachShearedItem", allow = 1, at = @At("HEAD"), argsOnly = true, ordinal = 0)
-    private BiConsumer<ServerWorld, ItemStack> mcmmo$onShearedItems(
-            BiConsumer<ServerWorld, ItemStack> dropper) {
+    private BiConsumer<ServerLevel, ItemStack> mcmmo$onShearedItems(
+            BiConsumer<ServerLevel, ItemStack> dropper) {
         return HusbandryListener.onShearedItems((LivingEntity) (Object) this, dropper);
     }
 }

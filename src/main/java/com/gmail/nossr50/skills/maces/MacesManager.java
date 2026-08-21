@@ -24,7 +24,7 @@ import org.jetbrains.annotations.NotNull;
  *
  * <p>Legacy's {@code mockSpigotMatch} / {@code slowEffectType} registry-lookup plumbing is dropped:
  * it existed to resolve the Slowness {@code PotionEffectType} across Bukkit versions, whereas the
- * vanilla constant {@link net.minecraft.entity.effect.StatusEffects#SLOWNESS} is fixed. The Slowness
+ * vanilla constant {@link net.minecraft.world.effect.MobEffects#SLOWNESS} is fixed. The Slowness
  * application itself lives behind {@link PlatformLivingEntity#applySlowness}, keeping this class
  * MC-free and unit-testable. The Cripple activation particle is deferred with the other combat
  * particles (Dodge/Rupture) until a particle adapter lands.

@@ -1,7 +1,7 @@
 package com.gmail.nossr50.platform;
 
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.collection.DefaultedList;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.NonNullList;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -16,13 +16,13 @@ import org.jetbrains.annotations.NotNull;
  */
 public final class PlatformInventory {
 
-    private final DefaultedList<ItemStack> slots;
+    private final NonNullList<ItemStack> slots;
 
-    public PlatformInventory(@NotNull DefaultedList<ItemStack> slots) {
+    public PlatformInventory(@NotNull NonNullList<ItemStack> slots) {
         this.slots = slots;
     }
 
-    public @NotNull DefaultedList<ItemStack> unwrap() {
+    public @NotNull NonNullList<ItemStack> unwrap() {
         return slots;
     }
 

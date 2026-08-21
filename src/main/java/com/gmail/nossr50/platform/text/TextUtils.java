@@ -1,16 +1,16 @@
 package com.gmail.nossr50.platform.text;
 
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextColor;
-import net.minecraft.util.Formatting;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextColor;
+import net.minecraft.ChatFormatting;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
  * Converts mcMMO's legacy section-code ({@code §}) formatted strings into vanilla
- * {@link net.minecraft.text.Text}.
+ * {@link net.minecraft.network.chat.Component}.
  *
  * <p>The original Bukkit plugin produced {@code String}s carrying legacy formatting codes
  * ({@code §a}, {@code §l}, and the six-nibble hex form {@code §x§R§R§G§G§B§B}); every
@@ -36,8 +36,8 @@ public final class TextUtils {
      * @param legacy the section-code string (may be {@code null} or empty)
      * @return a {@link MutableText} tree reproducing the string's colours and decorations
      */
-    public static @NotNull MutableText toText(@Nullable String legacy) {
-        final MutableText result = Text.empty();
+    public static @NotNull MutableComponent toText(@Nullable String legacy) {
+        final MutableComponent result = Component.empty();
         if (legacy == null || legacy.isEmpty()) {
             return result;
         }
@@ -67,7 +67,7 @@ public final class TextUtils {
                     continue;
                 }
 
-                final Formatting formatting = Formatting.byCode(code);
+                final ChatFormatting formatting = ChatFormatting.byCode(code);
                 if (formatting != null) {
                     flush(result, buffer, style);
                     style = applyCode(style, formatting);
@@ -85,8 +85,8 @@ public final class TextUtils {
         return result;
     }
 
-    private static Style applyCode(@NotNull Style style, @NotNull Formatting formatting) {
-        if (formatting == Formatting.RESET) {
+    private static Style applyCode(@NotNull Style style, @NotNull ChatFormatting formatting) {
+        if (formatting == ChatFormatting.RESET) {
             return Style.EMPTY;
         }
         if (formatting.isColor()) {
@@ -129,10 +129,10 @@ public final class TextUtils {
         }
     }
 
-    private static void flush(@NotNull MutableText result, @NotNull StringBuilder buffer,
+    private static void flush(@NotNull MutableComponent result, @NotNull StringBuilder buffer,
             @NotNull Style style) {
         if (buffer.length() > 0) {
-            result.append(Text.literal(buffer.toString()).setStyle(style));
+            result.append(Component.literal(buffer.toString()).setStyle(style));
             buffer.setLength(0);
         }
     }

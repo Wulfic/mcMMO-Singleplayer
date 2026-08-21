@@ -2,8 +2,8 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import net.minecraft.entity.projectile.thrown.EggEntity;
-import net.minecraft.util.hit.HitResult;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEgg;
+import net.minecraft.world.phys.HitResult;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
@@ -31,13 +31,13 @@ import org.spongepowered.asm.mixin.injection.At;
  * <p>The thrower is resolved through {@code ProjectileEntity#getOwner()}, which also closes the
  * dispenser: eggs are dispensable in vanilla, and a dispensed egg has no player owner.
  */
-@Mixin(EggEntity.class)
+@Mixin(ThrownEgg.class)
 public abstract class EggHatchMixin {
 
     private static final String ON_COLLISION =
-            "onCollision(Lnet/minecraft/util/hit/HitResult;)V";
+            "onCollision(Lnet/minecraft/world/phys/HitResult;)V";
     private static final String NEXT_INT =
-            "Lnet/minecraft/util/math/random/Random;nextInt(I)I";
+            "Lnet/minecraft/util/RandomSource;nextInt(I)I";
 
     /**
      * Rescue an egg vanilla was about to waste.
@@ -48,7 +48,7 @@ public abstract class EggHatchMixin {
     @ModifyExpressionValue(method = ON_COLLISION, allow = 1,
             at = @At(value = "INVOKE", target = NEXT_INT, ordinal = 0))
     private int mcmmo$broodHatchesMoreEggs(int roll, HitResult hitResult) {
-        return HusbandryListener.onEggHatchRoll((EggEntity) (Object) this, roll);
+        return HusbandryListener.onEggHatchRoll((ThrownEgg) (Object) this, roll);
     }
 
     /**
@@ -62,6 +62,6 @@ public abstract class EggHatchMixin {
     @ModifyExpressionValue(method = ON_COLLISION, allow = 1,
             at = @At(value = "INVOKE", target = NEXT_INT, ordinal = 1))
     private int mcmmo$broodHatchesFullClutches(int roll, HitResult hitResult) {
-        return HusbandryListener.onFullClutchRoll((EggEntity) (Object) this, roll);
+        return HusbandryListener.onFullClutchRoll((ThrownEgg) (Object) this, roll);
     }
 }

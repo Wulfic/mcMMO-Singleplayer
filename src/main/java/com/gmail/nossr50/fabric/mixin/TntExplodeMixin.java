@@ -1,7 +1,7 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.BlastMiningListener;
-import net.minecraft.entity.TntEntity;
+import net.minecraft.world.entity.item.PrimedTnt;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -19,21 +19,21 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
  * Every other TNT — hand-lit, dispenser-lit, chain-detonated — is untracked and passes through with
  * its vanilla power; see {@link BlastMiningListener} for how a tracked charge is recognised.
  */
-@Mixin(TntEntity.class)
+@Mixin(PrimedTnt.class)
 public abstract class TntExplodeMixin {
 
     @ModifyArg(
             method = "explode", allow = 1,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/World;createExplosion("
-                            + "Lnet/minecraft/entity/Entity;"
-                            + "Lnet/minecraft/entity/damage/DamageSource;"
-                            + "Lnet/minecraft/world/explosion/ExplosionBehavior;"
+                    target = "Lnet/minecraft/world/level/Level;createExplosion("
+                            + "Lnet/minecraft/world/entity/Entity;"
+                            + "Lnet/minecraft/world/damagesource/DamageSource;"
+                            + "Lnet/minecraft/world/level/ExplosionDamageCalculator;"
                             + "DDDFZ"
-                            + "Lnet/minecraft/world/World$ExplosionSourceType;)V"),
+                            + "Lnet/minecraft/world/level/Level$ExplosionInteraction;)V"),
             index = 6)
     private float mcmmo$applyBiggerBombs(float power) {
-        return BlastMiningListener.applyBiggerBombs((TntEntity) (Object) this, power);
+        return BlastMiningListener.applyBiggerBombs((PrimedTnt) (Object) this, power);
     }
 }

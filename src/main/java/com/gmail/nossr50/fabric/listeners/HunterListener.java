@@ -15,11 +15,11 @@ import com.gmail.nossr50.util.sounds.SoundType;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.passive.IronGolemEntity;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.animal.golem.IronGolem;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerPlayer;
 import com.gmail.nossr50.platform.PlatformSoundCategory;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -138,7 +138,7 @@ public final class HunterListener {
      * @param source what killed it
      */
     static void onDeath(@NotNull LivingEntity victim, @NotNull DamageSource source) {
-        final ServerPlayerEntity killer = qualifyingKiller(victim, source);
+        final ServerPlayer killer = qualifyingKiller(victim, source);
         if (killer == null) {
             return;
         }
@@ -197,7 +197,7 @@ public final class HunterListener {
      */
     public static void onLootDropped(@NotNull LivingEntity victim, @NotNull DamageSource source,
             @NotNull Runnable bonusRoll) {
-        final ServerPlayerEntity killer = qualifyingKiller(victim, source);
+        final ServerPlayer killer = qualifyingKiller(victim, source);
         if (killer == null) {
             return;
         }
@@ -227,13 +227,13 @@ public final class HunterListener {
      *
      * @return the player to credit, or {@code null} if any gate refuses
      */
-    static @Nullable ServerPlayerEntity qualifyingKiller(@NotNull LivingEntity victim,
+    static @Nullable ServerPlayer qualifyingKiller(@NotNull LivingEntity victim,
             @NotNull DamageSource source) {
         // Gate 1, first because it is both the cheapest read and the most selective: a farm that
         // kills by fall damage, lava or suffocation has no attacker at all. getAttacker() resolves a
         // projectile back to its shooter, so an arrow kill is the player's; a wolf's kill is the
         // wolf's, and Taming owns that hit.
-        if (!(source.getAttacker() instanceof ServerPlayerEntity killer)) {
+        if (!(source.getAttacker() instanceof ServerPlayer killer)) {
             return null;
         }
 
@@ -268,7 +268,7 @@ public final class HunterListener {
      * first moments of a join, and {@code getHunterManager()} is null for a mocked player in a test
      * that is not about Hunter. Neither is worth logging on a path that runs on every mob death.
      */
-    private static @Nullable McMMOPlayer hunterPlayer(@NotNull ServerPlayerEntity killer) {
+    private static @Nullable McMMOPlayer hunterPlayer(@NotNull ServerPlayer killer) {
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(killer.getUuid());
         return mmoPlayer == null || mmoPlayer.getHunterManager() == null ? null : mmoPlayer;
     }
@@ -301,7 +301,7 @@ public final class HunterListener {
      * into an exploit, so it is closed in the same stage that creates it.
      */
     private static boolean isManufactured(@NotNull LivingEntity victim) {
-        if (victim instanceof IronGolemEntity golem) {
+        if (victim instanceof IronGolem golem) {
             return golem.isPlayerCreated();
         }
         return MANUFACTURED_SPECIES.contains(masteryKeyOf(victim));
@@ -313,7 +313,7 @@ public final class HunterListener {
      *
      * <h2>🔑 Keyed by id, not by {@code instanceof} — a multi-version requirement, not a style call</h2>
      * The copper golem is not in every Minecraft version this mod supports, so
-     * {@code net.minecraft.entity.passive.CopperGolemEntity} is not always a class that exists to be
+     * {@code net.minecraft.world.entity.animal.golem.CopperGolem} is not always a class that exists to be
      * named. Where it does not, {@code victim instanceof CopperGolemEntity} is a <b>compile error</b>
      * that takes the whole build down — not a check that quietly answers false. That single class
      * reference was the only reason this file could not build on the older bands.
@@ -352,7 +352,7 @@ public final class HunterListener {
      * has to survive two mods shipping a creature of the same name.
      */
     static @NotNull String masteryKeyOf(@NotNull LivingEntity entity) {
-        return Registries.ENTITY_TYPE.getId(entity.getType()).toString();
+        return BuiltInRegistries.ENTITY_TYPE.getId(entity.getType()).toString();
     }
 
     /**

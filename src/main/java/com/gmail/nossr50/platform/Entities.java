@@ -1,7 +1,7 @@
 package com.gmail.nossr50.platform;
 
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -34,7 +34,7 @@ public final class Entities {
         if (id == null) {
             return entityId;
         }
-        return Registries.ENTITY_TYPE.getOptionalValue(id)
+        return BuiltInRegistries.ENTITY_TYPE.getOptionalValue(id)
                 .map(type -> type.getName().getString())
                 .orElse(entityId);
     }

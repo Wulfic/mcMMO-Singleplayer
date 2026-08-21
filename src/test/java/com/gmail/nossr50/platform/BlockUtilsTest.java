@@ -16,12 +16,12 @@ import com.gmail.nossr50.util.BlockRules;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.nio.file.Path;
 import java.util.List;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.state.property.Properties;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +30,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Exercises the MC-typed {@link BlockUtils} bridge against real vanilla
- * {@link net.minecraft.block.Block}s. Its one job since the Phase 2 extraction is to prove the
+ * {@link net.minecraft.world.level.block.Block}s. Its one job since the Phase 2 extraction is to prove the
  * <b>key extraction connects</b>:
  *
  * <ul>
@@ -130,7 +130,7 @@ class BlockUtilsTest {
         // Making obsidian consumes the lava source, so it cannot repeat without another bucket --
         // it is a trade, not a generator. Legacy exempts it by name and so do we, by identity: the
         // exemption sits on this side of the boundary for the same reason the snow arm does.
-        final World world = overworld();
+        final Level world = overworld();
         final BlockPos pos = new BlockPos(1, 30, 0);
         BlockUtils.markLavaFormed(world, pos, Blocks.OBSIDIAN);
         assertFalse(BlockUtils.isRewardIneligible(world, pos));
@@ -184,14 +184,14 @@ class BlockUtilsTest {
         assertEquals(7, freshWheat.maxAge());
 
         AgeableState grownWheat =
-                BlockUtils.getAgeableState(Blocks.WHEAT.getDefaultState().with(Properties.AGE_7, 7));
+                BlockUtils.getAgeableState(Blocks.WHEAT.getDefaultState().with(BlockStateProperties.AGE_7, 7));
         assertNotNull(grownWheat);
         assertEquals(7, grownWheat.age());
         assertEquals(7, grownWheat.maxAge());
 
         // Sweet berry bush maxes at 3.
         AgeableState berries = BlockUtils.getAgeableState(
-                Blocks.SWEET_BERRY_BUSH.getDefaultState().with(Properties.AGE_3, 2));
+                Blocks.SWEET_BERRY_BUSH.getDefaultState().with(BlockStateProperties.AGE_3, 2));
         assertNotNull(berries);
         assertEquals(2, berries.age());
         assertEquals(3, berries.maxAge());
@@ -222,12 +222,12 @@ class BlockUtilsTest {
         // Cocoa's age maxes at 2 and its facing must survive the re-age (the record-preserved
         // property the AFTER-seam replant relies on instead of a Directional rebuild).
         BlockState cocoa = Blocks.COCOA.getDefaultState()
-                .with(Properties.HORIZONTAL_FACING, Direction.SOUTH);
+                .with(BlockStateProperties.HORIZONTAL_FACING, Direction.SOUTH);
         BlockState cocoa1 = BlockUtils.withAge(cocoa, 1);
         AgeableState cocoaState = BlockUtils.getAgeableState(cocoa1);
         assertNotNull(cocoaState);
         assertEquals(1, cocoaState.age());
-        assertEquals(Direction.SOUTH, cocoa1.get(Properties.HORIZONTAL_FACING));
+        assertEquals(Direction.SOUTH, cocoa1.get(BlockStateProperties.HORIZONTAL_FACING));
 
         // A block with no age property is returned unchanged.
         assertEquals(Blocks.STONE.getDefaultState(),
@@ -237,15 +237,15 @@ class BlockUtilsTest {
     // --- The (World, BlockPos) -> tracker-key bridge -------------------------
 
     /** A world that answers only the one question the tracker asks it: which world am I? */
-    private static World overworld() {
-        final World world = mock(World.class);
-        when(world.getRegistryKey()).thenReturn(World.OVERWORLD);
+    private static Level overworld() {
+        final Level world = mock(Level.class);
+        when(world.getRegistryKey()).thenReturn(Level.OVERWORLD);
         return world;
     }
 
     @Test
     void aWorldAndPositionPackIntoTheKeysTheRulesLayerUses() {
-        final World world = overworld();
+        final Level world = overworld();
         final BlockPos pos = new BlockPos(10, 64, -20);
 
         assertFalse(BlockUtils.isRewardIneligible(world, pos), "a never-placed block is eligible");
@@ -266,7 +266,7 @@ class BlockUtilsTest {
         // BlockRules takes movedFrom/movedTo already packed, so offsetting by the push direction is
         // the one piece of this mechanic still on the MC side -- and therefore the one piece
         // BlockRulesTest cannot cover.
-        final World world = overworld();
+        final Level world = overworld();
         final BlockPos from = new BlockPos(0, 64, 0);
         final BlockPos to = from.offset(Direction.EAST);
         BlockUtils.markPlaced(world, from);
@@ -287,7 +287,7 @@ class BlockUtilsTest {
 
     @Test
     void aBlockDestroyedByThePushLosesItsFlag() {
-        final World world = overworld();
+        final Level world = overworld();
         final BlockPos broken = new BlockPos(9, 64, 9);
         BlockUtils.markPlaced(world, broken);
 

@@ -39,21 +39,21 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.entity.ExperienceOrbEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.entity.ExperienceOrb;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -124,10 +124,10 @@ public final class BlockBreakListener {
      *
      * @return {@code false} to cancel the vanilla break, {@code true} to let it proceed
      */
-    private static boolean beforeBlockBroken(World world, PlayerEntity player, BlockPos pos,
+    private static boolean beforeBlockBroken(Level world, Player player, BlockPos pos,
             BlockState state, @Nullable BlockEntity blockEntity) {
-        if (!(player instanceof ServerPlayerEntity serverPlayer)
-                || !(world instanceof ServerWorld serverWorld)) {
+        if (!(player instanceof ServerPlayer serverPlayer)
+                || !(world instanceof ServerLevel serverWorld)) {
             return true; // client-side prediction / non-server context: let vanilla handle it.
         }
         // Drop any snapshot from an earlier break that never reached AFTER (another listener cancelled
@@ -152,8 +152,8 @@ public final class BlockBreakListener {
      * @return {@code false} to cancel the vanilla break (Hylian consumed the block), {@code true} to
      *     let it break normally
      */
-    private static boolean maybeProcessHylianLuck(ServerWorld serverWorld,
-            ServerPlayerEntity serverPlayer, BlockPos pos, BlockState state) {
+    private static boolean maybeProcessHylianLuck(ServerLevel serverWorld,
+            ServerPlayer serverPlayer, BlockPos pos, BlockState state) {
         // Cheapest gate first — Hylian triggers only on a sword break, and most breaks aren't swords.
         if (!ItemUtils.isSword(serverPlayer.getMainHandStack())) {
             return true;
@@ -206,15 +206,15 @@ public final class BlockBreakListener {
         return true; // no treasure, not a pot: break the block normally.
     }
 
-    private static void onBlockBroken(World world, PlayerEntity player, BlockPos pos,
+    private static void onBlockBroken(Level world, Player player, BlockPos pos,
             BlockState state, @Nullable BlockEntity blockEntity) {
         // Consume the pre-break snapshot unconditionally, even on the paths that bail below, so it
         // can never be mistaken for a later break's.
         final PlantBreakCapture plantBreak = pendingPlantBreak;
         pendingPlantBreak = null;
 
-        if (!(player instanceof ServerPlayerEntity serverPlayer)
-                || !(world instanceof ServerWorld serverWorld)) {
+        if (!(player instanceof ServerPlayer serverPlayer)
+                || !(world instanceof ServerLevel serverWorld)) {
             return; // client-side prediction / non-server context: ignore.
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
@@ -228,7 +228,7 @@ public final class BlockBreakListener {
         // now, so its position is natural again and the tracker's memory is freed on the way out.
         final boolean handPlaced = consumePlacedFlag(serverWorld, pos);
 
-        final String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
+        final String blockId = BuiltInRegistries.BLOCK.getId(state.getBlock()).toString();
 
         // Multi-block plants (sugar cane, cactus, kelp, bamboo, chorus trees, tall grass, vines) take
         // their other blocks down with them, and legacy rewarded every one of those — so they get
@@ -296,8 +296,8 @@ public final class BlockBreakListener {
      * {@code processTreeFeller}). The heavy lifting — the recursive search, drops and durability —
      * lives in {@link TreeFellerProcessor}; this only reproduces the trigger gate.
      */
-    private static void maybeProcessTreeFeller(McMMOPlayer mmoPlayer, ServerWorld world, BlockPos pos,
-            BlockState state, ServerPlayerEntity breaker) {
+    private static void maybeProcessTreeFeller(McMMOPlayer mmoPlayer, ServerLevel world, BlockPos pos,
+            BlockState state, ServerPlayer breaker) {
         if (!mmoPlayer.getAbilityMode(SuperAbilityType.TREE_FELLER)) {
             return;
         }
@@ -326,8 +326,8 @@ public final class BlockBreakListener {
      * on, the block gives Excavation XP ({@link BlockUtils#affectedByGigaDrillBreaker}), and a shovel is
      * in hand. Called from inside the creative gate, so the bonus treasure spawns match the base path.
      */
-    private static void maybeProcessGigaDrillBreaker(McMMOPlayer mmoPlayer, ServerWorld world,
-            BlockPos pos, BlockState state, ServerPlayerEntity breaker, String blockId) {
+    private static void maybeProcessGigaDrillBreaker(McMMOPlayer mmoPlayer, ServerLevel world,
+            BlockPos pos, BlockState state, ServerPlayer breaker, String blockId) {
         if (!mmoPlayer.getAbilityMode(SuperAbilityType.GIGA_DRILL_BREAKER)) {
             return;
         }
@@ -361,8 +361,8 @@ public final class BlockBreakListener {
      * below still owns those.
      */
     private static void processMaturityGatedCrop(McMMOPlayer mmoPlayer, HerbalismManager herbalism,
-            ServerWorld world, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity,
-            ServerPlayerEntity breaker, String blockId, BlockUtils.AgeableState ageable) {
+            ServerLevel world, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity,
+            ServerPlayer breaker, String blockId, BlockUtils.AgeableState ageable) {
         if (isHerbalismAfkFarming(herbalism, breaker)) {
             return;
         }
@@ -407,8 +407,8 @@ public final class BlockBreakListener {
      * </ul>
      */
     private static void maybeProcessGreenThumbReplant(McMMOPlayer mmoPlayer,
-            HerbalismManager herbalism, ServerWorld world, BlockPos pos, BlockState state,
-            ServerPlayerEntity breaker, String blockId, boolean mature) {
+            HerbalismManager herbalism, ServerLevel world, BlockPos pos, BlockState state,
+            ServerPlayer breaker, String blockId, boolean mature) {
         if (breaker.isSneaking()) {
             return; // legacy: sneaking suppresses Green Thumb replant.
         }
@@ -460,7 +460,7 @@ public final class BlockBreakListener {
      * only lands if the spot is still air, so a block the player placed in the interim is never
      * overwritten (legacy's {@code blockIsAirOrExpectedCrop} guard).
      */
-    private static void scheduleReplant(ServerWorld world, BlockPos pos, BlockState cropState,
+    private static void scheduleReplant(ServerLevel world, BlockPos pos, BlockState cropState,
             int finalAge) {
         final BlockState replant = BlockUtils.withAge(cropState, finalAge);
         McMMOMod.getScheduler().runLater(() -> {
@@ -476,7 +476,7 @@ public final class BlockBreakListener {
      * one. Scans every slot (main, hotbar, off hand), covering legacy's
      * {@code hasItemIncludingOffHand}; mirrors {@code SuperAbilityListener#findItemSlot}.
      */
-    private static int findItemSlot(PlayerInventory inventory, Item item) {
+    private static int findItemSlot(Inventory inventory, Item item) {
         for (int slot = 0; slot < inventory.size(); slot++) {
             final ItemStack stack = inventory.getStack(slot);
             if (!stack.isEmpty() && stack.isOf(item)) {
@@ -497,7 +497,7 @@ public final class BlockBreakListener {
      * in AFTER would find tall grass and large ferns already gone. Capturing the {@link BlockState}s
      * here also means the delayed chorus check can still roll their loot long after they fell.
      */
-    private static void capturePlantBreak(ServerWorld world, BlockPos pos, BlockState state) {
+    private static void capturePlantBreak(ServerLevel world, BlockPos pos, BlockState state) {
         final String originPath = pathOf(state);
         final MaterialMapStore materials = McMMOMod.getMaterialMapStore();
         if (MultiBlockPlantTraversal.isOneBlockPlant(originPath, materials)) {
@@ -528,7 +528,7 @@ public final class BlockBreakListener {
      * nothing and merely mark it natural again, so the outcome is identical.
      */
     private static void processMultiBlockPlant(McMMOPlayer mmoPlayer, HerbalismManager herbalism,
-            ServerWorld world, ServerPlayerEntity breaker, PlantBreakCapture capture,
+            ServerLevel world, ServerPlayer breaker, PlantBreakCapture capture,
             boolean originHandPlaced) {
         if (isHerbalismAfkFarming(herbalism, breaker)) {
             return;
@@ -575,7 +575,7 @@ public final class BlockBreakListener {
      * </ul>
      */
     private static void awardPlantBlocks(McMMOPlayer mmoPlayer, HerbalismManager herbalism,
-            ServerWorld world, ServerPlayerEntity breaker, PlantBreakCapture capture,
+            ServerLevel world, ServerPlayer breaker, PlantBreakCapture capture,
             List<PlantSnapshot> blocks, boolean originHandPlaced) {
         int xpToReward = 0;
         int firstBlockXp = 0;
@@ -622,11 +622,11 @@ public final class BlockBreakListener {
      * is re-resolved by UUID rather than captured, so a logout during the wait is a clean no-op.
      * There is no tall-plant cap on this path, matching legacy.
      */
-    private static void scheduleChorusXpCheck(ServerWorld world, ServerPlayerEntity breaker,
+    private static void scheduleChorusXpCheck(ServerLevel world, ServerPlayer breaker,
             List<PlantSnapshot> chorusBlocks) {
         final UUID breakerId = breaker.getUuid();
         McMMOMod.getScheduler().runLater(() -> {
-            final ServerPlayerEntity player = world.getServer().getPlayerManager().getPlayer(breakerId);
+            final ServerPlayer player = world.getServer().getPlayerManager().getPlayer(breakerId);
             final McMMOPlayer owner = UserManager.getPlayer(breakerId);
             if (player == null || owner == null) {
                 return; // logged out while the tree was falling.
@@ -660,8 +660,8 @@ public final class BlockBreakListener {
      * excluded exactly as on the single-block path — a creative break spawns no vanilla loot, so
      * bonus copies there would be a duplication bug.
      */
-    private static void awardPlantBonusDrops(HerbalismManager herbalism, ServerWorld world,
-            ServerPlayerEntity breaker, PlantSnapshot snapshot) {
+    private static void awardPlantBonusDrops(HerbalismManager herbalism, ServerLevel world,
+            ServerPlayer breaker, PlantSnapshot snapshot) {
         if (breaker.isCreative() || !herbalism.isBonusDropsEligible(snapshot.path())) {
             return;
         }
@@ -685,7 +685,7 @@ public final class BlockBreakListener {
      * knob the port read from disk and never consulted.
      */
     private static boolean isHerbalismAfkFarming(HerbalismManager herbalism,
-            ServerPlayerEntity breaker) {
+            ServerPlayer breaker) {
         return herbalism.isHerbalismAfkPrevented() && breaker.hasVehicle();
     }
 
@@ -693,14 +693,14 @@ public final class BlockBreakListener {
      * Read a position's §A hand-placed flag and clear it in one go. Clearing is unconditional: the
      * block is gone by now, so the location is natural again and the tracker's memory is freed.
      */
-    private static boolean consumePlacedFlag(ServerWorld world, BlockPos pos) {
+    private static boolean consumePlacedFlag(ServerLevel world, BlockPos pos) {
         final boolean placed = BlockUtils.isRewardIneligible(world, pos);
         BlockUtils.markNatural(world, pos);
         return placed;
     }
 
     private static String pathOf(BlockState state) {
-        return Registries.BLOCK.getId(state.getBlock()).getPath();
+        return BuiltInRegistries.BLOCK.getId(state.getBlock()).getPath();
     }
 
     private static void awardBlockXp(McMMOPlayer mmoPlayer, String blockId) {
@@ -710,8 +710,8 @@ public final class BlockBreakListener {
         }
     }
 
-    private static void awardMiningBonusDrops(McMMOPlayer mmoPlayer, ServerWorld world, BlockPos pos,
-            BlockState state, @Nullable BlockEntity blockEntity, ServerPlayerEntity breaker,
+    private static void awardMiningBonusDrops(McMMOPlayer mmoPlayer, ServerLevel world, BlockPos pos,
+            BlockState state, @Nullable BlockEntity blockEntity, ServerPlayer breaker,
             String blockId) {
         final MiningManager mining = mmoPlayer.getMiningManager();
         if (mining == null) {
@@ -727,9 +727,9 @@ public final class BlockBreakListener {
         }
     }
 
-    private static void awardWoodcuttingBonusDrops(McMMOPlayer mmoPlayer, ServerWorld world,
+    private static void awardWoodcuttingBonusDrops(McMMOPlayer mmoPlayer, ServerLevel world,
             BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity,
-            ServerPlayerEntity breaker, String blockId) {
+            ServerPlayer breaker, String blockId) {
         final WoodcuttingManager woodcutting = mmoPlayer.getWoodcuttingManager();
         if (woodcutting == null) {
             return;
@@ -743,9 +743,9 @@ public final class BlockBreakListener {
         }
     }
 
-    private static void awardHerbalismBonusDrops(McMMOPlayer mmoPlayer, ServerWorld world,
+    private static void awardHerbalismBonusDrops(McMMOPlayer mmoPlayer, ServerLevel world,
             BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity,
-            ServerPlayerEntity breaker, String blockId) {
+            ServerPlayer breaker, String blockId) {
         final HerbalismManager herbalism = mmoPlayer.getHerbalismManager();
         if (herbalism == null) {
             return;
@@ -762,7 +762,7 @@ public final class BlockBreakListener {
         }
     }
 
-    private static void awardExcavationTreasures(McMMOPlayer mmoPlayer, ServerWorld world,
+    private static void awardExcavationTreasures(McMMOPlayer mmoPlayer, ServerLevel world,
             BlockPos pos, String blockId) {
         final ExcavationManager excavation = mmoPlayer.getExcavationManager();
         if (excavation == null) {
@@ -778,10 +778,10 @@ public final class BlockBreakListener {
             ItemSpecBuilder.build(spec).ifPresent(stack -> Block.dropStack(world, pos, stack));
         }
         if (!rewards.experienceOrbs().isEmpty()) {
-            final Vec3d center = Vec3d.ofCenter(pos);
+            final Vec3 center = Vec3.ofCenter(pos);
             for (int amount : rewards.experienceOrbs()) {
                 if (amount > 0) {
-                    ExperienceOrbEntity.spawn(world, center, amount);
+                    ExperienceOrb.spawn(world, center, amount);
                 }
             }
         }
@@ -805,8 +805,8 @@ public final class BlockBreakListener {
      * XP is awarded with the drop, because the sub-skill is a loot perk and paying Excavation XP for
      * an Agility proc would let a player level one skill by having ranked another.
      */
-    private static void awardLakeRaiderTreasure(McMMOPlayer mmoPlayer, ServerWorld world,
-            BlockPos pos, ServerPlayerEntity breaker, String blockId) {
+    private static void awardLakeRaiderTreasure(McMMOPlayer mmoPlayer, ServerLevel world,
+            BlockPos pos, ServerPlayer breaker, String blockId) {
         if (!breaker.isSubmergedInWater()) {
             return;
         }

@@ -14,21 +14,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.decoration.ArmorStandEntity;
-import net.minecraft.entity.mob.CreeperEntity;
-import net.minecraft.entity.mob.ZombieEntity;
-import net.minecraft.entity.passive.WolfEntity;
-import net.minecraft.entity.projectile.ArrowEntity;
-import net.minecraft.entity.projectile.FireworkRocketEntity;
-import net.minecraft.entity.projectile.ProjectileEntity;
-import net.minecraft.entity.projectile.TridentEntity;
-import net.minecraft.entity.projectile.thrown.EggEntity;
-import net.minecraft.entity.projectile.thrown.SnowballEntity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.Box;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.world.entity.projectile.arrow.Arrow;
+import net.minecraft.world.entity.projectile.FireworkRocketEntity;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.arrow.ThrownTrident;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEgg;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.Snowball;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.AABB;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,9 +62,9 @@ class SicPetsOnRangedHitTest {
         McTestRegistries.bootstrap();
     }
 
-    private ServerPlayerEntity shooter;
-    private WolfEntity pet;
-    private final List<WolfEntity> wolves = new ArrayList<>();
+    private ServerPlayer shooter;
+    private Wolf pet;
+    private final List<Wolf> wolves = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -73,13 +73,13 @@ class SicPetsOnRangedHitTest {
         McMMOMod.setGeneralConfig(mock(GeneralConfig.class));
         McMMOMod.setExperienceConfig(mock(ExperienceConfig.class));
 
-        final ServerWorld world = mock(ServerWorld.class);
-        shooter = mock(ServerPlayerEntity.class);
+        final ServerLevel world = mock(ServerLevel.class);
+        shooter = mock(ServerPlayer.class);
         lenient().when(shooter.getUuid()).thenReturn(UUID.randomUUID());
         lenient().when(shooter.getEntityWorld()).thenReturn(world);
-        lenient().when(shooter.getBoundingBox()).thenReturn(new Box(-0.3, 0, -0.3, 0.3, 1.8, 0.3));
+        lenient().when(shooter.getBoundingBox()).thenReturn(new AABB(-0.3, 0, -0.3, 0.3, 1.8, 0.3));
 
-        pet = mock(WolfEntity.class);
+        pet = mock(Wolf.class);
         lenient().when(pet.isTamed()).thenReturn(true);
         lenient().when(pet.isOwner(shooter)).thenReturn(true);
         lenient().when(pet.isOwner(any())).thenReturn(true);
@@ -88,11 +88,11 @@ class SicPetsOnRangedHitTest {
 
         // The real predicate is applied, so the ownership/sitting gates in attackTarget are exercised
         // rather than bypassed.
-        lenient().when(world.getEntitiesByClass(any(Class.class), any(Box.class), any()))
+        lenient().when(world.getEntitiesByClass(any(Class.class), any(AABB.class), any()))
                 .thenAnswer(invocation -> {
                     final Predicate<Object> filter = invocation.getArgument(2);
                     final List<Object> matched = new ArrayList<>();
-                    for (WolfEntity wolf : wolves) {
+                    for (Wolf wolf : wolves) {
                         if (filter.test(wolf)) {
                             matched.add(wolf);
                         }
@@ -116,9 +116,9 @@ class SicPetsOnRangedHitTest {
      */
     @Test
     void aThrownTridentSicsThePack() {
-        final ZombieEntity target = zombie();
+        final Zombie target = zombie();
 
-        EntityDamageListener.onModifyAppliedDamage(target, thrownBy(TridentEntity.class), 10F);
+        EntityDamageListener.onModifyAppliedDamage(target, thrownBy(ThrownTrident.class), 10F);
 
         verify(pet).setTarget(target);
     }
@@ -129,25 +129,25 @@ class SicPetsOnRangedHitTest {
      */
     @Test
     void aSnowballSicsThePack() {
-        final ZombieEntity target = zombie();
+        final Zombie target = zombie();
 
-        EntityDamageListener.onModifyAppliedDamage(target, thrownBy(SnowballEntity.class), 1F);
+        EntityDamageListener.onModifyAppliedDamage(target, thrownBy(Snowball.class), 1F);
 
         verify(pet).setTarget(target);
     }
 
     @Test
     void aThrownEggSicsThePack() {
-        final ZombieEntity target = zombie();
+        final Zombie target = zombie();
 
-        EntityDamageListener.onModifyAppliedDamage(target, thrownBy(EggEntity.class), 1F);
+        EntityDamageListener.onModifyAppliedDamage(target, thrownBy(ThrownEgg.class), 1F);
 
         verify(pet).setTarget(target);
     }
 
     @Test
     void aFiredFireworkSicsThePack() {
-        final ZombieEntity target = zombie();
+        final Zombie target = zombie();
 
         EntityDamageListener.onModifyAppliedDamage(target, thrownBy(FireworkRocketEntity.class), 6F);
 
@@ -157,9 +157,9 @@ class SicPetsOnRangedHitTest {
     /** The case that always worked, kept so the fix cannot be a regression dressed as a feature. */
     @Test
     void anArrowStillSicsThePack() {
-        final ZombieEntity target = zombie();
+        final Zombie target = zombie();
 
-        EntityDamageListener.onModifyAppliedDamage(target, thrownBy(ArrowEntity.class), 6F);
+        EntityDamageListener.onModifyAppliedDamage(target, thrownBy(Arrow.class), 6F);
 
         verify(pet).setTarget(target);
     }
@@ -179,10 +179,10 @@ class SicPetsOnRangedHitTest {
      */
     @Test
     void aShotFiredBeforeTheProfileLoadsStillSicsThePack() {
-        final ZombieEntity target = zombie();
+        final Zombie target = zombie();
         // UserManager holds nothing for this shooter — see the class fixture.
 
-        EntityDamageListener.onModifyAppliedDamage(target, thrownBy(ArrowEntity.class), 6F);
+        EntityDamageListener.onModifyAppliedDamage(target, thrownBy(Arrow.class), 6F);
 
         verify(pet).setTarget(target);
     }
@@ -195,10 +195,10 @@ class SicPetsOnRangedHitTest {
      */
     @Test
     void aCreeperIsNeverSicced() {
-        final CreeperEntity creeper = mock(CreeperEntity.class);
+        final Creeper creeper = mock(Creeper.class);
         lenient().when(creeper.getUuid()).thenReturn(UUID.randomUUID());
 
-        EntityDamageListener.onModifyAppliedDamage(creeper, thrownBy(ArrowEntity.class), 6F);
+        EntityDamageListener.onModifyAppliedDamage(creeper, thrownBy(Arrow.class), 6F);
 
         verify(pet, never()).setTarget(any());
     }
@@ -206,12 +206,12 @@ class SicPetsOnRangedHitTest {
     /** An armour stand is not a fight — the target-dummy guard has to stay ahead of the sic. */
     @Test
     void anArmourStandIsNeverSicced() {
-        final ArmorStandEntity dummy = mock(ArmorStandEntity.class);
+        final ArmorStand dummy = mock(ArmorStand.class);
         lenient().when(dummy.getUuid()).thenReturn(UUID.randomUUID());
         lenient().when(McMMOMod.getExperienceConfig().isArmorStandInteractionPrevented())
                 .thenReturn(true);
 
-        EntityDamageListener.onModifyAppliedDamage(dummy, thrownBy(ArrowEntity.class), 6F);
+        EntityDamageListener.onModifyAppliedDamage(dummy, thrownBy(Arrow.class), 6F);
 
         verify(pet, never()).setTarget(any());
     }
@@ -219,9 +219,9 @@ class SicPetsOnRangedHitTest {
     /** A skeleton's arrow has an owner, but not one whose pets these are. */
     @Test
     void aProjectileFiredByAMobSicsNothing() {
-        final ZombieEntity target = zombie();
-        final ArrowEntity arrow = mock(ArrowEntity.class);
-        lenient().when(arrow.getOwner()).thenReturn(mock(ZombieEntity.class));
+        final Zombie target = zombie();
+        final Arrow arrow = mock(Arrow.class);
+        lenient().when(arrow.getOwner()).thenReturn(mock(Zombie.class));
 
         EntityDamageListener.onModifyAppliedDamage(target, sourceOf(arrow), 6F);
 
@@ -231,8 +231,8 @@ class SicPetsOnRangedHitTest {
     /** A dispenser-fired arrow has no owner at all. */
     @Test
     void anOwnerlessProjectileSicsNothing() {
-        final ZombieEntity target = zombie();
-        final ArrowEntity arrow = mock(ArrowEntity.class);
+        final Zombie target = zombie();
+        final Arrow arrow = mock(Arrow.class);
         lenient().when(arrow.getOwner()).thenReturn(null);
 
         EntityDamageListener.onModifyAppliedDamage(target, sourceOf(arrow), 6F);
@@ -243,7 +243,7 @@ class SicPetsOnRangedHitTest {
     /** A melee swing is not a ranged hit; the melee path has its own sic and this must not double it. */
     @Test
     void aMeleeHitDoesNotReachTheRangedSic() {
-        final ZombieEntity target = zombie();
+        final Zombie target = zombie();
         final DamageSource melee = mock(DamageSource.class);
         lenient().when(melee.getAttacker()).thenReturn(shooter);
         lenient().when(melee.getSource()).thenReturn(shooter);
@@ -259,23 +259,23 @@ class SicPetsOnRangedHitTest {
     @Test
     void aSittingPetIsNotSicced() {
         lenient().when(pet.isSitting()).thenReturn(true);
-        final ZombieEntity target = zombie();
+        final Zombie target = zombie();
 
-        EntityDamageListener.onModifyAppliedDamage(target, thrownBy(ArrowEntity.class), 6F);
+        EntityDamageListener.onModifyAppliedDamage(target, thrownBy(Arrow.class), 6F);
 
         verify(pet, never()).setTarget(any());
     }
 
     // --- fixture --------------------------------------------------------------------------------
 
-    private static ZombieEntity zombie() {
-        final ZombieEntity zombie = mock(ZombieEntity.class);
+    private static Zombie zombie() {
+        final Zombie zombie = mock(Zombie.class);
         lenient().when(zombie.getUuid()).thenReturn(UUID.randomUUID());
         return zombie;
     }
 
     /** A damage source whose direct damager is a projectile of {@code type}, thrown by the shooter. */
-    private <T extends ProjectileEntity> DamageSource thrownBy(Class<T> type) {
+    private <T extends Projectile> DamageSource thrownBy(Class<T> type) {
         final T projectile = mock(type);
         lenient().when(projectile.getOwner()).thenReturn(shooter);
         return sourceOf(projectile);

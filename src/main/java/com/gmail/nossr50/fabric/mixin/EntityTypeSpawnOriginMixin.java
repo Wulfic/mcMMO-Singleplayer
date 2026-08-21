@@ -1,10 +1,10 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.platform.MobOrigins;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.SpawnReason;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -48,10 +48,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class EntityTypeSpawnOriginMixin {
 
     @Inject(
-            method = "create(Lnet/minecraft/world/World;Lnet/minecraft/entity/SpawnReason;)"
-                    + "Lnet/minecraft/entity/Entity;", allow = 2,
+            method = "create(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/EntitySpawnReason;)"
+                    + "Lnet/minecraft/world/entity/Entity;", allow = 2,
             at = @At("RETURN"))
-    private void mcmmo$stampSpawnOrigin(World world, SpawnReason reason,
+    private void mcmmo$stampSpawnOrigin(Level world, EntitySpawnReason reason,
             CallbackInfoReturnable<Entity> cir) {
         // The return value is null when the entity type sits behind a disabled feature flag;
         // stampOnSpawn handles that, along with the client-side and non-living cases.

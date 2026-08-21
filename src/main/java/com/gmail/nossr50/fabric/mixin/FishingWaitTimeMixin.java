@@ -1,8 +1,8 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.FishingListener;
-import net.minecraft.entity.projectile.FishingBobberEntity;
-import net.minecraft.util.math.random.Random;
+import net.minecraft.world.entity.projectile.FishingHook;
+import net.minecraft.util.RandomSource;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -50,7 +50,7 @@ import org.spongepowered.asm.mixin.injection.Slice;
  * reverting to vanilla timings after the first. The gates are also read at draw time rather than at
  * cast time, so swapping the rod out mid-cast changes the next wait.
  */
-@Mixin(FishingBobberEntity.class)
+@Mixin(FishingHook.class)
 public abstract class FishingWaitTimeMixin {
 
     /**
@@ -67,12 +67,12 @@ public abstract class FishingWaitTimeMixin {
             slice = @Slice(from = @At(value = "CONSTANT", args = "intValue=600")),
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/util/math/MathHelper;nextInt("
-                            + "Lnet/minecraft/util/math/random/Random;II)I"),
+                    target = "Lnet/minecraft/util/Mth;nextInt("
+                            + "Lnet/minecraft/util/RandomSource;II)I"),
             require = 1,
             allow = 1)
-    private int mcmmo$masterAnglerWaitCountdown(Random random, int minWaitTicks, int maxWaitTicks) {
-        return FishingListener.resolveWaitCountdown((FishingBobberEntity) (Object) this, random,
+    private int mcmmo$masterAnglerWaitCountdown(RandomSource random, int minWaitTicks, int maxWaitTicks) {
+        return FishingListener.resolveWaitCountdown((FishingHook) (Object) this, random,
                 minWaitTicks, maxWaitTicks, this.waitTimeReductionTicks);
     }
 }

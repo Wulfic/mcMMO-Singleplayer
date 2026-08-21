@@ -3,10 +3,10 @@ package com.gmail.nossr50.fabric.mixin;
 import com.gmail.nossr50.fabric.listeners.BlastMiningListener;
 import java.util.List;
 import java.util.function.BiConsumer;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.explosion.Explosion;
-import net.minecraft.world.explosion.ExplosionImpl;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Explosion;
+import net.minecraft.world.level.ServerExplosion;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -37,7 +37,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * re-resolving the detonator for every block destroyed; an {@code ExplosionImpl} is built per blast,
  * so the flag can't leak between explosions.
  */
-@Mixin(ExplosionImpl.class)
+@Mixin(ServerExplosion.class)
 public abstract class ExplosionDropsMixin {
 
     /** Whether mcMMO has already paid out this blast's drops, so vanilla's must be suppressed. */
@@ -54,10 +54,10 @@ public abstract class ExplosionDropsMixin {
             method = "destroyBlocks", allow = 1,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/block/BlockState;onExploded("
-                            + "Lnet/minecraft/server/world/ServerWorld;"
-                            + "Lnet/minecraft/util/math/BlockPos;"
-                            + "Lnet/minecraft/world/explosion/Explosion;"
+                    target = "Lnet/minecraft/world/level/block/state/BlockState;onExploded("
+                            + "Lnet/minecraft/server/level/ServerLevel;"
+                            + "Lnet/minecraft/core/BlockPos;"
+                            + "Lnet/minecraft/world/level/Explosion;"
                             + "Ljava/util/function/BiConsumer;)V"),
             index = 3)
     private BiConsumer<ItemStack, BlockPos> mcmmo$suppressVanillaDrops(

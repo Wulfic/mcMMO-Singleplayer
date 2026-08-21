@@ -41,30 +41,30 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LightningEntity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.Tameable;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.damage.DamageTypes;
-import net.minecraft.entity.decoration.ArmorStandEntity;
-import net.minecraft.entity.mob.CreeperEntity;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.passive.AbstractHorseEntity;
-import net.minecraft.entity.passive.LlamaEntity;
-import net.minecraft.entity.passive.WolfEntity;
-import net.minecraft.entity.projectile.ArrowEntity;
-import net.minecraft.entity.projectile.PersistentProjectileEntity;
-import net.minecraft.entity.projectile.ProjectileEntity;
-import net.minecraft.entity.projectile.TridentEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.tag.DamageTypeTags;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LightningBolt;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.OwnableEntity;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.animal.equine.AbstractHorse;
+import net.minecraft.world.entity.animal.equine.Llama;
+import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.world.entity.projectile.arrow.Arrow;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.arrow.ThrownTrident;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.Identifier;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 import com.gmail.nossr50.platform.PlatformSoundCategory;
@@ -164,13 +164,13 @@ public final class EntityDamageListener {
      * @return {@code false} to cancel the hit, {@code true} to let it proceed
      */
     static boolean onAllowDamage(LivingEntity entity, DamageSource source, float amount) {
-        if (entity instanceof ServerPlayerEntity serverPlayer) {
+        if (entity instanceof ServerPlayer serverPlayer) {
             return !isArrowDeflected(serverPlayer, source);
         }
         if (maybeInspect(entity, source)) {
             return false; // inspected with a bone — the blow is cancelled.
         }
-        if (entity instanceof WolfEntity wolf && isEnvironmentallyAwareFall(wolf, source)) {
+        if (entity instanceof Wolf wolf && isEnvironmentallyAwareFall(wolf, source)) {
             return false;
         }
         return true;
@@ -184,12 +184,12 @@ public final class EntityDamageListener {
      *
      * @return {@code true} if the arrow was deflected (the caller should cancel the hit)
      */
-    private static boolean isArrowDeflected(ServerPlayerEntity serverPlayer, DamageSource source) {
+    private static boolean isArrowDeflected(ServerPlayer serverPlayer, DamageSource source) {
         // Legacy checks the *direct* damager (`event.getDamager()`) for `instanceof Arrow`, which in
         // Bukkit is specifically a regular/tipped arrow — its sibling types (SpectralArrow, Trident)
         // implement AbstractArrow, not Arrow, so they were never deflectable. ArrowEntity draws that
         // same line here: its siblings extend PersistentProjectileEntity alongside it, not from it.
-        if (!(source.getSource() instanceof ArrowEntity)) {
+        if (!(source.getSource() instanceof Arrow)) {
             return false;
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
@@ -212,11 +212,11 @@ public final class EntityDamageListener {
      *
      * @return {@code true} if the fall damage should be negated (the caller should cancel the hit)
      */
-    private static boolean isEnvironmentallyAwareFall(WolfEntity wolf, DamageSource source) {
+    private static boolean isEnvironmentallyAwareFall(Wolf wolf, DamageSource source) {
         if (!source.isIn(DamageTypeTags.IS_FALL)) {
             return false;
         }
-        if (!(wolf.getOwner() instanceof ServerPlayerEntity owner)) {
+        if (!(wolf.getOwner() instanceof ServerPlayer owner)) {
             return false; // wild wolf (getOwner() is null unless tamed).
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(owner.getUuid());
@@ -261,7 +261,7 @@ public final class EntityDamageListener {
         // Legacy's entry conditions, unchanged and shared: a *direct* melee swing (legacy's
         // `entityType == EntityType.PLAYER`, i.e. the player is the direct damager, so a bone cannot
         // inspect by proxy through a projectile) thrown by a player holding a bone.
-        if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)
+        if (!(source.getAttacker() instanceof ServerPlayer attacker)
                 || source.getSource() != attacker) {
             return false;
         }
@@ -275,11 +275,11 @@ public final class EntityDamageListener {
 
         final TamingManager taming = mmoPlayer.getTamingManager();
         final boolean beastLore =
-                entity instanceof Tameable && taming != null && taming.canUseBeastLore();
+                entity instanceof OwnableEntity && taming != null && taming.canUseBeastLore();
 
         final HunterManager hunter = mmoPlayer.getHunterManager();
         final boolean quarrySense = attacker.isSneaking()
-                && !(entity instanceof ArmorStandEntity)
+                && !(entity instanceof ArmorStand)
                 && hunter != null && hunter.canQuarrySense();
 
         if (!beastLore && !quarrySense) {
@@ -315,7 +315,7 @@ public final class EntityDamageListener {
      * stats worth showing).
      */
     private static String beastLore(LivingEntity target) {
-        final Tameable beast = (Tameable) target;
+        final OwnableEntity beast = (OwnableEntity) target;
         String message = LocaleLoader.getString("Combat.BeastLore") + " ";
 
         final LivingEntity owner = beast.getOwner();
@@ -328,11 +328,11 @@ public final class EntityDamageListener {
                 target.getMaxHealth());
 
         // Mules & donkeys share the horse's jump/speed stats; llamas do not.
-        if (target instanceof AbstractHorseEntity horse && !(target instanceof LlamaEntity)
-                && horse.getAttributeInstance(EntityAttributes.JUMP_STRENGTH) != null) {
+        if (target instanceof AbstractHorse horse && !(target instanceof Llama)
+                && horse.getAttributeInstance(Attributes.JUMP_STRENGTH) != null) {
             final double jumpStrength = TamingManager.beastLoreHorseJumpStrength(
-                    horse.getAttributeValue(EntityAttributes.JUMP_STRENGTH));
-            final double speed = horse.getAttributeValue(EntityAttributes.MOVEMENT_SPEED) * 43;
+                    horse.getAttributeValue(Attributes.JUMP_STRENGTH));
+            final double speed = horse.getAttributeValue(Attributes.MOVEMENT_SPEED) * 43;
             message += "\n" + LocaleLoader.getString("Combat.BeastLoreHorseSpeed", speed)
                     + "\n" + LocaleLoader.getString("Combat.BeastLoreHorseJumpStrength", jumpStrength);
         }
@@ -464,7 +464,7 @@ public final class EntityDamageListener {
 
         // K1 defender / K2 branch: the entity *taking* damage is a player — fall damage feeds
         // Agility Roll, an incoming entity hit feeds Agility Dodge.
-        if (entity instanceof ServerPlayerEntity serverPlayer) {
+        if (entity instanceof ServerPlayer serverPlayer) {
             // Stamp the Assassin recency window before anything can reduce or cancel the damage
             // (D-S3). Deliberately every incoming source, not just combat: a player who just took
             // fall damage or stepped in lava is not lurking in the shadows either.
@@ -496,7 +496,7 @@ public final class EntityDamageListener {
                 // back *after* Dodge has written to it, so a dodged hit counters for less.
                 maybeProcessCounterAttack(serverPlayer, source, result);
             }
-        } else if (entity instanceof WolfEntity wolf) {
+        } else if (entity instanceof Wolf wolf) {
             // Legacy's sibling `else if (livingEntity instanceof Tameable pet)` arm: the player's own
             // wolf is taking damage, and Taming may soften or undo it.
             result = handleWolfDamage(wolf, source, result);
@@ -570,7 +570,7 @@ public final class EntityDamageListener {
      * {@code UnarmoredManager#getUnarmoredXp}: Iron Skin is itself armor, so metering the XP after
      * armor would have the skill throttle its own progress exactly when the grind is longest.
      */
-    static void maybeAwardUnarmoredXp(ServerPlayerEntity serverPlayer, DamageSource source,
+    static void maybeAwardUnarmoredXp(ServerPlayer serverPlayer, DamageSource source,
             float preArmorDamage) {
         if (preArmorDamage <= 0 || !isUnarmoredXpSource(serverPlayer, source)) {
             return;
@@ -676,7 +676,7 @@ public final class EntityDamageListener {
      * run inside an mcMMO-dealt hit, and {@link #onModifyAppliedDamage} turns such hits away before
      * this branch is reached. Two unarmored players could otherwise sting each other forever.
      */
-    private static void maybeProcessThornySkin(ServerPlayerEntity serverPlayer, DamageSource source) {
+    private static void maybeProcessThornySkin(ServerPlayer serverPlayer, DamageSource source) {
         // The *direct* damager: a projectile's shooter is not standing close enough to be stung.
         if (!(source.getSource() instanceof LivingEntity assailant) || assailant == serverPlayer) {
             return;
@@ -709,7 +709,7 @@ public final class EntityDamageListener {
      * charge, which is a repeatable mining loop that Demolitions Expertise exists to make survivable
      * — would read as a living attacker and pay full XP for blowing yourself up on purpose.
      */
-    private static boolean isUnarmoredXpSource(ServerPlayerEntity victim, DamageSource source) {
+    private static boolean isUnarmoredXpSource(ServerPlayer victim, DamageSource source) {
         if (!McMMOMod.getExperienceConfig().isUnarmoredLivingAttackerRequired()) {
             return true; // gate off: every damage cause pays (play-testing / diagnosis only).
         }
@@ -754,10 +754,10 @@ public final class EntityDamageListener {
             float amount) {
         // Legacy keys off painSource (the *direct* damager), so a wolf's own bite — not, say, an
         // arrow that happens to have a wolf as its owner — is what counts.
-        if (!(source.getSource() instanceof WolfEntity wolf)) {
+        if (!(source.getSource() instanceof Wolf wolf)) {
             return amount;
         }
-        if (!(wolf.getOwner() instanceof ServerPlayerEntity master)) {
+        if (!(wolf.getOwner() instanceof ServerPlayer master)) {
             return amount; // wild wolf, or one whose owner is not this player.
         }
         if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.TAMING, target)) {
@@ -834,7 +834,7 @@ public final class EntityDamageListener {
      *
      * <h2>🔑 The mannequin is matched by registry id, the armour stand by {@code instanceof}</h2>
      * Not an inconsistency. The mannequin does not exist in every Minecraft version this mod
-     * supports, so {@code net.minecraft.entity.decoration.MannequinEntity} is not always a class that
+     * supports, so {@code net.minecraft.world.entity.decoration.Mannequin} is not always a class that
      * can be named — and where it cannot, {@code instanceof MannequinEntity} is a <b>compile error</b>
      * that takes the build down rather than a check that quietly answers false. An id keeps the
      * question answerable everywhere: on a version with no mannequin nothing is registered under that
@@ -851,10 +851,10 @@ public final class EntityDamageListener {
      */
     private static boolean isTargetDummy(LivingEntity target) {
         final ExperienceConfig config = McMMOMod.getExperienceConfig();
-        if (target instanceof ArmorStandEntity) {
+        if (target instanceof ArmorStand) {
             return config == null || config.isArmorStandInteractionPrevented();
         }
-        if (MANNEQUIN_ID.equals(Registries.ENTITY_TYPE.getId(target.getType()))) {
+        if (MANNEQUIN_ID.equals(BuiltInRegistries.ENTITY_TYPE.getId(target.getType()))) {
             return config == null || config.isMannequinInteractionPrevented();
         }
         return false;
@@ -909,13 +909,13 @@ public final class EntityDamageListener {
      * also means a pet still answers a shot fired during the window before a profile loads.
      */
     private static void sicPetsOnRangedHit(LivingEntity target, DamageSource source) {
-        if (!(source.getSource() instanceof ProjectileEntity projectile)) {
+        if (!(source.getSource() instanceof Projectile projectile)) {
             return; // A melee hit, or environmental damage.
         }
-        if (!(projectile.getOwner() instanceof ServerPlayerEntity shooter)) {
+        if (!(projectile.getOwner() instanceof ServerPlayer shooter)) {
             return; // A dispenser, a skeleton, or a wild projectile — nobody's pets to sic.
         }
-        if (isTargetDummy(target) || target instanceof CreeperEntity) {
+        if (isTargetDummy(target) || target instanceof Creeper) {
             return;
         }
         CallOfTheWildHandler.attackTarget(shooter, target);
@@ -923,10 +923,10 @@ public final class EntityDamageListener {
 
     private static float applyProjectileAttackBonus(LivingEntity target, DamageSource source,
             float amount) {
-        if (!(source.getSource() instanceof PersistentProjectileEntity projectile)) {
+        if (!(source.getSource() instanceof AbstractArrow projectile)) {
             return amount; // not a projectile hit.
         }
-        if (!(projectile.getOwner() instanceof ServerPlayerEntity shooter)) {
+        if (!(projectile.getOwner() instanceof ServerPlayer shooter)) {
             return amount; // wild/dispenser projectile, or not fired by this player.
         }
         if (isTargetDummy(target)) {
@@ -937,7 +937,7 @@ public final class EntityDamageListener {
             return amount; // data not loaded (e.g. mid-join).
         }
 
-        if (projectile instanceof TridentEntity) {
+        if (projectile instanceof ThrownTrident) {
             return applyTridentImpale(mmoPlayer, target, amount);
         }
 
@@ -961,7 +961,7 @@ public final class EntityDamageListener {
      * comment describes) would otherwise NPE here, inside the vanilla damage pipeline. A missing
      * weapon reads as a bow shot, which is the correct fallback: "not a crossbow → Archery".
      */
-    private static boolean isCrossbowShot(PersistentProjectileEntity projectile) {
+    private static boolean isCrossbowShot(AbstractArrow projectile) {
         final ItemStack weapon = projectile.getWeaponStack();
         return weapon != null && weapon.isOf(Items.CROSSBOW);
     }
@@ -976,7 +976,7 @@ public final class EntityDamageListener {
      * themselves drop when it dies (see {@link ProjectileListener}).
      */
     private static float applyArcheryBonus(McMMOPlayer mmoPlayer, LivingEntity target,
-            PersistentProjectileEntity projectile, float amount) {
+            AbstractArrow projectile, float amount) {
         if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.ARCHERY, target)) {
             return amount;
         }
@@ -1016,7 +1016,7 @@ public final class EntityDamageListener {
      * the measurement itself is MC-free on {@link Archery}.
      */
     private static double distanceXpMultiplier(LivingEntity target,
-            PersistentProjectileEntity projectile) {
+            AbstractArrow projectile) {
         return Archery.distanceXpBonusMultiplier(projectile.getUuid(),
                 target.getEntityWorld().getRegistryKey().getValue().toString(),
                 target.getX(), target.getY(), target.getZ());
@@ -1032,7 +1032,7 @@ public final class EntityDamageListener {
      * force half.
      */
     private static float applyPoweredShot(McMMOPlayer mmoPlayer, LivingEntity target,
-            PersistentProjectileEntity projectile, float amount) {
+            AbstractArrow projectile, float amount) {
         if (!CombatUtils.canCombatSkillsTrigger(PrimarySkillType.CROSSBOWS, target)) {
             return amount;
         }
@@ -1099,8 +1099,8 @@ public final class EntityDamageListener {
      * while its {@code FALL} arm cancels the hit outright and so rides the {@code ALLOW_DAMAGE} veto
      * (see {@link #onAllowDamage}) rather than this reduce-only seam.
      */
-    private static float handleWolfDamage(WolfEntity wolf, DamageSource source, float amount) {
-        if (!(wolf.getOwner() instanceof ServerPlayerEntity owner)) {
+    private static float handleWolfDamage(Wolf wolf, DamageSource source, float amount) {
+        if (!(wolf.getOwner() instanceof ServerPlayer owner)) {
             return amount; // wild wolf (getOwner() is null unless tamed).
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(owner.getUuid());
@@ -1214,7 +1214,7 @@ public final class EntityDamageListener {
      * with the rest of PvP (see {@code BlastMining}'s javadoc): the only player a blast can hit here
      * is the one who set it off.
      */
-    private static boolean canReduceOwnBlast(ServerPlayerEntity serverPlayer, DamageSource source) {
+    private static boolean canReduceOwnBlast(ServerPlayer serverPlayer, DamageSource source) {
         final UUID detonator = BlastMiningListener.detonatorUuid(source.getSource());
         if (detonator == null || !detonator.equals(serverPlayer.getUuid())) {
             return false; // not an mcMMO charge, or not this player's.
@@ -1227,7 +1227,7 @@ public final class EntityDamageListener {
      * Demolitions Expertise: reduce the damage the player's own Blast Mining charge deals to them,
      * by their rank's percentage (legacy {@code MiningManager#processDemolitionsExpertise}).
      */
-    private static float handleOwnBlastDamage(ServerPlayerEntity serverPlayer, float amount) {
+    private static float handleOwnBlastDamage(ServerPlayer serverPlayer, float amount) {
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
         if (mmoPlayer == null) {
             return amount;
@@ -1247,7 +1247,7 @@ public final class EntityDamageListener {
      */
     private static float applyAttackerWeaponBonus(LivingEntity target, DamageSource source,
             float amount) {
-        if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)) {
+        if (!(source.getAttacker() instanceof ServerPlayer attacker)) {
             return amount; // environmental / mob-dealt damage.
         }
         // Only a direct melee swing: the *direct* source of the damage is the player themselves. A
@@ -1335,7 +1335,7 @@ public final class EntityDamageListener {
      * which is exactly what the sub-skill is for.
      */
     private static float applySprintSmash(LivingEntity target, DamageSource source, float amount) {
-        if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)) {
+        if (!(source.getAttacker() instanceof ServerPlayer attacker)) {
             return amount;
         }
         // Direct melee only, same test as the weapon arm: a projectile's direct source is the
@@ -1379,7 +1379,7 @@ public final class EntityDamageListener {
     private static final Map<UUID, Integer> LAST_DAMAGED_TICK = new HashMap<>();
 
     /** Stamp the current server tick as this player's most recent damage. */
-    static void recordDamageTaken(@NotNull ServerPlayerEntity player) {
+    static void recordDamageTaken(@NotNull ServerPlayer player) {
         final MinecraftServer server = player.getEntityWorld().getServer();
         if (server != null) {
             LAST_DAMAGED_TICK.put(player.getUuid(), server.getTicks());
@@ -1394,7 +1394,7 @@ public final class EntityDamageListener {
      * which {@code /time set} moves backwards — that would hand a player a permanent backstab, or
      * withhold one for a whole in-game day, depending on which way they set it.
      */
-    static long ticksSinceDamageTaken(@NotNull ServerPlayerEntity player) {
+    static long ticksSinceDamageTaken(@NotNull ServerPlayer player) {
         final Integer last = LAST_DAMAGED_TICK.get(player.getUuid());
         if (last == null) {
             return Long.MAX_VALUE;
@@ -1442,7 +1442,7 @@ public final class EntityDamageListener {
      * paid it on the pre-Assassin damage, and the extra came from Stealth, not from the weapon.
      */
     static float applyAssassin(LivingEntity target, DamageSource source, float amount) {
-        if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)) {
+        if (!(source.getAttacker() instanceof ServerPlayer attacker)) {
             return amount;
         }
         // Direct melee only, same test as the weapon arm: a projectile's direct source is the
@@ -1510,7 +1510,7 @@ public final class EntityDamageListener {
         // projectile getAttacker() resolves back to the shooter, so this admits both halves at once
         // — and keeping the two entry conditions identical is what stops "the kill counted" and "the
         // bonus applied" drifting apart.
-        if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)) {
+        if (!(source.getAttacker() instanceof ServerPlayer attacker)) {
             return amount;
         }
         if (isTargetDummy(target)) {
@@ -1549,8 +1549,8 @@ public final class EntityDamageListener {
      * attribution and ownership disagree (a mod re-crediting a shot mid-flight) contributes nothing
      * rather than paying the wrong player's mastery.
      */
-    private static boolean isProjectileFrom(DamageSource source, ServerPlayerEntity attacker) {
-        return source.getSource() instanceof PersistentProjectileEntity projectile
+    private static boolean isProjectileFrom(DamageSource source, ServerPlayer attacker) {
+        return source.getSource() instanceof AbstractArrow projectile
                 && projectile.getOwner() == attacker;
     }
 
@@ -1609,7 +1609,7 @@ public final class EntityDamageListener {
      * {@code canUseSerratedStrike} arm.
      */
     private static void maybeProcessSerratedStrikes(McMMOPlayer mmoPlayer,
-            ServerPlayerEntity attacker, LivingEntity target, float damage) {
+            ServerPlayer attacker, LivingEntity target, float damage) {
         final SwordsManager swords = mmoPlayer.getSwordsManager();
         if (swords == null || !swords.canUseSerratedStrike()) {
             return;
@@ -1623,7 +1623,7 @@ public final class EntityDamageListener {
      * for a fraction of the damage. Mirrors legacy {@code CombatUtils#processAxeCombat}'s
      * {@code canUseSkullSplitter} arm.
      */
-    private static void maybeProcessSkullSplitter(McMMOPlayer mmoPlayer, ServerPlayerEntity attacker,
+    private static void maybeProcessSkullSplitter(McMMOPlayer mmoPlayer, ServerPlayer attacker,
             PlatformLivingEntity platformTarget, LivingEntity target, float damage) {
         final AxesManager axes = mmoPlayer.getAxesManager();
         if (axes == null || !axes.canUseSkullSplitter(platformTarget)) {
@@ -1711,7 +1711,7 @@ public final class EntityDamageListener {
      *
      * @param damage the damage the player is taking, after any Dodge reduction
      */
-    private static void maybeProcessCounterAttack(ServerPlayerEntity serverPlayer,
+    private static void maybeProcessCounterAttack(ServerPlayer serverPlayer,
             DamageSource source, float damage) {
         // The *direct* damager, matching legacy's painSource (not painSourceRoot).
         if (!(source.getSource() instanceof LivingEntity assailant)) {
@@ -1803,7 +1803,7 @@ public final class EntityDamageListener {
         return MeleeWeapon.OTHER;
     }
 
-    private static float handleFallDamage(ServerPlayerEntity serverPlayer, float amount) {
+    private static float handleFallDamage(ServerPlayer serverPlayer, float amount) {
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
         if (mmoPlayer == null) {
             return amount; // data not loaded (e.g. mid-join).
@@ -1842,9 +1842,9 @@ public final class EntityDamageListener {
      * {@code CombatUtils.processCombatAttack}'s dodge path. (The attacker-side melee weapon bonuses
      * are handled separately in {@link #applyAttackerWeaponBonus}.)
      */
-    private static float handleDodge(ServerPlayerEntity serverPlayer, Entity attacker, float amount) {
+    private static float handleDodge(ServerPlayer serverPlayer, Entity attacker, float amount) {
         // Lightning dodge can be excluded by config (legacy Agility.dodgeLightningDisabled).
-        if (attacker instanceof LightningEntity
+        if (attacker instanceof LightningBolt
                 && McMMOMod.getGeneralConfig().getDodgeLightningDisabled()) {
             return amount;
         }
@@ -1860,7 +1860,7 @@ public final class EntityDamageListener {
 
         // Only mobs grant dodge XP, and only up to the per-mob cap; the manager still reduces damage
         // when the attacker is XP-ineligible, it just pays nothing.
-        final boolean xpEligible = attacker instanceof MobEntity && dodgeXpUncapped((MobEntity) attacker);
+        final boolean xpEligible = attacker instanceof Mob && dodgeXpUncapped((Mob) attacker);
 
         final DodgeResult result = agility.processDodge(amount, xpEligible);
         if (result == null) {
@@ -1868,7 +1868,7 @@ public final class EntityDamageListener {
         }
 
         if (result.getXpGain() > 0) {
-            incrementDodgeTracker((MobEntity) attacker);
+            incrementDodgeTracker((Mob) attacker);
         }
         if (mmoPlayer.useChatNotifications()) {
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
@@ -1882,7 +1882,7 @@ public final class EntityDamageListener {
     }
 
     /** Whether {@code mob} has not yet hit the dodge-XP award cap. */
-    private static boolean dodgeXpUncapped(MobEntity mob) {
+    private static boolean dodgeXpUncapped(Mob mob) {
         if (!McMMOMod.getExperienceConfig().isMovementExploitingPrevented()) {
             return true; // exploit prevention off → uncapped.
         }
@@ -1891,7 +1891,7 @@ public final class EntityDamageListener {
     }
 
     /** Bump the per-mob dodge-XP counter after a successful, XP-paying dodge. */
-    private static void incrementDodgeTracker(MobEntity mob) {
+    private static void incrementDodgeTracker(Mob mob) {
         if (!McMMOMod.getExperienceConfig().isMovementExploitingPrevented()) {
             return;
         }

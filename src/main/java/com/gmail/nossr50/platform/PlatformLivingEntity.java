@@ -5,20 +5,20 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.item.ItemStack;
-import net.minecraft.network.packet.s2c.play.PositionFlag;
-import net.minecraft.registry.Registries;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.entity.Relative;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -56,7 +56,7 @@ public final class PlatformLivingEntity {
 
     /** Registry id of the entity type, for name-based comparisons (e.g. {@code minecraft:zombie}). */
     public @NotNull Identifier getTypeId() {
-        return Registries.ENTITY_TYPE.getId(handle.getType());
+        return BuiltInRegistries.ENTITY_TYPE.getId(handle.getType());
     }
 
     // --- State --------------------------------------------------------------
@@ -104,7 +104,7 @@ public final class PlatformLivingEntity {
      * Cripple on an already-slowed target.
      */
     public boolean hasSlowness() {
-        return handle.hasStatusEffect(StatusEffects.SLOWNESS);
+        return handle.hasStatusEffect(MobEffects.SLOWNESS);
     }
 
     /**
@@ -115,7 +115,7 @@ public final class PlatformLivingEntity {
      * @param amplifier     effect level, zero-based (Bukkit's amplifier, so {@code 1} is Slowness II)
      */
     public void applySlowness(int durationTicks, int amplifier) {
-        handle.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, durationTicks,
+        handle.addStatusEffect(new MobEffectInstance(MobEffects.SLOWNESS, durationTicks,
                 amplifier));
     }
 
@@ -226,14 +226,14 @@ public final class PlatformLivingEntity {
      * teleporting to the owner's full {@code Location} did.
      */
     public void teleportTo(@NotNull PlatformPlayer owner) {
-        final Vec3d dest = owner.getPos();
+        final Vec3 dest = owner.getPos();
         handle.teleport(owner.getWorld(), dest.x, dest.y, dest.z,
-                EnumSet.noneOf(PositionFlag.class), handle.getYaw(), handle.getPitch(), false);
+                EnumSet.noneOf(Relative.class), handle.getYaw(), handle.getPitch(), false);
     }
 
     // --- World / position (Bukkit getLocation/getWorld) ---------------------
 
-    public @NotNull World getWorld() {
+    public @NotNull Level getWorld() {
         return handle.getEntityWorld();
     }
 
@@ -241,17 +241,17 @@ public final class PlatformLivingEntity {
         return handle.getBlockPos();
     }
 
-    public @NotNull Vec3d getPos() {
+    public @NotNull Vec3 getPos() {
         return handle.getEntityPos();
     }
 
     // --- Custom name --------------------------------------------------------
 
-    public @Nullable Text getCustomName() {
+    public @Nullable Component getCustomName() {
         return handle.getCustomName();
     }
 
-    public void setCustomName(@Nullable Text name) {
+    public void setCustomName(@Nullable Component name) {
         handle.setCustomName(name);
     }
 

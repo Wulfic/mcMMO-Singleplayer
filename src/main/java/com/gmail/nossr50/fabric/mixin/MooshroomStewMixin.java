@@ -1,11 +1,11 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.passive.MooshroomEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.cow.MushroomCow;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -27,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * which effects its stew will carry; it harvests nothing and produces nothing, so it is not a harvest
  * verb. It also lives on a different branch, so excluding it costs nothing.
  */
-@Mixin(MooshroomEntity.class)
+@Mixin(MushroomCow.class)
 public abstract class MooshroomStewMixin {
 
     /**
@@ -37,15 +37,15 @@ public abstract class MooshroomStewMixin {
      * from the three-argument one the bucket path uses, which is what keeps the two hooks from
      * colliding on a mooshroom that inherits both paths.
      */
-    @Inject(method = "interactMob(Lnet/minecraft/entity/player/PlayerEntity;"
-            + "Lnet/minecraft/util/Hand;)Lnet/minecraft/util/ActionResult;", allow = 1,
+    @Inject(method = "interactMob(Lnet/minecraft/world/entity/player/Player;"
+            + "Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;", allow = 1,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/item/ItemUsage;exchangeStack("
-                            + "Lnet/minecraft/item/ItemStack;"
-                            + "Lnet/minecraft/entity/player/PlayerEntity;"
-                            + "Lnet/minecraft/item/ItemStack;Z)Lnet/minecraft/item/ItemStack;"))
-    private void mcmmo$onStewed(PlayerEntity player, Hand hand,
-            CallbackInfoReturnable<ActionResult> cir) {
+                    target = "Lnet/minecraft/world/item/ItemUtils;exchangeStack("
+                            + "Lnet/minecraft/world/item/ItemStack;"
+                            + "Lnet/minecraft/world/entity/player/Player;"
+                            + "Lnet/minecraft/world/item/ItemStack;Z)Lnet/minecraft/world/item/ItemStack;"))
+    private void mcmmo$onStewed(Player player, InteractionHand hand,
+            CallbackInfoReturnable<InteractionResult> cir) {
         HusbandryListener.onMilked((Entity) (Object) this, player);
     }
 }

@@ -17,9 +17,9 @@ import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.nio.file.Path;
 import java.util.UUID;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.server.level.ServerPlayer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -99,7 +99,7 @@ class SuperAbilityListenerOffhandTest {
     void offhandNeverBlocksAnythingWhileTheSwitchIsOff() {
         // Not just torches: nothing in the off hand may block, or the fix is item-specific by
         // accident and a shield/food/map reopens the issue.
-        for (net.minecraft.item.Item offhand : new net.minecraft.item.Item[] {
+        for (net.minecraft.world.item.Item offhand : new net.minecraft.world.item.Item[] {
                 Items.TORCH, Items.SHIELD, Items.COOKED_BEEF, Items.DIAMOND_PICKAXE, Items.MAP}) {
             assertFalse(SuperAbilityListener.offhandBlocksActivation(
                             player(Items.DIAMOND_PICKAXE, offhand, false, false)),
@@ -217,14 +217,14 @@ class SuperAbilityListenerOffhandTest {
         return new McMMOPlayer(platformPlayer, new PlayerProfile("TestPlayer", UID, 0));
     }
 
-    private static ServerPlayerEntity emptyOffhand() {
+    private static ServerPlayer emptyOffhand() {
         return player(Items.DIAMOND_PICKAXE, null, false, false);
     }
 
     /** @param mainHand / {@code offHand} {@code null} for an empty slot. */
-    private static ServerPlayerEntity player(net.minecraft.item.Item mainHand,
-            net.minecraft.item.Item offHand, boolean sneaking, boolean riding) {
-        final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
+    private static ServerPlayer player(net.minecraft.world.item.Item mainHand,
+            net.minecraft.world.item.Item offHand, boolean sneaking, boolean riding) {
+        final ServerPlayer player = mock(ServerPlayer.class);
         when(player.getMainHandStack())
                 .thenReturn(mainHand == null ? ItemStack.EMPTY : new ItemStack(mainHand));
         when(player.getOffHandStack())

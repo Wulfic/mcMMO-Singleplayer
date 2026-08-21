@@ -6,9 +6,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.UUID;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.text.Text;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -36,10 +36,10 @@ class PlatformPlayerTest {
         com.gmail.nossr50.util.McTestRegistries.bootstrap();
     }
 
-    private static ServerPlayerEntity entity(UUID uuid, String name) {
-        final ServerPlayerEntity handle = mock(ServerPlayerEntity.class);
+    private static ServerPlayer entity(UUID uuid, String name) {
+        final ServerPlayer handle = mock(ServerPlayer.class);
         when(handle.getUuid()).thenReturn(uuid);
-        when(handle.getName()).thenReturn(Text.literal(name));
+        when(handle.getName()).thenReturn(Component.literal(name));
         return handle;
     }
 
@@ -59,7 +59,7 @@ class PlatformPlayerTest {
     @Test
     void everyPlatformSoundCategoryMapsToTheVanillaConstantOfTheSameName() {
         for (final PlatformSoundCategory category : PlatformSoundCategory.values()) {
-            assertSame(SoundCategory.valueOf(category.name()), PlatformPlayer.toVanilla(category),
+            assertSame(SoundSource.valueOf(category.name()), PlatformPlayer.toVanilla(category),
                     "PlatformSoundCategory." + category.name()
                             + " must map to vanilla SoundCategory." + category.name()
                             + " — a mis-mapped arm silently plays mcMMO's sounds on the wrong "
@@ -76,7 +76,7 @@ class PlatformPlayerTest {
      */
     @Test
     void theMirrorEnumCoversEveryVanillaSoundCategory() {
-        for (final SoundCategory vanilla : SoundCategory.values()) {
+        for (final SoundSource vanilla : SoundSource.values()) {
             assertDoesNotThrow(() -> PlatformSoundCategory.valueOf(vanilla.name()),
                     "vanilla SoundCategory." + vanilla.name()
                             + " has no PlatformSoundCategory mirror — skill code cannot name it");
@@ -85,8 +85,8 @@ class PlatformPlayerTest {
 
     @Test
     void rebindSwapsInTheReplacementEntityForTheSamePlayer() {
-        final ServerPlayerEntity beforeDeath = entity(PLAYER_ID, "Steve");
-        final ServerPlayerEntity afterRespawn = entity(PLAYER_ID, "Steve");
+        final ServerPlayer beforeDeath = entity(PLAYER_ID, "Steve");
+        final ServerPlayer afterRespawn = entity(PLAYER_ID, "Steve");
         final PlatformPlayer player = new PlatformPlayer(beforeDeath);
 
         player.rebind(afterRespawn);
@@ -110,7 +110,7 @@ class PlatformPlayerTest {
 
     @Test
     void rebindRefusesAnEntityBelongingToADifferentPlayer() {
-        final ServerPlayerEntity original = entity(PLAYER_ID, "Steve");
+        final ServerPlayer original = entity(PLAYER_ID, "Steve");
         final PlatformPlayer player = new PlatformPlayer(original);
 
         player.rebind(entity(OTHER_ID, "Alex"));

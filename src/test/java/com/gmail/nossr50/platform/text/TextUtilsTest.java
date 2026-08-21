@@ -4,9 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextColor;
-import net.minecraft.util.Formatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextColor;
+import net.minecraft.ChatFormatting;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -28,17 +28,17 @@ class TextUtilsTest {
 
     @Test
     void colorCodeAppliesTheColor() {
-        final Text text = TextUtils.toText("§aGreen");
-        final List<Text> siblings = text.getSiblings();
+        final Component text = TextUtils.toText("§aGreen");
+        final List<Component> siblings = text.getSiblings();
         assertEquals(1, siblings.size());
-        assertEquals(TextColor.fromFormatting(Formatting.GREEN),
+        assertEquals(TextColor.fromFormatting(ChatFormatting.GREEN),
                 siblings.get(0).getStyle().getColor());
     }
 
     @Test
     void decorationCodeAccumulates() {
-        final Text text = TextUtils.toText("§l§nBold");
-        final Text run = text.getSiblings().get(0);
+        final Component text = TextUtils.toText("§l§nBold");
+        final Component run = text.getSiblings().get(0);
         assertTrue(run.getStyle().isBold());
         assertTrue(run.getStyle().isUnderlined());
     }
@@ -46,8 +46,8 @@ class TextUtilsTest {
     @Test
     void colorResetsPriorDecoration() {
         // §l turns on bold; a following colour code must clear it (legacy behaviour).
-        final Text text = TextUtils.toText("§lBold§aPlain");
-        final List<Text> siblings = text.getSiblings();
+        final Component text = TextUtils.toText("§lBold§aPlain");
+        final List<Component> siblings = text.getSiblings();
         assertEquals(2, siblings.size());
         assertTrue(siblings.get(0).getStyle().isBold());
         assertTrue(!siblings.get(1).getStyle().isBold());
@@ -55,7 +55,7 @@ class TextUtilsTest {
 
     @Test
     void hexColorIsParsed() {
-        final Text text = TextUtils.toText("§x§F§F§0§0§0§0Red");
+        final Component text = TextUtils.toText("§x§F§F§0§0§0§0Red");
         assertEquals("Red", text.getString());
         assertEquals(TextColor.fromRgb(0xFF0000),
                 text.getSiblings().get(0).getStyle().getColor());

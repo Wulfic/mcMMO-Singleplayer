@@ -2,11 +2,11 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.CookingListener;
 import com.llamalad7.mixinextras.sugar.Local;
-import net.minecraft.block.entity.CampfireBlockEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.recipe.input.SingleStackRecipeInput;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.level.block.entity.CampfireBlockEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.SingleRecipeInput;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
  * {@link AbstractFurnaceSmeltMixin} does not reach it. Both campfire variants share this one block
  * entity and one {@code CampfireBlock}, so both are covered by this single injector.
  *
- * <h2>The seam ({@code javap -c -p net.minecraft.block.entity.CampfireBlockEntity})</h2>
+ * <h2>The seam ({@code javap -c -p net.minecraft.world.level.block.entity.CampfireBlockEntity})</h2>
  * {@code litServerTick} walks the four cooking slots, and for a slot whose {@code cookingTimes}
  * entry has reached its {@code cookingTotalTimes} entry it does, in order:
  * <pre>
@@ -79,13 +79,13 @@ public abstract class CampfireCookMixin {
             index = 4,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/util/ItemScatterer;spawn("
-                            + "Lnet/minecraft/world/World;DDD"
-                            + "Lnet/minecraft/item/ItemStack;)V"))
+                    target = "Lnet/minecraft/world/Containers;spawn("
+                            + "Lnet/minecraft/world/level/Level;DDD"
+                            + "Lnet/minecraft/world/item/ItemStack;)V"))
     private static ItemStack mcmmo$onCampfireCook(ItemStack result,
-            @Local(argsOnly = true) ServerWorld world,
+            @Local(argsOnly = true) ServerLevel world,
             @Local(argsOnly = true) BlockPos pos,
-            @Local SingleStackRecipeInput cooked) {
+            @Local SingleRecipeInput cooked) {
         return CookingListener.onCampfireCook(world, pos, cooked.item(), result);
     }
 }

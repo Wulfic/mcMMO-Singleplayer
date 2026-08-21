@@ -20,9 +20,9 @@ import com.gmail.nossr50.platform.PlatformInventory;
 import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.nio.file.Path;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.util.collection.DefaultedList;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.NonNullList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,17 +69,17 @@ class AlchemyPotionBrewerTest {
      * exactly as {@code AlchemyListener} wraps the block entity's own slot list — so the tests still
      * assert against the underlying vanilla stacks the mixin would see.
      */
-    private DefaultedList<ItemStack> awkwardStandWith(ItemStack ingredient) {
+    private NonNullList<ItemStack> awkwardStandWith(ItemStack ingredient) {
         final AlchemyPotion awkward = potionConfig.getPotion("POTION_OF_AWKWARD");
         assertNotNull(awkward, "POTION_OF_AWKWARD is in the bundled tree");
-        final DefaultedList<ItemStack> slots = DefaultedList.ofSize(5, ItemStack.EMPTY);
+        final NonNullList<ItemStack> slots = NonNullList.ofSize(5, ItemStack.EMPTY);
         slots.set(0, awkward.toItem(1).unwrap());
         slots.set(AlchemyPotionBrewer.INGREDIENT_SLOT, ingredient);
         return slots;
     }
 
     /** The brewing-stand view the production path operates on. */
-    private static PlatformInventory view(DefaultedList<ItemStack> slots) {
+    private static PlatformInventory view(NonNullList<ItemStack> slots) {
         return new PlatformInventory(slots);
     }
 
@@ -103,7 +103,7 @@ class AlchemyPotionBrewerTest {
 
     @Test
     void finishBrewingTransformsTheBottleAndConsumesTheIngredient() {
-        final DefaultedList<ItemStack> slots = awkwardStandWith(new ItemStack(Items.SUGAR));
+        final NonNullList<ItemStack> slots = awkwardStandWith(new ItemStack(Items.SUGAR));
 
         AlchemyPotionBrewer.finishBrewing(view(slots), null); // unattended brew → no XP, still completes.
 
@@ -117,7 +117,7 @@ class AlchemyPotionBrewerTest {
 
     @Test
     void finishBrewingDecrementsAStackedIngredient() {
-        final DefaultedList<ItemStack> slots = awkwardStandWith(new ItemStack(Items.SUGAR, 2));
+        final NonNullList<ItemStack> slots = awkwardStandWith(new ItemStack(Items.SUGAR, 2));
 
         AlchemyPotionBrewer.finishBrewing(view(slots), null);
 
@@ -128,7 +128,7 @@ class AlchemyPotionBrewerTest {
 
     @Test
     void finishBrewingLeavesTheStandUntouchedForANonIngredient() {
-        final DefaultedList<ItemStack> slots = awkwardStandWith(new ItemStack(Items.DIRT));
+        final NonNullList<ItemStack> slots = awkwardStandWith(new ItemStack(Items.DIRT));
 
         AlchemyPotionBrewer.finishBrewing(view(slots), null);
 
@@ -140,7 +140,7 @@ class AlchemyPotionBrewerTest {
 
     @Test
     void finishBrewingAwardsTheStageXpToTheBrewer() {
-        final DefaultedList<ItemStack> slots = awkwardStandWith(new ItemStack(Items.SUGAR));
+        final NonNullList<ItemStack> slots = awkwardStandWith(new ItemStack(Items.SUGAR));
 
         final McMMOPlayer mmoPlayer = mock(McMMOPlayer.class);
         final AlchemyManager alchemyManager = mock(AlchemyManager.class);
@@ -154,7 +154,7 @@ class AlchemyPotionBrewerTest {
 
     @Test
     void finishBrewingAwardsNoXpForANonBrew() {
-        final DefaultedList<ItemStack> slots = awkwardStandWith(new ItemStack(Items.DIRT));
+        final NonNullList<ItemStack> slots = awkwardStandWith(new ItemStack(Items.DIRT));
 
         final McMMOPlayer mmoPlayer = mock(McMMOPlayer.class);
 

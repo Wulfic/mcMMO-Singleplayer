@@ -10,8 +10,8 @@ import me.shedaniel.clothconfig2.api.AbstractConfigListEntry;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -33,12 +33,12 @@ public final class ClothConfigScreenBuilder {
 
         final ConfigBuilder builder = ConfigBuilder.create()
                 .setParentScreen(parent)
-                .setTitle(Text.literal("mcMMO Configuration"));
+                .setTitle(Component.literal("mcMMO Configuration"));
 
         final ConfigEntryBuilder entries = builder.entryBuilder();
 
         for (String category : McMMOSettings.categories()) {
-            final ConfigCategory tab = builder.getOrCreateCategory(Text.literal(category));
+            final ConfigCategory tab = builder.getOrCreateCategory(Component.literal(category));
             for (ConfigSetting setting : McMMOSettings.byCategory(category)) {
                 tab.addEntry(buildEntry(entries, session, setting));
             }
@@ -80,7 +80,7 @@ public final class ClothConfigScreenBuilder {
     private static @NotNull AbstractConfigListEntry<?> buildEntry(
             @NotNull ConfigEntryBuilder entries, @NotNull ConfigSession session,
             @NotNull ConfigSetting setting) {
-        final Text label = Text.literal(setting.label());
+        final Component label = Component.literal(setting.label());
         return switch (setting.kind()) {
             case BOOLEAN -> {
                 // Owner ruling S-3 (2026-08-18): a skill this Minecraft version cannot furnish gets
@@ -106,7 +106,7 @@ public final class ClothConfigScreenBuilder {
                         .setSaveConsumer(onSave);
                 final String tooltip = tooltipFor(setting, locked);
                 if (tooltip != null) {
-                    b = b.setTooltip(Text.literal(tooltip));
+                    b = b.setTooltip(Component.literal(tooltip));
                 }
                 final AbstractConfigListEntry<?> entry = b.build();
                 if (locked) {
@@ -125,7 +125,7 @@ public final class ClothConfigScreenBuilder {
                     b = b.setMax(setting.max().intValue());
                 }
                 if (setting.tooltip() != null) {
-                    b = b.setTooltip(Text.literal(setting.tooltip()));
+                    b = b.setTooltip(Component.literal(setting.tooltip()));
                 }
                 yield b.build();
             }
@@ -140,7 +140,7 @@ public final class ClothConfigScreenBuilder {
                     b = b.setMax(setting.max());
                 }
                 if (setting.tooltip() != null) {
-                    b = b.setTooltip(Text.literal(setting.tooltip()));
+                    b = b.setTooltip(Component.literal(setting.tooltip()));
                 }
                 yield b.build();
             }

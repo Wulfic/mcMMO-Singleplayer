@@ -1,10 +1,10 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.platform.MobOrigins;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.SpawnReason;
-import net.minecraft.entity.conversion.EntityConversionContext;
-import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.ConversionParams;
+import net.minecraft.world.entity.Mob;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -43,20 +43,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * {@code TAIL} would silently miss the early exits. Re-measure per band with
  * {@code scripts/mixin-allow-audit.py}; a new guard clause upstream changes this number.
  */
-@Mixin(MobEntity.class)
+@Mixin(Mob.class)
 public abstract class MobConversionOriginMixin {
 
     @Inject(
-            method = "convertTo(Lnet/minecraft/entity/EntityType;"
-                    + "Lnet/minecraft/entity/conversion/EntityConversionContext;"
-                    + "Lnet/minecraft/entity/SpawnReason;"
-                    + "Lnet/minecraft/entity/conversion/EntityConversionContext$Finalizer;)"
-                    + "Lnet/minecraft/entity/mob/MobEntity;", allow = 3,
+            method = "convertTo(Lnet/minecraft/world/entity/EntityType;"
+                    + "Lnet/minecraft/world/entity/ConversionParams;"
+                    + "Lnet/minecraft/world/entity/EntitySpawnReason;"
+                    + "Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)"
+                    + "Lnet/minecraft/world/entity/Mob;", allow = 3,
             at = @At("RETURN"))
     private void mcmmo$carryOriginThroughConversion(EntityType<?> type,
-            EntityConversionContext context, SpawnReason reason,
-            EntityConversionContext.Finalizer<?> finalizer,
-            CallbackInfoReturnable<MobEntity> cir) {
-        MobOrigins.carryThroughConversion((MobEntity) (Object) this, cir.getReturnValue());
+            ConversionParams context, EntitySpawnReason reason,
+            ConversionParams.AfterConversion<?> finalizer,
+            CallbackInfoReturnable<Mob> cir) {
+        MobOrigins.carryThroughConversion((Mob) (Object) this, cir.getReturnValue());
     }
 }

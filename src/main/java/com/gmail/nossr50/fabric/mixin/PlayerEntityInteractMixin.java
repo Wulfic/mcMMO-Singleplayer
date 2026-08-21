@@ -1,10 +1,10 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -32,20 +32,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * <p>HEAD and RETURN as a pair give try/finally semantics: {@code @At("RETURN")} matches every exit,
  * including the spectator early-return, so the stash cannot outlive the interaction that set it.
  */
-@Mixin(PlayerEntity.class)
+@Mixin(Player.class)
 public abstract class PlayerEntityInteractMixin {
 
-    @Inject(method = "interact(Lnet/minecraft/entity/Entity;Lnet/minecraft/util/Hand;)"
-            + "Lnet/minecraft/util/ActionResult;", allow = 1, at = @At("HEAD"))
-    private void mcmmo$beginInteraction(Entity target, Hand hand,
-            CallbackInfoReturnable<ActionResult> cir) {
-        HusbandryListener.beginPlayerInteraction((PlayerEntity) (Object) this, target);
+    @Inject(method = "interact(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;)"
+            + "Lnet/minecraft/world/InteractionResult;", allow = 1, at = @At("HEAD"))
+    private void mcmmo$beginInteraction(Entity target, InteractionHand hand,
+            CallbackInfoReturnable<InteractionResult> cir) {
+        HusbandryListener.beginPlayerInteraction((Player) (Object) this, target);
     }
 
-    @Inject(method = "interact(Lnet/minecraft/entity/Entity;Lnet/minecraft/util/Hand;)"
-            + "Lnet/minecraft/util/ActionResult;", allow = 4, at = @At("RETURN"))
-    private void mcmmo$endInteraction(Entity target, Hand hand,
-            CallbackInfoReturnable<ActionResult> cir) {
+    @Inject(method = "interact(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;)"
+            + "Lnet/minecraft/world/InteractionResult;", allow = 4, at = @At("RETURN"))
+    private void mcmmo$endInteraction(Entity target, InteractionHand hand,
+            CallbackInfoReturnable<InteractionResult> cir) {
         HusbandryListener.endPlayerInteraction();
     }
 }

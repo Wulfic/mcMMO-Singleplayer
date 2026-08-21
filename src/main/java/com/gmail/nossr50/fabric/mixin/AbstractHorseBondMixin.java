@@ -1,8 +1,8 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.TamingListener;
-import net.minecraft.entity.passive.AbstractHorseEntity;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.world.entity.animal.equine.AbstractHorse;
+import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -15,13 +15,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * untamed and the RNG temper roll passed). We inject at {@code RETURN} and award Taming XP via
  * {@link TamingListener#onEntityTamed} only on a successful bond, avoiding rewarding failed attempts.
  */
-@Mixin(AbstractHorseEntity.class)
+@Mixin(AbstractHorse.class)
 public abstract class AbstractHorseBondMixin {
 
     @Inject(method = "bondWithPlayer", allow = 1, at = @At("RETURN"))
-    private void mcmmo$onBond(PlayerEntity player, CallbackInfoReturnable<Boolean> cir) {
+    private void mcmmo$onBond(Player player, CallbackInfoReturnable<Boolean> cir) {
         if (Boolean.TRUE.equals(cir.getReturnValue())) {
-            TamingListener.onEntityTamed(player, (AbstractHorseEntity) (Object) this);
+            TamingListener.onEntityTamed(player, (AbstractHorse) (Object) this);
         }
     }
 }

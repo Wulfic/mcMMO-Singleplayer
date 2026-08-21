@@ -10,9 +10,9 @@ import com.mojang.serialization.Codec;
 import java.util.List;
 import java.util.UUID;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
-import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.NbtOps;
-import net.minecraft.nbt.NbtString;
+import net.minecraft.nbt.StringTag;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -60,7 +60,7 @@ class McMMOAttachmentsTest {
         assertNotNull(codec, "a persistent attachment must carry a codec");
         final UUID breeder = UUID.randomUUID();
 
-        final NbtElement encoded = codec.encodeStart(NbtOps.INSTANCE, breeder).getOrThrow();
+        final Tag encoded = codec.encodeStart(NbtOps.INSTANCE, breeder).getOrThrow();
         final UUID decoded = codec.parse(NbtOps.INSTANCE, encoded).getOrThrow();
 
         assertEquals(breeder, decoded, "the breeder's identity must survive the write/read cycle");
@@ -91,7 +91,7 @@ class McMMOAttachmentsTest {
         final Codec<String> codec = McMMOAttachments.MOB_ORIGIN.persistenceCodec();
         assertNotNull(codec, "a persistent attachment must carry a codec");
 
-        final NbtElement encoded = codec.encodeStart(NbtOps.INSTANCE,
+        final Tag encoded = codec.encodeStart(NbtOps.INSTANCE,
                 MobOrigin.SPAWNER.storageKey()).getOrThrow();
         final String decoded = codec.parse(NbtOps.INSTANCE, encoded).getOrThrow();
 
@@ -108,7 +108,7 @@ class McMMOAttachmentsTest {
         // A String always decodes, and MobOrigins maps anything it cannot interpret to UNKNOWN.
         final Codec<String> codec = McMMOAttachments.MOB_ORIGIN.persistenceCodec();
         assertNotNull(codec);
-        assertTrue(codec.parse(NbtOps.INSTANCE, NbtString.of("NOT_A_REAL_ORIGIN")).isSuccess(),
+        assertTrue(codec.parse(NbtOps.INSTANCE, StringTag.of("NOT_A_REAL_ORIGIN")).isSuccess(),
                 "an unrecognised stored value must still decode, so that MobOrigins gets the chance "
                         + "to fail closed on it rather than Fabric discarding the marker entirely");
     }

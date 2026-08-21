@@ -5,34 +5,34 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.text.TextUtils;
 import com.gmail.nossr50.platform.ItemUtils;
 import java.util.UUID;
-import net.minecraft.advancement.AdvancementEntry;
-import net.minecraft.advancement.PlayerAdvancementTracker;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.NbtComponent;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.enchantment.Enchantments;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.advancements.AdvancementHolder;
+import net.minecraft.server.PlayerAdvancements;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.core.Holder;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.GameMode;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.GameType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
 
@@ -70,14 +70,14 @@ public final class PlatformPlayer {
      * client thread can read player state during world open/close — the same thread split that made
      * {@link com.gmail.nossr50.util.player.UserManager}'s registry a {@code ConcurrentHashMap}.
      */
-    private volatile ServerPlayerEntity handle;
+    private volatile ServerPlayer handle;
 
-    public PlatformPlayer(@NotNull ServerPlayerEntity handle) {
+    public PlatformPlayer(@NotNull ServerPlayer handle) {
         this.handle = handle;
     }
 
     /** The wrapped vanilla player. Use when the mimicked surface is insufficient. */
-    public @NotNull ServerPlayerEntity unwrap() {
+    public @NotNull ServerPlayer unwrap() {
         return handle;
     }
 
@@ -102,7 +102,7 @@ public final class PlatformPlayer {
      *
      * @param replacement the freshly constructed entity for the same player
      */
-    public void rebind(@NotNull ServerPlayerEntity replacement) {
+    public void rebind(@NotNull ServerPlayer replacement) {
         if (!replacement.getUuid().equals(handle.getUuid())) {
             // Never swap one player's handle for another's; a mis-wired caller would silently
             // redirect every skill side effect onto the wrong player.
@@ -129,16 +129,16 @@ public final class PlatformPlayer {
 
     // --- World / position ---------------------------------------------------
 
-    public @NotNull ServerWorld getWorld() {
+    public @NotNull ServerLevel getWorld() {
         // getEntityWorld() replaced Bukkit getWorld(); for a ServerPlayerEntity it is a ServerWorld.
-        return (ServerWorld) handle.getEntityWorld();
+        return (ServerLevel) handle.getEntityWorld();
     }
 
     public @NotNull BlockPos getBlockPos() {
         return handle.getBlockPos();
     }
 
-    public @NotNull Vec3d getPos() {
+    public @NotNull Vec3 getPos() {
         return handle.getEntityPos();
     }
 
@@ -159,7 +159,7 @@ public final class PlatformPlayer {
 
     // --- Mode / movement state ---------------------------------------------
 
-    public @NotNull GameMode getGameMode() {
+    public @NotNull GameType getGameMode() {
         return handle.interactionManager.getGameMode();
     }
 
@@ -177,7 +177,7 @@ public final class PlatformPlayer {
 
     /**
      * Bukkit {@code Player#isBlocking()}: whether the player is actively raising a shield. Maps to
-     * vanilla {@link net.minecraft.entity.LivingEntity#isBlocking()}. Consumed by the Agility
+     * vanilla {@link net.minecraft.world.entity.LivingEntity#isBlocking()}. Consumed by the Agility
      * Dodge gate, which suppresses a dodge while the player is blocking.
      */
     public boolean isBlocking() {
@@ -224,12 +224,12 @@ public final class PlatformPlayer {
     public void playSound(@NotNull String soundRegistryId, @NotNull PlatformSoundCategory category,
             float volume, float pitch) {
         Identifier id = Identifier.tryParse(soundRegistryId);
-        if (id == null || !Registries.SOUND_EVENT.containsId(id)) {
+        if (id == null || !BuiltInRegistries.SOUND_EVENT.containsId(id)) {
             McMMOMod.LOGGER.warn("No vanilla sound for id '{}'", soundRegistryId);
             return;
         }
-        SoundEvent soundEvent = Registries.SOUND_EVENT.get(id);
-        Vec3d pos = getPos();
+        SoundEvent soundEvent = BuiltInRegistries.SOUND_EVENT.get(id);
+        Vec3 pos = getPos();
         // except = null → all players in range hear it (the one player, in singleplayer).
         getWorld().playSound(null, pos.x, pos.y, pos.z, soundEvent, toVanilla(category), volume,
                 pitch);
@@ -246,19 +246,19 @@ public final class PlatformPlayer {
      * every mcMMO sound on the wrong volume slider.
      */
     @VisibleForTesting
-    static @NotNull SoundCategory toVanilla(@NotNull PlatformSoundCategory category) {
+    static @NotNull SoundSource toVanilla(@NotNull PlatformSoundCategory category) {
         return switch (category) {
-            case MASTER -> SoundCategory.MASTER;
-            case MUSIC -> SoundCategory.MUSIC;
-            case RECORDS -> SoundCategory.RECORDS;
-            case WEATHER -> SoundCategory.WEATHER;
-            case BLOCKS -> SoundCategory.BLOCKS;
-            case HOSTILE -> SoundCategory.HOSTILE;
-            case NEUTRAL -> SoundCategory.NEUTRAL;
-            case PLAYERS -> SoundCategory.PLAYERS;
-            case AMBIENT -> SoundCategory.AMBIENT;
-            case VOICE -> SoundCategory.VOICE;
-            case UI -> SoundCategory.UI;
+            case MASTER -> SoundSource.MASTER;
+            case MUSIC -> SoundSource.MUSIC;
+            case RECORDS -> SoundSource.RECORDS;
+            case WEATHER -> SoundSource.WEATHER;
+            case BLOCKS -> SoundSource.BLOCKS;
+            case HOSTILE -> SoundSource.HOSTILE;
+            case NEUTRAL -> SoundSource.NEUTRAL;
+            case PLAYERS -> SoundSource.PLAYERS;
+            case AMBIENT -> SoundSource.AMBIENT;
+            case VOICE -> SoundSource.VOICE;
+            case UI -> SoundSource.UI;
         };
     }
 
@@ -287,12 +287,12 @@ public final class PlatformPlayer {
             return; // No integrated server (unit tests / between world sessions).
         }
         final Identifier id = Identifier.of("mcmmo", "milestone/" + path);
-        final AdvancementEntry entry = server.getAdvancementLoader().get(id);
+        final AdvancementHolder entry = server.getAdvancementLoader().get(id);
         if (entry == null) {
             McMMOMod.LOGGER.warn("Milestone advancement '{}' is not loaded; skipping plaque.", id);
             return;
         }
-        final PlayerAdvancementTracker tracker = handle.getAdvancementTracker();
+        final PlayerAdvancements tracker = handle.getAdvancementTracker();
         if (repeatable) {
             // Clear the completion so the re-grant re-shows the toast/plaque.
             tracker.revokeCriterion(entry, MILESTONE_CRITERION);
@@ -306,7 +306,7 @@ public final class PlatformPlayer {
      * The stack in the main hand (Bukkit {@code getInventory().getItemInMainHand()}). Consumed by
      * the super-ability activation trigger and tool-type detection ({@link
      * com.gmail.nossr50.datatypes.skills.ToolType#inHand}). Returns an empty {@link ItemStack} (never
-     * null) when the hand is empty, matching vanilla {@link net.minecraft.entity.LivingEntity#getMainHandStack()}.
+     * null) when the hand is empty, matching vanilla {@link net.minecraft.world.entity.LivingEntity#getMainHandStack()}.
      */
     public @NotNull ItemStack getMainHandStack() {
         return handle.getMainHandStack();
@@ -331,7 +331,7 @@ public final class PlatformPlayer {
 
     /**
      * Whether the player is riding an entity (Bukkit {@code Player#isInsideVehicle()} →
-     * {@link net.minecraft.entity.Entity#hasVehicle()}). Consumed by the Agility exploit check
+     * {@link net.minecraft.world.entity.Entity#hasVehicle()}). Consumed by the Agility exploit check
      * (fall damage while mounted is disallowed for XP).
      */
     public boolean isInsideVehicle() {
@@ -345,7 +345,7 @@ public final class PlatformPlayer {
      * registry; if the enchantment registry is somehow absent the check degrades to {@code false}.
      */
     public boolean hasFeatherFallingBoots() {
-        RegistryEntry<Enchantment> featherFalling = getWorld().getRegistryManager()
+        Holder<Enchantment> featherFalling = getWorld().getRegistryManager()
                 .getOrThrow(RegistryKeys.ENCHANTMENT)
                 .getOrThrow(Enchantments.FEATHER_FALLING);
         return EnchantmentHelper.getEquipmentLevel(featherFalling, handle) > 0;
@@ -436,7 +436,7 @@ public final class PlatformPlayer {
      * @return {@code true} if the effect was applied or upgraded an existing one
      */
     public boolean applySpeed(int durationTicks, int amplifier) {
-        return handle.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, durationTicks,
+        return handle.addStatusEffect(new MobEffectInstance(MobEffects.SPEED, durationTicks,
                 amplifier));
     }
 
@@ -463,11 +463,11 @@ public final class PlatformPlayer {
         if (!canBeDigBoosted(stack)) {
             return;
         }
-        final RegistryEntry<Enchantment> efficiency = efficiencyEntry();
+        final Holder<Enchantment> efficiency = efficiencyEntry();
         final int originalDigSpeed = EnchantmentHelper.getLevel(efficiency, stack);
         EnchantmentHelper.apply(stack, builder -> builder.set(efficiency,
                 originalDigSpeed + enchantBuff));
-        NbtComponent.set(DataComponentTypes.CUSTOM_DATA, stack,
+        CustomData.set(DataComponents.CUSTOM_DATA, stack,
                 nbt -> nbt.putInt(SUPER_ABILITY_BOOST_KEY, originalDigSpeed));
     }
 
@@ -485,7 +485,7 @@ public final class PlatformPlayer {
      * boosted tool that was moved out of the main hand is still cleaned up.
      */
     public void removeSuperAbilityBoostsFromInventory() {
-        final PlayerInventory inventory = handle.getInventory();
+        final Inventory inventory = handle.getInventory();
         for (int slot = 0; slot < inventory.size(); slot++) {
             removeSuperAbilityBoostFromStack(inventory.getStack(slot));
         }
@@ -512,23 +512,23 @@ public final class PlatformPlayer {
         if (stack.isEmpty() || !canBeDigBoosted(stack)) {
             return;
         }
-        final NbtComponent customData = stack.get(DataComponentTypes.CUSTOM_DATA);
+        final CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
         if (customData == null) {
             return;
         }
-        final NbtCompound nbt = customData.copyNbt();
+        final CompoundTag nbt = customData.copyNbt();
         if (!nbt.contains(SUPER_ABILITY_BOOST_KEY)) {
             return; // not a boosted stack.
         }
         final int originalDigSpeed = nbt.getInt(SUPER_ABILITY_BOOST_KEY, 0);
-        final RegistryEntry<Enchantment> efficiency = efficiencyEntry();
+        final Holder<Enchantment> efficiency = efficiencyEntry();
         if (originalDigSpeed > 0) {
             EnchantmentHelper.apply(stack, builder -> builder.set(efficiency, originalDigSpeed));
         } else {
             EnchantmentHelper.apply(stack,
                     builder -> builder.remove(entry -> entry.matchesKey(Enchantments.EFFICIENCY)));
         }
-        NbtComponent.set(DataComponentTypes.CUSTOM_DATA, stack,
+        CustomData.set(DataComponents.CUSTOM_DATA, stack,
                 marker -> marker.remove(SUPER_ABILITY_BOOST_KEY));
     }
 
@@ -538,7 +538,7 @@ public final class PlatformPlayer {
     }
 
     /** Resolve the {@code Efficiency} enchantment entry from the world's dynamic registry. */
-    private @NotNull RegistryEntry<Enchantment> efficiencyEntry() {
+    private @NotNull Holder<Enchantment> efficiencyEntry() {
         return getWorld().getRegistryManager()
                 .getOrThrow(RegistryKeys.ENCHANTMENT)
                 .getOrThrow(Enchantments.EFFICIENCY);
@@ -547,7 +547,7 @@ public final class PlatformPlayer {
     // --- Stopgap raw accessors (pending dedicated adapters) ------------------
 
     /** Stopgap: raw vanilla inventory until the ItemStack adapter lands. */
-    public @NotNull PlayerInventory getInventory() {
+    public @NotNull Inventory getInventory() {
         return handle.getInventory();
     }
 }

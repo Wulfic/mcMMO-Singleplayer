@@ -4,10 +4,10 @@ import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.CombatUtils;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.mob.EndermanEntity;
-import net.minecraft.entity.mob.EndermiteEntity;
-import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Endermite;
+import net.minecraft.world.entity.Mob;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -36,16 +36,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * hence the mixin sits on {@code MobEntity} and filters by type — two {@code instanceof} checks on a
  * call that only happens when a mob changes its mind about who to attack.
  */
-@Mixin(MobEntity.class)
+@Mixin(Mob.class)
 public abstract class EndermanEndermiteLureMixin {
 
-    @Inject(method = "setTarget(Lnet/minecraft/entity/LivingEntity;)V", allow = 1, at = @At("HEAD"))
+    @Inject(method = "setTarget(Lnet/minecraft/world/entity/LivingEntity;)V", allow = 1, at = @At("HEAD"))
     private void mcmmo$flagEndermiteLuredEnderman(LivingEntity target, CallbackInfo ci) {
-        if (!(target instanceof EndermiteEntity)) {
+        if (!(target instanceof Endermite)) {
             return;
         }
-        final MobEntity self = (MobEntity) (Object) this;
-        if (!(self instanceof EndermanEntity)) {
+        final Mob self = (Mob) (Object) this;
+        if (!(self instanceof EnderMan)) {
             return;
         }
         // Checked at the write as well as at the read so the flag is never stamped at all while the

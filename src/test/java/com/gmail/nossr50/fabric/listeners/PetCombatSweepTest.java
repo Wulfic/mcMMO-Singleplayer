@@ -22,24 +22,24 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.attribute.EntityAttributeInstance;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.mob.CreeperEntity;
-import net.minecraft.entity.mob.GhastEntity;
-import net.minecraft.entity.mob.MagmaCubeEntity;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.mob.Monster;
-import net.minecraft.entity.mob.SlimeEntity;
-import net.minecraft.entity.mob.WardenEntity;
-import net.minecraft.entity.mob.ZombieEntity;
-import net.minecraft.entity.passive.CowEntity;
-import net.minecraft.entity.passive.WolfEntity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.Box;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.Ghast;
+import net.minecraft.world.entity.monster.MagmaCube;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.Slime;
+import net.minecraft.world.entity.monster.warden.Warden;
+import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.entity.animal.cow.Cow;
+import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.server.level.ServerLevel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,15 +63,15 @@ class PetCombatSweepTest {
     private static final double BASE_FOLLOW_RANGE = 16.0D;
 
     private GeneralConfig config;
-    private ServerWorld world;
-    private ServerPlayerEntity player;
+    private ServerLevel world;
+    private ServerPlayer player;
     private UUID playerUuid;
     private McMMOPlayer mmoPlayer;
     private TamingManager tamingManager;
 
     /** Everything the world's box queries will hand back, by the class the caller asked for. */
-    private final List<WolfEntity> pets = new ArrayList<>();
-    private final List<MobEntity> mobs = new ArrayList<>();
+    private final List<Wolf> pets = new ArrayList<>();
+    private final List<Mob> mobs = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -82,13 +82,13 @@ class PetCombatSweepTest {
         lenient().when(config.getPetEngageRange()).thenReturn(32.0D);
         McMMOMod.setGeneralConfig(config);
 
-        world = mock(ServerWorld.class);
-        player = mock(ServerPlayerEntity.class);
+        world = mock(ServerLevel.class);
+        player = mock(ServerPlayer.class);
         playerUuid = UUID.randomUUID();
         lenient().when(player.getUuid()).thenReturn(playerUuid);
-        lenient().when(player.getName()).thenReturn(Text.literal("tester"));
+        lenient().when(player.getName()).thenReturn(Component.literal("tester"));
         lenient().when(player.getEntityWorld()).thenReturn(world);
-        lenient().when(player.getBoundingBox()).thenReturn(new Box(-0.3, 0, -0.3, 0.3, 1.8, 0.3));
+        lenient().when(player.getBoundingBox()).thenReturn(new AABB(-0.3, 0, -0.3, 0.3, 1.8, 0.3));
         // age 0 % 20 == 0, so every test is on a sweep tick unless it says otherwise.
         player.age = 0;
         // Everything is 100 blocks² away unless a test says otherwise; overridden per mob below.
@@ -113,9 +113,9 @@ class PetCombatSweepTest {
 
     @Test
     void anAggressivePetWithNoTargetAttacksTheNearestHostile() {
-        final WolfEntity pet = idlePet();
-        final ZombieEntity zombie = hostile(ZombieEntity.class, 25.0D);
-        final ZombieEntity distant = hostile(ZombieEntity.class, 900.0D);
+        final Wolf pet = idlePet();
+        final Zombie zombie = hostile(Zombie.class, 25.0D);
+        final Zombie distant = hostile(Zombie.class, 900.0D);
 
         PetCombatSweep.tick(player);
 
@@ -132,10 +132,10 @@ class PetCombatSweepTest {
      */
     @Test
     void aSlimeIsAValidTargetEvenThoughItIsNotAHostileEntity() {
-        final WolfEntity pet = idlePet();
-        final SlimeEntity slime = hostile(SlimeEntity.class, 25.0D);
+        final Wolf pet = idlePet();
+        final Slime slime = hostile(Slime.class, 25.0D);
 
-        assertTrue(slime instanceof Monster, "precondition: a slime is a Monster");
+        assertTrue(slime instanceof Enemy, "precondition: a slime is a Monster");
 
         PetCombatSweep.tick(player);
 
@@ -145,8 +145,8 @@ class PetCombatSweepTest {
     /** The same trap, second species — magma cubes are the other common one. */
     @Test
     void aMagmaCubeIsAValidTarget() {
-        final WolfEntity pet = idlePet();
-        final MagmaCubeEntity magmaCube = hostile(MagmaCubeEntity.class, 25.0D);
+        final Wolf pet = idlePet();
+        final MagmaCube magmaCube = hostile(MagmaCube.class, 25.0D);
 
         PetCombatSweep.tick(player);
 
@@ -159,8 +159,8 @@ class PetCombatSweepTest {
      */
     @Test
     void aWardenIsNeverTargeted() {
-        final WolfEntity pet = idlePet();
-        hostile(WardenEntity.class, 4.0D);
+        final Wolf pet = idlePet();
+        hostile(Warden.class, 4.0D);
 
         PetCombatSweep.tick(player);
 
@@ -174,8 +174,8 @@ class PetCombatSweepTest {
      */
     @Test
     void aCreeperIsNeverTargeted() {
-        final WolfEntity pet = idlePet();
-        final CreeperEntity creeper = hostile(CreeperEntity.class, 4.0D);
+        final Wolf pet = idlePet();
+        final Creeper creeper = hostile(Creeper.class, 4.0D);
         lenient().when(pet.canAttackWithOwner(creeper, player)).thenReturn(false);
 
         PetCombatSweep.tick(player);
@@ -185,8 +185,8 @@ class PetCombatSweepTest {
 
     @Test
     void aGhastIsNeverTargeted() {
-        final WolfEntity pet = idlePet();
-        final GhastEntity ghast = hostile(GhastEntity.class, 4.0D);
+        final Wolf pet = idlePet();
+        final Ghast ghast = hostile(Ghast.class, 4.0D);
         lenient().when(pet.canAttackWithOwner(ghast, player)).thenReturn(false);
 
         PetCombatSweep.tick(player);
@@ -197,8 +197,8 @@ class PetCombatSweepTest {
     /** A cow is not a Monster. Aggressive mode must not turn the pack loose on livestock. */
     @Test
     void aPassiveAnimalIsNeverTargeted() {
-        final WolfEntity pet = idlePet();
-        final CowEntity cow = mock(CowEntity.class);
+        final Wolf pet = idlePet();
+        final Cow cow = mock(Cow.class);
         lenient().when(cow.isAlive()).thenReturn(true);
         lenient().when(player.squaredDistanceTo(cow)).thenReturn(4.0D);
         mobs.add(cow);
@@ -222,8 +222,8 @@ class PetCombatSweepTest {
     @Test
     void aPassivePetPicksNoFightOfItsOwn() {
         trackProfile(PetCombatMode.PASSIVE);
-        final WolfEntity pet = idlePet();
-        hostile(ZombieEntity.class, 4.0D);
+        final Wolf pet = idlePet();
+        hostile(Zombie.class, 4.0D);
 
         PetCombatSweep.tick(player);
 
@@ -234,9 +234,9 @@ class PetCombatSweepTest {
     @Test
     void aPassivePetKeepsTheTargetItAlreadyHas() {
         trackProfile(PetCombatMode.PASSIVE);
-        final ZombieEntity engaged = mock(ZombieEntity.class);
+        final Zombie engaged = mock(Zombie.class);
         lenient().when(engaged.isAlive()).thenReturn(true);
-        final WolfEntity pet = pet(engaged);
+        final Wolf pet = pet(engaged);
 
         PetCombatSweep.tick(player);
 
@@ -249,8 +249,8 @@ class PetCombatSweepTest {
     void anUnloadedProfileDoesNotAcquireTargets() {
         UserManager.cleanupPlayer(mmoPlayer);
         mmoPlayer = null;
-        final WolfEntity pet = idlePet();
-        hostile(ZombieEntity.class, 4.0D);
+        final Wolf pet = idlePet();
+        hostile(Zombie.class, 4.0D);
 
         PetCombatSweep.tick(player);
 
@@ -266,9 +266,9 @@ class PetCombatSweepTest {
      */
     @Test
     void aPetWithATargetIsBoostedToTheEngageRange() {
-        final ZombieEntity shot = mock(ZombieEntity.class);
+        final Zombie shot = mock(Zombie.class);
         lenient().when(shot.isAlive()).thenReturn(true);
-        final WolfEntity pet = pet(shot);
+        final Wolf pet = pet(shot);
 
         PetCombatSweep.tick(player);
 
@@ -284,9 +284,9 @@ class PetCombatSweepTest {
     @Test
     void theReachBoostAppliesInPassiveModeToo() {
         trackProfile(PetCombatMode.PASSIVE);
-        final ZombieEntity shot = mock(ZombieEntity.class);
+        final Zombie shot = mock(Zombie.class);
         lenient().when(shot.isAlive()).thenReturn(true);
-        final WolfEntity pet = pet(shot);
+        final Wolf pet = pet(shot);
 
         PetCombatSweep.tick(player);
 
@@ -301,9 +301,9 @@ class PetCombatSweepTest {
      */
     @Test
     void theBoostIsRemovedWhenTheTargetIsGone() {
-        final ZombieEntity shot = mock(ZombieEntity.class);
+        final Zombie shot = mock(Zombie.class);
         lenient().when(shot.isAlive()).thenReturn(true);
-        final WolfEntity pet = pet(shot);
+        final Wolf pet = pet(shot);
 
         PetCombatSweep.tick(player);
         assertTrue(SkillAttributeService.isApplied(pet,
@@ -329,9 +329,9 @@ class PetCombatSweepTest {
      */
     @Test
     void aDeadTargetDoesNotKeepTheBoostAlive() {
-        final ZombieEntity victim = mock(ZombieEntity.class);
+        final Zombie victim = mock(Zombie.class);
         when(victim.isAlive()).thenReturn(true);
-        final WolfEntity pet = pet(victim);
+        final Wolf pet = pet(victim);
 
         PetCombatSweep.tick(player);
         assertTrue(SkillAttributeService.isApplied(pet,
@@ -356,9 +356,9 @@ class PetCombatSweepTest {
      */
     @Test
     void sittingAPetTakesItsExistingBoostBackOff() {
-        final ZombieEntity target = mock(ZombieEntity.class);
+        final Zombie target = mock(Zombie.class);
         lenient().when(target.isAlive()).thenReturn(true);
-        final WolfEntity pet = pet(target);
+        final Wolf pet = pet(target);
 
         PetCombatSweep.tick(player);
         assertTrue(SkillAttributeService.isApplied(pet,
@@ -378,9 +378,9 @@ class PetCombatSweepTest {
      */
     @Test
     void loweringTheEngageRangeBelowNaturalRemovesAnExistingBoost() {
-        final ZombieEntity target = mock(ZombieEntity.class);
+        final Zombie target = mock(Zombie.class);
         lenient().when(target.isAlive()).thenReturn(true);
-        final WolfEntity pet = pet(target);
+        final Wolf pet = pet(target);
 
         PetCombatSweep.tick(player);
         assertTrue(SkillAttributeService.isApplied(pet,
@@ -399,14 +399,14 @@ class PetCombatSweepTest {
      */
     @Test
     void theBoostIsTemporaryAndNeverPersistent() {
-        final ZombieEntity shot = mock(ZombieEntity.class);
+        final Zombie shot = mock(Zombie.class);
         lenient().when(shot.isAlive()).thenReturn(true);
-        final WolfEntity pet = pet(shot);
+        final Wolf pet = pet(shot);
 
         PetCombatSweep.tick(player);
 
-        final EntityAttributeInstance instance =
-                pet.getAttributeInstance(EntityAttributes.FOLLOW_RANGE);
+        final AttributeInstance instance =
+                pet.getAttributeInstance(Attributes.FOLLOW_RANGE);
         assertTrue(instance.getModifiers().stream().anyMatch(m -> m.value() == 16.0D),
                 "precondition: the modifier is applied");
         assertTrue(instance.getPersistentModifiers().stream().noneMatch(
@@ -417,11 +417,11 @@ class PetCombatSweepTest {
     /** A sitting pet is under an explicit order to stay: no fight, no chase, no boost. */
     @Test
     void aSittingPetIsNeitherBoostedNorGivenATarget() {
-        final ZombieEntity shot = mock(ZombieEntity.class);
+        final Zombie shot = mock(Zombie.class);
         lenient().when(shot.isAlive()).thenReturn(true);
-        final WolfEntity pet = pet(shot);
+        final Wolf pet = pet(shot);
         when(pet.isSitting()).thenReturn(true);
-        hostile(ZombieEntity.class, 4.0D);
+        hostile(Zombie.class, 4.0D);
 
         PetCombatSweep.tick(player);
 
@@ -434,9 +434,9 @@ class PetCombatSweepTest {
     @Test
     void anEngageRangeBelowTheNaturalOneAppliesNothing() {
         when(config.getPetEngageRange()).thenReturn(BASE_FOLLOW_RANGE);
-        final ZombieEntity shot = mock(ZombieEntity.class);
+        final Zombie shot = mock(Zombie.class);
         lenient().when(shot.isAlive()).thenReturn(true);
-        final WolfEntity pet = pet(shot);
+        final Wolf pet = pet(shot);
 
         PetCombatSweep.tick(player);
 
@@ -449,8 +449,8 @@ class PetCombatSweepTest {
     @Test
     void theSweepDoesNothingWhenTheFeatureIsDisabled() {
         when(config.isPetCombatModeEnabled()).thenReturn(false);
-        final WolfEntity pet = idlePet();
-        hostile(ZombieEntity.class, 4.0D);
+        final Wolf pet = idlePet();
+        hostile(Zombie.class, 4.0D);
 
         PetCombatSweep.tick(player);
 
@@ -464,8 +464,8 @@ class PetCombatSweepTest {
     @Test
     void theSweepIsSkippedOnATickThatIsNotOnTheInterval() {
         player.age = 7; // 7 % 20 != 0
-        final WolfEntity pet = idlePet();
-        hostile(ZombieEntity.class, 4.0D);
+        final Wolf pet = idlePet();
+        hostile(Zombie.class, 4.0D);
 
         PetCombatSweep.tick(player);
 
@@ -474,12 +474,12 @@ class PetCombatSweepTest {
 
     @Test
     void aPetSomebodyElseOwnsIsUntouched() {
-        final WolfEntity stranger = mock(WolfEntity.class);
+        final Wolf stranger = mock(Wolf.class);
         lenient().when(stranger.isTamed()).thenReturn(true);
         lenient().when(stranger.isOwner(any())).thenReturn(false);
         // NOT added to `pets` — the world query's own predicate excludes it. Driving the real
         // predicate is the point: this asserts the filter is asked, not that the list was short.
-        hostile(ZombieEntity.class, 4.0D);
+        hostile(Zombie.class, 4.0D);
 
         PetCombatSweep.tick(player);
 
@@ -498,12 +498,12 @@ class PetCombatSweepTest {
      */
     @SuppressWarnings("unchecked")
     private void wireWorldQueries() {
-        lenient().when(world.getEntitiesByClass(any(Class.class), any(Box.class), any()))
+        lenient().when(world.getEntitiesByClass(any(Class.class), any(AABB.class), any()))
                 .thenAnswer(invocation -> {
                     final Class<?> type = invocation.getArgument(0);
                     final Predicate<Object> filter = invocation.getArgument(2);
                     final List<Object> source =
-                            type == WolfEntity.class ? List.copyOf(pets) : List.copyOf(mobs);
+                            type == Wolf.class ? List.copyOf(pets) : List.copyOf(mobs);
                     final List<Object> matched = new ArrayList<>();
                     for (Object candidate : source) {
                         if (type.isInstance(candidate) && filter.test(candidate)) {
@@ -515,13 +515,13 @@ class PetCombatSweepTest {
     }
 
     /** A tamed, owned, standing pet with no target and a real FOLLOW_RANGE attribute instance. */
-    private WolfEntity idlePet() {
+    private Wolf idlePet() {
         return pet(null);
     }
 
     /** A tamed, owned, standing pet currently targeting {@code target} (or nothing). */
-    private WolfEntity pet(LivingEntity target) {
-        final WolfEntity pet = mock(WolfEntity.class);
+    private Wolf pet(LivingEntity target) {
+        final Wolf pet = mock(Wolf.class);
         lenient().when(pet.isTamed()).thenReturn(true);
         lenient().when(pet.isOwner(player)).thenReturn(true);
         lenient().when(pet.isOwner(any())).thenReturn(true);
@@ -534,10 +534,10 @@ class PetCombatSweepTest {
         // A REAL attribute instance, not a stub: the boost's value is derived from getBaseValue()
         // and asserted through SkillAttributeService, so a mock returning 0 would make every reach
         // assertion here agree with itself and with nothing else.
-        final EntityAttributeInstance followRange =
-                new EntityAttributeInstance(EntityAttributes.FOLLOW_RANGE, ignored -> { });
+        final AttributeInstance followRange =
+                new AttributeInstance(Attributes.FOLLOW_RANGE, ignored -> { });
         followRange.setBaseValue(BASE_FOLLOW_RANGE);
-        lenient().when(pet.getAttributeInstance(EntityAttributes.FOLLOW_RANGE))
+        lenient().when(pet.getAttributeInstance(Attributes.FOLLOW_RANGE))
                 .thenReturn(followRange);
 
         pets.add(pet);
@@ -545,7 +545,7 @@ class PetCombatSweepTest {
     }
 
     /** A live hostile of {@code type}, {@code squaredDistance} from the player. */
-    private <T extends MobEntity> T hostile(Class<T> type, double squaredDistance) {
+    private <T extends Mob> T hostile(Class<T> type, double squaredDistance) {
         final T mob = mock(type);
         lenient().when(mob.isAlive()).thenReturn(true);
         lenient().when(player.squaredDistanceTo(mob)).thenReturn(squaredDistance);

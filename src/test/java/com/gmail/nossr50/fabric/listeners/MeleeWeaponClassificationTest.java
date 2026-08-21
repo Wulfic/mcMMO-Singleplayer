@@ -9,10 +9,10 @@ import com.gmail.nossr50.platform.ItemUtils;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -43,8 +43,8 @@ class MeleeWeaponClassificationTest {
     /** Every registered item whose id path ends in {@code _spear} — vanilla's seven, from the registry. */
     private static List<Item> registeredSpears() {
         final List<Item> spears = new ArrayList<>();
-        for (Item item : Registries.ITEM) {
-            if (Registries.ITEM.getId(item).getPath().endsWith("_spear")) {
+        for (Item item : BuiltInRegistries.ITEM) {
+            if (BuiltInRegistries.ITEM.getId(item).getPath().endsWith("_spear")) {
                 spears.add(item);
             }
         }
@@ -75,9 +75,9 @@ class MeleeWeaponClassificationTest {
         for (Item spear : spears) {
             final ItemStack held = new ItemStack(spear);
             assertTrue(ItemUtils.isSpear(held),
-                    () -> Registries.ITEM.getId(spear) + " is not in MaterialMapStore's spear set");
+                    () -> BuiltInRegistries.ITEM.getId(spear) + " is not in MaterialMapStore's spear set");
             assertEquals(MeleeWeapon.SPEAR, EntityDamageListener.classifyMainHand(held),
-                    () -> Registries.ITEM.getId(spear) + " must dispatch to the Spears skill");
+                    () -> BuiltInRegistries.ITEM.getId(spear) + " must dispatch to the Spears skill");
         }
     }
 

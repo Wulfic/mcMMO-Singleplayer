@@ -167,7 +167,7 @@ class MixinAllowCoverageTest {
                 @Mixin(Foo.class)
                 class Example {
                     @ModifyArg(
-                            method = "use(Lnet/minecraft/item/ItemStack;)Lnet/minecraft/util/Hand;",
+                            method = "use(Lnet/minecraft/world/item/ItemStack;)Lnet/minecraft/world/InteractionHand;",
                             at = @At(value = "INVOKE",
                                     target = "Lnet/minecraft/Foo;bar(Ljava/util/Collection;)V"),
                             index = 3,

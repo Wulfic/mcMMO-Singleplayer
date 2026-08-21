@@ -107,26 +107,26 @@ class PlatformBoundaryGuardTest {
         final String violating = """
                 package com.gmail.nossr50.skills.mining;
                 import java.util.List;
-                import net.minecraft.item.ItemStack;
+                import net.minecraft.world.item.ItemStack;
                 class Example { }
                 """;
         final String staticViolating = """
                 package com.gmail.nossr50.skills.mining;
-                import static net.minecraft.item.Items.DIRT;
+                import static net.minecraft.world.item.Items.DIRT;
                 class Example { }
                 """;
         final String qualifiedViolating = """
                 package com.gmail.nossr50.skills.mining;
-                class Example { net.minecraft.item.ItemStack held; }
+                class Example { net.minecraft.world.item.ItemStack held; }
                 """;
         final String clean = """
                 package com.gmail.nossr50.skills.mining;
                 import com.gmail.nossr50.platform.PlatformItem;
                 import java.util.List;
-                /** Mentions net.minecraft.item.ItemStack only in prose. */
+                /** Mentions net.minecraft.world.item.ItemStack only in prose. */
                 class Example {
-                    // and in a comment: import net.minecraft.item.Items;
-                    String s = "net.minecraft.item.ItemStack";
+                    // and in a comment: import net.minecraft.world.item.Items;
+                    String s = "net.minecraft.world.item.ItemStack";
                 }
                 """;
 

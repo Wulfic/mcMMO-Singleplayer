@@ -11,18 +11,18 @@ import com.gmail.nossr50.platform.PlatformLivingEntity;
 import com.gmail.nossr50.skills.CombatXp;
 import com.gmail.nossr50.platform.ItemUtils;
 import com.gmail.nossr50.platform.MobOrigins;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.Tameable;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.mob.HostileEntity;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.entity.passive.IronGolemEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.OwnableEntity;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.golem.IronGolem;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -94,11 +94,11 @@ public final class CombatUtils {
      * @param attacker the player the damage is attributed to
      */
     public static void safeDealDamage(@NotNull LivingEntity target, double amount,
-            @NotNull ServerPlayerEntity attacker) {
+            @NotNull ServerPlayer attacker) {
         if (IN_MCMMO_DAMAGE.get() || !target.isAlive()) {
             return;
         }
-        if (!(target.getEntityWorld() instanceof ServerWorld serverWorld)) {
+        if (!(target.getEntityWorld() instanceof ServerLevel serverWorld)) {
             return; // damage is server-side only.
         }
 
@@ -130,8 +130,8 @@ public final class CombatUtils {
      */
     public static boolean canCombatSkillsTrigger(@NotNull PrimarySkillType primarySkillType,
             @NotNull Entity target) {
-        final boolean isPlayerOrTamed = target instanceof PlayerEntity
-                || (target instanceof Tameable tameable && tameable.getOwnerReference() != null);
+        final boolean isPlayerOrTamed = target instanceof Player
+                || (target instanceof OwnableEntity tameable && tameable.getOwnerReference() != null);
 
         return isPlayerOrTamed
                 ? McMMOMod.getSkillTools().getPVPEnabled(primarySkillType)
@@ -169,7 +169,7 @@ public final class CombatUtils {
      * @param damage the per-entity AoE damage, already divided by the ability's modifier
      * @param type the skill whose ability is firing
      */
-    public static void applyAbilityAoE(@NotNull ServerPlayerEntity attacker,
+    public static void applyAbilityAoE(@NotNull ServerPlayer attacker,
             @NotNull McMMOPlayer mmoPlayer, @NotNull LivingEntity target, double damage,
             @NotNull PrimarySkillType type) {
         // The higher the weapon tier, the more targets you hit.
@@ -220,15 +220,15 @@ public final class CombatUtils {
      * player's own pets are spared — the correct outcome, and why {@code Permissions.friendlyFire}
      * is not ported rather than being an oversight.
      */
-    private static boolean shouldBeAffected(@NotNull ServerPlayerEntity attacker,
+    private static boolean shouldBeAffected(@NotNull ServerPlayer attacker,
             @NotNull Entity entity) {
-        if (entity instanceof PlayerEntity) {
+        if (entity instanceof Player) {
             return false;
         }
 
         // Tameable covers wolves/cats/parrots and the horse family alike, as Bukkit's Tameable did.
         // getOwner() is null unless the animal is tamed, so this is the whole isFriendlyPet check.
-        if (entity instanceof Tameable pet && pet.getOwner() == attacker) {
+        if (entity instanceof OwnableEntity pet && pet.getOwner() == attacker) {
             return false;
         }
 
@@ -283,7 +283,7 @@ public final class CombatUtils {
         // Legacy's `type == IRON_GOLEM && !ironGolem.isPlayerCreated()` gate: a village-spawned golem
         // pays its configured 2.0 multiplier, a player-built one pays nothing. Without it a golem farm
         // is an XP exploit — which is the whole reason upstream singles the check out.
-        if (target instanceof IronGolemEntity golem && golem.isPlayerCreated()) {
+        if (target instanceof IronGolem golem && golem.isPlayerCreated()) {
             return;
         }
 
@@ -316,7 +316,7 @@ public final class CombatUtils {
         }
 
         final int xp = CombatXp.xpForHit(
-                Registries.ENTITY_TYPE.getId(target.getType()).toString(), categoryOf(target),
+                BuiltInRegistries.ENTITY_TYPE.getId(target.getType()).toString(), categoryOf(target),
                 damage, target.getHealth(), originScaled);
         if (xp <= 0) {
             return;
@@ -335,10 +335,10 @@ public final class CombatUtils {
      * {@code instanceof Monster} / else branch in {@code processCombatXP}.
      */
     private static CombatXp.MobCategory categoryOf(@NotNull LivingEntity entity) {
-        if (entity instanceof HostileEntity) {
+        if (entity instanceof Monster) {
             return CombatXp.MobCategory.MONSTER;
         }
-        if (entity instanceof AnimalEntity) {
+        if (entity instanceof Animal) {
             return CombatXp.MobCategory.ANIMAL;
         }
         return CombatXp.MobCategory.OTHER;

@@ -1,8 +1,8 @@
 package com.gmail.nossr50.platform;
 
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -21,14 +21,14 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class PlatformSender {
 
-    private final ServerCommandSource handle;
+    private final CommandSourceStack handle;
 
-    public PlatformSender(@NotNull ServerCommandSource handle) {
+    public PlatformSender(@NotNull CommandSourceStack handle) {
         this.handle = handle;
     }
 
     /** The wrapped Brigadier source. */
-    public @NotNull ServerCommandSource unwrap() {
+    public @NotNull CommandSourceStack unwrap() {
         return handle;
     }
 
@@ -38,12 +38,12 @@ public final class PlatformSender {
     }
 
     /** Bukkit {@code sendMessage}: non-broadcast chat feedback. Text is the locked target type. */
-    public void sendMessage(@NotNull Text message) {
+    public void sendMessage(@NotNull Component message) {
         handle.sendFeedback(() -> message, false);
     }
 
     /** Error-styled feedback (Bukkit red {@code sendMessage} convention). */
-    public void sendError(@NotNull Text message) {
+    public void sendError(@NotNull Component message) {
         handle.sendError(message);
     }
 
@@ -54,7 +54,7 @@ public final class PlatformSender {
 
     /** The player behind this source, or {@code null} for console/command-block sources. */
     public @Nullable PlatformPlayer getPlayer() {
-        final ServerPlayerEntity player = handle.getPlayer();
+        final ServerPlayer player = handle.getPlayer();
         return player == null ? null : new PlatformPlayer(player);
     }
 }

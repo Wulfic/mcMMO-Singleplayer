@@ -24,18 +24,18 @@ import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
 import java.util.UUID;
-import net.minecraft.block.entity.CampfireBlockEntity;
-import net.minecraft.block.entity.FurnaceBlockEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.level.block.entity.CampfireBlockEntity;
+import net.minecraft.world.level.block.entity.FurnaceBlockEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,7 +89,7 @@ class CookingListenerTest {
     private static final int BOOSTED_BURN = 6400;
 
     private UUID uuid;
-    private ServerWorld world;
+    private ServerLevel world;
     private McMMOPlayer mmoPlayer;
     private CookingManager cooking;
     private SmeltingManager smelting;
@@ -107,7 +107,7 @@ class CookingListenerTest {
         McMMOMod.setGeneralConfig(new GeneralConfig(dataFolder));
 
         uuid = UUID.randomUUID();
-        world = mock(ServerWorld.class);
+        world = mock(ServerLevel.class);
         lenient().when(world.getTime()).thenReturn(WORLD_TICK);
 
         cooking = mock(CookingManager.class);
@@ -224,7 +224,7 @@ class CookingListenerTest {
         // ⚠️ In singleplayer both logical sides run a screen handler, so without the server-side
         // guard every craft would be paid twice -- and the doubling would look like a tuning
         // problem, not a bug. The repair-anvil pass learned this the hard way.
-        final PlayerEntity clientPlayer = mock(PlayerEntity.class);
+        final Player clientPlayer = mock(Player.class);
         lenient().when(clientPlayer.getUuid()).thenReturn(uuid);
 
         CookingListener.onCraftedItemTaken(clientPlayer, new ItemStack(Items.COOKIE), 8);
@@ -567,13 +567,13 @@ class CookingListenerTest {
                 .thenReturn(mock(FurnaceBlockEntity.class));
 
         final BlockHitResult hit = new BlockHitResult(
-                Vec3d.ofCenter(FURNACE_POS), Direction.UP, FURNACE_POS, false);
-        final ServerPlayerEntity player = serverPlayer();
+                Vec3.ofCenter(FURNACE_POS), Direction.UP, FURNACE_POS, false);
+        final ServerPlayer player = serverPlayer();
 
-        assertEquals(net.minecraft.util.ActionResult.PASS,
-                SmeltingListener.onUseBlock(player, world, Hand.MAIN_HAND, hit),
+        assertEquals(net.minecraft.world.InteractionResult.PASS,
+                SmeltingListener.onUseBlock(player, world, InteractionHand.MAIN_HAND, hit),
                 "claiming a furnace must never swallow the click that opens it");
-        CookingListener.onUseBlock(player, world, Hand.MAIN_HAND, hit);
+        CookingListener.onUseBlock(player, world, InteractionHand.MAIN_HAND, hit);
     }
 
     /**
@@ -587,17 +587,17 @@ class CookingListenerTest {
                 .thenReturn(mock(CampfireBlockEntity.class));
 
         final BlockHitResult hit = new BlockHitResult(
-                Vec3d.ofCenter(CAMPFIRE_POS), Direction.UP, CAMPFIRE_POS, false);
-        final ServerPlayerEntity player = serverPlayer();
+                Vec3.ofCenter(CAMPFIRE_POS), Direction.UP, CAMPFIRE_POS, false);
+        final ServerPlayer player = serverPlayer();
 
-        assertEquals(net.minecraft.util.ActionResult.PASS,
-                CookingListener.onUseBlock(player, world, Hand.MAIN_HAND, hit),
+        assertEquals(net.minecraft.world.InteractionResult.PASS,
+                CookingListener.onUseBlock(player, world, InteractionHand.MAIN_HAND, hit),
                 "claiming a campfire must never swallow the click that puts the food on it");
-        SmeltingListener.onUseBlock(player, world, Hand.MAIN_HAND, hit);
+        SmeltingListener.onUseBlock(player, world, InteractionHand.MAIN_HAND, hit);
     }
 
-    private ServerPlayerEntity serverPlayer() {
-        final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
+    private ServerPlayer serverPlayer() {
+        final ServerPlayer player = mock(ServerPlayer.class);
         lenient().when(player.getUuid()).thenReturn(uuid);
         lenient().when(player.getEntityWorld()).thenReturn(world);
         return player;

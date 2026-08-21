@@ -21,22 +21,22 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiConsumer;
-import net.minecraft.block.BeehiveBlock;
-import net.minecraft.block.BlockState;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.entity.passive.PassiveEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.projectile.ProjectileEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.BeehiveBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -120,7 +120,7 @@ public final class HusbandryListener {
     private static final ThreadLocal<Interaction> PLAYER_INTERACTION = new ThreadLocal<>();
 
     /** One player-entity interaction: who, and with what. */
-    private record Interaction(ServerPlayerEntity player, Entity target) {
+    private record Interaction(ServerPlayer player, Entity target) {
     }
 
     private HusbandryListener() {
@@ -138,7 +138,7 @@ public final class HusbandryListener {
      * {@link #onAnimalsBred} with only one parent, and refusing those would break turtles and frogs
      * for everyone.
      */
-    private static boolean isCallOfTheWildSummon(@Nullable AnimalEntity animal) {
+    private static boolean isCallOfTheWildSummon(@Nullable Animal animal) {
         final ExperienceConfig config = McMMOMod.getExperienceConfig();
         if (animal == null || config == null || !config.isCOTWBreedingPrevented()) {
             return false;
@@ -157,8 +157,8 @@ public final class HusbandryListener {
      * @param mate    the other parent
      * @param child   the baby about to be spawned; {@code null} for the egg-laying breeders
      */
-    public static void onAnimalsBred(ServerPlayerEntity breeder, AnimalEntity parent,
-            AnimalEntity mate, PassiveEntity child) {
+    public static void onAnimalsBred(ServerPlayer breeder, Animal parent,
+            Animal mate, AgeableMob child) {
         if (breeder == null || parent == null) {
             return;
         }
@@ -190,7 +190,7 @@ public final class HusbandryListener {
         }
 
         final String entityConfigString = ConfigStringUtils.getConfigEntityTypeString(
-                Registries.ENTITY_TYPE.getId(parent.getType()).getPath());
+                BuiltInRegistries.ENTITY_TYPE.getId(parent.getType()).getPath());
         final HusbandryManager.BreedAward award =
                 husbandry.onBreed(entityConfigString, parent.getEntityWorld().getTime());
         if (award.capReached()) {
@@ -235,8 +235,8 @@ public final class HusbandryListener {
      *
      * @param paid whether the breeding that produced this child actually paid Husbandry XP
      */
-    private static void claimOffspring(HusbandryManager husbandry, ServerPlayerEntity breeder,
-            PassiveEntity child, boolean paid) {
+    private static void claimOffspring(HusbandryManager husbandry, ServerPlayer breeder,
+            AgeableMob child, boolean paid) {
         if (child == null) {
             return; // Egg-laying breeder: the clutch is not an entity we can mark.
         }
@@ -269,19 +269,19 @@ public final class HusbandryListener {
      * skill's boundary rule exists to avoid.
      */
     private static void maybeBearTwin(McMMOPlayer mmoPlayer, HusbandryManager husbandry,
-            ServerPlayerEntity breeder, AnimalEntity parent, AnimalEntity mate,
-            PassiveEntity child, boolean paid) {
+            ServerPlayer breeder, Animal parent, Animal mate,
+            AgeableMob child, boolean paid) {
         if (child == null || mate == null) {
             return; // Egg-laying breeder: vanilla produced no baby for us to double.
         }
-        if (!(parent.getEntityWorld() instanceof ServerWorld serverWorld)) {
+        if (!(parent.getEntityWorld() instanceof ServerLevel serverWorld)) {
             return;
         }
         if (!husbandry.rollTwins()) {
             return;
         }
 
-        final PassiveEntity twin = parent.createChild(serverWorld, mate);
+        final AgeableMob twin = parent.createChild(serverWorld, mate);
         if (twin == null) {
             return; // Species declined to make a second child; nothing to report.
         }
@@ -326,15 +326,15 @@ public final class HusbandryListener {
      * @param fed    the animal the player actually fed
      * @param player the feeder; ignored unless it is a real server player
      */
-    public static void onLovePlayer(AnimalEntity fed, PlayerEntity player) {
+    public static void onLovePlayer(Animal fed, Player player) {
         if (SPREADING_LOVE.get()) {
             return; // We are the ones doing the spreading — see the field javadoc.
         }
-        if (fed == null || !(player instanceof ServerPlayerEntity serverPlayer)) {
+        if (fed == null || !(player instanceof ServerPlayer serverPlayer)) {
             return;
         }
-        final World world = fed.getEntityWorld();
-        if (!(world instanceof ServerWorld)) {
+        final Level world = fed.getEntityWorld();
+        if (!(world instanceof ServerLevel)) {
             return;
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
@@ -351,13 +351,13 @@ public final class HusbandryListener {
             return;
         }
 
-        final Box searchBox = fed.getBoundingBox().expand(radius);
-        final List<AnimalEntity> neighbours = world.getEntitiesByClass(AnimalEntity.class, searchBox,
+        final AABB searchBox = fed.getBoundingBox().expand(radius);
+        final List<Animal> neighbours = world.getEntitiesByClass(Animal.class, searchBox,
                 candidate -> isMultiBreedCandidate(fed, candidate));
 
         SPREADING_LOVE.set(true);
         try {
-            for (AnimalEntity neighbour : neighbours) {
+            for (Animal neighbour : neighbours) {
                 neighbour.lovePlayer(serverPlayer);
             }
         } finally {
@@ -373,8 +373,8 @@ public final class HusbandryListener {
      * <p>Called from {@code PlayerEntityInteractMixin}. See {@link #PLAYER_INTERACTION} for why the
      * feed verb cannot simply hook the feeding methods.
      */
-    public static void beginPlayerInteraction(PlayerEntity player, Entity target) {
-        if (player instanceof ServerPlayerEntity serverPlayer && target != null) {
+    public static void beginPlayerInteraction(Player player, Entity target) {
+        if (player instanceof ServerPlayer serverPlayer && target != null) {
             PLAYER_INTERACTION.set(new Interaction(serverPlayer, target));
         }
     }
@@ -399,7 +399,7 @@ public final class HusbandryListener {
      * @param growthSeconds the seconds of growth vanilla was about to apply; positive
      * @return the seconds to actually apply — doubled on a successful Accelerated Growth roll
      */
-    public static int onGrowthApplied(PassiveEntity animal, int growthSeconds) {
+    public static int onGrowthApplied(AgeableMob animal, int growthSeconds) {
         if (animal == null || growthSeconds <= 0) {
             return growthSeconds;
         }
@@ -461,7 +461,7 @@ public final class HusbandryListener {
      * @param previousAge the age it currently has — negative while it is a baby
      * @param newAge      the age it is about to have
      */
-    public static void onBreedingAgeChange(PassiveEntity animal, int previousAge, int newAge) {
+    public static void onBreedingAgeChange(AgeableMob animal, int previousAge, int newAge) {
         if (animal == null || previousAge >= 0 || newAge < 0) {
             return; // Not the baby -> adult crossing.
         }
@@ -526,8 +526,8 @@ public final class HusbandryListener {
      *                spawning an item ourselves
      * @return {@code dropper} unchanged, or a wrapper that delivers everything twice
      */
-    public static BiConsumer<ServerWorld, ItemStack> onShearedItems(LivingEntity sheared,
-            BiConsumer<ServerWorld, ItemStack> dropper) {
+    public static BiConsumer<ServerLevel, ItemStack> onShearedItems(LivingEntity sheared,
+            BiConsumer<ServerLevel, ItemStack> dropper) {
         if (sheared == null || dropper == null) {
             return dropper;
         }
@@ -629,10 +629,10 @@ public final class HusbandryListener {
      * @param world   the hive's world
      * @param pos     the hive
      */
-    public static void onHoneycombHarvested(PlayerEntity player, ItemStack usedItem, BlockState state,
-            World world, BlockPos pos) {
-        if (!(player instanceof ServerPlayerEntity serverPlayer)
-                || !(world instanceof ServerWorld serverWorld)) {
+    public static void onHoneycombHarvested(Player player, ItemStack usedItem, BlockState state,
+            Level world, BlockPos pos) {
+        if (!(player instanceof ServerPlayer serverPlayer)
+                || !(world instanceof ServerLevel serverWorld)) {
             return;
         }
         final HusbandryManager husbandry = husbandryOf(serverPlayer);
@@ -663,8 +663,8 @@ public final class HusbandryListener {
      *
      * @param player the harvester
      */
-    public static void onHoneyBottled(PlayerEntity player) {
-        if (!(player instanceof ServerPlayerEntity serverPlayer)) {
+    public static void onHoneyBottled(Player player) {
+        if (!(player instanceof ServerPlayer serverPlayer)) {
             return;
         }
         final HusbandryManager husbandry = husbandryOf(serverPlayer);
@@ -705,8 +705,8 @@ public final class HusbandryListener {
      * {@code takeHoney(..., BeeState.EMERGENCY)}, which drives the hive's own occupants out angry.
      * Suppressing the first alone, which is what the plan proposed, would have left the second firing.
      */
-    public static boolean hiveHarvestLeavesBeesCalm(PlayerEntity player) {
-        if (!(player instanceof ServerPlayerEntity serverPlayer)) {
+    public static boolean hiveHarvestLeavesBeesCalm(Player player) {
+        if (!(player instanceof ServerPlayer serverPlayer)) {
             return false;
         }
         final HusbandryManager husbandry = husbandryOf(serverPlayer);
@@ -725,7 +725,7 @@ public final class HusbandryListener {
      * @return {@code damageAmount}, or {@code 0} on a successful save
      */
     public static int onHiveToolDamaged(LivingEntity holder, int damageAmount) {
-        if (damageAmount <= 0 || !(holder instanceof ServerPlayerEntity player)) {
+        if (damageAmount <= 0 || !(holder instanceof ServerPlayer player)) {
             return damageAmount;
         }
         final HusbandryManager husbandry = husbandryOf(player);
@@ -753,8 +753,8 @@ public final class HusbandryListener {
      * @param animal the cow, goat or mooshroom
      * @param player the milker
      */
-    public static void onMilked(Entity animal, PlayerEntity player) {
-        if (animal == null || !(player instanceof ServerPlayerEntity serverPlayer)) {
+    public static void onMilked(Entity animal, Player player) {
+        if (animal == null || !(player instanceof ServerPlayer serverPlayer)) {
             return;
         }
         final HusbandryManager husbandry = husbandryOf(serverPlayer);
@@ -790,9 +790,9 @@ public final class HusbandryListener {
      * @param dropper   vanilla's own per-item handler
      * @return {@code dropper} unchanged, or a wrapper that pays on first delivery
      */
-    public static BiConsumer<ServerWorld, ItemStack> onBrushedItems(Entity armadillo, Entity brusher,
-            BiConsumer<ServerWorld, ItemStack> dropper) {
-        if (armadillo == null || dropper == null || !(brusher instanceof ServerPlayerEntity player)) {
+    public static BiConsumer<ServerLevel, ItemStack> onBrushedItems(Entity armadillo, Entity brusher,
+            BiConsumer<ServerLevel, ItemStack> dropper) {
+        if (armadillo == null || dropper == null || !(brusher instanceof ServerPlayer player)) {
             return dropper; // A dispenser, or nobody at all.
         }
         final HusbandryManager husbandry = husbandryOf(player);
@@ -810,17 +810,17 @@ public final class HusbandryListener {
      * state is the point: the cooldown must be consumed once per brush and the bonus decided once per
      * brush, while the handler itself may be invoked several times.
      */
-    private static final class BrushPayout implements BiConsumer<ServerWorld, ItemStack> {
+    private static final class BrushPayout implements BiConsumer<ServerLevel, ItemStack> {
 
         private final HusbandryManager husbandry;
-        private final ServerPlayerEntity brusher;
+        private final ServerPlayer brusher;
         private final Entity armadillo;
-        private final BiConsumer<ServerWorld, ItemStack> dropper;
+        private final BiConsumer<ServerLevel, ItemStack> dropper;
         private boolean settled;
         private boolean doubled;
 
-        private BrushPayout(HusbandryManager husbandry, ServerPlayerEntity brusher, Entity armadillo,
-                BiConsumer<ServerWorld, ItemStack> dropper) {
+        private BrushPayout(HusbandryManager husbandry, ServerPlayer brusher, Entity armadillo,
+                BiConsumer<ServerLevel, ItemStack> dropper) {
             this.husbandry = husbandry;
             this.brusher = brusher;
             this.armadillo = armadillo;
@@ -828,7 +828,7 @@ public final class HusbandryListener {
         }
 
         @Override
-        public void accept(ServerWorld world, ItemStack stack) {
+        public void accept(ServerLevel world, ItemStack stack) {
             if (!settled) {
                 settled = true;
                 // The cooldown gates the reward, never the drop: a brush inside the window still
@@ -900,7 +900,7 @@ public final class HusbandryListener {
      * player on whichever animal was fed, and it only reaches breeding when at least one has one.
      * Resolving the bias here rather than in the static call is the whole point of the stash.
      */
-    public static void beginSelectiveBreeding(AnimalEntity parent, AnimalEntity mate) {
+    public static void beginSelectiveBreeding(Animal parent, Animal mate) {
         final HusbandryManager husbandry = husbandryOfBreeder(parent, mate);
         if (husbandry == null) {
             return; // AI-driven or command-driven breeding: nobody's sub-skill applies.
@@ -926,12 +926,12 @@ public final class HusbandryListener {
     }
 
     /** The Husbandry manager of whichever parent vanilla credits with the breeding, or {@code null}. */
-    private static HusbandryManager husbandryOfBreeder(AnimalEntity parent, AnimalEntity mate) {
-        for (AnimalEntity candidate : new AnimalEntity[] {parent, mate}) {
+    private static HusbandryManager husbandryOfBreeder(Animal parent, Animal mate) {
+        for (Animal candidate : new Animal[] {parent, mate}) {
             if (candidate == null) {
                 continue;
             }
-            final ServerPlayerEntity breeder = candidate.getLovingPlayer();
+            final ServerPlayer breeder = candidate.getLovingPlayer();
             if (breeder != null) {
                 final HusbandryManager husbandry = husbandryOf(breeder);
                 if (husbandry != null) {
@@ -982,10 +982,10 @@ public final class HusbandryListener {
      * egg has no player owner.
      */
     private static HusbandryManager husbandryOfThrower(Entity projectile) {
-        if (!(projectile instanceof ProjectileEntity thrown)) {
+        if (!(projectile instanceof Projectile thrown)) {
             return null;
         }
-        return thrown.getOwner() instanceof ServerPlayerEntity thrower ? husbandryOf(thrower) : null;
+        return thrown.getOwner() instanceof ServerPlayer thrower ? husbandryOf(thrower) : null;
     }
 
     /**
@@ -1004,7 +1004,7 @@ public final class HusbandryListener {
      * @param player    the harvester, who the find is given to
      * @param verb      {@code "Shear"}, {@code "Hive"}, {@code "Milk"} or {@code "Brush"}
      */
-    private static void rollHiddenBounty(HusbandryManager husbandry, ServerPlayerEntity player,
+    private static void rollHiddenBounty(HusbandryManager husbandry, ServerPlayer player,
             String verb) {
         final TreasureConfig treasures = McMMOMod.getTreasureConfig();
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
@@ -1075,7 +1075,7 @@ public final class HusbandryListener {
     }
 
     /** Hand a bonus stack to the player, dropping it at their feet if they have no room. */
-    private static void giveOrDrop(ServerPlayerEntity player, ItemStack stack) {
+    private static void giveOrDrop(ServerPlayer player, ItemStack stack) {
         if (!player.getInventory().insertStack(stack)) {
             player.dropItem(stack, false);
         }
@@ -1099,7 +1099,7 @@ public final class HusbandryListener {
     }
 
     /** The Husbandry manager for a server player, or {@code null} if their data is not loaded. */
-    private static HusbandryManager husbandryOf(ServerPlayerEntity player) {
+    private static HusbandryManager husbandryOf(ServerPlayer player) {
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
         return mmoPlayer == null ? null : mmoPlayer.getHusbandryManager();
     }
@@ -1107,7 +1107,7 @@ public final class HusbandryListener {
     /** The animal's {@code experience.yml} key, e.g. {@code "Cow"}. */
     private static String configStringOf(Entity animal) {
         return ConfigStringUtils.getConfigEntityTypeString(
-                Registries.ENTITY_TYPE.getId(animal.getType()).getPath());
+                BuiltInRegistries.ENTITY_TYPE.getId(animal.getType()).getPath());
     }
 
     /**
@@ -1119,7 +1119,7 @@ public final class HusbandryListener {
      * animal is still a baby and positive for the five minutes after a breeding — and
      * {@code canEat()} is vanilla's own name for "not already in love".
      */
-    private static boolean isMultiBreedCandidate(AnimalEntity fed, AnimalEntity candidate) {
+    private static boolean isMultiBreedCandidate(Animal fed, Animal candidate) {
         return candidate != fed
                 && candidate.isAlive()
                 && candidate.getType() == fed.getType()

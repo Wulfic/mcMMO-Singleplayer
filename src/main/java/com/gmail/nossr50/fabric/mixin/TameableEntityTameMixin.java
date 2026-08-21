@@ -1,8 +1,8 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.TamingListener;
-import net.minecraft.entity.passive.TameableEntity;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -15,11 +15,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * per real taming. We inject at {@code TAIL} (after the entity is marked tamed) and route to
  * {@link TamingListener#onEntityTamed}, which awards Taming XP.
  */
-@Mixin(TameableEntity.class)
+@Mixin(TamableAnimal.class)
 public abstract class TameableEntityTameMixin {
 
     @Inject(method = "setTamedBy", allow = 1, at = @At("TAIL"))
-    private void mcmmo$onTamed(PlayerEntity player, CallbackInfo ci) {
-        TamingListener.onEntityTamed(player, (TameableEntity) (Object) this);
+    private void mcmmo$onTamed(Player player, CallbackInfo ci) {
+        TamingListener.onEntityTamed(player, (TamableAnimal) (Object) this);
     }
 }

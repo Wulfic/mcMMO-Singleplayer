@@ -2,8 +2,8 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.GlideListener;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
@@ -41,12 +41,12 @@ public abstract class LivingEntityGlideMixin {
     @ModifyExpressionValue(
             method = "travelGliding",
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/entity/LivingEntity;calcGlidingVelocity"
-                            + "(Lnet/minecraft/util/math/Vec3d;)Lnet/minecraft/util/math/Vec3d;"),
+                    target = "Lnet/minecraft/world/entity/LivingEntity;calcGlidingVelocity"
+                            + "(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;"),
             // One call site in this method; cap it so a future remap that widens the match is a
             // build failure rather than a silent second injection.
             allow = 1)
-    private Vec3d mcmmo$applyGlideBonus(Vec3d glideVelocity) {
+    private Vec3 mcmmo$applyGlideBonus(Vec3 glideVelocity) {
         return GlideListener.modifyGlideVelocity((LivingEntity) (Object) this, glideVelocity);
     }
 }

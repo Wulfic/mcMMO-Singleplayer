@@ -9,16 +9,16 @@ import com.gmail.nossr50.skills.archery.ArcheryManager;
 import com.gmail.nossr50.util.player.UserManager;
 import java.util.UUID;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
-import net.minecraft.enchantment.Enchantments;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.projectile.ArrowEntity;
-import net.minecraft.entity.projectile.ProjectileEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.projectile.arrow.Arrow;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
 
 /**
  * Both ends of Archery's <b>Arrow Retrieval</b>: the launch mark and the death drop. Replaces legacy
@@ -69,11 +69,11 @@ public final class ProjectileListener {
      * <em>siblings</em> under it, mirroring Bukkit where {@code SpectralArrow}/{@code Trident}
      * implement {@code AbstractArrow} rather than {@code Arrow}. Neither was ever retrievable upstream.
      */
-    public static void onProjectileSpawn(ProjectileEntity projectile, ServerWorld world) {
-        if (!(projectile instanceof ArrowEntity arrow)) {
+    public static void onProjectileSpawn(Projectile projectile, ServerLevel world) {
+        if (!(projectile instanceof Arrow arrow)) {
             return;
         }
-        if (!(arrow.getOwner() instanceof ServerPlayerEntity shooter)) {
+        if (!(arrow.getOwner() instanceof ServerPlayer shooter)) {
             return; // wild/dispenser arrow — legacy's `getShooter() instanceof Player` check.
         }
         final UUID arrowId = arrow.getUuid();
@@ -144,7 +144,7 @@ public final class ProjectileListener {
      * it with {@code orElse(null)}), hence the guard — though on this path the arrow was just built by
      * {@code RangedWeaponItem#createArrowEntity}, which always records the weapon.
      */
-    private static boolean isInfinityShot(ArrowEntity arrow) {
+    private static boolean isInfinityShot(Arrow arrow) {
         final ItemStack weapon = arrow.getWeaponStack();
         if (weapon == null || weapon.isEmpty()) {
             return false;
@@ -157,7 +157,7 @@ public final class ProjectileListener {
      * never tracked. Checks both hands, as legacy does, rather than the arrow's recorded weapon — the
      * looser check is the ported behaviour.
      */
-    private static boolean hasPiercingInHands(ServerPlayerEntity shooter) {
+    private static boolean hasPiercingInHands(ServerPlayer shooter) {
         return hasPiercing(shooter.getMainHandStack()) || hasPiercing(shooter.getOffHandStack());
     }
 
@@ -183,7 +183,7 @@ public final class ProjectileListener {
         if (arrowCount <= 0) {
             return;
         }
-        if (!(victim.getEntityWorld() instanceof ServerWorld world)) {
+        if (!(victim.getEntityWorld() instanceof ServerLevel world)) {
             return;
         }
         final ItemEntity drop = new ItemEntity(world, victim.getX(), victim.getY(), victim.getZ(),

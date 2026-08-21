@@ -4,11 +4,11 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 import net.minecraft.util.Util;
 import org.jetbrains.annotations.Nullable;
 
@@ -24,7 +24,7 @@ public final class McMMOInfoScreen extends Screen {
     private final Path configDir;
 
     public McMMOInfoScreen(@Nullable Screen parent, Path configDir) {
-        super(Text.literal("mcMMO"));
+        super(Component.literal("mcMMO"));
         this.parent = parent;
         this.configDir = configDir;
     }
@@ -35,31 +35,31 @@ public final class McMMOInfoScreen extends Screen {
         final int buttonWidth = 220;
         int y = this.height / 2;
 
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("Open Config Folder"), button -> openConfigFolder())
+        this.addDrawableChild(Button.builder(
+                Component.literal("Open Config Folder"), button -> openConfigFolder())
                 .dimensions(centerX - buttonWidth / 2, y, buttonWidth, 20)
                 .build());
 
         y += 24;
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.translatable("gui.done"), button -> close())
+        this.addDrawableChild(Button.builder(
+                Component.translatable("gui.done"), button -> close())
                 .dimensions(centerX - buttonWidth / 2, y, buttonWidth, 20)
                 .build());
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
         final int centerX = this.width / 2;
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("mcMMO"),
+        context.drawCenteredTextWithShadow(this.textRenderer, Component.literal("mcMMO"),
                 centerX, this.height / 2 - 60, 0xFFFFFF);
         context.drawCenteredTextWithShadow(this.textRenderer,
-                Text.literal("Install the Cloth Config API mod to edit mcMMO settings in-game.")
-                        .formatted(Formatting.GRAY),
+                Component.literal("Install the Cloth Config API mod to edit mcMMO settings in-game.")
+                        .formatted(ChatFormatting.GRAY),
                 centerX, this.height / 2 - 40, 0xAAAAAA);
         context.drawCenteredTextWithShadow(this.textRenderer,
-                Text.literal("Otherwise, edit the .yml files directly. Changes apply on world load.")
-                        .formatted(Formatting.GRAY),
+                Component.literal("Otherwise, edit the .yml files directly. Changes apply on world load.")
+                        .formatted(ChatFormatting.GRAY),
                 centerX, this.height / 2 - 28, 0xAAAAAA);
     }
 

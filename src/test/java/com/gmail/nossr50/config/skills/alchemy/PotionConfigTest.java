@@ -17,10 +17,10 @@ import com.gmail.nossr50.platform.PlatformItem;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.nio.file.Path;
 import java.util.List;
-import net.minecraft.component.type.PotionContentsComponent;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.potion.Potions;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.Potions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -87,7 +87,7 @@ class PotionConfigTest {
     void resolvesAWaterPotionByItemStack() {
         // A vanilla water bottle must be recognised as the config's POTION_OF_WATER.
         final PlatformItem waterBottle = new PlatformItem(
-                PotionContentsComponent.createStack(Items.POTION, Potions.WATER));
+                PotionContents.createStack(Items.POTION, Potions.WATER));
         final AlchemyPotion potion = potionConfig.getPotion(waterBottle);
         assertNotNull(potion, "a vanilla water bottle resolves to a config potion");
         assertEquals("POTION_OF_WATER", potion.getPotionConfigName());

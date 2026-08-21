@@ -17,18 +17,18 @@ import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
 import java.util.UUID;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.mob.ZombieEntity;
-import net.minecraft.entity.passive.CatEntity;
-import net.minecraft.entity.passive.WolfEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.entity.animal.feline.Cat;
+import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,7 +56,7 @@ class PetCombatModeListenerTest {
         McTestRegistries.bootstrap();
     }
 
-    private World world;
+    private Level world;
     private McMMOPlayer mmoPlayer;
     private TamingManager tamingManager;
 
@@ -66,7 +66,7 @@ class PetCombatModeListenerTest {
         lenient().when(config.isPetCombatModeEnabled()).thenReturn(true);
         lenient().when(config.getPetCombatModeToggleItem()).thenReturn("BONE");
         McMMOMod.setGeneralConfig(config);
-        world = mock(World.class);
+        world = mock(Level.class);
     }
 
     @AfterEach
@@ -90,22 +90,22 @@ class PetCombatModeListenerTest {
      */
     @Test
     void clientSideFireOnTheGestureClaimsTheClick() {
-        final ActionResult result = PetCombatModeListener.onUseEntity(
-                sneakingClientPlayer(new ItemStack(Items.BONE)), world, Hand.MAIN_HAND,
+        final InteractionResult result = PetCombatModeListener.onUseEntity(
+                sneakingClientPlayer(new ItemStack(Items.BONE)), world, InteractionHand.MAIN_HAND,
                 ownedWolf(), null);
 
-        assertEquals(ActionResult.CONSUME, result,
+        assertEquals(InteractionResult.CONSUME, result,
                 "the client fire must claim the gesture, or the client predicts vanilla's sit-toggle");
     }
 
     /** The client-side fire must touch no state — the server fire owns the flip. */
     @Test
     void clientSideFireMutatesNothing() {
-        final PlayerEntity player = sneakingClientPlayer(new ItemStack(Items.BONE));
+        final Player player = sneakingClientPlayer(new ItemStack(Items.BONE));
         // A tracked profile exists; the point is that the CLIENT fire must not reach it even so.
         trackedServerPlayer(new ItemStack(Items.BONE));
 
-        PetCombatModeListener.onUseEntity(player, world, Hand.MAIN_HAND, ownedWolf(), null);
+        PetCombatModeListener.onUseEntity(player, world, InteractionHand.MAIN_HAND, ownedWolf(), null);
 
         verify(tamingManager, never()).togglePetCombatMode();
     }
@@ -114,14 +114,14 @@ class PetCombatModeListenerTest {
 
     @Test
     void serverSideFireTogglesTheMode() {
-        final ServerPlayerEntity player = trackedServerPlayer(new ItemStack(Items.BONE));
+        final ServerPlayer player = trackedServerPlayer(new ItemStack(Items.BONE));
         when(tamingManager.togglePetCombatMode()).thenReturn(PetCombatMode.AGGRESSIVE);
 
-        final ActionResult result = PetCombatModeListener.onUseEntity(player, world, Hand.MAIN_HAND,
+        final InteractionResult result = PetCombatModeListener.onUseEntity(player, world, InteractionHand.MAIN_HAND,
                 ownedWolf(player), null);
 
         verify(tamingManager).togglePetCombatMode();
-        assertEquals(ActionResult.CONSUME, result);
+        assertEquals(InteractionResult.CONSUME, result);
     }
 
     /**
@@ -134,16 +134,16 @@ class PetCombatModeListenerTest {
     @Test
     void anUnloadedProfileStillConsumesTheClick() {
         // Deliberately NOT tracked in UserManager: this is the mid-join state.
-        final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
+        final ServerPlayer player = mock(ServerPlayer.class);
         lenient().when(player.getUuid()).thenReturn(UUID.randomUUID());
         lenient().when(player.getMainHandStack()).thenReturn(new ItemStack(Items.BONE));
         lenient().when(player.isSneaking()).thenReturn(true);
-        lenient().when(player.getName()).thenReturn(Text.literal("mid-join"));
+        lenient().when(player.getName()).thenReturn(Component.literal("mid-join"));
 
-        final ActionResult result = PetCombatModeListener.onUseEntity(player, world, Hand.MAIN_HAND,
+        final InteractionResult result = PetCombatModeListener.onUseEntity(player, world, InteractionHand.MAIN_HAND,
                 ownedWolf(player), null);
 
-        assertEquals(ActionResult.CONSUME, result,
+        assertEquals(InteractionResult.CONSUME, result,
                 "handing the click back mid-decision sits the pet on a gesture already claimed");
     }
 
@@ -156,28 +156,28 @@ class PetCombatModeListenerTest {
      */
     @Test
     void aPlainRightClickWithoutSneakingPasses() {
-        final PlayerEntity player = clientPlayer(new ItemStack(Items.BONE), false);
+        final Player player = clientPlayer(new ItemStack(Items.BONE), false);
 
-        assertSame(ActionResult.PASS,
-                PetCombatModeListener.onUseEntity(player, world, Hand.MAIN_HAND, ownedWolf(), null));
+        assertSame(InteractionResult.PASS,
+                PetCombatModeListener.onUseEntity(player, world, InteractionHand.MAIN_HAND, ownedWolf(), null));
     }
 
     /** Any other item is vanilla's click — feeding, breeding, shearing, leashing all still work. */
     @Test
     void sneakClickingWithTheWrongItemPasses() {
-        final PlayerEntity player = sneakingClientPlayer(new ItemStack(Items.WHEAT));
+        final Player player = sneakingClientPlayer(new ItemStack(Items.WHEAT));
 
-        assertSame(ActionResult.PASS,
-                PetCombatModeListener.onUseEntity(player, world, Hand.MAIN_HAND, ownedWolf(), null));
+        assertSame(InteractionResult.PASS,
+                PetCombatModeListener.onUseEntity(player, world, InteractionHand.MAIN_HAND, ownedWolf(), null));
     }
 
     /** An empty hand is not the gesture either. */
     @Test
     void sneakClickingWithAnEmptyHandPasses() {
-        final PlayerEntity player = sneakingClientPlayer(ItemStack.EMPTY);
+        final Player player = sneakingClientPlayer(ItemStack.EMPTY);
 
-        assertSame(ActionResult.PASS,
-                PetCombatModeListener.onUseEntity(player, world, Hand.MAIN_HAND, ownedWolf(), null));
+        assertSame(InteractionResult.PASS,
+                PetCombatModeListener.onUseEntity(player, world, InteractionHand.MAIN_HAND, ownedWolf(), null));
     }
 
     /**
@@ -187,42 +187,42 @@ class PetCombatModeListenerTest {
      */
     @Test
     void sneakClickingAPetYouDoNotOwnPasses() {
-        final WolfEntity someoneElsesWolf = mock(WolfEntity.class);
+        final Wolf someoneElsesWolf = mock(Wolf.class);
         lenient().when(someoneElsesWolf.isTamed()).thenReturn(true);
         lenient().when(someoneElsesWolf.isOwner(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(false);
 
-        assertSame(ActionResult.PASS, PetCombatModeListener.onUseEntity(
-                sneakingClientPlayer(new ItemStack(Items.BONE)), world, Hand.MAIN_HAND,
+        assertSame(InteractionResult.PASS, PetCombatModeListener.onUseEntity(
+                sneakingClientPlayer(new ItemStack(Items.BONE)), world, InteractionHand.MAIN_HAND,
                 someoneElsesWolf, null));
     }
 
     /** An untamed wolf is a wild animal, not a pet. */
     @Test
     void sneakClickingAnUntamedWolfPasses() {
-        final WolfEntity wild = mock(WolfEntity.class);
+        final Wolf wild = mock(Wolf.class);
         lenient().when(wild.isTamed()).thenReturn(false);
         lenient().when(wild.isOwner(org.mockito.ArgumentMatchers.any())).thenReturn(false);
 
-        assertSame(ActionResult.PASS, PetCombatModeListener.onUseEntity(
-                sneakingClientPlayer(new ItemStack(Items.BONE)), world, Hand.MAIN_HAND, wild, null));
+        assertSame(InteractionResult.PASS, PetCombatModeListener.onUseEntity(
+                sneakingClientPlayer(new ItemStack(Items.BONE)), world, InteractionHand.MAIN_HAND, wild, null));
     }
 
     /** A hostile mob is not a {@code TameableEntity} at all. */
     @Test
     void sneakClickingANonTameableMobPasses() {
-        final Entity zombie = mock(ZombieEntity.class);
+        final Entity zombie = mock(Zombie.class);
 
-        assertSame(ActionResult.PASS, PetCombatModeListener.onUseEntity(
-                sneakingClientPlayer(new ItemStack(Items.BONE)), world, Hand.MAIN_HAND, zombie,
+        assertSame(InteractionResult.PASS, PetCombatModeListener.onUseEntity(
+                sneakingClientPlayer(new ItemStack(Items.BONE)), world, InteractionHand.MAIN_HAND, zombie,
                 null));
     }
 
     /** The off-hand dispatch stays ignored, so one right-click cannot toggle the stance twice. */
     @Test
     void offHandFirePasses() {
-        assertSame(ActionResult.PASS, PetCombatModeListener.onUseEntity(
-                sneakingClientPlayer(new ItemStack(Items.BONE)), world, Hand.OFF_HAND, ownedWolf(),
+        assertSame(InteractionResult.PASS, PetCombatModeListener.onUseEntity(
+                sneakingClientPlayer(new ItemStack(Items.BONE)), world, InteractionHand.OFF_HAND, ownedWolf(),
                 null));
     }
 
@@ -237,8 +237,8 @@ class PetCombatModeListenerTest {
         lenient().when(off.getPetCombatModeToggleItem()).thenReturn("BONE");
         McMMOMod.setGeneralConfig(off);
 
-        assertSame(ActionResult.PASS, PetCombatModeListener.onUseEntity(
-                sneakingClientPlayer(new ItemStack(Items.BONE)), world, Hand.MAIN_HAND, ownedWolf(),
+        assertSame(InteractionResult.PASS, PetCombatModeListener.onUseEntity(
+                sneakingClientPlayer(new ItemStack(Items.BONE)), world, InteractionHand.MAIN_HAND, ownedWolf(),
                 null));
     }
 
@@ -253,46 +253,46 @@ class PetCombatModeListenerTest {
         lenient().when(typo.getPetCombatModeToggleItem()).thenReturn("NOT_A_REAL_ITEM");
         McMMOMod.setGeneralConfig(typo);
 
-        assertSame(ActionResult.PASS, PetCombatModeListener.onUseEntity(
-                sneakingClientPlayer(new ItemStack(Items.BONE)), world, Hand.MAIN_HAND, ownedWolf(),
+        assertSame(InteractionResult.PASS, PetCombatModeListener.onUseEntity(
+                sneakingClientPlayer(new ItemStack(Items.BONE)), world, InteractionHand.MAIN_HAND, ownedWolf(),
                 null));
     }
 
     /** Cats are {@code TameableEntity} too, so the gesture reads on them even though only wolves act. */
     @Test
     void theGestureWorksOnAnyTameableYouOwn() {
-        final CatEntity cat = mock(CatEntity.class);
+        final Cat cat = mock(Cat.class);
         lenient().when(cat.isTamed()).thenReturn(true);
         lenient().when(cat.isOwner(org.mockito.ArgumentMatchers.any())).thenReturn(true);
 
-        assertSame(ActionResult.CONSUME, PetCombatModeListener.onUseEntity(
-                sneakingClientPlayer(new ItemStack(Items.BONE)), world, Hand.MAIN_HAND, cat, null));
+        assertSame(InteractionResult.CONSUME, PetCombatModeListener.onUseEntity(
+                sneakingClientPlayer(new ItemStack(Items.BONE)), world, InteractionHand.MAIN_HAND, cat, null));
     }
 
     // --- fixture --------------------------------------------------------------------------------
 
-    private static PlayerEntity clientPlayer(ItemStack mainHand, boolean sneaking) {
-        final PlayerEntity player = mock(PlayerEntity.class);
+    private static Player clientPlayer(ItemStack mainHand, boolean sneaking) {
+        final Player player = mock(Player.class);
         lenient().when(player.getMainHandStack()).thenReturn(mainHand);
         lenient().when(player.isSneaking()).thenReturn(sneaking);
         return player;
     }
 
-    private static PlayerEntity sneakingClientPlayer(ItemStack mainHand) {
+    private static Player sneakingClientPlayer(ItemStack mainHand) {
         return clientPlayer(mainHand, true);
     }
 
     /** A tamed wolf that answers "yes" to any owner asked about it. */
-    private static WolfEntity ownedWolf() {
-        final WolfEntity wolf = mock(WolfEntity.class);
+    private static Wolf ownedWolf() {
+        final Wolf wolf = mock(Wolf.class);
         lenient().when(wolf.isTamed()).thenReturn(true);
         lenient().when(wolf.isOwner(org.mockito.ArgumentMatchers.any())).thenReturn(true);
         return wolf;
     }
 
     /** A tamed wolf owned by exactly {@code owner} and nobody else. */
-    private static WolfEntity ownedWolf(PlayerEntity owner) {
-        final WolfEntity wolf = mock(WolfEntity.class);
+    private static Wolf ownedWolf(Player owner) {
+        final Wolf wolf = mock(Wolf.class);
         lenient().when(wolf.isTamed()).thenReturn(true);
         lenient().when(wolf.isOwner(org.mockito.ArgumentMatchers.any())).thenReturn(false);
         lenient().when(wolf.isOwner(owner)).thenReturn(true);
@@ -300,14 +300,14 @@ class PetCombatModeListenerTest {
     }
 
     /** A sneaking server-side player holding {@code mainHand}, with a profile in {@link UserManager}. */
-    private ServerPlayerEntity trackedServerPlayer(ItemStack mainHand) {
+    private ServerPlayer trackedServerPlayer(ItemStack mainHand) {
         final UUID uuid = UUID.randomUUID();
 
-        final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
+        final ServerPlayer player = mock(ServerPlayer.class);
         lenient().when(player.getUuid()).thenReturn(uuid);
         lenient().when(player.getMainHandStack()).thenReturn(mainHand);
         lenient().when(player.isSneaking()).thenReturn(true);
-        lenient().when(player.getName()).thenReturn(Text.literal("tester"));
+        lenient().when(player.getName()).thenReturn(Component.literal("tester"));
 
         tamingManager = mock(TamingManager.class);
         final PlatformPlayer platformPlayer = mock(PlatformPlayer.class);

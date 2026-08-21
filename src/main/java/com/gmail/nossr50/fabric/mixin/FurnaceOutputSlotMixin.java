@@ -1,9 +1,9 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.SmeltingListener;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.slot.FurnaceOutputSlot;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.inventory.FurnaceResultSlot;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -32,20 +32,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * first line for a non-{@code ServerPlayerEntity}, and the clear-up is a thread-local removal — so no
  * environment guard is used here.
  */
-@Mixin(FurnaceOutputSlot.class)
+@Mixin(FurnaceResultSlot.class)
 public abstract class FurnaceOutputSlotMixin {
 
     /** The slot's owner. Vanilla reads this same field to decide whether to drop the stored XP. */
     @Shadow
     @Final
-    private PlayerEntity player;
+    private Player player;
 
-    @Inject(method = "onCrafted(Lnet/minecraft/item/ItemStack;)V", allow = 1, at = @At("HEAD"))
+    @Inject(method = "onCrafted(Lnet/minecraft/world/item/ItemStack;)V", allow = 1, at = @At("HEAD"))
     private void mcmmo$beginFurnaceExtract(ItemStack stack, CallbackInfo ci) {
         SmeltingListener.beginFurnaceExtract(player, stack);
     }
 
-    @Inject(method = "onCrafted(Lnet/minecraft/item/ItemStack;)V", allow = 1, at = @At("RETURN"))
+    @Inject(method = "onCrafted(Lnet/minecraft/world/item/ItemStack;)V", allow = 1, at = @At("RETURN"))
     private void mcmmo$endFurnaceExtract(ItemStack stack, CallbackInfo ci) {
         SmeltingListener.endFurnaceExtract();
     }

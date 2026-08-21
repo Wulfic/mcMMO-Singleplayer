@@ -84,7 +84,7 @@ public class TreasureConfig extends ConfigLoader {
      *
      * <p><b>⚠️⚠️ Deliberately NOT done during {@link #loadKeys}, and this is not a style choice.</b>
      * This class is Minecraft-free by design — its tests construct it in a plain fork with no
-     * bootstrap — and the registry probe touches {@code net.minecraft.registry.Registries}. Class
+     * bootstrap — and the registry probe touches {@code net.minecraft.core.registries.BuiltInRegistries}. Class
      * initialization for that type <em>throws</em> in an un-bootstrapped fork, and the failure is
      * sticky: every later touch of the class in the same fork gets {@code NoClassDefFoundError}, so
      * one probe in a constructor poisons the whole fork. Doing it in the constructor cost 351 test

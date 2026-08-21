@@ -18,19 +18,19 @@ import com.gmail.nossr50.skills.salvage.salvageables.SalvageableManager;
 import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
 import java.util.UUID;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,7 +63,7 @@ class RepairSalvageListenerTest {
     private static final BlockPos ANVIL_POS = new BlockPos(4, 64, -7);
 
     private GeneralConfig generalConfig;
-    private World world;
+    private Level world;
     private McMMOPlayer mmoPlayer;
     private RepairManager repairManager;
 
@@ -88,7 +88,7 @@ class RepairSalvageListenerTest {
                 .thenReturn(mock(Salvageable.class));
         McMMOMod.setSalvageableManager(salvageables);
 
-        world = mock(World.class);
+        world = mock(Level.class);
         placeAnvil(Blocks.STONE);
     }
 
@@ -113,10 +113,10 @@ class RepairSalvageListenerTest {
     void clientSideFireOnTheRepairAnvilClaimsTheClick() {
         placeAnvil(Blocks.IRON_BLOCK);
 
-        final ActionResult result = RepairSalvageListener.onUseBlock(clientPlayer(damagedChestplate()),
-                world, Hand.MAIN_HAND, anvilHit());
+        final InteractionResult result = RepairSalvageListener.onUseBlock(clientPlayer(damagedChestplate()),
+                world, InteractionHand.MAIN_HAND, anvilHit());
 
-        assertEquals(ActionResult.SUCCESS, result,
+        assertEquals(InteractionResult.SUCCESS, result,
                 "the client fire must claim the anvil click, or the client falls through to "
                         + "\"use item\" and equips the armour being repaired");
     }
@@ -126,10 +126,10 @@ class RepairSalvageListenerTest {
     void clientSideFireOnTheSalvageAnvilClaimsTheClick() {
         placeAnvil(Blocks.GOLD_BLOCK);
 
-        final ActionResult result = RepairSalvageListener.onUseBlock(clientPlayer(damagedChestplate()),
-                world, Hand.MAIN_HAND, anvilHit());
+        final InteractionResult result = RepairSalvageListener.onUseBlock(clientPlayer(damagedChestplate()),
+                world, InteractionHand.MAIN_HAND, anvilHit());
 
-        assertEquals(ActionResult.SUCCESS, result);
+        assertEquals(InteractionResult.SUCCESS, result);
     }
 
     // --- the boundary of the claim -------------------------------------------
@@ -143,10 +143,10 @@ class RepairSalvageListenerTest {
     void clientSideFireWithAnItemMcmmoDoesNotWorkOnPasses() {
         placeAnvil(Blocks.IRON_BLOCK);
 
-        final ActionResult result = RepairSalvageListener.onUseBlock(
-                clientPlayer(new ItemStack(Items.GOLDEN_APPLE)), world, Hand.MAIN_HAND, anvilHit());
+        final InteractionResult result = RepairSalvageListener.onUseBlock(
+                clientPlayer(new ItemStack(Items.GOLDEN_APPLE)), world, InteractionHand.MAIN_HAND, anvilHit());
 
-        assertEquals(ActionResult.PASS, result);
+        assertEquals(InteractionResult.PASS, result);
     }
 
     /** An empty hand over the anvil is not an anvil action either. */
@@ -154,10 +154,10 @@ class RepairSalvageListenerTest {
     void clientSideFireWithAnEmptyHandPasses() {
         placeAnvil(Blocks.IRON_BLOCK);
 
-        final ActionResult result = RepairSalvageListener.onUseBlock(clientPlayer(ItemStack.EMPTY),
-                world, Hand.MAIN_HAND, anvilHit());
+        final InteractionResult result = RepairSalvageListener.onUseBlock(clientPlayer(ItemStack.EMPTY),
+                world, InteractionHand.MAIN_HAND, anvilHit());
 
-        assertEquals(ActionResult.PASS, result);
+        assertEquals(InteractionResult.PASS, result);
     }
 
     /** Holding repairable gear is not enough — the block has to be one of mcMMO's anvils. */
@@ -165,10 +165,10 @@ class RepairSalvageListenerTest {
     void clientSideFireOnAnOrdinaryBlockPasses() {
         placeAnvil(Blocks.STONE);
 
-        final ActionResult result = RepairSalvageListener.onUseBlock(clientPlayer(damagedChestplate()),
-                world, Hand.MAIN_HAND, anvilHit());
+        final InteractionResult result = RepairSalvageListener.onUseBlock(clientPlayer(damagedChestplate()),
+                world, InteractionHand.MAIN_HAND, anvilHit());
 
-        assertEquals(ActionResult.PASS, result);
+        assertEquals(InteractionResult.PASS, result);
     }
 
     /** The off-hand dispatch stays ignored, so one right-click cannot arm the confirmation twice. */
@@ -176,10 +176,10 @@ class RepairSalvageListenerTest {
     void offHandFirePasses() {
         placeAnvil(Blocks.IRON_BLOCK);
 
-        final ActionResult result = RepairSalvageListener.onUseBlock(clientPlayer(damagedChestplate()),
-                world, Hand.OFF_HAND, anvilHit());
+        final InteractionResult result = RepairSalvageListener.onUseBlock(clientPlayer(damagedChestplate()),
+                world, InteractionHand.OFF_HAND, anvilHit());
 
-        assertEquals(ActionResult.PASS, result);
+        assertEquals(InteractionResult.PASS, result);
     }
 
     // --- the server side still does the work ---------------------------------
@@ -192,15 +192,15 @@ class RepairSalvageListenerTest {
     @Test
     void serverSideFireOnTheRepairAnvilArmsTheConfirmation() {
         placeAnvil(Blocks.IRON_BLOCK);
-        final ServerPlayerEntity player = trackedServerPlayer(damagedChestplate());
+        final ServerPlayer player = trackedServerPlayer(damagedChestplate());
         // First click of the pair: arms + prompts, repairs nothing.
         when(repairManager.checkConfirmation(true)).thenReturn(false);
 
-        final ActionResult result =
-                RepairSalvageListener.onUseBlock(player, world, Hand.MAIN_HAND, anvilHit());
+        final InteractionResult result =
+                RepairSalvageListener.onUseBlock(player, world, InteractionHand.MAIN_HAND, anvilHit());
 
         verify(repairManager).checkConfirmation(true);
-        assertEquals(ActionResult.SUCCESS, result,
+        assertEquals(InteractionResult.SUCCESS, result,
                 "the click is claimed whether it repaired or merely armed");
     }
 
@@ -213,7 +213,7 @@ class RepairSalvageListenerTest {
 
     /** A right-click landing on the top face of the block at {@link #ANVIL_POS}. */
     private static BlockHitResult anvilHit() {
-        return new BlockHitResult(Vec3d.ofCenter(ANVIL_POS), Direction.UP, ANVIL_POS, false);
+        return new BlockHitResult(Vec3.ofCenter(ANVIL_POS), Direction.UP, ANVIL_POS, false);
     }
 
     /** Damaged gear: what a player actually walks up to the anvil holding. */
@@ -227,17 +227,17 @@ class RepairSalvageListenerTest {
      * The client-side fire's player: a {@link PlayerEntity} that is <em>not</em> a
      * {@link ServerPlayerEntity}, which is precisely how the listener tells the two fires apart.
      */
-    private static PlayerEntity clientPlayer(ItemStack mainHand) {
-        final PlayerEntity player = mock(PlayerEntity.class);
+    private static Player clientPlayer(ItemStack mainHand) {
+        final Player player = mock(Player.class);
         lenient().when(player.getMainHandStack()).thenReturn(mainHand);
         return player;
     }
 
     /** A server-side player with an mcMMO profile behind them, tracked in {@link UserManager}. */
-    private ServerPlayerEntity trackedServerPlayer(ItemStack mainHand) {
+    private ServerPlayer trackedServerPlayer(ItemStack mainHand) {
         final UUID uuid = UUID.randomUUID();
 
-        final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
+        final ServerPlayer player = mock(ServerPlayer.class);
         lenient().when(player.getUuid()).thenReturn(uuid);
         lenient().when(player.getMainHandStack()).thenReturn(mainHand);
 

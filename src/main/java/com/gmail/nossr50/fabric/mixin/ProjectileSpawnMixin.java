@@ -2,9 +2,9 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.ProjectileListener;
 import java.util.function.Consumer;
-import net.minecraft.entity.projectile.ProjectileEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.server.level.ServerLevel;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -30,19 +30,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * bow: {@code shootAll} passes the ammo stack. The firing weapon is read off the arrow itself via
  * {@code PersistentProjectileEntity#getWeaponStack()} in the listener.
  */
-@Mixin(ProjectileEntity.class)
+@Mixin(Projectile.class)
 public abstract class ProjectileSpawnMixin {
 
     @Inject(
-            method = "spawn(Lnet/minecraft/entity/projectile/ProjectileEntity;"
-                    + "Lnet/minecraft/server/world/ServerWorld;"
-                    + "Lnet/minecraft/item/ItemStack;"
+            method = "spawn(Lnet/minecraft/world/entity/projectile/Projectile;"
+                    + "Lnet/minecraft/server/level/ServerLevel;"
+                    + "Lnet/minecraft/world/item/ItemStack;"
                     + "Ljava/util/function/Consumer;)"
-                    + "Lnet/minecraft/entity/projectile/ProjectileEntity;", allow = 1,
+                    + "Lnet/minecraft/world/entity/projectile/Projectile;", allow = 1,
             at = @At("TAIL"))
-    private static void mcmmo$onProjectileSpawn(ProjectileEntity projectile, ServerWorld world,
-            ItemStack projectileStack, Consumer<ProjectileEntity> beforeSpawn,
-            CallbackInfoReturnable<ProjectileEntity> cir) {
+    private static void mcmmo$onProjectileSpawn(Projectile projectile, ServerLevel world,
+            ItemStack projectileStack, Consumer<Projectile> beforeSpawn,
+            CallbackInfoReturnable<Projectile> cir) {
         ProjectileListener.onProjectileSpawn(projectile, world);
     }
 }

@@ -13,11 +13,11 @@ import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -61,23 +61,23 @@ public final class HerdsmansCallListener {
         UseItemCallback.EVENT.register(HerdsmansCallListener::onUseItem);
     }
 
-    private static ActionResult onUseItem(PlayerEntity player, World world, Hand hand) {
-        if (hand != Hand.MAIN_HAND || world.isClient()
-                || !(player instanceof ServerPlayerEntity serverPlayer)) {
-            return ActionResult.PASS;
+    private static InteractionResult onUseItem(Player player, Level world, InteractionHand hand) {
+        if (hand != InteractionHand.MAIN_HAND || world.isClient()
+                || !(player instanceof ServerPlayer serverPlayer)) {
+            return InteractionResult.PASS;
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
         if (mmoPlayer == null) {
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
         if (!mmoPlayer.getPlayer().isHoldingItem(triggerItem())) {
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
         tryActivate(mmoPlayer, serverPlayer);
         // Always PASS: the horn is never consumed and mcMMO is observing the click rather than
         // replacing it, so a goat horn still sounds exactly as vanilla intends. That is a large part of
         // why the horn was chosen — the ability comes with its own noise for free.
-        return ActionResult.PASS;
+        return InteractionResult.PASS;
     }
 
     private static String triggerItem() {
@@ -87,7 +87,7 @@ public final class HerdsmansCallListener {
     }
 
     private static void tryActivate(@NotNull McMMOPlayer mmoPlayer,
-            @NotNull ServerPlayerEntity player) {
+            @NotNull ServerPlayer player) {
         if (mmoPlayer.getAbilityMode(SuperAbilityType.HERDSMANS_CALL)) {
             return; // Already sounding.
         }

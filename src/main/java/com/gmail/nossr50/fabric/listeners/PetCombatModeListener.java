@@ -12,15 +12,15 @@ import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.passive.TameableEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Item;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.EntityHitResult;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -91,16 +91,16 @@ public final class PetCombatModeListener {
      * @param hitResult vanilla's precise hit position; unused here (the gesture is about the entity,
      *                  not where on it you clicked) and nullable in the callback's contract
      */
-    static ActionResult onUseEntity(PlayerEntity player, World world, Hand hand, Entity entity,
+    static InteractionResult onUseEntity(Player player, Level world, InteractionHand hand, Entity entity,
             @Nullable EntityHitResult hitResult) {
         if (!isToggleGesture(player, hand, entity)) {
-            return ActionResult.PASS; // Not our gesture — let vanilla sit the pet as usual.
+            return InteractionResult.PASS; // Not our gesture — let vanilla sit the pet as usual.
         }
 
-        if (!(player instanceof ServerPlayerEntity serverPlayer)) {
+        if (!(player instanceof ServerPlayer serverPlayer)) {
             // Client-side fire: claim the click so the client does not predict the sit-toggle, and
             // touch no state. The server-side fire below owns the actual flip. See the class doc.
-            return ActionResult.CONSUME;
+            return InteractionResult.CONSUME;
         }
 
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
@@ -116,7 +116,7 @@ public final class PetCombatModeListener {
                             + " consuming the click and asking them to retry.",
                     serverPlayer.getName().getString());
             serverPlayer.sendMessage(TextUtils.toText(LocaleLoader.getString("Profile.PendingLoad")));
-            return ActionResult.CONSUME;
+            return InteractionResult.CONSUME;
         }
 
         final TamingManager taming = mmoPlayer.getTamingManager();
@@ -125,12 +125,12 @@ public final class PetCombatModeListener {
             // click is already claimed, so log it loudly and consume rather than desyncing the sit.
             McMMOMod.LOGGER.warn("Player {} has no TamingManager; pet combat-mode toggle ignored.",
                     serverPlayer.getName().getString());
-            return ActionResult.CONSUME;
+            return InteractionResult.CONSUME;
         }
 
         announce(mmoPlayer, taming.togglePetCombatMode());
         SoundManager.sendSound(mmoPlayer.getPlayer(), SoundType.TOOL_READY);
-        return ActionResult.CONSUME;
+        return InteractionResult.CONSUME;
     }
 
     /**
@@ -143,9 +143,9 @@ public final class PetCombatModeListener {
      * <p>Package-private for the test, which needs to assert the negative cases (no bone, not
      * sneaking, someone else's pet, an untamed mob) without constructing a server.
      */
-    static boolean isToggleGesture(@NotNull PlayerEntity player, @NotNull Hand hand,
+    static boolean isToggleGesture(@NotNull Player player, @NotNull InteractionHand hand,
             @NotNull Entity entity) {
-        if (hand != Hand.MAIN_HAND) {
+        if (hand != InteractionHand.MAIN_HAND) {
             return false; // Avoid the off-hand dispatch double-firing the toggle.
         }
         if (!isFeatureEnabled()) {
@@ -154,7 +154,7 @@ public final class PetCombatModeListener {
         if (!player.isSneaking()) {
             return false; // A plain right-click still belongs to vanilla's sit-toggle.
         }
-        if (!(entity instanceof TameableEntity pet) || !pet.isTamed() || !pet.isOwner(player)) {
+        if (!(entity instanceof TamableAnimal pet) || !pet.isTamed() || !pet.isOwner(player)) {
             return false; // Someone else's pet, or not a pet at all.
         }
         final Item toggleItem = toggleItem();

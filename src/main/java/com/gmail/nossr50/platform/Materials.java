@@ -4,11 +4,11 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import net.minecraft.block.Block;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -74,11 +74,11 @@ public final class Materials {
     /** Resolve an item by Bukkit-style name / namespaced id, empty if unknown. */
     public static @NotNull Optional<Item> item(@NotNull String name) {
         final Identifier id = idOf(name);
-        if (id == null || !Registries.ITEM.containsId(id)) {
+        if (id == null || !BuiltInRegistries.ITEM.containsId(id)) {
             McMMOMod.LOGGER.warn("No vanilla item for material name '{}'", name);
             return Optional.empty();
         }
-        return Optional.of(Registries.ITEM.get(id));
+        return Optional.of(BuiltInRegistries.ITEM.get(id));
     }
 
     /**
@@ -93,17 +93,17 @@ public final class Materials {
     /** Resolve a block by Bukkit-style name / namespaced id, empty if unknown. */
     public static @NotNull Optional<Block> block(@NotNull String name) {
         final Identifier id = idOf(name);
-        if (id == null || !Registries.BLOCK.containsId(id)) {
+        if (id == null || !BuiltInRegistries.BLOCK.containsId(id)) {
             McMMOMod.LOGGER.warn("No vanilla block for material name '{}'", name);
             return Optional.empty();
         }
-        return Optional.of(Registries.BLOCK.get(id));
+        return Optional.of(BuiltInRegistries.BLOCK.get(id));
     }
 
     /** Whether a vanilla item exists for the given name. Does not log on miss. */
     public static boolean isItem(@NotNull String name) {
         final Identifier id = idOf(name);
-        return id != null && Registries.ITEM.containsId(id);
+        return id != null && BuiltInRegistries.ITEM.containsId(id);
     }
 
     /**
@@ -122,14 +122,14 @@ public final class Materials {
      * test side.
      */
     public static boolean itemRegistryIsPopulated() {
-        return Registries.ITEM.containsId(Identifier.ofVanilla("iron_sword"))
-                && Registries.ITEM.containsId(Identifier.ofVanilla("stone"));
+        return BuiltInRegistries.ITEM.containsId(Identifier.ofVanilla("iron_sword"))
+                && BuiltInRegistries.ITEM.containsId(Identifier.ofVanilla("stone"));
     }
 
     /** Whether a vanilla block exists for the given name. Does not log on miss. */
     public static boolean isBlock(@NotNull String name) {
         final Identifier id = idOf(name);
-        return id != null && Registries.BLOCK.containsId(id);
+        return id != null && BuiltInRegistries.BLOCK.containsId(id);
     }
 
     /**
@@ -142,7 +142,7 @@ public final class Materials {
      * name may be a pre-1.13 alias ({@link #LEGACY_NAME_ALIASES}) that differs from it.
      */
     public static @NotNull Optional<String> itemPath(@NotNull String name) {
-        return item(name).map(item -> Registries.ITEM.getId(item).getPath());
+        return item(name).map(item -> BuiltInRegistries.ITEM.getId(item).getPath());
     }
 
     /**

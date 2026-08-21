@@ -2,10 +2,10 @@ package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.datatypes.mobs.MobOrigin;
 import com.gmail.nossr50.fabric.McMMOAttachments;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.SpawnReason;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -108,7 +108,7 @@ public final class MobOrigins {
      * @param reason vanilla's reason for the spawn
      * @param entity the new entity, or {@code null} when the type is behind a disabled feature flag
      */
-    public static void stampOnSpawn(@NotNull World world, @NotNull SpawnReason reason,
+    public static void stampOnSpawn(@NotNull Level world, @NotNull EntitySpawnReason reason,
             @Nullable Entity entity) {
         if (entity == null || world.isClient() || !(entity instanceof LivingEntity)) {
             return;
@@ -176,7 +176,7 @@ public final class MobOrigins {
      * Logs the first mark of the session at INFO, so a play-test can tell "the gate refused this mob"
      * apart from "the injector never bound". See {@link #LOGGED_FIRST_MARK}.
      */
-    private static void announceFirstMark(@NotNull MobOrigin origin, @NotNull SpawnReason reason) {
+    private static void announceFirstMark(@NotNull MobOrigin origin, @NotNull EntitySpawnReason reason) {
         if (LOGGED_FIRST_MARK.compareAndSet(false, true)) {
             LOGGER.info("Hunter: mob-origin gate is live — first mob marked {} (SpawnReason.{}). "
                             + "Mobs from this origin will not advance mob mastery.",
@@ -184,7 +184,7 @@ public final class MobOrigins {
         }
     }
 
-    public static @NotNull MobOrigin classify(@NotNull SpawnReason reason) {
+    public static @NotNull MobOrigin classify(@NotNull EntitySpawnReason reason) {
         return switch (reason) {
             // The gate's whole purpose. isAnySpawner() covers both, but they are spelled out so the
             // mapping stays readable next to the rest.

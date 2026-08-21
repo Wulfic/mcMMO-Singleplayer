@@ -1,13 +1,13 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.AlchemyListener;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BrewingStandBlockEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.recipe.BrewingRecipeRegistry;
-import net.minecraft.util.collection.DefaultedList;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.entity.BrewingStandBlockEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.alchemy.PotionBrewing;
+import net.minecraft.core.NonNullList;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -47,16 +47,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BrewingStandBlockEntityMixin {
 
     @Inject(method = "canCraft", allow = 1, at = @At("HEAD"), cancellable = true)
-    private static void mcmmo$forceMcMMOBrewRecognition(BrewingRecipeRegistry registry,
-            DefaultedList<ItemStack> slots, CallbackInfoReturnable<Boolean> cir) {
+    private static void mcmmo$forceMcMMOBrewRecognition(PotionBrewing registry,
+            NonNullList<ItemStack> slots, CallbackInfoReturnable<Boolean> cir) {
         if (AlchemyListener.isValidBrew(slots)) {
             cir.setReturnValue(true);
         }
     }
 
     @Inject(method = "craft", allow = 1, at = @At("HEAD"), cancellable = true)
-    private static void mcmmo$onBrewCraft(World world, BlockPos pos,
-            DefaultedList<ItemStack> slots, CallbackInfo ci) {
+    private static void mcmmo$onBrewCraft(Level world, BlockPos pos,
+            NonNullList<ItemStack> slots, CallbackInfo ci) {
         if (AlchemyListener.isValidBrew(slots)) {
             AlchemyListener.onBrewCraft(world, pos, slots);
             ci.cancel();
@@ -64,7 +64,7 @@ public abstract class BrewingStandBlockEntityMixin {
     }
 
     @Inject(method = "tick", allow = 1, at = @At("HEAD"))
-    private static void mcmmo$applyCatalysisBrewSpeed(World world, BlockPos pos, BlockState state,
+    private static void mcmmo$applyCatalysisBrewSpeed(Level world, BlockPos pos, BlockState state,
             BrewingStandBlockEntity blockEntity, CallbackInfo ci) {
         AlchemyListener.applyCatalysis(pos, blockEntity);
     }

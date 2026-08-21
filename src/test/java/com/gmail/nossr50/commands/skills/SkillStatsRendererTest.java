@@ -52,7 +52,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import com.gmail.nossr50.platform.text.TextUtils;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;

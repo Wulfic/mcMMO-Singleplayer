@@ -4,9 +4,9 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.skills.movement.MovementManager;
 import com.gmail.nossr50.util.player.UserManager;
-import net.minecraft.entity.player.HungerManager;
+import net.minecraft.world.food.FoodData;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -37,11 +37,11 @@ public final class AthleteListener {
      * @param exhaustion    the exhaustion vanilla wants to add
      * @return the reduced exhaustion, or {@code exhaustion} unchanged when Athlete does not apply
      */
-    public static float scaleExhaustion(@NotNull HungerManager hungerManager, float exhaustion) {
+    public static float scaleExhaustion(@NotNull FoodData hungerManager, float exhaustion) {
         if (exhaustion <= 0) {
             return exhaustion;
         }
-        final ServerPlayerEntity player = ownerOf(hungerManager);
+        final ServerPlayer player = ownerOf(hungerManager);
         if (player == null || !player.isSprinting()) {
             return exhaustion;
         }
@@ -60,12 +60,12 @@ public final class AthleteListener {
      * The online player this hunger manager belongs to, or {@code null} if it belongs to none —
      * which covers the client-side manager and anything that runs outside a world session.
      */
-    private static @Nullable ServerPlayerEntity ownerOf(@NotNull HungerManager hungerManager) {
+    private static @Nullable ServerPlayer ownerOf(@NotNull FoodData hungerManager) {
         final MinecraftServer server = McMMOMod.getServer();
         if (server == null) {
             return null;
         }
-        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+        for (ServerPlayer player : server.getPlayerManager().getPlayerList()) {
             if (player.getHungerManager() == hungerManager) {
                 return player;
             }

@@ -26,24 +26,24 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.minecraft.block.Block;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ItemEnchantmentsComponent;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Holder;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -107,23 +107,23 @@ public final class RepairSalvageListener {
      * on, claim the click and (server side) perform the action. Package-private so the test can drive
      * the real dispatch rather than the predicates alone.
      */
-    static ActionResult onUseBlock(PlayerEntity player, World world, Hand hand,
+    static InteractionResult onUseBlock(Player player, Level world, InteractionHand hand,
             BlockHitResult hitResult) {
-        if (hand != Hand.MAIN_HAND) {
-            return ActionResult.PASS; // avoid the off-hand dispatch double-firing.
+        if (hand != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS; // avoid the off-hand dispatch double-firing.
         }
 
         final BlockPos pos = hitResult.getBlockPos();
         final AnvilKind kind = anvilKindAt(world, pos);
         if (kind == null || !isAnvilAction(kind, player.getMainHandStack())) {
-            return ActionResult.PASS; // not an mcMMO anvil action — let vanilla have the click.
+            return InteractionResult.PASS; // not an mcMMO anvil action — let vanilla have the click.
         }
 
-        if (!(player instanceof ServerPlayerEntity serverPlayer)) {
+        if (!(player instanceof ServerPlayer serverPlayer)) {
             // Client-side fire: claim the click so the client does not fall through to "use item"
             // and equip/use the item out of our hand. No player state is touched here — the
             // confirmation clock and the action itself belong to the server-side fire below.
-            return ActionResult.SUCCESS;
+            return InteractionResult.SUCCESS;
         }
 
         return switch (kind) {
@@ -145,9 +145,9 @@ public final class RepairSalvageListener {
      * <p>Unlike the click path there is no held-item test: legacy notifies on placement regardless of
      * what the player is carrying, because the whole point is to explain the block they just put down.
      */
-    public static void onAnvilPlaced(@NotNull World world, @NotNull BlockPos pos,
-            @Nullable PlayerEntity player) {
-        if (!(player instanceof ServerPlayerEntity serverPlayer)) {
+    public static void onAnvilPlaced(@NotNull Level world, @NotNull BlockPos pos,
+            @Nullable Player player) {
+        if (!(player instanceof ServerPlayer serverPlayer)) {
             return;
         }
         final AnvilKind kind = anvilKindAt(world, pos);
@@ -173,7 +173,7 @@ public final class RepairSalvageListener {
     }
 
     /** The mcMMO anvil at {@code pos}, or {@code null} when that block is neither anvil. */
-    private static @Nullable AnvilKind anvilKindAt(World world, BlockPos pos) {
+    private static @Nullable AnvilKind anvilKindAt(Level world, BlockPos pos) {
         final Block clicked = world.getBlockState(pos).getBlock();
 
         final Block repairAnvil = anvilBlock(
@@ -230,7 +230,7 @@ public final class RepairSalvageListener {
 
     /** A stack's registry path ({@code minecraft:iron_sword} → {@code iron_sword}), the config key. */
     private static String itemPath(ItemStack stack) {
-        return Registries.ITEM.getId(stack.getItem()).getPath();
+        return BuiltInRegistries.ITEM.getId(stack.getItem()).getPath();
     }
 
     /**
@@ -239,10 +239,10 @@ public final class RepairSalvageListener {
      * {@link ActionResult#SUCCESS} once the click is claimed for repair (so vanilla does not also act
      * on it), {@link ActionResult#PASS} when the held item is not something mcMMO repairs.
      */
-    private static ActionResult handleRepairInteraction(ServerPlayerEntity serverPlayer) {
+    private static InteractionResult handleRepairInteraction(ServerPlayer serverPlayer) {
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
         if (mmoPlayer == null) {
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
 
         // Re-resolved on this side rather than carried over from onUseBlock's gate: the client fires
@@ -251,7 +251,7 @@ public final class RepairSalvageListener {
         final ItemStack item = serverPlayer.getMainHandStack();
         final Repairable repairable = repairableInHand(item);
         if (repairable == null) {
-            return ActionResult.PASS; // the held item is not repairable — let vanilla have the click.
+            return InteractionResult.PASS; // the held item is not repairable — let vanilla have the click.
         }
 
         final RepairManager repairManager = mmoPlayer.getRepairManager();
@@ -260,14 +260,14 @@ public final class RepairSalvageListener {
         if (repairManager.checkConfirmation(true)) {
             performRepair(serverPlayer, mmoPlayer, repairManager, item, itemPath(item), repairable);
         }
-        return ActionResult.SUCCESS; // claim the click whether we repaired or merely armed.
+        return InteractionResult.SUCCESS; // claim the click whether we repaired or merely armed.
     }
 
     /** Port of legacy {@code handleRepair}: the guards, material consumption, XP, and durability write. */
-    private static void performRepair(ServerPlayerEntity serverPlayer, McMMOPlayer mmoPlayer,
+    private static void performRepair(ServerPlayer serverPlayer, McMMOPlayer mmoPlayer,
             RepairManager repairManager, ItemStack item, String itemPath, Repairable repairable) {
         // Unbreakable items cannot be repaired.
-        if (item.contains(DataComponentTypes.UNBREAKABLE)) {
+        if (item.contains(DataComponents.UNBREAKABLE)) {
             NotificationManager.sendPlayerInformation(mmoPlayer,
                     NotificationType.SUBSKILL_MESSAGE_FAILED, "Anvil.Unbreakable");
             return;
@@ -296,7 +296,7 @@ public final class RepairSalvageListener {
             return; // misconfigured repairable — nothing to consume.
         }
         final Item repairItem = repairItemOpt.get();
-        final PlayerInventory inventory = serverPlayer.getInventory();
+        final Inventory inventory = serverPlayer.getInventory();
         int materialSlot = findMaterialSlot(inventory, repairItem, false);
         if (materialSlot < 0) {
             notifyMissingRepairMaterial(mmoPlayer, repairable);
@@ -374,7 +374,7 @@ public final class RepairSalvageListener {
      */
     private static void applyArcaneForging(McMMOPlayer mmoPlayer, RepairManager repairManager,
             ItemStack item) {
-        final ItemEnchantmentsComponent enchants = EnchantmentHelper.getEnchantments(item);
+        final ItemEnchantments enchants = EnchantmentHelper.getEnchantments(item);
         if (enchants.isEmpty()) {
             return; // an unenchanted item has nothing to lose.
         }
@@ -388,7 +388,7 @@ public final class RepairSalvageListener {
 
         // No Arcane Forging rank ⇒ the arcane energies are lost entirely.
         if (!repairManager.canKeepEnchants()) {
-            EnchantmentHelper.set(item, ItemEnchantmentsComponent.DEFAULT);
+            EnchantmentHelper.set(item, ItemEnchantments.DEFAULT);
             NotificationManager.sendPlayerInformation(mmoPlayer,
                     NotificationType.SUBSKILL_MESSAGE_FAILED, "Repair.Arcane.Lost");
             return;
@@ -396,10 +396,10 @@ public final class RepairSalvageListener {
 
         final boolean allowUnsafe = allowUnsafeEnchantments();
         final int startingCount = enchants.getSize();
-        final Map<RegistryEntry<Enchantment>, Integer> survivors = new LinkedHashMap<>();
+        final Map<Holder<Enchantment>, Integer> survivors = new LinkedHashMap<>();
         boolean downgraded = false;
 
-        for (RegistryEntry<Enchantment> enchantment : enchants.getEnchantments()) {
+        for (Holder<Enchantment> enchantment : enchants.getEnchantments()) {
             // Legacy clamps an over-levelled ("unsafe") enchantment down to the vanilla maximum
             // before rolling, so a repair also launders illegally-high levels unless allowed.
             int level = enchants.getLevel(enchantment);
@@ -438,18 +438,18 @@ public final class RepairSalvageListener {
      * The salvage-anvil right-click flow: resolve the player + held item, gate on the item being
      * salvageable and the double-click confirmation, then perform the salvage.
      */
-    private static ActionResult handleSalvageInteraction(ServerPlayerEntity serverPlayer,
-            World world, BlockPos pos) {
+    private static InteractionResult handleSalvageInteraction(ServerPlayer serverPlayer,
+            Level world, BlockPos pos) {
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
         if (mmoPlayer == null) {
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
 
         // Re-resolved on this side for the same reason as in handleRepairInteraction.
         final ItemStack item = serverPlayer.getMainHandStack();
         final Salvageable salvageable = salvageableInHand(item);
         if (salvageable == null) {
-            return ActionResult.PASS; // the held item is not salvageable.
+            return InteractionResult.PASS; // the held item is not salvageable.
         }
 
         final SalvageManager salvageManager = mmoPlayer.getSalvageManager();
@@ -458,7 +458,7 @@ public final class RepairSalvageListener {
             performSalvage(serverPlayer, mmoPlayer, salvageManager, item, itemPath(item), salvageable,
                     world, pos);
         }
-        return ActionResult.SUCCESS;
+        return InteractionResult.SUCCESS;
     }
 
     /**
@@ -467,11 +467,11 @@ public final class RepairSalvageListener {
      * the returned crafting materials. The yield math ({@link SalvageManager#calculateSalvageableAmount}
      * + {@link SalvageManager#getSalvageLimit}) is MC-free; this owns the item reads/spawn.
      */
-    private static void performSalvage(ServerPlayerEntity serverPlayer, McMMOPlayer mmoPlayer,
+    private static void performSalvage(ServerPlayer serverPlayer, McMMOPlayer mmoPlayer,
             SalvageManager salvageManager, ItemStack item, String itemPath, Salvageable salvageable,
-            World world, BlockPos pos) {
+            Level world, BlockPos pos) {
         // Unbreakable items cannot be salvaged.
-        if (item.contains(DataComponentTypes.UNBREAKABLE)) {
+        if (item.contains(DataComponents.UNBREAKABLE)) {
             NotificationManager.sendPlayerInformation(mmoPlayer,
                     NotificationType.SUBSKILL_MESSAGE_FAILED, "Anvil.Unbreakable");
             return;
@@ -511,7 +511,7 @@ public final class RepairSalvageListener {
                 String.valueOf(potentialSalvageYield), StringUtils.getPrettyString(itemPath));
 
         // Consume the salvaged item (salvage only ever operates on a single, non-stacking item).
-        serverPlayer.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+        serverPlayer.setStackInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
 
         // Pop the recovered materials out of the top of the anvil.
         if (enchantBook != null) {
@@ -540,7 +540,7 @@ public final class RepairSalvageListener {
      */
     private static @Nullable ItemStack buildArcaneSalvageBook(McMMOPlayer mmoPlayer,
             SalvageManager salvageManager, ItemStack item) {
-        final ItemEnchantmentsComponent enchants = EnchantmentHelper.getEnchantments(item);
+        final ItemEnchantments enchants = EnchantmentHelper.getEnchantments(item);
         if (enchants.isEmpty()) {
             return null; // an unenchanted item yields no book (legacy skips the check entirely).
         }
@@ -552,11 +552,11 @@ public final class RepairSalvageListener {
         }
 
         final boolean allowUnsafe = allowUnsafeEnchantments();
-        final Map<RegistryEntry<Enchantment>, Integer> extracted = new LinkedHashMap<>();
+        final Map<Holder<Enchantment>, Integer> extracted = new LinkedHashMap<>();
         int arcaneFailureCount = 0;
         boolean downgraded = false;
 
-        for (RegistryEntry<Enchantment> enchantment : enchants.getEnchantments()) {
+        for (Holder<Enchantment> enchantment : enchants.getEnchantments()) {
             // Unlike Arcane Forging this clamp only bounds what the book receives — the source item
             // is being destroyed, so there is nothing to write the clamped level back to.
             int level = enchants.getLevel(enchantment);
@@ -598,7 +598,7 @@ public final class RepairSalvageListener {
         // exactly when the stack isOf(ENCHANTED_BOOK)), but naming the component documents the
         // book/tool distinction that applyArcaneForging relies on the helper to make for it.
         final ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
-        book.set(DataComponentTypes.STORED_ENCHANTMENTS, componentOf(extracted));
+        book.set(DataComponents.STORED_ENCHANTMENTS, componentOf(extracted));
         return book;
     }
 
@@ -606,10 +606,10 @@ public final class RepairSalvageListener {
      * Build an {@link ItemEnchantmentsComponent} from a resolved enchantment→level map. Used for
      * both the repaired item's surviving enchantments and the salvage book's extracted ones.
      */
-    private static ItemEnchantmentsComponent componentOf(
-            Map<RegistryEntry<Enchantment>, Integer> levels) {
-        final ItemEnchantmentsComponent.Builder builder =
-                new ItemEnchantmentsComponent.Builder(ItemEnchantmentsComponent.DEFAULT);
+    private static ItemEnchantments componentOf(
+            Map<Holder<Enchantment>, Integer> levels) {
+        final ItemEnchantments.Mutable builder =
+                new ItemEnchantments.Mutable(ItemEnchantments.DEFAULT);
         levels.forEach(builder::set);
         return builder.build();
     }
@@ -657,7 +657,7 @@ public final class RepairSalvageListener {
      * @param requireUnenchanted skip enchanted stacks, for the
      *     {@code Repair.AllowEnchantedRepairMaterials} avoidance pass (legacy's second, filtered scan)
      */
-    private static int findMaterialSlot(PlayerInventory inventory, Item material,
+    private static int findMaterialSlot(Inventory inventory, Item material,
             boolean requireUnenchanted) {
         for (int slot = 0; slot < inventory.size(); slot++) {
             final ItemStack stack = inventory.getStack(slot);

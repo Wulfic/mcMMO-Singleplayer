@@ -15,19 +15,19 @@ import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import java.util.List;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -77,22 +77,22 @@ public final class SecondWindListener {
         UseItemCallback.EVENT.register(SecondWindListener::onUseItem);
     }
 
-    private static ActionResult onUseItem(PlayerEntity player, World world, Hand hand) {
-        if (hand != Hand.MAIN_HAND || world.isClient()
-                || !(player instanceof ServerPlayerEntity serverPlayer)) {
-            return ActionResult.PASS;
+    private static InteractionResult onUseItem(Player player, Level world, InteractionHand hand) {
+        if (hand != InteractionHand.MAIN_HAND || world.isClient()
+                || !(player instanceof ServerPlayer serverPlayer)) {
+            return InteractionResult.PASS;
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
         if (mmoPlayer == null) {
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
         if (!mmoPlayer.getPlayer().isHoldingItem(triggerItem())) {
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
         tryActivate(mmoPlayer, serverPlayer);
         // Always PASS: the trigger item is never consumed and mcMMO is observing the click, not
         // replacing it. A feather has no vanilla use action to suppress anyway.
-        return ActionResult.PASS;
+        return InteractionResult.PASS;
     }
 
     private static String triggerItem() {
@@ -121,7 +121,7 @@ public final class SecondWindListener {
     }
 
     private static void tryActivate(@NotNull McMMOPlayer mmoPlayer,
-            @NotNull ServerPlayerEntity player) {
+            @NotNull ServerPlayer player) {
         if (mmoPlayer.getAbilityMode(SuperAbilityType.SECOND_WIND)) {
             return; // Already running.
         }
@@ -163,7 +163,7 @@ public final class SecondWindListener {
         activate(mmoPlayer, player, result, ticks);
     }
 
-    private static void activate(@NotNull McMMOPlayer mmoPlayer, @NotNull ServerPlayerEntity player,
+    private static void activate(@NotNull McMMOPlayer mmoPlayer, @NotNull ServerPlayer player,
             @NotNull SecondWindResult result, int ticks) {
         if (mmoPlayer.useChatNotifications()) {
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUPER_ABILITY,
@@ -192,15 +192,15 @@ public final class SecondWindListener {
      * are collected from a box around that path rather than by a raycast, so a lunge past someone's
      * shoulder still connects instead of requiring pixel-accurate aim.
      */
-    private static void dart(@NotNull ServerPlayerEntity player, @NotNull SecondWindResult result) {
-        final Vec3d look = player.getRotationVector().normalize();
-        final Vec3d lunge = look.multiply(result.magnitude());
+    private static void dart(@NotNull ServerPlayer player, @NotNull SecondWindResult result) {
+        final Vec3 look = player.getRotationVector().normalize();
+        final Vec3 lunge = look.multiply(result.magnitude());
         setVelocity(player, player.getVelocity().add(lunge.x, Math.max(0.1, lunge.y * 0.5), lunge.z));
 
-        final ServerWorld world = (ServerWorld) player.getEntityWorld();
-        final Vec3d from = player.getEntityPos();
-        final Vec3d to = from.add(look.multiply(result.dartRange()));
-        final Box path = new Box(from, to).expand(DART_HIT_RADIUS);
+        final ServerLevel world = (ServerLevel) player.getEntityWorld();
+        final Vec3 from = player.getEntityPos();
+        final Vec3 to = from.add(look.multiply(result.dartRange()));
+        final AABB path = new AABB(from, to).expand(DART_HIT_RADIUS);
 
         final List<Entity> hits = world.getOtherEntities(player, path,
                 entity -> entity instanceof LivingEntity && entity.isAlive());
@@ -214,23 +214,23 @@ public final class SecondWindListener {
     }
 
     /** Aquaman: a timed underwater buff. Duration is the ability's own length. */
-    private static void aquaman(@NotNull ServerPlayerEntity player,
+    private static void aquaman(@NotNull ServerPlayer player,
             @NotNull SecondWindResult result) {
         final int duration = result.durationTicks();
         final int amplifier = (int) result.magnitude();
-        player.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, duration, amplifier));
+        player.addStatusEffect(new MobEffectInstance(MobEffects.STRENGTH, duration, amplifier));
         player.addStatusEffect(
-                new StatusEffectInstance(StatusEffects.REGENERATION, duration, amplifier));
-        player.addStatusEffect(new StatusEffectInstance(StatusEffects.NIGHT_VISION, duration, 0));
+                new MobEffectInstance(MobEffects.REGENERATION, duration, amplifier));
+        player.addStatusEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, duration, 0));
         // Dolphin's Grace is the swim-speed half of the fantasy and is a status effect rather than an
         // attribute, so it composes with Fleet Footed's water modifier instead of fighting it.
-        player.addStatusEffect(new StatusEffectInstance(StatusEffects.DOLPHINS_GRACE, duration, 0));
+        player.addStatusEffect(new MobEffectInstance(MobEffects.DOLPHINS_GRACE, duration, 0));
     }
 
     /** Limitless: a forward-and-up burst for a gliding player. */
-    private static void limitless(@NotNull ServerPlayerEntity player,
+    private static void limitless(@NotNull ServerPlayer player,
             @NotNull SecondWindResult result) {
-        final Vec3d look = player.getRotationVector().normalize();
+        final Vec3 look = player.getRotationVector().normalize();
         final double boost = result.magnitude();
         setVelocity(player, player.getVelocity()
                 .add(look.x * boost, look.y * boost + LIMITLESS_LIFT, look.z * boost));
@@ -248,9 +248,9 @@ public final class SecondWindListener {
      * one-shot impulses; the same approach per-tick would fight the client's own prediction, which is
      * why the continuous air bonuses go through a shared-movement mixin instead.
      */
-    private static void setVelocity(@NotNull ServerPlayerEntity player, @NotNull Vec3d velocity) {
+    private static void setVelocity(@NotNull ServerPlayer player, @NotNull Vec3 velocity) {
         player.setVelocity(velocity);
         player.velocityDirty = true;
-        player.networkHandler.sendPacket(new EntityVelocityUpdateS2CPacket(player));
+        player.networkHandler.sendPacket(new ClientboundSetEntityMotionPacket(player));
     }
 }

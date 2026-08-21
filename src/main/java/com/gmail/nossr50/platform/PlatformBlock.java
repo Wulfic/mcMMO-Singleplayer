@@ -2,16 +2,16 @@ package com.gmail.nossr50.platform;
 
 import java.util.Collections;
 import java.util.List;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.resources.Identifier;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -27,15 +27,15 @@ import org.jetbrains.annotations.NotNull;
  */
 public final class PlatformBlock {
 
-    private final World world;
+    private final Level world;
     private final BlockPos pos;
 
-    public PlatformBlock(@NotNull World world, @NotNull BlockPos pos) {
+    public PlatformBlock(@NotNull Level world, @NotNull BlockPos pos) {
         this.world = world;
         this.pos = pos;
     }
 
-    public @NotNull World getWorld() {
+    public @NotNull Level getWorld() {
         return world;
     }
 
@@ -69,7 +69,7 @@ public final class PlatformBlock {
 
     /** Registry id of the current block, e.g. {@code minecraft:stone}. */
     public @NotNull Identifier getTypeId() {
-        return Registries.BLOCK.getId(getBlock());
+        return BuiltInRegistries.BLOCK.getId(getBlock());
     }
 
     public boolean isAir() {
@@ -103,7 +103,7 @@ public final class PlatformBlock {
      * server-authoritative); returns empty on the logical client.
      */
     public @NotNull List<ItemStack> getDrops() {
-        if (!(world instanceof ServerWorld serverWorld)) {
+        if (!(world instanceof ServerLevel serverWorld)) {
             return Collections.emptyList();
         }
         final BlockEntity blockEntity = world.getBlockEntity(pos);

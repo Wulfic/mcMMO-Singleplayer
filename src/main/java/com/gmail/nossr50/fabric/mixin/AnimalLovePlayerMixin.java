@@ -1,8 +1,8 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -31,11 +31,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * {@code HusbandryListener} holds a {@code ThreadLocal} flag for the duration; without it, one piece
  * of wheat would propagate outward animal by animal until the stack overflowed.
  */
-@Mixin(AnimalEntity.class)
+@Mixin(Animal.class)
 public abstract class AnimalLovePlayerMixin {
 
     @Inject(method = "lovePlayer", allow = 1, at = @At("TAIL"))
-    private void mcmmo$onLovePlayer(PlayerEntity player, CallbackInfo ci) {
-        HusbandryListener.onLovePlayer((AnimalEntity) (Object) this, player);
+    private void mcmmo$onLovePlayer(Player player, CallbackInfo ci) {
+        HusbandryListener.onLovePlayer((Animal) (Object) this, player);
     }
 }

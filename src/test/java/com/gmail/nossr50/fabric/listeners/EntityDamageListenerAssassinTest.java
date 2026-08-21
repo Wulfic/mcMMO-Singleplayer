@@ -13,13 +13,13 @@ import com.gmail.nossr50.platform.PlatformPlayer;
 import com.gmail.nossr50.skills.stealth.StealthManager;
 import com.gmail.nossr50.util.player.UserManager;
 import java.util.UUID;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.damage.DamageTypes;
-import net.minecraft.entity.decoration.ArmorStandEntity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
+import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -55,15 +55,15 @@ class EntityDamageListenerAssassinTest {
     }
 
     /** A crouched attacker mid-swing, with the server clock parked at {@link #NOW}. */
-    private ServerPlayerEntity attacker() {
+    private ServerPlayer attacker() {
         uuid = UUID.randomUUID();
 
         final MinecraftServer server = mock(MinecraftServer.class);
         lenient().when(server.getTicks()).thenReturn(NOW);
-        final ServerWorld world = mock(ServerWorld.class);
+        final ServerLevel world = mock(ServerLevel.class);
         lenient().when(world.getServer()).thenReturn(server);
 
-        final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
+        final ServerPlayer player = mock(ServerPlayer.class);
         lenient().when(player.getUuid()).thenReturn(uuid);
         lenient().when(player.isSneaking()).thenReturn(true);
         lenient().when(player.getEntityWorld()).thenReturn(world);
@@ -86,7 +86,7 @@ class EntityDamageListenerAssassinTest {
     }
 
     /** A direct melee source: the attacker is both the responsible entity and the direct one. */
-    private static DamageSource melee(ServerPlayerEntity attacker) {
+    private static DamageSource melee(ServerPlayer attacker) {
         final DamageSource source = mock(DamageSource.class);
         lenient().when(source.getAttacker()).thenReturn(attacker);
         lenient().when(source.getSource()).thenReturn(attacker);
@@ -98,7 +98,7 @@ class EntityDamageListenerAssassinTest {
 
     @Test
     void aReadyBackstabMultipliesTheDamage() {
-        final ServerPlayerEntity attacker = attacker();
+        final ServerPlayer attacker = attacker();
         trackStealth(true, 2.0);
 
         assertEquals(20F,
@@ -108,7 +108,7 @@ class EntityDamageListenerAssassinTest {
 
     @Test
     void anUnreadyBackstabLeavesTheDamageAlone() {
-        final ServerPlayerEntity attacker = attacker();
+        final ServerPlayer attacker = attacker();
         trackStealth(false, 2.0);
 
         assertEquals(10F,
@@ -118,7 +118,7 @@ class EntityDamageListenerAssassinTest {
 
     @Test
     void aWalkingAttackerIsNotBackstabbing() {
-        final ServerPlayerEntity attacker = attacker();
+        final ServerPlayer attacker = attacker();
         when(attacker.isSneaking()).thenReturn(false);
         trackStealth(true, 2.0);
 
@@ -131,18 +131,18 @@ class EntityDamageListenerAssassinTest {
     void anArmourStandCannotBeBackstabbed() {
         // Same carve-out as Smash: an armour stand is a punching bag, not a victim, and letting it
         // proc combat sub-skills is how a damage multiplier gets measured and then abused.
-        final ServerPlayerEntity attacker = attacker();
+        final ServerPlayer attacker = attacker();
         trackStealth(true, 2.0);
 
         assertEquals(10F, EntityDamageListener.applyAssassin(
-                mock(ArmorStandEntity.class), melee(attacker), 10F), 1.0E-4);
+                mock(ArmorStand.class), melee(attacker), 10F), 1.0E-4);
     }
 
     @Test
     void aProjectileIsNotABackstab() {
         // The direct source is the arrow, not the player — so a sneaking archer does not get to
         // multiply every shot. Mirrors the weapon arm's and Smash's own test.
-        final ServerPlayerEntity attacker = attacker();
+        final ServerPlayer attacker = attacker();
         trackStealth(true, 2.0);
 
         final DamageSource source = melee(attacker);
@@ -154,7 +154,7 @@ class EntityDamageListenerAssassinTest {
 
     @Test
     void thornsIsNotASwing() {
-        final ServerPlayerEntity attacker = attacker();
+        final ServerPlayer attacker = attacker();
         trackStealth(true, 2.0);
 
         final DamageSource source = melee(attacker);
@@ -175,7 +175,7 @@ class EntityDamageListenerAssassinTest {
 
     @Test
     void theWindowIsMeasuredFromTheStampedTick() {
-        final ServerPlayerEntity player = attacker();
+        final ServerPlayer player = attacker();
         EntityDamageListener.recordDamageTaken(player); // stamped at NOW
 
         assertEquals(0L, EntityDamageListener.ticksSinceDamageTaken(player));
@@ -189,7 +189,7 @@ class EntityDamageListenerAssassinTest {
     void aClockThatRanBackwardsCannotInvertTheWindow() {
         // getTicks() is an int and wraps after ~3.4 years of uptime. A negative window would read as
         // "hit in the future" and silently disable the sub-skill rather than mistiming it once.
-        final ServerPlayerEntity player = attacker();
+        final ServerPlayer player = attacker();
         EntityDamageListener.recordDamageTaken(player);
         when(player.getEntityWorld().getServer().getTicks()).thenReturn(NOW - 500);
 
@@ -198,7 +198,7 @@ class EntityDamageListenerAssassinTest {
 
     @Test
     void forgettingAPlayerRestoresTheNeverBeenHitState() {
-        final ServerPlayerEntity player = attacker();
+        final ServerPlayer player = attacker();
         EntityDamageListener.recordDamageTaken(player);
         assertTrue(EntityDamageListener.ticksSinceDamageTaken(player) < Long.MAX_VALUE);
 

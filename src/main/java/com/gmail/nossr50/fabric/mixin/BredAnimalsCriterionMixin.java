@@ -1,10 +1,10 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
-import net.minecraft.advancement.criterion.BredAnimalsCriterion;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.entity.passive.PassiveEntity;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.advancements.criterion.BredAnimalsTrigger;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -33,17 +33,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * {@code AbstractCriterion}, so the target is spelled out in full. A bare {@code "trigger"} would be
  * ambiguous.
  */
-@Mixin(BredAnimalsCriterion.class)
+@Mixin(BredAnimalsTrigger.class)
 public abstract class BredAnimalsCriterionMixin {
 
     @Inject(
-            method = "trigger(Lnet/minecraft/server/network/ServerPlayerEntity;"
-                    + "Lnet/minecraft/entity/passive/AnimalEntity;"
-                    + "Lnet/minecraft/entity/passive/AnimalEntity;"
-                    + "Lnet/minecraft/entity/passive/PassiveEntity;)V", allow = 1,
+            method = "trigger(Lnet/minecraft/server/level/ServerPlayer;"
+                    + "Lnet/minecraft/world/entity/animal/Animal;"
+                    + "Lnet/minecraft/world/entity/animal/Animal;"
+                    + "Lnet/minecraft/world/entity/AgeableMob;)V", allow = 1,
             at = @At("HEAD"))
-    private void mcmmo$onAnimalsBred(ServerPlayerEntity breeder, AnimalEntity parent,
-            AnimalEntity mate, PassiveEntity child, CallbackInfo ci) {
+    private void mcmmo$onAnimalsBred(ServerPlayer breeder, Animal parent,
+            Animal mate, AgeableMob child, CallbackInfo ci) {
         // child is null for the egg-laying breeders (frog, sniffer, turtle) — the listener pays the
         // breeding regardless and skips only Twins, which needs a baby to copy.
         HusbandryListener.onAnimalsBred(breeder, parent, mate, child);

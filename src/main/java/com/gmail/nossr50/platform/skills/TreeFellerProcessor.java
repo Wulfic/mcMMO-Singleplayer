@@ -21,16 +21,16 @@ import com.gmail.nossr50.util.skills.SkillUtils;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.entity.ExperienceOrbEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.entity.ExperienceOrb;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -68,8 +68,8 @@ public final class TreeFellerProcessor {
      * @param breaker the felling player (loot/durability context)
      * @param mmoPlayer the breaker's mcMMO data
      */
-    public static void process(@NotNull ServerWorld world, @NotNull BlockPos startPos,
-            @NotNull ServerPlayerEntity breaker, @NotNull McMMOPlayer mmoPlayer) {
+    public static void process(@NotNull ServerLevel world, @NotNull BlockPos startPos,
+            @NotNull ServerPlayer breaker, @NotNull McMMOPlayer mmoPlayer) {
         final WoodcuttingManager woodcutting = mmoPlayer.getWoodcuttingManager();
         if (woodcutting == null) {
             return;
@@ -97,7 +97,7 @@ public final class TreeFellerProcessor {
     }
 
     /** Classify the live block at a coordinate for the traversal (LOG / LEAF / OTHER). */
-    private static @NotNull TreeBlockType classify(@NotNull ServerWorld world, int x, int y, int z) {
+    private static @NotNull TreeBlockType classify(@NotNull ServerLevel world, int x, int y, int z) {
         final BlockPos pos = new BlockPos(x, y, z);
         // §A: a hand-placed log/leaf is excluded from the fell entirely — legacy
         // processTreeFellerTargetBlock returns false for an ineligible block, so it is never added to
@@ -146,8 +146,8 @@ public final class TreeFellerProcessor {
      * XP; leaves drop rarely (or their saplings, with Knock on Wood) and may pop an XP orb. The
      * summed XP is awarded once at the end (legacy {@code dropTreeFellerLootFromBlocks}).
      */
-    private static void dropFelledBlocks(@NotNull ServerWorld world,
-            @NotNull ServerPlayerEntity breaker, @NotNull McMMOPlayer mmoPlayer,
+    private static void dropFelledBlocks(@NotNull ServerLevel world,
+            @NotNull ServerPlayer breaker, @NotNull McMMOPlayer mmoPlayer,
             @NotNull WoodcuttingManager woodcutting, @NotNull ItemStack axe,
             @NotNull List<FelledBlock> felled) {
         int xp = 0;
@@ -157,7 +157,7 @@ public final class TreeFellerProcessor {
             final BlockPos pos = new BlockPos(felledBlock.x(), felledBlock.y(), felledBlock.z());
             final BlockState state = world.getBlockState(pos);
             final BlockEntity blockEntity = world.getBlockEntity(pos);
-            final String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
+            final String blockId = BuiltInRegistries.BLOCK.getId(state.getBlock()).toString();
 
             if (felledBlock.type() == TreeBlockType.LOG) {
                 final int beforeXp = xp;
@@ -194,8 +194,8 @@ public final class TreeFellerProcessor {
      * on Wood (rank 2) experience-orb bonus. Mirrors legacy {@code dropTreeFellerLootFromBlocks}'s
      * non-wood branch, including its {@code nextInt(100) > 75} drop chance.
      */
-    private static void processFelledLeaf(@NotNull ServerWorld world, @NotNull BlockPos pos,
-            @NotNull BlockState state, BlockEntity blockEntity, @NotNull ServerPlayerEntity breaker,
+    private static void processFelledLeaf(@NotNull ServerLevel world, @NotNull BlockPos pos,
+            @NotNull BlockState state, BlockEntity blockEntity, @NotNull ServerPlayer breaker,
             @NotNull McMMOPlayer mmoPlayer, @NotNull ItemStack axe) {
         if (ThreadLocalRandom.current().nextInt(100) > 75) {
             dropStacks(world, pos, state, blockEntity, breaker, axe);
@@ -212,13 +212,13 @@ public final class TreeFellerProcessor {
                 && McMMOMod.getAdvancedConfig().isKnockOnWoodXPOrbEnabled()
                 && ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.WOODCUTTING, mmoPlayer, 10)) {
             final int orbCount = Math.max(1, ThreadLocalRandom.current().nextInt(100));
-            ExperienceOrbEntity.spawn(world, Vec3d.ofCenter(pos), orbCount);
+            ExperienceOrb.spawn(world, Vec3.ofCenter(pos), orbCount);
         }
     }
 
     /** Spawn a block's natural, tool-aware loot at its position (legacy {@code spawnItemsFromCollection}). */
-    private static void dropStacks(@NotNull ServerWorld world, @NotNull BlockPos pos,
-            @NotNull BlockState state, BlockEntity blockEntity, @NotNull ServerPlayerEntity breaker,
+    private static void dropStacks(@NotNull ServerLevel world, @NotNull BlockPos pos,
+            @NotNull BlockState state, BlockEntity blockEntity, @NotNull ServerPlayer breaker,
             @NotNull ItemStack tool) {
         for (ItemStack stack : Block.getDroppedStacks(state, world, pos, blockEntity, breaker, tool)) {
             if (!stack.isEmpty()) {
@@ -229,7 +229,7 @@ public final class TreeFellerProcessor {
 
     /** Whether a dropped item is a sapling or mangrove propagule (Knock on Wood salvage filter). */
     private static boolean isSaplingOrPropagule(@NotNull ItemStack stack) {
-        final String path = Registries.ITEM.getId(stack.getItem()).getPath();
+        final String path = BuiltInRegistries.ITEM.getId(stack.getItem()).getPath();
         return path.contains(WoodcuttingManager.SAPLING) || path.contains(WoodcuttingManager.PROPAGULE);
     }
 }

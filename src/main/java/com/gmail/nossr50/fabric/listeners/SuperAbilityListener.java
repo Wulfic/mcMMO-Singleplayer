@@ -28,24 +28,24 @@ import java.util.function.Predicate;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.HoeItem;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemUsageContext;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.HoeItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 
 /**
  * The K6 super-ability activation trigger: the interaction listener that readies a super-ability tool
@@ -108,19 +108,19 @@ public final class SuperAbilityListener {
     }
 
     /** Right-click a block → ready the tool for whichever skill the block can activate. */
-    private static ActionResult onUseBlock(PlayerEntity player, World world, Hand hand,
+    private static InteractionResult onUseBlock(Player player, Level world, InteractionHand hand,
             BlockHitResult hitResult) {
-        if (hand != Hand.MAIN_HAND) {
-            return ActionResult.PASS;
+        if (hand != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS;
         }
         final McMMOPlayer mmoPlayer = resolve(player);
         if (mmoPlayer == null) {
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
 
         final BlockPos pos = hitResult.getBlockPos();
         final BlockState state = world.getBlockState(pos);
-        final ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
+        final ServerPlayer serverPlayer = (ServerPlayer) player;
 
         // Blast Mining's "don't blow yourself up" guard: with the detonator (flint & steel, by
         // default) in hand, right-clicking a TNT block you're standing next to would light it the
@@ -128,14 +128,14 @@ public final class SuperAbilityListener {
         // before the activation chain because legacy checks it in an earlier (LOWEST-priority)
         // handler whose cancel suppresses the activation handler entirely.
         if (state.isOf(Blocks.TNT) && mmoPlayer.getMiningManager().canDetonate()) {
-            return ActionResult.FAIL;
+            return InteractionResult.FAIL;
         }
 
         // The off-hand rule gates the whole RIGHT_CLICK_BLOCK arm — both the tool-skill activation
         // below and the Herbalism interactions after it (legacy's break at the top of the case).
         if (offhandBlocksActivation(serverPlayer)) {
             hintOffhandBlockedTheReady(mmoPlayer, serverPlayer);
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
 
         // Tool-skill activation: legacy nests this inside the abilities-enabled gate, so — unlike the
@@ -175,21 +175,21 @@ public final class SuperAbilityListener {
      *     seeds don't place on a mossify-able block anyway) and a berry-bush click must reach vanilla
      *     to actually reap the bush.
      */
-    private static ActionResult processHerbalismInteraction(McMMOPlayer mmoPlayer,
-            ServerPlayerEntity serverPlayer, World world, BlockPos pos, BlockState state) {
+    private static InteractionResult processHerbalismInteraction(McMMOPlayer mmoPlayer,
+            ServerPlayer serverPlayer, Level world, BlockPos pos, BlockState state) {
         final HerbalismManager herbalism = mmoPlayer.getHerbalismManager();
         final ItemStack mainHand = serverPlayer.getMainHandStack();
 
         if (canGreenThumbBlock(herbalism, mainHand, state)) {
             processGreenThumbBlock(mmoPlayer, serverPlayer, world, pos, state);
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
         if (canUseShroomThumb(herbalism, serverPlayer, mainHand, state)) {
             processShroomThumb(mmoPlayer, serverPlayer, world, pos, state);
-            return ActionResult.FAIL;
+            return InteractionResult.FAIL;
         }
         maybeHarvestBerryBush(mmoPlayer, world, pos, state);
-        return ActionResult.PASS;
+        return InteractionResult.PASS;
     }
 
     /**
@@ -211,7 +211,7 @@ public final class SuperAbilityListener {
      * main hand, a shroomy-able block, and one brown + one red mushroom somewhere in the pack (legacy
      * {@code canUseShroomThumb}, whose {@code inventory.contains(..)} checks the whole inventory).
      */
-    private static boolean canUseShroomThumb(HerbalismManager herbalism, ServerPlayerEntity player,
+    private static boolean canUseShroomThumb(HerbalismManager herbalism, ServerPlayer player,
             ItemStack mainHand, BlockState state) {
         if (!BlockUtils.canMakeShroomy(state) || !herbalism.canUseShroomThumb()) {
             return false;
@@ -219,7 +219,7 @@ public final class SuperAbilityListener {
         if (!mainHand.isOf(Items.BROWN_MUSHROOM) && !mainHand.isOf(Items.RED_MUSHROOM)) {
             return false;
         }
-        final PlayerInventory inventory = player.getInventory();
+        final Inventory inventory = player.getInventory();
         return findItemSlot(inventory, Items.BROWN_MUSHROOM) >= 0
                 && findItemSlot(inventory, Items.RED_MUSHROOM) >= 0;
     }
@@ -230,8 +230,8 @@ public final class SuperAbilityListener {
      * so a failed Green Thumb still costs the seed. The conversion target reuses the shared Green
      * Terra / Green Thumb table ({@link Herbalism#greenTerraConversionTarget}).
      */
-    private static void processGreenThumbBlock(McMMOPlayer mmoPlayer, ServerPlayerEntity serverPlayer,
-            World world, BlockPos pos, BlockState state) {
+    private static void processGreenThumbBlock(McMMOPlayer mmoPlayer, ServerPlayer serverPlayer,
+            Level world, BlockPos pos, BlockState state) {
         serverPlayer.getMainHandStack().decrement(1);
         if (!mmoPlayer.getHerbalismManager().rollGreenThumbBlockSuccess()) {
             NotificationManager.sendPlayerInformation(mmoPlayer,
@@ -247,9 +247,9 @@ public final class SuperAbilityListener {
      * mycelium. {@link #canUseShroomThumb} has already proven both mushrooms are present; legacy removes
      * them <i>before</i> the roll, so a failed Shroom Thumb still costs the pair.
      */
-    private static void processShroomThumb(McMMOPlayer mmoPlayer, ServerPlayerEntity serverPlayer,
-            World world, BlockPos pos, BlockState state) {
-        final PlayerInventory inventory = serverPlayer.getInventory();
+    private static void processShroomThumb(McMMOPlayer mmoPlayer, ServerPlayer serverPlayer,
+            Level world, BlockPos pos, BlockState state) {
+        final Inventory inventory = serverPlayer.getInventory();
         final int brownSlot = findItemSlot(inventory, Items.BROWN_MUSHROOM);
         final int redSlot = findItemSlot(inventory, Items.RED_MUSHROOM);
         if (brownSlot < 0 || redSlot < 0) {
@@ -272,7 +272,7 @@ public final class SuperAbilityListener {
      * block that is whitelisted but has no specific target (or a target absent from this registry) is
      * a safe no-op.
      */
-    private static void convertBlock(McMMOPlayer mmoPlayer, World world, BlockPos pos,
+    private static void convertBlock(McMMOPlayer mmoPlayer, Level world, BlockPos pos,
             BlockState state, Optional<String> targetPath) {
         if (targetPath.isEmpty()) {
             return; // whitelisted but with no conversion target for this specific block.
@@ -293,7 +293,7 @@ public final class SuperAbilityListener {
      * and paid only when the bush has dropped to age &le; 1. This runs on the {@code UseBlockCallback}
      * (before vanilla reaps the bush), which is why the re-read a tick later sees the reset age.
      */
-    private static void maybeHarvestBerryBush(McMMOPlayer mmoPlayer, World world, BlockPos pos,
+    private static void maybeHarvestBerryBush(McMMOPlayer mmoPlayer, Level world, BlockPos pos,
             BlockState state) {
         if (!state.isOf(Blocks.SWEET_BERRY_BUSH)) {
             return;
@@ -321,17 +321,17 @@ public final class SuperAbilityListener {
     }
 
     /** Right-click the air → ready every tool skill, and fire Blast Mining's remote detonation. */
-    private static ActionResult onUseItem(PlayerEntity player, World world, Hand hand) {
-        if (hand != Hand.MAIN_HAND) {
-            return ActionResult.PASS;
+    private static InteractionResult onUseItem(Player player, Level world, InteractionHand hand) {
+        if (hand != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS;
         }
         final McMMOPlayer mmoPlayer = resolve(player);
         if (mmoPlayer == null) {
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
-        if (offhandBlocksActivation((ServerPlayerEntity) player)) {
-            hintOffhandBlockedTheReady(mmoPlayer, (ServerPlayerEntity) player);
-            return ActionResult.PASS;
+        if (offhandBlocksActivation((ServerPlayer) player)) {
+            hintOffhandBlockedTheReady(mmoPlayer, (ServerPlayer) player);
+            return InteractionResult.PASS;
         }
 
         if (McMMOMod.getGeneralConfig().getAbilitiesEnabled()) {
@@ -342,24 +342,24 @@ public final class SuperAbilityListener {
         // Blast Mining: aiming at distant TNT and right-clicking thin air detonates it. Legacy runs
         // this after the activation chain and outside the abilities-enabled gate, as here.
         if (mmoPlayer.getMiningManager().canDetonate()) {
-            BlastMiningListener.remoteDetonation(mmoPlayer, (ServerPlayerEntity) player);
+            BlastMiningListener.remoteDetonation(mmoPlayer, (ServerPlayer) player);
         }
-        return ActionResult.PASS;
+        return InteractionResult.PASS;
     }
 
     /** Left-click (break) a block with a prepared tool on an eligible block → fire the super ability. */
-    private static ActionResult onAttackBlock(PlayerEntity player, World world, Hand hand,
+    private static InteractionResult onAttackBlock(Player player, Level world, InteractionHand hand,
             BlockPos pos, Direction direction) {
-        if (hand != Hand.MAIN_HAND) {
-            return ActionResult.PASS;
+        if (hand != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS;
         }
         final McMMOPlayer mmoPlayer = resolve(player);
         if (mmoPlayer == null) {
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
 
         final BlockState state = world.getBlockState(pos);
-        final ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
+        final ServerPlayer serverPlayer = (ServerPlayer) player;
         final ItemStack held = serverPlayer.getMainHandStack();
 
         // Taming Call of the Wild: a sneaking left-click while holding a summoning item (bones for a
@@ -371,7 +371,7 @@ public final class SuperAbilityListener {
         if (serverPlayer.isSneaking()
                 && McMMOMod.getCallOfTheWild().isCOTWItem(itemPath(held))) {
             CallOfTheWildHandler.processCallOfTheWild(mmoPlayer, serverPlayer);
-            return ActionResult.FAIL;
+            return InteractionResult.FAIL;
         }
 
         boolean instaBroke = false;
@@ -418,7 +418,7 @@ public final class SuperAbilityListener {
 
         // Cancelling the attack is how the port spells legacy's event.setInstaBreak(true): the block
         // is already gone, so vanilla must not also start a mining-progress cycle on it.
-        return instaBroke ? ActionResult.SUCCESS : ActionResult.PASS;
+        return instaBroke ? InteractionResult.SUCCESS : InteractionResult.PASS;
     }
 
     /**
@@ -430,7 +430,7 @@ public final class SuperAbilityListener {
      * @return {@code instaBroke}, updated if this phase broke the block
      */
     private static boolean processAbilityEffects(McMMOPlayer mmoPlayer,
-            ServerPlayerEntity serverPlayer, World world, BlockPos pos, BlockState state,
+            ServerPlayer serverPlayer, Level world, BlockPos pos, BlockState state,
             ItemStack held, boolean instaBroke) {
         if (mmoPlayer.getHerbalismManager().isGreenTerraActive() && BlockUtils.canMakeMossy(state)) {
             processGreenTerraConversion(mmoPlayer, serverPlayer, world, pos, state);
@@ -466,7 +466,7 @@ public final class SuperAbilityListener {
      *
      * @return whether the block was actually broken
      */
-    private static boolean instaBreak(ServerPlayerEntity serverPlayer, BlockPos pos) {
+    private static boolean instaBreak(ServerPlayer serverPlayer, BlockPos pos) {
         // PORT (K5): legacy gated this on EventUtils.simulateBlockBreak(block, player) — a fake
         // BlockBreakEvent asking other plugins whether the break was allowed. No plugins exist in
         // singleplayer, so the check collapses to "always allowed"; tryBreakBlock still enforces
@@ -481,7 +481,7 @@ public final class SuperAbilityListener {
      *
      * @return whether the block was actually broken
      */
-    private static boolean berserkInstaBreak(McMMOPlayer mmoPlayer, ServerPlayerEntity serverPlayer,
+    private static boolean berserkInstaBreak(McMMOPlayer mmoPlayer, ServerPlayer serverPlayer,
             BlockPos pos, BlockState state) {
         if (!instaBreak(serverPlayer, pos)) {
             return false;
@@ -501,7 +501,7 @@ public final class SuperAbilityListener {
      * usual — config + RNG gate on {@link com.gmail.nossr50.skills.unarmed.UnarmedManager#rollBlockCracker},
      * conversion table in {@link Unarmed#blockCrackerConversionTarget}, live swap here.
      */
-    private static void processBlockCracker(McMMOPlayer mmoPlayer, World world, BlockPos pos,
+    private static void processBlockCracker(McMMOPlayer mmoPlayer, Level world, BlockPos pos,
             BlockState state) {
         if (!mmoPlayer.getUnarmedManager().rollBlockCracker()) {
             return;
@@ -537,7 +537,7 @@ public final class SuperAbilityListener {
      * own branch condition in {@code onBlockDamageHigher}.
      */
     private static void processGreenTerraConversion(McMMOPlayer mmoPlayer,
-            ServerPlayerEntity serverPlayer, World world, BlockPos pos, BlockState state) {
+            ServerPlayer serverPlayer, Level world, BlockPos pos, BlockState state) {
         final Optional<String> targetPath = Herbalism.greenTerraConversionTarget(blockPath(state));
         if (targetPath.isEmpty()) {
             return; // mossify-whitelisted but with no conversion target: nothing to become.
@@ -571,7 +571,7 @@ public final class SuperAbilityListener {
      * {@code PlayerInventory#containsAtLeast(stack, 1)}, whose paired {@code removeItem} then
      * consumes one. Mirrors {@code RepairSalvageListener#findMaterialSlot}.
      */
-    private static int findItemSlot(PlayerInventory inventory, Item item) {
+    private static int findItemSlot(Inventory inventory, Item item) {
         for (int slot = 0; slot < inventory.size(); slot++) {
             final ItemStack stack = inventory.getStack(slot);
             if (!stack.isEmpty() && stack.isOf(item)) {
@@ -633,17 +633,17 @@ public final class SuperAbilityListener {
      *
      * @return whether vanilla will till this block with this click
      */
-    static boolean isTillAction(PlayerEntity player, Hand hand, BlockHitResult hitResult,
+    static boolean isTillAction(Player player, InteractionHand hand, BlockHitResult hitResult,
             BlockState state) {
         if (!(player.getStackInHand(hand).getItem() instanceof HoeItem)) {
             return false;
         }
-        final Pair<Predicate<ItemUsageContext>, Consumer<ItemUsageContext>> tilling =
+        final Pair<Predicate<UseOnContext>, Consumer<UseOnContext>> tilling =
                 HoeTillingActionsAccessor.getTillingActions().get(state.getBlock());
         if (tilling == null) {
             return false;
         }
-        return tilling.getFirst().test(new ItemUsageContext(player, hand, hitResult));
+        return tilling.getFirst().test(new UseOnContext(player, hand, hitResult));
     }
 
     /**
@@ -668,7 +668,7 @@ public final class SuperAbilityListener {
      *
      * <p>Package-private for {@code SuperAbilityListenerOffhandTest}.
      */
-    static boolean offhandBlocksActivation(ServerPlayerEntity player) {
+    static boolean offhandBlocksActivation(ServerPlayer player) {
         final GeneralConfig config = McMMOMod.getGeneralConfig();
         if (config == null || !config.getOffhandBlocksReadying()) {
             return false;
@@ -695,7 +695,7 @@ public final class SuperAbilityListener {
      * right-click and an un-throttled hint would be one message per torch placed.
      */
     private static void hintOffhandBlockedTheReady(McMMOPlayer mmoPlayer,
-            ServerPlayerEntity player) {
+            ServerPlayer player) {
         if (!McMMOMod.getGeneralConfig().getAbilityMessagesEnabled()
                 || !wouldHaveReadiedATool(player)
                 || !mmoPlayer.claimOffhandBlockedHint(System.currentTimeMillis())) {
@@ -711,7 +711,7 @@ public final class SuperAbilityListener {
      *
      * <p>Package-private for {@code SuperAbilityListenerOffhandTest}.
      */
-    static boolean wouldHaveReadiedATool(ServerPlayerEntity player) {
+    static boolean wouldHaveReadiedATool(ServerPlayer player) {
         final ItemStack mainHand = player.getMainHandStack();
         for (ToolType tool : READYABLE_TOOLS) {
             if (ItemUtils.isToolInHand(tool, mainHand)) {
@@ -721,18 +721,18 @@ public final class SuperAbilityListener {
         return false;
     }
 
-    private static McMMOPlayer resolve(PlayerEntity player) {
-        if (!(player instanceof ServerPlayerEntity serverPlayer)) {
+    private static McMMOPlayer resolve(Player player) {
+        if (!(player instanceof ServerPlayer serverPlayer)) {
             return null; // client-side callback: ignore.
         }
         return UserManager.getPlayer(serverPlayer.getUuid());
     }
 
     private static String blockPath(BlockState state) {
-        return Registries.BLOCK.getId(state.getBlock()).getPath();
+        return BuiltInRegistries.BLOCK.getId(state.getBlock()).getPath();
     }
 
     private static String itemPath(ItemStack stack) {
-        return Registries.ITEM.getId(stack.getItem()).getPath();
+        return BuiltInRegistries.ITEM.getId(stack.getItem()).getPath();
     }
 }

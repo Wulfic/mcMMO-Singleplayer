@@ -15,9 +15,9 @@ import com.gmail.nossr50.skills.repair.repairables.Repairable;
 import com.gmail.nossr50.skills.repair.repairables.RepairableManager;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.nio.file.Path;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.util.Unit;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -68,7 +68,7 @@ class SkillUtilsTest {
     @Test
     void durabilityChangeSkipsUnbreakable() {
         ItemStack pick = new ItemStack(Items.DIAMOND_PICKAXE);
-        pick.set(DataComponentTypes.UNBREAKABLE, Unit.INSTANCE);
+        pick.set(DataComponents.UNBREAKABLE, Unit.INSTANCE);
         PlatformItem item = new PlatformItem(pick);
 
         SkillUtils.handleDurabilityChange(item, 100);

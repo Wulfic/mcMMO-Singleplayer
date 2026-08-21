@@ -2,8 +2,8 @@ package com.gmail.nossr50.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -22,8 +22,8 @@ class McRegistryBootstrapProbeTest {
 
     @Test
     void itemRegistryResolvesVanillaIdPaths() {
-        assertEquals("diamond_axe", Registries.ITEM.getId(Items.DIAMOND_AXE).getPath());
-        assertEquals("netherite_pickaxe", Registries.ITEM.getId(Items.NETHERITE_PICKAXE).getPath());
-        assertEquals("air", Registries.ITEM.getId(Items.AIR).getPath());
+        assertEquals("diamond_axe", BuiltInRegistries.ITEM.getId(Items.DIAMOND_AXE).getPath());
+        assertEquals("netherite_pickaxe", BuiltInRegistries.ITEM.getId(Items.NETHERITE_PICKAXE).getPath());
+        assertEquals("air", BuiltInRegistries.ITEM.getId(Items.AIR).getPath());
     }
 }

@@ -13,11 +13,11 @@ import com.gmail.nossr50.datatypes.treasure.ShakeTreasure;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.PotionContentsComponent;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.potion.Potions;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.Potions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -38,8 +38,8 @@ class ItemSpecBuilderTest {
         com.gmail.nossr50.util.McTestRegistries.bootstrap();
     }
 
-    private static PotionContentsComponent contentsOf(ItemStack stack) {
-        return stack.get(DataComponentTypes.POTION_CONTENTS);
+    private static PotionContents contentsOf(ItemStack stack) {
+        return stack.get(DataComponents.POTION_CONTENTS);
     }
 
     @Test
@@ -58,7 +58,7 @@ class ItemSpecBuilderTest {
 
         assertTrue(built.isPresent());
         assertSame(Items.POTION, built.get().getItem());
-        final PotionContentsComponent contents = contentsOf(built.get());
+        final PotionContents contents = contentsOf(built.get());
         assertNotNull(contents, "a potion spec must set POTION_CONTENTS");
         assertTrue(contents.matches(Potions.POISON));
     }

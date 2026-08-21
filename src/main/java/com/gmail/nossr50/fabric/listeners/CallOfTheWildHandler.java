@@ -16,23 +16,23 @@ import com.gmail.nossr50.util.sounds.SoundType;
 import com.gmail.nossr50.platform.text.TextUtils;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.SpawnReason;
-import net.minecraft.entity.attribute.EntityAttributeInstance;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.passive.AbstractHorseEntity;
-import net.minecraft.entity.passive.CatEntity;
-import net.minecraft.entity.passive.HorseEntity;
-import net.minecraft.entity.passive.TameableEntity;
-import net.minecraft.entity.passive.WolfEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.animal.equine.AbstractHorse;
+import net.minecraft.world.entity.animal.feline.Cat;
+import net.minecraft.world.entity.animal.equine.Horse;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * The MC-typed Call-of-the-Wild glue: spawning the summoned animals and the {@code attackTarget}
@@ -62,14 +62,14 @@ public final class CallOfTheWildHandler {
      * ({@code SuperAbilityListener}) has already confirmed a sneaking left-click; the gate + debounce
      * are checked here so every entry path shares them.
      */
-    public static void processCallOfTheWild(McMMOPlayer mmoPlayer, ServerPlayerEntity player) {
+    public static void processCallOfTheWild(McMMOPlayer mmoPlayer, ServerPlayer player) {
         final TamingManager taming = mmoPlayer.getTamingManager();
         if (!taming.canCallOfTheWild() || !taming.summonDebounceElapsed()) {
             return;
         }
 
         final ItemStack inHand = player.getMainHandStack();
-        final String itemId = Registries.ITEM.getId(inHand.getItem()).getPath();
+        final String itemId = BuiltInRegistries.ITEM.getId(inHand.getItem()).getPath();
         final Optional<TamingSummon> maybeSummon = McMMOMod.getCallOfTheWild().summonForItem(itemId);
         if (maybeSummon.isEmpty()) {
             return; // not a summoning item.
@@ -87,7 +87,7 @@ public final class CallOfTheWildHandler {
         }
 
         final TransientEntityTracker tracker = McMMOMod.getTransientEntityTracker();
-        Vec3d spawnPos = player.getEntityPos().add(1.0, 0.0, 1.0);
+        Vec3 spawnPos = player.getEntityPos().add(1.0, 0.0, 1.0);
         int amountSummoned = 0;
 
         for (int i = 0; i < summon.getEntitiesSummoned(); i++) {
@@ -119,15 +119,15 @@ public final class CallOfTheWildHandler {
         }
     }
 
-    private static void spawnSummon(ServerPlayerEntity player, CallOfTheWildType type,
-            TamingSummon summon, Vec3d pos) {
-        final ServerWorld world = (ServerWorld) player.getEntityWorld();
-        final MobEntity entity = createEntity(type, world);
+    private static void spawnSummon(ServerPlayer player, CallOfTheWildType type,
+            TamingSummon summon, Vec3 pos) {
+        final ServerLevel world = (ServerLevel) player.getEntityWorld();
+        final Mob entity = createEntity(type, world);
 
         entity.refreshPositionAndAngles(pos.getX(), pos.getY(), pos.getZ(), player.getYaw(), 0.0F);
         // Natural randomisation (variant/markings/base attributes) — the only public path to vary a
         // horse's look, its setters being private. Must precede our own stat overrides below.
-        entity.initialize(world, world.getLocalDifficulty(entity.getBlockPos()), SpawnReason.EVENT,
+        entity.initialize(world, world.getLocalDifficulty(entity.getBlockPos()), EntitySpawnReason.EVENT,
                 null);
         entity.setBaby(false); // legacy setAdult()
         applyOwnership(entity, player);
@@ -144,24 +144,24 @@ public final class CallOfTheWildHandler {
         McMMOMod.getTransientEntityTracker().addSummon(player.getUuid(), tracked);
     }
 
-    private static MobEntity createEntity(CallOfTheWildType type, ServerWorld world) {
+    private static Mob createEntity(CallOfTheWildType type, ServerLevel world) {
         return switch (type) {
-            case WOLF -> new WolfEntity(EntityType.WOLF, world);
-            case CAT -> new CatEntity(EntityType.CAT, world);
-            case HORSE -> new HorseEntity(EntityType.HORSE, world);
+            case WOLF -> new Wolf(EntityType.WOLF, world);
+            case CAT -> new Cat(EntityType.CAT, world);
+            case HORSE -> new Horse(EntityType.HORSE, world);
         };
     }
 
-    private static void applyOwnership(MobEntity entity, ServerPlayerEntity player) {
-        if (entity instanceof TameableEntity tameable) {
+    private static void applyOwnership(Mob entity, ServerPlayer player) {
+        if (entity instanceof TamableAnimal tameable) {
             tameable.setTamedBy(player); // wolves + cats: sets tamed and owner together
-        } else if (entity instanceof AbstractHorseEntity horse) {
+        } else if (entity instanceof AbstractHorse horse) {
             horse.setTame(true);
             horse.setOwner(player);
         }
     }
 
-    private static void applyTypeStats(MobEntity entity, CallOfTheWildType type) {
+    private static void applyTypeStats(Mob entity, CallOfTheWildType type) {
         switch (type) {
             case WOLF -> setMaxHealth(entity, 20.0);
             case HORSE -> {
@@ -172,8 +172,8 @@ public final class CallOfTheWildHandler {
                         entity.getRandom().nextDouble()) * 2.0;
                 final double jump = Math.max(McMMOMod.getAdvancedConfig().getMinHorseJumpStrength(),
                         Math.min(rolled, McMMOMod.getAdvancedConfig().getMaxHorseJumpStrength()));
-                final EntityAttributeInstance jumpAttr =
-                        entity.getAttributeInstance(EntityAttributes.JUMP_STRENGTH);
+                final AttributeInstance jumpAttr =
+                        entity.getAttributeInstance(Attributes.JUMP_STRENGTH);
                 if (jumpAttr != null) {
                     jumpAttr.setBaseValue(jump);
                 }
@@ -186,7 +186,7 @@ public final class CallOfTheWildHandler {
     }
 
     private static void setMaxHealth(LivingEntity entity, double maxHealth) {
-        final EntityAttributeInstance attr = entity.getAttributeInstance(EntityAttributes.MAX_HEALTH);
+        final AttributeInstance attr = entity.getAttributeInstance(Attributes.MAX_HEALTH);
         if (attr != null) {
             attr.setBaseValue(maxHealth);
         }
@@ -197,15 +197,15 @@ public final class CallOfTheWildHandler {
      * the player owns re-targets the entity they just struck. The own-pet guard stops a player siccing
      * their pack on one of their own animals.
      */
-    public static void attackTarget(ServerPlayerEntity player, LivingEntity target) {
-        if (target instanceof TameableEntity tameable && tameable.isOwner(player)) {
+    public static void attackTarget(ServerPlayer player, LivingEntity target) {
+        if (target instanceof TamableAnimal tameable && tameable.isOwner(player)) {
             return;
         }
 
-        final Box searchBox = player.getBoundingBox().expand(5.0);
-        final List<WolfEntity> wolves = player.getEntityWorld()
-                .getEntitiesByClass(WolfEntity.class, searchBox, wolf -> true);
-        for (WolfEntity wolf : wolves) {
+        final AABB searchBox = player.getBoundingBox().expand(5.0);
+        final List<Wolf> wolves = player.getEntityWorld()
+                .getEntitiesByClass(Wolf.class, searchBox, wolf -> true);
+        for (Wolf wolf : wolves) {
             if (wolf.isTamed() && wolf.isOwner(player) && !wolf.isSitting()) {
                 wolf.setTarget(target);
             }

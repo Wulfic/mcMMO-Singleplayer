@@ -9,7 +9,7 @@ import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Drives the per-player session lifecycle (Phase 5 persistence + Phase 3 join/quit hooks): loads a
@@ -42,7 +42,7 @@ public final class PlayerSessionListener {
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> onQuit(handler.player));
     }
 
-    private static void onJoin(ServerPlayerEntity vanilla) {
+    private static void onJoin(ServerPlayer vanilla) {
         final PlatformPlayer player = new PlatformPlayer(vanilla);
         try {
             final ProfileStore store = McMMOMod.getProfileStore();
@@ -111,7 +111,7 @@ public final class PlayerSessionListener {
      *
      * @param vanilla the replacement entity for the respawned player
      */
-    private static void onRespawn(ServerPlayerEntity vanilla) {
+    private static void onRespawn(ServerPlayer vanilla) {
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(vanilla.getUuid());
         if (mmoPlayer == null) {
             // Only reachable if the join load failed or was skipped; the player simply has no mcMMO
@@ -125,7 +125,7 @@ public final class PlayerSessionListener {
         mmoPlayer.actualizeRespawnATS();
     }
 
-    private static void onQuit(ServerPlayerEntity vanilla) {
+    private static void onQuit(ServerPlayer vanilla) {
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(vanilla.getUuid());
         if (mmoPlayer == null) {
             return;

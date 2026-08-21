@@ -16,26 +16,26 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.recipe.Ingredient;
-import net.minecraft.recipe.RecipeEntry;
-import net.minecraft.recipe.SmeltingRecipe;
-import net.minecraft.recipe.input.SingleStackRecipeInput;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.SmeltingRecipe;
+import net.minecraft.world.item.crafting.SingleRecipeInput;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Holder;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 
 /**
  * The K7 Smelting XP hook: awards Smelting XP when a furnace the player owns completes a smelt
@@ -108,8 +108,8 @@ public final class SmeltingListener {
      * recipe's result stack ({@code SingleStackRecipe#result()} is protected). Bytecode-verified:
      * {@code SingleStackRecipe#craft} ignores both arguments and returns {@code result.copy()}.
      */
-    private static final SingleStackRecipeInput EMPTY_RECIPE_INPUT =
-            new SingleStackRecipeInput(ItemStack.EMPTY);
+    private static final SingleRecipeInput EMPTY_RECIPE_INPUT =
+            new SingleRecipeInput(ItemStack.EMPTY);
 
     private SmeltingListener() {
     }
@@ -146,16 +146,16 @@ public final class SmeltingListener {
      * food branch of {@link #onFurnaceSmelt} is untestable — which is exactly how a hook ends up
      * wired to nothing.
      */
-    static ActionResult onUseBlock(PlayerEntity player, World world, Hand hand,
+    static InteractionResult onUseBlock(Player player, Level world, InteractionHand hand,
             BlockHitResult hitResult) {
-        if (!(player instanceof ServerPlayerEntity)) {
-            return ActionResult.PASS; // client-side fire — the server copy does the bookkeeping.
+        if (!(player instanceof ServerPlayer)) {
+            return InteractionResult.PASS; // client-side fire — the server copy does the bookkeeping.
         }
         final BlockPos pos = hitResult.getBlockPos();
         if (world.getBlockEntity(pos) instanceof AbstractFurnaceBlockEntity) {
             FURNACE_OWNERS.put(pos.asLong(), player.getUuid());
         }
-        return ActionResult.PASS; // observe only; never cancel opening the furnace.
+        return InteractionResult.PASS; // observe only; never cancel opening the furnace.
     }
 
     /**
@@ -177,7 +177,7 @@ public final class SmeltingListener {
      * @param pos   the furnace position
      * @param input the item that was smelted (the input slot's stack, read before it is consumed)
      */
-    public static void onFurnaceSmelt(ServerWorld world, BlockPos pos, ItemStack input) {
+    public static void onFurnaceSmelt(ServerLevel world, BlockPos pos, ItemStack input) {
         if (input.isEmpty()) {
             return;
         }
@@ -331,8 +331,8 @@ public final class SmeltingListener {
      * @param player    the player taking the item (legacy used the extractor, not the furnace owner)
      * @param extracted the stack being taken out of the output slot
      */
-    public static void beginFurnaceExtract(PlayerEntity player, ItemStack extracted) {
-        if (!(player instanceof ServerPlayerEntity) || extracted.isEmpty()) {
+    public static void beginFurnaceExtract(Player player, ItemStack extracted) {
+        if (!(player instanceof ServerPlayer) || extracted.isEmpty()) {
             return; // client-side copy of the screen handler, or nothing actually taken.
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
@@ -384,9 +384,9 @@ public final class SmeltingListener {
      * simply mean nobody ever gets the boost.
      */
     private static void indexSmeltedOreProducts(MinecraftServer server) {
-        final List<RegistryEntry<Item>> ores = oreBlockItems();
+        final List<Holder<Item>> ores = oreBlockItems();
         final Set<Item> products = new HashSet<>();
-        for (RecipeEntry<?> entry : server.getRecipeManager().values()) {
+        for (RecipeHolder<?> entry : server.getRecipeManager().values()) {
             // SmeltingRecipe specifically, not AbstractCookingRecipe: legacy matched Bukkit's
             // FurnaceRecipe, so blasting/smoking/campfire variants of the same ore are excluded.
             if (!(entry.value() instanceof SmeltingRecipe recipe) || !hasOreBlockInput(recipe, ores)) {
@@ -409,7 +409,7 @@ public final class SmeltingListener {
      * accept any known ore block? — which also avoids {@code Ingredient#getMatchingItems},
      * deprecated in this version.
      */
-    private static boolean hasOreBlockInput(SmeltingRecipe recipe, List<RegistryEntry<Item>> ores) {
+    private static boolean hasOreBlockInput(SmeltingRecipe recipe, List<Holder<Item>> ores) {
         final Ingredient ingredient = recipe.ingredient();
         return ores.stream().anyMatch(ingredient::acceptsItem);
     }
@@ -419,12 +419,12 @@ public final class SmeltingListener {
      * {@code isBlock() && MaterialUtils.isOre(...)} pair, resolved against the live item registry so
      * the store's stale pre-1.13 ids ({@code quartz_ore}, {@code lapis_lazuli_ore}) simply never match.
      */
-    private static List<RegistryEntry<Item>> oreBlockItems() {
-        return Registries.ITEM.stream()
+    private static List<Holder<Item>> oreBlockItems() {
+        return BuiltInRegistries.ITEM.stream()
                 .filter(item -> item instanceof BlockItem)
                 .filter(item -> McMMOMod.getMaterialMapStore()
-                        .isOre(Registries.ITEM.getId(item).getPath()))
-                .map(Registries.ITEM::getEntry)
+                        .isOre(BuiltInRegistries.ITEM.getId(item).getPath()))
+                .map(BuiltInRegistries.ITEM::getEntry)
                 .toList();
     }
 
@@ -456,6 +456,6 @@ public final class SmeltingListener {
      */
     static String materialConfigString(ItemStack stack) {
         return ConfigStringUtils.getMaterialConfigString(
-                Registries.ITEM.getId(stack.getItem()).getPath());
+                BuiltInRegistries.ITEM.getId(stack.getItem()).getPath());
     }
 }

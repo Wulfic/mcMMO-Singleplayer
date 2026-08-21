@@ -94,7 +94,7 @@ public class ExperienceConfig extends ConfigLoader {
      * <p>⚠️⚠️ Called from {@code McMMOMod#onServerStarting}, <b>never</b> from {@link #loadKeys}.
      * The class javadoc above states this config "needs no registry and stays unit-testable", and
      * that is load-bearing rather than descriptive: probing the registry in the load path
-     * initializes {@code net.minecraft.registry.Registries}, which <em>throws</em> in a fork with no
+     * initializes {@code net.minecraft.core.registries.BuiltInRegistries}, which <em>throws</em> in a fork with no
      * bootstrap and stays broken for every later use in that fork. Doing it here cost 351 failures
      * across 8 test classes. See {@code TreasureConfig#pruneUnavailableEntries}.
      *

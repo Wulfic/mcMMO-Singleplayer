@@ -8,7 +8,7 @@ import com.gmail.nossr50.util.TransientEntityTracker;
 import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import java.util.UUID;
-import net.minecraft.entity.LivingEntity;
+import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -23,7 +23,7 @@ import org.jetbrains.annotations.NotNull;
  * still-pending task, so logging out (which drives {@code cleanupPlayer}) can't leave a task firing
  * later on a discarded entity.
  *
- * <p>Deviation from legacy: despawn uses {@link net.minecraft.entity.Entity#discard()} (a silent
+ * <p>Deviation from legacy: despawn uses {@link net.minecraft.world.entity.Entity#discard()} (a silent
  * removal) rather than legacy's {@code setHealth(0)} + {@code remove()}, which fired death events and
  * dropped loot — a summoned pet should vanish, not die and drop meat/leather. The death sound and
  * {@code playCallOfTheWildEffect} particle are dropped with it (no particle adapter — the standing

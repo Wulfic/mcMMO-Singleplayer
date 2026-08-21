@@ -2,9 +2,9 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
-import net.minecraft.entity.passive.AbstractHorseEntity;
-import net.minecraft.entity.passive.PassiveEntity;
-import net.minecraft.util.math.random.Random;
+import net.minecraft.world.entity.animal.equine.AbstractHorse;
+import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.util.RandomSource;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -37,12 +37,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * synchronous call on the server thread. Ordering is safe: {@code createChild} (and with it
  * {@code setChildAttributes}) runs <em>before</em> {@code AnimalEntity#breed} clears the loving player.
  */
-@Mixin(AbstractHorseEntity.class)
+@Mixin(AbstractHorse.class)
 public abstract class HorseChildAttributesMixin {
 
     private static final String SET_CHILD_ATTRIBUTES =
-            "setChildAttributes(Lnet/minecraft/entity/passive/PassiveEntity;"
-                    + "Lnet/minecraft/entity/passive/AbstractHorseEntity;)V";
+            "setChildAttributes(Lnet/minecraft/world/entity/AgeableMob;"
+                    + "Lnet/minecraft/world/entity/animal/equine/AbstractHorse;)V";
 
     /**
      * Open the stash: the horse whose {@code setChildAttributes} is running knows who bred it.
@@ -52,14 +52,14 @@ public abstract class HorseChildAttributesMixin {
      * parent has one.
      */
     @Inject(method = SET_CHILD_ATTRIBUTES, allow = 1, at = @At("HEAD"))
-    private void mcmmo$beginChildAttributes(PassiveEntity child, AbstractHorseEntity other,
+    private void mcmmo$beginChildAttributes(AgeableMob child, AbstractHorse other,
             CallbackInfo ci) {
-        HusbandryListener.beginSelectiveBreeding((AbstractHorseEntity) (Object) this, other);
+        HusbandryListener.beginSelectiveBreeding((AbstractHorse) (Object) this, other);
     }
 
     /** Close the stash on every exit, so it cannot outlive the breeding that opened it. */
     @Inject(method = SET_CHILD_ATTRIBUTES, allow = 1, at = @At("RETURN"))
-    private void mcmmo$endChildAttributes(PassiveEntity child, AbstractHorseEntity other,
+    private void mcmmo$endChildAttributes(AgeableMob child, AbstractHorse other,
             CallbackInfo ci) {
         HusbandryListener.endSelectiveBreeding();
     }
@@ -82,7 +82,7 @@ public abstract class HorseChildAttributesMixin {
     @ModifyReturnValue(method = "calculateAttributeBaseValue(DDDDLnet/minecraft/util/math/random/"
             + "Random;)D", allow = 3, at = @At("RETURN"))
     private static double mcmmo$biasChildAttribute(double rolled, double parentA, double parentB,
-            double min, double max, Random random) {
+            double min, double max, RandomSource random) {
         return HusbandryListener.applySelectiveBreedingBias(rolled, min, max);
     }
 }

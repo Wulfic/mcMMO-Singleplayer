@@ -1,15 +1,15 @@
 package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.fabric.McMMOMod;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.attribute.EntityAttribute;
-import net.minecraft.entity.attribute.EntityAttributeInstance;
-import net.minecraft.entity.attribute.EntityAttributeModifier;
-import net.minecraft.entity.attribute.EntityAttributeModifier.Operation;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.Identifier;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.core.Holder;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -68,7 +68,7 @@ public final class SkillAttributeService {
          * knows, so a renamed id strands the old modifier permanently: an unremovable speed buff on
          * everyone who has already played. Rename the constant, never the literal.
          */
-        MOVEMENT_FLEET_FOOTED_LAND(EntityAttributes.MOVEMENT_SPEED, "agility_fleet_footed",
+        MOVEMENT_FLEET_FOOTED_LAND(Attributes.MOVEMENT_SPEED, "agility_fleet_footed",
                 Operation.ADD_MULTIPLIED_TOTAL),
 
         /**
@@ -82,7 +82,7 @@ public final class SkillAttributeService {
          * same attribute Depth Strider uses, so the two stack additively and the config cap is what
          * stops a max-Swimming Depth Strider III player from becoming silly.
          */
-        MOVEMENT_FLEET_FOOTED_WATER(EntityAttributes.WATER_MOVEMENT_EFFICIENCY,
+        MOVEMENT_FLEET_FOOTED_WATER(Attributes.WATER_MOVEMENT_EFFICIENCY,
                 "agility_fleet_footed_water", Operation.ADD_VALUE),
 
         /**
@@ -107,7 +107,7 @@ public final class SkillAttributeService {
          * multiplicative operation would make the same config number mean different speeds as vanilla
          * retunes its default.
          */
-        STEALTH_PADFOOT(EntityAttributes.SNEAKING_SPEED, "stealth_padfoot", Operation.ADD_VALUE),
+        STEALTH_PADFOOT(Attributes.SNEAKING_SPEED, "stealth_padfoot", Operation.ADD_VALUE),
 
         /**
          * Unarmored → Iron Skin. The innate "skin" armour, live only while all four armour slots are
@@ -143,7 +143,7 @@ public final class SkillAttributeService {
          * diamond skin (20/0) still takes noticeably more from a heavy blow than a diamond set
          * (20/8), which also keeps its enchantments.
          */
-        UNARMORED_IRON_SKIN(EntityAttributes.ARMOR, "unarmored_iron_skin", Operation.ADD_VALUE),
+        UNARMORED_IRON_SKIN(Attributes.ARMOR, "unarmored_iron_skin", Operation.ADD_VALUE),
 
         /**
          * Taming → the pet combat mode's engage range. The <b>only managed buff that is not applied
@@ -172,14 +172,14 @@ public final class SkillAttributeService {
          * <p>⚠️ Cost is superlinear — 16 → 32 takes the search box from ~32³ to ~48³, about 3.4× the
          * volume, per repath, per pet. Hence the config cap, and hence "only while engaged".
          */
-        TAMING_PET_ENGAGE_RANGE(EntityAttributes.FOLLOW_RANGE, "taming_pet_engage",
+        TAMING_PET_ENGAGE_RANGE(Attributes.FOLLOW_RANGE, "taming_pet_engage",
                 Operation.ADD_VALUE);
 
-        private final RegistryEntry<EntityAttribute> attribute;
+        private final Holder<Attribute> attribute;
         private final Identifier id;
         private final Operation operation;
 
-        Managed(RegistryEntry<EntityAttribute> attribute, String path, Operation operation) {
+        Managed(Holder<Attribute> attribute, String path, Operation operation) {
             this.attribute = attribute;
             this.id = Identifier.of(McMMOMod.MOD_ID, path);
             this.operation = operation;
@@ -209,7 +209,7 @@ public final class SkillAttributeService {
      *               removes it
      */
     public static void set(@NotNull LivingEntity entity, @NotNull Managed buff, double amount) {
-        final EntityAttributeInstance instance = entity.getAttributeInstance(buff.attribute);
+        final AttributeInstance instance = entity.getAttributeInstance(buff.attribute);
         if (instance == null) {
             // A player always has these attributes; a null here means the attribute was not
             // registered for this entity type, which is a wiring bug rather than a game state.
@@ -218,7 +218,7 @@ public final class SkillAttributeService {
             return;
         }
 
-        final EntityAttributeModifier existing = instance.getModifier(buff.id());
+        final AttributeModifier existing = instance.getModifier(buff.id());
         if (amount == 0.0) {
             if (existing != null) {
                 instance.removeModifier(buff.id());
@@ -232,12 +232,12 @@ public final class SkillAttributeService {
             instance.removeModifier(buff.id());
         }
         instance.addTemporaryModifier(
-                new EntityAttributeModifier(buff.id(), amount, buff.operation()));
+                new AttributeModifier(buff.id(), amount, buff.operation()));
     }
 
     /** Whether this managed buff is currently applied to the player. Test/diagnostic seam. */
     public static boolean isApplied(@NotNull LivingEntity entity, @NotNull Managed buff) {
-        final EntityAttributeInstance instance = entity.getAttributeInstance(buff.attribute);
+        final AttributeInstance instance = entity.getAttributeInstance(buff.attribute);
         return instance != null && instance.getModifier(buff.id()) != null;
     }
 
@@ -246,11 +246,11 @@ public final class SkillAttributeService {
      * lets a test distinguish "removed" from "applied at zero" without reaching into vanilla.
      */
     public static double appliedValue(@NotNull LivingEntity entity, @NotNull Managed buff) {
-        final EntityAttributeInstance instance = entity.getAttributeInstance(buff.attribute);
+        final AttributeInstance instance = entity.getAttributeInstance(buff.attribute);
         if (instance == null) {
             return 0.0;
         }
-        final EntityAttributeModifier modifier = instance.getModifier(buff.id());
+        final AttributeModifier modifier = instance.getModifier(buff.id());
         return modifier == null ? 0.0 : modifier.value();
     }
 
@@ -264,7 +264,7 @@ public final class SkillAttributeService {
      */
     public static void clearAll(@NotNull LivingEntity entity) {
         for (Managed buff : Managed.values()) {
-            final EntityAttributeInstance instance = entity.getAttributeInstance(buff.attribute);
+            final AttributeInstance instance = entity.getAttributeInstance(buff.attribute);
             if (instance != null) {
                 instance.removeModifier(buff.id());
             }

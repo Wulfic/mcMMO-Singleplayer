@@ -1,7 +1,7 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
-import net.minecraft.entity.passive.PassiveEntity;
+import net.minecraft.world.entity.AgeableMob;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -49,7 +49,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * horse, camel and llama all feed through the one-argument {@code growUp(int)}, which passes
  * {@code false} — the same value {@code SheepEntity#onEatingGrass} uses.
  */
-@Mixin(PassiveEntity.class)
+@Mixin(AgeableMob.class)
 public abstract class PassiveEntityGrowthMixin {
 
     /**
@@ -70,7 +70,7 @@ public abstract class PassiveEntityGrowthMixin {
      */
     @Inject(method = "setBreedingAge(I)V", allow = 1, at = @At("HEAD"))
     private void mcmmo$onBreedingAgeChange(int newAge, CallbackInfo ci) {
-        HusbandryListener.onBreedingAgeChange((PassiveEntity) (Object) this, this.breedingAge,
+        HusbandryListener.onBreedingAgeChange((AgeableMob) (Object) this, this.breedingAge,
                 newAge);
     }
 
@@ -83,6 +83,6 @@ public abstract class PassiveEntityGrowthMixin {
      */
     @ModifyVariable(method = "growUp(IZ)V", allow = 1, at = @At("HEAD"), argsOnly = true, ordinal = 0)
     private int mcmmo$onGrowthApplied(int growthSeconds) {
-        return HusbandryListener.onGrowthApplied((PassiveEntity) (Object) this, growthSeconds);
+        return HusbandryListener.onGrowthApplied((AgeableMob) (Object) this, growthSeconds);
     }
 }

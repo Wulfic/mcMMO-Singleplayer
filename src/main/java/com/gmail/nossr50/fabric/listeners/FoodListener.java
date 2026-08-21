@@ -9,18 +9,18 @@ import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import net.minecraft.component.type.FoodComponent;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.effect.StatusEffect;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.player.HungerConstants;
-import net.minecraft.entity.player.HungerManager;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.world.World;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.food.FoodConstants;
+import net.minecraft.world.food.FoodData;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Holder;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,12 +82,12 @@ public final class FoodListener {
      * @param stack the stack that was eaten
      * @param food  the food component vanilla just applied
      */
-    public static void onFoodConsumed(World world, LivingEntity user, ItemStack stack,
-            FoodComponent food) {
+    public static void onFoodConsumed(Level world, LivingEntity user, ItemStack stack,
+            FoodProperties food) {
         if (world.isClient()) {
             return; // the client half of a singleplayer session also runs consumption; server is authoritative.
         }
-        if (!(user instanceof ServerPlayerEntity player)) {
+        if (!(user instanceof ServerPlayer player)) {
             return; // mobs eat too (e.g. via consumable items); no mcMMO data to read.
         }
 
@@ -102,7 +102,7 @@ public final class FoodListener {
             return; // data not loaded (e.g. mid-join).
         }
 
-        final String itemPath = Registries.ITEM.getId(stack.getItem()).getPath();
+        final String itemPath = BuiltInRegistries.ITEM.getId(stack.getItem()).getPath();
 
         // ⚠️⚠️ THE ORDERING TRAP — READ THIS BEFORE ADDING A SKILL TO THIS SEAM.
         //
@@ -144,7 +144,7 @@ public final class FoodListener {
      * @param mmoPlayer their mcMMO data
      * @param itemPath  the eaten item's registry path
      */
-    private static void applyPowerCook(ServerPlayerEntity player, McMMOPlayer mmoPlayer,
+    private static void applyPowerCook(ServerPlayer player, McMMOPlayer mmoPlayer,
             String itemPath) {
         final CookingManager cooking = mmoPlayer.getCookingManager();
         if (cooking == null) {
@@ -155,7 +155,7 @@ public final class FoodListener {
         if (effect == null) {
             return; // Skill off, unranked, or a food that grants nothing. All three are normal.
         }
-        final RegistryEntry<StatusEffect> type = Potions.matchEffect(effect.effectName());
+        final Holder<MobEffect> type = Potions.matchEffect(effect.effectName());
         if (type == null) {
             // An operator typo in config.yml. Warn once per bad name rather than once per bite:
             // this is on the eat path, and a player with a full smoker eats a lot.
@@ -167,7 +167,7 @@ public final class FoodListener {
             }
             return;
         }
-        player.addStatusEffect(new StatusEffectInstance(type, effect.durationTicks(),
+        player.addStatusEffect(new MobEffectInstance(type, effect.durationTicks(),
                 CookingManager.POWER_COOK_AMPLIFIER));
     }
 
@@ -186,7 +186,7 @@ public final class FoodListener {
      * @param nutrition  the food's own nutrition, which is what the bonus is computed from
      * @param saturation the food's own saturation, scaled alongside the bonus
      */
-    private static void applyDietBonus(ServerPlayerEntity player, McMMOPlayer mmoPlayer,
+    private static void applyDietBonus(ServerPlayer player, McMMOPlayer mmoPlayer,
             String itemPath, int nutrition, float saturation) {
         final int boosted;
         if (HerbalismManager.isFarmersDietFood(itemPath)) {
@@ -228,15 +228,15 @@ public final class FoodListener {
      * @param nutrition the food's own nutrition, as the proportion base for saturation
      * @param saturation the food's own saturation
      */
-    private static void applyBonus(ServerPlayerEntity player, int bonusFood, int nutrition,
+    private static void applyBonus(ServerPlayer player, int bonusFood, int nutrition,
             float saturation) {
-        final HungerManager hunger = player.getHungerManager();
-        final int newFoodLevel = MathHelper.clamp(hunger.getFoodLevel() + bonusFood, 0,
-                HungerConstants.FULL_FOOD_LEVEL);
+        final FoodData hunger = player.getHungerManager();
+        final int newFoodLevel = Mth.clamp(hunger.getFoodLevel() + bonusFood, 0,
+                FoodConstants.FULL_FOOD_LEVEL);
         final float bonusSaturation = saturation * bonusFood / nutrition;
 
         hunger.setFoodLevel(newFoodLevel);
         hunger.setSaturationLevel(
-                MathHelper.clamp(hunger.getSaturationLevel() + bonusSaturation, 0.0f, newFoodLevel));
+                Mth.clamp(hunger.getSaturationLevel() + bonusSaturation, 0.0f, newFoodLevel));
     }
 }

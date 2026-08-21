@@ -4,9 +4,9 @@ import com.mojang.datafixers.util.Pair;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
-import net.minecraft.block.Block;
-import net.minecraft.item.HoeItem;
-import net.minecraft.item.ItemUsageContext;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.item.HoeItem;
+import net.minecraft.world.item.context.UseOnContext;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
@@ -40,7 +40,7 @@ public interface HoeTillingActionsAccessor {
      * @return the live map; treat it as read-only
      */
     @Accessor("TILLING_ACTIONS")
-    static Map<Block, Pair<Predicate<ItemUsageContext>, Consumer<ItemUsageContext>>>
+    static Map<Block, Pair<Predicate<UseOnContext>, Consumer<UseOnContext>>>
             getTillingActions() {
         throw new AssertionError("mixin did not apply");
     }

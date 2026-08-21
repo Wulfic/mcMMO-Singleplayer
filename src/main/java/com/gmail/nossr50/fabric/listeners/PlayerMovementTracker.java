@@ -19,19 +19,19 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.ai.pathing.EntityNavigation;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.RegistryKey;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.navigation.PathNavigation;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.PlayerInput;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.player.Input;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -110,7 +110,7 @@ public final class PlayerMovementTracker {
     private static final double MIN_DELTA = 1.0E-4;
 
     /** Last tick's position per player. Not a session field, so it can be reset independently. */
-    private static final Map<UUID, Vec3d> LAST_POSITIONS = new HashMap<>();
+    private static final Map<UUID, Vec3> LAST_POSITIONS = new HashMap<>();
 
     /**
      * Last tick's world per player, so a position baseline is never compared across worlds.
@@ -118,10 +118,10 @@ public final class PlayerMovementTracker {
      * <p>Only {@link PetFollowTeleport} reads it today, and it is load-bearing there: the coordinates
      * either side of a nether portal are both valid and 8× apart, so a box drawn at the old position
      * in the new world is a box somewhere real that happens to be wrong. Keyed by
-     * {@link net.minecraft.registry.RegistryKey} rather than by the world object so nothing here keeps
+     * {@link net.minecraft.resources.ResourceKey} rather than by the world object so nothing here keeps
      * an unloaded world alive.
      */
-    private static final Map<UUID, RegistryKey<World>> LAST_WORLDS = new HashMap<>();
+    private static final Map<UUID, ResourceKey<Level>> LAST_WORLDS = new HashMap<>();
 
     /** Ticks since each player's last Solar Wings repair, so the trickle is rate-limited. */
     private static final Map<UUID, Integer> SOLAR_WINGS_TICKS = new HashMap<>();
@@ -182,7 +182,7 @@ public final class PlayerMovementTracker {
         SNOW_WALKERS.clear();
     }
 
-    private static void onQuit(@NotNull ServerPlayerEntity player) {
+    private static void onQuit(@NotNull ServerPlayer player) {
         LAST_POSITIONS.remove(player.getUuid());
         LAST_WORLDS.remove(player.getUuid());
         SOLAR_WINGS_TICKS.remove(player.getUuid());
@@ -197,7 +197,7 @@ public final class PlayerMovementTracker {
     }
 
     private static void onServerTick(@NotNull MinecraftServer server) {
-        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+        for (ServerPlayer player : server.getPlayerManager().getPlayerList()) {
             try {
                 tickPlayer(player);
             } catch (Exception e) {
@@ -217,18 +217,18 @@ public final class PlayerMovementTracker {
      * the actual defect risk, and a test of the sneak-travel predicate on its own would pass with the
      * dispatch deleted entirely.
      */
-    static void tickPlayer(@NotNull ServerPlayerEntity player) {
+    static void tickPlayer(@NotNull ServerPlayer player) {
         final UUID uuid = player.getUuid();
-        final Vec3d current = player.getEntityPos();
-        final Vec3d previous = LAST_POSITIONS.put(uuid, current);
+        final Vec3 current = player.getEntityPos();
+        final Vec3 previous = LAST_POSITIONS.put(uuid, current);
         // ⚠️ The cast is load-bearing on the older bands — do NOT "simplify" it away.
         // ServerPlayerEntity's covariant ServerWorld override of getEntityWorld() was added in
         // 1.21.9; on 1.21 – 1.21.5 only Entity's World-returning form exists and the bare
         // assignment does not compile. ⚠️ Not usable on 1.21.6 – 1.21.8, which has no
         // Entity#getEntityWorld() at all and spells the accessor getWorld() — see
         // PetFollowTeleport#bringPetsFrom for the measured version ladder.
-        final ServerWorld world = (ServerWorld) player.getEntityWorld();
-        final RegistryKey<World> previousWorld =
+        final ServerLevel world = (ServerLevel) player.getEntityWorld();
+        final ResourceKey<Level> previousWorld =
                 LAST_WORLDS.put(uuid, world == null ? null : world.getRegistryKey());
         final boolean sameWorld =
                 world != null && world.getRegistryKey().equals(previousWorld);
@@ -332,7 +332,7 @@ public final class PlayerMovementTracker {
      * every tick would fight vanilla's own goals — an animal fleeing a wolf, or one already walking to
      * its mate — and produce a herd that jitters in place instead of one that comes when called.
      */
-    private static void callTheHerd(@NotNull ServerPlayerEntity player,
+    private static void callTheHerd(@NotNull ServerPlayer player,
             @NotNull McMMOPlayer mmoPlayer) {
         final HusbandryManager husbandry = mmoPlayer.getHusbandryManager();
         if (husbandry == null) {
@@ -342,14 +342,14 @@ public final class PlayerMovementTracker {
         if (radius <= 0) {
             return; // Not sounding — the overwhelmingly common case, and it must stay cheap.
         }
-        if (!(player.getEntityWorld() instanceof ServerWorld)) {
+        if (!(player.getEntityWorld() instanceof ServerLevel)) {
             return;
         }
 
-        final Box searchBox = player.getBoundingBox().expand(radius);
-        for (AnimalEntity animal : player.getEntityWorld().getEntitiesByClass(AnimalEntity.class,
-                searchBox, AnimalEntity::isAlive)) {
-            final EntityNavigation navigation = animal.getNavigation();
+        final AABB searchBox = player.getBoundingBox().expand(radius);
+        for (Animal animal : player.getEntityWorld().getEntitiesByClass(Animal.class,
+                searchBox, Animal::isAlive)) {
+            final PathNavigation navigation = animal.getNavigation();
             if (navigation.isIdle()) {
                 navigation.startMovingTo(player, HERD_FOLLOW_SPEED);
             }
@@ -383,7 +383,7 @@ public final class PlayerMovementTracker {
      * and needs no movement sampling. It is here because this is the mod's only per-tick per-player
      * sweep, not because it has anything to do with movement.
      */
-    private static void applyIronSkin(@NotNull ServerPlayerEntity player,
+    private static void applyIronSkin(@NotNull ServerPlayer player,
             @NotNull McMMOPlayer mmoPlayer) {
         final UnarmoredManager unarmored = mmoPlayer.getUnarmoredManager();
         if (unarmored == null) {
@@ -399,7 +399,7 @@ public final class PlayerMovementTracker {
      * <p>Written only when the answer changes, so the steady state costs one hash lookup per tick
      * rather than a write to a shared concurrent set 20 times a second.
      */
-    private static void publishSnowWalker(@NotNull ServerPlayerEntity player,
+    private static void publishSnowWalker(@NotNull ServerPlayer player,
             @NotNull MovementManager agility) {
         final UUID uuid = player.getUuid();
         if (agility.canSnowWalk()) {
@@ -410,7 +410,7 @@ public final class PlayerMovementTracker {
     }
 
     /** Horizontal distance between two positions, in blocks. */
-    private static double horizontalDistance(@NotNull Vec3d previous, @NotNull Vec3d current) {
+    private static double horizontalDistance(@NotNull Vec3 previous, @NotNull Vec3 current) {
         final double dx = current.x - previous.x;
         final double dz = current.z - previous.z;
         return Math.sqrt(dx * dx + dz * dz);
@@ -427,7 +427,7 @@ public final class PlayerMovementTracker {
      * sitting on a walking player forever, which is indistinguishable from a leak the first time
      * somebody debugs this.
      */
-    private static void tickStealth(@NotNull ServerPlayerEntity player,
+    private static void tickStealth(@NotNull ServerPlayer player,
             @NotNull McMMOPlayer mmoPlayer, double distance, boolean travelled) {
         final StealthManager stealth = mmoPlayer.getStealthManager();
         if (stealth == null) {
@@ -464,7 +464,7 @@ public final class PlayerMovementTracker {
      *       or a bubble column, none of which need a hand on the keyboard.</li>
      * </ul>
      */
-    static boolean qualifiesAsSneakTravel(@NotNull ServerPlayerEntity player) {
+    static boolean qualifiesAsSneakTravel(@NotNull ServerPlayer player) {
         if (player.hasVehicle() || player.isGliding() || player.isTouchingWater()
                 || !player.isOnGround()) {
             return false;
@@ -494,8 +494,8 @@ public final class PlayerMovementTracker {
      * INFO line below: a §G session can confirm the gate is live from the log alone, instead of
      * inferring it from XP that may be zero for some other reason.
      */
-    private static boolean isPressingMovementKey(@NotNull ServerPlayerEntity player) {
-        final PlayerInput input = player.getPlayerInput();
+    private static boolean isPressingMovementKey(@NotNull ServerPlayer player) {
+        final Input input = player.getPlayerInput();
         final boolean pressing =
                 input.forward() || input.backward() || input.left() || input.right();
         if (pressing && MOVEMENT_INPUT_OBSERVED.compareAndSet(false, true)) {
@@ -533,7 +533,7 @@ public final class PlayerMovementTracker {
      * Padfoot and Fleet Footed are the same mechanic on the same attribute and must never be live at
      * once (D-AG5), and this settles that overlap in one place rather than in each consumer.
      */
-    public static @Nullable Medium classifyMedium(@NotNull ServerPlayerEntity player) {
+    public static @Nullable Medium classifyMedium(@NotNull ServerPlayer player) {
         if (player.hasVehicle() || player.isSneaking()) {
             return null;
         }
@@ -557,7 +557,7 @@ public final class PlayerMovementTracker {
      * flight is velocity-driven with no attribute behind it, so it lives in
      * {@link com.gmail.nossr50.fabric.mixin.LivingEntityGlideMixin}.
      */
-    private static void applyFleetFooted(@NotNull ServerPlayerEntity player,
+    private static void applyFleetFooted(@NotNull ServerPlayer player,
             @NotNull MovementManager agility, @Nullable Medium medium) {
         SkillAttributeService.set(player, SkillAttributeService.Managed.MOVEMENT_FLEET_FOOTED_LAND,
                 medium == Medium.LAND ? agility.getFleetFootedBonus(Medium.LAND) : 0.0);
@@ -573,7 +573,7 @@ public final class PlayerMovementTracker {
      * ever misbehaves the failure mode is "breath is slightly wrong", not "the drowning code is
      * broken". Clamped to the vanilla maximum so it can top up but never overfill.
      */
-    private static void applyLeadLungs(@NotNull ServerPlayerEntity player,
+    private static void applyLeadLungs(@NotNull ServerPlayer player,
             @NotNull MovementManager agility) {
         if (!player.isSubmergedInWater()) {
             return;
@@ -597,7 +597,7 @@ public final class PlayerMovementTracker {
      * Repairs faster on the ground than in flight, so it is a reason to land rather than a reason to
      * never land.
      */
-    private static void applySolarWings(@NotNull ServerPlayerEntity player,
+    private static void applySolarWings(@NotNull ServerPlayer player,
             @NotNull MovementManager agility) {
         final UUID uuid = player.getUuid();
         if (!agility.canSolarWings()) {

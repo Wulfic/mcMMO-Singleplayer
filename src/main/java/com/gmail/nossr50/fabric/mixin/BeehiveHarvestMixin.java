@@ -2,16 +2,16 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import net.minecraft.block.BlockState;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -50,18 +50,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * damaged or decremented — and the ambiguous case (the tool broke, or that was the last bottle) is
  * exactly the one a player would hit.
  */
-@Mixin(net.minecraft.block.BeehiveBlock.class)
+@Mixin(net.minecraft.world.level.block.BeehiveBlock.class)
 public abstract class BeehiveHarvestMixin {
 
     private static final String ON_USE_WITH_ITEM =
-            "onUseWithItem(Lnet/minecraft/item/ItemStack;Lnet/minecraft/block/BlockState;"
-                    + "Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;"
-                    + "Lnet/minecraft/entity/player/PlayerEntity;Lnet/minecraft/util/Hand;"
-                    + "Lnet/minecraft/util/hit/BlockHitResult;)Lnet/minecraft/util/ActionResult;";
+            "onUseWithItem(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/block/state/BlockState;"
+                    + "Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;"
+                    + "Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;"
+                    + "Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;";
 
     private static final String IS_LIT_CAMPFIRE_IN_RANGE =
-            "Lnet/minecraft/block/CampfireBlock;isLitCampfireInRange("
-                    + "Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;)Z";
+            "Lnet/minecraft/world/level/block/CampfireBlock;isLitCampfireInRange("
+                    + "Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Z";
 
     /**
      * The shears half: pay the hive verb and add any bonus helpings.
@@ -73,14 +73,14 @@ public abstract class BeehiveHarvestMixin {
      */
     @Inject(method = ON_USE_WITH_ITEM, allow = 1,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/block/BeehiveBlock;dropHoneycomb("
-                            + "Lnet/minecraft/server/world/ServerWorld;Lnet/minecraft/item/ItemStack;"
-                            + "Lnet/minecraft/block/BlockState;"
-                            + "Lnet/minecraft/block/entity/BlockEntity;Lnet/minecraft/entity/Entity;"
-                            + "Lnet/minecraft/util/math/BlockPos;)V"))
-    private void mcmmo$onHoneycombHarvested(ItemStack stack, BlockState state, World world,
-            BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit,
-            CallbackInfoReturnable<ActionResult> cir) {
+                    target = "Lnet/minecraft/world/level/block/BeehiveBlock;dropHoneycomb("
+                            + "Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/item/ItemStack;"
+                            + "Lnet/minecraft/world/level/block/state/BlockState;"
+                            + "Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/world/entity/Entity;"
+                            + "Lnet/minecraft/core/BlockPos;)V"))
+    private void mcmmo$onHoneycombHarvested(ItemStack stack, BlockState state, Level world,
+            BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit,
+            CallbackInfoReturnable<InteractionResult> cir) {
         HusbandryListener.onHoneycombHarvested(player, stack, state, world, pos);
     }
 
@@ -91,10 +91,10 @@ public abstract class BeehiveHarvestMixin {
      * and one vanilla only reaches once it has decided the harvest is going ahead.
      */
     @Inject(method = ON_USE_WITH_ITEM, allow = 1,
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/item/ItemStack;decrement(I)V"))
-    private void mcmmo$onHoneyBottled(ItemStack stack, BlockState state, World world, BlockPos pos,
-            PlayerEntity player, Hand hand, BlockHitResult hit,
-            CallbackInfoReturnable<ActionResult> cir) {
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/ItemStack;decrement(I)V"))
+    private void mcmmo$onHoneyBottled(ItemStack stack, BlockState state, Level world, BlockPos pos,
+            Player player, InteractionHand hand, BlockHitResult hit,
+            CallbackInfoReturnable<InteractionResult> cir) {
         HusbandryListener.onHoneyBottled(player);
     }
 
@@ -115,7 +115,7 @@ public abstract class BeehiveHarvestMixin {
     @ModifyExpressionValue(method = ON_USE_WITH_ITEM, allow = 1,
             at = @At(value = "INVOKE", target = IS_LIT_CAMPFIRE_IN_RANGE))
     private boolean mcmmo$beekeeperKeepsTheBeesCalm(boolean campfireInRange, ItemStack stack,
-            BlockState state, World world, BlockPos pos, PlayerEntity player, Hand hand,
+            BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand,
             BlockHitResult hit) {
         return campfireInRange || HusbandryListener.hiveHarvestLeavesBeesCalm(player);
     }
@@ -130,8 +130,8 @@ public abstract class BeehiveHarvestMixin {
      */
     @ModifyArg(method = ON_USE_WITH_ITEM, allow = 1, index = 0,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/item/ItemStack;damage(ILnet/minecraft/entity/"
-                            + "LivingEntity;Lnet/minecraft/entity/EquipmentSlot;)V"))
+                    target = "Lnet/minecraft/world/item/ItemStack;damage(ILnet/minecraft/entity/"
+                            + "LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;)V"))
     private int mcmmo$saveHiveToolDurability(int damageAmount, LivingEntity holder,
             EquipmentSlot slot) {
         return HusbandryListener.onHiveToolDamaged(holder, damageAmount);

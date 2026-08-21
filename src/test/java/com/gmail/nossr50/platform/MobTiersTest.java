@@ -12,11 +12,11 @@ import com.gmail.nossr50.util.McTestRegistries;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.attribute.DefaultAttributeRegistry;
-import net.minecraft.entity.mob.ZombieEntity;
-import net.minecraft.registry.Registries;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
+import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -127,7 +127,7 @@ class MobTiersTest {
         // 500-health boss by every live measure and is still a tier-2 zombie, because tier is a fact
         // about the species that a player can learn -- not about the individual's gear, its rolled
         // health, or the world difficulty it spawned on.
-        final ZombieEntity buffed = mock(ZombieEntity.class);
+        final Zombie buffed = mock(Zombie.class);
         Mockito.doReturn(EntityType.ZOMBIE).when(buffed).getType();
         lenient().when(buffed.getMaxHealth()).thenReturn(500.0F);
 
@@ -139,7 +139,7 @@ class MobTiersTest {
         // Pins the has() guard in tierOf. The dragon genuinely has no ATTACK_DAMAGE entry -- its
         // 200 health is the only signal available, and reading a missing attribute instead of
         // testing for it is the kind of thing that throws once, in a live world, on a boss fight.
-        assertTrue(DefaultAttributeRegistry.hasDefinitionFor(EntityType.ENDER_DRAGON));
+        assertTrue(DefaultAttributes.hasDefinitionFor(EntityType.ENDER_DRAGON));
         assertEquals(4, MobTiers.tierOf(EntityType.ENDER_DRAGON));
     }
 
@@ -183,13 +183,13 @@ class MobTiersTest {
         loadShippedConfig(dataFolder);
 
         final List<String> broken = new ArrayList<>();
-        for (EntityType<?> type : Registries.ENTITY_TYPE) {
-            if (!DefaultAttributeRegistry.hasDefinitionFor(type)) {
+        for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
+            if (!DefaultAttributes.hasDefinitionFor(type)) {
                 continue; // not a living entity: boats, arrows, item frames.
             }
             final int tier = MobTiers.tierOf((EntityType<? extends LivingEntity>) type);
             if (tier < HunterManager.MIN_TIER || tier > HunterManager.MAX_TIER) {
-                broken.add(Registries.ENTITY_TYPE.getId(type) + " -> " + tier);
+                broken.add(BuiltInRegistries.ENTITY_TYPE.getId(type) + " -> " + tier);
             }
         }
 

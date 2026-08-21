@@ -8,32 +8,32 @@ import com.gmail.nossr50.fabric.mixin.HoeTillingActionsAccessor;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Arrays;
 import java.util.List;
-import net.minecraft.advancement.criterion.BredAnimalsCriterion;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
-import net.minecraft.block.entity.BrewingStandBlockEntity;
-import net.minecraft.block.entity.CampfireBlockEntity;
-import net.minecraft.component.type.FoodComponent;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.mob.BoggedEntity;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.passive.AbstractCowEntity;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.entity.passive.GoatEntity;
-import net.minecraft.entity.passive.MooshroomEntity;
-import net.minecraft.entity.passive.PassiveEntity;
-import net.minecraft.entity.passive.SheepEntity;
-import net.minecraft.entity.projectile.FireworkRocketEntity;
-import net.minecraft.entity.passive.SnowGolemEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.projectile.FishingBobberEntity;
-import net.minecraft.entity.projectile.ProjectileEntity;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.BowItem;
-import net.minecraft.item.HoeItem;
-import net.minecraft.screen.slot.FurnaceOutputSlot;
-import net.minecraft.world.explosion.ExplosionImpl;
+import net.minecraft.advancements.criterion.BredAnimalsTrigger;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
+import net.minecraft.world.level.block.entity.BrewingStandBlockEntity;
+import net.minecraft.world.level.block.entity.CampfireBlockEntity;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.skeleton.Bogged;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.animal.cow.AbstractCow;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.goat.Goat;
+import net.minecraft.world.entity.animal.cow.MushroomCow;
+import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.world.entity.animal.sheep.Sheep;
+import net.minecraft.world.entity.projectile.FireworkRocketEntity;
+import net.minecraft.world.entity.animal.golem.SnowGolem;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.FishingHook;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.BowItem;
+import net.minecraft.world.item.HoeItem;
+import net.minecraft.world.inventory.FurnaceResultSlot;
+import net.minecraft.world.level.ServerExplosion;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -67,12 +67,12 @@ class MixinApplicationTest {
         // Class-loading ExplosionImpl is what triggers mixin application: if either injection in
         // ExplosionDropsMixin (the destroyBlocks HEAD hook, or the onExploded drop-collector arg)
         // no longer matches, this throws rather than silently no-op'ing.
-        assertDoesNotThrow(() -> Class.forName(ExplosionImpl.class.getName(), true,
+        assertDoesNotThrow(() -> Class.forName(ServerExplosion.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
 
         // ...and prove the mixin was really applied, rather than the class merely loading: the
         // @Unique flag ExplosionDropsMixin adds only exists on a transformed ExplosionImpl.
-        final boolean hasMixinField = Arrays.stream(ExplosionImpl.class.getDeclaredFields())
+        final boolean hasMixinField = Arrays.stream(ServerExplosion.class.getDeclaredFields())
                 .anyMatch(field -> field.getName().contains("blastMiningHandled"));
         assertTrue(hasMixinField,
                 "ExplosionDropsMixin did not apply to ExplosionImpl — its blast-mining drop "
@@ -86,7 +86,7 @@ class MixinApplicationTest {
         // @Inject), so class-loading is the whole test: with defaultRequire=1, a spawn signature that
         // has drifted fails the injection and throws here rather than silently costing Archery its
         // Arrow Retrieval marks in-game.
-        assertDoesNotThrow(() -> Class.forName(ProjectileEntity.class.getName(), true,
+        assertDoesNotThrow(() -> Class.forName(Projectile.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
     }
 
@@ -138,7 +138,7 @@ class MixinApplicationTest {
         // transformed (or the failure has already surfaced as an error in @BeforeAll). What is worth
         // asserting is that the Master Angler @Redirect actually bound — an applied @Redirect leaves
         // its handler method on the transformed target.
-        final boolean hasRedirect = Arrays.stream(FishingBobberEntity.class.getDeclaredMethods())
+        final boolean hasRedirect = Arrays.stream(FishingHook.class.getDeclaredMethods())
                 .anyMatch(method -> method.getName().contains("masterAnglerWaitCountdown"));
         assertTrue(hasRedirect,
                 "FishingWaitTimeMixin did not apply to FishingBobberEntity — Master Angler would "
@@ -151,7 +151,7 @@ class MixinApplicationTest {
         // Same reasoning for the Shake @Inject on FishingBobberUseMixin: an applied @Inject leaves its
         // handler on the target, so its absence means reeling in a hooked mob would silently never
         // shake anything loose.
-        final boolean hasShakeHook = Arrays.stream(FishingBobberEntity.class.getDeclaredMethods())
+        final boolean hasShakeHook = Arrays.stream(FishingHook.class.getDeclaredMethods())
                 .anyMatch(method -> method.getName().contains("onEntityHooked"));
         assertTrue(hasShakeHook,
                 "FishingBobberUseMixin's Shake injector did not apply to FishingBobberEntity — the "
@@ -161,7 +161,7 @@ class MixinApplicationTest {
         // ExperienceOrbEntity constructor inside use()'s loot loop. It is capped at allow = 1 because
         // that constructor is invoked exactly once there today — an unconstrained injector would bind
         // to any future orb spawn added to the method.
-        final boolean hasVanillaXpHook = Arrays.stream(FishingBobberEntity.class.getDeclaredMethods())
+        final boolean hasVanillaXpHook = Arrays.stream(FishingHook.class.getDeclaredMethods())
                 .anyMatch(method -> method.getName().contains("boostVanillaFishingXp"));
         assertTrue(hasVanillaXpHook,
                 "FishingBobberUseMixin's vanilla-XP injector did not apply to FishingBobberEntity — "
@@ -263,7 +263,7 @@ class MixinApplicationTest {
         // McTestRegistries.bootstrap(), so FoodComponent is already transformed by now. An applied
         // @Inject leaves its handler method on the target, and its absence is the failure that
         // matters — both diet sub-skills would silently do nothing on every meal in-game.
-        final boolean hasConsumeHook = Arrays.stream(FoodComponent.class.getDeclaredMethods())
+        final boolean hasConsumeHook = Arrays.stream(FoodProperties.class.getDeclaredMethods())
                 .anyMatch(method -> method.getName().contains("onFoodConsumed"));
         assertTrue(hasConsumeHook,
                 "FoodComponentMixin did not apply to FoodComponent — Farmer's Diet and Fisherman's "
@@ -276,10 +276,10 @@ class MixinApplicationTest {
         // class-loading it here is what forces its mixin to apply. Both handlers are asserted because
         // they are separate injections — losing the RETURN one alone would leak the multiplier onto
         // the next furnace extraction on the same thread.
-        assertDoesNotThrow(() -> Class.forName(FurnaceOutputSlot.class.getName(), true,
+        assertDoesNotThrow(() -> Class.forName(FurnaceResultSlot.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
 
-        final var methods = Arrays.stream(FurnaceOutputSlot.class.getDeclaredMethods())
+        final var methods = Arrays.stream(FurnaceResultSlot.class.getDeclaredMethods())
                 .map(java.lang.reflect.Method::getName)
                 .toList();
 
@@ -297,10 +297,10 @@ class MixinApplicationTest {
         // mixin to apply. Both halves matter: the target is disambiguated by a full descriptor
         // (BredAnimalsCriterion inherits a two-arg trigger from AbstractCriterion), so a drifted
         // signature fails the injection here rather than leaving every breeding unpaid in-game.
-        assertDoesNotThrow(() -> Class.forName(BredAnimalsCriterion.class.getName(), true,
+        assertDoesNotThrow(() -> Class.forName(BredAnimalsTrigger.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
 
-        final boolean hasBredHook = Arrays.stream(BredAnimalsCriterion.class.getDeclaredMethods())
+        final boolean hasBredHook = Arrays.stream(BredAnimalsTrigger.class.getDeclaredMethods())
                 .anyMatch(method -> method.getName().contains("onAnimalsBred"));
         assertTrue(hasBredHook,
                 "BredAnimalsCriterionMixin did not apply to BredAnimalsCriterion — Husbandry would "
@@ -316,7 +316,7 @@ class MixinApplicationTest {
         // CamelEntity, LlamaEntity and PandaEntity all override interactMob and call lovePlayer
         // themselves, so an interactMob hook would leave Multi-Breed dead on four species — horses
         // among them — while passing every test that used a cow.
-        final boolean hasLoveHook = Arrays.stream(AnimalEntity.class.getDeclaredMethods())
+        final boolean hasLoveHook = Arrays.stream(Animal.class.getDeclaredMethods())
                 .anyMatch(method -> method.getName().contains("onLovePlayer"));
         assertTrue(hasLoveHook,
                 "AnimalLovePlayerMixin did not apply to AnimalEntity — Multi-Breed would silently "
@@ -325,10 +325,10 @@ class MixinApplicationTest {
 
     @Test
     void husbandryGrowthMixinApplies() {
-        assertDoesNotThrow(() -> Class.forName(PassiveEntity.class.getName(), true,
+        assertDoesNotThrow(() -> Class.forName(AgeableMob.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
 
-        final var methods = Arrays.stream(PassiveEntity.class.getDeclaredMethods())
+        final var methods = Arrays.stream(AgeableMob.class.getDeclaredMethods())
                 .map(java.lang.reflect.Method::getName)
                 .toList();
 
@@ -349,10 +349,10 @@ class MixinApplicationTest {
 
     @Test
     void playerInteractMixinApplies() {
-        assertDoesNotThrow(() -> Class.forName(PlayerEntity.class.getName(), true,
+        assertDoesNotThrow(() -> Class.forName(Player.class.getName(), true,
                 MixinApplicationTest.class.getClassLoader()));
 
-        final var methods = Arrays.stream(PlayerEntity.class.getDeclaredMethods())
+        final var methods = Arrays.stream(Player.class.getDeclaredMethods())
                 .map(java.lang.reflect.Method::getName)
                 .toList();
 
@@ -410,8 +410,8 @@ class MixinApplicationTest {
         // is what turns "the species list drifted" from a silent shortfall into a red test: a
         // renamed or restructured interactMob on any single species would otherwise leave that
         // animal's shear quietly wearing the tool while the other three did not.
-        for (Class<?> shearable : List.of(SheepEntity.class, MooshroomEntity.class,
-                SnowGolemEntity.class, BoggedEntity.class)) {
+        for (Class<?> shearable : List.of(Sheep.class, MushroomCow.class,
+                SnowGolem.class, Bogged.class)) {
             assertDoesNotThrow(() -> Class.forName(shearable.getName(), true,
                     MixinApplicationTest.class.getClassLoader()));
             final boolean hasSave = Arrays.stream(shearable.getDeclaredMethods())
@@ -444,7 +444,7 @@ class MixinApplicationTest {
         // MobEntity is loaded by EntityType's static init during bootstrap, so class-loading proves
         // nothing; the handler does. Losing this one leaves a narrower but very real hole: a zombie
         // spawner over water launders its origin into drowned that count.
-        assertTrue(Arrays.stream(MobEntity.class.getDeclaredMethods())
+        assertTrue(Arrays.stream(Mob.class.getDeclaredMethods())
                         .anyMatch(method -> method.getName().contains("carryOriginThroughConversion")),
                 "MobConversionOriginMixin did not apply to MobEntity — a spawner mob would shed its "
                         + "marker the moment it converted, which is exactly how drowned farms work");
@@ -490,7 +490,7 @@ class MixinApplicationTest {
         // method where it is DECLARED, which is not where it is reachable. That grep returns exactly
         // three — AbstractCowEntity (carrying cow and mooshroom), GoatEntity, and WanderingTraderEntity
         // (a trade offer, not a milking). Re-run it after a version bump; add any new hit here.
-        for (Class<?> milkable : List.of(AbstractCowEntity.class, GoatEntity.class)) {
+        for (Class<?> milkable : List.of(AbstractCow.class, Goat.class)) {
             assertDoesNotThrow(() -> Class.forName(milkable.getName(), true,
                     MixinApplicationTest.class.getClassLoader()));
             final boolean hasMilkHook = Arrays.stream(milkable.getDeclaredMethods())

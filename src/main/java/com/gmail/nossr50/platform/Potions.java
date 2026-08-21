@@ -7,16 +7,16 @@ import com.gmail.nossr50.util.PotionNames;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.PotionContentsComponent;
-import net.minecraft.entity.effect.StatusEffect;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.potion.Potion;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.Potion;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Holder;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -66,10 +66,10 @@ public final class Potions {
      * @return the namespaced status-effect id (e.g. {@code minecraft:mining_fatigue}), or empty
      */
     public static @NotNull Optional<String> resolveEffectId(@Nullable String effectName) {
-        final RegistryEntry<StatusEffect> entry = matchEffect(effectName);
+        final Holder<MobEffect> entry = matchEffect(effectName);
         return entry == null
                 ? Optional.empty()
-                : Optional.of(Registries.STATUS_EFFECT.getId(entry.value()).toString());
+                : Optional.of(BuiltInRegistries.STATUS_EFFECT.getId(entry.value()).toString());
     }
 
     /**
@@ -77,11 +77,11 @@ public final class Potions {
      * The MC-typed form of {@link #resolvePotionId}, for callers inside {@code platform/}/{@code
      * fabric/} that need the entry itself.
      */
-    public static @NotNull Optional<RegistryEntry<Potion>> matchPotion(@Nullable String partialName,
+    public static @NotNull Optional<Holder<Potion>> matchPotion(@Nullable String partialName,
             boolean upgraded, boolean extended) {
         // Candidates are most-specific-first (strong_/long_ variant, then the plain base).
         for (String path : PotionNames.variantPaths(partialName, upgraded, extended)) {
-            final Optional<RegistryEntry<Potion>> entry = lookupPotion(path);
+            final Optional<Holder<Potion>> entry = lookupPotion(path);
             if (entry.isPresent()) {
                 return entry;
             }
@@ -95,23 +95,23 @@ public final class Potions {
      *
      * @return the status-effect entry, or {@code null} if unknown
      */
-    public static @Nullable RegistryEntry<StatusEffect> matchEffect(@Nullable String effectName) {
+    public static @Nullable Holder<MobEffect> matchEffect(@Nullable String effectName) {
         if (effectName == null || effectName.isEmpty()) {
             return null;
         }
         final Identifier id = Identifier.ofVanilla(PotionNames.convertLegacyEffectName(effectName));
-        return Registries.STATUS_EFFECT.getEntry(id).orElse(null);
+        return BuiltInRegistries.STATUS_EFFECT.getEntry(id).orElse(null);
     }
 
-    private static @NotNull Optional<RegistryEntry<Potion>> lookupPotion(@NotNull String path) {
+    private static @NotNull Optional<Holder<Potion>> lookupPotion(@NotNull String path) {
         // The registry hands back Optional<RegistryEntry.Reference<Potion>>; widen it so callers see
         // the interface rather than the implementation type.
-        return Registries.POTION.getEntry(Identifier.ofVanilla(path))
-                .map(entry -> (RegistryEntry<Potion>) entry);
+        return BuiltInRegistries.POTION.getEntry(Identifier.ofVanilla(path))
+                .map(entry -> (Holder<Potion>) entry);
     }
 
-    private static @NotNull String idOf(@NotNull RegistryEntry<Potion> entry) {
-        return Registries.POTION.getId(entry.value()).toString();
+    private static @NotNull String idOf(@NotNull Holder<Potion> entry) {
+        return BuiltInRegistries.POTION.getId(entry.value()).toString();
     }
 
     // --- Stack ⇄ PotionSpec -------------------------------------------------
@@ -124,7 +124,7 @@ public final class Potions {
      */
     public static @Nullable PotionSpec specOf(@NotNull PlatformItem item) {
         final ItemStack stack = item.unwrap();
-        final PotionContentsComponent contents = stack.get(DataComponentTypes.POTION_CONTENTS);
+        final PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
         if (contents == null) {
             return null;
         }
@@ -135,9 +135,9 @@ public final class Potions {
                 .orElse(false);
 
         final List<EffectSpec> customEffects = new ArrayList<>();
-        for (StatusEffectInstance effect : contents.customEffects()) {
+        for (MobEffectInstance effect : contents.customEffects()) {
             customEffects.add(new EffectSpec(
-                    Registries.STATUS_EFFECT.getId(effect.getEffectType().value()).toString(),
+                    BuiltInRegistries.STATUS_EFFECT.getId(effect.getEffectType().value()).toString(),
                     effect.getAmplifier(), effect.getDuration()));
         }
 
@@ -154,35 +154,35 @@ public final class Potions {
      */
     public static boolean applyContents(@NotNull PlatformItem item, @NotNull String basePotionId,
             @NotNull List<EffectSpec> effects) {
-        final Optional<RegistryEntry<Potion>> base = lookupId(basePotionId);
+        final Optional<Holder<Potion>> base = lookupId(basePotionId);
         if (base.isEmpty()) {
             return false;
         }
 
-        final List<StatusEffectInstance> instances = new ArrayList<>();
+        final List<MobEffectInstance> instances = new ArrayList<>();
         for (EffectSpec effect : effects) {
-            final RegistryEntry<StatusEffect> type = lookupEffectId(effect.effectId());
+            final Holder<MobEffect> type = lookupEffectId(effect.effectId());
             if (type == null) {
                 continue; // already logged by the config when it resolved the name.
             }
-            instances.add(new StatusEffectInstance(type, effect.duration(), effect.amplifier()));
+            instances.add(new MobEffectInstance(type, effect.duration(), effect.amplifier()));
         }
 
-        item.unwrap().set(DataComponentTypes.POTION_CONTENTS, new PotionContentsComponent(
+        item.unwrap().set(DataComponents.POTION_CONTENTS, new PotionContents(
                 Optional.of(base.get()), Optional.empty(), instances, Optional.empty()));
         return true;
     }
 
-    private static @NotNull Optional<RegistryEntry<Potion>> lookupId(@NotNull String namespacedId) {
+    private static @NotNull Optional<Holder<Potion>> lookupId(@NotNull String namespacedId) {
         final Identifier id = Identifier.tryParse(namespacedId);
         return id == null
                 ? Optional.empty()
-                : Registries.POTION.getEntry(id).map(entry -> (RegistryEntry<Potion>) entry);
+                : BuiltInRegistries.POTION.getEntry(id).map(entry -> (Holder<Potion>) entry);
     }
 
-    private static @Nullable RegistryEntry<StatusEffect> lookupEffectId(@NotNull String namespacedId) {
+    private static @Nullable Holder<MobEffect> lookupEffectId(@NotNull String namespacedId) {
         final Identifier id = Identifier.tryParse(namespacedId);
-        return id == null ? null : Registries.STATUS_EFFECT.getEntry(id).orElse(null);
+        return id == null ? null : BuiltInRegistries.STATUS_EFFECT.getEntry(id).orElse(null);
     }
 
     // --- Item identity ------------------------------------------------------

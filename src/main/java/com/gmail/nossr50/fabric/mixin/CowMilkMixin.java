@@ -1,12 +1,12 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.passive.AbstractCowEntity;
-import net.minecraft.entity.passive.GoatEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.cow.AbstractCow;
+import net.minecraft.world.entity.animal.goat.Goat;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -48,7 +48,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * per-animal harvest cooldown in the listener, not any game mechanic — and because that cooldown lives
  * inside {@code HusbandryListener#onMilked}, adding a target here puts it under the gate for free.
  */
-@Mixin({AbstractCowEntity.class, GoatEntity.class})
+@Mixin({AbstractCow.class, Goat.class})
 public abstract class CowMilkMixin {
 
     /**
@@ -66,15 +66,15 @@ public abstract class CowMilkMixin {
      * adds a second {@code exchangeStack} to either method this fails loudly at mixin-apply time rather
      * than quietly paying twice.
      */
-    @Inject(method = "interactMob(Lnet/minecraft/entity/player/PlayerEntity;"
-            + "Lnet/minecraft/util/Hand;)Lnet/minecraft/util/ActionResult;", allow = 1,
+    @Inject(method = "interactMob(Lnet/minecraft/world/entity/player/Player;"
+            + "Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;", allow = 1,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/item/ItemUsage;exchangeStack("
-                            + "Lnet/minecraft/item/ItemStack;"
-                            + "Lnet/minecraft/entity/player/PlayerEntity;"
-                            + "Lnet/minecraft/item/ItemStack;)Lnet/minecraft/item/ItemStack;"))
-    private void mcmmo$onMilked(PlayerEntity player, Hand hand,
-            CallbackInfoReturnable<ActionResult> cir) {
+                    target = "Lnet/minecraft/world/item/ItemUtils;exchangeStack("
+                            + "Lnet/minecraft/world/item/ItemStack;"
+                            + "Lnet/minecraft/world/entity/player/Player;"
+                            + "Lnet/minecraft/world/item/ItemStack;)Lnet/minecraft/world/item/ItemStack;"))
+    private void mcmmo$onMilked(Player player, InteractionHand hand,
+            CallbackInfoReturnable<InteractionResult> cir) {
         HusbandryListener.onMilked((Entity) (Object) this, player);
     }
 }

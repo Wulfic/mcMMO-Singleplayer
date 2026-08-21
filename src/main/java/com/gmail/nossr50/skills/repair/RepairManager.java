@@ -118,7 +118,7 @@ public class RepairManager extends SkillManager {
      * multiplier, the {@code Experience_Values.Repair.Base} factor, and the per-{@link
      * com.gmail.nossr50.datatypes.skills.MaterialType} Repair XP factor. MC-free (operates on the
      * MC-free {@link Repairable} + config getters), so the anvil listener rolls the RNG and mutates
-     * the live {@link net.minecraft.item.ItemStack}, then calls this for the deterministic award.
+     * the live {@link net.minecraft.world.item.ItemStack}, then calls this for the deterministic award.
      *
      * @param startDurability the item's durability (damage) before the repair
      * @param newDurability the item's durability (damage) after the repair

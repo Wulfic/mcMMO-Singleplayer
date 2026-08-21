@@ -9,16 +9,16 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.minecraft.block.entity.CampfireBlockEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.entity.CampfireBlockEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 
 /**
  * Cooking's own two seams: the <b>crafting grid</b> (a player taking a crafted food out of a result
@@ -103,18 +103,18 @@ public final class CookingListener {
      * way a player does; there is no other route into {@link #CAMPFIRE_OWNERS}, and a hook with no
      * test route into it is how a mechanic ends up wired to nothing.
      */
-    static ActionResult onUseBlock(PlayerEntity player, World world, Hand hand,
+    static InteractionResult onUseBlock(Player player, Level world, InteractionHand hand,
             BlockHitResult hitResult) {
-        if (!(player instanceof ServerPlayerEntity)) {
+        if (!(player instanceof ServerPlayer)) {
             // ⚠️ UseBlockCallback fires on BOTH logical sides and a client-side PASS is not neutral
             // — see the Repair anvil hook. The server copy does all the bookkeeping.
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         }
         final BlockPos pos = hitResult.getBlockPos();
         if (world.getBlockEntity(pos) instanceof CampfireBlockEntity) {
             CAMPFIRE_OWNERS.put(pos.asLong(), player.getUuid());
         }
-        return ActionResult.PASS; // observe only; never cancel the interaction.
+        return InteractionResult.PASS; // observe only; never cancel the interaction.
     }
 
     /**
@@ -149,7 +149,7 @@ public final class CookingListener {
      * @param result the stack vanilla is about to scatter
      * @return {@code result}, possibly incremented by Master Chef
      */
-    public static ItemStack onCampfireCook(ServerWorld world, BlockPos pos, ItemStack input,
+    public static ItemStack onCampfireCook(ServerLevel world, BlockPos pos, ItemStack input,
             ItemStack result) {
         if (input == result) {
             // ⚠️ Identity, not equality, and it is the precise test. litServerTick resolves the
@@ -203,8 +203,8 @@ public final class CookingListener {
      * @param result the crafted result stack (one item's worth — the count is in {@code items})
      * @param items  the slot's accumulated {@code amount}: how many items this take produced
      */
-    public static void onCraftedItemTaken(PlayerEntity player, ItemStack result, int items) {
-        if (!(player instanceof ServerPlayerEntity) || result.isEmpty() || items <= 0) {
+    public static void onCraftedItemTaken(Player player, ItemStack result, int items) {
+        if (!(player instanceof ServerPlayer) || result.isEmpty() || items <= 0) {
             return; // client-side copy, an empty slot, or nothing actually taken.
         }
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());

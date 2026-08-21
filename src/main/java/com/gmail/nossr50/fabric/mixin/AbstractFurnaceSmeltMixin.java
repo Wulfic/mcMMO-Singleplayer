@@ -2,11 +2,11 @@ package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.SmeltingListener;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -60,12 +60,12 @@ public abstract class AbstractFurnaceSmeltMixin {
             allow = 1,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/block/entity/AbstractFurnaceBlockEntity;craftRecipe("
-                            + "Lnet/minecraft/registry/DynamicRegistryManager;"
-                            + "Lnet/minecraft/recipe/RecipeEntry;"
-                            + "Lnet/minecraft/recipe/input/SingleStackRecipeInput;"
-                            + "Lnet/minecraft/util/collection/DefaultedList;I)Z"))
-    private static void mcmmo$onSmeltComplete(ServerWorld world, BlockPos pos, BlockState state,
+                    target = "Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;craftRecipe("
+                            + "Lnet/minecraft/core/RegistryAccess;"
+                            + "Lnet/minecraft/world/item/crafting/RecipeHolder;"
+                            + "Lnet/minecraft/world/item/crafting/SingleRecipeInput;"
+                            + "Lnet/minecraft/core/NonNullList;I)Z"))
+    private static void mcmmo$onSmeltComplete(ServerLevel world, BlockPos pos, BlockState state,
             AbstractFurnaceBlockEntity blockEntity, CallbackInfo ci) {
         final ItemStack input = blockEntity.getStack(0); // INPUT_SLOT_INDEX
         SmeltingListener.onFurnaceSmelt(world, pos, input);
@@ -76,9 +76,9 @@ public abstract class AbstractFurnaceSmeltMixin {
             allow = 1,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/block/entity/AbstractFurnaceBlockEntity;setLastRecipe("
-                            + "Lnet/minecraft/recipe/RecipeEntry;)V"))
-    private static void mcmmo$onSecondSmelt(ServerWorld world, BlockPos pos, BlockState state,
+                    target = "Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;setLastRecipe("
+                            + "Lnet/minecraft/world/item/crafting/RecipeHolder;)V"))
+    private static void mcmmo$onSecondSmelt(ServerLevel world, BlockPos pos, BlockState state,
             AbstractFurnaceBlockEntity blockEntity, CallbackInfo ci) {
         final ItemStack output = blockEntity.getStack(2); // OUTPUT_SLOT_INDEX
         SmeltingListener.onSmeltComplete(pos, output);
@@ -89,10 +89,10 @@ public abstract class AbstractFurnaceSmeltMixin {
             allow = 1,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/block/entity/AbstractFurnaceBlockEntity;getFuelTime("
-                            + "Lnet/minecraft/item/FuelRegistry;"
-                            + "Lnet/minecraft/item/ItemStack;)I"))
-    private static int mcmmo$applyFuelEfficiency(int burnTime, ServerWorld world, BlockPos pos,
+                    target = "Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;getFuelTime("
+                            + "Lnet/minecraft/world/level/block/entity/FuelValues;"
+                            + "Lnet/minecraft/world/item/ItemStack;)I"))
+    private static int mcmmo$applyFuelEfficiency(int burnTime, ServerLevel world, BlockPos pos,
             BlockState state, AbstractFurnaceBlockEntity blockEntity) {
         return SmeltingListener.boostFuelTime(burnTime, pos, blockEntity.getStack(0));
     }
@@ -112,15 +112,15 @@ public abstract class AbstractFurnaceSmeltMixin {
      * {@code getRecipesUsedAndDropExperience}, because that call site lives in a lambda.
      */
     @ModifyArg(
-            method = "dropExperience(Lnet/minecraft/server/world/ServerWorld;"
-                    + "Lnet/minecraft/util/math/Vec3d;IF)V",
+            method = "dropExperience(Lnet/minecraft/server/level/ServerLevel;"
+                    + "Lnet/minecraft/world/phys/Vec3;IF)V",
             allow = 1,
             index = 2,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/entity/ExperienceOrbEntity;spawn("
-                            + "Lnet/minecraft/server/world/ServerWorld;"
-                            + "Lnet/minecraft/util/math/Vec3d;I)V"))
+                    target = "Lnet/minecraft/world/entity/ExperienceOrb;spawn("
+                            + "Lnet/minecraft/server/level/ServerLevel;"
+                            + "Lnet/minecraft/world/phys/Vec3;I)V"))
     private static int mcmmo$boostVanillaXp(int amount) {
         return SmeltingListener.boostVanillaXp(amount);
     }

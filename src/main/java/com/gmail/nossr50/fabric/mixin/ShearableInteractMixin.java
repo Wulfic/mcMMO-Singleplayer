@@ -1,11 +1,11 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.HusbandryListener;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.mob.BoggedEntity;
-import net.minecraft.entity.passive.MooshroomEntity;
-import net.minecraft.entity.passive.SheepEntity;
-import net.minecraft.entity.passive.SnowGolemEntity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.skeleton.Bogged;
+import net.minecraft.world.entity.animal.cow.MushroomCow;
+import net.minecraft.world.entity.animal.sheep.Sheep;
+import net.minecraft.world.entity.animal.golem.SnowGolem;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -36,7 +36,7 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
  * <p>All four use exactly one {@code ItemStack.damage} call in {@code interactMob}
  * (jar-verified), so no {@code ordinal} is needed to disambiguate.
  */
-@Mixin({SheepEntity.class, MooshroomEntity.class, SnowGolemEntity.class, BoggedEntity.class})
+@Mixin({Sheep.class, MushroomCow.class, SnowGolem.class, Bogged.class})
 public abstract class ShearableInteractMixin {
 
     /**
@@ -47,11 +47,11 @@ public abstract class ShearableInteractMixin {
      * rather than assuming that whoever holds the interaction stash is the shearer.
      */
     @ModifyArg(
-            method = "interactMob(Lnet/minecraft/entity/player/PlayerEntity;"
-                    + "Lnet/minecraft/util/Hand;)Lnet/minecraft/util/ActionResult;", allow = 1,
+            method = "interactMob(Lnet/minecraft/world/entity/player/Player;"
+                    + "Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;", allow = 1,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/item/ItemStack;damage(ILnet/minecraft/entity/"
-                            + "LivingEntity;Lnet/minecraft/entity/EquipmentSlot;)V"),
+                    target = "Lnet/minecraft/world/item/ItemStack;damage(ILnet/minecraft/entity/"
+                            + "LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;)V"),
             index = 0)
     private int mcmmo$saveShearDurability(int damageAmount) {
         return HusbandryListener.onShearToolDamaged((LivingEntity) (Object) this, damageAmount);

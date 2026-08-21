@@ -4,12 +4,12 @@ import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.fabric.McMMOMod;
 import java.util.EnumSet;
 import java.util.List;
-import net.minecraft.entity.passive.TameableEntity;
-import net.minecraft.network.packet.s2c.play.PositionFlag;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.Relative;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -90,8 +90,8 @@ public final class PetFollowTeleport {
      * @param current   their position now
      * @param sameWorld whether {@code previous} was measured in the world they are in now
      */
-    public static void onPlayerMoved(@NotNull ServerPlayerEntity player, @Nullable Vec3d previous,
-            @NotNull Vec3d current, boolean sameWorld) {
+    public static void onPlayerMoved(@NotNull ServerPlayer player, @Nullable Vec3 previous,
+            @NotNull Vec3 current, boolean sameWorld) {
         if (previous == null || !sameWorld || !isTeleport(previous, current)) {
             return;
         }
@@ -110,7 +110,7 @@ public final class PetFollowTeleport {
      * measures horizontally only — the tracker is billing horizontal travel, whereas a vertical
      * {@code /tp} is every bit as much a teleport.
      */
-    static boolean isTeleport(@NotNull Vec3d previous, @NotNull Vec3d current) {
+    static boolean isTeleport(@NotNull Vec3 previous, @NotNull Vec3 current) {
         final double limit = PlayerMovementTracker.TELEPORT_DELTA;
         return current.squaredDistanceTo(previous) > limit * limit;
     }
@@ -120,7 +120,7 @@ public final class PetFollowTeleport {
      *
      * @return how many pets were moved, for the tests to assert on
      */
-    static int bringPetsFrom(@NotNull ServerPlayerEntity player, @NotNull Vec3d from, double radius) {
+    static int bringPetsFrom(@NotNull ServerPlayer player, @NotNull Vec3 from, double radius) {
         // ⚠️ The cast is load-bearing on the older bands — do NOT "simplify" it away.
         // ServerPlayerEntity's covariant ServerWorld override of getEntityWorld() was added in
         // 1.21.9. On 1.21 – 1.21.5 only Entity's World-returning form exists, so the bare
@@ -131,16 +131,16 @@ public final class PetFollowTeleport {
         // Entity#getEntityWorld() at all — it spells the accessor getWorld() — so that band cannot
         // take this line and carries its own. Every other band can, which is why the cast is
         // written here instead of being rediscovered at each cut.
-        final ServerWorld world = (ServerWorld) player.getEntityWorld();
+        final ServerLevel world = (ServerLevel) player.getEntityWorld();
         if (world == null) {
             return 0;
         }
-        final Box searchBox = Box.of(from, radius * 2, radius * 2, radius * 2);
-        final List<TameableEntity> pets = world.getEntitiesByClass(TameableEntity.class, searchBox,
+        final AABB searchBox = AABB.of(from, radius * 2, radius * 2, radius * 2);
+        final List<TamableAnimal> pets = world.getEntitiesByClass(TamableAnimal.class, searchBox,
                 pet -> isFollower(pet, player));
 
         int moved = 0;
-        for (TameableEntity pet : pets) {
+        for (TamableAnimal pet : pets) {
             if (bring(pet, player)) {
                 moved++;
             }
@@ -156,7 +156,7 @@ public final class PetFollowTeleport {
      * makes "sit means stay" hold here without a second implementation to keep in step — a pet told to
      * wait somewhere must not be yanked across the world by its owner's ender pearl.
      */
-    static boolean isFollower(@NotNull TameableEntity pet, @NotNull ServerPlayerEntity player) {
+    static boolean isFollower(@NotNull TamableAnimal pet, @NotNull ServerPlayer player) {
         return pet.isAlive() && pet.isTamed() && pet.isOwner(player) && !pet.cannotFollowOwner();
     }
 
@@ -167,7 +167,7 @@ public final class PetFollowTeleport {
      * because it is the same question vanilla asked before it: a lingering yes means the placement
      * search found nowhere to put the pet, not that the pet did not need moving.
      */
-    private static boolean bring(@NotNull TameableEntity pet, @NotNull ServerPlayerEntity player) {
+    private static boolean bring(@NotNull TamableAnimal pet, @NotNull ServerPlayer player) {
         pet.tryTeleportToOwner();
         if (!pet.shouldTryTeleportToOwner()) {
             return true; // Vanilla found it a spot beside the player.
@@ -183,10 +183,10 @@ public final class PetFollowTeleport {
             return false;
         }
 
-        final Vec3d destination = player.getEntityPos();
+        final Vec3 destination = player.getEntityPos();
         // Cast load-bearing below 1.21.9, and not usable on 1.21.6 – 1.21.8 — see bringPetsFrom.
-        final boolean placed = pet.teleport((ServerWorld) player.getEntityWorld(), destination.x, destination.y,
-                destination.z, EnumSet.noneOf(PositionFlag.class), pet.getYaw(), pet.getPitch(),
+        final boolean placed = pet.teleport((ServerLevel) player.getEntityWorld(), destination.x, destination.y,
+                destination.z, EnumSet.noneOf(Relative.class), pet.getYaw(), pet.getPitch(),
                 false);
         if (!placed) {
             McMMOMod.LOGGER.warn("Pet follow: could not place {} on owner {} at {}; left behind.",

@@ -1,11 +1,11 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.skills.archery.Archery;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.BowItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BowItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -33,12 +33,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BowShootMixin {
 
     @Inject(
-            method = "onStoppedUsing(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;"
-                    + "Lnet/minecraft/entity/LivingEntity;I)Z", allow = 1,
+            method = "onStoppedUsing(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;"
+                    + "Lnet/minecraft/world/entity/LivingEntity;I)Z", allow = 1,
             at = @At("HEAD"))
-    private void mcmmo$captureBowForce(ItemStack stack, World world, LivingEntity user,
+    private void mcmmo$captureBowForce(ItemStack stack, Level world, LivingEntity user,
             int remainingUseTicks, CallbackInfoReturnable<Boolean> cir) {
-        if (!(user instanceof PlayerEntity)) {
+        if (!(user instanceof Player)) {
             return;
         }
         final BowItem bow = (BowItem) (Object) this;
@@ -47,10 +47,10 @@ public abstract class BowShootMixin {
     }
 
     @Inject(
-            method = "onStoppedUsing(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;"
-                    + "Lnet/minecraft/entity/LivingEntity;I)Z", allow = 4,
+            method = "onStoppedUsing(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;"
+                    + "Lnet/minecraft/world/entity/LivingEntity;I)Z", allow = 4,
             at = @At("RETURN"))
-    private void mcmmo$clearBowForce(ItemStack stack, World world, LivingEntity user,
+    private void mcmmo$clearBowForce(ItemStack stack, Level world, LivingEntity user,
             int remainingUseTicks, CallbackInfoReturnable<Boolean> cir) {
         Archery.endBowShot();
     }

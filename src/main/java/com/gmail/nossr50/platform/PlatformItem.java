@@ -1,15 +1,15 @@
 package com.gmail.nossr50.platform;
 
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ItemEnchantmentsComponent;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.Enchantments;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.core.Holder;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -52,7 +52,7 @@ public final class PlatformItem {
 
     /** Registry id of the item, e.g. {@code minecraft:diamond_pickaxe}. */
     public @NotNull Identifier getTypeId() {
-        return Registries.ITEM.getId(handle.getItem());
+        return BuiltInRegistries.ITEM.getId(handle.getItem());
     }
 
     /**
@@ -108,7 +108,7 @@ public final class PlatformItem {
      * durability changes are a no-op on them.
      */
     public boolean isUnbreakable() {
-        return handle.contains(DataComponentTypes.UNBREAKABLE);
+        return handle.contains(DataComponents.UNBREAKABLE);
     }
 
     /**
@@ -117,12 +117,12 @@ public final class PlatformItem {
      * and matching the {@link RegistryKey} — no registry-manager access is needed, so this is callable
      * without a world context.
      */
-    public int getEnchantmentLevel(@NotNull RegistryKey<Enchantment> enchantmentKey) {
+    public int getEnchantmentLevel(@NotNull ResourceKey<Enchantment> enchantmentKey) {
         if (!handle.hasEnchantments()) {
             return 0;
         }
-        ItemEnchantmentsComponent enchantments = handle.getEnchantments();
-        for (RegistryEntry<Enchantment> entry : enchantments.getEnchantments()) {
+        ItemEnchantments enchantments = handle.getEnchantments();
+        for (Holder<Enchantment> entry : enchantments.getEnchantments()) {
             if (entry.matchesKey(enchantmentKey)) {
                 return enchantments.getLevel(entry);
             }

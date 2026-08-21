@@ -58,7 +58,7 @@ import org.junit.jupiter.api.Test;
  * as an {@code initializationError} on this class, <em>not</em> through the assertion message above:
  * {@code LivingEntity} is loaded by the shared {@code Bootstrap.initialize()} in {@code @BeforeAll},
  * so it has already failed to transform before any test body runs. The report reads
- * <i>"Mixin transformation of net.minecraft.entity.LivingEntity failed"</i>, which names the target
+ * <i>"Mixin transformation of net.minecraft.world.entity.LivingEntity failed"</i>, which names the target
  * but not the injector; the {@code InvalidInjectionException} detail goes to the Mixin log.
  * {@code scripts/mixin-allow-audit.py} turns that class name into the offending injector in one step.
  *
@@ -197,7 +197,7 @@ class MixinApplicationTest {
      * <p>Two shapes both occur in this package and a parser that handles only the first quietly
      * skips the others — which would shrink the tested population without failing anything:
      * {@code @Mixin(BeehiveBlock.class)} needs the file's imports, while
-     * {@code @Mixin(net.minecraft.block.BeehiveBlock.class)} is already qualified. Nested types must
+     * {@code @Mixin(net.minecraft.world.level.block.BeehiveBlock.class)} is already qualified. Nested types must
      * also come out as {@code Outer$Inner}, not {@code Outer.Inner}, or {@code Class.forName} fails.
      */
     private static String resolve(String token, Set<String> imports) {

@@ -2,13 +2,13 @@ package com.gmail.nossr50.platform;
 
 import com.gmail.nossr50.skills.hunter.HunterManager;
 import com.gmail.nossr50.util.text.ConfigStringUtils;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.SpawnGroup;
-import net.minecraft.entity.attribute.DefaultAttributeContainer;
-import net.minecraft.entity.attribute.DefaultAttributeRegistry;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.registry.Registries;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
+import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -65,19 +65,19 @@ public final class MobTiers {
         // needs an entity, and it agrees with SpawnGroup.MONSTER for every vanilla mob anyway
         // (including the awkward ones: shulker is a GolemEntity, hoglin an AnimalEntity, ghast a
         // FlyingEntity, and all three are SpawnGroup.MONSTER).
-        final boolean hostile = type.getSpawnGroup() == SpawnGroup.MONSTER;
+        final boolean hostile = type.getSpawnGroup() == MobCategory.MONSTER;
 
         double maxHealth = 0.0D;
         double attackDamage = 0.0D;
-        if (DefaultAttributeRegistry.hasDefinitionFor(type)) {
+        if (DefaultAttributes.hasDefinitionFor(type)) {
             @SuppressWarnings("unchecked")
-            final DefaultAttributeContainer attributes =
-                    DefaultAttributeRegistry.get((EntityType<? extends LivingEntity>) type);
-            maxHealth = attributes.getBaseValue(EntityAttributes.MAX_HEALTH);
+            final AttributeSupplier attributes =
+                    DefaultAttributes.get((EntityType<? extends LivingEntity>) type);
+            maxHealth = attributes.getBaseValue(Attributes.MAX_HEALTH);
             // has() first: ATTACK_DAMAGE is genuinely absent on several types (the ender dragon has
             // none at all), and getBaseValue on a missing attribute is not a question worth asking.
-            if (attributes.has(EntityAttributes.ATTACK_DAMAGE)) {
-                attackDamage = attributes.getBaseValue(EntityAttributes.ATTACK_DAMAGE);
+            if (attributes.has(Attributes.ATTACK_DAMAGE)) {
+                attackDamage = attributes.getBaseValue(Attributes.ATTACK_DAMAGE);
             }
         }
 
@@ -104,6 +104,6 @@ public final class MobTiers {
      */
     static @NotNull String configKeyOf(@NotNull EntityType<?> type) {
         return ConfigStringUtils.getConfigEntityTypeString(
-                Registries.ENTITY_TYPE.getId(type).getPath());
+                BuiltInRegistries.ENTITY_TYPE.getId(type).getPath());
     }
 }

@@ -1,9 +1,9 @@
 package com.gmail.nossr50.fabric.mixin;
 
 import com.gmail.nossr50.fabric.listeners.CookingListener;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.slot.CraftingResultSlot;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.inventory.ResultSlot;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -32,13 +32,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * <p>No environment guard is used — {@link CookingListener#onCraftedItemTaken} bails on its first
  * line for a non-{@code ServerPlayerEntity}, which is the client's own copy of the screen handler.
  */
-@Mixin(CraftingResultSlot.class)
+@Mixin(ResultSlot.class)
 public abstract class CraftingResultSlotMixin {
 
     /** The slot's owner. Vanilla reads this same field to attribute the craft. */
     @Shadow
     @Final
-    private PlayerEntity player;
+    private Player player;
 
     /**
      * How many items this take produced. Accumulated by {@code takeStack} and
@@ -48,7 +48,7 @@ public abstract class CraftingResultSlotMixin {
     @Shadow
     private int amount;
 
-    @Inject(method = "onCrafted(Lnet/minecraft/item/ItemStack;)V", allow = 1, at = @At("HEAD"))
+    @Inject(method = "onCrafted(Lnet/minecraft/world/item/ItemStack;)V", allow = 1, at = @At("HEAD"))
     private void mcmmo$onCraftedItemTaken(ItemStack stack, CallbackInfo ci) {
         CookingListener.onCraftedItemTaken(player, stack, amount);
     }

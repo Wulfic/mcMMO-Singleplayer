@@ -27,22 +27,22 @@ import com.gmail.nossr50.util.McTestRegistries;
 import com.gmail.nossr50.util.player.UserManager;
 import java.nio.file.Path;
 import java.util.UUID;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.TntEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.damage.DamageTypes;
-import net.minecraft.entity.decoration.ArmorStandEntity;
-import net.minecraft.entity.mob.ZombieEntity;
-import net.minecraft.entity.passive.WolfEntity;
-import net.minecraft.entity.projectile.ArrowEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.PrimedTnt;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.world.entity.projectile.arrow.Arrow;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,7 +89,7 @@ class EntityDamageListenerHunterTest {
     private UUID playerId;
     private PlayerProfile profile;
     private McMMOPlayer mmoPlayer;
-    private ServerPlayerEntity attacker;
+    private ServerPlayer attacker;
     private AdvancedConfig advancedConfig;
 
     @BeforeEach
@@ -150,13 +150,13 @@ class EntityDamageListenerHunterTest {
      * {@code MeleeWeapon.OTHER}, so the weapon arm bows out and the arithmetic under test is not
      * buried under a Swords bonus.
      */
-    private ServerPlayerEntity player() {
+    private ServerPlayer player() {
         final MinecraftServer server = mock(MinecraftServer.class);
         lenient().when(server.getTicks()).thenReturn(10_000);
-        final ServerWorld world = mock(ServerWorld.class);
+        final ServerLevel world = mock(ServerLevel.class);
         lenient().when(world.getServer()).thenReturn(server);
 
-        final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
+        final ServerPlayer player = mock(ServerPlayer.class);
         lenient().when(player.getUuid()).thenReturn(playerId);
         lenient().when(player.getEntityWorld()).thenReturn(world);
         lenient().when(player.getMainHandStack()).thenReturn(new ItemStack(Items.DIRT));
@@ -165,8 +165,8 @@ class EntityDamageListenerHunterTest {
         return player;
     }
 
-    private static ZombieEntity zombie() {
-        final ZombieEntity zombie = mock(ZombieEntity.class);
+    private static Zombie zombie() {
+        final Zombie zombie = mock(Zombie.class);
         Mockito.doReturn(EntityType.ZOMBIE).when(zombie).getType();
         lenient().when(zombie.getUuid()).thenReturn(UUID.randomUUID());
         return zombie;
@@ -184,7 +184,7 @@ class EntityDamageListenerHunterTest {
 
     /** An arrow loosed by {@code owner}, credited to {@code responsible}. */
     private DamageSource arrow(Entity responsible, Entity owner) {
-        final ArrowEntity projectile = mock(ArrowEntity.class);
+        final Arrow projectile = mock(Arrow.class);
         lenient().when(projectile.getOwner()).thenReturn(owner);
 
         final DamageSource source = mock(DamageSource.class);
@@ -299,7 +299,7 @@ class EntityDamageListenerHunterTest {
         // Ruled out explicitly in D-HU4: that is the wolf's damage, and Taming's Sharpened Claws and
         // Gore already own it. Adding Hunter would double-dip on a single bite.
         seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
-        final WolfEntity wolf = mock(WolfEntity.class);
+        final Wolf wolf = mock(Wolf.class);
         final DamageSource bite = mock(DamageSource.class);
         lenient().when(bite.getAttacker()).thenReturn(wolf);
         lenient().when(bite.getSource()).thenReturn(wolf);
@@ -314,7 +314,7 @@ class EntityDamageListenerHunterTest {
         seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
 
         assertEquals(10F, EntityDamageListener.applyHunterMastery(
-                zombie(), arrow(attacker, mock(ZombieEntity.class)), 10F), EPSILON);
+                zombie(), arrow(attacker, mock(Zombie.class)), 10F), EPSILON);
     }
 
     @Test
@@ -324,7 +324,7 @@ class EntityDamageListenerHunterTest {
         seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
         final DamageSource blast = mock(DamageSource.class);
         lenient().when(blast.getAttacker()).thenReturn(attacker);
-        lenient().when(blast.getSource()).thenReturn(mock(TntEntity.class));
+        lenient().when(blast.getSource()).thenReturn(mock(PrimedTnt.class));
         lenient().when(blast.isOf(any())).thenReturn(false);
 
         assertEquals(10F, EntityDamageListener.applyHunterMastery(zombie(), blast, 10F), EPSILON);
@@ -346,7 +346,7 @@ class EntityDamageListenerHunterTest {
         seedKills("minecraft:armor_stand", TOP_TIER_KILLS);
 
         assertEquals(10F, EntityDamageListener.applyHunterMastery(
-                mock(ArmorStandEntity.class), melee(), 10F), EPSILON);
+                mock(ArmorStand.class), melee(), 10F), EPSILON);
     }
 
     /**
@@ -405,7 +405,7 @@ class EntityDamageListenerHunterTest {
         // still a zombie; refusing the bonus there closes no farm (the farm banks nothing either way)
         // while making the damage a player sees depend on an invisible property of their target.
         seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
-        final ZombieEntity farmed = zombie();
+        final Zombie farmed = zombie();
         when(farmed.getAttached(McMMOAttachments.MOB_ORIGIN))
                 .thenReturn(MobOrigin.SPAWNER.storageKey());
 
@@ -427,7 +427,7 @@ class EntityDamageListenerHunterTest {
         // change. Neither side's own tests would notice, because each is self-consistent. So the
         // kills here are banked through the REAL AFTER_DEATH handler and spent through the REAL
         // damage arm, with nothing in between agreeing on a literal.
-        final ZombieEntity victim = zombie();
+        final Zombie victim = zombie();
         for (int i = 0; i < HunterManager.MASTERY_THRESHOLDS[0]; i++) {
             HunterListener.onDeath(victim, melee());
         }
@@ -452,7 +452,7 @@ class EntityDamageListenerHunterTest {
         final boolean allowed = EntityDamageListener.onAllowDamage(target, melee(), 1F);
         // attacker is a raw ServerPlayerEntity here, so this is vanilla's own sendMessage(Text) --
         // not PlatformPlayer's §-string overload.
-        final ArgumentCaptor<Text> sent = ArgumentCaptor.forClass(Text.class);
+        final ArgumentCaptor<Component> sent = ArgumentCaptor.forClass(Component.class);
         Mockito.verify(attacker, Mockito.atMost(1)).sendMessage(sent.capture());
         return new Inspection(!allowed,
                 sent.getAllValues().isEmpty() ? "" : sent.getValue().getString());
@@ -583,7 +583,7 @@ class EntityDamageListenerHunterTest {
         // permanently zero — a readout there would be all cost and no information.
         readyToInspect();
 
-        assertFalse(inspect(mock(ArmorStandEntity.class)).cancelled());
+        assertFalse(inspect(mock(ArmorStand.class)).cancelled());
     }
 
     @Test

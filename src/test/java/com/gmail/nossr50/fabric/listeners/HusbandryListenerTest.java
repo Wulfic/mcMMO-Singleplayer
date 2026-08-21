@@ -40,21 +40,21 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.entity.passive.ArmadilloEntity;
-import net.minecraft.entity.passive.CowEntity;
-import net.minecraft.entity.passive.PassiveEntity;
-import net.minecraft.entity.passive.PigEntity;
-import net.minecraft.entity.passive.SheepEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.projectile.thrown.EggEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.Box;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.armadillo.Armadillo;
+import net.minecraft.world.entity.animal.cow.Cow;
+import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.world.entity.animal.pig.Pig;
+import net.minecraft.world.entity.animal.sheep.Sheep;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEgg;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.AABB;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -81,7 +81,7 @@ class HusbandryListenerTest {
     }
 
     /** A one-block hitbox at the origin — the sweep expands this by the Multi-Breed radius. */
-    private static final Box UNIT_BOX = new Box(0, 0, 0, 1, 1, 1);
+    private static final AABB UNIT_BOX = new AABB(0, 0, 0, 1, 1, 1);
 
     /**
      * Stands in for whatever a shear loot table produced.
@@ -101,23 +101,23 @@ class HusbandryListenerTest {
     private UUID uuid;
     private McMMOPlayer mmoPlayer;
     private HusbandryManager husbandry;
-    private ServerWorld world;
+    private ServerLevel world;
 
     /** Every animal handed to {@code getEntitiesByClass}, regardless of the box or predicate. */
-    private final List<AnimalEntity> worldAnimals = new ArrayList<>();
+    private final List<Animal> worldAnimals = new ArrayList<>();
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
         uuid = UUID.randomUUID();
-        world = mock(ServerWorld.class);
+        world = mock(ServerLevel.class);
 
         // Answer the sweep from worldAnimals, applying the caller's own predicate — that predicate
         // IS the candidate filter under test, so running it here rather than stubbing past it is
         // what makes the eligibility assertions mean anything.
-        lenient().when(world.getEntitiesByClass(any(Class.class), any(Box.class), any()))
+        lenient().when(world.getEntitiesByClass(any(Class.class), any(AABB.class), any()))
                 .thenAnswer(invocation -> {
-                    final java.util.function.Predicate<AnimalEntity> filter =
+                    final java.util.function.Predicate<Animal> filter =
                             invocation.getArgument(2);
                     return worldAnimals.stream().filter(filter).toList();
                 });
@@ -165,19 +165,19 @@ class HusbandryListenerTest {
         McMMOMod.getTransientEntityTracker().cleanupPlayer(uuid);
     }
 
-    private ServerPlayerEntity breeder() {
-        final ServerPlayerEntity player = mock(ServerPlayerEntity.class);
+    private ServerPlayer breeder() {
+        final ServerPlayer player = mock(ServerPlayer.class);
         lenient().when(player.getUuid()).thenReturn(uuid);
         return player;
     }
 
     /** An adult, off cooldown, not already courting — everything Multi-Breed looks for. */
-    private AnimalEntity eligibleCow() {
+    private Animal eligibleCow() {
         return cow(true, 0, true);
     }
 
-    private AnimalEntity cow(boolean alive, int breedingAge, boolean canEat) {
-        final CowEntity animal = mock(CowEntity.class);
+    private Animal cow(boolean alive, int breedingAge, boolean canEat) {
+        final Cow animal = mock(Cow.class);
         // doReturn, not when/thenReturn: getType() is declared EntityType<?>, and the wildcard
         // capture makes the type-safe form uncompilable against a concrete EntityType<CowEntity>.
         Mockito.doReturn(EntityType.COW).when(animal).getType();
@@ -192,8 +192,8 @@ class HusbandryListenerTest {
         return animal;
     }
 
-    private AnimalEntity pig() {
-        final PigEntity animal = mock(PigEntity.class);
+    private Animal pig() {
+        final Pig animal = mock(Pig.class);
         Mockito.doReturn(EntityType.PIG).when(animal).getType();
         lenient().when(animal.isAlive()).thenReturn(true);
         lenient().when(animal.getBreedingAge()).thenReturn(0);
@@ -209,8 +209,8 @@ class HusbandryListenerTest {
     }
 
     /** A calf with a breeding age and a working attachment slot for the bred-by marker. */
-    private PassiveEntity calf(int breedingAge) {
-        final CowEntity baby = mock(CowEntity.class);
+    private AgeableMob calf(int breedingAge) {
+        final Cow baby = mock(Cow.class);
         Mockito.doReturn(EntityType.COW).when(baby).getType();
         lenient().when(baby.getBreedingAge()).thenReturn(breedingAge);
         lenient().when(baby.getEntityWorld()).thenReturn(world);
@@ -241,8 +241,8 @@ class HusbandryListenerTest {
     }
 
     /** Breed a calf and hand back the marked child, with acceleration stubbed out as a no-op. */
-    private PassiveEntity bredCalf() {
-        final PassiveEntity child = calf(-24000);
+    private AgeableMob bredCalf() {
+        final AgeableMob child = calf(-24000);
         lenient().when(husbandry.applyGrowthAcceleration(anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
@@ -272,7 +272,7 @@ class HusbandryListenerTest {
     @Test
     void aBreedingByAnUntrackedPlayerPaysNothing() {
         UserManager.cleanupPlayer(mmoPlayer);
-        final ServerPlayerEntity stranger = mock(ServerPlayerEntity.class);
+        final ServerPlayer stranger = mock(ServerPlayer.class);
         lenient().when(stranger.getUuid()).thenReturn(UUID.randomUUID());
 
         HusbandryListener.onAnimalsBred(stranger, eligibleCow(), eligibleCow(), null);
@@ -286,7 +286,7 @@ class HusbandryListenerTest {
      * Registers {@code animal} with the transient tracker as a live Call-of-the-Wild summon, the way
      * {@code CallOfTheWildHandler} does for a real one.
      */
-    private void registerAsSummon(AnimalEntity animal) {
+    private void registerAsSummon(Animal animal) {
         final UUID summonId = UUID.randomUUID();
         lenient().when(animal.getUuid()).thenReturn(summonId);
         final TrackedSummon summon = mock(TrackedSummon.class);
@@ -299,7 +299,7 @@ class HusbandryListenerTest {
     @Test
     void breedingYourOwnCallOfTheWildSummonPaysNothing(@TempDir Path dir) {
         McMMOMod.setExperienceConfig(new ExperienceConfig(dir));
-        final AnimalEntity summon = eligibleCow();
+        final Animal summon = eligibleCow();
         registerAsSummon(summon);
 
         HusbandryListener.onAnimalsBred(breeder(), summon, eligibleCow(), calf(-24000));
@@ -314,9 +314,9 @@ class HusbandryListenerTest {
         // The GitHub #3 lesson, applied to this gate: if the calf were still claimed, the raise verb
         // would pay for it when it grew up and the gate would be a twenty-minute delay, not a gate.
         McMMOMod.setExperienceConfig(new ExperienceConfig(dir));
-        final AnimalEntity summon = eligibleCow();
+        final Animal summon = eligibleCow();
         registerAsSummon(summon);
-        final PassiveEntity child = calf(-24000);
+        final AgeableMob child = calf(-24000);
 
         HusbandryListener.onAnimalsBred(breeder(), summon, eligibleCow(), child);
 
@@ -326,7 +326,7 @@ class HusbandryListenerTest {
     @Test
     void theSummonMayBeEitherParent(@TempDir Path dir) {
         McMMOMod.setExperienceConfig(new ExperienceConfig(dir));
-        final AnimalEntity summon = eligibleCow();
+        final Animal summon = eligibleCow();
         registerAsSummon(summon);
 
         // Mate side, not just the parent side -- the check has to be on both or feeding the summon
@@ -342,7 +342,7 @@ class HusbandryListenerTest {
         Files.writeString(dir.resolve("experience.yml"),
                 "ExploitFix:\n    COTWBreeding: false\n", StandardCharsets.UTF_8);
         McMMOMod.setExperienceConfig(new ExperienceConfig(dir));
-        final AnimalEntity summon = eligibleCow();
+        final Animal summon = eligibleCow();
         registerAsSummon(summon);
 
         HusbandryListener.onAnimalsBred(breeder(), summon, eligibleCow(), calf(-24000));
@@ -375,7 +375,7 @@ class HusbandryListenerTest {
 
     @Test
     void anAnimalYouBredPaysTheRaiseVerbWhenItGrowsUp() {
-        final PassiveEntity child = bredCalf();
+        final AgeableMob child = bredCalf();
 
         // -1 -> 0 is exactly how vanilla's tickMovement walks a baby into adulthood.
         HusbandryListener.onBreedingAgeChange(child, -1, 0);
@@ -390,7 +390,7 @@ class HusbandryListenerTest {
         // a real, invisible condition on the payout. Asserting the attachment write specifically —
         // rather than just that the raise verb pays — is what pins the marker to a home that gets
         // written into the world save.
-        final PassiveEntity child = calf(-24000);
+        final AgeableMob child = calf(-24000);
         lenient().when(husbandry.applyGrowthAcceleration(anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -404,7 +404,7 @@ class HusbandryListenerTest {
         // The other half of HU16, from the read side: nothing bred this animal during this session.
         // Its marker arrived with the entity off disk, which is exactly what a reloaded world hands
         // the listener. Before HU16 was reversed this calf was indistinguishable from a wild one.
-        final PassiveEntity reloadedCalf = calf(-1);
+        final AgeableMob reloadedCalf = calf(-1);
         reloadedCalf.setAttached(McMMOAttachments.BRED_BY, uuid);
 
         HusbandryListener.onBreedingAgeChange(reloadedCalf, -1, 0);
@@ -415,7 +415,7 @@ class HusbandryListenerTest {
     void anAnimalNobodyBredPaysNothingWhenItGrowsUp() {
         // The marker gate. Without it every wild baby in every loaded chunk coming of age would pay
         // somebody -- and there is no somebody to pay.
-        final PassiveEntity wildCalf = calf(-1);
+        final AgeableMob wildCalf = calf(-1);
 
         HusbandryListener.onBreedingAgeChange(wildCalf, -1, 0);
         verify(husbandry, never()).onRaise(any());
@@ -427,7 +427,7 @@ class HusbandryListenerTest {
         // through setBreedingAge, so a baby loading from a chunk goes from the field default of 0 to
         // its real negative age. Without the gate, flying away and back would re-pay the raise verb
         // on every single chunk load, for every baby you had ever bred.
-        final PassiveEntity child = bredCalf();
+        final AgeableMob child = bredCalf();
 
         for (int i = 0; i < 5; i++) {
             HusbandryListener.onBreedingAgeChange(child, 0, -1200);
@@ -439,7 +439,7 @@ class HusbandryListenerTest {
     void anAdultTurnedBackIntoABabyPaysNothing() {
         // The same gate's other half: setBreedingAge runs its transition branch when an adult
         // becomes a baby too (a spawn egg, or setBaby(true)).
-        final PassiveEntity child = bredCalf();
+        final AgeableMob child = bredCalf();
 
         HusbandryListener.onBreedingAgeChange(child, 0, -24000);
         verify(husbandry, never()).onRaise(any());
@@ -449,7 +449,7 @@ class HusbandryListenerTest {
     void theRaiseVerbPaysAtMostOncePerAnimal() {
         // The marker is consumed as it is read, so a second crossing has nobody left to credit.
         // Without that, anything that drove the animal back across the boundary would pay again.
-        final PassiveEntity child = bredCalf();
+        final AgeableMob child = bredCalf();
 
         HusbandryListener.onBreedingAgeChange(child, -1, 0);
         HusbandryListener.onBreedingAgeChange(child, -1, 0);
@@ -464,7 +464,7 @@ class HusbandryListenerTest {
         // with the cap's own message saying it had been stopped. Brood already sets this precedent
         // for exactly the same reason (a hatched chick is deliberately unmarked).
         when(husbandry.onBreed(any(), anyLong())).thenReturn(REFUSED);
-        final PassiveEntity child = calf(-24000);
+        final AgeableMob child = calf(-24000);
         lenient().when(husbandry.applyGrowthAcceleration(anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -482,7 +482,7 @@ class HusbandryListenerTest {
         // make a refused breeding feel arbitrarily punished. Asserted off the reference point above:
         // without this, "marks nothing" could have been implemented as "does nothing".
         when(husbandry.onBreed(any(), anyLong())).thenReturn(REFUSED);
-        final PassiveEntity child = calf(-24000);
+        final AgeableMob child = calf(-24000);
         when(husbandry.applyGrowthAcceleration(-24000)).thenReturn(-16800);
 
         HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
@@ -494,9 +494,9 @@ class HusbandryListenerTest {
         // Otherwise Twins is a hole straight through the cap: the refused breeding's own calf pays
         // nobody, and its sibling quietly pays the full raise verb twenty minutes later.
         when(husbandry.onBreed(any(), anyLong())).thenReturn(REFUSED);
-        final PassiveEntity child = calf(-24000);
-        final PassiveEntity twin = calf(-24000);
-        final AnimalEntity parent = eligibleCow();
+        final AgeableMob child = calf(-24000);
+        final AgeableMob twin = calf(-24000);
+        final Animal parent = eligibleCow();
         lenient().when(husbandry.applyGrowthAcceleration(anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(husbandry.rollTwins()).thenReturn(true);
@@ -513,9 +513,9 @@ class HusbandryListenerTest {
     void aTwinIsMarkedTooSoItAlsoPaysWhenItGrowsUp() {
         // A twin that carried no marker would be the only baby in the game whose breeder could never
         // be paid for raising it -- which reads as a bug rather than as balance.
-        final PassiveEntity child = calf(-24000);
-        final PassiveEntity twin = calf(-24000);
-        final AnimalEntity parent = eligibleCow();
+        final AgeableMob child = calf(-24000);
+        final AgeableMob twin = calf(-24000);
+        final Animal parent = eligibleCow();
         lenient().when(husbandry.applyGrowthAcceleration(anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(husbandry.rollTwins()).thenReturn(true);
@@ -531,7 +531,7 @@ class HusbandryListenerTest {
 
     @Test
     void acceleratedGrowthShortensTheNewbornsChildhoodAtBirth() {
-        final PassiveEntity child = calf(-24000);
+        final AgeableMob child = calf(-24000);
         when(husbandry.applyGrowthAcceleration(-24000)).thenReturn(-16800);
 
         HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
@@ -542,7 +542,7 @@ class HusbandryListenerTest {
     void anUnchangedAgeIsNotWrittenBack() {
         // setBreedingAge is not a plain setter -- it is the method the raise hook watches. Writing
         // an unchanged value would fire a pointless transition check on every birth.
-        final PassiveEntity child = calf(-24000);
+        final AgeableMob child = calf(-24000);
         when(husbandry.applyGrowthAcceleration(-24000)).thenReturn(-24000);
 
         HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
@@ -553,9 +553,9 @@ class HusbandryListenerTest {
 
     @Test
     void feedingABabyYouAreInteractingWithPaysTheFeedVerb() {
-        final PassiveEntity baby = calf(-24000);
+        final AgeableMob baby = calf(-24000);
         when(husbandry.applyFeedBonus(120)).thenReturn(240);
-        final ServerPlayerEntity player = breeder();
+        final ServerPlayer player = breeder();
 
         HusbandryListener.beginPlayerInteraction(player, baby);
         try {
@@ -573,10 +573,10 @@ class HusbandryListenerTest {
         // ever sent, so the sub-skill's active half was invisible -- the baby just grew a little
         // more, with nothing to attribute it to. NotificationManager gates every send on
         // useChatNotifications(), which makes that call the seam for "a message was attempted".
-        final PassiveEntity baby = calf(-24000);
+        final AgeableMob baby = calf(-24000);
         when(husbandry.applyFeedBonus(120)).thenReturn(240);
         when(mmoPlayer.useChatNotifications()).thenReturn(false);
-        final ServerPlayerEntity player = breeder();
+        final ServerPlayer player = breeder();
 
         HusbandryListener.beginPlayerInteraction(player, baby);
         try {
@@ -606,7 +606,7 @@ class HusbandryListenerTest {
         // onEatingGrass calls it from an AI goal, and a tadpole ages itself through it. Paying for
         // those would make a lamb standing in a field an AFK income -- exactly the dispenser-farm
         // shape this skill's plan spends a page warning about, arrived at from the other direction.
-        final PassiveEntity lamb = calf(-24000);
+        final AgeableMob lamb = calf(-24000);
 
         assertEquals(60, HusbandryListener.onGrowthApplied(lamb, 60),
                 "vanilla's growth must pass through completely untouched");
@@ -619,8 +619,8 @@ class HusbandryListenerTest {
         // The stash records WHICH entity is being interacted with, not merely that someone is
         // interacting. Without the identity check, any growth anywhere during a right-click would
         // bill as a feed of whatever the player happened to be holding a hand out to.
-        final PassiveEntity fed = calf(-24000);
-        final PassiveEntity other = calf(-24000);
+        final AgeableMob fed = calf(-24000);
+        final AgeableMob other = calf(-24000);
 
         HusbandryListener.beginPlayerInteraction(breeder(), fed);
         try {
@@ -635,7 +635,7 @@ class HusbandryListenerTest {
     void theStashDoesNotOutliveTheInteractionThatSetIt() {
         // The mixin's RETURN injector is what clears this. If it ever stopped matching, the last
         // animal a player right-clicked would keep earning feed XP for every growth in the world.
-        final PassiveEntity baby = calf(-24000);
+        final AgeableMob baby = calf(-24000);
 
         HusbandryListener.beginPlayerInteraction(breeder(), baby);
         HusbandryListener.endPlayerInteraction();
@@ -648,8 +648,8 @@ class HusbandryListenerTest {
     void growthDrivenByANonPlayerHolderOfTheStashPaysNothing() {
         // beginPlayerInteraction is reached from PlayerEntity#interact, which is shared with the
         // client player. Only a real ServerPlayerEntity may open a stash.
-        final PassiveEntity baby = calf(-24000);
-        final PlayerEntity clientSide = mock(PlayerEntity.class);
+        final AgeableMob baby = calf(-24000);
+        final Player clientSide = mock(Player.class);
 
         HusbandryListener.beginPlayerInteraction(clientSide, baby);
         try {
@@ -663,17 +663,17 @@ class HusbandryListenerTest {
     // --- Shear and Bountiful Harvest ------------------------------------------------------------
 
     /** Collects everything vanilla's own drop handler was asked to deliver. */
-    private static final class Dropper implements BiConsumer<ServerWorld, ItemStack> {
+    private static final class Dropper implements BiConsumer<ServerLevel, ItemStack> {
         private final List<ItemStack> delivered = new ArrayList<>();
 
         @Override
-        public void accept(ServerWorld world, ItemStack stack) {
+        public void accept(ServerLevel world, ItemStack stack) {
             delivered.add(stack);
         }
     }
 
-    private PassiveEntity shearableSheep() {
-        final SheepEntity sheep = mock(SheepEntity.class);
+    private AgeableMob shearableSheep() {
+        final Sheep sheep = mock(Sheep.class);
         Mockito.doReturn(EntityType.SHEEP).when(sheep).getType();
         lenient().when(sheep.getEntityWorld()).thenReturn(world);
         stubAttachments(sheep);
@@ -682,7 +682,7 @@ class HusbandryListenerTest {
 
     @Test
     void shearingAnAnimalYouAreInteractingWithPaysTheShearVerb() {
-        final PassiveEntity sheep = shearableSheep();
+        final AgeableMob sheep = shearableSheep();
         final Dropper dropper = new Dropper();
 
         HusbandryListener.beginPlayerInteraction(breeder(), sheep);
@@ -703,7 +703,7 @@ class HusbandryListenerTest {
         // — that IS the classic AFK wool farm, and it is the single most important thing shearing
         // must never pay for. Nothing distinguishes the two calls except that a dispenser opens no
         // player interaction, so this test is the gate.
-        final PassiveEntity sheep = shearableSheep();
+        final AgeableMob sheep = shearableSheep();
         final Dropper dropper = new Dropper();
 
         // No beginPlayerInteraction: this is exactly the state a dispenser fires in.
@@ -719,8 +719,8 @@ class HusbandryListenerTest {
     void shearingOneAnimalDoesNotPayForAnotherShearedAtTheSameMoment() {
         // The identity half of the gate. Without it a dispenser firing anywhere in the world during
         // a player's right-click would bill to that player.
-        final PassiveEntity held = shearableSheep();
-        final PassiveEntity elsewhere = shearableSheep();
+        final AgeableMob held = shearableSheep();
+        final AgeableMob elsewhere = shearableSheep();
         final Dropper dropper = new Dropper();
 
         HusbandryListener.beginPlayerInteraction(breeder(), held);
@@ -738,7 +738,7 @@ class HusbandryListenerTest {
         // The bonus is vanilla's handler called again rather than an item spawned by us, so a
         // sheep's colour and a mooshroom's variant carry into it for free. Asserting on the
         // delivered stacks -- not just that the roll happened -- is what pins that.
-        final PassiveEntity sheep = shearableSheep();
+        final AgeableMob sheep = shearableSheep();
         final Dropper dropper = new Dropper();
         when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
 
@@ -758,13 +758,13 @@ class HusbandryListenerTest {
     void theBonusDropIsRolledOncePerShearNotOncePerItem() {
         // A shear that yields three wool must resolve the sub-skill once and then double all three,
         // rather than rolling per item and producing a partial, noisy result.
-        final PassiveEntity sheep = shearableSheep();
+        final AgeableMob sheep = shearableSheep();
         final Dropper dropper = new Dropper();
         when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
 
         HusbandryListener.beginPlayerInteraction(breeder(), sheep);
         try {
-            final BiConsumer<ServerWorld, ItemStack> wrapped =
+            final BiConsumer<ServerLevel, ItemStack> wrapped =
                     HusbandryListener.onShearedItems(sheep, dropper);
             wrapped.accept(world, wool());
             wrapped.accept(world, wool());
@@ -779,7 +779,7 @@ class HusbandryListenerTest {
 
     @Test
     void bountifulHarvestSparesTheShearsOnASuccessfulRoll() {
-        final PassiveEntity sheep = shearableSheep();
+        final AgeableMob sheep = shearableSheep();
         when(husbandry.rollToolDurabilitySave()).thenReturn(true);
 
         HusbandryListener.beginPlayerInteraction(breeder(), sheep);
@@ -795,7 +795,7 @@ class HusbandryListenerTest {
     void aDispenserNeverSavesDurability() {
         // The same gate on the other half. A dispenser's shears are not a player's tool and must
         // wear exactly as vanilla intends -- otherwise an automated farm quietly runs forever.
-        final PassiveEntity sheep = shearableSheep();
+        final AgeableMob sheep = shearableSheep();
         lenient().when(husbandry.rollToolDurabilitySave()).thenReturn(true);
 
         assertEquals(1, HusbandryListener.onShearToolDamaged(sheep, 1));
@@ -807,12 +807,12 @@ class HusbandryListenerTest {
     @Test
     void multiBreedSetsEligibleSameSpeciesNeighboursInLoveFromTheOneItem() {
         allowMultiBreed(40.0);
-        final AnimalEntity fed = eligibleCow();
-        final AnimalEntity neighbourA = eligibleCow();
-        final AnimalEntity neighbourB = eligibleCow();
+        final Animal fed = eligibleCow();
+        final Animal neighbourA = eligibleCow();
+        final Animal neighbourB = eligibleCow();
         worldAnimals.addAll(Arrays.asList(fed, neighbourA, neighbourB));
 
-        final ServerPlayerEntity player = breeder();
+        final ServerPlayer player = breeder();
         HusbandryListener.onLovePlayer(fed, player);
 
         verify(neighbourA).lovePlayer(player);
@@ -823,12 +823,12 @@ class HusbandryListenerTest {
     @Test
     void multiBreedSkipsAnimalsVanillaItselfWouldRefuseToFeed() {
         allowMultiBreed(40.0);
-        final AnimalEntity fed = eligibleCow();
-        final AnimalEntity baby = cow(true, -1200, true);       // still a baby
-        final AnimalEntity onCooldown = cow(true, 6000, true);  // just bred
-        final AnimalEntity alreadyCourting = cow(true, 0, false); // canEat() == not in love
-        final AnimalEntity dead = cow(false, 0, true);
-        final AnimalEntity wrongSpecies = pig();
+        final Animal fed = eligibleCow();
+        final Animal baby = cow(true, -1200, true);       // still a baby
+        final Animal onCooldown = cow(true, 6000, true);  // just bred
+        final Animal alreadyCourting = cow(true, 0, false); // canEat() == not in love
+        final Animal dead = cow(false, 0, true);
+        final Animal wrongSpecies = pig();
         worldAnimals.addAll(
                 Arrays.asList(fed, baby, onCooldown, alreadyCourting, dead, wrongSpecies));
 
@@ -848,7 +848,7 @@ class HusbandryListenerTest {
         // bounded XP per ITEM in a game where wheat is free. The anti-exploit gate now sits on the XP
         // payout, one window at a time, and is pinned by HusbandryManagerTest.
         allowMultiBreed(40.0);
-        final AnimalEntity fed = eligibleCow();
+        final Animal fed = eligibleCow();
         worldAnimals.add(fed);
         for (int i = 0; i < 30; i++) {
             worldAnimals.add(eligibleCow());
@@ -864,7 +864,7 @@ class HusbandryListenerTest {
     }
 
     /** Whether this mock ever had {@code lovePlayer} called on it. */
-    private static boolean wasSetInLove(AnimalEntity animal) {
+    private static boolean wasSetInLove(Animal animal) {
         return Mockito.mockingDetails(animal).getInvocations().stream()
                 .anyMatch(invocation -> invocation.getMethod().getName().equals("lovePlayer"));
     }
@@ -872,15 +872,15 @@ class HusbandryListenerTest {
     @Test
     void multiBreedDoesNothingWhileLocked() {
         when(husbandry.canMultiBreed()).thenReturn(false);
-        final AnimalEntity fed = eligibleCow();
-        final AnimalEntity neighbour = eligibleCow();
+        final Animal fed = eligibleCow();
+        final Animal neighbour = eligibleCow();
         worldAnimals.addAll(Arrays.asList(fed, neighbour));
 
         HusbandryListener.onLovePlayer(fed, breeder());
 
         verify(neighbour, never()).lovePlayer(any());
         // The sweep must not even be attempted: it is an entity scan on every animal ever fed.
-        verify(world, never()).getEntitiesByClass(any(Class.class), any(Box.class), any());
+        verify(world, never()).getEntitiesByClass(any(Class.class), any(AABB.class), any());
     }
 
     @Test
@@ -888,11 +888,11 @@ class HusbandryListenerTest {
         // The radius is the only bound left on the spread, so it is also the only remaining way to
         // switch it off -- and switching it off must skip the entity scan, not merely discard it.
         allowMultiBreed(0.0);
-        final AnimalEntity fed = eligibleCow();
+        final Animal fed = eligibleCow();
         worldAnimals.addAll(Arrays.asList(fed, eligibleCow()));
 
         HusbandryListener.onLovePlayer(fed, breeder());
-        verify(world, never()).getEntitiesByClass(any(Class.class), any(Box.class), any());
+        verify(world, never()).getEntitiesByClass(any(Class.class), any(AABB.class), any());
     }
 
     @Test
@@ -905,10 +905,10 @@ class HusbandryListenerTest {
         // The mock cannot re-enter on its own, so the cascade is simulated: every neighbour's
         // lovePlayer feeds the call straight back into the listener, exactly as the real mixin does.
         allowMultiBreed(40.0);
-        final AnimalEntity fed = eligibleCow();
+        final Animal fed = eligibleCow();
         worldAnimals.add(fed);
         for (int i = 0; i < 8; i++) {
-            final AnimalEntity neighbour = eligibleCow();
+            final Animal neighbour = eligibleCow();
             lenient().doAnswer(invocation -> {
                 HusbandryListener.onLovePlayer(neighbour, invocation.getArgument(0));
                 return null;
@@ -921,7 +921,7 @@ class HusbandryListenerTest {
                 "the re-entrancy guard is gone — the spread is cascading");
 
         // One sweep, from the animal the player actually fed, and no more.
-        verify(world, times(1)).getEntitiesByClass(any(Class.class), any(Box.class), any());
+        verify(world, times(1)).getEntitiesByClass(any(Class.class), any(AABB.class), any());
     }
 
     @Test
@@ -929,7 +929,7 @@ class HusbandryListenerTest {
         // The radius is read per activation rather than baked in, so a maxed player reaches further
         // than a fresh one. Asserted by driving two different radii and reading the box back.
         allowMultiBreed(40.0);
-        final AnimalEntity fed = eligibleCow();
+        final Animal fed = eligibleCow();
         worldAnimals.add(fed);
 
         HusbandryListener.onLovePlayer(fed, breeder());
@@ -941,11 +941,11 @@ class HusbandryListenerTest {
     @Test
     void aNonServerPlayerNeverTriggersTheSweep() {
         allowMultiBreed(40.0);
-        final AnimalEntity fed = eligibleCow();
+        final Animal fed = eligibleCow();
         worldAnimals.add(fed);
 
         HusbandryListener.onLovePlayer(fed, null);
-        verify(world, never()).getEntitiesByClass(any(Class.class), any(Box.class), any());
+        verify(world, never()).getEntitiesByClass(any(Class.class), any(AABB.class), any());
         verify(husbandry, never()).getMultiBreedRadius();
     }
 
@@ -989,7 +989,7 @@ class HusbandryListenerTest {
 
     @Test
     void aHiveHarvestByAnUntrackedPlayerPaysNothing() {
-        final ServerPlayerEntity stranger = mock(ServerPlayerEntity.class);
+        final ServerPlayer stranger = mock(ServerPlayer.class);
         lenient().when(stranger.getUuid()).thenReturn(UUID.randomUUID());
 
         HusbandryListener.onHoneyBottled(stranger);
@@ -1068,7 +1068,7 @@ class HusbandryListenerTest {
         allowHarvestCooldown();
         worldTime(0L);
 
-        HusbandryListener.onMilked(harvestable(CowEntity.class), breeder());
+        HusbandryListener.onMilked(harvestable(Cow.class), breeder());
         verify(husbandry).onMilk();
     }
 
@@ -1078,7 +1078,7 @@ class HusbandryListenerTest {
         // on milking, so the same cow can be milked as fast as a player can click, forever, for free.
         // Without this it would be the fastest XP source in the mod by a wide margin.
         allowHarvestCooldown();
-        final Entity cow = harvestable(CowEntity.class);
+        final Entity cow = harvestable(Cow.class);
 
         worldTime(0L);
         HusbandryListener.onMilked(cow, breeder());
@@ -1091,7 +1091,7 @@ class HusbandryListenerTest {
     @Test
     void milkingTheSameCowAfterTheCooldownPaysAgain() {
         allowHarvestCooldown();
-        final Entity cow = harvestable(CowEntity.class);
+        final Entity cow = harvestable(Cow.class);
 
         worldTime(0L);
         HusbandryListener.onMilked(cow, breeder());
@@ -1108,8 +1108,8 @@ class HusbandryListenerTest {
         allowHarvestCooldown();
         worldTime(0L);
 
-        HusbandryListener.onMilked(harvestable(CowEntity.class), breeder());
-        HusbandryListener.onMilked(harvestable(CowEntity.class), breeder());
+        HusbandryListener.onMilked(harvestable(Cow.class), breeder());
+        HusbandryListener.onMilked(harvestable(Cow.class), breeder());
 
         verify(husbandry, times(2)).onMilk();
     }
@@ -1118,7 +1118,7 @@ class HusbandryListenerTest {
     void aZeroCooldownDisablesTheGateEntirely() {
         // The escape hatch, so the behaviour is diagnosable during play-testing.
         lenient().when(husbandry.getHarvestCooldownSeconds()).thenReturn(0);
-        final Entity cow = harvestable(CowEntity.class);
+        final Entity cow = harvestable(Cow.class);
         worldTime(0L);
 
         HusbandryListener.onMilked(cow, breeder());
@@ -1133,7 +1133,7 @@ class HusbandryListenerTest {
         // elapsed as "not yet" would lock that animal out of paying anything ever again, silently --
         // the worst of the two available failure modes.
         allowHarvestCooldown();
-        final Entity cow = harvestable(CowEntity.class);
+        final Entity cow = harvestable(Cow.class);
 
         worldTime(1_000_000L);
         HusbandryListener.onMilked(cow, breeder());
@@ -1148,7 +1148,7 @@ class HusbandryListenerTest {
         allowHarvestCooldown();
         worldTime(0L);
 
-        HusbandryListener.onMilked(harvestable(CowEntity.class), mock(PlayerEntity.class));
+        HusbandryListener.onMilked(harvestable(Cow.class), mock(Player.class));
         verify(husbandry, never()).onMilk();
     }
 
@@ -1158,7 +1158,7 @@ class HusbandryListenerTest {
     void brushingAnArmadilloPaysTheBrushVerbWhenAScuteIsActuallyDelivered() {
         allowHarvestCooldown();
         worldTime(0L);
-        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        final Entity armadillo = harvestable(Armadillo.class);
         final Dropper dropper = new Dropper();
 
         HusbandryListener.onBrushedItems(armadillo, breeder(), dropper).accept(world, wool());
@@ -1175,7 +1175,7 @@ class HusbandryListenerTest {
         // item actually changing hands is the only available proof a harvest happened.
         allowHarvestCooldown();
         worldTime(0L);
-        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        final Entity armadillo = harvestable(Armadillo.class);
 
         // Wrapped, then never invoked: exactly what an empty loot roll looks like.
         HusbandryListener.onBrushedItems(armadillo, breeder(), new Dropper());
@@ -1188,7 +1188,7 @@ class HusbandryListenerTest {
     void aDispenserBrushingAnArmadilloPaysNothingAndDropsNothingExtra() {
         // ⚠️ Vanilla really does ship this (DispenserBehavior$5) and the plan did not mention it.
         // It passes null for the brusher, so the exclusion is a property of the signature.
-        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        final Entity armadillo = harvestable(Armadillo.class);
         final Dropper dropper = new Dropper();
 
         HusbandryListener.onBrushedItems(armadillo, null, dropper).accept(world, wool());
@@ -1205,7 +1205,7 @@ class HusbandryListenerTest {
         // enforce its own balance would be breaking the game rather than tuning itself.
         allowHarvestCooldown();
         worldTime(0L);
-        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        final Entity armadillo = harvestable(Armadillo.class);
 
         HusbandryListener.onBrushedItems(armadillo, breeder(), new Dropper()).accept(world, wool());
         final Dropper second = new Dropper();
@@ -1219,11 +1219,11 @@ class HusbandryListenerTest {
     void theBrushBonusIsRolledOncePerBrushNotOncePerItem() {
         allowHarvestCooldown();
         worldTime(0L);
-        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        final Entity armadillo = harvestable(Armadillo.class);
         final Dropper dropper = new Dropper();
         when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
 
-        final BiConsumer<ServerWorld, ItemStack> wrapped =
+        final BiConsumer<ServerLevel, ItemStack> wrapped =
                 HusbandryListener.onBrushedItems(armadillo, breeder(), dropper);
         wrapped.accept(world, wool());
         wrapped.accept(world, wool());
@@ -1239,7 +1239,7 @@ class HusbandryListenerTest {
         // a free extra scute, or the cooldown would only be throttling half of the reward.
         allowHarvestCooldown();
         worldTime(0L);
-        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        final Entity armadillo = harvestable(Armadillo.class);
         lenient().when(husbandry.rollBonusHarvestDrop()).thenReturn(true);
 
         HusbandryListener.onBrushedItems(armadillo, breeder(), new Dropper()).accept(world, wool());
@@ -1253,7 +1253,7 @@ class HusbandryListenerTest {
 
     @Test
     void bountifulHarvestSparesTheBrushOnASuccessfulRoll() {
-        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        final Entity armadillo = harvestable(Armadillo.class);
         when(husbandry.rollToolDurabilitySave()).thenReturn(true);
 
         HusbandryListener.beginPlayerInteraction(breeder(), armadillo);
@@ -1267,7 +1267,7 @@ class HusbandryListenerTest {
 
     @Test
     void aDispenserNeverSavesBrushDurability() {
-        final Entity armadillo = harvestable(ArmadilloEntity.class);
+        final Entity armadillo = harvestable(Armadillo.class);
         lenient().when(husbandry.rollToolDurabilitySave()).thenReturn(true);
 
         assertEquals(16, HusbandryListener.onBrushToolDamaged(armadillo, 16));
@@ -1276,8 +1276,8 @@ class HusbandryListenerTest {
 
     // --- Stage 5: Selective Breeding -------------------------------------------------------------
 
-    private AnimalEntity horseLovedBy(ServerPlayerEntity player) {
-        final AnimalEntity horse = cow(true, 0, true);
+    private Animal horseLovedBy(ServerPlayer player) {
+        final Animal horse = cow(true, 0, true);
         lenient().when(horse.getLovingPlayer()).thenReturn(player);
         return horse;
     }
@@ -1340,8 +1340,8 @@ class HusbandryListenerTest {
 
     // --- Stage 5: Brood -------------------------------------------------------------------------
 
-    private Entity eggThrownBy(ServerPlayerEntity thrower) {
-        final EggEntity egg = mock(EggEntity.class);
+    private Entity eggThrownBy(ServerPlayer thrower) {
+        final ThrownEgg egg = mock(ThrownEgg.class);
         lenient().when(egg.getOwner()).thenReturn(thrower);
         return egg;
     }
@@ -1418,7 +1418,7 @@ class HusbandryListenerTest {
         // cannot be wired into milking and forgotten for brushing -- so testing it through milk also
         // covers brush.
         allowHarvestCooldown();
-        final Entity cow = harvestable(CowEntity.class);
+        final Entity cow = harvestable(Cow.class);
         worldTime(0L);
 
         HusbandryListener.onMilked(cow, breeder());
@@ -1434,7 +1434,7 @@ class HusbandryListenerTest {
         // player a second full round the instant the ability ended -- the super would be worth twice
         // what it looks like, and only to someone who noticed.
         allowHarvestCooldown();
-        final Entity cow = harvestable(CowEntity.class);
+        final Entity cow = harvestable(Cow.class);
 
         worldTime(0L);
         HusbandryListener.onMilked(cow, breeder()); // Normal award, stamps tick 0.
@@ -1458,7 +1458,7 @@ class HusbandryListenerTest {
         allowHarvestCooldown();
         worldTime(0L);
 
-        HusbandryListener.onMilked(harvestable(CowEntity.class), breeder());
+        HusbandryListener.onMilked(harvestable(Cow.class), breeder());
         HusbandryListener.onHoneyBottled(breeder());
 
         verify(husbandry).onMilk();
