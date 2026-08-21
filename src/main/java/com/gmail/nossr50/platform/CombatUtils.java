@@ -316,7 +316,7 @@ public final class CombatUtils {
         }
 
         final int xp = CombatXp.xpForHit(
-                BuiltInRegistries.ENTITY_TYPE.getId(target.getType()).toString(), categoryOf(target),
+                BuiltInRegistries.ENTITY_TYPE.getKey(target.getType()).toString(), categoryOf(target),
                 damage, target.getHealth(), originScaled);
         if (xp <= 0) {
             return;

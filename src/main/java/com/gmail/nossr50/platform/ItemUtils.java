@@ -37,7 +37,7 @@ public final class ItemUtils {
      * is {@code minecraft:air}, i.e. path {@code air}, which is in none of the tool/armor sets.
      */
     private static @NotNull String idPath(@NotNull ItemStack item) {
-        return BuiltInRegistries.ITEM.getId(item.getItem()).getPath();
+        return BuiltInRegistries.ITEM.getKey(item.getItem()).getPath();
     }
 
     // --- Weapons ------------------------------------------------------------

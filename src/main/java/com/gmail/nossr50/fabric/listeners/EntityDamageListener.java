@@ -854,7 +854,7 @@ public final class EntityDamageListener {
         if (target instanceof ArmorStand) {
             return config == null || config.isArmorStandInteractionPrevented();
         }
-        if (MANNEQUIN_ID.equals(BuiltInRegistries.ENTITY_TYPE.getId(target.getType()))) {
+        if (MANNEQUIN_ID.equals(BuiltInRegistries.ENTITY_TYPE.getKey(target.getType()))) {
             return config == null || config.isMannequinInteractionPrevented();
         }
         return false;

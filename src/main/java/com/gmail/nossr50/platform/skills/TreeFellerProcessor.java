@@ -157,7 +157,7 @@ public final class TreeFellerProcessor {
             final BlockPos pos = new BlockPos(felledBlock.x(), felledBlock.y(), felledBlock.z());
             final BlockState state = world.getBlockState(pos);
             final BlockEntity blockEntity = world.getBlockEntity(pos);
-            final String blockId = BuiltInRegistries.BLOCK.getId(state.getBlock()).toString();
+            final String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
 
             if (felledBlock.type() == TreeBlockType.LOG) {
                 final int beforeXp = xp;
@@ -229,7 +229,7 @@ public final class TreeFellerProcessor {
 
     /** Whether a dropped item is a sapling or mangrove propagule (Knock on Wood salvage filter). */
     private static boolean isSaplingOrPropagule(@NotNull ItemStack stack) {
-        final String path = BuiltInRegistries.ITEM.getId(stack.getItem()).getPath();
+        final String path = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
         return path.contains(WoodcuttingManager.SAPLING) || path.contains(WoodcuttingManager.PROPAGULE);
     }
 }

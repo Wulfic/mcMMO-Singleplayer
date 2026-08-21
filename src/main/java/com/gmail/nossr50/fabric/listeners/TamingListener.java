@@ -51,7 +51,7 @@ public final class TamingListener {
         }
 
         final String entityConfigString = ConfigStringUtils.getConfigEntityTypeString(
-                BuiltInRegistries.ENTITY_TYPE.getId(tamed.getType()).getPath());
+                BuiltInRegistries.ENTITY_TYPE.getKey(tamed.getType()).getPath());
         taming.awardTamingXP(entityConfigString);
     }
 }

@@ -189,7 +189,7 @@ class MobTiersTest {
             }
             final int tier = MobTiers.tierOf((EntityType<? extends LivingEntity>) type);
             if (tier < HunterManager.MIN_TIER || tier > HunterManager.MAX_TIER) {
-                broken.add(BuiltInRegistries.ENTITY_TYPE.getId(type) + " -> " + tier);
+                broken.add(BuiltInRegistries.ENTITY_TYPE.getKey(type) + " -> " + tier);
             }
         }
 

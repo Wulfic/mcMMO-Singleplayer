@@ -352,7 +352,7 @@ public final class HunterListener {
      * has to survive two mods shipping a creature of the same name.
      */
     static @NotNull String masteryKeyOf(@NotNull LivingEntity entity) {
-        return BuiltInRegistries.ENTITY_TYPE.getId(entity.getType()).toString();
+        return BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
     }
 
     /**

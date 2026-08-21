@@ -22,8 +22,8 @@ class McRegistryBootstrapProbeTest {
 
     @Test
     void itemRegistryResolvesVanillaIdPaths() {
-        assertEquals("diamond_axe", BuiltInRegistries.ITEM.getId(Items.DIAMOND_AXE).getPath());
-        assertEquals("netherite_pickaxe", BuiltInRegistries.ITEM.getId(Items.NETHERITE_PICKAXE).getPath());
-        assertEquals("air", BuiltInRegistries.ITEM.getId(Items.AIR).getPath());
+        assertEquals("diamond_axe", BuiltInRegistries.ITEM.getKey(Items.DIAMOND_AXE).getPath());
+        assertEquals("netherite_pickaxe", BuiltInRegistries.ITEM.getKey(Items.NETHERITE_PICKAXE).getPath());
+        assertEquals("air", BuiltInRegistries.ITEM.getKey(Items.AIR).getPath());
     }
 }

@@ -73,7 +73,7 @@ class SuperAbilityListenerTillingTest {
         // the moment it appears instead of quietly re-opening the issue for that one block.
         for (Block tillable : HoeTillingActionsAccessor.getTillingActions().keySet()) {
             assertTrue(tills(new ItemStack(Items.DIAMOND_HOE), tillable),
-                    "a hoe click on " + BuiltInRegistries.BLOCK.getId(tillable) + " tills, so it must not "
+                    "a hoe click on " + BuiltInRegistries.BLOCK.getKey(tillable) + " tills, so it must not "
                             + "re-ready the hoe");
         }
     }
@@ -100,7 +100,7 @@ class SuperAbilityListenerTillingTest {
         for (ItemStack held : notHoes) {
             for (Block tillable : HoeTillingActionsAccessor.getTillingActions().keySet()) {
                 assertFalse(tills(held, tillable),
-                        held.getItem() + " on " + BuiltInRegistries.BLOCK.getId(tillable) + " is not a till "
+                        held.getItem() + " on " + BuiltInRegistries.BLOCK.getKey(tillable) + " is not a till "
                                 + "— vanilla only consults the tilling table for a HoeItem. Calling "
                                 + "it one suppresses the ready, and right-clicking the ground is how "
                                 + "the pickaxe/shovel/axe/sword/fist super abilities arm.");
@@ -169,7 +169,7 @@ class SuperAbilityListenerTillingTest {
         // mandatory rather than belt-and-braces. If this list changes, re-read that argument — a
         // future table of rare blocks would not need the same care, and a wider one needs more.
         final Set<String> tillable = HoeTillingActionsAccessor.getTillingActions().keySet().stream()
-                .map(block -> BuiltInRegistries.BLOCK.getId(block).getPath())
+                .map(block -> BuiltInRegistries.BLOCK.getKey(block).getPath())
                 .collect(Collectors.toSet());
         assertEquals(Set.of("grass_block", "dirt", "coarse_dirt", "dirt_path", "rooted_dirt"),
                 tillable);

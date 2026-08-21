@@ -44,7 +44,7 @@ class MeleeWeaponClassificationTest {
     private static List<Item> registeredSpears() {
         final List<Item> spears = new ArrayList<>();
         for (Item item : BuiltInRegistries.ITEM) {
-            if (BuiltInRegistries.ITEM.getId(item).getPath().endsWith("_spear")) {
+            if (BuiltInRegistries.ITEM.getKey(item).getPath().endsWith("_spear")) {
                 spears.add(item);
             }
         }
@@ -75,9 +75,9 @@ class MeleeWeaponClassificationTest {
         for (Item spear : spears) {
             final ItemStack held = new ItemStack(spear);
             assertTrue(ItemUtils.isSpear(held),
-                    () -> BuiltInRegistries.ITEM.getId(spear) + " is not in MaterialMapStore's spear set");
+                    () -> BuiltInRegistries.ITEM.getKey(spear) + " is not in MaterialMapStore's spear set");
             assertEquals(MeleeWeapon.SPEAR, EntityDamageListener.classifyMainHand(held),
-                    () -> BuiltInRegistries.ITEM.getId(spear) + " must dispatch to the Spears skill");
+                    () -> BuiltInRegistries.ITEM.getKey(spear) + " must dispatch to the Spears skill");
         }
     }
 

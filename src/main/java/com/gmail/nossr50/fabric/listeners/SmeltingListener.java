@@ -423,7 +423,7 @@ public final class SmeltingListener {
         return BuiltInRegistries.ITEM.stream()
                 .filter(item -> item instanceof BlockItem)
                 .filter(item -> McMMOMod.getMaterialMapStore()
-                        .isOre(BuiltInRegistries.ITEM.getId(item).getPath()))
+                        .isOre(BuiltInRegistries.ITEM.getKey(item).getPath()))
                 .map(BuiltInRegistries.ITEM::getEntry)
                 .toList();
     }
@@ -456,6 +456,6 @@ public final class SmeltingListener {
      */
     static String materialConfigString(ItemStack stack) {
         return ConfigStringUtils.getMaterialConfigString(
-                BuiltInRegistries.ITEM.getId(stack.getItem()).getPath());
+                BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath());
     }
 }

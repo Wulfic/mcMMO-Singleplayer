@@ -104,6 +104,6 @@ public final class MobTiers {
      */
     static @NotNull String configKeyOf(@NotNull EntityType<?> type) {
         return ConfigStringUtils.getConfigEntityTypeString(
-                BuiltInRegistries.ENTITY_TYPE.getId(type).getPath());
+                BuiltInRegistries.ENTITY_TYPE.getKey(type).getPath());
     }
 }

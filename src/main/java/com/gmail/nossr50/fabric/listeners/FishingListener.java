@@ -158,7 +158,7 @@ public final class FishingListener {
                 continue;
             }
             final String materialConfigString = ConfigStringUtils.getMaterialConfigString(
-                    BuiltInRegistries.ITEM.getId(stack.getItem()).getPath());
+                    BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath());
             fishingManager.awardFishingXP(materialConfigString);
         }
 
@@ -445,7 +445,7 @@ public final class FishingListener {
         if (!fishingManager.isMagicHunterEnabled()) {
             return false;
         }
-        final String itemId = BuiltInRegistries.ITEM.getId(treasureStack.getItem()).getPath();
+        final String itemId = BuiltInRegistries.ITEM.getKey(treasureStack.getItem()).getPath();
         if (!McMMOMod.getMaterialMapStore().isEnchantable(itemId)) {
             return false;
         }
@@ -586,7 +586,7 @@ public final class FishingListener {
             return;
         }
 
-        final String entityPath = BuiltInRegistries.ENTITY_TYPE.getId(target.getType()).getPath();
+        final String entityPath = BuiltInRegistries.ENTITY_TYPE.getKey(target.getType()).getPath();
         final Optional<ShakeTreasure> rolled = fishingManager.rollShakeTreasure(entityPath,
                 ThreadLocalRandom.current().nextInt(100));
         if (rolled.isEmpty()) {

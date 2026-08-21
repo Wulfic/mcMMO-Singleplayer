@@ -228,7 +228,7 @@ public final class BlockBreakListener {
         // now, so its position is natural again and the tracker's memory is freed on the way out.
         final boolean handPlaced = consumePlacedFlag(serverWorld, pos);
 
-        final String blockId = BuiltInRegistries.BLOCK.getId(state.getBlock()).toString();
+        final String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
 
         // Multi-block plants (sugar cane, cactus, kelp, bamboo, chorus trees, tall grass, vines) take
         // their other blocks down with them, and legacy rewarded every one of those — so they get
@@ -700,7 +700,7 @@ public final class BlockBreakListener {
     }
 
     private static String pathOf(BlockState state) {
-        return BuiltInRegistries.BLOCK.getId(state.getBlock()).getPath();
+        return BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
     }
 
     private static void awardBlockXp(McMMOPlayer mmoPlayer, String blockId) {

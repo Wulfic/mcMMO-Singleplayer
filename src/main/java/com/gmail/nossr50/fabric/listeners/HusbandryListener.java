@@ -190,7 +190,7 @@ public final class HusbandryListener {
         }
 
         final String entityConfigString = ConfigStringUtils.getConfigEntityTypeString(
-                BuiltInRegistries.ENTITY_TYPE.getId(parent.getType()).getPath());
+                BuiltInRegistries.ENTITY_TYPE.getKey(parent.getType()).getPath());
         final HusbandryManager.BreedAward award =
                 husbandry.onBreed(entityConfigString, parent.level().getGameTime());
         if (award.capReached()) {
@@ -1107,7 +1107,7 @@ public final class HusbandryListener {
     /** The animal's {@code experience.yml} key, e.g. {@code "Cow"}. */
     private static String configStringOf(Entity animal) {
         return ConfigStringUtils.getConfigEntityTypeString(
-                BuiltInRegistries.ENTITY_TYPE.getId(animal.getType()).getPath());
+                BuiltInRegistries.ENTITY_TYPE.getKey(animal.getType()).getPath());
     }
 
     /**

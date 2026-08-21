@@ -69,7 +69,7 @@ public final class CallOfTheWildHandler {
         }
 
         final ItemStack inHand = player.getMainHandItem();
-        final String itemId = BuiltInRegistries.ITEM.getId(inHand.getItem()).getPath();
+        final String itemId = BuiltInRegistries.ITEM.getKey(inHand.getItem()).getPath();
         final Optional<TamingSummon> maybeSummon = McMMOMod.getCallOfTheWild().summonForItem(itemId);
         if (maybeSummon.isEmpty()) {
             return; // not a summoning item.

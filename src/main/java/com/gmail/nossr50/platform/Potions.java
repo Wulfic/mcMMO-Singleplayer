@@ -69,7 +69,7 @@ public final class Potions {
         final Holder<MobEffect> entry = matchEffect(effectName);
         return entry == null
                 ? Optional.empty()
-                : Optional.of(BuiltInRegistries.MOB_EFFECT.getId(entry.value()).toString());
+                : Optional.of(BuiltInRegistries.MOB_EFFECT.getKey(entry.value()).toString());
     }
 
     /**
@@ -111,7 +111,7 @@ public final class Potions {
     }
 
     private static @NotNull String idOf(@NotNull Holder<Potion> entry) {
-        return BuiltInRegistries.POTION.getId(entry.value()).toString();
+        return BuiltInRegistries.POTION.getKey(entry.value()).toString();
     }
 
     // --- Stack ⇄ PotionSpec -------------------------------------------------
@@ -137,7 +137,7 @@ public final class Potions {
         final List<EffectSpec> customEffects = new ArrayList<>();
         for (MobEffectInstance effect : contents.customEffects()) {
             customEffects.add(new EffectSpec(
-                    BuiltInRegistries.MOB_EFFECT.getId(effect.getEffect().value()).toString(),
+                    BuiltInRegistries.MOB_EFFECT.getKey(effect.getEffect().value()).toString(),
                     effect.getAmplifier(), effect.getDuration()));
         }
 

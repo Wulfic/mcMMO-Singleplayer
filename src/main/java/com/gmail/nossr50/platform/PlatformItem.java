@@ -52,7 +52,7 @@ public final class PlatformItem {
 
     /** Registry id of the item, e.g. {@code minecraft:diamond_pickaxe}. */
     public @NotNull Identifier getTypeId() {
-        return BuiltInRegistries.ITEM.getId(handle.getItem());
+        return BuiltInRegistries.ITEM.getKey(handle.getItem());
     }
 
     /**

@@ -269,7 +269,7 @@ public final class BlastMiningListener {
     }
 
     private static String blockPath(BlockState state) {
-        return BuiltInRegistries.BLOCK.getId(state.getBlock()).getPath();
+        return BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
     }
 
     /**

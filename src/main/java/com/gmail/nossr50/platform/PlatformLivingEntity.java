@@ -56,7 +56,7 @@ public final class PlatformLivingEntity {
 
     /** Registry id of the entity type, for name-based comparisons (e.g. {@code minecraft:zombie}). */
     public @NotNull Identifier getTypeId() {
-        return BuiltInRegistries.ENTITY_TYPE.getId(handle.getType());
+        return BuiltInRegistries.ENTITY_TYPE.getKey(handle.getType());
     }
 
     // --- State --------------------------------------------------------------

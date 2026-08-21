@@ -230,7 +230,7 @@ public final class RepairSalvageListener {
 
     /** A stack's registry path ({@code minecraft:iron_sword} → {@code iron_sword}), the config key. */
     private static String itemPath(ItemStack stack) {
-        return BuiltInRegistries.ITEM.getId(stack.getItem()).getPath();
+        return BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
     }
 
     /**

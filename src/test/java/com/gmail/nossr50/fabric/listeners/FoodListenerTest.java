@@ -300,7 +300,7 @@ class FoodListenerTest {
      */
     private void powerCooked(Item item, String effectName, int ticks) {
         final String key = ConfigStringUtils.getMaterialConfigString(
-                BuiltInRegistries.ITEM.getId(item).getPath());
+                BuiltInRegistries.ITEM.getKey(item).getPath());
         when(cooking.powerCookEffect(key))
                 .thenReturn(new CookingManager.PowerCookEffect(effectName, ticks));
     }

@@ -102,7 +102,7 @@ public final class FoodListener {
             return; // data not loaded (e.g. mid-join).
         }
 
-        final String itemPath = BuiltInRegistries.ITEM.getId(stack.getItem()).getPath();
+        final String itemPath = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
 
         // ⚠️⚠️ THE ORDERING TRAP — READ THIS BEFORE ADDING A SKILL TO THIS SEAM.
         //

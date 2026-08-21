@@ -729,10 +729,10 @@ public final class SuperAbilityListener {
     }
 
     private static String blockPath(BlockState state) {
-        return BuiltInRegistries.BLOCK.getId(state.getBlock()).getPath();
+        return BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
     }
 
     private static String itemPath(ItemStack stack) {
-        return BuiltInRegistries.ITEM.getId(stack.getItem()).getPath();
+        return BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
     }
 }

@@ -69,7 +69,7 @@ public final class PlatformBlock {
 
     /** Registry id of the current block, e.g. {@code minecraft:stone}. */
     public @NotNull Identifier getTypeId() {
-        return BuiltInRegistries.BLOCK.getId(getBlock());
+        return BuiltInRegistries.BLOCK.getKey(getBlock());
     }
 
     public boolean isAir() {

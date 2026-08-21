@@ -68,7 +68,7 @@ public final class BlockUtils {
      * {@code minecraft:oak_log}) — the key {@link BlockRules} is keyed on.
      */
     private static @NotNull String idPath(@NotNull Block block) {
-        return BuiltInRegistries.BLOCK.getId(block).getPath();
+        return BuiltInRegistries.BLOCK.getKey(block).getPath();
     }
 
     // --- Super-ability activation gates -------------------------------------

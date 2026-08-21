@@ -142,7 +142,7 @@ public final class Materials {
      * name may be a pre-1.13 alias ({@link #LEGACY_NAME_ALIASES}) that differs from it.
      */
     public static @NotNull Optional<String> itemPath(@NotNull String name) {
-        return item(name).map(item -> BuiltInRegistries.ITEM.getId(item).getPath());
+        return item(name).map(item -> BuiltInRegistries.ITEM.getKey(item).getPath());
     }
 
     /**
