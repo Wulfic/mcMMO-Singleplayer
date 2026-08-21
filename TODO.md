@@ -2085,9 +2085,43 @@ Classify every survivor as **mechanical miss** (⇒ fix in §30) or **genuine `2
       Self-test **42 → 64 checks**, and four mutations were **watched go red** before any of it was
       believed: nested branch off (3 red, printing the exact pre-fix `0 candidates`), `--continue`
       removed (1 red), dedupe off and test-bucketing off (3 red).
-- [ ] **30.2** All 14 multi-target rows decided, each with its deciding call-site fact in the table.
-- [ ] **30.3** `--write` applied to `master`'s `src/`, staged, both compile tasks.
-- [ ] **30.4** Four labelled error counts; residue classified mechanical vs `26.x` delta.
+- [x] **30.1b** 🔴 **The 30.1 fix above bought NOTHING, and finding that out is the lesson.** It
+      resolved *dotted* owners (`BlockPos.Mutable`) — the shape §29 recorded. javac does not print
+      that. It prints the **inner simple name ALONE**: `Reference`, `Mutable`, `Builder`, which are
+      **4**, **3** and **118** table-wide candidates. The ambiguous count stayed at exactly 16.
+      A passing self-test proves the code does what you wrote, never that you wrote the right thing;
+      only re-measuring against the real tree caught it.
+      **The real fix stops picking an owner by name at all.** `candidate_owners()` returns every type
+      the name could denote and the loop disambiguates on the **MEMBER** — of `Crackiness$Level` and
+      `world.level.Level` only one declares `getRegistryKey`; of `ClipContext$Block` and
+      `world.level.block.Block` only one declares `getDefaultState`. Fail-closed: candidates that
+      answer must agree. **126 → 120**, and the `Reference` sites became a resolved owner carrying a
+      genuine `26.x` member delta.
+- [x] **30.2** All 14 multi-target rows decided — recorded as **data**, not as 34 hand edits:
+      `MULTI_TARGET_DECISIONS`, keyed `(owner, member, argc)`, each row carrying the call-site fact
+      that decided it. **Guarded**: a decision is applied only if its target is among the candidates
+      the table itself produced, so a stale row cannot invent a member. **120 → 86.**
+      All are arity-decided except two, which the argument type decides:
+      `Registry#getEntry` → **`get`** (§28's own row — the arg is an `Identifier` and the result is
+      `Optional<Holder.Reference<T>>`; `wrapAsHolder` takes the **value** and returns a bare
+      `Holder`), and `Util$OS#open` → **`openUri`** (the argument is `configDir.toUri()`).
+      ⚠️ A check asserting `Registry#getEntry` **refuses** was re-pointed at an undecided arity, not
+      deleted — deleting it would leave the refusal path unguarded, which is not the same as
+      unnecessary.
+- [x] **30.3** `--write` applied to `master`'s `src/`, staged across three commits.
+- [x] **30.4** Error counts, `compileJava`, distinct deduped diagnostics, cap lifted to 20,000:
+
+      | Stage | Errors |
+      |---|---|
+      | baseline (`26.2`, untouched) | **2,639** |
+      | after passes 1+2 | **702** (−73.4%) — reproduces §29's worktree figure exactly |
+      | after the compiler loop | **126** |
+      | after 30.1b (owner disambiguation by member) | **120** |
+      | after the 30.2 decisions | **86** |
+      | after the `getId` collision fix | **56** (−97.9% from baseline) |
+
+      🔴 **`compileTestJava` is still NOT RUN and its `0` is still not a pass** — see 30.4's
+      amendment above. Its first real number belongs to §31.
 - [x] **30.5a** 🔴 **The collision audit was under-reporting by 52× in its DEFAULT mode.** It scopes
       each file to the MC types it imports and read the file **off disk** — where, in dry-run, the
       imports are still *yarn*-named and match nothing in the mojmap table. It saw almost no MC
@@ -2097,10 +2131,34 @@ Classify every survivor as **mechanical miss** (⇒ fix in §30) or **genuine `2
       ⚠️ The failure direction is the dangerous one: it printed a small, *reassuring*, wrong number
       in the mode people actually run, and **exited 1 either way**, so the exit code looked
       identical. 13th vacuous-guard sighting in this repo.
-- [ ] **30.5b** Re-measured: **579 sites over 38 names**, exit 1. Review them — every genuine rename
-      applied, every false positive (`List.add`, `Map.get`) recorded as such.
+- [x] **30.5b** 🔑🔑 **The `Registry#getId` collision: 42 sites, and 12 of them javac never
+      mentioned.** This is §29's prediction measured, and the luck was thinner than §29 thought:
+
+      | How it surfaced | Sites |
+      |---|---|
+      | `int cannot be dereferenced` — the result was dotted | 27 |
+      | `int cannot be converted to X` — the result was returned | 3 |
+      | **no diagnostic at all** | **12** |
+
+      Two different error shapes, both accidents of what the call site did with the value.
+      🔴 **One of the 12 is in MAIN source and is silently wrong today:**
+      `EntityDamageListener:857` —
+      `MANNEQUIN_ID.equals(BuiltInRegistries.ENTITY_TYPE.getId(target.getType()))`.
+      `equals(Object)` takes anything, the `int` autoboxes, and the comparison compiles clean and
+      returns **false forever**. The mannequin check could never match. It would have passed every
+      gate in this repo.
+      Two further invisibility mechanisms found: **string concatenation** (`"..." + int` compiles,
+      so a wrong id prints as a number), and **the test tree cannot report anything yet** — 11 of
+      the 12 are in `src/test/`, which never compiles while main is red.
+      ✅ Verified after: **zero** `BuiltInRegistries.*.getId(` remain; the audit's `getId` row is
+      30 sites → 0. **Fixing the last 12 moved the error count by exactly 0**, which is the whole
+      argument for reading this audit rather than trusting the compiler.
       ⚠️ Check the gate's status **directly**, never through `| tail`: `$?` after a pipeline is the
       pipe's status, and a real exit 1 read as `EXIT=0` once already in this section.
+- [ ] **30.5c** The remaining **562 sites over 38 names** are still unreviewed. Sampling says they
+      are dominated by false positives (`Map.get`, `List.add`, `Set.contains` on plain Java
+      collections that merely share a name with a colliding MC member), but *dominated by* is not
+      *entirely*. This is the honest open item of §30.
 - [ ] **30.6** `.hprof` added to `.gitignore`. Two 4.3 GB dumps sat untracked in the repo root for a
       day; deleted 2026-08-20 on the owner's call. ⚠️ `.gitignore` is in the **gate-10 identity set**,
       so this rides the already-owed sweep and cannot land alone.
