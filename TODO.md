@@ -1954,6 +1954,179 @@ the plan named.
 
 ---
 
+## §30 — §9.3, apply the rename to `master`'s `src/` (owner-ruled 2026-08-20)
+
+§29 built the script and proved it in a **disposable worktree**: 2,643 → 126. §30 applies it to
+`master`'s real `src/` and closes the mechanical residue. Two owner rulings set the shape:
+
+| | Ruled |
+|---|---|
+| **Exit bar** | **Staged. The rename lands RED.** §30 commits the mechanical rename as one reviewable unit with its error count stated in the commit; the genuine `26.x` API delta is **§31**. Rationale: `compileTestJava` has never been measured on `26.2`, so §30's true residue is an unknown — a single green-only commit would be an unbounded task with no checkpoint, which is exactly what context truncation destroys. Precedent: `fcb2d4bbf` already committed red, deliberately. |
+| **The 14 multi-target decisions** | **Agent decides from the call-site arguments**, records each choice *and its evidence* in the table below, owner reviews in the diff. They are not guesses — the argument list decides each one. |
+
+🔴 **`master` stays RED and UNPUSHED throughout §30.** R-z is unchanged: `origin/master` and
+`mc/1.21.11` both sit at `minecraft_version=1.21.11`, so pushing puts two branches on one value and
+each release run reaps the other's release (**R10**). Nothing pushes until §31 is green.
+
+### Why this is not just "run §29's script with `--write`"
+
+§29 measured in a throwaway tree, where a wrong rewrite costs nothing. Here the target is the real
+`src/`, there is **no undo but git**, and three things the worktree run never had to face apply:
+
+1. **`--collisions` must gate this section.** §29's finding is that *a compiler loop cannot see a
+   member that is PRESENT but WRONG*. All 27 `int cannot be dereferenced` errors were **one row**
+   (`Registry#getId` → `getKey`, shadowed by `IdMap.getId(T):int`), caught **only** because the wrong
+   member's return type happened to be incompatible. Had the types lined up it would have compiled,
+   passed every gate, and shipped. `--collisions` reports **575 sites / 37 names** (import-scoped;
+   **4,811 / 74** unscoped, which is an audit nobody reads). It exits 1 while any survive.
+   ⚠️ **It is a REVIEW LIST, never a rewrite** — without javac's typing, `.get(` in a file that
+   imports `Registry` may be `Registry.get` or `Map.get`.
+2. **The test tree is in scope and unmeasured.** 18 of §29's 144 changed files were outside
+   `fabric/`+`platform/`, nearly all tests. `compileTestJava` on `26.2` has **never been run**.
+3. **The 16 owner-ambiguous sites are a TOOLING gap, not hand work** — see 30.1. Doing them by hand
+   would be 16 edits that teach the script nothing and leave the same hole open for §31 and for
+   every band cut after it.
+
+### 30.1 — Close the owner-resolution gap in the script (tooling, not hand edits)
+
+The gap is exact and lives in two functions. `location_type()` returns javac's `location:` as a
+**simple name**; `imported_types()` indexes **only top-level imports**. So three shapes never resolve:
+
+| Shape | Example | Why it fails today |
+|---|---|---|
+| Nested owner | `location: variable pos of type BlockPos.Mutable` | key is `BlockPos.Mutable`; imports hold `BlockPos` |
+| Nested via holder | `Registry.Reference` | same |
+| Un-imported owner | same-package type, `java.lang`, on-demand `import x.y.*` | never enters the import map at all |
+
+Fix, in the script, each with a self-test check:
+- **Dotted resolution.** Split the location on `.`; resolve the outermost segment through
+  `imported_types()`; re-attach inner segments as `Outer$Inner` to hit the table's nested form. The
+  `self.nested` index already built in `Renamer` holds the inner-name renames.
+- **Un-imported fallback, fail-closed.** If the simple name is absent from the imports, look it up
+  across the mojmap table — and **use it only when globally unique**. More than one hit ⇒ the site
+  stays on the worklist. This matches the script's existing refusal design; a guess here is the
+  silent-wrongness class §29 exists to prevent.
+- ❌ **Not doing:** a real Java type-resolver. javac already is one — the point is to consume its
+  answer, not re-derive it.
+
+### 30.2 — The 14 multi-target decisions
+
+34 call sites, **14 distinct choices**. Each row gets its resolved target *and the call-site fact
+that decided it* written into this table before the rewrite. Known from §29:
+
+| Yarn member | Candidates | Decided by |
+|---|---|---|
+| `Block#dropStack` | `popResource` / `popResourceFromFace` | whether a `Direction` is passed |
+| `Identifier#of` | `fromNamespaceAndPath` / `parse` | arity — 2 args vs 1 |
+| `LivingEntity#getYaw` | `getViewYRot` / `getYRot` | whether a partial-tick float is passed |
+| `Registry#getEntry` | `get` / `wrapAsHolder` | §28's own row; argument type |
+| *(remaining rows enumerated at run time)* | | |
+
+⚠️ **§28 ruled these have no answer derivable from a NAME.** They do have one derivable from the
+**call site**, which is the entire reason the rename is call-site-driven. That is not a re-litigation
+of §28 — it is §28's conclusion applied.
+
+### 30.3 — Apply to `master`'s `src/`
+
+Rule zero applies: this rewrites tracked source in place.
+
+- **Gate:** tree clean (`git status --porcelain` empty) — no `--allow-dirty`. Confirmed before the run.
+- **Recoverable:** `31ea81fc8` is committed and is the exact undo. Stated in Rollback below.
+- **Dry-run first**, always: a plain run writes nothing. Read the counts, *then* `--write`.
+- **Staged, not one shot:** passes 1+2 → build → checkpoint → `--loop` → build. Not ten edits
+  then a build.
+- **Both trees:** `--tasks compileJava,compileTestJava`. A `compileJava`-only number is a lie about
+  this section.
+
+### 30.4 — Measure and classify
+
+🔴 **AMENDED 2026-08-20, and the amendment is the finding.** This section was written expecting
+**four** numbers — main and test, at each stage. Only the main ones are obtainable, and the reason
+is structural rather than a tooling gap:
+
+> **`compileTestJava` CONSUMES `compileJava`'s output.** It is a *dependency*, not merely a later
+> task, so `--continue` cannot reach it: while main is red the test tree is **never compiled at
+> all**. Its error count reads as a clean **0**, which is indistinguishable from "the test tree is
+> fine". The test tree's first real number therefore belongs to **§31**, after main hits zero.
+
+Two real defects were found getting to that answer, both of which made the first run *look* like it
+had measured both trees:
+
+| Defect | Symptom | Fix |
+|---|---|---|
+| No `--continue` | Gradle stops at the first failing task | `MAXERRS_CMD_FLAGS` now carries it |
+| `total = max(counts)` over Gradle's `N errors` summary lines | correct for ONE task (Gradle echoes each summary twice, and `max()` deduped that); across two it silently reports the **larger task, not the sum** | `count_by_tree()` counts deduped diagnostics and buckets on `/src/test/` |
+
+`--baseline` now prints the per-tree split **and the per-task outcome together**, because
+`src/test: 0` on its own is a lie:
+
+```
+baseline: 2,639 errors (maxerrs=20,000)
+  src/main: 2,639
+  src/test: 0
+  task compileJava: FAILED
+  task compileTestJava: NOT RUN      <- the 0 above means THIS, not "clean"
+```
+
+⚠️ **Two baseline numbers, and they measure different things.** **2,643** is `max()` over Gradle's
+summary lines (§29's figure); **2,639** is distinct deduped diagnostics. Both are `compileJava`
+**only**. §30 quotes **2,639** and says which it is — §27 already lost a day to an unlabelled count.
+
+Classify every survivor as **mechanical miss** (⇒ fix in §30) or **genuine `26.x` delta** (⇒ §31).
+
+### Deliverables
+
+- [x] **30.1** `Renamer.resolve_owner()` — one fail-closed resolver replacing the inline chain in
+      the loop. ⚠️ **The gap was narrower than this plan assumed:** the globally-unique fallback
+      already existed and was already fail-closed. The real hole was **nested owners only** — javac
+      prints `Menu.Bay`, the table keys it `Menu$Bay`, and `simple_of()` keys `moj_simple` by the
+      **inner** name (`Bay`) alone, so a dotted location matched *no index at all* and was reported
+      as `ambiguous (0 candidates)` — a resolvable type made indistinguishable from an unknown one.
+      Self-test **42 → 64 checks**, and four mutations were **watched go red** before any of it was
+      believed: nested branch off (3 red, printing the exact pre-fix `0 candidates`), `--continue`
+      removed (1 red), dedupe off and test-bucketing off (3 red).
+- [ ] **30.2** All 14 multi-target rows decided, each with its deciding call-site fact in the table.
+- [ ] **30.3** `--write` applied to `master`'s `src/`, staged, both compile tasks.
+- [ ] **30.4** Four labelled error counts; residue classified mechanical vs `26.x` delta.
+- [x] **30.5a** 🔴 **The collision audit was under-reporting by 52× in its DEFAULT mode.** It scopes
+      each file to the MC types it imports and read the file **off disk** — where, in dry-run, the
+      imports are still *yarn*-named and match nothing in the mojmap table. It saw almost no MC
+      types, so it found almost no collisions: **11 sites over 3 names**, against §29's 575. §29's
+      figure was taken on a tree where passes 1+2 had already been WRITTEN. Fixed with
+      `renamed_text()` — passes 1+2 applied **in memory** — so dry-run and `--write` agree.
+      ⚠️ The failure direction is the dangerous one: it printed a small, *reassuring*, wrong number
+      in the mode people actually run, and **exited 1 either way**, so the exit code looked
+      identical. 13th vacuous-guard sighting in this repo.
+- [ ] **30.5b** Re-measured: **579 sites over 38 names**, exit 1. Review them — every genuine rename
+      applied, every false positive (`List.add`, `Map.get`) recorded as such.
+      ⚠️ Check the gate's status **directly**, never through `| tail`: `$?` after a pipeline is the
+      pipe's status, and a real exit 1 read as `EXIT=0` once already in this section.
+- [ ] **30.6** `.hprof` added to `.gitignore`. Two 4.3 GB dumps sat untracked in the repo root for a
+      day; deleted 2026-08-20 on the owner's call. ⚠️ `.gitignore` is in the **gate-10 identity set**,
+      so this rides the already-owed sweep and cannot land alone.
+- [ ] **30.7** Commit, RED, with the error count in the message and a `Backport-not-needed:` line —
+      the rename is `26.x`-only and must not reach a band.
+
+### What I am NOT doing
+
+* **Not closing the genuine `26.x` API delta.** ~27 signature changes and the
+  `advancements/criterion` → `advancements/triggers` package move are **§31**.
+* **Not pushing, and not touching any band branch.** R-z holds; `mc/1.21.11` stays held.
+* **Not building R-aa** (the per-band `java_version` key). Ruled, not implemented; lands with the push.
+* **Not touching `probe-bands.py` / `mixin-allow-audit.py`.** Still yarn-named, still blind on this
+  branch; they are the rest of 9.3, after the rename exists.
+* **Not rebuilding §28's descriptor `.tsv`.** Superseded on this path (§29).
+* **Not letting `--collisions` rewrite anything.** Review list only.
+
+### Rollback
+
+* `git reset --hard 31ea81fc8` restores `master` to the pre-§30 state. This is the whole undo, and it
+  is sufficient **only because the tree is clean before the run** — that is why 30.3 gates on it.
+* The script changes are additive; `--write` is still opt-in and dry-run is still the default.
+* No band branch and no remote is read or written in this section.
+
+---
+
 ## Other open work
 
 - [x] ✅ **DONE 2026-08-20 — `scripts/gradle-key-identity-audit.py` closes R-w′.** Ship-gate **11**,

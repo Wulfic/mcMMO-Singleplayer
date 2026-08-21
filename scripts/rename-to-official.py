@@ -263,6 +263,46 @@ class Renamer:
                 out[simple_of(fqn)] = fqn
         return out
 
+    def resolve_owner(self, simple: str, imports: dict[str, str]) -> tuple[str | None, str]:
+        """javac's `location:` simple name -> a mojmap FQN owner, or (None, reason).
+
+        Fail-closed at every step. Guessing an owner here is the SILENT-wrongness class that §29
+        found the hard way: a wrong owner resolves a member that genuinely EXISTS on it, so the
+        call binds and javac reports nothing. A site we cannot pin uniquely goes to the worklist,
+        where a human reads it, and that is the cheaper failure by a wide margin.
+        """
+        if not simple:
+            return None, "empty location"
+        # 1. the file imports it, or javac printed a fully-qualified name
+        hit = imports.get(simple)
+        if hit:
+            return hit, "import"
+        if simple in self.moj2yarn:
+            return simple, "fqn"
+        # 2. NESTED. javac spells it `Outer.Inner`; the table spells it `Outer$Inner`, and
+        #    `simple_of` keys moj_simple by the INNER name alone (`Mutable`, `Reference`), so a
+        #    dotted location misses every index above and lands in the global fallback as ZERO
+        #    candidates -- indistinguishable from an unknown type. Resolve the OUTERMOST segment
+        #    (the one the file actually imports) and re-attach the inners with `$`.
+        if "." in simple:
+            head, *inner = simple.split(".")
+            base = imports.get(head) or (head if head in self.moj2yarn else None)
+            if base is None:
+                cands = self.moj_simple.get(head, set())
+                base = next(iter(cands)) if len(cands) == 1 else None
+            if base is None:
+                return None, f"owner '{simple}': outer '{head}' unresolved"
+            cand = base + "$" + "$".join(inner)
+            if cand in self.moj2yarn:
+                return cand, "nested"
+            return None, f"owner '{simple}' -> '{cand}' not in table"
+        # 3. not imported at all -- same-package, java.lang, or an on-demand `import x.y.*`.
+        #    Usable ONLY when the simple name is globally unique across the table.
+        cands = self.moj_simple.get(simple, set())
+        if len(cands) == 1:
+            return next(iter(cands)), "unique-global"
+        return None, f"owner '{simple}' ambiguous ({len(cands)} candidates)"
+
     def rewrite_simple_names(self, text: str) -> tuple[str, int, list[str]]:
         """Rename yarn simple type names to mojmap ones, scoped to this file's own imports.
 
@@ -485,6 +525,32 @@ allprojects {
 """
 
 
+MAXERRS_CMD_FLAGS = ["--console=plain", "--no-configuration-cache", "--continue"]
+
+
+def count_by_tree(log: str) -> tuple[int, int, int]:
+    """(main, test, total) DISTINCT javac errors, bucketed by source tree.
+
+    Not `max()` over Gradle's `N errors` summary lines. That worked for one task -- Gradle echoes
+    each summary TWICE, once as task output and again inside `What went wrong`, and max() deduped
+    that -- but across TWO tasks max() silently reports the larger task instead of the sum. §30.4
+    needs a figure per tree, so count the diagnostics themselves and dedupe on identity.
+    """
+    seen = set()
+    main_n = test_n = 0
+    for e in parse_javac(log):
+        key = (e.path, e.line, e.col, e.msg)
+        if key in seen:
+            continue
+        seen.add(key)
+        norm = (e.path or "").replace("\\", "/")
+        if "/src/test/" in norm:
+            test_n += 1
+        else:
+            main_n += 1
+    return main_n, test_n, main_n + test_n
+
+
 def compile_once(root: Path, maxerrs: int, tasks: list[str]) -> tuple[str, int]:
     """Run javac through Gradle with the 100-error cap LIFTED, and return (log, error count).
 
@@ -507,7 +573,12 @@ def compile_once(root: Path, maxerrs: int, tasks: list[str]) -> tuple[str, int]:
         # HeapDumpOnOutOfMemoryError is dropped deliberately: on a 4G+ daemon it writes a
         # multi-gigabyte .hprof into the repo root before dying. Two such files are sitting in this
         # repo from earlier runs of exactly this measurement.
-        cmd = [str(gradlew), "--console=plain", "--no-configuration-cache",
+        # --continue is load-bearing, not politeness. Without it Gradle stops at the FIRST
+        # failing task, so while compileJava is red compileTestJava never runs at all and its
+        # error count reads as zero -- a measurement that looks like "the test tree is fine".
+        # The first §30 baseline run reported 2,643 for `compileJava,compileTestJava`, byte-for-byte
+        # the §29 compileJava-ONLY figure, which is exactly what this bug looks like.
+        cmd = [str(gradlew)] + MAXERRS_CMD_FLAGS + [
                "-Dorg.gradle.jvmargs=-Xmx8G -XX:MaxMetaspaceSize=1G",
                "--init-script", str(init)] + tasks
         # stdin=DEVNULL is NOT tidiness. Launched from Python with an inherited stdin handle,
@@ -521,9 +592,7 @@ def compile_once(root: Path, maxerrs: int, tasks: list[str]) -> tuple[str, int]:
         log = proc.stdout + proc.stderr
     finally:
         init.unlink(missing_ok=True)
-    counts = [int(x) for x in re.findall(r"^(\d+) errors?$", log, re.M)]
-    total = max(counts) if counts else len(parse_javac(log))
-    return log, total
+    return log, count_by_tree(log)[2]
 
 
 # --------------------------------------------------------------------------------------------
@@ -556,6 +625,22 @@ def targets(root: Path, only: str | None) -> list[Path]:
 # --------------------------------------------------------------------------------------------
 # the passes, driven
 # --------------------------------------------------------------------------------------------
+
+def renamed_text(ren: Renamer, path: Path) -> str:
+    """The file as passes 1+2 WOULD leave it -- computed in memory, never read back from disk.
+
+    The collision audit must scope on the MC types a file imports, and after the rename those
+    imports are mojmap FQNs. Reading the file off disk gives the pre-rename YARN imports, which
+    match nothing in `moj2yarn`, so the audit sees almost no MC types and reports almost no
+    sites. Measured on `master` 2026-08-20: 11 sites over 3 names from disk text, against 575
+    over 37 from renamed text -- the SAME tree. The small number is the wrong one, and it is what
+    the DEFAULT (dry-run) mode printed.
+    """
+    text, _ = ren.rewrite_fqns(path.read_text(encoding="utf-8"))
+    if path.suffix == ".java":
+        text, _, _ = ren.rewrite_simple_names(text)
+    return text
+
 
 def run_passes(ren: Renamer, root: Path, files: list[Path], write: bool) -> dict:
     stats = {"files": 0, "fqn": 0, "simple": 0, "skipped": []}
@@ -606,14 +691,10 @@ def run_loop(ren: Renamer, root: Path, maxerrs: int, rounds: int,
             if not src.is_file():
                 continue
             imports = ren.imported_types(src.read_text(encoding="utf-8"))
-            owner = imports.get(simple) or (simple if simple in ren.moj2yarn else None)
+            owner, why = ren.resolve_owner(simple, imports)
             if owner is None:
-                cands = ren.moj_simple.get(simple, set())
-                if len(cands) != 1:
-                    worklist.append(f"{e.path}:{e.line} {e.symbol_name}: owner '{simple}' "
-                                    f"ambiguous ({len(cands)} candidates)")
-                    continue
-                owner = next(iter(cands))
+                worklist.append(f"{e.path}:{e.line} {e.symbol_name}: {why}")
+                continue
             new, note = ren.resolve_member(owner, e.symbol_name, e.argc)
             if new is None:
                 worklist.append(f"{e.path}:{e.line} {note}")
@@ -686,6 +767,14 @@ def _fixture_table(mod):
     tab.members[("net.minecraft.registry.IdMap", "getRawId")] = {"getId"}
     tab.members[("net.minecraft.registry.Registry", "getId")] = {"getKey"}
     tab.members[("net.minecraft.world.item.ItemStack", "getCount")] = {"getCount"}
+    # Two DIFFERENT moj classes carrying the simple name `Block`. Without this the fixture has
+    # no ambiguous simple name at all, so the fail-closed branch of resolve_owner would be
+    # asserted by nothing -- a guard with no test is decoration.
+    for _y, _m in (("net/minecraft/block/Block", "net.minecraft.world.level.block.Block"),
+                   ("net/minecraft/entity/BlockEntity", "net.minecraft.world.entity.Block")):
+        tab.classes[_y] = _m
+        tab.yarn2obf[_y] = "obf_" + _y.rsplit("/", 1)[-1]
+        tab.obf2moj[tab.yarn2obf[_y]] = _m
 
     tab.by_obf["obf_Entity"] = {"getWorld": {"level"}}
     tab.by_obf["obf_LivingEntity"] = {"getHealth": {"getHealth"}}
@@ -794,6 +883,63 @@ def self_test() -> int:
                       "  symbol:   method f(Map<A,B>,C)\n"
                       "  location: class A\n")[0].argc, 2)
 
+    # ---- the collision audit must not depend on WRITE MODE (30.5) --------------------------
+    import tempfile as _tf
+    with _tf.TemporaryDirectory() as _d:
+        _p = Path(_d) / "Z.java"
+        _p.write_text("import net.minecraft.registry.Registry;\n"
+                      "class Z { void f(Registry r) { r.getId(x); } }\n", encoding="utf-8")
+        _t = renamed_text(ren, _p)
+        check("renamed_text rewrites the import without writing",
+              "net.minecraft.core.Registry" in _t, True)
+        check("renamed_text leaves the file on disk ALONE",
+              "net.minecraft.registry.Registry" in _p.read_text(encoding="utf-8"), True)
+        # the whole point: scoping off DISK text finds no MC import, off renamed text it does
+        check("disk text scopes to NOTHING (the old, wrong behaviour)",
+              len(ren.imported_types(_p.read_text(encoding="utf-8"))), 0)
+        check("renamed text scopes to the real owner",
+              ren.imported_types(_t).get("Registry"), "net.minecraft.core.Registry")
+
+    # ---- owner resolution (30.1) ----------------------------------------------------------
+    IMP = {"Menu": "net.minecraft.world.inventory.Menu"}
+    check("owner via import", ren.resolve_owner("Menu", IMP)[0],
+          "net.minecraft.world.inventory.Menu")
+    check("owner via fqn", ren.resolve_owner("net.minecraft.core.Registry", {})[0],
+          "net.minecraft.core.Registry")
+    # THE 30.1 GAP: javac prints `Menu.Bay`, the table keys it `Menu$Bay`, and moj_simple keys it
+    # by the INNER name `Bay` alone -- so before this fix the dotted form matched no index at all
+    # and was reported as "ambiguous (0 candidates)": a real, resolvable type made
+    # indistinguishable from an unknown one.
+    check("owner NESTED via dotted location", ren.resolve_owner("Menu.Bay", IMP),
+          ("net.minecraft.world.inventory.Menu$Bay", "nested"))
+    check("owner nested resolves with an EMPTY import map too",
+          ren.resolve_owner("Menu.Bay", {})[0], "net.minecraft.world.inventory.Menu$Bay")
+    check("owner nested, outer unknown -> refuses",
+          ren.resolve_owner("Nope.Inner", {})[0], None)
+    check("owner nested, inner not in table -> refuses",
+          ren.resolve_owner("Menu.Ghost", IMP)[0], None)
+    check("owner un-imported unique moj name resolves",
+          ren.resolve_owner("ChatFormatting", {})[0], "net.minecraft.ChatFormatting")
+    # fail-closed: two moj classes are named `Block`, so no owner may be chosen
+    check("owner AMBIGUOUS -> refuses, does not guess",
+          ren.resolve_owner("Block", {})[0], None)
+    check("owner ambiguous reason names the count",
+          "2 candidates" in ren.resolve_owner("Block", {})[1], True)
+    check("owner ambiguity is overridden by an explicit import",
+          ren.resolve_owner("Block", {"Block": "net.minecraft.world.level.block.Block"})[0],
+          "net.minecraft.world.level.block.Block")
+    check("owner empty location -> refuses", ren.resolve_owner("", {})[0], None)
+
+    # ---- per-tree error counting (30.4) ----------------------------------------------------
+    LOG = ("> Task :compileJava FAILED\n"
+           "C:\\r\\src\\main\\java\\A.java:3: error: cannot find symbol\n"
+           "C:\\r\\src\\main\\java\\A.java:3: error: cannot find symbol\n"
+           "C:\\r\\src\\test\\java\\T.java:9: error: cannot find symbol\n")
+    main_n, test_n, tot = count_by_tree(LOG)
+    check("count_by_tree dedupes Gradle's double echo", main_n, 1)
+    check("count_by_tree buckets the test tree", test_n, 1)
+    check("count_by_tree total", tot, 2)
+
     # ---- member resolution ---------------------------------------------------------------
     check("member direct",
           ren.resolve_member("net.minecraft.world.item.ItemStack", "damage", 3)[0], "hurtAndBreak")
@@ -871,6 +1017,29 @@ def self_test() -> int:
     _, unmasked = re.subn(r"(?<![.\w])World\b", "Level", txt)
     check("M3 masking OFF changes the answer (0 -> 1)", unmasked, 1)
 
+    # M4: disable the nested-owner branch -> a resolvable type must read as unresolvable again
+    orig_ro = Renamer.resolve_owner
+
+    def m4(self, simple, imports):
+        if "." in simple and simple not in imports and simple not in self.moj2yarn:
+            cands = self.moj_simple.get(simple, set())
+            if len(cands) != 1:
+                return None, f"owner '{simple}' ambiguous ({len(cands)} candidates)"
+            return next(iter(cands)), "unique-global"
+        return orig_ro(self, simple, imports)
+
+    Renamer.resolve_owner = m4
+    m4_got = ren.resolve_owner("Menu.Bay", IMP)
+    Renamer.resolve_owner = orig_ro
+    check("M4 nested branch OFF changes the answer (resolved -> refused)", m4_got[0], None)
+    check("M4 and the pre-fix reason was the misleading '0 candidates'",
+          "0 candidates" in m4_got[1], True)
+    check("M4 restored", ren.resolve_owner("Menu.Bay", IMP)[1], "nested")
+
+    # M5: drop --continue -> the second compile task never runs, so its errors read as ZERO
+    check("M5 --continue is present, or compileTestJava is never measured",
+          "--continue" in MAXERRS_CMD_FLAGS, True)
+
     print(f"\n  {checks} checks, {failures} failed")
     return 1 if failures else 0
 
@@ -897,6 +1066,7 @@ def main() -> int:
     ap.add_argument("--rounds", type=int, default=6, help="max compiler rounds (default 6)")
     ap.add_argument("--maxerrs", type=int, default=100000,
                     help="javac -Xmaxerrs; the default 100 CAP MAKES EVERY MEASUREMENT A LIE")
+    ap.add_argument("--log", help="write the full compiler log here (for classifying residue)")
     ap.add_argument("--baseline", action="store_true",
                     help="just compile and report the error count, change nothing")
     ap.add_argument("--cache", help="ProGuard map cache dir (never the repo)")
@@ -911,8 +1081,28 @@ def main() -> int:
     tasks = [t for t in args.tasks.split(",") if t]
 
     if args.baseline:
-        _, n = compile_once(root, args.maxerrs, tasks)
+        log, n = compile_once(root, args.maxerrs, tasks)
+        main_n, test_n, _ = count_by_tree(log)
         print(f"baseline: {n:,} errors (maxerrs={args.maxerrs:,})")
+        print(f"  src/main: {main_n:,}")
+        print(f"  src/test: {test_n:,}")
+        # WHICH TASKS ACTUALLY RAN. `compileTestJava` CONSUMES compileJava's output, so it is a
+        # dependency and not merely a later task: while compileJava is red, --continue cannot make
+        # compileTestJava run, and its error count reads as a clean ZERO. Printing the outcome per
+        # task is the difference between "the test tree is fine" and "the test tree was never
+        # compiled", which are otherwise the same number.
+        for t in tasks:
+            short = t.rsplit(":", 1)[-1]
+            state = "NOT RUN"
+            for suffix, label in ((" FAILED", "FAILED"), (" SKIPPED", "SKIPPED"),
+                                  (" UP-TO-DATE", "UP-TO-DATE"), ("", "ran")):
+                if f"> Task :{short}{suffix}" in log:
+                    state = label
+                    break
+            print(f"  task {short}: {state}")
+        if args.log:
+            Path(args.log).write_text(log, encoding="utf-8")
+            print(f"  full log -> {args.log}")
         return 0
 
     if not args.mc:
@@ -971,7 +1161,10 @@ def main() -> int:
         for path in files:
             if path.suffix != ".java":
                 continue
-            text = path.read_text(encoding="utf-8")
+            # POST-pass text, not the file on disk. In dry-run the disk copy is still
+            # yarn-named, its imports match nothing in the mojmap table, and the audit then
+            # reports a small, reassuring, WRONG number. See renamed_text().
+            text = renamed_text(ren, path)
             # Only names reachable on an MC type THIS FILE IMPORTS. A bare-name search matches
             # every List.add() in the repo and drowns the finding.
             names: set[str] = set()
