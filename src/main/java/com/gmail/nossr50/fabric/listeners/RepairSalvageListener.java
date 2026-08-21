@@ -115,7 +115,7 @@ public final class RepairSalvageListener {
 
         final BlockPos pos = hitResult.getBlockPos();
         final AnvilKind kind = anvilKindAt(world, pos);
-        if (kind == null || !isAnvilAction(kind, player.getMainHandStack())) {
+        if (kind == null || !isAnvilAction(kind, player.getMainHandItem())) {
             return InteractionResult.PASS; // not an mcMMO anvil action — let vanilla have the click.
         }
 
@@ -154,7 +154,7 @@ public final class RepairSalvageListener {
         if (kind == null) {
             return;
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             return;
         }
@@ -240,7 +240,7 @@ public final class RepairSalvageListener {
      * on it), {@link ActionResult#PASS} when the held item is not something mcMMO repairs.
      */
     private static InteractionResult handleRepairInteraction(ServerPlayer serverPlayer) {
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             return InteractionResult.PASS;
         }
@@ -248,7 +248,7 @@ public final class RepairSalvageListener {
         // Re-resolved on this side rather than carried over from onUseBlock's gate: the client fires
         // first and the two sides hold different ItemStack instances, so the hand is read where it is
         // acted on.
-        final ItemStack item = serverPlayer.getMainHandStack();
+        final ItemStack item = serverPlayer.getMainHandItem();
         final Repairable repairable = repairableInHand(item);
         if (repairable == null) {
             return InteractionResult.PASS; // the held item is not repairable — let vanilla have the click.
@@ -267,7 +267,7 @@ public final class RepairSalvageListener {
     private static void performRepair(ServerPlayer serverPlayer, McMMOPlayer mmoPlayer,
             RepairManager repairManager, ItemStack item, String itemPath, Repairable repairable) {
         // Unbreakable items cannot be repaired.
-        if (item.contains(DataComponents.UNBREAKABLE)) {
+        if (item.has(DataComponents.UNBREAKABLE)) {
             NotificationManager.sendPlayerInformation(mmoPlayer,
                     NotificationType.SUBSKILL_MESSAGE_FAILED, "Anvil.Unbreakable");
             return;
@@ -283,7 +283,7 @@ public final class RepairSalvageListener {
         }
 
         // Do not repair an item that is already at full durability.
-        final short startDurability = (short) item.getDamage();
+        final short startDurability = (short) item.getDamageValue();
         if (startDurability <= 0) {
             NotificationManager.sendPlayerInformation(mmoPlayer,
                     NotificationType.SUBSKILL_MESSAGE_FAILED, "Repair.Skills.FullDurability");
@@ -321,7 +321,7 @@ public final class RepairSalvageListener {
         // fall back to the first *unenchanted* stack, and refuse the repair when only enchanted ones
         // are on hand — legacy reports the identical "you need more material" failure either way.
         if (!McMMOMod.getAdvancedConfig().getAllowEnchantedRepairMaterials()
-                && isEnchanted(inventory.getStack(materialSlot))) {
+                && isEnchanted(inventory.getItem(materialSlot))) {
             materialSlot = findMaterialSlot(inventory, repairItem, true);
             if (materialSlot < 0) {
                 notifyMissingRepairMaterial(mmoPlayer, repairable);
@@ -343,7 +343,7 @@ public final class RepairSalvageListener {
                 repairManager.repairCalculate(startDurability, baseRepairAmount, superRepair);
 
         // Consume one repair material.
-        inventory.removeStack(materialSlot, 1);
+        inventory.removeItem(materialSlot, 1);
 
         // Award Repair XP (MC-free formula on the manager).
         repairManager.awardRepairXp(startDurability, newDurability, repairable);
@@ -355,7 +355,7 @@ public final class RepairSalvageListener {
         }
 
         // Repair the item.
-        item.setDamage(newDurability);
+        item.setDamageValue(newDurability);
     }
 
     /**
@@ -374,7 +374,7 @@ public final class RepairSalvageListener {
      */
     private static void applyArcaneForging(McMMOPlayer mmoPlayer, RepairManager repairManager,
             ItemStack item) {
-        final ItemEnchantments enchants = EnchantmentHelper.getEnchantments(item);
+        final ItemEnchantments enchants = EnchantmentHelper.getEnchantmentsForCrafting(item);
         if (enchants.isEmpty()) {
             return; // an unenchanted item has nothing to lose.
         }
@@ -388,18 +388,18 @@ public final class RepairSalvageListener {
 
         // No Arcane Forging rank ⇒ the arcane energies are lost entirely.
         if (!repairManager.canKeepEnchants()) {
-            EnchantmentHelper.set(item, ItemEnchantments.DEFAULT);
+            EnchantmentHelper.setEnchantments(item, ItemEnchantments.EMPTY);
             NotificationManager.sendPlayerInformation(mmoPlayer,
                     NotificationType.SUBSKILL_MESSAGE_FAILED, "Repair.Arcane.Lost");
             return;
         }
 
         final boolean allowUnsafe = allowUnsafeEnchantments();
-        final int startingCount = enchants.getSize();
+        final int startingCount = enchants.size();
         final Map<Holder<Enchantment>, Integer> survivors = new LinkedHashMap<>();
         boolean downgraded = false;
 
-        for (Holder<Enchantment> enchantment : enchants.getEnchantments()) {
+        for (Holder<Enchantment> enchantment : enchants.keySet()) {
             // Legacy clamps an over-levelled ("unsafe") enchantment down to the vanilla maximum
             // before rolling, so a repair also launders illegally-high levels unless allowed.
             int level = enchants.getLevel(enchantment);
@@ -423,7 +423,7 @@ public final class RepairSalvageListener {
             }
         }
 
-        EnchantmentHelper.set(item, componentOf(survivors));
+        EnchantmentHelper.setEnchantments(item, componentOf(survivors));
 
         if (survivors.isEmpty()) {
             NotificationManager.sendPlayerInformationChatOnly(mmoPlayer, "Repair.Arcane.Fail");
@@ -440,13 +440,13 @@ public final class RepairSalvageListener {
      */
     private static InteractionResult handleSalvageInteraction(ServerPlayer serverPlayer,
             Level world, BlockPos pos) {
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             return InteractionResult.PASS;
         }
 
         // Re-resolved on this side for the same reason as in handleRepairInteraction.
-        final ItemStack item = serverPlayer.getMainHandStack();
+        final ItemStack item = serverPlayer.getMainHandItem();
         final Salvageable salvageable = salvageableInHand(item);
         if (salvageable == null) {
             return InteractionResult.PASS; // the held item is not salvageable.
@@ -471,7 +471,7 @@ public final class RepairSalvageListener {
             SalvageManager salvageManager, ItemStack item, String itemPath, Salvageable salvageable,
             Level world, BlockPos pos) {
         // Unbreakable items cannot be salvaged.
-        if (item.contains(DataComponents.UNBREAKABLE)) {
+        if (item.has(DataComponents.UNBREAKABLE)) {
             NotificationManager.sendPlayerInformation(mmoPlayer,
                     NotificationType.SUBSKILL_MESSAGE_FAILED, "Anvil.Unbreakable");
             return;
@@ -487,7 +487,7 @@ public final class RepairSalvageListener {
         }
 
         // Yield scales with how damaged the item is, capped by Scrap Collector.
-        int potentialSalvageYield = SalvageManager.calculateSalvageableAmount(item.getDamage(),
+        int potentialSalvageYield = SalvageManager.calculateSalvageableAmount(item.getDamageValue(),
                 salvageable.getMaximumDurability(), salvageable.getMaximumQuantity());
         if (potentialSalvageYield <= 0) {
             NotificationManager.sendPlayerInformation(mmoPlayer,
@@ -511,13 +511,13 @@ public final class RepairSalvageListener {
                 String.valueOf(potentialSalvageYield), StringUtils.getPrettyString(itemPath));
 
         // Consume the salvaged item (salvage only ever operates on a single, non-stacking item).
-        serverPlayer.setStackInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+        serverPlayer.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
 
         // Pop the recovered materials out of the top of the anvil.
         if (enchantBook != null) {
-            Block.dropStack(world, pos.up(), enchantBook);
+            Block.popResource(world, pos.above(), enchantBook);
         }
-        Block.dropStack(world, pos.up(), new ItemStack(salvageItemOpt.get(), potentialSalvageYield));
+        Block.popResource(world, pos.above(), new ItemStack(salvageItemOpt.get(), potentialSalvageYield));
 
         if (McMMOMod.getGeneralConfig().getSalvageAnvilUseSoundsEnabled()) {
             SoundManager.sendSound(mmoPlayer.getPlayer(), SoundType.ITEM_BREAK);
@@ -540,7 +540,7 @@ public final class RepairSalvageListener {
      */
     private static @Nullable ItemStack buildArcaneSalvageBook(McMMOPlayer mmoPlayer,
             SalvageManager salvageManager, ItemStack item) {
-        final ItemEnchantments enchants = EnchantmentHelper.getEnchantments(item);
+        final ItemEnchantments enchants = EnchantmentHelper.getEnchantmentsForCrafting(item);
         if (enchants.isEmpty()) {
             return null; // an unenchanted item yields no book (legacy skips the check entirely).
         }
@@ -556,7 +556,7 @@ public final class RepairSalvageListener {
         int arcaneFailureCount = 0;
         boolean downgraded = false;
 
-        for (Holder<Enchantment> enchantment : enchants.getEnchantments()) {
+        for (Holder<Enchantment> enchantment : enchants.keySet()) {
             // Unlike Arcane Forging this clamp only bounds what the book receives — the source item
             // is being destroyed, so there is nothing to write the clamped level back to.
             int level = enchants.getLevel(enchantment);
@@ -580,7 +580,7 @@ public final class RepairSalvageListener {
             }
         }
 
-        if (salvageManager.failedAllEnchants(arcaneFailureCount, enchants.getSize())) {
+        if (salvageManager.failedAllEnchants(arcaneFailureCount, enchants.size())) {
             NotificationManager.sendPlayerInformationChatOnly(mmoPlayer,
                     "Salvage.Skills.ArcaneFailed");
             return null;
@@ -609,9 +609,9 @@ public final class RepairSalvageListener {
     private static ItemEnchantments componentOf(
             Map<Holder<Enchantment>, Integer> levels) {
         final ItemEnchantments.Mutable builder =
-                new ItemEnchantments.Mutable(ItemEnchantments.DEFAULT);
+                new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
         levels.forEach(builder::set);
-        return builder.build();
+        return toImmutableer.build();
     }
 
     /**
@@ -659,9 +659,9 @@ public final class RepairSalvageListener {
      */
     private static int findMaterialSlot(Inventory inventory, Item material,
             boolean requireUnenchanted) {
-        for (int slot = 0; slot < inventory.size(); slot++) {
-            final ItemStack stack = inventory.getStack(slot);
-            if (stack.isEmpty() || !stack.isOf(material)) {
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            final ItemStack stack = inventory.getItem(slot);
+            if (stack.isEmpty() || !stack.is(material)) {
                 continue;
             }
             if (requireUnenchanted && isEnchanted(stack)) {
@@ -679,7 +679,7 @@ public final class RepairSalvageListener {
      * knob (do not consume an enchanted item as scrap) and only reachable via a custom repair.yml.
      */
     private static boolean isEnchanted(ItemStack stack) {
-        return !EnchantmentHelper.getEnchantments(stack).isEmpty();
+        return !EnchantmentHelper.getEnchantmentsForCrafting(stack).isEmpty();
     }
 
     /**

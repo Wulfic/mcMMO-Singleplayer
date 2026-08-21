@@ -295,7 +295,7 @@ public class McMMOMod implements ModInitializer {
             pruneConfigEntriesUnavailableOnThisVersion();
             // Phase 5: bind the per-world profile store under <worldRoot>/mcmmo/players/. Player
             // profiles load lazily on join (PlayerSessionListener), not eagerly here.
-            final Path modDataDir = startingServer.getSavePath(LevelResource.ROOT).resolve(MOD_ID);
+            final Path modDataDir = startingServer.getWorldPath(LevelResource.ROOT).resolve(MOD_ID);
             McMMOMod.setProfileStore(new FlatFileProfileStore(modDataDir.resolve("players")));
             // §A/K9: load this world's hand-placed-block flags before any block can be broken, so a
             // block placed in a previous session is still ineligible for gathering rewards. Bound

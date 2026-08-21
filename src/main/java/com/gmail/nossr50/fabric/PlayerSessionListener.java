@@ -112,7 +112,7 @@ public final class PlayerSessionListener {
      * @param vanilla the replacement entity for the respawned player
      */
     private static void onRespawn(ServerPlayer vanilla) {
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(vanilla.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(vanilla.getUUID());
         if (mmoPlayer == null) {
             // Only reachable if the join load failed or was skipped; the player simply has no mcMMO
             // state to re-point, but log it because a silent miss here degrades the whole session.
@@ -126,7 +126,7 @@ public final class PlayerSessionListener {
     }
 
     private static void onQuit(ServerPlayer vanilla) {
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(vanilla.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(vanilla.getUUID());
         if (mmoPlayer == null) {
             return;
         }
@@ -136,11 +136,11 @@ public final class PlayerSessionListener {
             McMMOMod.LOGGER.error("Failed to save mcMMO data for {} on quit.",
                     mmoPlayer.getPlayerName(), e);
         } finally {
-            UserManager.remove(vanilla.getUuid());
+            UserManager.remove(vanilla.getUUID());
             // Despawn the player's Call-of-the-Wild summons so persistent pets aren't orphaned in the
             // saved world. Ordered after UserManager.remove: the summon's despawn resolves its owner
             // through UserManager to notify them, which is correctly skipped for a leaving player.
-            McMMOMod.getTransientEntityTracker().cleanupPlayer(vanilla.getUuid());
+            McMMOMod.getTransientEntityTracker().cleanupPlayer(vanilla.getUUID());
         }
     }
 

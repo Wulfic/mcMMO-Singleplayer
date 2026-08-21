@@ -83,7 +83,7 @@ public final class TreeFellerProcessor {
             return;
         }
 
-        final ItemStack axe = breaker.getMainHandStack();
+        final ItemStack axe = breaker.getMainHandItem();
         if (!canSustainDurabilityLoss(axe, felled)) {
             NotificationManager.sendPlayerInformation(mmoPlayer,
                     NotificationType.SUBSKILL_MESSAGE_FAILED,
@@ -171,7 +171,7 @@ public final class TreeFellerProcessor {
                     BlockDrops.dropBonusLoot(world, pos, state, blockEntity, breaker, axe, bonusRounds);
                 }
 
-                world.breakBlock(pos, false);
+                world.destroyBlock(pos, false);
 
                 // Only advance the reduction counter when a log actually paid out XP (legacy parity).
                 if (beforeXp != xp) {
@@ -179,7 +179,7 @@ public final class TreeFellerProcessor {
                 }
             } else {
                 processFelledLeaf(world, pos, state, blockEntity, breaker, mmoPlayer, axe);
-                world.breakBlock(pos, false);
+                world.destroyBlock(pos, false);
             }
         }
 
@@ -200,9 +200,9 @@ public final class TreeFellerProcessor {
         if (ThreadLocalRandom.current().nextInt(100) > 75) {
             dropStacks(world, pos, state, blockEntity, breaker, axe);
         } else if (RankUtils.hasUnlockedSubskill(mmoPlayer, SubSkillType.WOODCUTTING_KNOCK_ON_WOOD)) {
-            for (ItemStack stack : Block.getDroppedStacks(state, world, pos, blockEntity, breaker, axe)) {
+            for (ItemStack stack : Block.getDrops(state, world, pos, blockEntity, breaker, axe)) {
                 if (!stack.isEmpty() && isSaplingOrPropagule(stack)) {
-                    Block.dropStack(world, pos, stack);
+                    Block.popResource(world, pos, stack);
                 }
             }
         }
@@ -212,7 +212,7 @@ public final class TreeFellerProcessor {
                 && McMMOMod.getAdvancedConfig().isKnockOnWoodXPOrbEnabled()
                 && ProbabilityUtil.isStaticSkillRNGSuccessful(PrimarySkillType.WOODCUTTING, mmoPlayer, 10)) {
             final int orbCount = Math.max(1, ThreadLocalRandom.current().nextInt(100));
-            ExperienceOrb.spawn(world, Vec3.ofCenter(pos), orbCount);
+            ExperienceOrb.award(world, Vec3.atCenterOf(pos), orbCount);
         }
     }
 
@@ -220,9 +220,9 @@ public final class TreeFellerProcessor {
     private static void dropStacks(@NotNull ServerLevel world, @NotNull BlockPos pos,
             @NotNull BlockState state, BlockEntity blockEntity, @NotNull ServerPlayer breaker,
             @NotNull ItemStack tool) {
-        for (ItemStack stack : Block.getDroppedStacks(state, world, pos, blockEntity, breaker, tool)) {
+        for (ItemStack stack : Block.getDrops(state, world, pos, blockEntity, breaker, tool)) {
             if (!stack.isEmpty()) {
-                Block.dropStack(world, pos, stack);
+                Block.popResource(world, pos, stack);
             }
         }
     }

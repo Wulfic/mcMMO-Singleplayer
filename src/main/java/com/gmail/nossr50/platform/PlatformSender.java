@@ -34,22 +34,22 @@ public final class PlatformSender {
 
     /** Display name of the source (player name, "Server", command-block name, ...). */
     public @NotNull String getName() {
-        return handle.getName();
+        return handle.getTextName();
     }
 
     /** Bukkit {@code sendMessage}: non-broadcast chat feedback. Text is the locked target type. */
     public void sendMessage(@NotNull Component message) {
-        handle.sendFeedback(() -> message, false);
+        handle.sendSuccess(() -> message, false);
     }
 
     /** Error-styled feedback (Bukkit red {@code sendMessage} convention). */
     public void sendError(@NotNull Component message) {
-        handle.sendError(message);
+        handle.sendFailure(message);
     }
 
     /** Whether this source is a player (Bukkit {@code sender instanceof Player}). */
     public boolean isPlayer() {
-        return handle.isExecutedByPlayer();
+        return handle.isPlayer();
     }
 
     /** The player behind this source, or {@code null} for console/command-block sources. */

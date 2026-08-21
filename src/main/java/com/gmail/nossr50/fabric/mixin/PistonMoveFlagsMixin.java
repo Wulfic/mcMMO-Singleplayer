@@ -48,7 +48,7 @@ public abstract class PistonMoveFlagsMixin {
         if (!(world instanceof ServerLevel)) {
             return;
         }
-        BlockUtils.movePlacedFlags(world, handler.getMovedBlocks(), handler.getBrokenBlocks(),
-                handler.getMotionDirection());
+        BlockUtils.movePlacedFlags(world, handler.getToPush(), handler.getToDestroy(),
+                handler.getPushDirection());
     }
 }

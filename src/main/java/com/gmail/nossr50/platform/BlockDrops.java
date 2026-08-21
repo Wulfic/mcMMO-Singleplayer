@@ -49,10 +49,10 @@ public final class BlockDrops {
         if (tool == null || tool.isEmpty()) {
             return false;
         }
-        final Holder<Enchantment> silkTouch = world.getRegistryManager()
+        final Holder<Enchantment> silkTouch = world.registryAccess()
                 .getOrThrow(Registries.ENCHANTMENT)
                 .getOrThrow(Enchantments.SILK_TOUCH);
-        return EnchantmentHelper.getLevel(silkTouch, tool) > 0;
+        return EnchantmentHelper.getItemEnchantmentLevel(silkTouch, tool) > 0;
     }
 
     /**
@@ -73,10 +73,10 @@ public final class BlockDrops {
             @NotNull ServerPlayer breaker, @Nullable ItemStack tool, int rounds) {
         for (int round = 0; round < rounds; round++) {
             final List<ItemStack> loot =
-                    Block.getDroppedStacks(state, world, pos, blockEntity, breaker, tool);
+                    Block.getDrops(state, world, pos, blockEntity, breaker, tool);
             for (ItemStack stack : loot) {
                 if (!stack.isEmpty()) {
-                    Block.dropStack(world, pos, stack);
+                    Block.popResource(world, pos, stack);
                 }
             }
         }

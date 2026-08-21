@@ -91,11 +91,11 @@ public final class PetCombatSweep {
             // then keep playing without a restart, which the config layer does not support anyway.
             return;
         }
-        if (player.age % config.getPetSweepIntervalTicks() != 0) {
+        if (player.tickCount % config.getPetSweepIntervalTicks() != 0) {
             return;
         }
 
-        final Level world = player.getEntityWorld();
+        final Level world = player.level();
         if (world == null) {
             return;
         }
@@ -107,9 +107,9 @@ public final class PetCombatSweep {
         // something at the engage range still has to be found, or its boost would never be taken
         // back off.
         final double petSearch = Math.max(engageRange, aggressiveRadius);
-        final List<Wolf> pets = world.getEntitiesByClass(Wolf.class,
-                player.getBoundingBox().expand(petSearch),
-                wolf -> wolf.isTamed() && wolf.isOwner(player));
+        final List<Wolf> pets = world.getEntitiesOfClass(Wolf.class,
+                player.getBoundingBox().inflate(petSearch),
+                wolf -> wolf.isTame() && wolf.isOwnedBy(player));
         if (pets.isEmpty()) {
             return; // Nothing to do, and no reason to pay for the candidate query.
         }
@@ -121,7 +121,7 @@ public final class PetCombatSweep {
         List<Mob> candidates = null;
 
         for (Wolf pet : pets) {
-            if (pet.isSitting()) {
+            if (pet.isOrderedToSit()) {
                 // "Sit" is an explicit order to stay. A sitting pet fights nothing and chases
                 // nothing, so it gets no boost either.
                 SkillAttributeService.set(pet, SkillAttributeService.Managed.TAMING_PET_ENGAGE_RANGE,
@@ -164,7 +164,7 @@ public final class PetCombatSweep {
      */
     private static void applyEngageBoost(@NotNull Wolf pet, double engageRange) {
         final AttributeInstance instance =
-                pet.getAttributeInstance(Attributes.FOLLOW_RANGE);
+                pet.getAttribute(Attributes.FOLLOW_RANGE);
         final double base = instance == null ? ASSUMED_BASE_FOLLOW_RANGE : instance.getBaseValue();
         SkillAttributeService.set(pet, SkillAttributeService.Managed.TAMING_PET_ENGAGE_RANGE,
                 Math.max(0.0D, engageRange - base));
@@ -178,8 +178,8 @@ public final class PetCombatSweep {
      */
     private static @NotNull List<Mob> findCandidates(@NotNull Level world,
             @NotNull ServerPlayer player, double radius) {
-        return world.getEntitiesByClass(Mob.class,
-                player.getBoundingBox().expand(radius),
+        return world.getEntitiesOfClass(Mob.class,
+                player.getBoundingBox().inflate(radius),
                 mob -> mob instanceof Enemy && mob.isAlive() && !isWarden(mob));
     }
 
@@ -209,7 +209,7 @@ public final class PetCombatSweep {
     private static void acquire(@NotNull Wolf pet, @NotNull ServerPlayer player,
             @NotNull List<Mob> candidates) {
         final List<Mob> eligible = candidates.stream()
-                .filter(candidate -> pet.canAttackWithOwner(candidate, player))
+                .filter(candidate -> pet.wantsToAttack(candidate, player))
                 .toList();
 
         final Optional<Mob> chosen =
@@ -226,7 +226,7 @@ public final class PetCombatSweep {
      * while a pack that waits a tick for its profile is invisible.
      */
     private static @NotNull PetCombatMode resolveMode(@NotNull ServerPlayer player) {
-        final @Nullable McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
+        final @Nullable McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUUID());
         if (mmoPlayer == null) {
             return PetCombatMode.PASSIVE;
         }

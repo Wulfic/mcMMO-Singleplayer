@@ -62,11 +62,11 @@ public final class HerdsmansCallListener {
     }
 
     private static InteractionResult onUseItem(Player player, Level world, InteractionHand hand) {
-        if (hand != InteractionHand.MAIN_HAND || world.isClient()
+        if (hand != InteractionHand.MAIN_HAND || world.isClientSide()
                 || !(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResult.PASS;
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUUID());
         if (mmoPlayer == null) {
             return InteractionResult.PASS;
         }

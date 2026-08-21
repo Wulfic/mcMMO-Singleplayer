@@ -37,13 +37,13 @@ public final class McMMOInfoScreen extends Screen {
 
         this.addDrawableChild(Button.builder(
                 Component.literal("Open Config Folder"), button -> openConfigFolder())
-                .dimensions(centerX - buttonWidth / 2, y, buttonWidth, 20)
+                .bounds(centerX - buttonWidth / 2, y, buttonWidth, 20)
                 .build());
 
         y += 24;
         this.addDrawableChild(Button.builder(
                 Component.translatable("gui.done"), button -> close())
-                .dimensions(centerX - buttonWidth / 2, y, buttonWidth, 20)
+                .bounds(centerX - buttonWidth / 2, y, buttonWidth, 20)
                 .build());
     }
 
@@ -55,18 +55,18 @@ public final class McMMOInfoScreen extends Screen {
                 centerX, this.height / 2 - 60, 0xFFFFFF);
         context.drawCenteredTextWithShadow(this.textRenderer,
                 Component.literal("Install the Cloth Config API mod to edit mcMMO settings in-game.")
-                        .formatted(ChatFormatting.GRAY),
+                        .withStyle(ChatFormatting.GRAY),
                 centerX, this.height / 2 - 40, 0xAAAAAA);
         context.drawCenteredTextWithShadow(this.textRenderer,
                 Component.literal("Otherwise, edit the .yml files directly. Changes apply on world load.")
-                        .formatted(ChatFormatting.GRAY),
+                        .withStyle(ChatFormatting.GRAY),
                 centerX, this.height / 2 - 28, 0xAAAAAA);
     }
 
     private void openConfigFolder() {
         try {
             Files.createDirectories(configDir);
-            Util.getOperatingSystem().open(configDir.toUri());
+            Util.getPlatform().openUri(configDir.toUri());
         } catch (IOException | RuntimeException e) {
             McMMOMod.LOGGER.warn("Could not open the mcMMO config folder {}", configDir, e);
         }

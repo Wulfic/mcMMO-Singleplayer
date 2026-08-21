@@ -68,13 +68,13 @@ public final class Materials {
         if (trimmed.indexOf(':') >= 0) {
             return Identifier.tryParse(trimmed);
         }
-        return Identifier.ofVanilla(LEGACY_NAME_ALIASES.getOrDefault(trimmed, trimmed));
+        return Identifier.withDefaultNamespace(LEGACY_NAME_ALIASES.getOrDefault(trimmed, trimmed));
     }
 
     /** Resolve an item by Bukkit-style name / namespaced id, empty if unknown. */
     public static @NotNull Optional<Item> item(@NotNull String name) {
         final Identifier id = idOf(name);
-        if (id == null || !BuiltInRegistries.ITEM.containsId(id)) {
+        if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
             McMMOMod.LOGGER.warn("No vanilla item for material name '{}'", name);
             return Optional.empty();
         }
@@ -93,7 +93,7 @@ public final class Materials {
     /** Resolve a block by Bukkit-style name / namespaced id, empty if unknown. */
     public static @NotNull Optional<Block> block(@NotNull String name) {
         final Identifier id = idOf(name);
-        if (id == null || !BuiltInRegistries.BLOCK.containsId(id)) {
+        if (id == null || !BuiltInRegistries.BLOCK.containsKey(id)) {
             McMMOMod.LOGGER.warn("No vanilla block for material name '{}'", name);
             return Optional.empty();
         }
@@ -103,7 +103,7 @@ public final class Materials {
     /** Whether a vanilla item exists for the given name. Does not log on miss. */
     public static boolean isItem(@NotNull String name) {
         final Identifier id = idOf(name);
-        return id != null && BuiltInRegistries.ITEM.containsId(id);
+        return id != null && BuiltInRegistries.ITEM.containsKey(id);
     }
 
     /**
@@ -122,14 +122,14 @@ public final class Materials {
      * test side.
      */
     public static boolean itemRegistryIsPopulated() {
-        return BuiltInRegistries.ITEM.containsId(Identifier.ofVanilla("iron_sword"))
-                && BuiltInRegistries.ITEM.containsId(Identifier.ofVanilla("stone"));
+        return BuiltInRegistries.ITEM.containsKey(Identifier.withDefaultNamespace("iron_sword"))
+                && BuiltInRegistries.ITEM.containsKey(Identifier.withDefaultNamespace("stone"));
     }
 
     /** Whether a vanilla block exists for the given name. Does not log on miss. */
     public static boolean isBlock(@NotNull String name) {
         final Identifier id = idOf(name);
-        return id != null && BuiltInRegistries.BLOCK.containsId(id);
+        return id != null && BuiltInRegistries.BLOCK.containsKey(id);
     }
 
     /**

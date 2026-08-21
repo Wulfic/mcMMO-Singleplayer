@@ -42,7 +42,7 @@ public class PowderSnowBlockMixin {
     @Inject(method = "canWalkOnPowderSnow", allow = 1, at = @At("HEAD"), cancellable = true)
     private static void mcmmo$parkourSnowWalker(Entity entity, CallbackInfoReturnable<Boolean> cir) {
         if (entity instanceof Player player
-                && PlayerMovementTracker.canWalkOnPowderSnow(player.getUuid())) {
+                && PlayerMovementTracker.canWalkOnPowderSnow(player.getUUID())) {
             cir.setReturnValue(true);
         }
     }

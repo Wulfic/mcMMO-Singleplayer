@@ -76,7 +76,7 @@ public final class ProjectileListener {
         if (!(arrow.getOwner() instanceof ServerPlayer shooter)) {
             return; // wild/dispenser arrow — legacy's `getShooter() instanceof Player` check.
         }
-        final UUID arrowId = arrow.getUuid();
+        final UUID arrowId = arrow.getUUID();
 
         // ORDER IS LOAD-BEARING, and it is legacy's: the fired-from stamp and the cleanup schedule
         // come before *every* later gate — the Piercing check, the retrieval roll, even the profile
@@ -84,7 +84,7 @@ public final class ProjectileListener {
         // sinking either of these below those early returns would silently drop it (and leak the
         // mark) for exactly the shots that fail them.
         Archery.markFiredFrom(arrowId, new Archery.FiredFrom(
-                world.getRegistryKey().getValue().toString(), arrow.getX(), arrow.getY(),
+                world.dimension().identifier().toString(), arrow.getX(), arrow.getY(),
                 arrow.getZ()));
         // Bow draw force, captured one frame up by `BowShootMixin` (vanilla has no shoot event). Null
         // for anything that did not come from a bow — a crossbow bolt, a dispenser arrow — which is
@@ -97,7 +97,7 @@ public final class ProjectileListener {
         }
         scheduleMarkCleanup(arrowId);
 
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(shooter.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(shooter.getUUID());
         if (mmoPlayer == null) {
             return; // data not loaded (e.g. mid-join).
         }
@@ -145,7 +145,7 @@ public final class ProjectileListener {
      * {@code RangedWeaponItem#createArrowEntity}, which always records the weapon.
      */
     private static boolean isInfinityShot(Arrow arrow) {
-        final ItemStack weapon = arrow.getWeaponStack();
+        final ItemStack weapon = arrow.getWeaponItem();
         if (weapon == null || weapon.isEmpty()) {
             return false;
         }
@@ -158,7 +158,7 @@ public final class ProjectileListener {
      * looser check is the ported behaviour.
      */
     private static boolean hasPiercingInHands(ServerPlayer shooter) {
-        return hasPiercing(shooter.getMainHandStack()) || hasPiercing(shooter.getOffHandStack());
+        return hasPiercing(shooter.getMainHandItem()) || hasPiercing(shooter.getOffhandItem());
     }
 
     private static boolean hasPiercing(ItemStack stack) {
@@ -179,16 +179,16 @@ public final class ProjectileListener {
      * vanilla would have merged the stacks on the ground within a tick.
      */
     private static void onDeath(LivingEntity victim, DamageSource source) {
-        final int arrowCount = Archery.arrowRetrievalCheck(victim.getUuid());
+        final int arrowCount = Archery.arrowRetrievalCheck(victim.getUUID());
         if (arrowCount <= 0) {
             return;
         }
-        if (!(victim.getEntityWorld() instanceof ServerLevel world)) {
+        if (!(victim.level() instanceof ServerLevel world)) {
             return;
         }
         final ItemEntity drop = new ItemEntity(world, victim.getX(), victim.getY(), victim.getZ(),
                 new ItemStack(Items.ARROW, arrowCount));
-        drop.setToDefaultPickupDelay(); // Bukkit's World#dropItem behaviour.
-        world.spawnEntity(drop);
+        drop.setDefaultPickUpDelay(); // Bukkit's World#dropItem behaviour.
+        world.addFreshEntity(drop);
     }
 }

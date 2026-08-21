@@ -153,7 +153,7 @@ public final class SmeltingListener {
         }
         final BlockPos pos = hitResult.getBlockPos();
         if (world.getBlockEntity(pos) instanceof AbstractFurnaceBlockEntity) {
-            FURNACE_OWNERS.put(pos.asLong(), player.getUuid());
+            FURNACE_OWNERS.put(pos.asLong(), player.getUUID());
         }
         return InteractionResult.PASS; // observe only; never cancel opening the furnace.
     }
@@ -191,7 +191,7 @@ public final class SmeltingListener {
             return; // An ore. Smelting's, and never also Cooking's.
         }
         final CookingManager.CookAward award =
-                owner.getCookingManager().onCook(inputConfigString, world.getTime());
+                owner.getCookingManager().onCook(inputConfigString, world.getGameTime());
         if (award.capReached()) {
             // Once per window, not once per cook: a rate cap that pays nothing and says nothing is
             // indistinguishable from a broken skill, and an eight-smoker array would spam the chat.
@@ -244,7 +244,7 @@ public final class SmeltingListener {
         if (output.isEmpty()) {
             return; // craftRecipe always fills this; guard anyway so an odd recipe can't NPE the tick.
         }
-        if (!SmeltingManager.hasRoomForSecondSmelt(output.getCount(), output.getMaxCount())) {
+        if (!SmeltingManager.hasRoomForSecondSmelt(output.getCount(), output.getMaxStackSize())) {
             return; // no room for the extra item — checked before the RNG, as legacy did.
         }
         final String resultConfigString = materialConfigString(output);
@@ -260,7 +260,7 @@ public final class SmeltingListener {
                 ? owner.getSmeltingManager().canSecondSmelt(resultConfigString)
                 : owner.getCookingManager().canSecondHelping(resultConfigString);
         if (bonus) {
-            output.increment(1);
+            output.grow(1);
         }
     }
 
@@ -335,7 +335,7 @@ public final class SmeltingListener {
         if (!(player instanceof ServerPlayer) || extracted.isEmpty()) {
             return; // client-side copy of the screen handler, or nothing actually taken.
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUUID());
         if (mmoPlayer == null) {
             return; // player data not loaded — behave exactly like vanilla.
         }
@@ -386,13 +386,13 @@ public final class SmeltingListener {
     private static void indexSmeltedOreProducts(MinecraftServer server) {
         final List<Holder<Item>> ores = oreBlockItems();
         final Set<Item> products = new HashSet<>();
-        for (RecipeHolder<?> entry : server.getRecipeManager().values()) {
+        for (RecipeHolder<?> entry : server.getRecipeManager().getRecipes()) {
             // SmeltingRecipe specifically, not AbstractCookingRecipe: legacy matched Bukkit's
             // FurnaceRecipe, so blasting/smoking/campfire variants of the same ore are excluded.
             if (!(entry.value() instanceof SmeltingRecipe recipe) || !hasOreBlockInput(recipe, ores)) {
                 continue;
             }
-            final ItemStack result = recipe.craft(EMPTY_RECIPE_INPUT, server.getRegistryManager());
+            final ItemStack result = recipe.assemble(EMPTY_RECIPE_INPUT, server.registryAccess());
             if (!result.isEmpty()) {
                 products.add(result.getItem());
             }
@@ -410,7 +410,7 @@ public final class SmeltingListener {
      * deprecated in this version.
      */
     private static boolean hasOreBlockInput(SmeltingRecipe recipe, List<Holder<Item>> ores) {
-        final Ingredient ingredient = recipe.ingredient();
+        final Ingredient input = recipe.input();
         return ores.stream().anyMatch(ingredient::acceptsItem);
     }
 

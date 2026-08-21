@@ -41,7 +41,7 @@ public final class TamingListener {
         if (!(owner instanceof ServerPlayer serverPlayer)) {
             return; // client-side / null owner — the authoritative award happens on the server.
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             return; // data not loaded (e.g. mid-join).
         }

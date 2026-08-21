@@ -181,7 +181,7 @@ public final class SkillAttributeService {
 
         Managed(Holder<Attribute> attribute, String path, Operation operation) {
             this.attribute = attribute;
-            this.id = Identifier.of(McMMOMod.MOD_ID, path);
+            this.id = Identifier.fromNamespaceAndPath(McMMOMod.MOD_ID, path);
             this.operation = operation;
         }
 
@@ -209,7 +209,7 @@ public final class SkillAttributeService {
      *               removes it
      */
     public static void set(@NotNull LivingEntity entity, @NotNull Managed buff, double amount) {
-        final AttributeInstance instance = entity.getAttributeInstance(buff.attribute);
+        final AttributeInstance instance = entity.getAttribute(buff.attribute);
         if (instance == null) {
             // A player always has these attributes; a null here means the attribute was not
             // registered for this entity type, which is a wiring bug rather than a game state.
@@ -226,18 +226,18 @@ public final class SkillAttributeService {
             return;
         }
         if (existing != null) {
-            if (existing.value() == amount && existing.operation() == buff.operation()) {
+            if (existing.amount() == amount && existing.operation() == buff.operation()) {
                 return; // Already exactly right — the common case on a per-tick caller.
             }
             instance.removeModifier(buff.id());
         }
-        instance.addTemporaryModifier(
+        instance.addTransientModifier(
                 new AttributeModifier(buff.id(), amount, buff.operation()));
     }
 
     /** Whether this managed buff is currently applied to the player. Test/diagnostic seam. */
     public static boolean isApplied(@NotNull LivingEntity entity, @NotNull Managed buff) {
-        final AttributeInstance instance = entity.getAttributeInstance(buff.attribute);
+        final AttributeInstance instance = entity.getAttribute(buff.attribute);
         return instance != null && instance.getModifier(buff.id()) != null;
     }
 
@@ -246,12 +246,12 @@ public final class SkillAttributeService {
      * lets a test distinguish "removed" from "applied at zero" without reaching into vanilla.
      */
     public static double appliedValue(@NotNull LivingEntity entity, @NotNull Managed buff) {
-        final AttributeInstance instance = entity.getAttributeInstance(buff.attribute);
+        final AttributeInstance instance = entity.getAttribute(buff.attribute);
         if (instance == null) {
             return 0.0;
         }
         final AttributeModifier modifier = instance.getModifier(buff.id());
-        return modifier == null ? 0.0 : modifier.value();
+        return modifier == null ? 0.0 : modifier.amount();
     }
 
     /**
@@ -264,7 +264,7 @@ public final class SkillAttributeService {
      */
     public static void clearAll(@NotNull LivingEntity entity) {
         for (Managed buff : Managed.values()) {
-            final AttributeInstance instance = entity.getAttributeInstance(buff.attribute);
+            final AttributeInstance instance = entity.getAttribute(buff.attribute);
             if (instance != null) {
                 instance.removeModifier(buff.id());
             }

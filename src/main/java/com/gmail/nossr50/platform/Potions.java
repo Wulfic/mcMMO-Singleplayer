@@ -69,7 +69,7 @@ public final class Potions {
         final Holder<MobEffect> entry = matchEffect(effectName);
         return entry == null
                 ? Optional.empty()
-                : Optional.of(BuiltInRegistries.STATUS_EFFECT.getId(entry.value()).toString());
+                : Optional.of(BuiltInRegistries.MOB_EFFECT.getId(entry.value()).toString());
     }
 
     /**
@@ -99,14 +99,14 @@ public final class Potions {
         if (effectName == null || effectName.isEmpty()) {
             return null;
         }
-        final Identifier id = Identifier.ofVanilla(PotionNames.convertLegacyEffectName(effectName));
-        return BuiltInRegistries.STATUS_EFFECT.getEntry(id).orElse(null);
+        final Identifier id = Identifier.withDefaultNamespace(PotionNames.convertLegacyEffectName(effectName));
+        return BuiltInRegistries.MOB_EFFECT.get(id).orElse(null);
     }
 
     private static @NotNull Optional<Holder<Potion>> lookupPotion(@NotNull String path) {
         // The registry hands back Optional<RegistryEntry.Reference<Potion>>; widen it so callers see
         // the interface rather than the implementation type.
-        return BuiltInRegistries.POTION.getEntry(Identifier.ofVanilla(path))
+        return BuiltInRegistries.POTION.get(Identifier.withDefaultNamespace(path))
                 .map(entry -> (Holder<Potion>) entry);
     }
 
@@ -137,7 +137,7 @@ public final class Potions {
         final List<EffectSpec> customEffects = new ArrayList<>();
         for (MobEffectInstance effect : contents.customEffects()) {
             customEffects.add(new EffectSpec(
-                    BuiltInRegistries.STATUS_EFFECT.getId(effect.getEffectType().value()).toString(),
+                    BuiltInRegistries.MOB_EFFECT.getId(effect.getEffect().value()).toString(),
                     effect.getAmplifier(), effect.getDuration()));
         }
 
@@ -177,12 +177,12 @@ public final class Potions {
         final Identifier id = Identifier.tryParse(namespacedId);
         return id == null
                 ? Optional.empty()
-                : BuiltInRegistries.POTION.getEntry(id).map(entry -> (Holder<Potion>) entry);
+                : BuiltInRegistries.POTION.get(id).map(entry -> (Holder<Potion>) entry);
     }
 
     private static @Nullable Holder<MobEffect> lookupEffectId(@NotNull String namespacedId) {
         final Identifier id = Identifier.tryParse(namespacedId);
-        return id == null ? null : BuiltInRegistries.STATUS_EFFECT.getEntry(id).orElse(null);
+        return id == null ? null : BuiltInRegistries.MOB_EFFECT.get(id).orElse(null);
     }
 
     // --- Item identity ------------------------------------------------------
@@ -193,10 +193,10 @@ public final class Potions {
      * item too. Anything that is not a thrown potion is {@link PotionForm#NORMAL}.
      */
     private static @NotNull PotionForm formOf(@NotNull ItemStack stack) {
-        if (stack.isOf(Items.SPLASH_POTION)) {
+        if (stack.is(Items.SPLASH_POTION)) {
             return PotionForm.SPLASH;
         }
-        if (stack.isOf(Items.LINGERING_POTION)) {
+        if (stack.is(Items.LINGERING_POTION)) {
             return PotionForm.LINGERING;
         }
         return PotionForm.NORMAL;
@@ -208,6 +208,6 @@ public final class Potions {
      * {@link #formOf}.
      */
     public static boolean isGlassBottle(@NotNull PlatformItem item) {
-        return item.unwrap().isOf(Items.GLASS_BOTTLE);
+        return item.unwrap().is(Items.GLASS_BOTTLE);
     }
 }

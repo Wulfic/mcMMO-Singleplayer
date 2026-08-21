@@ -42,8 +42,8 @@ public abstract class BowShootMixin {
             return;
         }
         final BowItem bow = (BowItem) (Object) this;
-        final int useTicks = bow.getMaxUseTime(stack, user) - remainingUseTicks;
-        Archery.beginBowShot(BowItem.getPullProgress(useTicks));
+        final int useTicks = bow.getUseDuration(stack, user) - remainingUseTicks;
+        Archery.beginBowShot(BowItem.getPowerForTime(useTicks));
     }
 
     @Inject(

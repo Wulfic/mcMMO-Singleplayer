@@ -114,7 +114,7 @@ public final class McMMOCommands {
      * and a call. Naming the concrete type here bought nothing and made this file diverge per band.
      */
     static final Predicate<CommandSourceStack> CHEAT_COMMAND =
-            Commands.requirePermissionLevel(Commands.GAMEMASTERS_CHECK);
+            Commands.hasPermission(Commands.LEVEL_GAMEMASTERS);
 
     @VisibleForTesting
     static void registerAll(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -177,28 +177,28 @@ public final class McMMOCommands {
     // --- /mcmmo -------------------------------------------------------------
 
     private static int info(CommandSourceStack source) {
-        source.sendFeedback(() -> Component.literal("mcMMO")
-                .formatted(ChatFormatting.GOLD, ChatFormatting.BOLD)
-                .append(Component.literal(" (Fabric singleplayer port)").formatted(ChatFormatting.GRAY)),
+        source.sendSuccess(() -> Component.literal("mcMMO")
+                .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)
+                .append(Component.literal(" (Fabric singleplayer port)").withStyle(ChatFormatting.GRAY)),
                 false);
-        source.sendFeedback(() -> Component.literal("Use ").formatted(ChatFormatting.GRAY)
-                .append(Component.literal("/mcstats").formatted(ChatFormatting.YELLOW))
-                .append(Component.literal(" to view your skills.").formatted(ChatFormatting.GRAY)), false);
+        source.sendSuccess(() -> Component.literal("Use ").withStyle(ChatFormatting.GRAY)
+                .append(Component.literal("/mcstats").withStyle(ChatFormatting.YELLOW))
+                .append(Component.literal(" to view your skills.").withStyle(ChatFormatting.GRAY)), false);
         return 1;
     }
 
     // --- /mcstats -----------------------------------------------------------
 
     private static int stats(CommandSourceStack source) throws CommandSyntaxException {
-        final ServerPlayer vanilla = source.getPlayerOrThrow();
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(vanilla.getUuid());
+        final ServerPlayer vanilla = source.getPlayerOrException();
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(vanilla.getUUID());
         if (mmoPlayer == null) {
-            source.sendError(Component.literal("Your mcMMO data has not loaded yet."));
+            source.sendFailure(Component.literal("Your mcMMO data has not loaded yet."));
             return 0;
         }
 
         final SkillTools skillTools = McMMOMod.getSkillTools();
-        source.sendFeedback(() -> Component.literal("--- mcMMO Stats ---").formatted(ChatFormatting.GOLD),
+        source.sendSuccess(() -> Component.literal("--- mcMMO Stats ---").withStyle(ChatFormatting.GOLD),
                 false);
 
         for (PrimarySkillType skill : SkillTools.NON_CHILD_SKILLS) {
@@ -213,18 +213,18 @@ public final class McMMOCommands {
             final int xp = mmoPlayer.getProfile().getSkillXpLevel(skill);
             final int xpToLevel = mmoPlayer.getProfile().getXpToLevel(skill);
             final String name = skillTools.getLocalizedSkillName(skill);
-            source.sendFeedback(() -> Component.literal(name + ": ").formatted(ChatFormatting.YELLOW)
-                    .append(Component.literal("Lv." + level).formatted(ChatFormatting.GREEN))
+            source.sendSuccess(() -> Component.literal(name + ": ").withStyle(ChatFormatting.YELLOW)
+                    .append(Component.literal("Lv." + level).withStyle(ChatFormatting.GREEN))
                     .append(Component.literal(" (" + xp + "/" + xpToLevel + " XP)")
-                            .formatted(ChatFormatting.GRAY)), false);
+                            .withStyle(ChatFormatting.GRAY)), false);
         }
 
         final int power = mmoPlayer.getPowerLevel();
-        source.sendFeedback(() -> Component.literal("Power Level: ").formatted(ChatFormatting.GOLD)
-                .append(Component.literal(String.valueOf(power)).formatted(ChatFormatting.GREEN)), false);
-        source.sendFeedback(() -> Component.literal("Use ").formatted(ChatFormatting.GRAY)
-                .append(Component.literal("/mcstats <skill>").formatted(ChatFormatting.YELLOW))
-                .append(Component.literal(" for a skill's full details.").formatted(ChatFormatting.GRAY)),
+        source.sendSuccess(() -> Component.literal("Power Level: ").withStyle(ChatFormatting.GOLD)
+                .append(Component.literal(String.valueOf(power)).withStyle(ChatFormatting.GREEN)), false);
+        source.sendSuccess(() -> Component.literal("Use ").withStyle(ChatFormatting.GRAY)
+                .append(Component.literal("/mcstats <skill>").withStyle(ChatFormatting.YELLOW))
+                .append(Component.literal(" for a skill's full details.").withStyle(ChatFormatting.GRAY)),
                 false);
         return 1;
     }
@@ -235,22 +235,22 @@ public final class McMMOCommands {
      * SkillStatsRenderer}. */
     private static int statsForSkill(CommandSourceStack source, String token)
             throws CommandSyntaxException {
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrThrow().getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrException().getUUID());
         if (mmoPlayer == null) {
-            source.sendError(Component.literal("Your mcMMO data has not loaded yet."));
+            source.sendFailure(Component.literal("Your mcMMO data has not loaded yet."));
             return 0;
         }
 
         // A-5. Ahead of matchSkill, which would both answer null and log the name as invalid.
         final String retired = RETIRED_SKILLS.get(token.toLowerCase(Locale.ROOT));
         if (retired != null) {
-            source.sendFeedback(() -> TextUtils.toText(LocaleLoader.getString(retired)), false);
+            source.sendSuccess(() -> TextUtils.toText(LocaleLoader.getString(retired)), false);
             return 1;
         }
 
         final PrimarySkillType skill = McMMOMod.getSkillTools().matchSkill(token);
         if (skill == null) {
-            source.sendError(Component.literal("Unknown skill: " + token));
+            source.sendFailure(Component.literal("Unknown skill: " + token));
             return 0;
         }
 
@@ -270,15 +270,15 @@ public final class McMMOCommands {
                             + "it under '" + CoreSkillsConfig.enabledPath(skill) + "' in coreskills.yml."
                     : " This version of Minecraft does not have the items this skill works on, so it "
                             + "cannot be switched on here. Your level (" + level + ") is saved.";
-            source.sendFeedback(() -> Component.literal(name + " is disabled.").formatted(ChatFormatting.RED)
-                    .append(Component.literal(why).formatted(ChatFormatting.GRAY)), false);
+            source.sendSuccess(() -> Component.literal(name + " is disabled.").withStyle(ChatFormatting.RED)
+                    .append(Component.literal(why).withStyle(ChatFormatting.GRAY)), false);
             return 1;
         }
 
         // The renderer emits §-coded strings (it is Minecraft-free); this is the boundary where they
         // become vanilla Text.
         SkillStatsRenderer.forSkill(skill)
-                .render(mmoPlayer, line -> source.sendFeedback(() -> TextUtils.toText(line), false));
+                .render(mmoPlayer, line -> source.sendSuccess(() -> TextUtils.toText(line), false));
         return 1;
     }
 
@@ -286,19 +286,19 @@ public final class McMMOCommands {
 
     /** Toggles whether the caller may ready/activate super abilities ({@code abilityUse}). */
     private static int ability(CommandSourceStack source) throws CommandSyntaxException {
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrThrow().getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrException().getUUID());
         if (mmoPlayer == null) {
-            source.sendError(Component.literal("Your mcMMO data has not loaded yet."));
+            source.sendFailure(Component.literal("Your mcMMO data has not loaded yet."));
             return 0;
         }
 
         mmoPlayer.toggleAbilityUse();
         final boolean on = mmoPlayer.getAbilityUse();
-        source.sendFeedback(() -> Component.literal("Super abilities ")
-                .formatted(ChatFormatting.GRAY)
+        source.sendSuccess(() -> Component.literal("Super abilities ")
+                .withStyle(ChatFormatting.GRAY)
                 .append(Component.literal(on ? "enabled" : "disabled")
-                        .formatted(on ? ChatFormatting.GREEN : ChatFormatting.RED))
-                .append(Component.literal(".").formatted(ChatFormatting.GRAY)), false);
+                        .withStyle(on ? ChatFormatting.GREEN : ChatFormatting.RED))
+                .append(Component.literal(".").withStyle(ChatFormatting.GRAY)), false);
         return 1;
     }
 
@@ -306,16 +306,16 @@ public final class McMMOCommands {
 
     /** Clears the caller's super-ability cooldowns and any active ability modes. */
     private static int refresh(CommandSourceStack source) throws CommandSyntaxException {
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrThrow().getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrException().getUUID());
         if (mmoPlayer == null) {
-            source.sendError(Component.literal("Your mcMMO data has not loaded yet."));
+            source.sendFailure(Component.literal("Your mcMMO data has not loaded yet."));
             return 0;
         }
 
         mmoPlayer.resetCooldowns();
         mmoPlayer.resetAbilityMode();
-        source.sendFeedback(() -> Component.literal("Your super-ability cooldowns have been refreshed.")
-                .formatted(ChatFormatting.GREEN), false);
+        source.sendSuccess(() -> Component.literal("Your super-ability cooldowns have been refreshed.")
+                .withStyle(ChatFormatting.GREEN), false);
         return 1;
     }
 
@@ -339,9 +339,9 @@ public final class McMMOCommands {
         for (PrimarySkillType skill : skills) {
             mmoPlayer.addLevels(skill, amount);
         }
-        source.sendFeedback(() -> Component.literal(
+        source.sendSuccess(() -> Component.literal(
                 "Added " + amount + " level(s) to " + skillLabel(skills) + ".")
-                .formatted(ChatFormatting.GREEN), false);
+                .withStyle(ChatFormatting.GREEN), false);
         return 1;
     }
 
@@ -363,9 +363,9 @@ public final class McMMOCommands {
         for (PrimarySkillType skill : skills) {
             mmoPlayer.beginXpGain(skill, amount, XPGainReason.COMMAND, XPGainSource.COMMAND);
         }
-        source.sendFeedback(() -> Component.literal(
+        source.sendSuccess(() -> Component.literal(
                 "Added " + amount + " XP to " + skillLabel(skills) + ".")
-                .formatted(ChatFormatting.GREEN), false);
+                .withStyle(ChatFormatting.GREEN), false);
         return 1;
     }
 
@@ -373,9 +373,9 @@ public final class McMMOCommands {
 
     private static McMMOPlayer requireLoadedPlayer(CommandSourceStack source)
             throws CommandSyntaxException {
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrThrow().getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrException().getUUID());
         if (mmoPlayer == null) {
-            source.sendError(Component.literal("Target's mcMMO data has not loaded yet."));
+            source.sendFailure(Component.literal("Target's mcMMO data has not loaded yet."));
         }
         return mmoPlayer;
     }
@@ -390,7 +390,7 @@ public final class McMMOCommands {
         }
         final PrimarySkillType skill = McMMOMod.getSkillTools().matchSkill(token);
         if (skill == null) {
-            source.sendError(Component.literal("Unknown skill: " + token));
+            source.sendFailure(Component.literal("Unknown skill: " + token));
             return null;
         }
         return List.of(skill);

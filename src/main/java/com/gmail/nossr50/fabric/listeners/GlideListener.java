@@ -41,7 +41,7 @@ public final class GlideListener {
         if (!(entity instanceof Player)) {
             return glideVelocity;
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(entity.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(entity.getUUID());
         if (mmoPlayer == null) {
             return glideVelocity;
         }

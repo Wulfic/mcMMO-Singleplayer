@@ -79,7 +79,7 @@ public final class AlchemyListener {
         }
         final BlockPos pos = hitResult.getBlockPos();
         if (world.getBlockEntity(pos) instanceof BrewingStandBlockEntity) {
-            BREWING_STAND_OWNERS.put(pos.asLong(), player.getUuid());
+            BREWING_STAND_OWNERS.put(pos.asLong(), player.getUUID());
         }
         return InteractionResult.PASS; // observe only; never cancel opening the brewing stand.
     }

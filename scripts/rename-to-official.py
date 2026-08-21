@@ -171,6 +171,64 @@ def string_spans(text: str) -> list[tuple[int, int]]:
 # the rename model
 # --------------------------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------------------------
+# 30.2 -- the multi-target decisions
+# --------------------------------------------------------------------------------------------
+#
+# Section 28 established that these rows have NO answer derivable from a NAME: `Registry#getEntry`
+# is `get|wrapAsHolder` and nothing about the string "getEntry" picks one. They DO have an answer
+# derivable from the CALL SITE, which is the whole reason this rename is call-site-driven -- so
+# each row below records the argument fact that decided it, not just the verdict.
+#
+# Keyed by (mojmap owner FQN, yarn member, argc). A decision is only ever APPLIED if its target is
+# one of the candidates the table itself produced for that row -- see resolve_member. That guard
+# is what stops a stale decision here from inventing a member that does not exist, which is
+# exactly the silent-wrongness class section 29 was built to prevent.
+MULTI_TARGET_DECISIONS: dict[tuple[str, str, int], tuple[str, str]] = {
+    ("net.minecraft.resources.Identifier", "of", 2): (
+        "fromNamespaceAndPath",
+        "two args (namespace, path); `parse` takes ONE combined 'ns:path' string"),
+    # getYaw/getPitch with NO argument are the plain field accessors. The `getView*` forms take a
+    # partial-tick float for interpolation during rendering; argc=0 rules them out at every site.
+    ("net.minecraft.world.entity.LivingEntity", "getYaw", 0): (
+        "getYRot", "argc=0; getViewYRot(float partialTick) requires a partial tick"),
+    ("net.minecraft.world.entity.LivingEntity", "getPitch", 0): (
+        "getXRot", "argc=0; getViewXRot(float partialTick) requires a partial tick"),
+    ("net.minecraft.server.level.ServerPlayer", "getYaw", 0): (
+        "getYRot", "argc=0; getViewYRot(float partialTick) requires a partial tick"),
+    ("net.minecraft.server.level.ServerPlayer", "getPitch", 0): (
+        "getXRot", "argc=0; getViewXRot(float partialTick) requires a partial tick"),
+    ("net.minecraft.world.entity.TamableAnimal", "getYaw", 0): (
+        "getYRot", "argc=0; getViewYRot(float partialTick) requires a partial tick"),
+    ("net.minecraft.world.entity.TamableAnimal", "getPitch", 0): (
+        "getXRot", "argc=0; getViewXRot(float partialTick) requires a partial tick"),
+    ("net.minecraft.world.level.block.Block", "dropStack", 3): (
+        "popResource",
+        "(Level, BlockPos, ItemStack) -- no Direction; popResourceFromFace takes a face"),
+    ("net.minecraft.world.entity.player.Inventory", "removeStack", 2): (
+        "removeItem",
+        "(slot, count) -- removeItemNoUpdate(int) takes a slot ALONE and returns the whole stack"),
+    ("net.minecraft.world.phys.Vec3", "ofCenter", 1): (
+        "atCenterOf", "(Vec3i) -- upFromBottomCenterOf(Vec3i, double) takes a second arg"),
+    ("net.minecraft.world.entity.ExperienceOrb", "spawn", 3): (
+        "award", "(ServerLevel, Vec3, int) -- awardWithDirection adds a direction vector"),
+    ("net.minecraft.world.level.block.state.BlockState", "get", 1): (
+        "getValue", "(Property) -- getValueOrElse(Property, T) takes a fallback"),
+    ("net.minecraft.world.level.block.state.BlockState", "with", 2): (
+        "setValue", "(Property, value) -- setValueInternal is the internal unchecked form"),
+    # The argument is an Identifier and the result is Optional<Holder.Reference<T>>:
+    #     BuiltInRegistries.MOB_EFFECT.getEntry(id).orElse(null)
+    #     Optional<Holder.Reference<Enchantment>> entry = enchantmentRegistry.getEntry(id)
+    # `wrapAsHolder(T value)` takes the VALUE and returns a Holder directly, not an Optional.
+    # This is section 28's own example row, decided by the argument type and the return shape.
+    ("net.minecraft.core.Registry", "getEntry", 1): (
+        "get", "arg is an Identifier and the result is Optional<Holder.Reference<T>>; "
+               "wrapAsHolder takes the VALUE and returns a bare Holder"),
+    ("net.minecraft.util.Util$OS", "open", 1): (
+        "openUri", "the argument is configDir.toUri() -- a java.net.URI, not a File or a Path"),
+}
+
+
 class Renamer:
     """Holds the two directions of the class table plus the member lookup.
 
@@ -263,6 +321,42 @@ class Renamer:
                 out[simple_of(fqn)] = fqn
         return out
 
+    def candidate_owners(self, simple: str, imports: dict[str, str]) -> list[str]:
+        """Every mojmap FQN `simple` could denote in this file, most-specific first.
+
+        javac prints `location:` as a bare simple name, and for a NESTED type it prints the inner
+        name ALONE -- `Reference`, `Mutable`, `Builder` -- with no outer and no dot. Measured on
+        master 2026-08-20: `Reference` has 4 table-wide candidates, `Mutable` 3, `Builder` 118.
+        Name alone cannot pick between them, so return them all and let the caller disambiguate on
+        the MEMBER, which is a fact rather than a guess.
+        """
+        if not simple:
+            return []
+        hit = imports.get(simple)
+        if hit:
+            return [hit]
+        if simple in self.moj2yarn:
+            return [simple]
+        if "." in simple:                      # javac DID qualify it: Outer.Inner
+            head, *inner = simple.split(".")
+            base = imports.get(head) or (head if head in self.moj2yarn else None)
+            if base is None:
+                c = self.moj_simple.get(head, set())
+                base = next(iter(c)) if len(c) == 1 else None
+            if base is None:
+                return []
+            cand = base + "$" + "$".join(inner)
+            return [cand] if cand in self.moj2yarn else []
+        cands = self.moj_simple.get(simple, set())
+        vals = set(imports.values())
+        # A nested candidate whose OUTER this file imports beats one it has never heard of:
+        # PlatformPlayer imports Holder, so `Reference` there is Holder$Reference and not one of
+        # the three unrelated Reference types.
+        outer = sorted(c for c in cands if "$" in c and c.split("$")[0] in vals)
+        if len(outer) == 1:
+            return outer
+        return sorted(cands)
+
     def resolve_owner(self, simple: str, imports: dict[str, str]) -> tuple[str | None, str]:
         """javac's `location:` simple name -> a mojmap FQN owner, or (None, reason).
 
@@ -279,6 +373,11 @@ class Renamer:
             return hit, "import"
         if simple in self.moj2yarn:
             return simple, "fqn"
+        scoped = self.candidate_owners(simple, imports)
+        if len(scoped) == 1 and "$" in scoped[0]:
+            # "nested": javac qualified it (Outer.Inner). "nested-via-imported-outer": javac gave
+            # the inner name alone and the file's imports picked the outer. Different evidence.
+            return scoped[0], ("nested" if "." in simple else "nested-via-imported-outer")
         # 2. NESTED. javac spells it `Outer.Inner`; the table spells it `Outer$Inner`, and
         #    `simple_of` keys moj_simple by the INNER name alone (`Mutable`, `Reference`), so a
         #    dotted location misses every index above and lands in the global fallback as ZERO
@@ -418,6 +517,19 @@ class Renamer:
                 out.setdefault(yarn_name, set()).add(yarn_owner)
         return out
 
+    def decide_multi(self, moj_owner_fqn: str, yarn_member: str, argc, names: set) -> tuple:
+        """A recorded 30.2 decision for this row, or (None, None).
+
+        Guarded: the decision is honoured ONLY if its target is among the candidates the TABLE
+        produced. A decision naming something the table does not offer is a stale decision, and
+        applying it would write a member that may not exist -- silently, if some other member
+        happens to answer to the name.
+        """
+        dec = MULTI_TARGET_DECISIONS.get((moj_owner_fqn, yarn_member, argc))
+        if dec and dec[0] in names:
+            return dec[0], f"DECIDED {moj_owner_fqn}#{yarn_member} -> {dec[0]} ({dec[1]})"
+        return None, None
+
     def resolve_member(self, moj_owner_fqn: str, yarn_member: str,
                        argc: int | None) -> tuple[str | None, str]:
         """(mojmap member name, note). None means: do not touch this site."""
@@ -433,6 +545,9 @@ class Renamer:
             return None, f"{moj_owner_fqn}#{yarn_member} unresolved (not a renamed MC member?)"
         if len(names) == 1:
             return next(iter(names)), "ok"
+        decided, note = self.decide_multi(moj_owner_fqn, yarn_member, argc, names)
+        if decided is not None:
+            return decided, note
         return None, (f"MULTI-TARGET {moj_owner_fqn}#{yarn_member} -> {'|'.join(sorted(names))}"
                       f" (argc={argc}) -- left alone, see section 28")
 
@@ -692,10 +807,33 @@ def run_loop(ren: Renamer, root: Path, maxerrs: int, rounds: int,
                 continue
             imports = ren.imported_types(src.read_text(encoding="utf-8"))
             owner, why = ren.resolve_owner(simple, imports)
-            if owner is None:
-                worklist.append(f"{e.path}:{e.line} {e.symbol_name}: {why}")
-                continue
-            new, note = ren.resolve_member(owner, e.symbol_name, e.argc)
+            if owner is not None:
+                new, note = ren.resolve_member(owner, e.symbol_name, e.argc)
+            else:
+                # AMBIGUOUS BY NAME -> disambiguate by MEMBER, not by picking a winner.
+                #
+                # javac prints a nested type's INNER name alone, so `Level` is both
+                # `Crackiness$Level` and `world.level.Level`, and `Block` is both `ClipContext$Block`
+                # and `world.level.block.Block`. The name cannot separate them -- but only ONE of
+                # each pair DECLARES the member being renamed, and the table knows which. Ask every
+                # candidate and keep the answer only if the candidates that respond AGREE.
+                # Still fail-closed: no agreement, no rewrite.
+                cands = ren.candidate_owners(simple, imports)
+                answers = {}
+                for c in cands:
+                    got, _ = ren.resolve_member(c, e.symbol_name, e.argc)
+                    if got is not None:
+                        answers.setdefault(got, []).append(c)
+                if len(answers) == 1:
+                    new = next(iter(answers))
+                    owner = answers[new][0]
+                    note = "ok"
+                else:
+                    new, note = None, (
+                        f"{e.symbol_name}: {why}"
+                        + (f"; {len(answers)} distinct member answers "
+                           f"({', '.join(sorted(answers))})" if answers else "; no candidate "
+                           f"declares it"))
             if new is None:
                 worklist.append(f"{e.path}:{e.line} {note}")
                 continue
@@ -883,6 +1021,41 @@ def self_test() -> int:
                       "  symbol:   method f(Map<A,B>,C)\n"
                       "  location: class A\n")[0].argc, 2)
 
+    # ---- the 30.2 multi-target decisions ----------------------------------------------------
+    check("a decision applies when the table offers its target",
+          ren.decide_multi("net.minecraft.core.Registry", "getEntry", 1,
+                           {"get", "wrapAsHolder"})[0], "get")
+    # THE GUARD: a decision naming something the table does not offer must be REFUSED, not written.
+    check("a decision naming a member the table does NOT offer is refused",
+          ren.decide_multi("net.minecraft.core.Registry", "getEntry", 1,
+                           {"wrapAsHolder", "somethingElse"})[0], None)
+    check("a decision is keyed on ARGC, so a different arity does not match",
+          ren.decide_multi("net.minecraft.core.Registry", "getEntry", 2,
+                           {"get", "wrapAsHolder"})[0], None)
+    check("an undecided multi-target row still refuses",
+          ren.decide_multi("net.minecraft.world.item.ItemStack", "damage", 3,
+                           {"a", "b"})[0], None)
+    check("every decision records the fact that decided it",
+          all(isinstance(v[1], str) and len(v[1]) > 20
+              for v in MULTI_TARGET_DECISIONS.values()), True)
+    check("no decision names its own yarn member (that would be a no-op row)",
+          [k for k, v in MULTI_TARGET_DECISIONS.items() if k[1] == v[0]], [])
+
+    # ---- ambiguity resolved by MEMBER, not by guessing an owner (30.1b) ---------------------
+    # `Level` is ambiguous by NAME between the fixture's two Block-ish classes below, and the real
+    # tree has exactly this shape: Crackiness$Level vs world.level.Level, ClipContext$Block vs
+    # world.level.block.Block. Only one of each pair declares the member.
+    check("candidate_owners returns ALL of an ambiguous name",
+          len(ren.candidate_owners("Block", {})), 2)
+    check("candidate_owners collapses when the file imports one",
+          ren.candidate_owners("Block", {"Block": "net.minecraft.world.level.block.Block"}),
+          ["net.minecraft.world.level.block.Block"])
+    check("candidate_owners prefers a nested type whose OUTER is imported",
+          ren.candidate_owners("Bay", {"Menu": "net.minecraft.world.inventory.Menu"}),
+          ["net.minecraft.world.inventory.Menu$Bay"])
+    check("candidate_owners on an unknown name is empty",
+          ren.candidate_owners("NoSuchTypeHere", {}), [])
+
     # ---- the collision audit must not depend on WRITE MODE (30.5) --------------------------
     import tempfile as _tf
     with _tf.TemporaryDirectory() as _d:
@@ -945,11 +1118,20 @@ def self_test() -> int:
           ren.resolve_member("net.minecraft.world.item.ItemStack", "damage", 3)[0], "hurtAndBreak")
     check("member INHERITED via hierarchy",
           ren.resolve_member("net.minecraft.world.entity.LivingEntity", "getWorld", 0)[0], "level")
-    check("member multi-target refuses",
-          ren.resolve_member("net.minecraft.core.Registry", "getEntry", 1)[0], None)
-    check("member multi-target reported",
-          "MULTI-TARGET" in ren.resolve_member("net.minecraft.core.Registry", "getEntry", 1)[1],
+    # An UNDECIDED multi-target row must still refuse and still say so. This used to be asserted
+    # with Registry#getEntry, which 30.2 has since DECIDED -- so it was re-pointed at an argc the
+    # decisions table deliberately does not cover, rather than deleted. Deleting it would have
+    # left the refusal path itself unguarded, which is not the same as unnecessary.
+    check("member multi-target refuses when UNDECIDED",
+          ren.resolve_member("net.minecraft.core.Registry", "getEntry", 7)[0], None)
+    check("member multi-target reported when UNDECIDED",
+          "MULTI-TARGET" in ren.resolve_member("net.minecraft.core.Registry", "getEntry", 7)[1],
           True)
+    # ...and the DECIDED arity resolves, so the two paths are both pinned.
+    check("member multi-target RESOLVES when decided",
+          ren.resolve_member("net.minecraft.core.Registry", "getEntry", 1)[0], "get")
+    check("a decided row explains itself",
+          "DECIDED" in ren.resolve_member("net.minecraft.core.Registry", "getEntry", 1)[1], True)
     check("member unknown owner refuses",
           ren.resolve_member("com.example.Nope", "x", 0)[0], None)
 

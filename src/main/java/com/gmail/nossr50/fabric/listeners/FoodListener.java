@@ -84,7 +84,7 @@ public final class FoodListener {
      */
     public static void onFoodConsumed(Level world, LivingEntity user, ItemStack stack,
             FoodProperties food) {
-        if (world.isClient()) {
+        if (world.isClientSide()) {
             return; // the client half of a singleplayer session also runs consumption; server is authoritative.
         }
         if (!(user instanceof ServerPlayer player)) {
@@ -97,7 +97,7 @@ public final class FoodListener {
             return;
         }
 
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUUID());
         if (mmoPlayer == null) {
             return; // data not loaded (e.g. mid-join).
         }
@@ -167,7 +167,7 @@ public final class FoodListener {
             }
             return;
         }
-        player.addStatusEffect(new MobEffectInstance(type, effect.durationTicks(),
+        player.addEffect(new MobEffectInstance(type, effect.durationTicks(),
                 CookingManager.POWER_COOK_AMPLIFIER));
     }
 
@@ -230,13 +230,13 @@ public final class FoodListener {
      */
     private static void applyBonus(ServerPlayer player, int bonusFood, int nutrition,
             float saturation) {
-        final FoodData hunger = player.getHungerManager();
+        final FoodData hunger = player.getFoodData();
         final int newFoodLevel = Mth.clamp(hunger.getFoodLevel() + bonusFood, 0,
-                FoodConstants.FULL_FOOD_LEVEL);
+                FoodConstants.MAX_FOOD);
         final float bonusSaturation = saturation * bonusFood / nutrition;
 
         hunger.setFoodLevel(newFoodLevel);
-        hunger.setSaturationLevel(
+        hunger.setSaturation(
                 Mth.clamp(hunger.getSaturationLevel() + bonusSaturation, 0.0f, newFoodLevel));
     }
 }

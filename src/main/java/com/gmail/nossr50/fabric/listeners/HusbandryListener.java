@@ -143,7 +143,7 @@ public final class HusbandryListener {
         if (animal == null || config == null || !config.isCOTWBreedingPrevented()) {
             return false;
         }
-        return McMMOMod.getTransientEntityTracker().isTransient(animal.getUuid());
+        return McMMOMod.getTransientEntityTracker().isTransient(animal.getUUID());
     }
 
     /**
@@ -162,7 +162,7 @@ public final class HusbandryListener {
         if (breeder == null || parent == null) {
             return;
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(breeder.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(breeder.getUUID());
         if (mmoPlayer == null) {
             return; // data not loaded (e.g. mid-join).
         }
@@ -184,7 +184,7 @@ public final class HusbandryListener {
         // leaving the child claimed would let the raise verb pay for it twenty minutes later, making
         // this a delay rather than a gate.
         if (isCallOfTheWildSummon(parent) || isCallOfTheWildSummon(mate)) {
-            LogUtils.debug("Refusing Husbandry breed XP for " + breeder.getUuid()
+            LogUtils.debug("Refusing Husbandry breed XP for " + breeder.getUUID()
                     + ": a parent is a Call of the Wild summon.");
             return;
         }
@@ -192,7 +192,7 @@ public final class HusbandryListener {
         final String entityConfigString = ConfigStringUtils.getConfigEntityTypeString(
                 BuiltInRegistries.ENTITY_TYPE.getId(parent.getType()).getPath());
         final HusbandryManager.BreedAward award =
-                husbandry.onBreed(entityConfigString, parent.getEntityWorld().getTime());
+                husbandry.onBreed(entityConfigString, parent.level().getGameTime());
         if (award.capReached()) {
             // Once per window, not once per breeding. A gate that pays nothing and says nothing is
             // indistinguishable from a broken one -- the lesson GitHub #4 and #5 both turned on.
@@ -241,12 +241,12 @@ public final class HusbandryListener {
             return; // Egg-laying breeder: the clutch is not an entity we can mark.
         }
         if (paid) {
-            child.setAttached(McMMOAttachments.BRED_BY, breeder.getUuid());
+            child.setAttached(McMMOAttachments.BRED_BY, breeder.getUUID());
         }
 
-        final int acceleratedAge = husbandry.applyGrowthAcceleration(child.getBreedingAge());
-        if (acceleratedAge != child.getBreedingAge()) {
-            child.setBreedingAge(acceleratedAge);
+        final int acceleratedAge = husbandry.applyGrowthAcceleration(child.getAge());
+        if (acceleratedAge != child.getAge()) {
+            child.setAge(acceleratedAge);
         }
     }
 
@@ -274,25 +274,25 @@ public final class HusbandryListener {
         if (child == null || mate == null) {
             return; // Egg-laying breeder: vanilla produced no baby for us to double.
         }
-        if (!(parent.getEntityWorld() instanceof ServerLevel serverWorld)) {
+        if (!(parent.level() instanceof ServerLevel serverWorld)) {
             return;
         }
         if (!husbandry.rollTwins()) {
             return;
         }
 
-        final AgeableMob twin = parent.createChild(serverWorld, mate);
+        final AgeableMob twin = parent.getBreedOffspring(serverWorld, mate);
         if (twin == null) {
             return; // Species declined to make a second child; nothing to report.
         }
         twin.setBaby(true);
-        twin.refreshPositionAndAngles(parent.getX(), parent.getY(), parent.getZ(), 0.0F, 0.0F);
+        twin.snapTo(parent.getX(), parent.getY(), parent.getZ(), 0.0F, 0.0F);
         // Claimed exactly like its sibling, and after setBaby so there is a childhood to shorten.
         // A twin with no bred-by marker would be the one baby in the game whose breeder could never
         // be paid for raising it -- and by the same token it inherits its sibling's refusal, so a
         // breeding the award cap turned down cannot smuggle a payable calf out through Twins.
         claimOffspring(husbandry, breeder, twin, paid);
-        serverWorld.spawnEntityAndPassengers(twin);
+        serverWorld.addFreshEntityWithPassengers(twin);
 
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
                 "Husbandry.SubSkill.Twins.Proc");
@@ -333,11 +333,11 @@ public final class HusbandryListener {
         if (fed == null || !(player instanceof ServerPlayer serverPlayer)) {
             return;
         }
-        final Level world = fed.getEntityWorld();
+        final Level world = fed.level();
         if (!(world instanceof ServerLevel)) {
             return;
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             return;
         }
@@ -351,14 +351,14 @@ public final class HusbandryListener {
             return;
         }
 
-        final AABB searchBox = fed.getBoundingBox().expand(radius);
-        final List<Animal> neighbours = world.getEntitiesByClass(Animal.class, searchBox,
+        final AABB searchBox = fed.getBoundingBox().inflate(radius);
+        final List<Animal> neighbours = world.getEntitiesOfClass(Animal.class, searchBox,
                 candidate -> isMultiBreedCandidate(fed, candidate));
 
         SPREADING_LOVE.set(true);
         try {
             for (Animal neighbour : neighbours) {
-                neighbour.lovePlayer(serverPlayer);
+                neighbour.setInLove(serverPlayer);
             }
         } finally {
             SPREADING_LOVE.set(false);
@@ -407,7 +407,7 @@ public final class HusbandryListener {
         if (interaction == null || interaction.target() != animal) {
             return growthSeconds; // Not a player feed: grass, or a tadpole ageing itself.
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(interaction.player().getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(interaction.player().getUUID());
         if (mmoPlayer == null) {
             return growthSeconds;
         }
@@ -931,7 +931,7 @@ public final class HusbandryListener {
             if (candidate == null) {
                 continue;
             }
-            final ServerPlayer breeder = candidate.getLovingPlayer();
+            final ServerPlayer breeder = candidate.getLoveCause();
             if (breeder != null) {
                 final HusbandryManager husbandry = husbandryOf(breeder);
                 if (husbandry != null) {
@@ -1007,7 +1007,7 @@ public final class HusbandryListener {
     private static void rollHiddenBounty(HusbandryManager husbandry, ServerPlayer player,
             String verb) {
         final TreasureConfig treasures = McMMOMod.getTreasureConfig();
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUUID());
         if (treasures == null || mmoPlayer == null) {
             return; // Not loaded (early boot, or a unit test with no config bound).
         }
@@ -1062,7 +1062,7 @@ public final class HusbandryListener {
         if (seconds <= 0) {
             return true; // Gate configured off.
         }
-        final long now = animal.getEntityWorld().getTime();
+        final long now = animal.level().getGameTime();
         final Long lastAward = MetadataStore.get(animal, HARVEST_COOLDOWN_KEY, Long.class);
         if (lastAward != null) {
             final long elapsed = now - lastAward;
@@ -1076,8 +1076,8 @@ public final class HusbandryListener {
 
     /** Hand a bonus stack to the player, dropping it at their feet if they have no room. */
     private static void giveOrDrop(ServerPlayer player, ItemStack stack) {
-        if (!player.getInventory().insertStack(stack)) {
-            player.dropItem(stack, false);
+        if (!player.getInventory().add(stack)) {
+            player.drop(stack, false);
         }
     }
 
@@ -1100,7 +1100,7 @@ public final class HusbandryListener {
 
     /** The Husbandry manager for a server player, or {@code null} if their data is not loaded. */
     private static HusbandryManager husbandryOf(ServerPlayer player) {
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUUID());
         return mmoPlayer == null ? null : mmoPlayer.getHusbandryManager();
     }
 
@@ -1123,7 +1123,7 @@ public final class HusbandryListener {
         return candidate != fed
                 && candidate.isAlive()
                 && candidate.getType() == fed.getType()
-                && candidate.getBreedingAge() == 0
-                && candidate.canEat();
+                && candidate.getAge() == 0
+                && candidate.canFallInLove();
     }
 }

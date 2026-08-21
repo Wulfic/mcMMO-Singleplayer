@@ -125,7 +125,7 @@ public final class FishingListener {
         if (!(bobber.getPlayerOwner() instanceof ServerPlayer serverPlayer)) {
             return; // client-side / null owner — the authoritative award happens on the server.
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             return; // data not loaded (e.g. mid-join).
         }
@@ -208,8 +208,8 @@ public final class FishingListener {
 
     /** The four fish legacy's treasure override leaves alone. */
     private static boolean isVanillaFish(ItemStack stack) {
-        return stack.isOf(Items.SALMON) || stack.isOf(Items.COD)
-                || stack.isOf(Items.TROPICAL_FISH) || stack.isOf(Items.PUFFERFISH);
+        return stack.is(Items.SALMON) || stack.is(Items.COD)
+                || stack.is(Items.TROPICAL_FISH) || stack.is(Items.PUFFERFISH);
     }
 
     /**
@@ -257,7 +257,7 @@ public final class FishingListener {
         if (!(bobber.getPlayerOwner() instanceof ServerPlayer serverPlayer)) {
             return experience; // client-side / null owner.
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             return experience; // data not loaded (e.g. mid-join).
         }
@@ -360,9 +360,9 @@ public final class FishingListener {
             FishingManager fishingManager, FishingTreasureBook book, ItemStack treasureStack,
             ThreadLocalRandom rng) {
         final Map<String, Holder<Enchantment>> byId = new LinkedHashMap<>();
-        for (Holder<Enchantment> entry : serverPlayer.getRegistryManager()
-                .getOrThrow(RegistryKeys.ENCHANTMENT).getIndexedEntries()) {
-            entry.getKey().ifPresent(key -> byId.put(key.getValue().getPath(), entry));
+        for (Holder<Enchantment> entry : serverPlayer.registryAccess()
+                .getOrThrow(Registries.ENCHANTMENT).getIndexedEntries()) {
+            entry.unwrapKey().ifPresent(key -> byId.put(key.identifier().getPath(), entry));
         }
         warnUnknownWhitelistedEnchantments(book, byId.keySet());
 
@@ -384,9 +384,9 @@ public final class FishingListener {
         }
 
         final ItemEnchantments.Mutable builder = new ItemEnchantments.Mutable(
-                EnchantmentHelper.getEnchantments(treasureStack));
+                EnchantmentHelper.getEnchantmentsForCrafting(treasureStack));
         builder.set(byId.get(picked.get().enchantmentId()), picked.get().level());
-        EnchantmentHelper.set(treasureStack, builder.build());
+        EnchantmentHelper.set(treasureStack, toImmutableer.build());
         return true;
     }
 
@@ -457,7 +457,7 @@ public final class FishingListener {
         }
 
         final Registry<Enchantment> enchantmentRegistry =
-                serverPlayer.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT);
+                serverPlayer.registryAccess().getOrThrow(Registries.ENCHANTMENT);
         final Map<String, Holder<Enchantment>> resolved = new HashMap<>();
         final List<EnchantmentTreasure> candidates = new ArrayList<>();
 
@@ -466,7 +466,7 @@ public final class FishingListener {
             final Identifier id = Identifier.tryParse(candidate.enchantmentId());
             final Optional<Holder.Reference<Enchantment>> entry = id == null
                     ? Optional.empty()
-                    : enchantmentRegistry.getEntry(id);
+                    : enchantmentRegistry.get(id);
 
             if (entry.isEmpty()) {
                 McMMOMod.LOGGER.warn("Skipping unknown Magic Hunter enchantment '{}' ({} band in"
@@ -474,7 +474,7 @@ public final class FishingListener {
                         candidate.enchantmentId(), rarity.get());
                 continue;
             }
-            if (!entry.get().value().isAcceptableItem(treasureStack)) {
+            if (!entry.get().value().canEnchant(treasureStack)) {
                 continue; // legacy getPossibleEnchantments: this enchantment doesn't fit this item.
             }
 
@@ -490,7 +490,7 @@ public final class FishingListener {
         Collections.shuffle(candidates, rng);
 
         final Set<Holder<Enchantment>> alreadyOnItem =
-                EnchantmentHelper.getEnchantments(treasureStack).getEnchantments();
+                EnchantmentHelper.keySetForCrafting(treasureStack).getEnchantments();
         final List<EnchantmentTreasure> chosen = fishingManager.selectMagicHunterEnchants(candidates,
                 (selectedSoFar, candidate) -> conflictsWithAny(alreadyOnItem, selectedSoFar, resolved,
                         candidate),
@@ -501,11 +501,11 @@ public final class FishingListener {
         }
 
         final ItemEnchantments.Mutable builder = new ItemEnchantments.Mutable(
-                EnchantmentHelper.getEnchantments(treasureStack));
+                EnchantmentHelper.getEnchantmentsForCrafting(treasureStack));
         for (EnchantmentTreasure treasure : chosen) {
             builder.set(resolved.get(treasure.enchantmentId()), treasure.level());
         }
-        EnchantmentHelper.set(treasureStack, builder.build());
+        EnchantmentHelper.set(treasureStack, toImmutableer.build());
         return true;
     }
 
@@ -524,12 +524,12 @@ public final class FishingListener {
         final Holder<Enchantment> entry = resolved.get(candidate.enchantmentId());
 
         for (Holder<Enchantment> existing : alreadyOnItem) {
-            if (!Enchantment.canBeCombined(existing, entry)) {
+            if (!Enchantment.areCompatible(existing, entry)) {
                 return true;
             }
         }
         for (EnchantmentTreasure selected : selectedSoFar) {
-            if (!Enchantment.canBeCombined(resolved.get(selected.enchantmentId()), entry)) {
+            if (!Enchantment.areCompatible(resolved.get(selected.enchantmentId()), entry)) {
                 return true;
             }
         }
@@ -544,7 +544,7 @@ public final class FishingListener {
     private static void applyRandomWear(ItemStack stack, ThreadLocalRandom rng) {
         final int maxDamage = stack.getMaxDamage();
         if (maxDamage > 0) {
-            stack.setDamage(rng.nextInt(maxDamage));
+            stack.setDamageValue(rng.nextInt(maxDamage));
         }
     }
 
@@ -567,16 +567,16 @@ public final class FishingListener {
      * @param bobber the bobber being reeled in (source of the owner and the hooked entity)
      */
     public static void onEntityHooked(FishingHook bobber) {
-        if (!(bobber.getHookedEntity() instanceof LivingEntity target)) {
+        if (!(bobber.getHookedIn() instanceof LivingEntity target)) {
             return; // legacy canShake's `target instanceof LivingEntity` half (a hooked boat/item).
         }
         if (!(bobber.getPlayerOwner() instanceof ServerPlayer serverPlayer)) {
             return; // client-side / null owner.
         }
-        if (!(target.getEntityWorld() instanceof ServerLevel world)) {
+        if (!(target.level() instanceof ServerLevel world)) {
             return; // the drop spawn and the damage are server-side only.
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             return; // data not loaded (e.g. mid-join).
         }
@@ -604,8 +604,8 @@ public final class FishingListener {
 
         final ItemEntity drop = new ItemEntity(world, target.getX(), target.getY(), target.getZ(),
                 built.get());
-        drop.setToDefaultPickupDelay(); // Bukkit's World#dropItem behaviour.
-        world.spawnEntity(drop);
+        drop.setDefaultPickUpDelay(); // Bukkit's World#dropItem behaviour.
+        world.addFreshEntity(drop);
 
         // Attributed to the player, so it is mcMMO's own damage: the K1 seam passes it through and it
         // pays no combat XP — the role legacy's CUSTOM_DAMAGE marker played.
@@ -665,20 +665,20 @@ public final class FishingListener {
      * @param bobber the bobber being reeled in (source of the owner and the world)
      */
     public static void tryIceFishing(FishingHook bobber) {
-        if (bobber.getHookedEntity() != null) {
+        if (bobber.getHookedIn() != null) {
             return; // a hooked mob is the Shake path, not a stuck-on-ice reel.
         }
         if (!(bobber.getPlayerOwner() instanceof ServerPlayer serverPlayer)) {
             return; // client-side / null owner.
         }
-        if (!(bobber.getEntityWorld() instanceof ServerLevel world)) {
+        if (!(bobber.level() instanceof ServerLevel world)) {
             return; // the block reads and the melt are server-side only.
         }
         // Reconstruct legacy's IN_GROUND precondition: a bobber in water is bobbing/caught, not stuck.
-        if (world.getFluidState(bobber.getBlockPos()).isIn(FluidTags.WATER)) {
+        if (world.getFluidState(bobber.blockPosition()).is(FluidTags.WATER)) {
             return;
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             return; // data not loaded (e.g. mid-join).
         }
@@ -687,12 +687,12 @@ public final class FishingListener {
             return;
         }
 
-        final HitResult hit = serverPlayer.raycast(100.0, 1.0F, false);
+        final HitResult hit = serverPlayer.pick(100.0, 1.0F, false);
         if (hit.getType() != HitResult.Type.BLOCK) {
             return;
         }
         final BlockPos target = ((BlockHitResult) hit).getBlockPos();
-        if (!world.getBlockState(target).isOf(Blocks.ICE) || !sitsOverWater(world, target)) {
+        if (!world.getBlockState(target).is(Blocks.ICE) || !sitsOverWater(world, target)) {
             return;
         }
 
@@ -703,8 +703,8 @@ public final class FishingListener {
                 if (dx == 0 && dz == 0) {
                     continue;
                 }
-                final BlockPos neighbour = target.add(dx, 0, dz);
-                if (world.getBlockState(neighbour).isOf(Blocks.ICE)) {
+                final BlockPos neighbour = target.offset(dx, 0, dz);
+                if (world.getBlockState(neighbour).is(Blocks.ICE)) {
                     meltIce(world, neighbour);
                 }
             }
@@ -717,7 +717,7 @@ public final class FishingListener {
      */
     private static boolean sitsOverWater(ServerLevel world, BlockPos icePos) {
         for (int dy = 1; dy <= 4; dy++) {
-            if (world.getFluidState(icePos.down(dy)).isIn(FluidTags.WATER)) {
+            if (world.getFluidState(icePos.below(dy)).is(FluidTags.WATER)) {
                 return true;
             }
         }
@@ -726,7 +726,7 @@ public final class FishingListener {
 
     /** Turns one block into a water source — legacy {@code block.setType(Material.WATER)}. */
     private static void meltIce(ServerLevel world, BlockPos pos) {
-        world.setBlockState(pos, Blocks.WATER.getDefaultState());
+        world.setBlockAndUpdate(pos, Blocks.WATER.defaultBlockState());
     }
 
     /**
@@ -774,11 +774,11 @@ public final class FishingListener {
         if (!(bobber.getPlayerOwner() instanceof ServerPlayer serverPlayer)) {
             return null; // client-side / null owner.
         }
-        if (!serverPlayer.getMainHandStack().isOf(Items.FISHING_ROD)
-                || serverPlayer.getOffHandStack().isOf(Items.FISHING_ROD)) {
+        if (!serverPlayer.getMainHandItem().is(Items.FISHING_ROD)
+                || serverPlayer.getOffhandItem().is(Items.FISHING_ROD)) {
             return null;
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             return null; // data not loaded (e.g. mid-join).
         }
@@ -799,8 +799,8 @@ public final class FishingListener {
      * exact lookup. Enchantment level resolves off the stack's component with no world context needed.
      */
     private static int luckOfTheSeaLevel(ServerPlayer player) {
-        final ItemStack main = player.getMainHandStack();
-        final ItemStack rod = main.isOf(Items.FISHING_ROD) ? main : player.getOffHandStack();
+        final ItemStack main = player.getMainHandItem();
+        final ItemStack rod = main.is(Items.FISHING_ROD) ? main : player.getOffhandItem();
         return new PlatformItem(rod).getEnchantmentLevel(Enchantments.LUCK_OF_THE_SEA);
     }
 }

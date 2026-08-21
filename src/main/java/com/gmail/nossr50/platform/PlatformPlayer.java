@@ -103,13 +103,13 @@ public final class PlatformPlayer {
      * @param replacement the freshly constructed entity for the same player
      */
     public void rebind(@NotNull ServerPlayer replacement) {
-        if (!replacement.getUuid().equals(handle.getUuid())) {
+        if (!replacement.getUUID().equals(handle.getUUID())) {
             // Never swap one player's handle for another's; a mis-wired caller would silently
             // redirect every skill side effect onto the wrong player.
             McMMOMod.LOGGER.error(
                     "Refusing to rebind mcMMO player handle for {} ({}) to a different player {} ({}).",
-                    getName(), handle.getUuid(), replacement.getName().getString(),
-                    replacement.getUuid());
+                    getName(), handle.getUUID(), replacement.getName().getString(),
+                    replacement.getUUID());
             return;
         }
         this.handle = replacement;
@@ -124,22 +124,22 @@ public final class PlatformPlayer {
     }
 
     public @NotNull UUID getUniqueId() {
-        return handle.getUuid();
+        return handle.getUUID();
     }
 
     // --- World / position ---------------------------------------------------
 
     public @NotNull ServerLevel getWorld() {
         // getEntityWorld() replaced Bukkit getWorld(); for a ServerPlayerEntity it is a ServerWorld.
-        return (ServerLevel) handle.getEntityWorld();
+        return (ServerLevel) handle.level();
     }
 
     public @NotNull BlockPos getBlockPos() {
-        return handle.getBlockPos();
+        return handle.blockPosition();
     }
 
     public @NotNull Vec3 getPos() {
-        return handle.getEntityPos();
+        return handle.position();
     }
 
     // --- Vitals -------------------------------------------------------------
@@ -160,7 +160,7 @@ public final class PlatformPlayer {
     // --- Mode / movement state ---------------------------------------------
 
     public @NotNull GameType getGameMode() {
-        return handle.interactionManager.getGameMode();
+        return handle.gameMode.getGameModeForPlayer();
     }
 
     public boolean isCreative() {
@@ -172,7 +172,7 @@ public final class PlatformPlayer {
     }
 
     public boolean isSneaking() {
-        return handle.isSneaking();
+        return handle.isShiftKeyDown();
     }
 
     /**
@@ -197,12 +197,12 @@ public final class PlatformPlayer {
      * stats renderers stay Minecraft-free and band-independent.
      */
     public void sendMessage(@NotNull String message) {
-        handle.sendMessage(TextUtils.toText(message));
+        handle.sendSystemMessage(TextUtils.toText(message));
     }
 
     /** Action-bar / overlay message (Bukkit {@code sendActionBar}). See {@link #sendMessage}. */
     public void sendActionBar(@NotNull String message) {
-        handle.sendMessage(TextUtils.toText(message), true);
+        handle.sendSystemMessage(TextUtils.toText(message), true);
     }
 
     // --- Sound (Bukkit Player#playSound / World#playSound) -------------------
@@ -224,7 +224,7 @@ public final class PlatformPlayer {
     public void playSound(@NotNull String soundRegistryId, @NotNull PlatformSoundCategory category,
             float volume, float pitch) {
         Identifier id = Identifier.tryParse(soundRegistryId);
-        if (id == null || !BuiltInRegistries.SOUND_EVENT.containsId(id)) {
+        if (id == null || !BuiltInRegistries.SOUND_EVENT.containsKey(id)) {
             McMMOMod.LOGGER.warn("No vanilla sound for id '{}'", soundRegistryId);
             return;
         }
@@ -286,18 +286,18 @@ public final class PlatformPlayer {
         if (server == null) {
             return; // No integrated server (unit tests / between world sessions).
         }
-        final Identifier id = Identifier.of("mcmmo", "milestone/" + path);
-        final AdvancementHolder entry = server.getAdvancementLoader().get(id);
+        final Identifier id = Identifier.fromNamespaceAndPath("mcmmo", "milestone/" + path);
+        final AdvancementHolder entry = server.getAdvancements().get(id);
         if (entry == null) {
             McMMOMod.LOGGER.warn("Milestone advancement '{}' is not loaded; skipping plaque.", id);
             return;
         }
-        final PlayerAdvancements tracker = handle.getAdvancementTracker();
+        final PlayerAdvancements tracker = handle.getAdvancements();
         if (repeatable) {
             // Clear the completion so the re-grant re-shows the toast/plaque.
-            tracker.revokeCriterion(entry, MILESTONE_CRITERION);
+            tracker.revoke(entry, MILESTONE_CRITERION);
         }
-        tracker.grantCriterion(entry, MILESTONE_CRITERION);
+        tracker.award(entry, MILESTONE_CRITERION);
     }
 
     // --- Held items ---------------------------------------------------------
@@ -309,12 +309,12 @@ public final class PlatformPlayer {
      * null) when the hand is empty, matching vanilla {@link net.minecraft.world.entity.LivingEntity#getMainHandStack()}.
      */
     public @NotNull ItemStack getMainHandStack() {
-        return handle.getMainHandStack();
+        return handle.getMainHandItem();
     }
 
     /** The stack in the off hand (Bukkit {@code getInventory().getItemInOffHand()}); empty when none. */
     public @NotNull ItemStack getOffHandStack() {
-        return handle.getOffHandStack();
+        return handle.getOffhandItem();
     }
 
     // --- Agility fall/roll support (K2) ----------------------------------
@@ -325,8 +325,8 @@ public final class PlatformPlayer {
      * {@code ItemUtils.hasItemInEitherHand(player, Material.ENDER_PEARL)}.
      */
     public boolean hasEnderPearlInEitherHand() {
-        return handle.getMainHandStack().isOf(Items.ENDER_PEARL)
-                || handle.getOffHandStack().isOf(Items.ENDER_PEARL);
+        return handle.getMainHandItem().is(Items.ENDER_PEARL)
+                || handle.getOffhandItem().is(Items.ENDER_PEARL);
     }
 
     /**
@@ -335,7 +335,7 @@ public final class PlatformPlayer {
      * (fall damage while mounted is disallowed for XP).
      */
     public boolean isInsideVehicle() {
-        return handle.hasVehicle();
+        return handle.isPassenger();
     }
 
     /**
@@ -345,10 +345,10 @@ public final class PlatformPlayer {
      * registry; if the enchantment registry is somehow absent the check degrades to {@code false}.
      */
     public boolean hasFeatherFallingBoots() {
-        Holder<Enchantment> featherFalling = getWorld().getRegistryManager()
-                .getOrThrow(RegistryKeys.ENCHANTMENT)
+        Holder<Enchantment> featherFalling = getWorld().registryAccess()
+                .getOrThrow(Registries.ENCHANTMENT)
                 .getOrThrow(Enchantments.FEATHER_FALLING);
-        return EnchantmentHelper.getEquipmentLevel(featherFalling, handle) > 0;
+        return EnchantmentHelper.getEnchantmentLevel(featherFalling, handle) > 0;
     }
 
     /**
@@ -356,7 +356,7 @@ public final class PlatformPlayer {
      * Agility fall-location history to throttle repeat XP farming on the same block.
      */
     public long getFeetBlockKey() {
-        return handle.getBlockPos().asLong();
+        return handle.blockPosition().asLong();
     }
 
     // --- Super-ability activation support (K6) ------------------------------
@@ -369,7 +369,7 @@ public final class PlatformPlayer {
      * {@link ToolType}.
      */
     public boolean isHoldingTool(@NotNull ToolType toolType) {
-        return ItemUtils.isToolInHand(toolType, handle.getMainHandStack());
+        return ItemUtils.isToolInHand(toolType, handle.getMainHandItem());
     }
 
     /**
@@ -379,7 +379,7 @@ public final class PlatformPlayer {
      * used for config-named items such as the Blast Mining detonator.
      */
     public boolean isHoldingItem(@NotNull String itemName) {
-        final ItemStack held = handle.getMainHandStack();
+        final ItemStack held = handle.getMainHandItem();
         return Materials.item(itemName).map(held::isOf).orElse(false);
     }
 
@@ -395,7 +395,7 @@ public final class PlatformPlayer {
      * established shape — see {@link #isHoldingTool} and {@link #isLookingAtTree}.)
      */
     public boolean isUnarmed() {
-        return ItemUtils.isUnarmed(handle.getMainHandStack());
+        return ItemUtils.isUnarmed(handle.getMainHandItem());
     }
 
     /**
@@ -406,7 +406,7 @@ public final class PlatformPlayer {
      * vector; a miss (air / fluid / entity) or a non-tree block yields {@code false}.
      */
     public boolean isLookingAtTree() {
-        HitResult hit = handle.raycast(100.0D, 1.0F, false);
+        HitResult hit = handle.pick(100.0D, 1.0F, false);
         if (hit.getType() != HitResult.Type.BLOCK) {
             return false;
         }
@@ -436,7 +436,7 @@ public final class PlatformPlayer {
      * @return {@code true} if the effect was applied or upgraded an existing one
      */
     public boolean applySpeed(int durationTicks, int amplifier) {
-        return handle.addStatusEffect(new MobEffectInstance(MobEffects.SPEED, durationTicks,
+        return handle.addEffect(new MobEffectInstance(MobEffects.SPEED, durationTicks,
                 amplifier));
     }
 
@@ -459,13 +459,13 @@ public final class PlatformPlayer {
      * @param enchantBuff the number of Efficiency levels to add (advanced.yml {@code EnchantBuff})
      */
     public void applySuperAbilityDigBoost(int enchantBuff) {
-        final ItemStack stack = handle.getMainHandStack();
+        final ItemStack stack = handle.getMainHandItem();
         if (!canBeDigBoosted(stack)) {
             return;
         }
         final Holder<Enchantment> efficiency = efficiencyEntry();
-        final int originalDigSpeed = EnchantmentHelper.getLevel(efficiency, stack);
-        EnchantmentHelper.apply(stack, builder -> builder.set(efficiency,
+        final int originalDigSpeed = EnchantmentHelper.getItemEnchantmentLevel(efficiency, stack);
+        EnchantmentHelper.updateEnchantments(stack, builder -> builder.set(efficiency,
                 originalDigSpeed + enchantBuff));
         CustomData.set(DataComponents.CUSTOM_DATA, stack,
                 nbt -> nbt.putInt(SUPER_ABILITY_BOOST_KEY, originalDigSpeed));
@@ -476,7 +476,7 @@ public final class PlatformPlayer {
      * on the held item). Called before (re)activating so a stale boost can't stack its Efficiency.
      */
     public void removeSuperAbilityBoostFromMainHand() {
-        removeSuperAbilityBoostFromStack(handle.getMainHandStack());
+        removeSuperAbilityBoostFromStack(handle.getMainHandItem());
     }
 
     /**
@@ -486,8 +486,8 @@ public final class PlatformPlayer {
      */
     public void removeSuperAbilityBoostsFromInventory() {
         final Inventory inventory = handle.getInventory();
-        for (int slot = 0; slot < inventory.size(); slot++) {
-            removeSuperAbilityBoostFromStack(inventory.getStack(slot));
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            removeSuperAbilityBoostFromStack(inventory.getItem(slot));
         }
     }
 
@@ -516,17 +516,17 @@ public final class PlatformPlayer {
         if (customData == null) {
             return;
         }
-        final CompoundTag nbt = customData.copyNbt();
+        final CompoundTag nbt = customData.copyTag();
         if (!nbt.contains(SUPER_ABILITY_BOOST_KEY)) {
             return; // not a boosted stack.
         }
         final int originalDigSpeed = nbt.getInt(SUPER_ABILITY_BOOST_KEY, 0);
         final Holder<Enchantment> efficiency = efficiencyEntry();
         if (originalDigSpeed > 0) {
-            EnchantmentHelper.apply(stack, builder -> builder.set(efficiency, originalDigSpeed));
+            EnchantmentHelper.updateEnchantments(stack, builder -> builder.set(efficiency, originalDigSpeed));
         } else {
-            EnchantmentHelper.apply(stack,
-                    builder -> builder.remove(entry -> entry.matchesKey(Enchantments.EFFICIENCY)));
+            EnchantmentHelper.updateEnchantments(stack,
+                    builder -> builder.removeIf(entry -> entry.is(Enchantments.EFFICIENCY)));
         }
         CustomData.set(DataComponents.CUSTOM_DATA, stack,
                 marker -> marker.remove(SUPER_ABILITY_BOOST_KEY));
@@ -539,8 +539,8 @@ public final class PlatformPlayer {
 
     /** Resolve the {@code Efficiency} enchantment entry from the world's dynamic registry. */
     private @NotNull Holder<Enchantment> efficiencyEntry() {
-        return getWorld().getRegistryManager()
-                .getOrThrow(RegistryKeys.ENCHANTMENT)
+        return getWorld().registryAccess()
+                .getOrThrow(Registries.ENCHANTMENT)
                 .getOrThrow(Enchantments.EFFICIENCY);
     }
 

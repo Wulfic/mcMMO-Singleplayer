@@ -103,7 +103,7 @@ public final class PetCombatModeListener {
             return InteractionResult.CONSUME;
         }
 
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             // Profile not loaded (mid-join). Still CONSUME: the client has already suppressed its
             // prediction, so PASSing here would sit the pet on a gesture that was claimed.
@@ -115,7 +115,7 @@ public final class PetCombatModeListener {
             McMMOMod.LOGGER.debug("Pet combat-mode toggle by {} arrived before their profile loaded;"
                             + " consuming the click and asking them to retry.",
                     serverPlayer.getName().getString());
-            serverPlayer.sendMessage(TextUtils.toText(LocaleLoader.getString("Profile.PendingLoad")));
+            serverPlayer.sendSystemMessage(TextUtils.toText(LocaleLoader.getString("Profile.PendingLoad")));
             return InteractionResult.CONSUME;
         }
 
@@ -151,14 +151,14 @@ public final class PetCombatModeListener {
         if (!isFeatureEnabled()) {
             return false;
         }
-        if (!player.isSneaking()) {
+        if (!player.isShiftKeyDown()) {
             return false; // A plain right-click still belongs to vanilla's sit-toggle.
         }
-        if (!(entity instanceof TamableAnimal pet) || !pet.isTamed() || !pet.isOwner(player)) {
+        if (!(entity instanceof TamableAnimal pet) || !pet.isTame() || !pet.isOwnedBy(player)) {
             return false; // Someone else's pet, or not a pet at all.
         }
         final Item toggleItem = toggleItem();
-        return toggleItem != null && player.getMainHandStack().isOf(toggleItem);
+        return toggleItem != null && player.getMainHandItem().is(toggleItem);
     }
 
     /**

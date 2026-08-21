@@ -155,13 +155,13 @@ public final class BlockBreakListener {
     private static boolean maybeProcessHylianLuck(ServerLevel serverWorld,
             ServerPlayer serverPlayer, BlockPos pos, BlockState state) {
         // Cheapest gate first — Hylian triggers only on a sword break, and most breaks aren't swords.
-        if (!ItemUtils.isSword(serverPlayer.getMainHandStack())) {
+        if (!ItemUtils.isSword(serverPlayer.getMainHandItem())) {
             return true;
         }
         if (serverPlayer.isCreative()) {
             return true; // legacy gates its whole block-break handler on non-creative.
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             return true; // data not loaded (e.g. mid-join).
         }
@@ -185,8 +185,8 @@ public final class BlockBreakListener {
             final Optional<ItemStack> built = ItemSpecBuilder.build(won.get().getDrop());
             if (built.isPresent()) {
                 // Remove the block first (legacy order), then drop the treasure into the now-empty space.
-                serverWorld.setBlockState(pos, Blocks.AIR.getDefaultState());
-                Block.dropStack(serverWorld, pos, built.get());
+                serverWorld.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
+                Block.popResource(serverWorld, pos, built.get());
                 NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
                         "Herbalism.HylianLuck");
                 return false; // treasure replaces the normal drop — cancel the vanilla break.
@@ -199,7 +199,7 @@ public final class BlockBreakListener {
             // Legacy: a sword-struck flower pot is consumed even without a treasure (set to air, break
             // cancelled so the pot's own drop is suppressed). Reachable whenever the main Hylian roll
             // fails — the common case at low Herbalism level.
-            serverWorld.setBlockState(pos, Blocks.AIR.getDefaultState());
+            serverWorld.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
             return false;
         }
 
@@ -217,7 +217,7 @@ public final class BlockBreakListener {
                 || !(world instanceof ServerLevel serverWorld)) {
             return; // client-side prediction / non-server context: ignore.
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(serverPlayer.getUUID());
         if (mmoPlayer == null) {
             return; // data not loaded (e.g. mid-join).
         }
@@ -301,7 +301,7 @@ public final class BlockBreakListener {
         if (!mmoPlayer.getAbilityMode(SuperAbilityType.TREE_FELLER)) {
             return;
         }
-        if (!BlockUtils.hasWoodcuttingXP(state) || !ItemUtils.isAxe(breaker.getMainHandStack())) {
+        if (!BlockUtils.hasWoodcuttingXP(state) || !ItemUtils.isAxe(breaker.getMainHandItem())) {
             return;
         }
         // Skills.Woodcutting.Tree_Feller_Sounds. Legacy played this from its BlockDamage handler --
@@ -331,7 +331,7 @@ public final class BlockBreakListener {
         if (!mmoPlayer.getAbilityMode(SuperAbilityType.GIGA_DRILL_BREAKER)) {
             return;
         }
-        final ItemStack tool = breaker.getMainHandStack();
+        final ItemStack tool = breaker.getMainHandItem();
         if (!BlockUtils.affectedByGigaDrillBreaker(state) || !ItemUtils.isShovel(tool)) {
             return;
         }
@@ -409,7 +409,7 @@ public final class BlockBreakListener {
     private static void maybeProcessGreenThumbReplant(McMMOPlayer mmoPlayer,
             HerbalismManager herbalism, ServerLevel world, BlockPos pos, BlockState state,
             ServerPlayer breaker, String blockId, boolean mature) {
-        if (breaker.isSneaking()) {
+        if (breaker.isShiftKeyDown()) {
             return; // legacy: sneaking suppresses Green Thumb replant.
         }
         final String materialConfigString = ConfigStringUtils.getMaterialConfigString(blockId);
@@ -417,7 +417,7 @@ public final class BlockBreakListener {
             return;
         }
         // A hoe replants any crop; an axe replants cocoa only (legacy processGreenThumbPlants).
-        final ItemStack tool = breaker.getMainHandStack();
+        final ItemStack tool = breaker.getMainHandItem();
         final boolean hoe = ItemUtils.isHoe(tool);
         final boolean axe = ItemUtils.isAxe(tool);
         if (!hoe && !axe) {
@@ -447,7 +447,7 @@ public final class BlockBreakListener {
         if (decision.isEmpty()) {
             return; // crop can't replant (bizarre/unknown) — unreachable from the maturity path.
         }
-        breaker.getInventory().removeStack(seedSlot, 1);
+        breaker.getInventory().removeItem(seedSlot, 1);
         scheduleReplant(world, pos, state, decision.get().finalAge());
         SoundManager.sendSound(mmoPlayer.getPlayer(), SoundType.ITEM_CONSUMED);
     }
@@ -465,7 +465,7 @@ public final class BlockBreakListener {
         final BlockState replant = BlockUtils.withAge(cropState, finalAge);
         McMMOMod.getScheduler().runLater(() -> {
             if (world.getBlockState(pos).isAir()) {
-                world.setBlockState(pos, replant);
+                world.setBlockAndUpdate(pos, replant);
             }
         }, Misc.TICK_CONVERSION_FACTOR);
     }
@@ -477,9 +477,9 @@ public final class BlockBreakListener {
      * {@code hasItemIncludingOffHand}; mirrors {@code SuperAbilityListener#findItemSlot}.
      */
     private static int findItemSlot(Inventory inventory, Item item) {
-        for (int slot = 0; slot < inventory.size(); slot++) {
-            final ItemStack stack = inventory.getStack(slot);
-            if (!stack.isEmpty() && stack.isOf(item)) {
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            final ItemStack stack = inventory.getItem(slot);
+            if (!stack.isEmpty() && stack.is(item)) {
                 return slot;
             }
         }
@@ -624,9 +624,9 @@ public final class BlockBreakListener {
      */
     private static void scheduleChorusXpCheck(ServerLevel world, ServerPlayer breaker,
             List<PlantSnapshot> chorusBlocks) {
-        final UUID breakerId = breaker.getUuid();
+        final UUID breakerId = breaker.getUUID();
         McMMOMod.getScheduler().runLater(() -> {
-            final ServerPlayer player = world.getServer().getPlayerManager().getPlayer(breakerId);
+            final ServerPlayer player = world.getServer().getPlayerList().getPlayer(breakerId);
             final McMMOPlayer owner = UserManager.getPlayer(breakerId);
             if (player == null || owner == null) {
                 return; // logged out while the tree was falling.
@@ -668,7 +668,7 @@ public final class BlockBreakListener {
         final int rounds = herbalism.rollBonusDropCount();
         if (rounds > 0) {
             BlockDrops.dropBonusLoot(world, snapshot.pos(), snapshot.state(), null, breaker,
-                    breaker.getMainHandStack(), rounds);
+                    breaker.getMainHandItem(), rounds);
         }
     }
 
@@ -686,7 +686,7 @@ public final class BlockBreakListener {
      */
     private static boolean isHerbalismAfkFarming(HerbalismManager herbalism,
             ServerPlayer breaker) {
-        return herbalism.isHerbalismAfkPrevented() && breaker.hasVehicle();
+        return herbalism.isHerbalismAfkPrevented() && breaker.isPassenger();
     }
 
     /**
@@ -717,7 +717,7 @@ public final class BlockBreakListener {
         if (mining == null) {
             return;
         }
-        final ItemStack tool = breaker.getMainHandStack();
+        final ItemStack tool = breaker.getMainHandItem();
         if (!mining.isBonusDropsEligible(blockId, BlockDrops.hasSilkTouch(world, tool))) {
             return;
         }
@@ -739,7 +739,7 @@ public final class BlockBreakListener {
         final int rounds = woodcutting.rollHarvestLumberBonusDropCount(blockId);
         if (rounds > 0) {
             BlockDrops.dropBonusLoot(world, pos, state, blockEntity, breaker,
-                    breaker.getMainHandStack(), rounds);
+                    breaker.getMainHandItem(), rounds);
         }
     }
 
@@ -758,7 +758,7 @@ public final class BlockBreakListener {
         final int rounds = herbalism.rollBonusDropCount();
         if (rounds > 0) {
             BlockDrops.dropBonusLoot(world, pos, state, blockEntity, breaker,
-                    breaker.getMainHandStack(), rounds);
+                    breaker.getMainHandItem(), rounds);
         }
     }
 
@@ -775,13 +775,13 @@ public final class BlockBreakListener {
         // Build each MC-free ItemSpec into a live stack and scatter it at the block (an unknown
         // material is skipped, having already been logged by Materials).
         for (ItemSpec spec : rewards.treasures()) {
-            ItemSpecBuilder.build(spec).ifPresent(stack -> Block.dropStack(world, pos, stack));
+            ItemSpecBuilder.build(spec).ifPresent(stack -> Block.popResource(world, pos, stack));
         }
         if (!rewards.experienceOrbs().isEmpty()) {
-            final Vec3 center = Vec3.ofCenter(pos);
+            final Vec3 center = Vec3.atCenterOf(pos);
             for (int amount : rewards.experienceOrbs()) {
                 if (amount > 0) {
-                    ExperienceOrb.spawn(world, center, amount);
+                    ExperienceOrb.award(world, center, amount);
                 }
             }
         }
@@ -807,7 +807,7 @@ public final class BlockBreakListener {
      */
     private static void awardLakeRaiderTreasure(McMMOPlayer mmoPlayer, ServerLevel world,
             BlockPos pos, ServerPlayer breaker, String blockId) {
-        if (!breaker.isSubmergedInWater()) {
+        if (!breaker.wasUnderwater()) {
             return;
         }
         final MovementManager agility = mmoPlayer.getMovementManager();
@@ -837,7 +837,7 @@ public final class BlockBreakListener {
         }
 
         ItemSpecBuilder.build(won.get().getDrop()).ifPresent(stack -> {
-            Block.dropStack(world, pos, stack);
+            Block.popResource(world, pos, stack);
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
                     "Swimming.SubSkill.LakeRaider.Proc");
         });

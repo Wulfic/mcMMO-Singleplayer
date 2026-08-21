@@ -110,7 +110,7 @@ public final class MobOrigins {
      */
     public static void stampOnSpawn(@NotNull Level world, @NotNull EntitySpawnReason reason,
             @Nullable Entity entity) {
-        if (entity == null || world.isClient() || !(entity instanceof LivingEntity)) {
+        if (entity == null || world.isClientSide() || !(entity instanceof LivingEntity)) {
             return;
         }
         final MobOrigin origin = classify(reason);

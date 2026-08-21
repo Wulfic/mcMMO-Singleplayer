@@ -42,7 +42,7 @@ public abstract class SnowGolemTrailMixin {
                             + "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z"),
             allow = 1)
     private void mcmmo$onSnowGolemLaidSnow(CallbackInfo ci, @Local BlockPos pos) {
-        final Level world = ((SnowGolem) (Object) this).getEntityWorld();
+        final Level world = ((SnowGolem) (Object) this).level();
         if (world instanceof ServerLevel) {
             // Injected *before* the call lands, so read the block vanilla is about to place rather
             // than the air that is still there.

@@ -56,7 +56,7 @@ public final class ExperienceBarWrapper implements ExperienceBar {
 
     @Override
     public void setProgress(double progress) {
-        this.bossBar.setPercent((float) clamp01(progress));
+        this.bossBar.setProgress((float) clamp01(progress));
 
         // Legacy recoloured the bar on every progress update so the early-game boost is visible
         // rather than merely configured. Unconditional because ServerBossBar#setColor is a no-op
@@ -81,7 +81,7 @@ public final class ExperienceBarWrapper implements ExperienceBar {
         // stale, and the bar must follow the current one (see the class javadoc). In the steady
         // state the handle is already subscribed and this is a no-op.
         if (!bossBar.getPlayers().contains(current)) {
-            bossBar.clearPlayers();
+            bossBar.removeAllPlayers();
             bossBar.addPlayer(current);
         }
         bossBar.setVisible(true);

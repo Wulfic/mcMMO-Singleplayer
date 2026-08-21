@@ -78,12 +78,12 @@ public final class PlatformBlock {
 
     /** Bukkit {@code setType(Material)}: set to a block's default state. */
     public void setType(@NotNull Block block) {
-        world.setBlockState(pos, block.getDefaultState());
+        world.setBlockAndUpdate(pos, block.defaultBlockState());
     }
 
     /** Bukkit {@code setBlockData(BlockData)}: set to a specific state. */
     public void setState(@NotNull BlockState state) {
-        world.setBlockState(pos, state);
+        world.setBlockAndUpdate(pos, state);
     }
 
     // --- Navigation (Bukkit getRelative) ------------------------------------
@@ -107,6 +107,6 @@ public final class PlatformBlock {
             return Collections.emptyList();
         }
         final BlockEntity blockEntity = world.getBlockEntity(pos);
-        return Block.getDroppedStacks(getState(), serverWorld, pos, blockEntity);
+        return Block.getDrops(getState(), serverWorld, pos, blockEntity);
     }
 }

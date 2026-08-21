@@ -127,7 +127,7 @@ public final class SuperAbilityListener {
         // vanilla way. Refusing the interaction is legacy's event.setCancelled(true). This runs
         // before the activation chain because legacy checks it in an earlier (LOWEST-priority)
         // handler whose cancel suppresses the activation handler entirely.
-        if (state.isOf(Blocks.TNT) && mmoPlayer.getMiningManager().canDetonate()) {
+        if (state.is(Blocks.TNT) && mmoPlayer.getMiningManager().canDetonate()) {
             return InteractionResult.FAIL;
         }
 
@@ -178,7 +178,7 @@ public final class SuperAbilityListener {
     private static InteractionResult processHerbalismInteraction(McMMOPlayer mmoPlayer,
             ServerPlayer serverPlayer, Level world, BlockPos pos, BlockState state) {
         final HerbalismManager herbalism = mmoPlayer.getHerbalismManager();
-        final ItemStack mainHand = serverPlayer.getMainHandStack();
+        final ItemStack mainHand = serverPlayer.getMainHandItem();
 
         if (canGreenThumbBlock(herbalism, mainHand, state)) {
             processGreenThumbBlock(mmoPlayer, serverPlayer, world, pos, state);
@@ -201,7 +201,7 @@ public final class SuperAbilityListener {
             BlockState state) {
         return herbalism.canGreenThumbBlock()
                 && !mainHand.isEmpty()
-                && mainHand.isOf(Items.WHEAT_SEEDS)
+                && mainHand.is(Items.WHEAT_SEEDS)
                 && BlockUtils.canMakeMossy(state);
     }
 
@@ -216,7 +216,7 @@ public final class SuperAbilityListener {
         if (!BlockUtils.canMakeShroomy(state) || !herbalism.canUseShroomThumb()) {
             return false;
         }
-        if (!mainHand.isOf(Items.BROWN_MUSHROOM) && !mainHand.isOf(Items.RED_MUSHROOM)) {
+        if (!mainHand.is(Items.BROWN_MUSHROOM) && !mainHand.is(Items.RED_MUSHROOM)) {
             return false;
         }
         final Inventory inventory = player.getInventory();
@@ -232,7 +232,7 @@ public final class SuperAbilityListener {
      */
     private static void processGreenThumbBlock(McMMOPlayer mmoPlayer, ServerPlayer serverPlayer,
             Level world, BlockPos pos, BlockState state) {
-        serverPlayer.getMainHandStack().decrement(1);
+        serverPlayer.getMainHandItem().shrink(1);
         if (!mmoPlayer.getHerbalismManager().rollGreenThumbBlockSuccess()) {
             NotificationManager.sendPlayerInformation(mmoPlayer,
                     NotificationType.SUBSKILL_MESSAGE_FAILED, "Herbalism.Ability.GTh.Fail");
@@ -255,8 +255,8 @@ public final class SuperAbilityListener {
         if (brownSlot < 0 || redSlot < 0) {
             return; // defensive: the gate already proved both present (brown/red are distinct slots).
         }
-        inventory.removeStack(brownSlot, 1);
-        inventory.removeStack(redSlot, 1);
+        inventory.removeItem(brownSlot, 1);
+        inventory.removeItem(redSlot, 1);
         if (!mmoPlayer.getHerbalismManager().rollShroomThumbSuccess()) {
             NotificationManager.sendPlayerInformation(mmoPlayer,
                     NotificationType.SUBSKILL_MESSAGE_FAILED, "Herbalism.Ability.ShroomThumb.Fail");
@@ -283,7 +283,7 @@ public final class SuperAbilityListener {
                     + "' is not a block in this registry; skipping conversion of " + blockPath(state));
             return;
         }
-        world.setBlockState(pos, targetBlock.get().getDefaultState());
+        world.setBlockAndUpdate(pos, targetBlock.get().defaultBlockState());
     }
 
     /**
@@ -295,7 +295,7 @@ public final class SuperAbilityListener {
      */
     private static void maybeHarvestBerryBush(McMMOPlayer mmoPlayer, Level world, BlockPos pos,
             BlockState state) {
-        if (!state.isOf(Blocks.SWEET_BERRY_BUSH)) {
+        if (!state.is(Blocks.SWEET_BERRY_BUSH)) {
             return;
         }
         final BlockUtils.AgeableState age = BlockUtils.getAgeableState(state);
@@ -309,7 +309,7 @@ public final class SuperAbilityListener {
         }
         McMMOMod.getScheduler().runLater(() -> {
             final BlockState now = world.getBlockState(pos);
-            if (!now.isOf(Blocks.SWEET_BERRY_BUSH)) {
+            if (!now.is(Blocks.SWEET_BERRY_BUSH)) {
                 return;
             }
             final BlockUtils.AgeableState nowAge = BlockUtils.getAgeableState(now);
@@ -360,7 +360,7 @@ public final class SuperAbilityListener {
 
         final BlockState state = world.getBlockState(pos);
         final ServerPlayer serverPlayer = (ServerPlayer) player;
-        final ItemStack held = serverPlayer.getMainHandStack();
+        final ItemStack held = serverPlayer.getMainHandItem();
 
         // Taming Call of the Wild: a sneaking left-click while holding a summoning item (bones for a
         // wolf, cod for a cat, an apple for a horse) summons the pet. Legacy fired this from the
@@ -368,7 +368,7 @@ public final class SuperAbilityListener {
         // wired — Fabric exposes no left-click-air callback — which still covers summoning while looking
         // at the ground or a wall (the common case; left-click-air is deferred, see the class note).
         // Returning FAIL consumes the click so it doesn't also begin breaking the block.
-        if (serverPlayer.isSneaking()
+        if (serverPlayer.isShiftKeyDown()
                 && McMMOMod.getCallOfTheWild().isCOTWItem(itemPath(held))) {
             CallOfTheWildHandler.processCallOfTheWild(mmoPlayer, serverPlayer);
             return InteractionResult.FAIL;
@@ -398,7 +398,7 @@ public final class SuperAbilityListener {
             } else if (mmoPlayer.getToolPreparationMode(ToolType.FISTS) && held.isEmpty()
                     && (BlockUtils.affectedByGigaDrillBreaker(state)
                             || McMMOMod.getMaterialMapStore().isGlass(blockPath(state))
-                            || state.isOf(Blocks.SNOW)
+                            || state.is(Blocks.SNOW)
                             || BlockUtils.affectedByBlockCracker(state))) {
                 mmoPlayer.checkAbilityActivation(PrimarySkillType.UNARMED);
 
@@ -471,7 +471,7 @@ public final class SuperAbilityListener {
         // BlockBreakEvent asking other plugins whether the break was allowed. No plugins exist in
         // singleplayer, so the check collapses to "always allowed"; tryBreakBlock still enforces
         // vanilla's own rules (adventure mode, protected spawn) and reports the outcome.
-        return serverPlayer.interactionManager.tryBreakBlock(pos);
+        return serverPlayer.gameMode.destroyBlock(pos);
     }
 
     /**
@@ -518,7 +518,7 @@ public final class SuperAbilityListener {
             return;
         }
 
-        world.setBlockState(pos, targetBlock.get().getDefaultState());
+        world.setBlockAndUpdate(pos, targetBlock.get().defaultBlockState());
     }
 
     /**
@@ -562,8 +562,8 @@ public final class SuperAbilityListener {
             return;
         }
 
-        serverPlayer.getInventory().removeStack(seedSlot, 1);
-        world.setBlockState(pos, targetBlock.get().getDefaultState());
+        serverPlayer.getInventory().removeItem(seedSlot, 1);
+        world.setBlockAndUpdate(pos, targetBlock.get().defaultBlockState());
     }
 
     /**
@@ -572,9 +572,9 @@ public final class SuperAbilityListener {
      * consumes one. Mirrors {@code RepairSalvageListener#findMaterialSlot}.
      */
     private static int findItemSlot(Inventory inventory, Item item) {
-        for (int slot = 0; slot < inventory.size(); slot++) {
-            final ItemStack stack = inventory.getStack(slot);
-            if (!stack.isEmpty() && stack.isOf(item)) {
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            final ItemStack stack = inventory.getItem(slot);
+            if (!stack.isEmpty() && stack.is(item)) {
                 return slot;
             }
         }
@@ -635,7 +635,7 @@ public final class SuperAbilityListener {
      */
     static boolean isTillAction(Player player, InteractionHand hand, BlockHitResult hitResult,
             BlockState state) {
-        if (!(player.getStackInHand(hand).getItem() instanceof HoeItem)) {
+        if (!(player.getItemInHand(hand).getItem() instanceof HoeItem)) {
             return false;
         }
         final Pair<Predicate<UseOnContext>, Consumer<UseOnContext>> tilling =
@@ -673,7 +673,7 @@ public final class SuperAbilityListener {
         if (config == null || !config.getOffhandBlocksReadying()) {
             return false;
         }
-        return !player.getOffHandStack().isEmpty() && !player.hasVehicle() && !player.isSneaking();
+        return !player.getOffhandItem().isEmpty() && !player.isPassenger() && !player.isShiftKeyDown();
     }
 
     /**
@@ -712,7 +712,7 @@ public final class SuperAbilityListener {
      * <p>Package-private for {@code SuperAbilityListenerOffhandTest}.
      */
     static boolean wouldHaveReadiedATool(ServerPlayer player) {
-        final ItemStack mainHand = player.getMainHandStack();
+        final ItemStack mainHand = player.getMainHandItem();
         for (ToolType tool : READYABLE_TOOLS) {
             if (ItemUtils.isToolInHand(tool, mainHand)) {
                 return true;
@@ -725,7 +725,7 @@ public final class SuperAbilityListener {
         if (!(player instanceof ServerPlayer serverPlayer)) {
             return null; // client-side callback: ignore.
         }
-        return UserManager.getPlayer(serverPlayer.getUuid());
+        return UserManager.getPlayer(serverPlayer.getUUID());
     }
 
     private static String blockPath(BlockState state) {

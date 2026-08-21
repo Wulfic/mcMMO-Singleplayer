@@ -80,7 +80,7 @@ public abstract class LivingEntityTrophyHunterMixin {
         final LivingEntity self = (LivingEntity) (Object) this;
         // causedByPlayer is passed straight through so the bonus roll sees exactly the loot conditions
         // the first roll did -- Looting, player-kill-only drops and the killer's luck all included.
-        HunterListener.onLootDropped(self, source, () -> self.getLootTableKey()
-                .ifPresent(key -> self.dropLoot(world, source, causedByPlayer, key)));
+        HunterListener.onLootDropped(self, source, () -> self.getLootTable()
+                .ifPresent(key -> self.dropFromLootTable(world, source, causedByPlayer, key)));
     }
 }

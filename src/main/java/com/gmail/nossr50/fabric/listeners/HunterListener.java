@@ -233,7 +233,7 @@ public final class HunterListener {
         // kills by fall damage, lava or suffocation has no attacker at all. getAttacker() resolves a
         // projectile back to its shooter, so an arrow kill is the player's; a wolf's kill is the
         // wolf's, and Taming owns that hit.
-        if (!(source.getAttacker() instanceof ServerPlayer killer)) {
+        if (!(source.getEntity() instanceof ServerPlayer killer)) {
             return null;
         }
 
@@ -246,7 +246,7 @@ public final class HunterListener {
         // Gate 3: mobs the player manufactures at will. The summon check and the iron-golem half of
         // isManufactured are verbatim from CombatUtils#processCombatXP; the other two golems are
         // Hunter's own and stage 5 had to add them -- see isManufactured.
-        if (McMMOMod.getTransientEntityTracker().isTransient(victim.getUuid())) {
+        if (McMMOMod.getTransientEntityTracker().isTransient(victim.getUUID())) {
             return null;
         }
         if (isManufactured(victim)) {
@@ -269,7 +269,7 @@ public final class HunterListener {
      * that is not about Hunter. Neither is worth logging on a path that runs on every mob death.
      */
     private static @Nullable McMMOPlayer hunterPlayer(@NotNull ServerPlayer killer) {
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(killer.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(killer.getUUID());
         return mmoPlayer == null || mmoPlayer.getHunterManager() == null ? null : mmoPlayer;
     }
 
@@ -372,7 +372,7 @@ public final class HunterListener {
             int tier, int kills) {
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_UNLOCKED,
                 "Hunter.SubSkill.MobMastery.Proc",
-                victim.getType().getName().getString(), String.valueOf(tier),
+                victim.getType().getDescription().getString(), String.valueOf(tier),
                 String.valueOf(kills));
         SoundManager.sendCategorizedSound(mmoPlayer.getPlayer(), SoundType.SKILL_UNLOCKED,
                 PlatformSoundCategory.MASTER);

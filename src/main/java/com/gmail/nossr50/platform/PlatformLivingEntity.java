@@ -85,7 +85,7 @@ public final class PlatformLivingEntity {
     }
 
     public @NotNull UUID getUniqueId() {
-        return handle.getUuid();
+        return handle.getUUID();
     }
 
     /**
@@ -93,7 +93,7 @@ public final class PlatformLivingEntity {
      * flames on a burning wolf. Vanilla's own {@code extinguish()} is exactly that assignment.
      */
     public void extinguish() {
-        handle.extinguish();
+        handle.clearFire();
     }
 
     // --- Status effects (Bukkit addPotionEffect/getPotionEffect) ------------
@@ -104,7 +104,7 @@ public final class PlatformLivingEntity {
      * Cripple on an already-slowed target.
      */
     public boolean hasSlowness() {
-        return handle.hasStatusEffect(MobEffects.SLOWNESS);
+        return handle.hasEffect(MobEffects.SLOWNESS);
     }
 
     /**
@@ -115,7 +115,7 @@ public final class PlatformLivingEntity {
      * @param amplifier     effect level, zero-based (Bukkit's amplifier, so {@code 1} is Slowness II)
      */
     public void applySlowness(int durationTicks, int amplifier) {
-        handle.addStatusEffect(new MobEffectInstance(MobEffects.SLOWNESS, durationTicks,
+        handle.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, durationTicks,
                 amplifier));
     }
 
@@ -146,7 +146,7 @@ public final class PlatformLivingEntity {
             if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) {
                 continue;
             }
-            final ItemStack stack = handle.getEquippedStack(slot);
+            final ItemStack stack = handle.getItemBySlot(slot);
             if (!stack.isEmpty() && ItemUtils.isArmor(stack)) {
                 pieces.add(new PlatformItem(stack));
             }
@@ -179,7 +179,7 @@ public final class PlatformLivingEntity {
     public static boolean isUnarmored(@NotNull LivingEntity entity) {
         for (EquipmentSlot slot : EquipmentSlot.VALUES) {
             if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR
-                    && !entity.getEquippedStack(slot).isEmpty()) {
+                    && !entity.getItemBySlot(slot).isEmpty()) {
                 return false;
             }
         }
@@ -212,8 +212,8 @@ public final class PlatformLivingEntity {
     }
 
     private void flingAlong(@NotNull Entity source, double multiplier) {
-        handle.setVelocity(source.getRotationVector().normalize().multiply(multiplier));
-        handle.velocityDirty = true;
+        handle.setVelocity(source.getRotationVector().normalized().scale(multiplier));
+        handle.needsSync = true;
     }
 
     // --- Teleport (Bukkit Entity#teleport) ----------------------------------
@@ -228,21 +228,21 @@ public final class PlatformLivingEntity {
     public void teleportTo(@NotNull PlatformPlayer owner) {
         final Vec3 dest = owner.getPos();
         handle.teleport(owner.getWorld(), dest.x, dest.y, dest.z,
-                EnumSet.noneOf(Relative.class), handle.getYaw(), handle.getPitch(), false);
+                EnumSet.noneOf(Relative.class), handle.getYRot(), handle.getXRot(), false);
     }
 
     // --- World / position (Bukkit getLocation/getWorld) ---------------------
 
     public @NotNull Level getWorld() {
-        return handle.getEntityWorld();
+        return handle.level();
     }
 
     public @NotNull BlockPos getBlockPos() {
-        return handle.getBlockPos();
+        return handle.blockPosition();
     }
 
     public @NotNull Vec3 getPos() {
-        return handle.getEntityPos();
+        return handle.position();
     }
 
     // --- Custom name --------------------------------------------------------

@@ -154,7 +154,7 @@ public final class BlockUtils {
      */
     public static boolean affectedByBerserk(@NotNull BlockState blockState) {
         return BlockRules.affectedByBerserkExceptSnowLayer(idPath(blockState.getBlock()))
-                || blockState.isOf(Blocks.SNOW);
+                || blockState.is(Blocks.SNOW);
     }
 
     // --- Woodcutting / tree ------------------------------------------------
@@ -238,7 +238,7 @@ public final class BlockUtils {
     public static @Nullable String getHylianTreasureGroup(@NotNull BlockState blockState) {
         return BlockRules.hylianTreasureGroup(idPath(blockState.getBlock()),
                 () -> blockState.isIn(BlockTags.SAPLINGS),
-                () -> blockState.isIn(BlockTags.FLOWER_POTS));
+                () -> blockState.is(BlockTags.FLOWER_POTS));
     }
 
     // --- Crop maturity (legacy Bukkit Ageable) ------------------------------
@@ -258,9 +258,9 @@ public final class BlockUtils {
         if (ageProperty == null) {
             return null;
         }
-        final int maxAge = ageProperty.getValues().stream()
+        final int maxAge = ageProperty.getPossibleValues().stream()
                 .mapToInt(Integer::intValue).max().orElse(0);
-        return new AgeableState(blockState.get(ageProperty), maxAge);
+        return new AgeableState(blockState.getValue(ageProperty), maxAge);
     }
 
     /**
@@ -283,11 +283,11 @@ public final class BlockUtils {
         }
         int min = Integer.MAX_VALUE;
         int max = Integer.MIN_VALUE;
-        for (int value : ageProperty.getValues()) {
+        for (int value : ageProperty.getPossibleValues()) {
             min = Math.min(min, value);
             max = Math.max(max, value);
         }
-        return blockState.with(ageProperty, Math.max(min, Math.min(age, max)));
+        return blockState.setValue(ageProperty, Math.max(min, Math.min(age, max)));
     }
 
     /**
@@ -398,6 +398,6 @@ public final class BlockUtils {
 
     /** The world's registry key, stringified — the {@link PlacedBlockTracker}'s per-world key. */
     private static @NotNull String worldKey(@NotNull Level world) {
-        return world.getRegistryKey().getValue().toString();
+        return world.dimension().identifier().toString();
     }
 }

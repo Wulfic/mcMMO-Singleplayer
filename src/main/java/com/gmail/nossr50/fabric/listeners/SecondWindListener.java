@@ -78,11 +78,11 @@ public final class SecondWindListener {
     }
 
     private static InteractionResult onUseItem(Player player, Level world, InteractionHand hand) {
-        if (hand != InteractionHand.MAIN_HAND || world.isClient()
+        if (hand != InteractionHand.MAIN_HAND || world.isClientSide()
                 || !(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResult.PASS;
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUUID());
         if (mmoPlayer == null) {
             return InteractionResult.PASS;
         }
@@ -193,23 +193,23 @@ public final class SecondWindListener {
      * shoulder still connects instead of requiring pixel-accurate aim.
      */
     private static void dart(@NotNull ServerPlayer player, @NotNull SecondWindResult result) {
-        final Vec3 look = player.getRotationVector().normalize();
+        final Vec3 look = player.getRotationVector().normalized();
         final Vec3 lunge = look.multiply(result.magnitude());
-        setVelocity(player, player.getVelocity().add(lunge.x, Math.max(0.1, lunge.y * 0.5), lunge.z));
+        setVelocity(player, player.getDeltaMovement().add(lunge.x, Math.max(0.1, lunge.y * 0.5), lunge.z));
 
-        final ServerLevel world = (ServerLevel) player.getEntityWorld();
-        final Vec3 from = player.getEntityPos();
+        final ServerLevel world = (ServerLevel) player.level();
+        final Vec3 from = player.position();
         final Vec3 to = from.add(look.multiply(result.dartRange()));
-        final AABB path = new AABB(from, to).expand(DART_HIT_RADIUS);
+        final AABB path = new AABB(from, to).inflate(DART_HIT_RADIUS);
 
-        final List<Entity> hits = world.getOtherEntities(player, path,
+        final List<Entity> hits = world.getEntities(player, path,
                 entity -> entity instanceof LivingEntity && entity.isAlive());
         for (Entity entity : hits) {
             final LivingEntity target = (LivingEntity) entity;
-            target.damage(world, world.getDamageSources().playerAttack(player),
+            target.hurtServer(world, world.damageSources().playerAttack(player),
                     (float) result.dartDamage());
             // Knock the target away from the player, along the horizontal lunge direction.
-            target.takeKnockback(result.dartKnockback(), -look.x, -look.z);
+            target.knockback(result.dartKnockback(), -look.x, -look.z);
         }
     }
 
@@ -218,21 +218,21 @@ public final class SecondWindListener {
             @NotNull SecondWindResult result) {
         final int duration = result.durationTicks();
         final int amplifier = (int) result.magnitude();
-        player.addStatusEffect(new MobEffectInstance(MobEffects.STRENGTH, duration, amplifier));
-        player.addStatusEffect(
+        player.addEffect(new MobEffectInstance(MobEffects.STRENGTH, duration, amplifier));
+        player.addEffect(
                 new MobEffectInstance(MobEffects.REGENERATION, duration, amplifier));
-        player.addStatusEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, duration, 0));
+        player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, duration, 0));
         // Dolphin's Grace is the swim-speed half of the fantasy and is a status effect rather than an
         // attribute, so it composes with Fleet Footed's water modifier instead of fighting it.
-        player.addStatusEffect(new MobEffectInstance(MobEffects.DOLPHINS_GRACE, duration, 0));
+        player.addEffect(new MobEffectInstance(MobEffects.DOLPHINS_GRACE, duration, 0));
     }
 
     /** Limitless: a forward-and-up burst for a gliding player. */
     private static void limitless(@NotNull ServerPlayer player,
             @NotNull SecondWindResult result) {
-        final Vec3 look = player.getRotationVector().normalize();
+        final Vec3 look = player.getRotationVector().normalized();
         final double boost = result.magnitude();
-        setVelocity(player, player.getVelocity()
+        setVelocity(player, player.getDeltaMovement()
                 .add(look.x * boost, look.y * boost + LIMITLESS_LIFT, look.z * boost));
     }
 
@@ -249,8 +249,8 @@ public final class SecondWindListener {
      * why the continuous air bonuses go through a shared-movement mixin instead.
      */
     private static void setVelocity(@NotNull ServerPlayer player, @NotNull Vec3 velocity) {
-        player.setVelocity(velocity);
-        player.velocityDirty = true;
-        player.networkHandler.sendPacket(new ClientboundSetEntityMotionPacket(player));
+        player.setDeltaMovement(velocity);
+        player.needsSync = true;
+        player.connection.send(new ClientboundSetEntityMotionPacket(player));
     }
 }

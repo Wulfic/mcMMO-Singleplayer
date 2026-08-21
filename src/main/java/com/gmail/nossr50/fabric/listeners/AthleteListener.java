@@ -45,7 +45,7 @@ public final class AthleteListener {
         if (player == null || !player.isSprinting()) {
             return exhaustion;
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUUID());
         if (mmoPlayer == null) {
             return exhaustion;
         }
@@ -65,8 +65,8 @@ public final class AthleteListener {
         if (server == null) {
             return null;
         }
-        for (ServerPlayer player : server.getPlayerManager().getPlayerList()) {
-            if (player.getHungerManager() == hungerManager) {
+        for (ServerPlayer player : server.getPlayers().getPlayerList()) {
+            if (player.getFoodData() == hungerManager) {
                 return player;
             }
         }

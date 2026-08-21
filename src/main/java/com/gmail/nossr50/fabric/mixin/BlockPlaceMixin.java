@@ -44,11 +44,11 @@ public abstract class BlockPlaceMixin {
         if (!cir.getReturnValueZ()) {
             return; // setBlockState reported no change: nothing was placed.
         }
-        final Level world = context.getWorld();
+        final Level world = context.getLevel();
         if (world instanceof ServerLevel serverWorld) {
-            BlockUtils.markPlaced(serverWorld, context.getBlockPos());
+            BlockUtils.markPlaced(serverWorld, context.getClickedPos());
             // Legacy fired both of these from the same BlockPlaceEvent handler.
-            RepairSalvageListener.onAnvilPlaced(serverWorld, context.getBlockPos(),
+            RepairSalvageListener.onAnvilPlaced(serverWorld, context.getClickedPos(),
                     context.getPlayer());
         }
     }

@@ -67,7 +67,7 @@ public abstract class AbstractFurnaceSmeltMixin {
                             + "Lnet/minecraft/core/NonNullList;I)Z"))
     private static void mcmmo$onSmeltComplete(ServerLevel world, BlockPos pos, BlockState state,
             AbstractFurnaceBlockEntity blockEntity, CallbackInfo ci) {
-        final ItemStack input = blockEntity.getStack(0); // INPUT_SLOT_INDEX
+        final ItemStack input = blockEntity.getItem(0); // INPUT_SLOT_INDEX
         SmeltingListener.onFurnaceSmelt(world, pos, input);
     }
 
@@ -80,7 +80,7 @@ public abstract class AbstractFurnaceSmeltMixin {
                             + "Lnet/minecraft/world/item/crafting/RecipeHolder;)V"))
     private static void mcmmo$onSecondSmelt(ServerLevel world, BlockPos pos, BlockState state,
             AbstractFurnaceBlockEntity blockEntity, CallbackInfo ci) {
-        final ItemStack output = blockEntity.getStack(2); // OUTPUT_SLOT_INDEX
+        final ItemStack output = blockEntity.getItem(2); // OUTPUT_SLOT_INDEX
         SmeltingListener.onSmeltComplete(pos, output);
     }
 
@@ -94,7 +94,7 @@ public abstract class AbstractFurnaceSmeltMixin {
                             + "Lnet/minecraft/world/item/ItemStack;)I"))
     private static int mcmmo$applyFuelEfficiency(int burnTime, ServerLevel world, BlockPos pos,
             BlockState state, AbstractFurnaceBlockEntity blockEntity) {
-        return SmeltingListener.boostFuelTime(burnTime, pos, blockEntity.getStack(0));
+        return SmeltingListener.boostFuelTime(burnTime, pos, blockEntity.getItem(0));
     }
 
     /**

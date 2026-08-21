@@ -112,7 +112,7 @@ public final class CookingListener {
         }
         final BlockPos pos = hitResult.getBlockPos();
         if (world.getBlockEntity(pos) instanceof CampfireBlockEntity) {
-            CAMPFIRE_OWNERS.put(pos.asLong(), player.getUuid());
+            CAMPFIRE_OWNERS.put(pos.asLong(), player.getUUID());
         }
         return InteractionResult.PASS; // observe only; never cancel the interaction.
     }
@@ -168,14 +168,14 @@ public final class CookingListener {
         }
         final CookingManager cooking = owner.getCookingManager();
         final CookingManager.CookAward award =
-                cooking.onCook(SmeltingListener.materialConfigString(input), world.getTime());
+                cooking.onCook(SmeltingListener.materialConfigString(input), world.getGameTime());
         if (award.capReached()) {
             // Once per window, not once per cook — see SmeltingListener#onFurnaceSmelt.
             NotificationManager.sendPlayerInformation(owner, NotificationType.SUBSKILL_MESSAGE,
                     "Cooking.CookRateCap.Reached");
         }
         if (cooking.canSecondHelping(SmeltingListener.materialConfigString(result))) {
-            result.increment(1);
+            result.grow(1);
         }
         return result;
     }
@@ -207,7 +207,7 @@ public final class CookingListener {
         if (!(player instanceof ServerPlayer) || result.isEmpty() || items <= 0) {
             return; // client-side copy, an empty slot, or nothing actually taken.
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUUID());
         if (mmoPlayer == null) {
             return; // player data not loaded — behave exactly like vanilla.
         }
@@ -215,7 +215,7 @@ public final class CookingListener {
         // derivation itself is shared so the two can never drift apart.
         final String resultConfigString = SmeltingListener.materialConfigString(result);
         final CookingManager.CookAward award = mmoPlayer.getCookingManager()
-                .onCraft(resultConfigString, items, player.getEntityWorld().getTime());
+                .onCraft(resultConfigString, items, player.level().getGameTime());
         if (award.capReached()) {
             // Once per window, not once per craft — see SmeltingListener#onFurnaceSmelt.
             NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,

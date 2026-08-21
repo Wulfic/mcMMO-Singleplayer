@@ -112,7 +112,7 @@ public final class PetFollowTeleport {
      */
     static boolean isTeleport(@NotNull Vec3 previous, @NotNull Vec3 current) {
         final double limit = PlayerMovementTracker.TELEPORT_DELTA;
-        return current.squaredDistanceTo(previous) > limit * limit;
+        return current.distanceToSqr(previous) > limit * limit;
     }
 
     /**
@@ -131,12 +131,12 @@ public final class PetFollowTeleport {
         // Entity#getEntityWorld() at all — it spells the accessor getWorld() — so that band cannot
         // take this line and carries its own. Every other band can, which is why the cast is
         // written here instead of being rediscovered at each cut.
-        final ServerLevel world = (ServerLevel) player.getEntityWorld();
+        final ServerLevel world = (ServerLevel) player.level();
         if (world == null) {
             return 0;
         }
         final AABB searchBox = AABB.of(from, radius * 2, radius * 2, radius * 2);
-        final List<TamableAnimal> pets = world.getEntitiesByClass(TamableAnimal.class, searchBox,
+        final List<TamableAnimal> pets = world.getEntitiesOfClass(TamableAnimal.class, searchBox,
                 pet -> isFollower(pet, player));
 
         int moved = 0;
@@ -157,7 +157,7 @@ public final class PetFollowTeleport {
      * wait somewhere must not be yanked across the world by its owner's ender pearl.
      */
     static boolean isFollower(@NotNull TamableAnimal pet, @NotNull ServerPlayer player) {
-        return pet.isAlive() && pet.isTamed() && pet.isOwner(player) && !pet.cannotFollowOwner();
+        return pet.isAlive() && pet.isTame() && pet.isOwnedBy(player) && !pet.unableToMoveToOwner();
     }
 
     /**
@@ -168,12 +168,12 @@ public final class PetFollowTeleport {
      * search found nowhere to put the pet, not that the pet did not need moving.
      */
     private static boolean bring(@NotNull TamableAnimal pet, @NotNull ServerPlayer player) {
-        pet.tryTeleportToOwner();
+        pet.tryToTeleportToOwner();
         if (!pet.shouldTryTeleportToOwner()) {
             return true; // Vanilla found it a spot beside the player.
         }
 
-        if (!player.isOnGround() && !player.isTouchingWater()) {
+        if (!player.onGround() && !player.isInWater()) {
             // See the class doc: a fallback drop onto an airborne owner can kill the pet, so the pet
             // stays put — the vanilla outcome, and never worse than it. Logged because "sometimes my
             // wolf follows and sometimes it doesn't" is otherwise unexplainable from the outside.
@@ -183,10 +183,10 @@ public final class PetFollowTeleport {
             return false;
         }
 
-        final Vec3 destination = player.getEntityPos();
+        final Vec3 destination = player.position();
         // Cast load-bearing below 1.21.9, and not usable on 1.21.6 – 1.21.8 — see bringPetsFrom.
-        final boolean placed = pet.teleport((ServerLevel) player.getEntityWorld(), destination.x, destination.y,
-                destination.z, EnumSet.noneOf(Relative.class), pet.getYaw(), pet.getPitch(),
+        final boolean placed = pet.teleport((ServerLevel) player.level(), destination.x, destination.y,
+                destination.z, EnumSet.noneOf(Relative.class), pet.getYRot(), pet.getXRot(),
                 false);
         if (!placed) {
             McMMOMod.LOGGER.warn("Pet follow: could not place {} on owner {} at {}; left behind.",

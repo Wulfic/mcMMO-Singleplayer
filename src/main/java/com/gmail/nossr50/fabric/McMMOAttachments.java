@@ -62,7 +62,7 @@ public final class McMMOAttachments {
      * uses for entity UUIDs, and half the size on disk of {@link Uuids#CODEC}'s 36-character string.
      */
     public static final AttachmentType<UUID> BRED_BY = AttachmentRegistry.createPersistent(
-            Identifier.of(McMMOMod.MOD_ID, "bred_by"), UUIDUtil.INT_STREAM_CODEC);
+            Identifier.fromNamespaceAndPath(McMMOMod.MOD_ID, "bred_by"), UUIDUtil.CODEC);
 
     /**
      * Why a mob does <b>not</b> count toward Hunter's mob-mastery counters — Hunter's D-HU1 gate.
@@ -89,7 +89,7 @@ public final class McMMOAttachments {
      * entity that Fabric does not treat as the same one.
      */
     public static final AttachmentType<String> MOB_ORIGIN = AttachmentRegistry.createPersistent(
-            Identifier.of(McMMOMod.MOD_ID, "mob_origin"), Codec.STRING);
+            Identifier.fromNamespaceAndPath(McMMOMod.MOD_ID, "mob_origin"), Codec.STRING);
 
     private McMMOAttachments() {
     }

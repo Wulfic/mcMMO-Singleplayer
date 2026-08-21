@@ -65,18 +65,18 @@ public final class MobTiers {
         // needs an entity, and it agrees with SpawnGroup.MONSTER for every vanilla mob anyway
         // (including the awkward ones: shulker is a GolemEntity, hoglin an AnimalEntity, ghast a
         // FlyingEntity, and all three are SpawnGroup.MONSTER).
-        final boolean hostile = type.getSpawnGroup() == MobCategory.MONSTER;
+        final boolean hostile = type.getCategory() == MobCategory.MONSTER;
 
         double maxHealth = 0.0D;
         double attackDamage = 0.0D;
-        if (DefaultAttributes.hasDefinitionFor(type)) {
+        if (DefaultAttributes.hasSupplier(type)) {
             @SuppressWarnings("unchecked")
             final AttributeSupplier attributes =
-                    DefaultAttributes.get((EntityType<? extends LivingEntity>) type);
+                    DefaultAttributes.getSupplier((EntityType<? extends LivingEntity>) type);
             maxHealth = attributes.getBaseValue(Attributes.MAX_HEALTH);
             // has() first: ATTACK_DAMAGE is genuinely absent on several types (the ender dragon has
             // none at all), and getBaseValue on a missing attribute is not a question worth asking.
-            if (attributes.has(Attributes.ATTACK_DAMAGE)) {
+            if (attributes.hasAttribute(Attributes.ATTACK_DAMAGE)) {
                 attackDamage = attributes.getBaseValue(Attributes.ATTACK_DAMAGE);
             }
         }

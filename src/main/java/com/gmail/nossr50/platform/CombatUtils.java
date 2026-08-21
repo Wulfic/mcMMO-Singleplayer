@@ -98,14 +98,14 @@ public final class CombatUtils {
         if (IN_MCMMO_DAMAGE.get() || !target.isAlive()) {
             return;
         }
-        if (!(target.getEntityWorld() instanceof ServerLevel serverWorld)) {
+        if (!(target.level() instanceof ServerLevel serverWorld)) {
             return; // damage is server-side only.
         }
 
         try {
             IN_MCMMO_DAMAGE.set(true);
-            final DamageSource source = serverWorld.getDamageSources().playerAttack(attacker);
-            target.damage(serverWorld, source, (float) amount);
+            final DamageSource source = serverWorld.damageSources().playerAttack(attacker);
+            target.hurtServer(serverWorld, source, (float) amount);
         } finally {
             IN_MCMMO_DAMAGE.set(false);
         }
@@ -173,15 +173,15 @@ public final class CombatUtils {
             @NotNull McMMOPlayer mmoPlayer, @NotNull LivingEntity target, double damage,
             @NotNull PrimarySkillType type) {
         // The higher the weapon tier, the more targets you hit.
-        int numberOfTargets = weaponTier(attacker.getMainHandStack());
+        int numberOfTargets = weaponTier(attacker.getMainHandItem());
         final double damageAmount = Math.max(damage, 1);
 
         // Bukkit's Entity#getNearbyEntities(x, y, z) inflates the entity's own bounding box by that
         // much on each axis and returns everything else inside it — getOtherEntities is the same
         // query, and likewise excludes the entity it is centred on (so the primary target, which the
         // triggering hit already damaged, is never struck twice).
-        for (Entity entity : target.getEntityWorld().getOtherEntities(target,
-                target.getBoundingBox().expand(ABILITY_AOE_RANGE), e -> true)) {
+        for (Entity entity : target.level().getEntities(target,
+                target.getBoundingBox().inflate(ABILITY_AOE_RANGE), e -> true)) {
             if (numberOfTargets <= 0) {
                 break;
             }
@@ -276,7 +276,7 @@ public final class CombatUtils {
         // A player must not farm XP off their own Call-of-the-Wild summons (hitting a summoned wolf /
         // cat / horse). Legacy zeroed a COTW summon's XP via the COTW_SUMMONED_MOB mob-flag; the
         // transient tracker already knows every live summon, so it answers the same question directly.
-        if (McMMOMod.getTransientEntityTracker().isTransient(target.getUuid())) {
+        if (McMMOMod.getTransientEntityTracker().isTransient(target.getUUID())) {
             return;
         }
 

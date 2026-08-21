@@ -110,7 +110,7 @@ public final class ParticleEffectUtils {
         }
         spawnAtEyes(livingEntity,
                 () -> new BlockParticleOption(ParticleTypes.BLOCK,
-                        Blocks.REDSTONE_WIRE.getDefaultState()),
+                        Blocks.REDSTONE_WIRE.defaultBlockState()),
                 10);
     }
 
@@ -129,7 +129,7 @@ public final class ParticleEffectUtils {
         }
         spawnAtEyes(livingEntity,
                 () -> new BlockParticleOption(ParticleTypes.BLOCK,
-                        Blocks.ANVIL.getDefaultState()),
+                        Blocks.ANVIL.defaultBlockState()),
                 20);
     }
 
@@ -155,9 +155,9 @@ public final class ParticleEffectUtils {
             return;
         }
         final Vec3 eyes = eyePosition(livingEntity);
-        world.spawnParticles(ParticleTypes.EXPLOSION, eyes.x, eyes.y, eyes.z, 1, 0D, 0D, 0D, 0D);
+        world.sendParticles(ParticleTypes.EXPLOSION, eyes.x, eyes.y, eyes.z, 1, 0D, 0D, 0D, 0D);
         world.playSound(null, eyes.x, eyes.y, eyes.z,
-                net.minecraft.sounds.SoundEvents.ENTITY_GENERIC_EXPLODE.value(),
+                net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE.value(),
                 SoundSource.PLAYERS, 1.0F, 1.0F);
     }
 
@@ -171,7 +171,7 @@ public final class ParticleEffectUtils {
             return;
         }
         final Vec3 eyes = eyePosition(livingEntity);
-        world.spawnParticles(ParticleTypes.FLAME, eyes.x, eyes.y, eyes.z,
+        world.sendParticles(ParticleTypes.FLAME, eyes.x, eyes.y, eyes.z,
                 10, 0.2D, 0.2D, 0.2D, 0.01D);
     }
 
@@ -224,7 +224,7 @@ public final class ParticleEffectUtils {
 
     /** Legacy's nine-{@code BlockFace} smoke burst, collapsed into one spread-based call. */
     private static void playSmokeEffect(@NotNull ServerLevel world, @NotNull Vec3 position) {
-        world.spawnParticles(ParticleTypes.SMOKE, position.x, position.y + 0.5D, position.z,
+        world.sendParticles(ParticleTypes.SMOKE, position.x, position.y + 0.5D, position.z,
                 9, 0.3D, 0.3D, 0.3D, 0.02D);
     }
 
@@ -275,7 +275,7 @@ public final class ParticleEffectUtils {
         final FireworkRocketEntity firework =
                 new FireworkRocketEntity(world, rocket, pos.x, pos.y, pos.z, true);
         MetadataStore.setFlag(firework, COSMETIC_FIREWORK_KEY);
-        world.spawnEntity(firework);
+        world.addFreshEntity(firework);
     }
 
     /**
@@ -297,12 +297,12 @@ public final class ParticleEffectUtils {
             return;
         }
         final Vec3 eyes = eyePosition(livingEntity);
-        world.spawnParticles(effect.get(), eyes.x, eyes.y, eyes.z, count,
+        world.sendParticles(effect.get(), eyes.x, eyes.y, eyes.z, count,
                 IMPACT_SPREAD, IMPACT_SPREAD, IMPACT_SPREAD, 0D);
     }
 
     private static @NotNull Vec3 eyePosition(@NotNull PlatformLivingEntity livingEntity) {
-        return livingEntity.unwrap().getEyePos();
+        return livingEntity.unwrap().getEyePosition();
     }
 
     private static @Nullable ServerLevel serverWorldOf(@Nullable PlatformLivingEntity entity) {

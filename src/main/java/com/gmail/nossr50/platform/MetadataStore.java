@@ -33,7 +33,7 @@ public final class MetadataStore {
 
     /** Set a transient flag/value on an entity. */
     public static void set(@NotNull Entity entity, @NotNull String key, @NotNull Object value) {
-        ENTITY_DATA.computeIfAbsent(entity.getUuid(), k -> new ConcurrentHashMap<>()).put(key, value);
+        ENTITY_DATA.computeIfAbsent(entity.getUUID(), k -> new ConcurrentHashMap<>()).put(key, value);
     }
 
     /** Set a presence-only flag (Bukkit {@code FixedMetadataValue(plugin, true)} pattern). */
@@ -42,13 +42,13 @@ public final class MetadataStore {
     }
 
     public static boolean has(@NotNull Entity entity, @NotNull String key) {
-        final Map<String, Object> data = ENTITY_DATA.get(entity.getUuid());
+        final Map<String, Object> data = ENTITY_DATA.get(entity.getUUID());
         return data != null && data.containsKey(key);
     }
 
     /** Raw value, or {@code null} if unset. */
     public static @Nullable Object get(@NotNull Entity entity, @NotNull String key) {
-        final Map<String, Object> data = ENTITY_DATA.get(entity.getUuid());
+        final Map<String, Object> data = ENTITY_DATA.get(entity.getUUID());
         return data == null ? null : data.get(key);
     }
 
@@ -65,7 +65,7 @@ public final class MetadataStore {
 
     /** Remove a single key from an entity. */
     public static void remove(@NotNull Entity entity, @NotNull String key) {
-        remove(entity.getUuid(), key);
+        remove(entity.getUUID(), key);
     }
 
     /*
@@ -106,7 +106,7 @@ public final class MetadataStore {
 
     /** Drop all stored data for an entity. Call when the entity is removed/dies. */
     public static void clear(@NotNull Entity entity) {
-        ENTITY_DATA.remove(entity.getUuid());
+        ENTITY_DATA.remove(entity.getUUID());
     }
 
     /** Clear the entire store (e.g. on server stop). */

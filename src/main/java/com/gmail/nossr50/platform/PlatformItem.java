@@ -74,26 +74,26 @@ public final class PlatformItem {
     }
 
     public int getMaxAmount() {
-        return handle.getMaxCount();
+        return handle.getMaxStackSize();
     }
 
     /** Remove {@code amount} items from this stack, in place (vanilla {@code decrement}). */
     public void decrement(int amount) {
-        handle.decrement(amount);
+        handle.shrink(amount);
     }
 
     // --- Durability (Bukkit durability == vanilla damage) -------------------
 
     public boolean isDamageable() {
-        return handle.isDamageable();
+        return handle.isDamageableItem();
     }
 
     public int getDurability() {
-        return handle.getDamage();
+        return handle.getDamageValue();
     }
 
     public void setDurability(int damage) {
-        handle.setDamage(damage);
+        handle.setDamageValue(damage);
     }
 
     public int getMaxDurability() {
@@ -108,7 +108,7 @@ public final class PlatformItem {
      * durability changes are a no-op on them.
      */
     public boolean isUnbreakable() {
-        return handle.contains(DataComponents.UNBREAKABLE);
+        return handle.has(DataComponents.UNBREAKABLE);
     }
 
     /**
@@ -118,12 +118,12 @@ public final class PlatformItem {
      * without a world context.
      */
     public int getEnchantmentLevel(@NotNull ResourceKey<Enchantment> enchantmentKey) {
-        if (!handle.hasEnchantments()) {
+        if (!handle.isEnchanted()) {
             return 0;
         }
         ItemEnchantments enchantments = handle.getEnchantments();
-        for (Holder<Enchantment> entry : enchantments.getEnchantments()) {
-            if (entry.matchesKey(enchantmentKey)) {
+        for (Holder<Enchantment> entry : enchantments.keySet()) {
+            if (entry.is(enchantmentKey)) {
                 return enchantments.getLevel(entry);
             }
         }
@@ -142,7 +142,7 @@ public final class PlatformItem {
      * item type only, not components/meta — refine once the ItemMeta adapter lands.
      */
     public boolean isSimilar(@NotNull PlatformItem other) {
-        return ItemStack.areItemsEqual(handle, other.handle);
+        return ItemStack.isSameItem(handle, other.handle);
     }
 
     /**
@@ -152,12 +152,12 @@ public final class PlatformItem {
      * "sugar with a custom name" must not be conflated.
      */
     public boolean matchesItemAndComponents(@NotNull PlatformItem other) {
-        return ItemStack.areItemsAndComponentsEqual(handle, other.handle);
+        return ItemStack.isSameItemSameComponents(handle, other.handle);
     }
 
     /** Full equality including stack count (vanilla {@code ItemStack.areEqual}). */
     public boolean matchesExactly(@NotNull PlatformItem other) {
-        return ItemStack.areEqual(handle, other.handle);
+        return ItemStack.matches(handle, other.handle);
     }
 
     public @NotNull PlatformItem copy() {

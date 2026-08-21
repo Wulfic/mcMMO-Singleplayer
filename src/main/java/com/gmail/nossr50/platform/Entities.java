@@ -34,8 +34,8 @@ public final class Entities {
         if (id == null) {
             return entityId;
         }
-        return BuiltInRegistries.ENTITY_TYPE.getOptionalValue(id)
-                .map(type -> type.getName().getString())
+        return BuiltInRegistries.ENTITY_TYPE.getOptional(id)
+                .map(type -> type.getDescription().getString())
                 .orElse(entityId);
     }
 }

@@ -59,7 +59,7 @@ public final class CotwSummon implements TrackedSummon {
 
     @Override
     public @NotNull UUID getEntityId() {
-        return entity.getUuid();
+        return entity.getUUID();
     }
 
     @Override

@@ -56,11 +56,11 @@ public final class SmokeBombListener {
     }
 
     private static InteractionResult onUseItem(Player player, Level world, InteractionHand hand) {
-        if (hand != InteractionHand.MAIN_HAND || world.isClient()
+        if (hand != InteractionHand.MAIN_HAND || world.isClientSide()
                 || !(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResult.PASS;
         }
-        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUuid());
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(player.getUUID());
         if (mmoPlayer == null) {
             return InteractionResult.PASS;
         }
@@ -144,7 +144,7 @@ public final class SmokeBombListener {
 
         // (effect, duration, amplifier, ambient, showParticles, showIcon) — particles off so the
         // effect cannot betray the player it is hiding; icon on, since only they can see it.
-        player.addStatusEffect(new MobEffectInstance(MobEffects.INVISIBILITY, durationTicks,
+        player.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, durationTicks,
                 0, false, false, true));
     }
 }

@@ -183,21 +183,21 @@ public final class PlayerMovementTracker {
     }
 
     private static void onQuit(@NotNull ServerPlayer player) {
-        LAST_POSITIONS.remove(player.getUuid());
-        LAST_WORLDS.remove(player.getUuid());
-        SOLAR_WINGS_TICKS.remove(player.getUuid());
-        SNOW_WALKERS.remove(player.getUuid());
+        LAST_POSITIONS.remove(player.getUUID());
+        LAST_WORLDS.remove(player.getUUID());
+        SOLAR_WINGS_TICKS.remove(player.getUUID());
+        SNOW_WALKERS.remove(player.getUUID());
         // Same reasoning for Stealth's Assassin window: this is the mod's one per-player disconnect
         // hook, so the combat listener's side table is dropped from here rather than growing a
         // second DISCONNECT registration that could be removed independently of this one.
-        EntityDamageListener.forgetPlayer(player.getUuid());
+        EntityDamageListener.forgetPlayer(player.getUUID());
         // Belt-and-braces: the modifiers are temporary and never persisted, but leaving nothing
         // behind on a player who is no longer online makes the invariant trivially checkable.
         SkillAttributeService.clearAll(player);
     }
 
     private static void onServerTick(@NotNull MinecraftServer server) {
-        for (ServerPlayer player : server.getPlayerManager().getPlayerList()) {
+        for (ServerPlayer player : server.getPlayers().getPlayerList()) {
             try {
                 tickPlayer(player);
             } catch (Exception e) {
@@ -218,8 +218,8 @@ public final class PlayerMovementTracker {
      * dispatch deleted entirely.
      */
     static void tickPlayer(@NotNull ServerPlayer player) {
-        final UUID uuid = player.getUuid();
-        final Vec3 current = player.getEntityPos();
+        final UUID uuid = player.getUUID();
+        final Vec3 current = player.position();
         final Vec3 previous = LAST_POSITIONS.put(uuid, current);
         // ⚠️ The cast is load-bearing on the older bands — do NOT "simplify" it away.
         // ServerPlayerEntity's covariant ServerWorld override of getEntityWorld() was added in
@@ -227,11 +227,11 @@ public final class PlayerMovementTracker {
         // assignment does not compile. ⚠️ Not usable on 1.21.6 – 1.21.8, which has no
         // Entity#getEntityWorld() at all and spells the accessor getWorld() — see
         // PetFollowTeleport#bringPetsFrom for the measured version ladder.
-        final ServerLevel world = (ServerLevel) player.getEntityWorld();
+        final ServerLevel world = (ServerLevel) player.level();
         final ResourceKey<Level> previousWorld =
-                LAST_WORLDS.put(uuid, world == null ? null : world.getRegistryKey());
+                LAST_WORLDS.put(uuid, world == null ? null : world.dimension());
         final boolean sameWorld =
-                world != null && world.getRegistryKey().equals(previousWorld);
+                world != null && world.dimension().equals(previousWorld);
 
         // ⚠️ TAMING'S PET FOLLOW SITS ABOVE THE MISSING-PROFILE RETURN BELOW, AND THAT IS THE WHOLE
         // POINT OF IT BEING HERE. It is not level-gated, not per-profile and not an mcMMO mechanic at
@@ -297,7 +297,7 @@ public final class PlayerMovementTracker {
         // boots clean and passes every unit test.
         tickStealth(player, mmoPlayer, distance, travelled);
 
-        if (medium == null || previous == null || player.hasVehicle()) {
+        if (medium == null || previous == null || player.isPassenger()) {
             // No qualifying medium, no baseline to measure against, or being carried by something
             // else. In the vehicle case the baseline was still refreshed above, so stepping out of a
             // boat does not bill the whole ride.
@@ -342,16 +342,16 @@ public final class PlayerMovementTracker {
         if (radius <= 0) {
             return; // Not sounding — the overwhelmingly common case, and it must stay cheap.
         }
-        if (!(player.getEntityWorld() instanceof ServerLevel)) {
+        if (!(player.level() instanceof ServerLevel)) {
             return;
         }
 
-        final AABB searchBox = player.getBoundingBox().expand(radius);
-        for (Animal animal : player.getEntityWorld().getEntitiesByClass(Animal.class,
+        final AABB searchBox = player.getBoundingBox().inflate(radius);
+        for (Animal animal : player.level().getEntitiesOfClass(Animal.class,
                 searchBox, Animal::isAlive)) {
             final PathNavigation navigation = animal.getNavigation();
-            if (navigation.isIdle()) {
-                navigation.startMovingTo(player, HERD_FOLLOW_SPEED);
+            if (navigation.isDone()) {
+                navigation.moveTo(player, HERD_FOLLOW_SPEED);
             }
         }
     }
@@ -401,7 +401,7 @@ public final class PlayerMovementTracker {
      */
     private static void publishSnowWalker(@NotNull ServerPlayer player,
             @NotNull MovementManager agility) {
-        final UUID uuid = player.getUuid();
+        final UUID uuid = player.getUUID();
         if (agility.canSnowWalk()) {
             SNOW_WALKERS.add(uuid);
         } else {
@@ -434,7 +434,7 @@ public final class PlayerMovementTracker {
             return;
         }
 
-        final boolean sneaking = player.isSneaking();
+        final boolean sneaking = player.isShiftKeyDown();
         SkillAttributeService.set(player, SkillAttributeService.Managed.STEALTH_PADFOOT,
                 sneaking ? stealth.getPadfootSpeedBonus() : 0.0);
 
@@ -465,8 +465,8 @@ public final class PlayerMovementTracker {
      * </ul>
      */
     static boolean qualifiesAsSneakTravel(@NotNull ServerPlayer player) {
-        if (player.hasVehicle() || player.isGliding() || player.isTouchingWater()
-                || !player.isOnGround()) {
+        if (player.isPassenger() || player.isFallFlying() || player.isInWater()
+                || !player.onGround()) {
             return false;
         }
         return !requiresMovementInput() || isPressingMovementKey(player);
@@ -495,7 +495,7 @@ public final class PlayerMovementTracker {
      * inferring it from XP that may be zero for some other reason.
      */
     private static boolean isPressingMovementKey(@NotNull ServerPlayer player) {
-        final Input input = player.getPlayerInput();
+        final Input input = player.getLastClientInput();
         final boolean pressing =
                 input.forward() || input.backward() || input.left() || input.right();
         if (pressing && MOVEMENT_INPUT_OBSERVED.compareAndSet(false, true)) {
@@ -534,13 +534,13 @@ public final class PlayerMovementTracker {
      * once (D-AG5), and this settles that overlap in one place rather than in each consumer.
      */
     public static @Nullable Medium classifyMedium(@NotNull ServerPlayer player) {
-        if (player.hasVehicle() || player.isSneaking()) {
+        if (player.isPassenger() || player.isShiftKeyDown()) {
             return null;
         }
-        if (player.isGliding()) {
+        if (player.isFallFlying()) {
             return Medium.AIR;
         }
-        if (player.isTouchingWater()) {
+        if (player.isInWater()) {
             return Medium.WATER;
         }
         if (player.isSprinting()) {
@@ -575,17 +575,17 @@ public final class PlayerMovementTracker {
      */
     private static void applyLeadLungs(@NotNull ServerPlayer player,
             @NotNull MovementManager agility) {
-        if (!player.isSubmergedInWater()) {
+        if (!player.wasUnderwater()) {
             return;
         }
         final int topUp = agility.consumeLeadLungsAirTopUp();
         if (topUp <= 0) {
             return;
         }
-        final int maxAir = player.getMaxAir();
-        final int air = player.getAir();
+        final int maxAir = player.getMaxAirSupply();
+        final int air = player.getAirSupply();
         if (air < maxAir) {
-            player.setAir(Math.min(maxAir, air + topUp));
+            player.setAirSupply(Math.min(maxAir, air + topUp));
         }
     }
 
@@ -599,18 +599,18 @@ public final class PlayerMovementTracker {
      */
     private static void applySolarWings(@NotNull ServerPlayer player,
             @NotNull MovementManager agility) {
-        final UUID uuid = player.getUuid();
+        final UUID uuid = player.getUUID();
         if (!agility.canSolarWings()) {
             SOLAR_WINGS_TICKS.remove(uuid);
             return;
         }
-        final ItemStack chest = player.getEquippedStack(EquipmentSlot.CHEST);
-        if (!chest.isOf(Items.ELYTRA) || !chest.isDamaged()) {
+        final ItemStack chest = player.getItemBySlot(EquipmentSlot.CHEST);
+        if (!chest.is(Items.ELYTRA) || !chest.isDamaged()) {
             SOLAR_WINGS_TICKS.remove(uuid);
             return;
         }
-        if (!player.getEntityWorld().isDay()
-                || !player.getEntityWorld().isSkyVisibleAllowingSea(player.getBlockPos())) {
+        if (!player.level().isBrightOutside()
+                || !player.level().canSeeSkyFromBelowWater(player.blockPosition())) {
             return; // Keep the counter: stepping through a tunnel shouldn't reset the progress.
         }
 
@@ -620,9 +620,9 @@ public final class PlayerMovementTracker {
         }
         SOLAR_WINGS_TICKS.put(uuid, 0);
 
-        final int repair = agility.getSolarWingsRepairAmount(player.isOnGround());
+        final int repair = agility.getSolarWingsRepairAmount(player.onGround());
         if (repair > 0) {
-            chest.setDamage(Math.max(0, chest.getDamage() - repair));
+            chest.setDamageValue(Math.max(0, chest.getDamageValue() - repair));
         }
     }
 }

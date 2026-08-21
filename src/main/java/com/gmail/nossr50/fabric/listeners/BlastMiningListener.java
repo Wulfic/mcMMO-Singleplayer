@@ -79,27 +79,27 @@ public final class BlastMiningListener {
 
         final BlockPos targetPos = targetBlock(serverPlayer);
         if (targetPos == null
-                || !serverPlayer.getEntityWorld().getBlockState(targetPos).isOf(Blocks.TNT)) {
+                || !serverPlayer.level().getBlockState(targetPos).is(Blocks.TNT)) {
             return;
         }
         // PORT (K5): legacy also required EventUtils.simulateBlockBreak(targetBlock, player) — a
         // fake BlockBreakEvent asking other plugins whether removing the TNT was allowed. There are
         // no plugins in singleplayer, so the check collapses to "always allowed".
 
-        final ServerLevel world = (ServerLevel) serverPlayer.getEntityWorld();
-        final Vec3 spawnPos = Vec3.ofBottomCenter(targetPos);
-        final PrimedTnt tnt = new PrimedTnt(world, spawnPos.getX(), spawnPos.getY(),
-                spawnPos.getZ(), serverPlayer);
-        MetadataStore.set(tnt, TRACKED_TNT_KEY, serverPlayer.getUuid());
+        final ServerLevel world = (ServerLevel) serverPlayer.level();
+        final Vec3 spawnPos = Vec3.atBottomCenterOf(targetPos);
+        final PrimedTnt tnt = new PrimedTnt(world, spawnPos.x(), spawnPos.y(),
+                spawnPos.z(), serverPlayer);
+        MetadataStore.set(tnt, TRACKED_TNT_KEY, serverPlayer.getUUID());
         tnt.setFuse(0);
-        world.spawnEntity(tnt);
+        world.addFreshEntity(tnt);
 
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUPER_ABILITY,
                 "Mining.Blast.Boom");
 
         // Remove the TNT block itself: it has become the primed entity above. Legacy's
         // targetBlock.setType(Material.AIR) — a silent replace, no drop, no break particles.
-        world.setBlockState(targetPos, Blocks.AIR.getDefaultState());
+        world.setBlockAndUpdate(targetPos, Blocks.AIR.defaultBlockState());
 
         miningManager.startBlastMiningCooldown();
     }
@@ -111,7 +111,7 @@ public final class BlastMiningListener {
      * own ray-cast already skips non-colliding blocks, so the set has no analogue here.
      */
     private static @Nullable BlockPos targetBlock(@NotNull ServerPlayer serverPlayer) {
-        final HitResult hit = serverPlayer.raycast(
+        final HitResult hit = serverPlayer.pick(
                 BlastMining.MAXIMUM_REMOTE_DETONATION_DISTANCE, 1.0F, false);
         return hit.getType() == HitResult.Type.BLOCK ? ((BlockHitResult) hit).getBlockPos() : null;
     }
@@ -157,7 +157,7 @@ public final class BlastMiningListener {
      */
     public static boolean processBlastDrops(@NotNull Explosion explosion,
             @NotNull List<BlockPos> blocks) {
-        final MiningManager miningManager = detonatorMiningManager(explosion.getEntity());
+        final MiningManager miningManager = detonatorMiningManager(explosion.getDirectSourceEntity());
         if (miningManager == null || !miningManager.canUseBlastMining()) {
             return false; // not an mcMMO charge (or the detonator lost the sub-skill): vanilla rules.
         }
@@ -165,18 +165,18 @@ public final class BlastMiningListener {
         // Bukkit handed mcMMO a "yield" — the fraction of destroyed blocks that drop. Vanilla spells
         // the same number as the explosion-decay loot function's 1/radius survival chance, so that
         // is what the ore yield is boosted from. A zero-power blast drops nothing to boost.
-        final float yield = explosion.getPower() <= 0 ? 0F : 1.0F / explosion.getPower();
+        final float yield = explosion.radius() <= 0 ? 0F : 1.0F / explosion.radius();
         if (yield == 0) {
             return false;
         }
 
-        final ServerLevel world = explosion.getWorld();
+        final ServerLevel world = explosion.level();
         final ServerPlayer detonator = world.getServer()
-                .getPlayerManager().getPlayer(detonatorUuid(explosion.getEntity()));
+                .getPlayerList().getPlayer(detonatorUuid(explosion.getDirectSourceEntity()));
         if (detonator == null) {
             return false; // detonator logged out mid-fuse: leave the blast vanilla.
         }
-        final ItemStack tool = detonator.getMainHandStack();
+        final ItemStack tool = detonator.getMainHandItem();
         final float oreYield = miningManager.blastMiningOreYield(yield);
 
         int xp = 0;
@@ -244,13 +244,13 @@ public final class BlastMiningListener {
     private static void spawnOreDrops(ServerLevel world, BlockPos pos, BlockState state,
             ServerPlayer detonator, ItemStack tool) {
         if (!ItemUtils.isPickaxe(tool)) {
-            Block.dropStack(world, pos, new ItemStack(state.getBlock()));
+            Block.popResource(world, pos, new ItemStack(state.getBlock()));
             return;
         }
-        for (ItemStack drop : Block.getDroppedStacks(state, world, pos,
+        for (ItemStack drop : Block.getDrops(state, world, pos,
                 world.getBlockEntity(pos), detonator, tool)) {
             if (!drop.isEmpty()) {
-                Block.dropStack(world, pos, drop);
+                Block.popResource(world, pos, drop);
             }
         }
     }
@@ -265,7 +265,7 @@ public final class BlastMiningListener {
         if (state.getBlock().asItem() == Items.AIR || !miningManager.rollDebrisDrop()) {
             return;
         }
-        Block.dropStack(world, pos, new ItemStack(state.getBlock()));
+        Block.popResource(world, pos, new ItemStack(state.getBlock()));
     }
 
     private static String blockPath(BlockState state) {

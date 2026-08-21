@@ -67,7 +67,7 @@ public final class TextUtils {
                     continue;
                 }
 
-                final ChatFormatting formatting = ChatFormatting.byCode(code);
+                final ChatFormatting formatting = ChatFormatting.getByCode(code);
                 if (formatting != null) {
                     flush(result, buffer, style);
                     style = applyCode(style, formatting);
@@ -96,7 +96,7 @@ public final class TextUtils {
         return switch (formatting) {
             case BOLD -> style.withBold(true);
             case ITALIC -> style.withItalic(true);
-            case UNDERLINE -> style.withUnderline(true);
+            case UNDERLINE -> style.withUnderlined(true);
             case STRIKETHROUGH -> style.withStrikethrough(true);
             case OBFUSCATED -> style.withObfuscated(true);
             default -> style;
