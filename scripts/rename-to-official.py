@@ -944,6 +944,257 @@ def apply_edits(edits: dict, write: bool) -> tuple[int, list[str]]:
     return n, skipped
 
 
+
+
+# --------------------------------------------------------------------------------------------
+# The mixin selector pass -- TODO section 32.1b
+#
+# WHY THIS IS A SEPARATE PASS, AND NOT PART OF THE COMPILER LOOP
+#
+#   Pass 1 rewrites TYPE names inside string literals. The MEMBER half of the rename is driven by
+#   javac, and javac cannot see inside a string literal, so the member name in all 61 mixin
+#   selectors was never touched -- by construction, not by accident. That is why the mod compiles
+#   on 26.2 and does nothing: ZERO=54 of 61 injectors bind no injection point.
+#
+#   There is a second, narrower blind spot in pass 1 itself. Its regex runs over the RAW file, and
+#   this repo spells long selectors across a Java concatenation:
+#
+#       target = "Lnet/minecraft/world/item/ItemStack;damage(ILnet/minecraft/entity/"
+#              + "LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;)V"
+#
+#   The regex sees `net/minecraft/entity/` (a package, no class) and `LivingEntity;...` (no
+#   `net/minecraft` prefix at all) and matches neither, so ONE descriptor ends up with two
+#   different mappings applied to it. Measured 2026-08-24: 4 sites, and all 4 were mis-reported as
+#   SIGNATURE-CHANGED -- i.e. as expensive hand work -- until the sizer learned to normalise.
+#
+# WHY THE DECISION LIVES IN THE SIZER AND ONLY THE WRITING LIVES HERE
+#
+#   `mixin-target-sizer.py` already owns the table lookup, the supertype walk, the `a|b|c`
+#   multi-name shape and the bucket that refuses to guess. It is validated by 40 self-test checks
+#   and by agreeing with the 6 injectors `mixin-allow-audit.py` independently reports as OK. A
+#   second copy of that logic here is exactly how the sizer's own first run grew three silent bugs
+#   at once. So: the sizer classifies, this writes, and NOTHING is written on any verdict other
+#   than NAME-ONLY.
+# --------------------------------------------------------------------------------------------
+
+def _load_sizer():
+    path = Path(__file__).resolve().parent / "mixin-target-sizer.py"
+    if not path.is_file():
+        raise SystemExit(f"FATAL: {path} missing -- it owns the selector verdict.")
+    spec = importlib.util.spec_from_file_location("mixin_target_sizer", path)
+    mod = importlib.util.module_from_spec(spec)
+    # REGISTER BEFORE exec: `@dataclass` resolves its annotations through
+    # sys.modules[cls.__module__], and an unregistered module makes that None -- the import dies
+    # inside dataclasses.py with an AttributeError that says nothing about this line.
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_FRAGMENT = re.compile(r'"((?:[^"\\]|\\.)*)"')
+_JOIN = re.compile(r"^\s*\+\s*$")
+
+
+def concat_groups(code: str) -> list[list[tuple[int, int, int, int]]]:
+    """Every maximal run of `"..." + "..."` in `code`, as [(qstart, cstart, cend, qend), ...].
+
+    `code` must be comment-masked with LENGTH PRESERVED (mixin_parse.strip_comments), so the
+    offsets index the original file. Fragments are grouped only when the text between them is
+    nothing but whitespace and a `+` -- a `,` or a method call ends the run.
+    """
+    groups: list[list[tuple[int, int, int, int]]] = []
+    cur: list[tuple[int, int, int, int]] = []
+    prev_end = None
+    for m in _FRAGMENT.finditer(code):
+        frag = (m.start(), m.start(1), m.end(1), m.end())
+        if cur and prev_end is not None and _JOIN.match(code[prev_end:m.start()]):
+            cur.append(frag)
+        else:
+            if cur:
+                groups.append(cur)
+            cur = [frag]
+        prev_end = m.end()
+    if cur:
+        groups.append(cur)
+    return groups
+
+
+def joined_value(text: str, frags: list[tuple[int, int, int, int]]) -> str:
+    return "".join(text[c0:c1] for _, c0, c1, _ in frags)
+
+
+def rewrite_group(text: str, frags: list[tuple[int, int, int, int]], old: str,
+                  new: str) -> tuple[int, int, str] | None:
+    """-> (span start, span end, replacement) for ONE concatenation group, or None for a no-op.
+
+    The change is computed on the JOINED value and mapped back to the fragment(s) it touches. A
+    change inside one fragment rewrites that fragment alone and leaves the `+` layout byte for
+    byte; a change crossing a boundary merges ONLY the fragments it crosses.
+
+    Refuses (raises) on a fragment containing a backslash: every selector in this repo is plain
+    ASCII, and an escape means the joined value and the source text no longer share an index --
+    which would make every offset below quietly wrong rather than visibly broken.
+    """
+    if any("\\" in text[c0:c1] for _, c0, c1, _ in frags):
+        raise ValueError("escape sequence in a selector literal -- refusing to map offsets")
+    if old == new:
+        return None
+
+    p = 0
+    while p < len(old) and p < len(new) and old[p] == new[p]:
+        p += 1
+    s = 0
+    while s < len(old) - p and s < len(new) - p and old[len(old) - 1 - s] == new[len(new) - 1 - s]:
+        s += 1
+    lo, hi = p, len(old) - s
+    changed = new[p:len(new) - s]
+
+    starts, pos = [], 0
+    for _, c0, c1, _ in frags:
+        starts.append(pos)
+        pos += c1 - c0
+    touched = [i for i, (_, c0, c1, _) in enumerate(frags)
+               if starts[i] < hi and starts[i] + (c1 - c0) > lo]
+    if not touched:                       # a pure insertion at a fragment boundary
+        touched = [max(i for i in range(len(frags)) if starts[i] <= lo)]
+
+    first, last = touched[0], touched[-1]
+    fq0, fc0, _, _ = frags[first]
+    _, lc0, lc1, lq1 = frags[last]
+    prefix = text[fc0:fc0 + (lo - starts[first])]
+    suffix = text[lc0 + (hi - starts[last]):lc1]
+    return fq0, lq1, '"' + prefix + changed + suffix + '"'
+
+
+def selector_sites(sizer, env, root: Path) -> tuple[list[dict], dict[str, int]]:
+    """Classify every selector in every mixin. -> (sites needing a rewrite, bucket counts).
+
+    A site is recorded ONLY when the sizer returns a NAME-ONLY rewrite that differs from what is
+    in the file. The already-correct rows -- 12 of the 81 measured on 2026-08-24 -- produce no
+    site at all, which is the mechanical form of "a pass that rewrites them is corrupting".
+    """
+    counts: dict[str, int] = {}
+    sites: list[dict] = []
+    for mf in sizer.mixin_parse.all_mixins(root):
+        if not mf.targets:
+            continue
+        target = mf.targets[0]
+        raws: list[str] = []
+        for inj in mf.injectors:
+            raws.extend(inj.method_selectors)
+            raws.extend(at.target for at in inj.ats if at.target.strip())
+        seen = set()
+        for raw in raws:
+            if raw in seen:
+                continue
+            seen.add(raw)
+            bucket, detail, new = sizer.plan_for(env, target, raw)
+            counts[bucket] = counts.get(bucket, 0) + 1
+            if new is None or new == raw:
+                continue
+            # Does the name we are REPLACING also exist on the 26.x target? If it does, this
+            # selector currently binds SOMETHING, and the rewrite moves the injector to a
+            # different member. `mixin-allow-audit.py` reports both states as OK, so nothing
+            # downstream will ever mention it -- see sizer.name_is_live for the measured case.
+            rebind = sizer.name_is_live(env, target, sizer.parse_selector(raw))
+            sites.append({"path": mf.path, "old": raw, "new": new, "detail": detail,
+                          "rebind": rebind})
+    return sites, counts
+
+
+def apply_selector_sites(sizer, sites: list[dict], write: bool) -> tuple[int, list[str]]:
+    """Apply the rewrites, one file at a time. -> (sites written, refusals).
+
+    A site whose joined text cannot be found in the file is REFUSED and reported, never
+    approximated. `mixin_parse` resolves `static final String` selector constants, so the text may
+    live in a declaration rather than at the annotation -- both are concatenation groups and both
+    are found the same way.
+    """
+    refusals: list[str] = []
+    by_file: dict[Path, list[dict]] = {}
+    for s in sites:
+        by_file.setdefault(s["path"], []).append(s)
+
+    written = 0
+    for path, group in by_file.items():
+        if "mixin" not in path.parts:
+            refusals.append(f"{path}: not under a mixin/ directory -- refusing")
+            continue
+        text = path.read_text(encoding="utf-8")
+        edits: list[tuple[int, int, str]] = []
+        for s in group:
+            code = sizer.mixin_parse.strip_comments(text)
+            hits = [g for g in concat_groups(code) if joined_value(text, g) == s["old"]]
+            if not hits:
+                refusals.append(f"{path.name}: no literal spells {s['old'][:60]!r} -- refusing")
+                continue
+            for g in hits:
+                edit = rewrite_group(text, g, s["old"], s["new"])
+                if edit:
+                    edits.append(edit)
+        if not edits:
+            continue
+        for a, b, rep in sorted(edits, reverse=True):
+            text = text[:a] + rep + text[b:]
+        written += len(edits)
+        if write:
+            path.write_text(text, encoding="utf-8", newline="\n")
+    return written, refusals
+
+
+def mixin_selector_pass(root: Path, table_path: str, jar_mc: str, write: bool,
+                        allow_dirty: bool) -> int:
+    sizer = _load_sizer()
+    tpath = Path(table_path)
+    if not tpath.is_file():
+        raise SystemExit(f"FATAL: no yarn<->official table at {tpath}.\n"
+                         f"       Build it with: derive-official-names.py --mc 1.21.11 -o <path>")
+    table = sizer.Table.load(tpath)
+    jar = sizer.find_jar(jar_mc)
+    env = sizer.Env(table, lambda f: sizer.load_class(str(jar), f))
+    print(f"selector pass: Minecraft {jar_mc}\n  jar:   {jar}\n  table: {tpath} "
+          f"({len(table.off2yarn):,} classes, {len(table.members):,} members)", file=sys.stderr)
+
+    src = root / "src" / "main" / "java"
+    sites, counts = selector_sites(sizer, env, src)
+
+    for bucket in sizer.BUCKETS:
+        if counts.get(bucket):
+            print(f"  {bucket:<20} {counts[bucket]:>4}", file=sys.stderr)
+    # An empty NAME-ONLY pile is not "no work" -- it is a wrong table or a wrong jar, and it would
+    # print exactly like a clean tree.
+    if not counts.get("NAME-ONLY"):
+        raise SystemExit("FATAL: not one selector classified NAME-ONLY. The table or the jar is\n"
+                         "       wrong -- refusing, because 'nothing to do' and 'nothing worked'\n"
+                         "       print the same way.")
+    if not sites:
+        print("\nnothing to rewrite: every NAME-ONLY selector already carries its official name.",
+              file=sys.stderr)
+        return 0
+
+    if write:
+        assert_clean_tree(root, allow_dirty)
+    else:
+        print("\nDRY RUN -- nothing will be written. Pass --write to apply.", file=sys.stderr)
+
+    for s in sites:
+        mark = "  [REBIND: the old name is ALSO live on the target]" if s["rebind"] else ""
+        print(f"\n  {s['path'].name}{mark}\n    - {s['old']}\n    + {s['new']}")
+    rebinds = [s for s in sites if s["rebind"]]
+    if rebinds:
+        print(f"\n!! {len(rebinds)} site(s) REBIND: the selector resolves today, to a DIFFERENT\n"
+              f"   member than the handler was written for. mixin-allow-audit.py calls both\n"
+              f"   states OK. Each one below is a judgement, not a mechanical rename:")
+        for s in rebinds:
+            print(f"     {s['path'].name}: {s['detail']}")
+    n, refusals = apply_selector_sites(sizer, sites, write)
+    print(f"\n{n} selector site(s) {'REWRITTEN' if write else 'would be rewritten'} "
+          f"across {len({s['path'] for s in sites})} file(s)", file=sys.stderr)
+    for r in refusals:
+        print(f"  REFUSED {r}", file=sys.stderr)
+    return 1 if refusals else 0
+
+
 # --------------------------------------------------------------------------------------------
 # self-test
 # --------------------------------------------------------------------------------------------
@@ -1001,6 +1252,7 @@ def _fixture_table(mod):
 
 def self_test() -> int:
     mod = _load_deriver()
+    mixin_parse_for_test = _load_sizer().mixin_parse
     ren = Renamer(_fixture_table(mod))
     checks = failures = 0
 
@@ -1402,6 +1654,58 @@ def self_test() -> int:
           "0 candidates" in m4_got[1], True)
     check("M4 restored", ren.resolve_owner("Menu.Bay", IMP)[1], "nested")
 
+    # ---- 32.1b: the mixin selector writer ------------------------------------------------
+    # Every fixture asserts the UNTOUCHED bytes are untouched. A writer that produces the right
+    # new string by rewriting the whole annotation is indistinguishable from a correct one on a
+    # `git diff --stat`, and this repo has already shipped one corrupting rename (section 31.0).
+    def one(src, old, new):
+        code = mixin_parse_for_test.strip_comments(src)
+        groups = [g for g in concat_groups(code) if joined_value(src, g) == old]
+        if len(groups) != 1:
+            return f"<{len(groups)} groups>"
+        edit = rewrite_group(src, groups[0], old, new)
+        if edit is None:
+            return src
+        a, b, rep = edit
+        return src[:a] + rep + src[b:]
+
+    check("single literal: the name is replaced in place",
+          one('method = "damage", allow = 1', "damage", "hurtAndBreak"),
+          'method = "hurtAndBreak", allow = 1')
+    two = 'target = "Lnet/A;damage(ILnet/B;"\n        + "Lnet/C;)V"'
+    check("two fragments, change INSIDE the first: the second is byte-identical",
+          one(two, "Lnet/A;damage(ILnet/B;Lnet/C;)V", "Lnet/A;hurtAndBreak(ILnet/B;Lnet/C;)V"),
+          'target = "Lnet/A;hurtAndBreak(ILnet/B;"\n        + "Lnet/C;)V"')
+    # A change that stays inside one fragment must NOT merge -- checked above. These two force
+    # the other case: the changed span reaches past the boundary, so those fragments (and only
+    # those) collapse into one literal. Both shapes occur in src/main; the 4 half-renamed
+    # descriptors of 32.0b are the crossing kind.
+    cross = 'target = "Lnet/A;damage(ILnet/old/"\n        + "Type;)V"'
+    check("two fragments, change CROSSING the boundary: they merge",
+          one(cross, "Lnet/A;damage(ILnet/old/Type;)V", "Lnet/A;hurt(ILnet/new/Kind;)V"),
+          'target = "Lnet/A;hurt(ILnet/new/Kind;)V"')
+    three = 'target = "Lnet/A;f("\n        + "Lnet/old/"\n        + "Type;)V"'
+    check("three fragments, change crossing only the SECOND boundary: the first SURVIVES",
+          one(three, "Lnet/A;f(Lnet/old/Type;)V", "Lnet/A;f(Lnet/new/Kind;)V"),
+          'target = "Lnet/A;f("\n        + "Lnet/new/Kind;)V"')
+    check("a change INSIDE one fragment leaves the `+` layout byte-identical",
+          one(three, "Lnet/A;f(Lnet/old/Type;)V", "Lnet/A;g(Lnet/old/Type;)V"),
+          'target = "Lnet/A;g("\n        + "Lnet/old/"\n        + "Type;)V"')
+    check("NO-OP: an already-correct selector is returned unchanged",
+          one('method = "hurtAndBreak"', "hurtAndBreak", "hurtAndBreak"),
+          'method = "hurtAndBreak"')
+    check("a selector inside a COMMENT is not a group (comments are masked first)",
+          one('// method = "damage"\nmethod = "damage"', "damage", "hurtAndBreak"),
+          '// method = "damage"\nmethod = "hurtAndBreak"')
+    check("a `,` between literals ENDS the run -- two selectors are never joined",
+          len(concat_groups('a = "x", b = "y"')), 2)
+    check("a `+` between literals CONTINUES the run", len(concat_groups('a = "x" + "y"')), 1)
+    try:
+        rewrite_group('"a\\tb"', [(0, 1, 5, 6)], "a\\tb", "c")
+        check("MUTATION: an ESCAPE in a selector literal is refused", "no raise", "<ValueError>")
+    except ValueError:
+        check("MUTATION: an ESCAPE in a selector literal is refused", "<ValueError>", "<ValueError>")
+
     # M5: drop --continue -> the second compile task never runs, so its errors read as ZERO
     check("M5 --continue is present, or compileTestJava is never measured",
           "--continue" in MAXERRS_CMD_FLAGS, True)
@@ -1425,6 +1729,15 @@ def main() -> int:
     ap.add_argument("--root", default=str(REPO), help="repo root to rewrite (default: this repo)")
     ap.add_argument("--only", help="restrict to paths containing this substring")
     ap.add_argument("--loop", action="store_true", help="run the javac-driven member loop")
+    ap.add_argument("--mixin-selectors", action="store_true",
+                    help="rewrite the MEMBER name inside mixin @Inject(method=) and @At(target=) "
+                         "strings. javac cannot see inside a string literal, so the compiler loop "
+                         "is structurally blind to these -- 54 of 61 injectors bound nothing on "
+                         "26.2 because of it. Needs --table and --jar-mc; ignores --mc.")
+    ap.add_argument("--table", help="yarn<->official table (derive-official-names.py -o), for "
+                                    "--mixin-selectors")
+    ap.add_argument("--jar-mc", help="Minecraft version of the DEOBF JAR to check members against, "
+                                     "for --mixin-selectors (this branch: 26.2)")
     ap.add_argument("--collisions", action="store_true",
                     help="report yarn member names that ALSO exist on the mojmap owner. The "
                          "compiler loop is blind to these -- javac reports nothing and the call "
@@ -1445,6 +1758,13 @@ def main() -> int:
 
     root = Path(args.root).resolve()
     tasks = [t for t in args.tasks.split(",") if t]
+
+    if args.mixin_selectors:
+        # Deliberately BEFORE the --mc check: this pass reads a pre-derived table and the 26.x
+        # deobf jar, and never touches the ProGuard/yarn download path that --mc drives.
+        if not args.table or not args.jar_mc:
+            raise SystemExit("FATAL: --mixin-selectors needs --table and --jar-mc.")
+        return mixin_selector_pass(root, args.table, args.jar_mc, args.write, args.allow_dirty)
 
     if args.baseline:
         log, n = compile_once(root, args.maxerrs, tasks)
