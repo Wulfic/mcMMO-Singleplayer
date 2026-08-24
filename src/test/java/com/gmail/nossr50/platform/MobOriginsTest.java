@@ -40,7 +40,7 @@ class MobOriginsTest {
     /** A server-side world — the only kind the gate acts on. */
     private static Level serverWorld() {
         final Level world = mock(Level.class);
-        when(world.isClient()).thenReturn(false);
+        when(world.isClientSide()).thenReturn(false);
         return world;
     }
 
@@ -110,7 +110,7 @@ class MobOriginsTest {
         // weight on a copy of the entity that is never saved, and a null dereference here would crash
         // every spawn of a feature-flagged mob.
         final Level clientWorld = mock(Level.class);
-        when(clientWorld.isClient()).thenReturn(true);
+        when(clientWorld.isClientSide()).thenReturn(true);
         final LivingEntity zombie = mock(Zombie.class);
 
         MobOrigins.stampOnSpawn(clientWorld, EntitySpawnReason.SPAWNER, zombie);

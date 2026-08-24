@@ -50,7 +50,7 @@ import org.junit.jupiter.api.Test;
 class SuperAbilityListenerTillingTest {
 
     private static final BlockPos POS = new BlockPos(10, 64, 10);
-    private static final BlockPos ABOVE = POS.up();
+    private static final BlockPos ABOVE = POS.above();
 
     @BeforeAll
     static void bootstrap() {
@@ -125,10 +125,10 @@ class SuperAbilityListenerTillingTest {
         // The predicate half. Vanilla's canTillFarmland refuses when the block is covered or the click
         // came from underneath, and a refused till is not a till — so those clicks keep readying.
         assertFalse(tills(new ItemStack(Items.DIAMOND_HOE), Blocks.GRASS_BLOCK, Direction.UP,
-                        Blocks.STONE.getDefaultState()),
+                        Blocks.STONE.defaultBlockState()),
                 "a covered grass block cannot be tilled, so the click is a ready");
         assertFalse(tills(new ItemStack(Items.DIAMOND_HOE), Blocks.GRASS_BLOCK, Direction.DOWN,
-                        Blocks.AIR.getDefaultState()),
+                        Blocks.AIR.defaultBlockState()),
                 "a grass block clicked from below cannot be tilled, so the click is a ready");
     }
 
@@ -142,7 +142,7 @@ class SuperAbilityListenerTillingTest {
         // predicate, which is what keeps the answer correct when Mojang edits the table. Substituting
         // the public HoeItem#canTillFarmland for the pair's predicate would leave this red.
         assertTrue(tills(new ItemStack(Items.DIAMOND_HOE), Blocks.ROOTED_DIRT, Direction.DOWN,
-                        Blocks.STONE.getDefaultState()),
+                        Blocks.STONE.defaultBlockState()),
                 "rooted dirt tills from any angle even when covered, so it must not re-ready the hoe");
     }
 
@@ -179,7 +179,7 @@ class SuperAbilityListenerTillingTest {
 
     /** A hoe-tillable click: clicked from above, nothing on top. */
     private static boolean tills(ItemStack held, Block target) {
-        return tills(held, target, Direction.UP, Blocks.AIR.getDefaultState());
+        return tills(held, target, Direction.UP, Blocks.AIR.defaultBlockState());
     }
 
     private static boolean tills(ItemStack held, Block target, Direction side, BlockState above) {
@@ -187,14 +187,14 @@ class SuperAbilityListenerTillingTest {
         when(world.getBlockState(ABOVE)).thenReturn(above);
 
         final ServerPlayer player = mock(ServerPlayer.class);
-        when(player.getStackInHand(InteractionHand.MAIN_HAND)).thenReturn(held);
+        when(player.getItemInHand(InteractionHand.MAIN_HAND)).thenReturn(held);
         // ItemUsageContext's public constructor reads the world off the player (getEntityWorld, not
         // getWorld — verified with javap), and vanilla's predicates read it back off the context.
-        when(player.getEntityWorld()).thenReturn(world);
+        when(player.level()).thenReturn(world);
 
         final BlockHitResult hit =
-                new BlockHitResult(Vec3.ofCenter(POS), side, POS, false);
+                new BlockHitResult(Vec3.atCenterOf(POS), side, POS, false);
         return SuperAbilityListener.isTillAction(player, InteractionHand.MAIN_HAND, hit,
-                target.getDefaultState());
+                target.defaultBlockState());
     }
 }

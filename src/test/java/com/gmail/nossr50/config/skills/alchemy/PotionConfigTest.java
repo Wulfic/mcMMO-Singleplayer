@@ -75,11 +75,11 @@ class PotionConfigTest {
         final List<PlatformItem> tier1 = potionConfig.getIngredients(1);
         final List<PlatformItem> tier2 = potionConfig.getIngredients(2);
         assertFalse(tier1.isEmpty(), "tier 1 ingredients load");
-        assertTrue(tier1.stream().anyMatch(s -> s.unwrap().isOf(Items.BLAZE_POWDER)),
+        assertTrue(tier1.stream().anyMatch(s -> s.unwrap().is(Items.BLAZE_POWDER)),
                 "tier 1 includes Blaze Powder");
         // Each tier includes every lower tier's ingredients, so tier 2 is strictly larger.
         assertTrue(tier2.size() > tier1.size(), "tier 2 cascades tier 1's ingredients plus its own");
-        assertTrue(tier2.stream().anyMatch(s -> s.unwrap().isOf(Items.BLAZE_POWDER)),
+        assertTrue(tier2.stream().anyMatch(s -> s.unwrap().is(Items.BLAZE_POWDER)),
                 "the cascade carries tier 1 ingredients into tier 2");
     }
 
@@ -87,7 +87,7 @@ class PotionConfigTest {
     void resolvesAWaterPotionByItemStack() {
         // A vanilla water bottle must be recognised as the config's POTION_OF_WATER.
         final PlatformItem waterBottle = new PlatformItem(
-                PotionContents.createStack(Items.POTION, Potions.WATER));
+                PotionContents.createItemStack(Items.POTION, Potions.WATER));
         final AlchemyPotion potion = potionConfig.getPotion(waterBottle);
         assertNotNull(potion, "a vanilla water bottle resolves to a config potion");
         assertEquals("POTION_OF_WATER", potion.getPotionConfigName());

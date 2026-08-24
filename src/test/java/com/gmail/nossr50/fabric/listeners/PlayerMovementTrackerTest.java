@@ -61,10 +61,10 @@ class PlayerMovementTrackerTest {
         // warning name the player, and an unstubbed getName() NPEs inside the tracker rather than in
         // the assertion — so it is stubbed here for every test rather than per-test.
         lenient().when(handle.getName()).thenReturn(Component.literal("TestPlayer"));
-        lenient().when(handle.hasVehicle()).thenReturn(false);
-        lenient().when(handle.isSneaking()).thenReturn(false);
-        lenient().when(handle.isGliding()).thenReturn(false);
-        lenient().when(handle.isTouchingWater()).thenReturn(false);
+        lenient().when(handle.isPassenger()).thenReturn(false);
+        lenient().when(handle.isShiftKeyDown()).thenReturn(false);
+        lenient().when(handle.isFallFlying()).thenReturn(false);
+        lenient().when(handle.isInWater()).thenReturn(false);
         lenient().when(handle.isSprinting()).thenReturn(false);
         return handle;
     }
@@ -82,7 +82,7 @@ class PlayerMovementTrackerTest {
     @Test
     void beingInWaterIsTheWaterMedium() {
         final ServerPlayer player = player();
-        lenient().when(player.isTouchingWater()).thenReturn(true);
+        lenient().when(player.isInWater()).thenReturn(true);
 
         assertSame(Medium.WATER, PlayerMovementTracker.classifyMedium(player));
     }
@@ -90,7 +90,7 @@ class PlayerMovementTrackerTest {
     @Test
     void glidingIsTheAirMedium() {
         final ServerPlayer player = player();
-        lenient().when(player.isGliding()).thenReturn(true);
+        lenient().when(player.isFallFlying()).thenReturn(true);
 
         assertSame(Medium.AIR, PlayerMovementTracker.classifyMedium(player));
     }
@@ -109,8 +109,8 @@ class PlayerMovementTrackerTest {
     @Test
     void glidingIntoWaterPaysOnceAsAir() {
         final ServerPlayer player = player();
-        lenient().when(player.isGliding()).thenReturn(true);
-        lenient().when(player.isTouchingWater()).thenReturn(true);
+        lenient().when(player.isFallFlying()).thenReturn(true);
+        lenient().when(player.isInWater()).thenReturn(true);
         lenient().when(player.isSprinting()).thenReturn(true);
 
         // All three states are live at once; without a fixed priority this tick would pay three times.
@@ -120,7 +120,7 @@ class PlayerMovementTrackerTest {
     @Test
     void sprintSwimmingPaysOnceAsWater() {
         final ServerPlayer player = player();
-        lenient().when(player.isTouchingWater()).thenReturn(true);
+        lenient().when(player.isInWater()).thenReturn(true);
         lenient().when(player.isSprinting()).thenReturn(true);
 
         assertSame(Medium.WATER, PlayerMovementTracker.classifyMedium(player));
@@ -131,8 +131,8 @@ class PlayerMovementTrackerTest {
     @Test
     void beingCarriedByAVehicleIsNotTravel() {
         final ServerPlayer player = player();
-        lenient().when(player.hasVehicle()).thenReturn(true);
-        lenient().when(player.isTouchingWater()).thenReturn(true);
+        lenient().when(player.isPassenger()).thenReturn(true);
+        lenient().when(player.isInWater()).thenReturn(true);
 
         // A boat on water hits isTouchingWater; the boat is moving, the player is not.
         assertNull(PlayerMovementTracker.classifyMedium(player));
@@ -145,11 +145,11 @@ class PlayerMovementTrackerTest {
         // not: holding shift to sink is still isTouchingWater, so crouch-swimming used to pay.
         for (Medium medium : Medium.values()) {
             final ServerPlayer player = player();
-            lenient().when(player.isSneaking()).thenReturn(true);
+            lenient().when(player.isShiftKeyDown()).thenReturn(true);
             switch (medium) {
                 case LAND -> lenient().when(player.isSprinting()).thenReturn(true);
-                case WATER -> lenient().when(player.isTouchingWater()).thenReturn(true);
-                case AIR -> lenient().when(player.isGliding()).thenReturn(true);
+                case WATER -> lenient().when(player.isInWater()).thenReturn(true);
+                case AIR -> lenient().when(player.isFallFlying()).thenReturn(true);
             }
 
             assertNull(PlayerMovementTracker.classifyMedium(player),
@@ -162,9 +162,9 @@ class PlayerMovementTrackerTest {
     /** A player mid-sneak on dry ground with the forward key held — every gate satisfied. */
     private static ServerPlayer sneakingPlayer() {
         final ServerPlayer handle = player();
-        lenient().when(handle.isSneaking()).thenReturn(true);
-        lenient().when(handle.isOnGround()).thenReturn(true);
-        lenient().when(handle.getPlayerInput())
+        lenient().when(handle.isShiftKeyDown()).thenReturn(true);
+        lenient().when(handle.onGround()).thenReturn(true);
+        lenient().when(handle.getLastClientInput())
                 .thenReturn(new Input(true, false, false, false, false, true, false));
         return handle;
     }
@@ -180,7 +180,7 @@ class PlayerMovementTrackerTest {
         // reference, so it would sit permanently at the speed clamp and make "hold shift in a water
         // current" the optimal farm — reopening the exact leak the Agility balance pass closed.
         final ServerPlayer player = sneakingPlayer();
-        lenient().when(player.isTouchingWater()).thenReturn(true);
+        lenient().when(player.isInWater()).thenReturn(true);
 
         assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player));
     }
@@ -188,8 +188,8 @@ class PlayerMovementTrackerTest {
     @Test
     void crouchGlidingDoesNotQualify() {
         final ServerPlayer player = sneakingPlayer();
-        lenient().when(player.isGliding()).thenReturn(true);
-        lenient().when(player.isOnGround()).thenReturn(false);
+        lenient().when(player.isFallFlying()).thenReturn(true);
+        lenient().when(player.onGround()).thenReturn(false);
 
         assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player));
     }
@@ -197,7 +197,7 @@ class PlayerMovementTrackerTest {
     @Test
     void beingCarriedWhileCrouchedDoesNotQualify() {
         final ServerPlayer player = sneakingPlayer();
-        lenient().when(player.hasVehicle()).thenReturn(true);
+        lenient().when(player.isPassenger()).thenReturn(true);
 
         assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player));
     }
@@ -205,7 +205,7 @@ class PlayerMovementTrackerTest {
     @Test
     void airborneSneakingDoesNotQualify() {
         final ServerPlayer player = sneakingPlayer();
-        lenient().when(player.isOnGround()).thenReturn(false);
+        lenient().when(player.onGround()).thenReturn(false);
 
         assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player));
     }
@@ -221,7 +221,7 @@ class PlayerMovementTrackerTest {
         // Distinct from airborneSneakingDoesNotQualify above, which pins the gate; this pins the
         // claim in the bug report, so it is not silently deleted as a duplicate.
         final ServerPlayer falling = sneakingPlayer();
-        lenient().when(falling.isOnGround()).thenReturn(false);
+        lenient().when(falling.onGround()).thenReturn(false);
 
         assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(falling),
                 "no Stealth credit while airborne, however long the fall");
@@ -236,7 +236,7 @@ class PlayerMovementTrackerTest {
         // water current or a piston loop, with nobody at the keyboard. Position moves; no movement
         // key is down. Note sneak() is true here — a held shift must not qualify as travel.
         final ServerPlayer player = sneakingPlayer();
-        lenient().when(player.getPlayerInput())
+        lenient().when(player.getLastClientInput())
                 .thenReturn(new Input(false, false, false, false, false, true, false));
 
         assertFalse(PlayerMovementTracker.qualifiesAsSneakTravel(player));
@@ -251,7 +251,7 @@ class PlayerMovementTrackerTest {
         };
         for (boolean[] d : directions) {
             final ServerPlayer player = sneakingPlayer();
-            lenient().when(player.getPlayerInput())
+            lenient().when(player.getLastClientInput())
                     .thenReturn(new Input(d[0], d[1], d[2], d[3], false, true, false));
 
             assertTrue(PlayerMovementTracker.qualifiesAsSneakTravel(player));
@@ -273,8 +273,8 @@ class PlayerMovementTrackerTest {
     void sneakTravelIsCreditedEvenThoughItHasNoTravelMedium() {
         final UUID uuid = UUID.randomUUID();
         final ServerPlayer player = sneakingPlayer();
-        lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getEntityPos())
+        lenient().when(player.getUUID()).thenReturn(uuid);
+        lenient().when(player.position())
                 .thenReturn(new Vec3(0, 64, 0), new Vec3(0.05, 64, 0));
 
         final StealthManager stealth = mock(StealthManager.class);
@@ -298,8 +298,8 @@ class PlayerMovementTrackerTest {
     void sneakingWithoutMovingIsCreditedNothing() {
         final UUID uuid = UUID.randomUUID();
         final ServerPlayer player = sneakingPlayer();
-        lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getEntityPos()).thenReturn(new Vec3(0, 64, 0));
+        lenient().when(player.getUUID()).thenReturn(uuid);
+        lenient().when(player.position()).thenReturn(new Vec3(0, 64, 0));
 
         final StealthManager stealth = mock(StealthManager.class);
         final McMMOPlayer mmoPlayer = trackedPlayer(uuid, stealth);
@@ -340,12 +340,12 @@ class PlayerMovementTrackerTest {
      */
     private static ServerPlayer unarmoredPlayerWithArmourAttribute(UUID uuid) {
         final ServerPlayer handle = player();
-        lenient().when(handle.getUuid()).thenReturn(uuid);
-        lenient().when(handle.getEntityPos()).thenReturn(new Vec3(0, 64, 0));
+        lenient().when(handle.getUUID()).thenReturn(uuid);
+        lenient().when(handle.position()).thenReturn(new Vec3(0, 64, 0));
         for (EquipmentSlot slot : EquipmentSlot.VALUES) {
-            lenient().when(handle.getEquippedStack(slot)).thenReturn(ItemStack.EMPTY);
+            lenient().when(handle.getItemBySlot(slot)).thenReturn(ItemStack.EMPTY);
         }
-        lenient().when(handle.getAttributeInstance(Attributes.ARMOR))
+        lenient().when(handle.getAttribute(Attributes.ARMOR))
                 .thenReturn(new AttributeInstance(Attributes.ARMOR, instance -> { }));
         return handle;
     }
@@ -401,7 +401,7 @@ class PlayerMovementTrackerTest {
             assertTrue(SkillAttributeService.isApplied(player,
                     SkillAttributeService.Managed.UNARMORED_IRON_SKIN));
 
-            when(player.getEquippedStack(EquipmentSlot.HEAD))
+            when(player.getItemBySlot(EquipmentSlot.HEAD))
                     .thenReturn(new ItemStack(Items.LEATHER_HELMET));
             PlayerMovementTracker.tickPlayer(player);
 
@@ -430,7 +430,7 @@ class PlayerMovementTrackerTest {
 
             assertEquals(11.0, SkillAttributeService.appliedValue(player,
                     SkillAttributeService.Managed.UNARMORED_IRON_SKIN), 1.0E-6);
-            assertEquals(1, player.getAttributeInstance(Attributes.ARMOR).getModifiers().size(),
+            assertEquals(1, player.getAttribute(Attributes.ARMOR).getModifiers().size(),
                     "a per-tick caller must never accumulate modifiers");
         } finally {
             UserManager.cleanupPlayer(mmoPlayer);

@@ -59,14 +59,14 @@ class EntityDamageListenerAssassinTest {
         uuid = UUID.randomUUID();
 
         final MinecraftServer server = mock(MinecraftServer.class);
-        lenient().when(server.getTicks()).thenReturn(NOW);
+        lenient().when(server.getTickCount()).thenReturn(NOW);
         final ServerLevel world = mock(ServerLevel.class);
         lenient().when(world.getServer()).thenReturn(server);
 
         final ServerPlayer player = mock(ServerPlayer.class);
-        lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.isSneaking()).thenReturn(true);
-        lenient().when(player.getEntityWorld()).thenReturn(world);
+        lenient().when(player.getUUID()).thenReturn(uuid);
+        lenient().when(player.isShiftKeyDown()).thenReturn(true);
+        lenient().when(player.level()).thenReturn(world);
         return player;
     }
 
@@ -88,9 +88,9 @@ class EntityDamageListenerAssassinTest {
     /** A direct melee source: the attacker is both the responsible entity and the direct one. */
     private static DamageSource melee(ServerPlayer attacker) {
         final DamageSource source = mock(DamageSource.class);
-        lenient().when(source.getAttacker()).thenReturn(attacker);
-        lenient().when(source.getSource()).thenReturn(attacker);
-        lenient().when(source.isOf(DamageTypes.THORNS)).thenReturn(false);
+        lenient().when(source.getEntity()).thenReturn(attacker);
+        lenient().when(source.getDirectEntity()).thenReturn(attacker);
+        lenient().when(source.is(DamageTypes.THORNS)).thenReturn(false);
         return source;
     }
 
@@ -119,7 +119,7 @@ class EntityDamageListenerAssassinTest {
     @Test
     void aWalkingAttackerIsNotBackstabbing() {
         final ServerPlayer attacker = attacker();
-        when(attacker.isSneaking()).thenReturn(false);
+        when(attacker.isShiftKeyDown()).thenReturn(false);
         trackStealth(true, 2.0);
 
         assertEquals(10F,
@@ -146,7 +146,7 @@ class EntityDamageListenerAssassinTest {
         trackStealth(true, 2.0);
 
         final DamageSource source = melee(attacker);
-        when(source.getSource()).thenReturn(mock(LivingEntity.class));
+        when(source.getDirectEntity()).thenReturn(mock(LivingEntity.class));
 
         assertEquals(10F,
                 EntityDamageListener.applyAssassin(mock(LivingEntity.class), source, 10F), 1.0E-4);
@@ -158,7 +158,7 @@ class EntityDamageListenerAssassinTest {
         trackStealth(true, 2.0);
 
         final DamageSource source = melee(attacker);
-        when(source.isOf(DamageTypes.THORNS)).thenReturn(true);
+        when(source.is(DamageTypes.THORNS)).thenReturn(true);
 
         assertEquals(10F,
                 EntityDamageListener.applyAssassin(mock(LivingEntity.class), source, 10F), 1.0E-4);
@@ -181,7 +181,7 @@ class EntityDamageListenerAssassinTest {
         assertEquals(0L, EntityDamageListener.ticksSinceDamageTaken(player));
 
         // Advance the server clock; the window must open by exactly that much.
-        when(player.getEntityWorld().getServer().getTicks()).thenReturn(NOW + 137);
+        when(player.level().getServer().getTickCount()).thenReturn(NOW + 137);
         assertEquals(137L, EntityDamageListener.ticksSinceDamageTaken(player));
     }
 
@@ -191,7 +191,7 @@ class EntityDamageListenerAssassinTest {
         // "hit in the future" and silently disable the sub-skill rather than mistiming it once.
         final ServerPlayer player = attacker();
         EntityDamageListener.recordDamageTaken(player);
-        when(player.getEntityWorld().getServer().getTicks()).thenReturn(NOW - 500);
+        when(player.level().getServer().getTickCount()).thenReturn(NOW - 500);
 
         assertEquals(0L, EntityDamageListener.ticksSinceDamageTaken(player));
     }
@@ -202,7 +202,7 @@ class EntityDamageListenerAssassinTest {
         EntityDamageListener.recordDamageTaken(player);
         assertTrue(EntityDamageListener.ticksSinceDamageTaken(player) < Long.MAX_VALUE);
 
-        EntityDamageListener.forgetPlayer(player.getUuid());
+        EntityDamageListener.forgetPlayer(player.getUUID());
 
         assertEquals(Long.MAX_VALUE, EntityDamageListener.ticksSinceDamageTaken(player));
     }

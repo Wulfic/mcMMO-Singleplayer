@@ -38,7 +38,7 @@ class PlatformPlayerTest {
 
     private static ServerPlayer entity(UUID uuid, String name) {
         final ServerPlayer handle = mock(ServerPlayer.class);
-        when(handle.getUuid()).thenReturn(uuid);
+        when(handle.getUUID()).thenReturn(uuid);
         when(handle.getName()).thenReturn(Component.literal(name));
         return handle;
     }

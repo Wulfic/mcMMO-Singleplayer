@@ -135,9 +135,9 @@ class PetCombatModeListenerTest {
     void anUnloadedProfileStillConsumesTheClick() {
         // Deliberately NOT tracked in UserManager: this is the mid-join state.
         final ServerPlayer player = mock(ServerPlayer.class);
-        lenient().when(player.getUuid()).thenReturn(UUID.randomUUID());
-        lenient().when(player.getMainHandStack()).thenReturn(new ItemStack(Items.BONE));
-        lenient().when(player.isSneaking()).thenReturn(true);
+        lenient().when(player.getUUID()).thenReturn(UUID.randomUUID());
+        lenient().when(player.getMainHandItem()).thenReturn(new ItemStack(Items.BONE));
+        lenient().when(player.isShiftKeyDown()).thenReturn(true);
         lenient().when(player.getName()).thenReturn(Component.literal("mid-join"));
 
         final InteractionResult result = PetCombatModeListener.onUseEntity(player, world, InteractionHand.MAIN_HAND,
@@ -188,8 +188,8 @@ class PetCombatModeListenerTest {
     @Test
     void sneakClickingAPetYouDoNotOwnPasses() {
         final Wolf someoneElsesWolf = mock(Wolf.class);
-        lenient().when(someoneElsesWolf.isTamed()).thenReturn(true);
-        lenient().when(someoneElsesWolf.isOwner(org.mockito.ArgumentMatchers.any()))
+        lenient().when(someoneElsesWolf.isTame()).thenReturn(true);
+        lenient().when(someoneElsesWolf.isOwnedBy(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(false);
 
         assertSame(InteractionResult.PASS, PetCombatModeListener.onUseEntity(
@@ -201,8 +201,8 @@ class PetCombatModeListenerTest {
     @Test
     void sneakClickingAnUntamedWolfPasses() {
         final Wolf wild = mock(Wolf.class);
-        lenient().when(wild.isTamed()).thenReturn(false);
-        lenient().when(wild.isOwner(org.mockito.ArgumentMatchers.any())).thenReturn(false);
+        lenient().when(wild.isTame()).thenReturn(false);
+        lenient().when(wild.isOwnedBy(org.mockito.ArgumentMatchers.any())).thenReturn(false);
 
         assertSame(InteractionResult.PASS, PetCombatModeListener.onUseEntity(
                 sneakingClientPlayer(new ItemStack(Items.BONE)), world, InteractionHand.MAIN_HAND, wild, null));
@@ -262,8 +262,8 @@ class PetCombatModeListenerTest {
     @Test
     void theGestureWorksOnAnyTameableYouOwn() {
         final Cat cat = mock(Cat.class);
-        lenient().when(cat.isTamed()).thenReturn(true);
-        lenient().when(cat.isOwner(org.mockito.ArgumentMatchers.any())).thenReturn(true);
+        lenient().when(cat.isTame()).thenReturn(true);
+        lenient().when(cat.isOwnedBy(org.mockito.ArgumentMatchers.any())).thenReturn(true);
 
         assertSame(InteractionResult.CONSUME, PetCombatModeListener.onUseEntity(
                 sneakingClientPlayer(new ItemStack(Items.BONE)), world, InteractionHand.MAIN_HAND, cat, null));
@@ -273,8 +273,8 @@ class PetCombatModeListenerTest {
 
     private static Player clientPlayer(ItemStack mainHand, boolean sneaking) {
         final Player player = mock(Player.class);
-        lenient().when(player.getMainHandStack()).thenReturn(mainHand);
-        lenient().when(player.isSneaking()).thenReturn(sneaking);
+        lenient().when(player.getMainHandItem()).thenReturn(mainHand);
+        lenient().when(player.isShiftKeyDown()).thenReturn(sneaking);
         return player;
     }
 
@@ -285,17 +285,17 @@ class PetCombatModeListenerTest {
     /** A tamed wolf that answers "yes" to any owner asked about it. */
     private static Wolf ownedWolf() {
         final Wolf wolf = mock(Wolf.class);
-        lenient().when(wolf.isTamed()).thenReturn(true);
-        lenient().when(wolf.isOwner(org.mockito.ArgumentMatchers.any())).thenReturn(true);
+        lenient().when(wolf.isTame()).thenReturn(true);
+        lenient().when(wolf.isOwnedBy(org.mockito.ArgumentMatchers.any())).thenReturn(true);
         return wolf;
     }
 
     /** A tamed wolf owned by exactly {@code owner} and nobody else. */
     private static Wolf ownedWolf(Player owner) {
         final Wolf wolf = mock(Wolf.class);
-        lenient().when(wolf.isTamed()).thenReturn(true);
-        lenient().when(wolf.isOwner(org.mockito.ArgumentMatchers.any())).thenReturn(false);
-        lenient().when(wolf.isOwner(owner)).thenReturn(true);
+        lenient().when(wolf.isTame()).thenReturn(true);
+        lenient().when(wolf.isOwnedBy(org.mockito.ArgumentMatchers.any())).thenReturn(false);
+        lenient().when(wolf.isOwnedBy(owner)).thenReturn(true);
         return wolf;
     }
 
@@ -304,9 +304,9 @@ class PetCombatModeListenerTest {
         final UUID uuid = UUID.randomUUID();
 
         final ServerPlayer player = mock(ServerPlayer.class);
-        lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getMainHandStack()).thenReturn(mainHand);
-        lenient().when(player.isSneaking()).thenReturn(true);
+        lenient().when(player.getUUID()).thenReturn(uuid);
+        lenient().when(player.getMainHandItem()).thenReturn(mainHand);
+        lenient().when(player.isShiftKeyDown()).thenReturn(true);
         lenient().when(player.getName()).thenReturn(Component.literal("tester"));
 
         tamingManager = mock(TamingManager.class);

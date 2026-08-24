@@ -24,6 +24,8 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.tags.TagKey;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.damagesource.DamageSources;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.entity.projectile.arrow.Arrow;
@@ -92,16 +94,16 @@ class EntityDamageListenerUnarmoredTest {
         uuid = UUID.randomUUID();
 
         final MinecraftServer server = mock(MinecraftServer.class);
-        lenient().when(server.getTicks()).thenReturn(1_000);
+        lenient().when(server.getTickCount()).thenReturn(1_000);
         final ServerLevel world = mock(ServerLevel.class);
         lenient().when(world.getServer()).thenReturn(server);
 
         final ServerPlayer player = mock(ServerPlayer.class);
-        lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getEntityWorld()).thenReturn(world);
-        lenient().when(player.getMainHandStack()).thenReturn(ItemStack.EMPTY);
+        lenient().when(player.getUUID()).thenReturn(uuid);
+        lenient().when(player.level()).thenReturn(world);
+        lenient().when(player.getMainHandItem()).thenReturn(ItemStack.EMPTY);
         for (EquipmentSlot slot : EquipmentSlot.VALUES) {
-            lenient().when(player.getEquippedStack(slot)).thenReturn(ItemStack.EMPTY);
+            lenient().when(player.getItemBySlot(slot)).thenReturn(ItemStack.EMPTY);
         }
 
         unarmored = mock(UnarmoredManager.class);
@@ -125,17 +127,17 @@ class EntityDamageListenerUnarmoredTest {
      */
     private static Zombie zombie() {
         final Zombie zombie = mock(Zombie.class);
-        lenient().when(zombie.getUuid()).thenReturn(UUID.randomUUID());
+        lenient().when(zombie.getUUID()).thenReturn(UUID.randomUUID());
         return zombie;
     }
 
     /** A zombie's punch: a living attacker who is not the victim. */
     private static DamageSource mobAttack(LivingEntity attacker) {
         final DamageSource source = mock(DamageSource.class);
-        lenient().when(source.getAttacker()).thenReturn(attacker);
-        lenient().when(source.getSource()).thenReturn(attacker);
-        lenient().when(source.isOf(any())).thenReturn(false);
-        lenient().when(source.isIn(any())).thenReturn(false);
+        lenient().when(source.getEntity()).thenReturn(attacker);
+        lenient().when(source.getDirectEntity()).thenReturn(attacker);
+        lenient().when(source.is(any(ResourceKey.class))).thenReturn(false);
+        lenient().when(source.is(any(TagKey.class))).thenReturn(false);
         return source;
     }
 
@@ -205,7 +207,7 @@ class EntityDamageListenerUnarmoredTest {
         for (EquipmentSlot slot : new EquipmentSlot[] {
                 EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
             final ServerPlayer player = unarmoredPlayer();
-            when(player.getEquippedStack(slot)).thenReturn(new ItemStack(Items.LEATHER_HELMET));
+            when(player.getItemBySlot(slot)).thenReturn(new ItemStack(Items.LEATHER_HELMET));
 
             EntityDamageListener.maybeAwardUnarmoredXp(player, mobAttack(zombie()), 9F);
 
@@ -221,7 +223,7 @@ class EntityDamageListenerUnarmoredTest {
         // ItemUtils.isArmor. "Free diamond-grade armour as long as mcMMO does not recognise your hat"
         // is a rule that rewards hunting for the one head-slot item outside the material store.
         final ServerPlayer player = unarmoredPlayer();
-        when(player.getEquippedStack(EquipmentSlot.HEAD))
+        when(player.getItemBySlot(EquipmentSlot.HEAD))
                 .thenReturn(new ItemStack(Items.CARVED_PUMPKIN));
 
         EntityDamageListener.maybeAwardUnarmoredXp(player, mobAttack(zombie()), 9F);
@@ -237,7 +239,7 @@ class EntityDamageListenerUnarmoredTest {
         // while doing something else. A sourceless hit has no attacker at all.
         final ServerPlayer player = unarmoredPlayer();
         final DamageSource cactus = mock(DamageSource.class);
-        lenient().when(cactus.getAttacker()).thenReturn(null);
+        lenient().when(cactus.getEntity()).thenReturn(null);
 
         EntityDamageListener.maybeAwardUnarmoredXp(player, cactus, 9F);
 
@@ -251,7 +253,7 @@ class EntityDamageListenerUnarmoredTest {
         when(experienceConfig.isUnarmoredLivingAttackerRequired()).thenReturn(false);
         final ServerPlayer player = unarmoredPlayer();
         final DamageSource cactus = mock(DamageSource.class);
-        lenient().when(cactus.getAttacker()).thenReturn(null);
+        lenient().when(cactus.getEntity()).thenReturn(null);
 
         EntityDamageListener.maybeAwardUnarmoredXp(player, cactus, 9F);
 
@@ -264,7 +266,7 @@ class EntityDamageListenerUnarmoredTest {
         // with the hit, but nothing that can be fought.
         final ServerPlayer player = unarmoredPlayer();
         final DamageSource source = mock(DamageSource.class);
-        lenient().when(source.getAttacker()).thenReturn(mock(PrimedTnt.class));
+        lenient().when(source.getEntity()).thenReturn(mock(PrimedTnt.class));
 
         EntityDamageListener.maybeAwardUnarmoredXp(player, source, 9F);
 
@@ -278,7 +280,7 @@ class EntityDamageListenerUnarmoredTest {
         // fully automatable XP source that never needs a mob.
         final ServerPlayer player = unarmoredPlayer();
         final DamageSource ownBlast = mock(DamageSource.class);
-        lenient().when(ownBlast.getAttacker()).thenReturn(player);
+        lenient().when(ownBlast.getEntity()).thenReturn(player);
 
         EntityDamageListener.maybeAwardUnarmoredXp(player, ownBlast, 9F);
 
@@ -380,9 +382,9 @@ class EntityDamageListenerUnarmoredTest {
         final DamageSources damageSources = mock(DamageSources.class);
         lenient().when(damageSources.playerAttack(victim)).thenReturn(stingSource);
         final ServerLevel world = mock(ServerLevel.class);
-        lenient().when(world.getDamageSources()).thenReturn(damageSources);
+        lenient().when(world.damageSources()).thenReturn(damageSources);
         lenient().when(zombie.isAlive()).thenReturn(true);
-        lenient().when(zombie.getEntityWorld()).thenReturn(world);
+        lenient().when(zombie.level()).thenReturn(world);
         return zombie;
     }
 
@@ -397,7 +399,7 @@ class EntityDamageListenerUnarmoredTest {
 
         EntityDamageListener.onModifyAppliedDamage(player, mobAttack(assailant), 6F);
 
-        verify(assailant).damage(any(ServerLevel.class), eq(stingSource), eq(1.0F));
+        verify(assailant).hurtServer(any(ServerLevel.class), eq(stingSource), eq(1.0F));
     }
 
     @Test
@@ -410,14 +412,14 @@ class EntityDamageListenerUnarmoredTest {
         lenient().when(unarmored.getThornsDamage(true)).thenReturn(1.0);
 
         final DamageSource arrow = mock(DamageSource.class);
-        lenient().when(arrow.getAttacker()).thenReturn(shooter);
-        lenient().when(arrow.getSource()).thenReturn(mock(Arrow.class));
-        lenient().when(arrow.isOf(any())).thenReturn(false);
-        lenient().when(arrow.isIn(any())).thenReturn(false);
+        lenient().when(arrow.getEntity()).thenReturn(shooter);
+        lenient().when(arrow.getDirectEntity()).thenReturn(mock(Arrow.class));
+        lenient().when(arrow.is(any(ResourceKey.class))).thenReturn(false);
+        lenient().when(arrow.is(any(TagKey.class))).thenReturn(false);
 
         EntityDamageListener.onModifyAppliedDamage(player, arrow, 6F);
 
-        verify(shooter, never()).damage(any(ServerLevel.class), any(), anyFloat());
+        verify(shooter, never()).hurtServer(any(ServerLevel.class), any(), anyFloat());
     }
 
     @Test
@@ -425,7 +427,7 @@ class EntityDamageListenerUnarmoredTest {
         // Same one rule the whole skill hangs off. Without this, Thorny would be a free thorns
         // enchantment on a fully-plated player.
         final ServerPlayer player = unarmoredPlayer();
-        when(player.getEquippedStack(EquipmentSlot.CHEST))
+        when(player.getItemBySlot(EquipmentSlot.CHEST))
                 .thenReturn(new ItemStack(Items.IRON_CHESTPLATE));
         final Zombie assailant = stingableZombie(player);
         lenient().when(unarmored.thornsReady(true)).thenReturn(true);
@@ -433,7 +435,7 @@ class EntityDamageListenerUnarmoredTest {
 
         EntityDamageListener.onModifyAppliedDamage(player, mobAttack(assailant), 6F);
 
-        verify(assailant, never()).damage(any(ServerLevel.class), any(), anyFloat());
+        verify(assailant, never()).hurtServer(any(ServerLevel.class), any(), anyFloat());
     }
 
     @Test
@@ -444,7 +446,7 @@ class EntityDamageListenerUnarmoredTest {
 
         EntityDamageListener.onModifyAppliedDamage(player, mobAttack(assailant), 6F);
 
-        verify(assailant, never()).damage(any(ServerLevel.class), any(), anyFloat());
+        verify(assailant, never()).hurtServer(any(ServerLevel.class), any(), anyFloat());
     }
 
     @Test
@@ -480,11 +482,11 @@ class EntityDamageListenerUnarmoredTest {
         // Unarmored source" and returned early.
         final ServerPlayer player = unarmoredPlayer();
         final DamageSource fall = mock(DamageSource.class);
-        lenient().when(fall.getAttacker()).thenReturn(null);
-        lenient().when(fall.getSource()).thenReturn(null);
-        lenient().when(fall.isOf(any())).thenReturn(false);
-        lenient().when(fall.isIn(any())).thenReturn(false);
-        when(fall.isIn(DamageTypeTags.IS_FALL)).thenReturn(true);
+        lenient().when(fall.getEntity()).thenReturn(null);
+        lenient().when(fall.getDirectEntity()).thenReturn(null);
+        lenient().when(fall.is(any(ResourceKey.class))).thenReturn(false);
+        lenient().when(fall.is(any(TagKey.class))).thenReturn(false);
+        when(fall.is(DamageTypeTags.IS_FALL)).thenReturn(true);
 
         assertEquals(6F, EntityDamageListener.onModifyAppliedDamage(player, fall, 6F), EPSILON);
         verify(unarmored, never()).onDamageTaken(anyDouble());

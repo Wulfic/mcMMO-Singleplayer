@@ -34,6 +34,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.monster.Creeper;
@@ -125,7 +126,7 @@ class HunterListenerTest {
         UserManager.track(mmoPlayer);
 
         killer = mock(ServerPlayer.class);
-        lenient().when(killer.getUuid()).thenReturn(playerId);
+        lenient().when(killer.getUUID()).thenReturn(playerId);
     }
 
     @AfterEach
@@ -148,22 +149,22 @@ class HunterListenerTest {
 
     private Zombie zombie() {
         final Zombie zombie = mock(Zombie.class);
-        Mockito.doReturn(EntityType.ZOMBIE).when(zombie).getType();
-        lenient().when(zombie.getUuid()).thenReturn(UUID.randomUUID());
+        Mockito.doReturn(EntityTypes.ZOMBIE).when(zombie).getType();
+        lenient().when(zombie.getUUID()).thenReturn(UUID.randomUUID());
         return zombie;
     }
 
     private Creeper creeper() {
         final Creeper creeper = mock(Creeper.class);
-        Mockito.doReturn(EntityType.CREEPER).when(creeper).getType();
-        lenient().when(creeper.getUuid()).thenReturn(UUID.randomUUID());
+        Mockito.doReturn(EntityTypes.CREEPER).when(creeper).getType();
+        lenient().when(creeper.getUUID()).thenReturn(UUID.randomUUID());
         return creeper;
     }
 
     /** A damage source attributed to {@code attacker} — null for "nothing killed it but the world". */
     private DamageSource killedBy(Entity attacker) {
         final DamageSource source = mock(DamageSource.class);
-        lenient().when(source.getAttacker()).thenReturn(attacker);
+        lenient().when(source.getEntity()).thenReturn(attacker);
         return source;
     }
 
@@ -247,7 +248,7 @@ class HunterListenerTest {
         // Read off the mock BEFORE opening a stubbing on another one: resolving summon.getUuid()
         // inside when(...).thenReturn(...) is a mock call made mid-stubbing, which Mockito rejects
         // with UnfinishedStubbingException pointing at the wrong line.
-        final UUID summonId = summon.getUuid();
+        final UUID summonId = summon.getUUID();
         final TrackedSummon tracked = mock(TrackedSummon.class);
         when(tracked.getEntityId()).thenReturn(summonId);
         McMMOMod.getTransientEntityTracker().addSummon(playerId, tracked);
@@ -267,16 +268,16 @@ class HunterListenerTest {
         // Asserted on BOTH sides deliberately: a gate written as `instanceof IronGolemEntity` with
         // the isPlayerCreated() half dropped would pass the first assertion on its own.
         final IronGolem built = mock(IronGolem.class);
-        Mockito.doReturn(EntityType.IRON_GOLEM).when(built).getType();
-        lenient().when(built.getUuid()).thenReturn(UUID.randomUUID());
+        Mockito.doReturn(EntityTypes.IRON_GOLEM).when(built).getType();
+        lenient().when(built.getUUID()).thenReturn(UUID.randomUUID());
         when(built.isPlayerCreated()).thenReturn(true);
 
         HunterListener.onDeath(built, killedBy(killer));
         assertEquals(0, killsOf("minecraft:iron_golem"));
 
         final IronGolem villageGolem = mock(IronGolem.class);
-        Mockito.doReturn(EntityType.IRON_GOLEM).when(villageGolem).getType();
-        lenient().when(villageGolem.getUuid()).thenReturn(UUID.randomUUID());
+        Mockito.doReturn(EntityTypes.IRON_GOLEM).when(villageGolem).getType();
+        lenient().when(villageGolem.getUUID()).thenReturn(UUID.randomUUID());
         when(villageGolem.isPlayerCreated()).thenReturn(false);
 
         HunterListener.onDeath(villageGolem, killedBy(killer));
@@ -334,7 +335,7 @@ class HunterListenerTest {
         // and the arg ORDER is exactly what has no other guard.
         assertTrue(message.contains("Mastery 1"), () -> "expected 'Mastery 1' in: " + message);
         assertTrue(message.contains("500"), () -> "expected the kill count in: " + message);
-        assertTrue(message.contains(EntityType.ZOMBIE.getName().getString()),
+        assertTrue(message.contains(EntityTypes.ZOMBIE.getDescription().getString()),
                 () -> "expected the victim's name in: " + message);
     }
 
@@ -487,7 +488,7 @@ class HunterListenerTest {
         assertEquals(0, killsOf("minecraft:snow_golem"));
 
         // The copper golem is resolved through the registry rather than named as
-        // EntityType.COPPER_GOLEM / CopperGolemEntity. It does not exist on every supported version,
+        // EntityTypes.COPPER_GOLEM / CopperGolemEntity. It does not exist on every supported version,
         // and there naming either one fails the BUILD rather than the assertion -- the whole test
         // tree stops compiling, exactly as Items.IRON_SPEAR did on mc/1.21.10.
         final LivingEntity copperGolem = copperGolem();
@@ -518,15 +519,15 @@ class HunterListenerTest {
 
     private Chicken chicken() {
         final Chicken chicken = mock(Chicken.class);
-        Mockito.doReturn(EntityType.CHICKEN).when(chicken).getType();
-        lenient().when(chicken.getUuid()).thenReturn(UUID.randomUUID());
+        Mockito.doReturn(EntityTypes.CHICKEN).when(chicken).getType();
+        lenient().when(chicken.getUUID()).thenReturn(UUID.randomUUID());
         return chicken;
     }
 
     private SnowGolem snowGolem() {
         final SnowGolem golem = mock(SnowGolem.class);
-        Mockito.doReturn(EntityType.SNOW_GOLEM).when(golem).getType();
-        lenient().when(golem.getUuid()).thenReturn(UUID.randomUUID());
+        Mockito.doReturn(EntityTypes.SNOW_GOLEM).when(golem).getType();
+        lenient().when(golem.getUUID()).thenReturn(UUID.randomUUID());
         return golem;
     }
 
@@ -548,7 +549,7 @@ class HunterListenerTest {
                 .map(type -> {
                     final LivingEntity golem = mock(LivingEntity.class);
                     Mockito.doReturn(type).when(golem).getType();
-                    lenient().when(golem.getUuid()).thenReturn(UUID.randomUUID());
+                    lenient().when(golem.getUUID()).thenReturn(UUID.randomUUID());
                     return golem;
                 })
                 .orElse(null);
@@ -656,7 +657,7 @@ class HunterListenerTest {
         assertEquals(0, rolls.get(), "a snow golem must not pay a bonus trophy");
 
         // ⚠️ copperGolem() is null on a version without copper golems -- it is resolved through the
-        // registry precisely because naming EntityType.COPPER_GOLEM would fail the BUILD there. The
+        // registry precisely because naming EntityTypes.COPPER_GOLEM would fail the BUILD there. The
         // sibling gate test above handles that; this one did not, and dereferenced the null.
         final LivingEntity copperGolem = copperGolem();
         if (copperGolem == null) {

@@ -225,12 +225,12 @@ class SuperAbilityListenerOffhandTest {
     private static ServerPlayer player(net.minecraft.world.item.Item mainHand,
             net.minecraft.world.item.Item offHand, boolean sneaking, boolean riding) {
         final ServerPlayer player = mock(ServerPlayer.class);
-        when(player.getMainHandStack())
+        when(player.getMainHandItem())
                 .thenReturn(mainHand == null ? ItemStack.EMPTY : new ItemStack(mainHand));
-        when(player.getOffHandStack())
+        when(player.getOffhandItem())
                 .thenReturn(offHand == null ? ItemStack.EMPTY : new ItemStack(offHand));
-        when(player.isSneaking()).thenReturn(sneaking);
-        when(player.hasVehicle()).thenReturn(riding);
+        when(player.isShiftKeyDown()).thenReturn(sneaking);
+        when(player.isPassenger()).thenReturn(riding);
         return player;
     }
 }

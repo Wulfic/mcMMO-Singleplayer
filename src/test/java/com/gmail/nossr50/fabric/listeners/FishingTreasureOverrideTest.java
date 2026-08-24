@@ -69,7 +69,7 @@ class FishingTreasureOverrideTest {
         FishingListener.overrideVanillaTreasures(catch_);
 
         assertEquals(1, catch_.size());
-        assertTrue(catch_.get(0).isOf(Items.SALMON), "vanilla junk is replaced, not merely dropped");
+        assertTrue(catch_.get(0).is(Items.SALMON), "vanilla junk is replaced, not merely dropped");
         assertEquals(1, catch_.get(0).getCount(), "legacy replaced with exactly one salmon");
     }
 
@@ -101,8 +101,8 @@ class FishingTreasureOverrideTest {
 
         assertEquals(3, catch_.size(), "nothing is lost or duplicated");
         assertEquals(cod, catch_.get(0));
-        assertTrue(catch_.get(1).isOf(Items.SALMON));
-        assertTrue(catch_.get(2).isOf(Items.SALMON));
+        assertTrue(catch_.get(1).is(Items.SALMON));
+        assertTrue(catch_.get(2).is(Items.SALMON));
     }
 
     @Test

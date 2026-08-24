@@ -28,10 +28,10 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Ghast;
-import net.minecraft.world.entity.monster.MagmaCube;
+import net.minecraft.world.entity.monster.cubemob.MagmaCube;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.monster.Enemy;
-import net.minecraft.world.entity.monster.Slime;
+import net.minecraft.world.entity.monster.cubemob.Slime;
 import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.entity.animal.cow.Cow;
@@ -85,14 +85,14 @@ class PetCombatSweepTest {
         world = mock(ServerLevel.class);
         player = mock(ServerPlayer.class);
         playerUuid = UUID.randomUUID();
-        lenient().when(player.getUuid()).thenReturn(playerUuid);
+        lenient().when(player.getUUID()).thenReturn(playerUuid);
         lenient().when(player.getName()).thenReturn(Component.literal("tester"));
-        lenient().when(player.getEntityWorld()).thenReturn(world);
+        lenient().when(player.level()).thenReturn(world);
         lenient().when(player.getBoundingBox()).thenReturn(new AABB(-0.3, 0, -0.3, 0.3, 1.8, 0.3));
         // age 0 % 20 == 0, so every test is on a sweep tick unless it says otherwise.
-        player.age = 0;
+        player.tickCount = 0;
         // Everything is 100 blocks² away unless a test says otherwise; overridden per mob below.
-        lenient().when(player.squaredDistanceTo(any(Entity.class))).thenReturn(100.0D);
+        lenient().when(player.distanceToSqr(any(Entity.class))).thenReturn(100.0D);
 
         wireWorldQueries();
         trackProfile(PetCombatMode.AGGRESSIVE);
@@ -176,7 +176,7 @@ class PetCombatSweepTest {
     void aCreeperIsNeverTargeted() {
         final Wolf pet = idlePet();
         final Creeper creeper = hostile(Creeper.class, 4.0D);
-        lenient().when(pet.canAttackWithOwner(creeper, player)).thenReturn(false);
+        lenient().when(pet.wantsToAttack(creeper, player)).thenReturn(false);
 
         PetCombatSweep.tick(player);
 
@@ -187,7 +187,7 @@ class PetCombatSweepTest {
     void aGhastIsNeverTargeted() {
         final Wolf pet = idlePet();
         final Ghast ghast = hostile(Ghast.class, 4.0D);
-        lenient().when(pet.canAttackWithOwner(ghast, player)).thenReturn(false);
+        lenient().when(pet.wantsToAttack(ghast, player)).thenReturn(false);
 
         PetCombatSweep.tick(player);
 
@@ -200,7 +200,7 @@ class PetCombatSweepTest {
         final Wolf pet = idlePet();
         final Cow cow = mock(Cow.class);
         lenient().when(cow.isAlive()).thenReturn(true);
-        lenient().when(player.squaredDistanceTo(cow)).thenReturn(4.0D);
+        lenient().when(player.distanceToSqr(cow)).thenReturn(4.0D);
         mobs.add(cow);
 
         PetCombatSweep.tick(player);
@@ -364,7 +364,7 @@ class PetCombatSweepTest {
         assertTrue(SkillAttributeService.isApplied(pet,
                 SkillAttributeService.Managed.TAMING_PET_ENGAGE_RANGE), "precondition: boosted");
 
-        when(pet.isSitting()).thenReturn(true);
+        when(pet.isOrderedToSit()).thenReturn(true);
         PetCombatSweep.tick(player);
 
         assertTrue(!SkillAttributeService.isApplied(pet,
@@ -406,11 +406,11 @@ class PetCombatSweepTest {
         PetCombatSweep.tick(player);
 
         final AttributeInstance instance =
-                pet.getAttributeInstance(Attributes.FOLLOW_RANGE);
-        assertTrue(instance.getModifiers().stream().anyMatch(m -> m.value() == 16.0D),
+                pet.getAttribute(Attributes.FOLLOW_RANGE);
+        assertTrue(instance.getModifiers().stream().anyMatch(m -> m.amount() == 16.0D),
                 "precondition: the modifier is applied");
-        assertTrue(instance.getPersistentModifiers().stream().noneMatch(
-                        m -> m.idMatches(SkillAttributeService.Managed.TAMING_PET_ENGAGE_RANGE.id())),
+        assertTrue(instance.getPermanentModifiers().stream().noneMatch(
+                        m -> m.is(SkillAttributeService.Managed.TAMING_PET_ENGAGE_RANGE.id())),
                 "the engage-range boost reached the PERSISTENT map and will be written to the save");
     }
 
@@ -420,7 +420,7 @@ class PetCombatSweepTest {
         final Zombie shot = mock(Zombie.class);
         lenient().when(shot.isAlive()).thenReturn(true);
         final Wolf pet = pet(shot);
-        when(pet.isSitting()).thenReturn(true);
+        when(pet.isOrderedToSit()).thenReturn(true);
         hostile(Zombie.class, 4.0D);
 
         PetCombatSweep.tick(player);
@@ -463,7 +463,7 @@ class PetCombatSweepTest {
      */
     @Test
     void theSweepIsSkippedOnATickThatIsNotOnTheInterval() {
-        player.age = 7; // 7 % 20 != 0
+        player.tickCount = 7; // 7 % 20 != 0
         final Wolf pet = idlePet();
         hostile(Zombie.class, 4.0D);
 
@@ -475,8 +475,8 @@ class PetCombatSweepTest {
     @Test
     void aPetSomebodyElseOwnsIsUntouched() {
         final Wolf stranger = mock(Wolf.class);
-        lenient().when(stranger.isTamed()).thenReturn(true);
-        lenient().when(stranger.isOwner(any())).thenReturn(false);
+        lenient().when(stranger.isTame()).thenReturn(true);
+        lenient().when(stranger.isOwnedBy(any())).thenReturn(false);
         // NOT added to `pets` — the world query's own predicate excludes it. Driving the real
         // predicate is the point: this asserts the filter is asked, not that the list was short.
         hostile(Zombie.class, 4.0D);
@@ -498,7 +498,7 @@ class PetCombatSweepTest {
      */
     @SuppressWarnings("unchecked")
     private void wireWorldQueries() {
-        lenient().when(world.getEntitiesByClass(any(Class.class), any(AABB.class), any()))
+        lenient().when(world.getEntitiesOfClass(any(Class.class), any(AABB.class), any()))
                 .thenAnswer(invocation -> {
                     final Class<?> type = invocation.getArgument(0);
                     final Predicate<Object> filter = invocation.getArgument(2);
@@ -522,14 +522,14 @@ class PetCombatSweepTest {
     /** A tamed, owned, standing pet currently targeting {@code target} (or nothing). */
     private Wolf pet(LivingEntity target) {
         final Wolf pet = mock(Wolf.class);
-        lenient().when(pet.isTamed()).thenReturn(true);
-        lenient().when(pet.isOwner(player)).thenReturn(true);
-        lenient().when(pet.isOwner(any())).thenReturn(true);
-        lenient().when(pet.isSitting()).thenReturn(false);
+        lenient().when(pet.isTame()).thenReturn(true);
+        lenient().when(pet.isOwnedBy(player)).thenReturn(true);
+        lenient().when(pet.isOwnedBy(any())).thenReturn(true);
+        lenient().when(pet.isOrderedToSit()).thenReturn(false);
         lenient().when(pet.getTarget()).thenReturn(target);
         // Vanilla permits by default; the creeper/ghast cases override it, matching what the real
         // canAttackWithOwner does.
-        lenient().when(pet.canAttackWithOwner(any(), any())).thenReturn(true);
+        lenient().when(pet.wantsToAttack(any(), any())).thenReturn(true);
 
         // A REAL attribute instance, not a stub: the boost's value is derived from getBaseValue()
         // and asserted through SkillAttributeService, so a mock returning 0 would make every reach
@@ -537,7 +537,7 @@ class PetCombatSweepTest {
         final AttributeInstance followRange =
                 new AttributeInstance(Attributes.FOLLOW_RANGE, ignored -> { });
         followRange.setBaseValue(BASE_FOLLOW_RANGE);
-        lenient().when(pet.getAttributeInstance(Attributes.FOLLOW_RANGE))
+        lenient().when(pet.getAttribute(Attributes.FOLLOW_RANGE))
                 .thenReturn(followRange);
 
         pets.add(pet);
@@ -548,7 +548,7 @@ class PetCombatSweepTest {
     private <T extends Mob> T hostile(Class<T> type, double squaredDistance) {
         final T mob = mock(type);
         lenient().when(mob.isAlive()).thenReturn(true);
-        lenient().when(player.squaredDistanceTo(mob)).thenReturn(squaredDistance);
+        lenient().when(player.distanceToSqr(mob)).thenReturn(squaredDistance);
         mobs.add(mob);
         return mob;
     }

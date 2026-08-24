@@ -208,18 +208,18 @@ class RepairSalvageListenerTest {
 
     /** Put {@code block} at {@link #ANVIL_POS} as far as the dispatch can tell. */
     private void placeAnvil(Block block) {
-        lenient().when(world.getBlockState(ANVIL_POS)).thenReturn(block.getDefaultState());
+        lenient().when(world.getBlockState(ANVIL_POS)).thenReturn(block.defaultBlockState());
     }
 
     /** A right-click landing on the top face of the block at {@link #ANVIL_POS}. */
     private static BlockHitResult anvilHit() {
-        return new BlockHitResult(Vec3.ofCenter(ANVIL_POS), Direction.UP, ANVIL_POS, false);
+        return new BlockHitResult(Vec3.atCenterOf(ANVIL_POS), Direction.UP, ANVIL_POS, false);
     }
 
     /** Damaged gear: what a player actually walks up to the anvil holding. */
     private static ItemStack damagedChestplate() {
         final ItemStack stack = new ItemStack(Items.IRON_CHESTPLATE);
-        stack.setDamage(100);
+        stack.setDamageValue(100);
         return stack;
     }
 
@@ -229,7 +229,7 @@ class RepairSalvageListenerTest {
      */
     private static Player clientPlayer(ItemStack mainHand) {
         final Player player = mock(Player.class);
-        lenient().when(player.getMainHandStack()).thenReturn(mainHand);
+        lenient().when(player.getMainHandItem()).thenReturn(mainHand);
         return player;
     }
 
@@ -238,8 +238,8 @@ class RepairSalvageListenerTest {
         final UUID uuid = UUID.randomUUID();
 
         final ServerPlayer player = mock(ServerPlayer.class);
-        lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getMainHandStack()).thenReturn(mainHand);
+        lenient().when(player.getUUID()).thenReturn(uuid);
+        lenient().when(player.getMainHandItem()).thenReturn(mainHand);
 
         repairManager = mock(RepairManager.class);
         final PlatformPlayer platformPlayer = mock(PlatformPlayer.class);

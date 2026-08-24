@@ -4,6 +4,7 @@ import java.util.Optional;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.SharedConstants;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.item.Item;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -28,8 +29,8 @@ public final class McTestRegistries {
         if (bootstrapped) {
             return;
         }
-        SharedConstants.createGameVersion();
-        Bootstrap.initialize();
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
         bootstrapped = true;
     }
 
@@ -51,8 +52,8 @@ public final class McTestRegistries {
      * became a {@code PIG}. {@code platform/Materials} guards the same way for the same reason.
      */
     public static Optional<Item> optionalVanillaItem(String path) {
-        final Identifier id = Identifier.ofVanilla(path);
-        return BuiltInRegistries.ITEM.containsId(id) ? Optional.of(BuiltInRegistries.ITEM.get(id)) : Optional.empty();
+        final Identifier id = Identifier.withDefaultNamespace(path);
+        return BuiltInRegistries.ITEM.containsKey(id) ? Optional.of(BuiltInRegistries.ITEM.getValue(id)) : Optional.empty();
     }
 
     /**
@@ -64,8 +65,8 @@ public final class McTestRegistries {
      * every band.
      */
     public static boolean itemRegistryIsPopulated() {
-        return BuiltInRegistries.ITEM.containsId(Identifier.ofVanilla("iron_sword"))
-                && BuiltInRegistries.ITEM.containsId(Identifier.ofVanilla("stone"));
+        return BuiltInRegistries.ITEM.containsKey(Identifier.withDefaultNamespace("iron_sword"))
+                && BuiltInRegistries.ITEM.containsKey(Identifier.withDefaultNamespace("stone"));
     }
 
     /**
@@ -73,7 +74,7 @@ public final class McTestRegistries {
      * have it — {@link #optionalVanillaItem} for creatures.
      *
      * <p>The live case is the copper golem, which arrives part-way through the supported range. Below
-     * that, {@code EntityType.COPPER_GOLEM} and {@code CopperGolemEntity} are both a compile error
+     * that, {@code EntityTypes.COPPER_GOLEM} and {@code CopperGolemEntity} are both a compile error
      * rather than a failing assertion, so a test that names either cannot be built from one source
      * tree across bands.
      *
@@ -87,9 +88,9 @@ public final class McTestRegistries {
      * every unrecognised mob id a pig in Hunter's own first cut.
      */
     public static Optional<EntityType<?>> optionalVanillaEntityType(String path) {
-        final Identifier id = Identifier.ofVanilla(path);
-        return BuiltInRegistries.ENTITY_TYPE.containsId(id)
-                ? Optional.of(BuiltInRegistries.ENTITY_TYPE.get(id))
+        final Identifier id = Identifier.withDefaultNamespace(path);
+        return BuiltInRegistries.ENTITY_TYPE.containsKey(id)
+                ? Optional.of(BuiltInRegistries.ENTITY_TYPE.getValue(id))
                 : Optional.empty();
     }
 
@@ -102,7 +103,7 @@ public final class McTestRegistries {
      * {@code cow} are chosen because they predate every version in scope by roughly a decade.
      */
     public static boolean entityTypeRegistryIsPopulated() {
-        return BuiltInRegistries.ENTITY_TYPE.containsId(Identifier.ofVanilla("zombie"))
-                && BuiltInRegistries.ENTITY_TYPE.containsId(Identifier.ofVanilla("cow"));
+        return BuiltInRegistries.ENTITY_TYPE.containsKey(Identifier.withDefaultNamespace("zombie"))
+                && BuiltInRegistries.ENTITY_TYPE.containsKey(Identifier.withDefaultNamespace("cow"));
     }
 }

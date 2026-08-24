@@ -89,12 +89,12 @@ class ConfigIdManifestTest {
 
     @Test
     void theManifestListsExactlyTheItemsThisMinecraftVersionHas() throws IOException {
-        assertRegistryMatchesManifest(ITEM, vanillaIds(BuiltInRegistries.ITEM.getIds()));
+        assertRegistryMatchesManifest(ITEM, vanillaIds(BuiltInRegistries.ITEM.keySet()));
     }
 
     @Test
     void theManifestListsExactlyTheBlocksThisMinecraftVersionHas() throws IOException {
-        assertRegistryMatchesManifest(BLOCK, vanillaIds(BuiltInRegistries.BLOCK.getIds()));
+        assertRegistryMatchesManifest(BLOCK, vanillaIds(BuiltInRegistries.BLOCK.keySet()));
     }
 
     private void assertRegistryMatchesManifest(String kind, Set<String> live) throws IOException {

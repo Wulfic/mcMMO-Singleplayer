@@ -72,7 +72,7 @@ class AlchemyPotionBrewerTest {
     private NonNullList<ItemStack> awkwardStandWith(ItemStack ingredient) {
         final AlchemyPotion awkward = potionConfig.getPotion("POTION_OF_AWKWARD");
         assertNotNull(awkward, "POTION_OF_AWKWARD is in the bundled tree");
-        final NonNullList<ItemStack> slots = NonNullList.ofSize(5, ItemStack.EMPTY);
+        final NonNullList<ItemStack> slots = NonNullList.withSize(5, ItemStack.EMPTY);
         slots.set(0, awkward.toItem(1).unwrap());
         slots.set(AlchemyPotionBrewer.INGREDIENT_SLOT, ingredient);
         return slots;
@@ -122,7 +122,7 @@ class AlchemyPotionBrewerTest {
         AlchemyPotionBrewer.finishBrewing(view(slots), null);
 
         final ItemStack ingredient = slots.get(AlchemyPotionBrewer.INGREDIENT_SLOT);
-        assertTrue(ingredient.isOf(Items.SUGAR), "the ingredient stack survives");
+        assertTrue(ingredient.is(Items.SUGAR), "the ingredient stack survives");
         assertEquals(1, ingredient.getCount(), "exactly one sugar consumed");
     }
 
@@ -134,7 +134,7 @@ class AlchemyPotionBrewerTest {
 
         assertEquals("POTION_OF_AWKWARD", potionConfig.getPotion(new PlatformItem(slots.get(0))).getPotionConfigName(),
                 "the potion is unchanged when the ingredient is not a valid brew");
-        assertTrue(slots.get(AlchemyPotionBrewer.INGREDIENT_SLOT).isOf(Items.DIRT),
+        assertTrue(slots.get(AlchemyPotionBrewer.INGREDIENT_SLOT).is(Items.DIRT),
                 "the non-ingredient is not consumed");
     }
 

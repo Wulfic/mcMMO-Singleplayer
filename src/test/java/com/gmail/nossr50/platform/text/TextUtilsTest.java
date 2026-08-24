@@ -31,7 +31,7 @@ class TextUtilsTest {
         final Component text = TextUtils.toText("§aGreen");
         final List<Component> siblings = text.getSiblings();
         assertEquals(1, siblings.size());
-        assertEquals(TextColor.fromFormatting(ChatFormatting.GREEN),
+        assertEquals(TextColor.fromLegacyFormat(ChatFormatting.GREEN),
                 siblings.get(0).getStyle().getColor());
     }
 

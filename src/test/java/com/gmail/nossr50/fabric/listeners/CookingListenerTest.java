@@ -108,7 +108,7 @@ class CookingListenerTest {
 
         uuid = UUID.randomUUID();
         world = mock(ServerLevel.class);
-        lenient().when(world.getTime()).thenReturn(WORLD_TICK);
+        lenient().when(world.getGameTime()).thenReturn(WORLD_TICK);
 
         cooking = mock(CookingManager.class);
         smelting = mock(SmeltingManager.class);
@@ -225,7 +225,7 @@ class CookingListenerTest {
         // guard every craft would be paid twice -- and the doubling would look like a tuning
         // problem, not a bug. The repair-anvil pass learned this the hard way.
         final Player clientPlayer = mock(Player.class);
-        lenient().when(clientPlayer.getUuid()).thenReturn(uuid);
+        lenient().when(clientPlayer.getUUID()).thenReturn(uuid);
 
         CookingListener.onCraftedItemTaken(clientPlayer, new ItemStack(Items.COOKIE), 8);
 
@@ -395,11 +395,11 @@ class CookingListenerTest {
 
         for (int cook = 0; cook < 3; cook++) {
             SmeltingListener.onSmeltComplete(FURNACE_POS, output);
-            output.increment(1); // vanilla's own craftRecipe merge, which our seam sits just after.
+            output.grow(1); // vanilla's own craftRecipe merge, which our seam sits just after.
         }
 
         assertEquals(7, output.getCount(), "3 cooks + 3 second helpings, all in one slot");
-        assertTrue(ItemStack.areItemsAndComponentsEqual(output, new ItemStack(Items.COOKED_BEEF)),
+        assertTrue(ItemStack.isSameItemSameComponents(output, new ItemStack(Items.COOKED_BEEF)),
                 "a Master Chef helping must stay merge-compatible with a plain cooked steak");
     }
 
@@ -567,7 +567,7 @@ class CookingListenerTest {
                 .thenReturn(mock(FurnaceBlockEntity.class));
 
         final BlockHitResult hit = new BlockHitResult(
-                Vec3.ofCenter(FURNACE_POS), Direction.UP, FURNACE_POS, false);
+                Vec3.atCenterOf(FURNACE_POS), Direction.UP, FURNACE_POS, false);
         final ServerPlayer player = serverPlayer();
 
         assertEquals(net.minecraft.world.InteractionResult.PASS,
@@ -587,7 +587,7 @@ class CookingListenerTest {
                 .thenReturn(mock(CampfireBlockEntity.class));
 
         final BlockHitResult hit = new BlockHitResult(
-                Vec3.ofCenter(CAMPFIRE_POS), Direction.UP, CAMPFIRE_POS, false);
+                Vec3.atCenterOf(CAMPFIRE_POS), Direction.UP, CAMPFIRE_POS, false);
         final ServerPlayer player = serverPlayer();
 
         assertEquals(net.minecraft.world.InteractionResult.PASS,
@@ -598,8 +598,8 @@ class CookingListenerTest {
 
     private ServerPlayer serverPlayer() {
         final ServerPlayer player = mock(ServerPlayer.class);
-        lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getEntityWorld()).thenReturn(world);
+        lenient().when(player.getUUID()).thenReturn(uuid);
+        lenient().when(player.level()).thenReturn(world);
         return player;
     }
 }

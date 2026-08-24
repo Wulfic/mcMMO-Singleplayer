@@ -16,6 +16,8 @@ import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.tags.TagKey;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.zombie.Zombie;
@@ -75,20 +77,20 @@ class SicPetsOnRangedHitTest {
 
         final ServerLevel world = mock(ServerLevel.class);
         shooter = mock(ServerPlayer.class);
-        lenient().when(shooter.getUuid()).thenReturn(UUID.randomUUID());
-        lenient().when(shooter.getEntityWorld()).thenReturn(world);
+        lenient().when(shooter.getUUID()).thenReturn(UUID.randomUUID());
+        lenient().when(shooter.level()).thenReturn(world);
         lenient().when(shooter.getBoundingBox()).thenReturn(new AABB(-0.3, 0, -0.3, 0.3, 1.8, 0.3));
 
         pet = mock(Wolf.class);
-        lenient().when(pet.isTamed()).thenReturn(true);
-        lenient().when(pet.isOwner(shooter)).thenReturn(true);
-        lenient().when(pet.isOwner(any())).thenReturn(true);
-        lenient().when(pet.isSitting()).thenReturn(false);
+        lenient().when(pet.isTame()).thenReturn(true);
+        lenient().when(pet.isOwnedBy(shooter)).thenReturn(true);
+        lenient().when(pet.isOwnedBy(any())).thenReturn(true);
+        lenient().when(pet.isOrderedToSit()).thenReturn(false);
         wolves.add(pet);
 
         // The real predicate is applied, so the ownership/sitting gates in attackTarget are exercised
         // rather than bypassed.
-        lenient().when(world.getEntitiesByClass(any(Class.class), any(AABB.class), any()))
+        lenient().when(world.getEntitiesOfClass(any(Class.class), any(AABB.class), any()))
                 .thenAnswer(invocation -> {
                     final Predicate<Object> filter = invocation.getArgument(2);
                     final List<Object> matched = new ArrayList<>();
@@ -196,7 +198,7 @@ class SicPetsOnRangedHitTest {
     @Test
     void aCreeperIsNeverSicced() {
         final Creeper creeper = mock(Creeper.class);
-        lenient().when(creeper.getUuid()).thenReturn(UUID.randomUUID());
+        lenient().when(creeper.getUUID()).thenReturn(UUID.randomUUID());
 
         EntityDamageListener.onModifyAppliedDamage(creeper, thrownBy(Arrow.class), 6F);
 
@@ -207,7 +209,7 @@ class SicPetsOnRangedHitTest {
     @Test
     void anArmourStandIsNeverSicced() {
         final ArmorStand dummy = mock(ArmorStand.class);
-        lenient().when(dummy.getUuid()).thenReturn(UUID.randomUUID());
+        lenient().when(dummy.getUUID()).thenReturn(UUID.randomUUID());
         lenient().when(McMMOMod.getExperienceConfig().isArmorStandInteractionPrevented())
                 .thenReturn(true);
 
@@ -245,10 +247,10 @@ class SicPetsOnRangedHitTest {
     void aMeleeHitDoesNotReachTheRangedSic() {
         final Zombie target = zombie();
         final DamageSource melee = mock(DamageSource.class);
-        lenient().when(melee.getAttacker()).thenReturn(shooter);
-        lenient().when(melee.getSource()).thenReturn(shooter);
-        lenient().when(melee.isOf(any())).thenReturn(false);
-        lenient().when(melee.isIn(any())).thenReturn(false);
+        lenient().when(melee.getEntity()).thenReturn(shooter);
+        lenient().when(melee.getDirectEntity()).thenReturn(shooter);
+        lenient().when(melee.is(any(ResourceKey.class))).thenReturn(false);
+        lenient().when(melee.is(any(TagKey.class))).thenReturn(false);
 
         EntityDamageListener.onModifyAppliedDamage(target, melee, 6F);
 
@@ -258,7 +260,7 @@ class SicPetsOnRangedHitTest {
     /** A sitting pet stays sitting — "sit" is an explicit order and a bow shot does not override it. */
     @Test
     void aSittingPetIsNotSicced() {
-        lenient().when(pet.isSitting()).thenReturn(true);
+        lenient().when(pet.isOrderedToSit()).thenReturn(true);
         final Zombie target = zombie();
 
         EntityDamageListener.onModifyAppliedDamage(target, thrownBy(Arrow.class), 6F);
@@ -270,7 +272,7 @@ class SicPetsOnRangedHitTest {
 
     private static Zombie zombie() {
         final Zombie zombie = mock(Zombie.class);
-        lenient().when(zombie.getUuid()).thenReturn(UUID.randomUUID());
+        lenient().when(zombie.getUUID()).thenReturn(UUID.randomUUID());
         return zombie;
     }
 
@@ -283,10 +285,10 @@ class SicPetsOnRangedHitTest {
 
     private DamageSource sourceOf(Entity projectile) {
         final DamageSource source = mock(DamageSource.class);
-        lenient().when(source.getAttacker()).thenReturn(shooter);
-        lenient().when(source.getSource()).thenReturn(projectile);
-        lenient().when(source.isOf(any())).thenReturn(false);
-        lenient().when(source.isIn(any())).thenReturn(false);
+        lenient().when(source.getEntity()).thenReturn(shooter);
+        lenient().when(source.getDirectEntity()).thenReturn(projectile);
+        lenient().when(source.is(any(ResourceKey.class))).thenReturn(false);
+        lenient().when(source.is(any(TagKey.class))).thenReturn(false);
         return source;
     }
 }

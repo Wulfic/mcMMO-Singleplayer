@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.armadillo.Armadillo;
 import net.minecraft.world.entity.animal.cow.Cow;
@@ -52,6 +53,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEgg;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.AABB;
@@ -95,7 +97,7 @@ class HusbandryListenerTest {
      * do with this one.
      */
     private static ItemStack wool() {
-        return new ItemStack(Items.WHITE_WOOL);
+        return new ItemStack(Items.WOOL.pick(DyeColor.WHITE));
     }
 
     private UUID uuid;
@@ -115,7 +117,7 @@ class HusbandryListenerTest {
         // Answer the sweep from worldAnimals, applying the caller's own predicate — that predicate
         // IS the candidate filter under test, so running it here rather than stubbing past it is
         // what makes the eligibility assertions mean anything.
-        lenient().when(world.getEntitiesByClass(any(Class.class), any(AABB.class), any()))
+        lenient().when(world.getEntitiesOfClass(any(Class.class), any(AABB.class), any()))
                 .thenAnswer(invocation -> {
                     final java.util.function.Predicate<Animal> filter =
                             invocation.getArgument(2);
@@ -167,7 +169,7 @@ class HusbandryListenerTest {
 
     private ServerPlayer breeder() {
         final ServerPlayer player = mock(ServerPlayer.class);
-        lenient().when(player.getUuid()).thenReturn(uuid);
+        lenient().when(player.getUUID()).thenReturn(uuid);
         return player;
     }
 
@@ -180,25 +182,25 @@ class HusbandryListenerTest {
         final Cow animal = mock(Cow.class);
         // doReturn, not when/thenReturn: getType() is declared EntityType<?>, and the wildcard
         // capture makes the type-safe form uncompilable against a concrete EntityType<CowEntity>.
-        Mockito.doReturn(EntityType.COW).when(animal).getType();
+        Mockito.doReturn(EntityTypes.COW).when(animal).getType();
         lenient().when(animal.isAlive()).thenReturn(alive);
-        lenient().when(animal.getBreedingAge()).thenReturn(breedingAge);
-        lenient().when(animal.canEat()).thenReturn(canEat);
-        lenient().when(animal.getEntityWorld()).thenReturn(world);
+        lenient().when(animal.getAge()).thenReturn(breedingAge);
+        lenient().when(animal.canFallInLove()).thenReturn(canEat);
+        lenient().when(animal.level()).thenReturn(world);
         // Every real entity has one, and since the COTW gate looks each parent up in the summon
         // tracker by UUID, a mock without one is not a cow -- it is a null key in a map lookup.
-        lenient().when(animal.getUuid()).thenReturn(UUID.randomUUID());
+        lenient().when(animal.getUUID()).thenReturn(UUID.randomUUID());
         lenient().when(animal.getBoundingBox()).thenReturn(UNIT_BOX);
         return animal;
     }
 
     private Animal pig() {
         final Pig animal = mock(Pig.class);
-        Mockito.doReturn(EntityType.PIG).when(animal).getType();
+        Mockito.doReturn(EntityTypes.PIG).when(animal).getType();
         lenient().when(animal.isAlive()).thenReturn(true);
-        lenient().when(animal.getBreedingAge()).thenReturn(0);
-        lenient().when(animal.canEat()).thenReturn(true);
-        lenient().when(animal.getEntityWorld()).thenReturn(world);
+        lenient().when(animal.getAge()).thenReturn(0);
+        lenient().when(animal.canFallInLove()).thenReturn(true);
+        lenient().when(animal.level()).thenReturn(world);
         lenient().when(animal.getBoundingBox()).thenReturn(UNIT_BOX);
         return animal;
     }
@@ -211,9 +213,9 @@ class HusbandryListenerTest {
     /** A calf with a breeding age and a working attachment slot for the bred-by marker. */
     private AgeableMob calf(int breedingAge) {
         final Cow baby = mock(Cow.class);
-        Mockito.doReturn(EntityType.COW).when(baby).getType();
-        lenient().when(baby.getBreedingAge()).thenReturn(breedingAge);
-        lenient().when(baby.getEntityWorld()).thenReturn(world);
+        Mockito.doReturn(EntityTypes.COW).when(baby).getType();
+        lenient().when(baby.getAge()).thenReturn(breedingAge);
+        lenient().when(baby.level()).thenReturn(world);
         stubAttachments(baby);
         return baby;
     }
@@ -273,7 +275,7 @@ class HusbandryListenerTest {
     void aBreedingByAnUntrackedPlayerPaysNothing() {
         UserManager.cleanupPlayer(mmoPlayer);
         final ServerPlayer stranger = mock(ServerPlayer.class);
-        lenient().when(stranger.getUuid()).thenReturn(UUID.randomUUID());
+        lenient().when(stranger.getUUID()).thenReturn(UUID.randomUUID());
 
         HusbandryListener.onAnimalsBred(stranger, eligibleCow(), eligibleCow(), null);
         verify(husbandry, never()).onBreed(any(), anyLong());
@@ -288,7 +290,7 @@ class HusbandryListenerTest {
      */
     private void registerAsSummon(Animal animal) {
         final UUID summonId = UUID.randomUUID();
-        lenient().when(animal.getUuid()).thenReturn(summonId);
+        lenient().when(animal.getUUID()).thenReturn(summonId);
         final TrackedSummon summon = mock(TrackedSummon.class);
         lenient().when(summon.getEntityId()).thenReturn(summonId);
         lenient().when(summon.getCallOfTheWildType()).thenReturn(CallOfTheWildType.WOLF);
@@ -368,7 +370,7 @@ class HusbandryListenerTest {
 
         verify(husbandry, times(1)).rollTwins();
         // A failed roll must not spawn anything. The pair is bred once, not once per parent.
-        verify(world, never()).spawnEntityAndPassengers(any());
+        verify(world, never()).addFreshEntityWithPassengers(any());
     }
 
     // --- Raise: the bred-by marker and the grow-up crossing ------------------------------------
@@ -486,7 +488,7 @@ class HusbandryListenerTest {
         when(husbandry.applyGrowthAcceleration(-24000)).thenReturn(-16800);
 
         HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
-        verify(child).setBreedingAge(-16800);
+        verify(child).setAge(-16800);
     }
 
     @Test
@@ -500,7 +502,7 @@ class HusbandryListenerTest {
         lenient().when(husbandry.applyGrowthAcceleration(anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(husbandry.rollTwins()).thenReturn(true);
-        Mockito.doReturn(twin).when(parent).createChild(any(), any());
+        Mockito.doReturn(twin).when(parent).getBreedOffspring(any(), any());
 
         HusbandryListener.onAnimalsBred(breeder(), parent, eligibleCow(), child);
 
@@ -519,7 +521,7 @@ class HusbandryListenerTest {
         lenient().when(husbandry.applyGrowthAcceleration(anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(husbandry.rollTwins()).thenReturn(true);
-        Mockito.doReturn(twin).when(parent).createChild(any(), any());
+        Mockito.doReturn(twin).when(parent).getBreedOffspring(any(), any());
 
         HusbandryListener.onAnimalsBred(breeder(), parent, eligibleCow(), child);
 
@@ -535,7 +537,7 @@ class HusbandryListenerTest {
         when(husbandry.applyGrowthAcceleration(-24000)).thenReturn(-16800);
 
         HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
-        verify(child).setBreedingAge(-16800);
+        verify(child).setAge(-16800);
     }
 
     @Test
@@ -546,7 +548,7 @@ class HusbandryListenerTest {
         when(husbandry.applyGrowthAcceleration(-24000)).thenReturn(-24000);
 
         HusbandryListener.onAnimalsBred(breeder(), eligibleCow(), eligibleCow(), child);
-        verify(child, never()).setBreedingAge(anyInt());
+        verify(child, never()).setAge(anyInt());
     }
 
     // --- Feed: the interaction stash -----------------------------------------------------------
@@ -674,8 +676,8 @@ class HusbandryListenerTest {
 
     private AgeableMob shearableSheep() {
         final Sheep sheep = mock(Sheep.class);
-        Mockito.doReturn(EntityType.SHEEP).when(sheep).getType();
-        lenient().when(sheep.getEntityWorld()).thenReturn(world);
+        Mockito.doReturn(EntityTypes.SHEEP).when(sheep).getType();
+        lenient().when(sheep.level()).thenReturn(world);
         stubAttachments(sheep);
         return sheep;
     }
@@ -750,7 +752,7 @@ class HusbandryListenerTest {
         }
 
         assertEquals(2, dropper.delivered.size(), "a successful roll must double the yield");
-        assertEquals(Items.WHITE_WOOL, dropper.delivered.get(1).getItem(),
+        assertEquals(Items.WOOL.pick(DyeColor.WHITE), dropper.delivered.get(1).getItem(),
                 "the bonus must be a copy of what vanilla actually dropped");
     }
 
@@ -815,9 +817,9 @@ class HusbandryListenerTest {
         final ServerPlayer player = breeder();
         HusbandryListener.onLovePlayer(fed, player);
 
-        verify(neighbourA).lovePlayer(player);
-        verify(neighbourB).lovePlayer(player);
-        verify(fed, never()).lovePlayer(any());
+        verify(neighbourA).setInLove(player);
+        verify(neighbourB).setInLove(player);
+        verify(fed, never()).setInLove(any());
     }
 
     @Test
@@ -834,11 +836,11 @@ class HusbandryListenerTest {
 
         HusbandryListener.onLovePlayer(fed, breeder());
 
-        verify(baby, never()).lovePlayer(any());
-        verify(onCooldown, never()).lovePlayer(any());
-        verify(alreadyCourting, never()).lovePlayer(any());
-        verify(dead, never()).lovePlayer(any());
-        verify(wrongSpecies, never()).lovePlayer(any());
+        verify(baby, never()).setInLove(any());
+        verify(onCooldown, never()).setInLove(any());
+        verify(alreadyCourting, never()).setInLove(any());
+        verify(dead, never()).setInLove(any());
+        verify(wrongSpecies, never()).setInLove(any());
     }
 
     @Test
@@ -878,9 +880,9 @@ class HusbandryListenerTest {
 
         HusbandryListener.onLovePlayer(fed, breeder());
 
-        verify(neighbour, never()).lovePlayer(any());
+        verify(neighbour, never()).setInLove(any());
         // The sweep must not even be attempted: it is an entity scan on every animal ever fed.
-        verify(world, never()).getEntitiesByClass(any(Class.class), any(AABB.class), any());
+        verify(world, never()).getEntitiesOfClass(any(Class.class), any(AABB.class), any());
     }
 
     @Test
@@ -892,7 +894,7 @@ class HusbandryListenerTest {
         worldAnimals.addAll(Arrays.asList(fed, eligibleCow()));
 
         HusbandryListener.onLovePlayer(fed, breeder());
-        verify(world, never()).getEntitiesByClass(any(Class.class), any(AABB.class), any());
+        verify(world, never()).getEntitiesOfClass(any(Class.class), any(AABB.class), any());
     }
 
     @Test
@@ -912,7 +914,7 @@ class HusbandryListenerTest {
             lenient().doAnswer(invocation -> {
                 HusbandryListener.onLovePlayer(neighbour, invocation.getArgument(0));
                 return null;
-            }).when(neighbour).lovePlayer(any());
+            }).when(neighbour).setInLove(any());
             worldAnimals.add(neighbour);
         }
 
@@ -921,7 +923,7 @@ class HusbandryListenerTest {
                 "the re-entrancy guard is gone — the spread is cascading");
 
         // One sweep, from the animal the player actually fed, and no more.
-        verify(world, times(1)).getEntitiesByClass(any(Class.class), any(AABB.class), any());
+        verify(world, times(1)).getEntitiesOfClass(any(Class.class), any(AABB.class), any());
     }
 
     @Test
@@ -934,8 +936,8 @@ class HusbandryListenerTest {
 
         HusbandryListener.onLovePlayer(fed, breeder());
         verify(husbandry).getMultiBreedRadius();
-        verify(world).getEntitiesByClass(any(Class.class),
-                argThat(box -> box.getLengthX() > 80.0), any());
+        verify(world).getEntitiesOfClass(any(Class.class),
+                argThat(box -> box.getXsize() > 80.0), any());
     }
 
     @Test
@@ -945,7 +947,7 @@ class HusbandryListenerTest {
         worldAnimals.add(fed);
 
         HusbandryListener.onLovePlayer(fed, null);
-        verify(world, never()).getEntitiesByClass(any(Class.class), any(AABB.class), any());
+        verify(world, never()).getEntitiesOfClass(any(Class.class), any(AABB.class), any());
         verify(husbandry, never()).getMultiBreedRadius();
     }
 
@@ -959,14 +961,14 @@ class HusbandryListenerTest {
         final Entity animal = mock(type);
         // ⚠️ MetadataStore keys on getUuid() and its backing ConcurrentHashMap rejects a null key, so
         // an unstubbed mock does not merely misbehave here -- it throws from inside the cooldown.
-        lenient().when(animal.getUuid()).thenReturn(UUID.randomUUID());
-        lenient().when(animal.getEntityWorld()).thenReturn(world);
+        lenient().when(animal.getUUID()).thenReturn(UUID.randomUUID());
+        lenient().when(animal.level()).thenReturn(world);
         return animal;
     }
 
     /** Move the world's clock, which is the clock the harvest cooldown is measured against. */
     private void worldTime(long ticks) {
-        lenient().when(world.getTime()).thenReturn(ticks);
+        lenient().when(world.getGameTime()).thenReturn(ticks);
     }
 
     private void allowHarvestCooldown() {
@@ -990,7 +992,7 @@ class HusbandryListenerTest {
     @Test
     void aHiveHarvestByAnUntrackedPlayerPaysNothing() {
         final ServerPlayer stranger = mock(ServerPlayer.class);
-        lenient().when(stranger.getUuid()).thenReturn(UUID.randomUUID());
+        lenient().when(stranger.getUUID()).thenReturn(UUID.randomUUID());
 
         HusbandryListener.onHoneyBottled(stranger);
         verify(husbandry, never()).onHiveHarvest();
@@ -1278,7 +1280,7 @@ class HusbandryListenerTest {
 
     private Animal horseLovedBy(ServerPlayer player) {
         final Animal horse = cow(true, 0, true);
-        lenient().when(horse.getLovingPlayer()).thenReturn(player);
+        lenient().when(horse.getLoveCause()).thenReturn(player);
         return horse;
     }
 

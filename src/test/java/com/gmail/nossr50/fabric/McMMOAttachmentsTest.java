@@ -108,7 +108,7 @@ class McMMOAttachmentsTest {
         // A String always decodes, and MobOrigins maps anything it cannot interpret to UNKNOWN.
         final Codec<String> codec = McMMOAttachments.MOB_ORIGIN.persistenceCodec();
         assertNotNull(codec);
-        assertTrue(codec.parse(NbtOps.INSTANCE, StringTag.of("NOT_A_REAL_ORIGIN")).isSuccess(),
+        assertTrue(codec.parse(NbtOps.INSTANCE, StringTag.valueOf("NOT_A_REAL_ORIGIN")).isSuccess(),
                 "an unrecognised stored value must still decode, so that MobOrigins gets the chance "
                         + "to fail closed on it rather than Fabric discarding the marker entirely");
     }

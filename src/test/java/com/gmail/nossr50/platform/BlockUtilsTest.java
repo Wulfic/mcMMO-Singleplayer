@@ -81,7 +81,7 @@ class BlockUtilsTest {
         assertTrue(BlockUtils.canActivateAbilities(Blocks.STONE));
         assertTrue(BlockUtils.canActivateTools(Blocks.STONE));
         // A BlockState overload resolves to the same answer as its Block.
-        assertTrue(BlockUtils.canActivateAbilities(Blocks.STONE.getDefaultState()));
+        assertTrue(BlockUtils.canActivateAbilities(Blocks.STONE.defaultBlockState()));
 
         assertTrue(BlockUtils.isNonWoodPartOfTree(Blocks.OAK_LEAVES));
         assertFalse(BlockUtils.isNonWoodPartOfTree(Blocks.OAK_LOG));
@@ -118,9 +118,9 @@ class BlockUtilsTest {
     void berserkInstaBreaksTheSnowLayerByIdentity() {
         // This arm cannot live in BlockRules: it is `isOf(Blocks.SNOW)`, an identity comparison, and
         // "snow".equals(idPath) would also match another namespace's block called snow.
-        assertTrue(BlockUtils.affectedByBerserk(Blocks.SNOW.getDefaultState()), "the snow layer");
-        assertTrue(BlockUtils.affectedByBerserk(Blocks.GLASS.getDefaultState()), "the glass arm");
-        assertFalse(BlockUtils.affectedByBerserk(Blocks.STONE.getDefaultState()));
+        assertTrue(BlockUtils.affectedByBerserk(Blocks.SNOW.defaultBlockState()), "the snow layer");
+        assertTrue(BlockUtils.affectedByBerserk(Blocks.GLASS.defaultBlockState()), "the glass arm");
+        assertFalse(BlockUtils.affectedByBerserk(Blocks.STONE.defaultBlockState()));
     }
 
     // --- Identity check #2: obsidian's lava-gate exemption -------------------
@@ -148,11 +148,11 @@ class BlockUtilsTest {
     void classifiesHylianTreasureGroupsFromHardcodedMembers() {
         // Only the MaterialMapStore-backed branches are reachable here -- the nine flowers and the
         // three non-tag bush blocks -- because each returns before any tag check.
-        assertEquals("Flowers", BlockUtils.getHylianTreasureGroup(Blocks.POPPY.getDefaultState()));
-        assertEquals("Bushes", BlockUtils.getHylianTreasureGroup(Blocks.FERN.getDefaultState()));
+        assertEquals("Flowers", BlockUtils.getHylianTreasureGroup(Blocks.POPPY.defaultBlockState()));
+        assertEquals("Bushes", BlockUtils.getHylianTreasureGroup(Blocks.FERN.defaultBlockState()));
         assertEquals("Bushes",
-                BlockUtils.getHylianTreasureGroup(Blocks.SHORT_GRASS.getDefaultState()));
-        assertEquals("Bushes", BlockUtils.getHylianTreasureGroup(Blocks.DEAD_BUSH.getDefaultState()));
+                BlockUtils.getHylianTreasureGroup(Blocks.SHORT_GRASS.defaultBlockState()));
+        assertEquals("Bushes", BlockUtils.getHylianTreasureGroup(Blocks.DEAD_BUSH.defaultBlockState()));
     }
 
     /**
@@ -168,7 +168,7 @@ class BlockUtilsTest {
     @Test
     void theHarnessGenuinelyHasNoBoundTagsSoTheLazinessIsWhatIsBeingProven() {
         assertThrows(IllegalStateException.class,
-                () -> BlockUtils.getHylianTreasureGroup(Blocks.STONE.getDefaultState()),
+                () -> BlockUtils.getHylianTreasureGroup(Blocks.STONE.defaultBlockState()),
                 "a block that reaches the tag check must throw here; if it stops throwing, the "
                         + "hardcoded-member assertions above have quietly stopped proving laziness");
     }
@@ -178,20 +178,20 @@ class BlockUtilsTest {
     @Test
     void getAgeableStateReadsCropAgeAndMax() {
         // Wheat's age property maxes at 7; a freshly-planted crop is age 0.
-        AgeableState freshWheat = BlockUtils.getAgeableState(Blocks.WHEAT.getDefaultState());
+        AgeableState freshWheat = BlockUtils.getAgeableState(Blocks.WHEAT.defaultBlockState());
         assertNotNull(freshWheat);
         assertEquals(0, freshWheat.age());
         assertEquals(7, freshWheat.maxAge());
 
         AgeableState grownWheat =
-                BlockUtils.getAgeableState(Blocks.WHEAT.getDefaultState().with(BlockStateProperties.AGE_7, 7));
+                BlockUtils.getAgeableState(Blocks.WHEAT.defaultBlockState().setValue(BlockStateProperties.AGE_7, 7));
         assertNotNull(grownWheat);
         assertEquals(7, grownWheat.age());
         assertEquals(7, grownWheat.maxAge());
 
         // Sweet berry bush maxes at 3.
         AgeableState berries = BlockUtils.getAgeableState(
-                Blocks.SWEET_BERRY_BUSH.getDefaultState().with(BlockStateProperties.AGE_3, 2));
+                Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(BlockStateProperties.AGE_3, 2));
         assertNotNull(berries);
         assertEquals(2, berries.age());
         assertEquals(3, berries.maxAge());
@@ -200,38 +200,38 @@ class BlockUtilsTest {
     @Test
     void getAgeableStateIsNullForBlocksWithoutAnAgeProperty() {
         // Stone has no state properties at all; a log has only an axis, not age.
-        assertNull(BlockUtils.getAgeableState(Blocks.STONE.getDefaultState()));
-        assertNull(BlockUtils.getAgeableState(Blocks.OAK_LOG.getDefaultState()));
+        assertNull(BlockUtils.getAgeableState(Blocks.STONE.defaultBlockState()));
+        assertNull(BlockUtils.getAgeableState(Blocks.OAK_LOG.defaultBlockState()));
     }
 
     @Test
     void withAgeSetsCropAgeClampsAndPreservesOtherProperties() {
         // Re-age wheat (age 0-7) to 3 — the Green Thumb replant path.
         AgeableState wheat3 = BlockUtils.getAgeableState(
-                BlockUtils.withAge(Blocks.WHEAT.getDefaultState(), 3));
+                BlockUtils.withAge(Blocks.WHEAT.defaultBlockState(), 3));
         assertNotNull(wheat3);
         assertEquals(3, wheat3.age());
 
         // An age above the crop's maximum clamps to it, so BlockState#with never throws (a high
         // Green Thumb stage against a short crop).
         AgeableState wheatOver = BlockUtils.getAgeableState(
-                BlockUtils.withAge(Blocks.WHEAT.getDefaultState(), 99));
+                BlockUtils.withAge(Blocks.WHEAT.defaultBlockState(), 99));
         assertNotNull(wheatOver);
         assertEquals(7, wheatOver.age());
 
         // Cocoa's age maxes at 2 and its facing must survive the re-age (the record-preserved
         // property the AFTER-seam replant relies on instead of a Directional rebuild).
-        BlockState cocoa = Blocks.COCOA.getDefaultState()
-                .with(BlockStateProperties.HORIZONTAL_FACING, Direction.SOUTH);
+        BlockState cocoa = Blocks.COCOA.defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.SOUTH);
         BlockState cocoa1 = BlockUtils.withAge(cocoa, 1);
         AgeableState cocoaState = BlockUtils.getAgeableState(cocoa1);
         assertNotNull(cocoaState);
         assertEquals(1, cocoaState.age());
-        assertEquals(Direction.SOUTH, cocoa1.get(BlockStateProperties.HORIZONTAL_FACING));
+        assertEquals(Direction.SOUTH, cocoa1.getValue(BlockStateProperties.HORIZONTAL_FACING));
 
         // A block with no age property is returned unchanged.
-        assertEquals(Blocks.STONE.getDefaultState(),
-                BlockUtils.withAge(Blocks.STONE.getDefaultState(), 3));
+        assertEquals(Blocks.STONE.defaultBlockState(),
+                BlockUtils.withAge(Blocks.STONE.defaultBlockState(), 3));
     }
 
     // --- The (World, BlockPos) -> tracker-key bridge -------------------------
@@ -239,7 +239,7 @@ class BlockUtilsTest {
     /** A world that answers only the one question the tracker asks it: which world am I? */
     private static Level overworld() {
         final Level world = mock(Level.class);
-        when(world.getRegistryKey()).thenReturn(Level.OVERWORLD);
+        when(world.dimension()).thenReturn(Level.OVERWORLD);
         return world;
     }
 
@@ -268,7 +268,7 @@ class BlockUtilsTest {
         // BlockRulesTest cannot cover.
         final Level world = overworld();
         final BlockPos from = new BlockPos(0, 64, 0);
-        final BlockPos to = from.offset(Direction.EAST);
+        final BlockPos to = from.relative(Direction.EAST);
         BlockUtils.markPlaced(world, from);
 
         BlockUtils.movePlacedFlags(world, List.of(from), List.of(), Direction.EAST);
@@ -279,7 +279,7 @@ class BlockUtilsTest {
         // Every other neighbour must be untouched, or the offset is right by accident.
         for (Direction other : Direction.values()) {
             if (other != Direction.EAST) {
-                assertFalse(BlockUtils.isRewardIneligible(world, from.offset(other)),
+                assertFalse(BlockUtils.isRewardIneligible(world, from.relative(other)),
                         "the flag went " + other + " as well as EAST");
             }
         }

@@ -2325,9 +2325,9 @@ same five sites, now the largest single group.
 renamed tree elsewhere, so the table knew the answer and the loop could not apply it.
 Also here: `MinecraftServer#getPlayers` ×2, `ServerPlayer#wasUnderwater` ×2,
 `EnchantmentHelper#keySetForCrafting`, `ChatFormatting#isColor`, `BlockTags.SAPLINGS`.
-- [ ] Decide whether to teach the loop `Type::member` or fix the three by hand. **Three sites is not
-      the argument** — the argument is whether the test tree (31.4) holds more of them, which is
-      unknown until 31.3. Defer the decision to 31.3; do not hand-fix before then.
+- [x] **DECIDED at 31.3: hand-fix, do not teach the loop.** The test tree's 410 turned out to hold
+      **zero** further `Type::member` sites — the shape is rare because a method reference to an MC
+      member is rare in this codebase. Teaching the loop would have been built for three sites.
 
 **(c) `EntityType.WOLF` / `.CAT` / `.HORSE` — 3 sites, and the cause is NOT yet known.** The import is
 `net.minecraft.world.entity.EntityType`, the correct mojmap FQN, and these constants exist there on
@@ -2365,17 +2365,54 @@ dependencies are not the blocker** and no version bump is in scope here.
 
 ### 31.3 — the first real `compileTestJava` number
 
-- [ ] Once main is zero, `--baseline` again and record **`src/test`** with `task compileTestJava`
-      printed beside it. This is the first time the test tree has been compiled since the rename.
-- [ ] Classify it the same way: rewriter damage / mechanical miss / genuine `26.x` delta. **11 of the
-      12 silent `getId` sites lived here**, so expect this tree to carry the rewriter's damage at a
-      higher rate than main did, not a lower one.
-- [ ] Decide 31.2(b)'s `Type::member` question against this number.
+- [x] **410 errors across 28 files**, with `task compileTestJava: FAILED` printed beside it — the
+      first time the test tree had been compiled at all since the rename. The preceding runs' clean
+      `src/test: 0` was the `NOT RUN` zero, exactly as 30.4's amendment warned.
+- [x] 🔑🔑 **Almost none of the 410 was a `26.x` delta — it was the SAME RENAME, NEVER APPLIED.**
+      The top rows are plain yarn member names: `getUuid` (37), `getDefaultState` (25),
+      `getEntityWorld` (16), `getAttacker` (15), `isSneaking` (14), `isTamed`, `getMainHandStack`,
+      `isTouchingWater`. The cause is structural rather than a miss: **the member pass is
+      compiler-driven, and `compileTestJava` never ran while main was red**, so the loop received
+      zero diagnostics from `src/test`. The test tree had received passes 1 and 2 and **none of
+      pass 3**.
+      ⚠️ The expectation written above — more rewriter damage here than in main — was **wrong, and
+      for an instructive reason**: `apply_edits` had never been given the chance to damage this tree.
+      The 12 silent `getId` sites got here through passes 1+2, not through the loop.
+- [x] Decided — see 31.2(b) above.
 
-### 31.4 — test tree to zero
+### 31.4 — test tree to zero ✅ **DONE — 410 → 0**
 
-Same loop, same rules. Nothing is deleted or `@Disabled` to make a number move — a test that will not
-compile gets fixed or gets a written reason, never a suppression.
+Same loop, same rules. Nothing was deleted or `@Disabled` to make a number move.
+
+- [x] **The loop, now that it can finally see the tree: 410 → 89 → 76.** 361 member sites rewritten,
+      **0 refused**, and the worklist held exactly one entry — the `NonNullList#ofSize` multi-target
+      row §28 had already parked.
+      🔑 **This is the run 31.0 was built for.** Under the old `apply_edits` it would have been 361
+      more chances at the `toImmutableer` corruption, in the tree that already hid 11 of the 12
+      silent `getId` sites. `rename-damage-audit.py` after the run: **+361 member rewrites, 0 new
+      suspects.**
+- [x] **The 76 residue, hand-resolved against the jar** — 47 `EntityType.<CONST>` →
+      `EntityTypes.<CONST>` (the same `26.2` class split as main, at 13× the volume) ·
+      `monster.Slime`/`MagmaCube` → `monster.cubemob.*` · `Items.WHITE_WOOL` →
+      `Items.WOOL.pick(DyeColor.WHITE)` (the 16 dyed wools are now one `ColorCollection<Item>`) ·
+      `teleport` → `teleportTo` · `offset(Direction)` → `relative` · `Registry#get` → `getValue` ·
+      `NonNullList.ofSize` → `withSize` (argc=2 with a fill value decides it) ·
+      `EntityType#getName` → `getDescription` · `DefaultAttributes#hasDefinitionFor` → `hasSupplier`.
+- [x] **The 15 `reference to is is ambiguous` sites, and why they needed the pre-rename tree.**
+      yarn had **two** methods on `DamageSource` — `isOf(RegistryKey<DamageType>)` and
+      `isIn(TagKey<DamageType>)` — and `26.2` collapsed both into overloads of `is(...)`. Each rename
+      is correct on its own; Mockito's untyped `any()` then matches both overloads and javac refuses.
+      The two calls are now **textually identical**, so which typed matcher each needs cannot be read
+      off the current file at all — only the pre-rename tree knows.
+      🔴 **The first attempt indexed the base file BY LINE NUMBER and was WRONG.** This same batch had
+      already inserted an `EntityTypes` import into those files, shifting every line by one, so the
+      lookup silently read the **neighbouring** call and assigned `TagKey` to a site that wanted
+      `ResourceKey`. It stopped only because the shift eventually ran off the end of a method and hit
+      a line that was neither — **one line of luck, and it had already mis-assigned one site.**
+      Redone with `difflib` alignment (identical lines pair regardless of insertions; anything not
+      pairing 1:1 is refused): **15 disambiguated, 0 refused**, alternating `isOf`/`isIn` exactly as
+      the originals did.
+- [x] **`compileJava` 0, `compileTestJava` 0, and `task compileTestJava: ran`** — the zero is real.
 
 ### 31.5 — 30.5c: the 562 unreviewed collision sites, filtered by tooling
 

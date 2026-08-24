@@ -81,18 +81,18 @@ class FoodListenerTest {
     @BeforeEach
     void setUp() {
         world = mock(ServerLevel.class);
-        lenient().when(world.isClient()).thenReturn(false);
+        lenient().when(world.isClientSide()).thenReturn(false);
 
         // A real HungerManager, not a mock: the bonus is applied through vanilla's own clamping
         // setters, and a mock would happily record a food level of 40 on a 20-point bar.
         hunger = new FoodData();
         hunger.setFoodLevel(START_FOOD_LEVEL);
-        hunger.setSaturationLevel(0.0f);
+        hunger.setSaturation(0.0f);
 
         final UUID uuid = UUID.randomUUID();
         player = mock(ServerPlayer.class);
-        lenient().when(player.getUuid()).thenReturn(uuid);
-        lenient().when(player.getHungerManager()).thenReturn(hunger);
+        lenient().when(player.getUUID()).thenReturn(uuid);
+        lenient().when(player.getFoodData()).thenReturn(hunger);
 
         final PlatformPlayer platformPlayer = mock(PlatformPlayer.class);
         lenient().when(platformPlayer.getUniqueId()).thenReturn(uuid);
@@ -175,7 +175,7 @@ class FoodListenerTest {
         // Singleplayer runs both logical sides in one process; the client's copy of the consumption
         // would double every diet bonus.
         rankedFarmer();
-        when(world.isClient()).thenReturn(true);
+        when(world.isClientSide()).thenReturn(true);
 
         eat(Items.BREAD);
 
@@ -231,7 +231,7 @@ class FoodListenerTest {
 
         eat(Items.COOKED_BEEF);
 
-        verify(player, never()).addStatusEffect(org.mockito.ArgumentMatchers.any());
+        verify(player, never()).addEffect(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -242,7 +242,7 @@ class FoodListenerTest {
 
         eat(Items.COOKED_BEEF);
 
-        verify(player, never()).addStatusEffect(org.mockito.ArgumentMatchers.any());
+        verify(player, never()).addEffect(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -265,7 +265,7 @@ class FoodListenerTest {
         final MobEffectInstance brewedPotion =
                 new MobEffectInstance(MobEffects.STRENGTH, 3600, 1);
 
-        final boolean changed = brewedPotion.upgrade(
+        final boolean changed = brewedPotion.update(
                 new MobEffectInstance(MobEffects.STRENGTH, POWER_COOK_TICKS, 0));
 
         assertFalse(changed, "a weaker, shorter effect must not replace a brewed potion");
@@ -280,7 +280,7 @@ class FoodListenerTest {
         final MobEffectInstance running =
                 new MobEffectInstance(MobEffects.STRENGTH, 20, 0);
 
-        final boolean changed = running.upgrade(
+        final boolean changed = running.update(
                 new MobEffectInstance(MobEffects.STRENGTH, POWER_COOK_TICKS, 0));
 
         assertTrue(changed, "a longer effect at the same strength must extend the running one");
@@ -309,8 +309,8 @@ class FoodListenerTest {
     private void assertEffectApplied(Holder<MobEffect> expected, int expectedTicks) {
         final MobEffectInstance applied = captureEffect();
         assertTrue(applied.equals(expected),
-                "expected " + expected.getIdAsString() + " but got "
-                        + applied.getEffectType().getIdAsString());
+                "expected " + expected.getRegisteredName() + " but got "
+                        + applied.getEffect().getRegisteredName());
         assertEquals(expectedTicks, applied.getDuration());
     }
 
@@ -318,7 +318,7 @@ class FoodListenerTest {
     private MobEffectInstance captureEffect() {
         final ArgumentCaptor<MobEffectInstance> captor =
                 ArgumentCaptor.forClass(MobEffectInstance.class);
-        verify(player).addStatusEffect(captor.capture());
+        verify(player).addEffect(captor.capture());
         return captor.getValue();
     }
 
@@ -348,7 +348,7 @@ class FoodListenerTest {
         if (food == null) {
             throw new AssertionError(item + " has no FOOD component; the seam can never fire for it");
         }
-        if (!world.isClient()) {
+        if (!world.isClientSide()) {
             hunger.eat(food);
         }
         FoodListener.onFoodConsumed(world, player, stack, food);

@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.wolf.Wolf;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
@@ -100,7 +101,7 @@ class PetFollowTeleportTest {
         // this pins that we ask it rather than re-listing those conditions ourselves.
         final ServerPlayer owner = player(UUID.randomUUID());
         final Wolf wolf = pet(owner);
-        when(wolf.cannotFollowOwner()).thenReturn(true);
+        when(wolf.unableToMoveToOwner()).thenReturn(true);
 
         assertFalse(PetFollowTeleport.isFollower(wolf, owner));
     }
@@ -109,7 +110,7 @@ class PetFollowTeleportTest {
     void someoneElsesPetDoesNotFollow() {
         final ServerPlayer owner = player(UUID.randomUUID());
         final Wolf wolf = pet(owner);
-        when(wolf.isOwner(owner)).thenReturn(false);
+        when(wolf.isOwnedBy(owner)).thenReturn(false);
 
         assertFalse(PetFollowTeleport.isFollower(wolf, owner));
     }
@@ -118,7 +119,7 @@ class PetFollowTeleportTest {
     void anUntamedWolfDoesNotFollow() {
         final ServerPlayer owner = player(UUID.randomUUID());
         final Wolf wolf = pet(owner);
-        when(wolf.isTamed()).thenReturn(false);
+        when(wolf.isTame()).thenReturn(false);
 
         assertFalse(PetFollowTeleport.isFollower(wolf, owner));
     }
@@ -144,8 +145,8 @@ class PetFollowTeleportTest {
 
         assertEquals(1, PetFollowTeleport.bringPetsFrom(owner, new Vec3(0, 64, 0), 32.0));
 
-        verify(wolf).tryTeleportToOwner();
-        verify(wolf, never()).teleport(any(), anyDouble(), anyDouble(), anyDouble(), anySet(),
+        verify(wolf).tryToTeleportToOwner();
+        verify(wolf, never()).teleportTo(any(), anyDouble(), anyDouble(), anyDouble(), anySet(),
                 anyFloat(), anyFloat(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
@@ -157,13 +158,13 @@ class PetFollowTeleportTest {
         final ServerPlayer owner = player(UUID.randomUUID());
         final Wolf wolf = pet(owner);
         when(wolf.shouldTryTeleportToOwner()).thenReturn(true);
-        when(wolf.teleport(any(), anyDouble(), anyDouble(), anyDouble(), anySet(), anyFloat(),
+        when(wolf.teleportTo(any(), anyDouble(), anyDouble(), anyDouble(), anySet(), anyFloat(),
                 anyFloat(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(true);
         worldContaining(owner, wolf);
 
         assertEquals(1, PetFollowTeleport.bringPetsFrom(owner, new Vec3(0, 64, 0), 32.0));
 
-        verify(wolf).teleport(any(), anyDouble(), anyDouble(), anyDouble(), anySet(), anyFloat(),
+        verify(wolf).teleportTo(any(), anyDouble(), anyDouble(), anyDouble(), anySet(), anyFloat(),
                 anyFloat(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
@@ -173,16 +174,16 @@ class PetFollowTeleportTest {
         // dropping a wolf out of an elytra flight kills it, whereas leaving it behind is exactly what
         // vanilla already does. Vanilla's own attempt still happens — only the fallback is refused.
         final ServerPlayer owner = player(UUID.randomUUID());
-        lenient().when(owner.isOnGround()).thenReturn(false);
-        lenient().when(owner.isTouchingWater()).thenReturn(false);
+        lenient().when(owner.onGround()).thenReturn(false);
+        lenient().when(owner.isInWater()).thenReturn(false);
         final Wolf wolf = pet(owner);
         when(wolf.shouldTryTeleportToOwner()).thenReturn(true);
         worldContaining(owner, wolf);
 
         assertEquals(0, PetFollowTeleport.bringPetsFrom(owner, new Vec3(0, 64, 0), 32.0));
 
-        verify(wolf).tryTeleportToOwner();
-        verify(wolf, never()).teleport(any(), anyDouble(), anyDouble(), anyDouble(), anySet(),
+        verify(wolf).tryToTeleportToOwner();
+        verify(wolf, never()).teleportTo(any(), anyDouble(), anyDouble(), anyDouble(), anySet(),
                 anyFloat(), anyFloat(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
@@ -200,10 +201,10 @@ class PetFollowTeleportTest {
         PetFollowTeleport.bringPetsFrom(owner, departure, 16.0);
 
         final org.mockito.ArgumentCaptor<AABB> box = org.mockito.ArgumentCaptor.forClass(AABB.class);
-        verify(world).getEntitiesByClass(any(), box.capture(), any());
+        verify(world).getEntitiesOfClass(any(), box.capture(), any());
         assertEquals(departure.x, box.getValue().getCenter().x, 1.0E-6);
         assertEquals(departure.z, box.getValue().getCenter().z, 1.0E-6);
-        assertEquals(32.0, box.getValue().getLengthX(), 1.0E-6, "a 16-block radius is a 32-wide box");
+        assertEquals(32.0, box.getValue().getXsize(), 1.0E-6, "a 16-block radius is a 32-wide box");
     }
 
     // --- the real tick path ----------------------------------------------------------------------
@@ -221,7 +222,7 @@ class PetFollowTeleportTest {
     void petsFollowOnTheRealSweepWithNoProfileLoaded() {
         final UUID uuid = UUID.randomUUID();
         final ServerPlayer owner = player(uuid);
-        when(owner.getEntityPos()).thenReturn(new Vec3(0, 64, 0), new Vec3(5000, 64, 0));
+        when(owner.position()).thenReturn(new Vec3(0, 64, 0), new Vec3(5000, 64, 0));
         final Wolf wolf = pet(owner);
         when(wolf.shouldTryTeleportToOwner()).thenReturn(false);
         worldContaining(owner, wolf);
@@ -229,14 +230,14 @@ class PetFollowTeleportTest {
         PlayerMovementTracker.tickPlayer(owner); // baseline only — no previous position yet
         PlayerMovementTracker.tickPlayer(owner); // the jump
 
-        verify(wolf).tryTeleportToOwner();
+        verify(wolf).tryToTeleportToOwner();
     }
 
     @Test
     void walkingAroundNeverTouchesThePets() {
         final UUID uuid = UUID.randomUUID();
         final ServerPlayer owner = player(uuid);
-        when(owner.getEntityPos()).thenReturn(new Vec3(0, 64, 0), new Vec3(0.3, 64, 0));
+        when(owner.position()).thenReturn(new Vec3(0, 64, 0), new Vec3(0.3, 64, 0));
         final Wolf wolf = pet(owner);
         final ServerLevel world = worldContaining(owner, wolf);
 
@@ -245,7 +246,7 @@ class PetFollowTeleportTest {
 
         // Not merely "the pet was not moved" — the entity sweep must not run at all, because this
         // path is 20 ticks a second forever.
-        verify(world, never()).getEntitiesByClass(any(), any(), any());
+        verify(world, never()).getEntitiesOfClass(any(), any(), any());
     }
 
     @Test
@@ -255,15 +256,15 @@ class PetFollowTeleportTest {
         // position in the new world is a box somewhere plausible and wrong.
         final UUID uuid = UUID.randomUUID();
         final ServerPlayer owner = player(uuid);
-        when(owner.getEntityPos()).thenReturn(new Vec3(0, 64, 0), new Vec3(5000, 64, 0));
+        when(owner.position()).thenReturn(new Vec3(0, 64, 0), new Vec3(5000, 64, 0));
         final Wolf wolf = pet(owner);
         final ServerLevel overworld = worldContaining(owner, wolf);
-        when(overworld.getRegistryKey()).thenReturn(Level.OVERWORLD, Level.NETHER);
+        when(overworld.dimension()).thenReturn(Level.OVERWORLD, Level.NETHER);
 
         PlayerMovementTracker.tickPlayer(owner);
         PlayerMovementTracker.tickPlayer(owner);
 
-        verify(wolf, never()).tryTeleportToOwner();
+        verify(wolf, never()).tryToTeleportToOwner();
     }
 
     @Test
@@ -274,14 +275,14 @@ class PetFollowTeleportTest {
 
         final UUID uuid = UUID.randomUUID();
         final ServerPlayer owner = player(uuid);
-        when(owner.getEntityPos()).thenReturn(new Vec3(0, 64, 0), new Vec3(5000, 64, 0));
+        when(owner.position()).thenReturn(new Vec3(0, 64, 0), new Vec3(5000, 64, 0));
         final Wolf wolf = pet(owner);
         worldContaining(owner, wolf);
 
         PlayerMovementTracker.tickPlayer(owner);
         PlayerMovementTracker.tickPlayer(owner);
 
-        verify(wolf, never()).tryTeleportToOwner();
+        verify(wolf, never()).tryToTeleportToOwner();
     }
 
     // --- the radius default, written down in four places ------------------------------------------
@@ -326,8 +327,8 @@ class PetFollowTeleportTest {
         PetFollowTeleport.bringPetsFrom(owner, new Vec3(0, 64, 0), 96.0);
 
         final org.mockito.ArgumentCaptor<AABB> box = org.mockito.ArgumentCaptor.forClass(AABB.class);
-        verify(world).getEntitiesByClass(any(), box.capture(), any());
-        assertEquals(192.0, box.getValue().getLengthX(), 1.0E-6,
+        verify(world).getEntitiesOfClass(any(), box.capture(), any());
+        assertEquals(192.0, box.getValue().getXsize(), 1.0E-6,
                 "a 96-block radius must be a 192-wide box — the radius is not ignored or halved");
     }
 
@@ -336,11 +337,11 @@ class PetFollowTeleportTest {
     /** A player standing on the ground in the overworld. */
     private static ServerPlayer player(UUID uuid) {
         final ServerPlayer handle = mock(ServerPlayer.class);
-        lenient().when(handle.getUuid()).thenReturn(uuid);
+        lenient().when(handle.getUUID()).thenReturn(uuid);
         lenient().when(handle.getName()).thenReturn(Component.literal("TestPlayer"));
-        lenient().when(handle.getEntityPos()).thenReturn(new Vec3(0, 64, 0));
-        lenient().when(handle.isOnGround()).thenReturn(true);
-        lenient().when(handle.isTouchingWater()).thenReturn(false);
+        lenient().when(handle.position()).thenReturn(new Vec3(0, 64, 0));
+        lenient().when(handle.onGround()).thenReturn(true);
+        lenient().when(handle.isInWater()).thenReturn(false);
         return handle;
     }
 
@@ -348,14 +349,14 @@ class PetFollowTeleportTest {
     private static Wolf pet(ServerPlayer owner) {
         final Wolf wolf = mock(Wolf.class);
         lenient().when(wolf.isAlive()).thenReturn(true);
-        lenient().when(wolf.isTamed()).thenReturn(true);
-        lenient().when(wolf.isOwner(owner)).thenReturn(true);
-        lenient().when(wolf.cannotFollowOwner()).thenReturn(false);
+        lenient().when(wolf.isTame()).thenReturn(true);
+        lenient().when(wolf.isOwnedBy(owner)).thenReturn(true);
+        lenient().when(wolf.unableToMoveToOwner()).thenReturn(false);
         lenient().when(wolf.shouldTryTeleportToOwner()).thenReturn(false);
         // doReturn, not when/thenReturn: getType() is declared EntityType<?>, whose capture no
         // concrete EntityType can be assigned to through the generic thenReturn signature.
         // Stubbed for the "left behind" log lines, which name the pet.
-        lenient().doReturn(EntityType.WOLF).when(wolf).getType();
+        lenient().doReturn(EntityTypes.WOLF).when(wolf).getType();
         return wolf;
     }
 
@@ -368,12 +369,12 @@ class PetFollowTeleportTest {
     private static ServerLevel worldContaining(ServerPlayer owner, Wolf... pets) {
         final ServerLevel world = mock(ServerLevel.class);
         final ResourceKey<Level> overworld = Level.OVERWORLD;
-        lenient().when(world.getRegistryKey()).thenReturn(overworld);
-        lenient().when(world.getEntitiesByClass(any(), any(), any())).thenAnswer(invocation -> {
+        lenient().when(world.dimension()).thenReturn(overworld);
+        lenient().when(world.getEntitiesOfClass(any(), any(), any())).thenAnswer(invocation -> {
             final Predicate<Object> filter = invocation.getArgument(2, Predicate.class);
             return List.of(pets).stream().filter(filter).toList();
         });
-        lenient().when(owner.getEntityWorld()).thenReturn(world);
+        lenient().when(owner.level()).thenReturn(world);
         return world;
     }
 }

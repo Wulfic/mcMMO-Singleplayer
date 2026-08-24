@@ -29,9 +29,12 @@ import java.nio.file.Path;
 import java.util.UUID;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.tags.TagKey;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.monster.zombie.Zombie;
@@ -152,33 +155,33 @@ class EntityDamageListenerHunterTest {
      */
     private ServerPlayer player() {
         final MinecraftServer server = mock(MinecraftServer.class);
-        lenient().when(server.getTicks()).thenReturn(10_000);
+        lenient().when(server.getTickCount()).thenReturn(10_000);
         final ServerLevel world = mock(ServerLevel.class);
         lenient().when(world.getServer()).thenReturn(server);
 
         final ServerPlayer player = mock(ServerPlayer.class);
-        lenient().when(player.getUuid()).thenReturn(playerId);
-        lenient().when(player.getEntityWorld()).thenReturn(world);
-        lenient().when(player.getMainHandStack()).thenReturn(new ItemStack(Items.DIRT));
+        lenient().when(player.getUUID()).thenReturn(playerId);
+        lenient().when(player.level()).thenReturn(world);
+        lenient().when(player.getMainHandItem()).thenReturn(new ItemStack(Items.DIRT));
         lenient().when(player.isSprinting()).thenReturn(false);
-        lenient().when(player.isSneaking()).thenReturn(false);
+        lenient().when(player.isShiftKeyDown()).thenReturn(false);
         return player;
     }
 
     private static Zombie zombie() {
         final Zombie zombie = mock(Zombie.class);
-        Mockito.doReturn(EntityType.ZOMBIE).when(zombie).getType();
-        lenient().when(zombie.getUuid()).thenReturn(UUID.randomUUID());
+        Mockito.doReturn(EntityTypes.ZOMBIE).when(zombie).getType();
+        lenient().when(zombie.getUUID()).thenReturn(UUID.randomUUID());
         return zombie;
     }
 
     /** A direct melee swing: the attacker is both the responsible and the direct damager. */
     private DamageSource melee() {
         final DamageSource source = mock(DamageSource.class);
-        lenient().when(source.getAttacker()).thenReturn(attacker);
-        lenient().when(source.getSource()).thenReturn(attacker);
-        lenient().when(source.isOf(any())).thenReturn(false);
-        lenient().when(source.isIn(any())).thenReturn(false);
+        lenient().when(source.getEntity()).thenReturn(attacker);
+        lenient().when(source.getDirectEntity()).thenReturn(attacker);
+        lenient().when(source.is(any(ResourceKey.class))).thenReturn(false);
+        lenient().when(source.is(any(TagKey.class))).thenReturn(false);
         return source;
     }
 
@@ -188,10 +191,10 @@ class EntityDamageListenerHunterTest {
         lenient().when(projectile.getOwner()).thenReturn(owner);
 
         final DamageSource source = mock(DamageSource.class);
-        lenient().when(source.getAttacker()).thenReturn(responsible);
-        lenient().when(source.getSource()).thenReturn(projectile);
-        lenient().when(source.isOf(any())).thenReturn(false);
-        lenient().when(source.isIn(any())).thenReturn(false);
+        lenient().when(source.getEntity()).thenReturn(responsible);
+        lenient().when(source.getDirectEntity()).thenReturn(projectile);
+        lenient().when(source.is(any(ResourceKey.class))).thenReturn(false);
+        lenient().when(source.is(any(TagKey.class))).thenReturn(false);
         return source;
     }
 
@@ -242,7 +245,7 @@ class EntityDamageListenerHunterTest {
         // only thing proving applyHunterMastery is CALLED at all — every other test here invokes it
         // directly, which is exactly the "gate proved, call site deleted" trap this port has hit.
         seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
-        when(attacker.isSneaking()).thenReturn(true);
+        when(attacker.isShiftKeyDown()).thenReturn(true);
 
         final StealthManager stealth = mock(StealthManager.class);
         when(stealth.assassinReady(anyBoolean(), anyLong())).thenReturn(true);
@@ -301,8 +304,8 @@ class EntityDamageListenerHunterTest {
         seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
         final Wolf wolf = mock(Wolf.class);
         final DamageSource bite = mock(DamageSource.class);
-        lenient().when(bite.getAttacker()).thenReturn(wolf);
-        lenient().when(bite.getSource()).thenReturn(wolf);
+        lenient().when(bite.getEntity()).thenReturn(wolf);
+        lenient().when(bite.getDirectEntity()).thenReturn(wolf);
 
         assertEquals(10F, EntityDamageListener.applyHunterMastery(zombie(), bite, 10F), EPSILON);
     }
@@ -323,9 +326,9 @@ class EntityDamageListenerHunterTest {
         // this would be a flat bonus on every tick of a blast, a lingering cloud or a lit TNT cart.
         seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
         final DamageSource blast = mock(DamageSource.class);
-        lenient().when(blast.getAttacker()).thenReturn(attacker);
-        lenient().when(blast.getSource()).thenReturn(mock(PrimedTnt.class));
-        lenient().when(blast.isOf(any())).thenReturn(false);
+        lenient().when(blast.getEntity()).thenReturn(attacker);
+        lenient().when(blast.getDirectEntity()).thenReturn(mock(PrimedTnt.class));
+        lenient().when(blast.is(any(ResourceKey.class))).thenReturn(false);
 
         assertEquals(10F, EntityDamageListener.applyHunterMastery(zombie(), blast, 10F), EPSILON);
     }
@@ -336,7 +339,7 @@ class EntityDamageListenerHunterTest {
         // arm, Smash and Assassin all make.
         seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
         final DamageSource thorns = melee();
-        when(thorns.isOf(DamageTypes.THORNS)).thenReturn(true);
+        when(thorns.is(DamageTypes.THORNS)).thenReturn(true);
 
         assertEquals(10F, EntityDamageListener.applyHunterMastery(zombie(), thorns, 10F), EPSILON);
     }
@@ -453,15 +456,15 @@ class EntityDamageListenerHunterTest {
         // attacker is a raw ServerPlayerEntity here, so this is vanilla's own sendMessage(Text) --
         // not PlatformPlayer's §-string overload.
         final ArgumentCaptor<Component> sent = ArgumentCaptor.forClass(Component.class);
-        Mockito.verify(attacker, Mockito.atMost(1)).sendMessage(sent.capture());
+        Mockito.verify(attacker, Mockito.atMost(1)).sendSystemMessage(sent.capture());
         return new Inspection(!allowed,
                 sent.getAllValues().isEmpty() ? "" : sent.getValue().getString());
     }
 
     /** Put a bone in the attacker's hand and crouch them — the full Quarry Sense gesture. */
     private void readyToInspect() {
-        when(attacker.getMainHandStack()).thenReturn(new ItemStack(Items.BONE));
-        when(attacker.isSneaking()).thenReturn(true);
+        when(attacker.getMainHandItem()).thenReturn(new ItemStack(Items.BONE));
+        when(attacker.isShiftKeyDown()).thenReturn(true);
     }
 
     @Test
@@ -560,8 +563,8 @@ class EntityDamageListenerHunterTest {
         // in the game, and a bone is a SKELETON'S OWN DROP. Without this, a player who picks one up
         // and is then set upon cannot swing back at anything.
         seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
-        when(attacker.getMainHandStack()).thenReturn(new ItemStack(Items.BONE));
-        when(attacker.isSneaking()).thenReturn(false);
+        when(attacker.getMainHandItem()).thenReturn(new ItemStack(Items.BONE));
+        when(attacker.isShiftKeyDown()).thenReturn(false);
 
         final Inspection inspection = inspect(zombie());
 
@@ -572,7 +575,7 @@ class EntityDamageListenerHunterTest {
     @Test
     void crouchingWithoutABoneIsAnOrdinaryBackstab() {
         seedKills(ZOMBIE_ID, TOP_TIER_KILLS);
-        when(attacker.isSneaking()).thenReturn(true);
+        when(attacker.isShiftKeyDown()).thenReturn(true);
 
         assertFalse(inspect(zombie()).cancelled(), "the hit must land");
     }

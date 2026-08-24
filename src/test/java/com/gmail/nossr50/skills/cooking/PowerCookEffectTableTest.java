@@ -140,11 +140,11 @@ class PowerCookEffectTableTest {
         // at 1 tick but fires at every tick thereafter would pass the cheaper check alone.
         for (String food : table.getKeys(false)) {
             final MobEffect effect = resolve(food).value();
-            assertFalse(effect.canApplyUpdateEffect(1, 0),
+            assertFalse(effect.shouldApplyEffectTickThisTick(1, 0),
                     () -> food + " maps to a status effect that applies EVERY TICK. Three seconds of"
                             + " one of those is sixty applications; Saturation would fill the hunger"
                             + " bar three times over from a single bite.");
-            assertFalse(effect.canApplyUpdateEffect(20, 0),
+            assertFalse(effect.shouldApplyEffectTickThisTick(20, 0),
                     () -> food + " maps to a per-tick status effect (caught at duration 20)");
         }
     }
@@ -153,11 +153,11 @@ class PowerCookEffectTableTest {
     void theCadenceCheckActuallyCatchesAPerTickEffect() {
         // The reference point for the test above. Without it, a canApplyUpdateEffect that always
         // answered false -- or a loop over an empty section -- would look identical to a clean table.
-        assertTrue(MobEffects.SATURATION.value().canApplyUpdateEffect(1, 0),
+        assertTrue(MobEffects.SATURATION.value().shouldApplyEffectTickThisTick(1, 0),
                 "Saturation must still be per-tick, or the check above is measuring nothing");
         // ⚠️ And the reason the check is not `instanceof InstantStatusEffect`: four of the seven
         // per-tick effects are not subclasses of it. Hunger is one of them.
-        assertTrue(MobEffects.HUNGER.value().canApplyUpdateEffect(1, 0));
+        assertTrue(MobEffects.HUNGER.value().shouldApplyEffectTickThisTick(1, 0));
     }
 
     // --- The bans and the exclusions --------------------------------------------------------------
@@ -244,7 +244,7 @@ class PowerCookEffectTableTest {
     /** The registry item a config key names, e.g. {@code Cooked_Beef} → {@code cooked_beef}. */
     private static Item item(String foodConfigString) {
         final String path = foodConfigString.toLowerCase(Locale.ENGLISH);
-        final Item found = BuiltInRegistries.ITEM.getOptionalValue(Identifier.ofVanilla(path)).orElse(null);
+        final Item found = BuiltInRegistries.ITEM.getOptional(Identifier.withDefaultNamespace(path)).orElse(null);
         assertNotNull(found, () -> foodConfigString + " is not a vanilla item (" + path + ")");
         return found;
     }

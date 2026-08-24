@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
 import net.minecraft.world.entity.monster.zombie.Zombie;
@@ -68,24 +69,24 @@ class MobTiersTest {
 
         // plans/new-skills/hunter.md, D-HU5's table. If one of these ever has to change, the plan
         // changes with it -- that is the point of naming them here rather than asserting a count.
-        assertEquals(1, MobTiers.tierOf(EntityType.CHICKEN));
-        assertEquals(1, MobTiers.tierOf(EntityType.COW));
-        assertEquals(1, MobTiers.tierOf(EntityType.SHEEP));
-        assertEquals(1, MobTiers.tierOf(EntityType.RABBIT));
+        assertEquals(1, MobTiers.tierOf(EntityTypes.CHICKEN));
+        assertEquals(1, MobTiers.tierOf(EntityTypes.COW));
+        assertEquals(1, MobTiers.tierOf(EntityTypes.SHEEP));
+        assertEquals(1, MobTiers.tierOf(EntityTypes.RABBIT));
 
-        assertEquals(2, MobTiers.tierOf(EntityType.ZOMBIE));
-        assertEquals(2, MobTiers.tierOf(EntityType.SKELETON));
-        assertEquals(2, MobTiers.tierOf(EntityType.CREEPER));
-        assertEquals(2, MobTiers.tierOf(EntityType.SPIDER));
+        assertEquals(2, MobTiers.tierOf(EntityTypes.ZOMBIE));
+        assertEquals(2, MobTiers.tierOf(EntityTypes.SKELETON));
+        assertEquals(2, MobTiers.tierOf(EntityTypes.CREEPER));
+        assertEquals(2, MobTiers.tierOf(EntityTypes.SPIDER));
 
-        assertEquals(3, MobTiers.tierOf(EntityType.BLAZE));
-        assertEquals(3, MobTiers.tierOf(EntityType.WITHER_SKELETON));
-        assertEquals(3, MobTiers.tierOf(EntityType.GUARDIAN));
-        assertEquals(3, MobTiers.tierOf(EntityType.RAVAGER));
+        assertEquals(3, MobTiers.tierOf(EntityTypes.BLAZE));
+        assertEquals(3, MobTiers.tierOf(EntityTypes.WITHER_SKELETON));
+        assertEquals(3, MobTiers.tierOf(EntityTypes.GUARDIAN));
+        assertEquals(3, MobTiers.tierOf(EntityTypes.RAVAGER));
 
-        assertEquals(4, MobTiers.tierOf(EntityType.WITHER));
-        assertEquals(4, MobTiers.tierOf(EntityType.ENDER_DRAGON));
-        assertEquals(4, MobTiers.tierOf(EntityType.WARDEN));
+        assertEquals(4, MobTiers.tierOf(EntityTypes.WITHER));
+        assertEquals(4, MobTiers.tierOf(EntityTypes.ENDER_DRAGON));
+        assertEquals(4, MobTiers.tierOf(EntityTypes.WARDEN));
     }
 
     @Test
@@ -99,15 +100,15 @@ class MobTiersTest {
         // Derivation alone gets both of these wrong, and for the same reason: their danger is not in
         // their attributes. A ghast has 10 health and no ATTACK_DAMAGE attribute at all; a wither
         // skeleton's ATTACK_DAMAGE is the inherited default 2.0, identical to a plain skeleton's.
-        assertEquals(2, MobTiers.tierOf(EntityType.GHAST),
+        assertEquals(2, MobTiers.tierOf(EntityTypes.GHAST),
                 "the derived rule is expected to under-rate the ghast -- that is why it is overridden");
-        assertEquals(2, MobTiers.tierOf(EntityType.WITHER_SKELETON),
+        assertEquals(2, MobTiers.tierOf(EntityTypes.WITHER_SKELETON),
                 "the derived rule is expected to under-rate the wither skeleton");
 
         loadShippedConfig(dataFolder);
 
-        assertEquals(3, MobTiers.tierOf(EntityType.GHAST));
-        assertEquals(3, MobTiers.tierOf(EntityType.WITHER_SKELETON));
+        assertEquals(3, MobTiers.tierOf(EntityTypes.GHAST));
+        assertEquals(3, MobTiers.tierOf(EntityTypes.WITHER_SKELETON));
     }
 
     @Test
@@ -115,7 +116,7 @@ class MobTiersTest {
         // The plan named the witch as a likely override ("26 HP and barely fights back") alongside
         // the ghast. It is not one: 26 health is below the T3 line, so the rule gets it right for
         // free. Pinned so nobody "completes" the override table by adding it.
-        assertEquals(2, MobTiers.tierOf(EntityType.WITCH));
+        assertEquals(2, MobTiers.tierOf(EntityTypes.WITCH));
     }
 
     // --- the reads themselves --------------------------------------------------------------------
@@ -128,7 +129,7 @@ class MobTiersTest {
         // about the species that a player can learn -- not about the individual's gear, its rolled
         // health, or the world difficulty it spawned on.
         final Zombie buffed = mock(Zombie.class);
-        Mockito.doReturn(EntityType.ZOMBIE).when(buffed).getType();
+        Mockito.doReturn(EntityTypes.ZOMBIE).when(buffed).getType();
         lenient().when(buffed.getMaxHealth()).thenReturn(500.0F);
 
         assertEquals(2, MobTiers.tierOf(buffed));
@@ -139,8 +140,8 @@ class MobTiersTest {
         // Pins the has() guard in tierOf. The dragon genuinely has no ATTACK_DAMAGE entry -- its
         // 200 health is the only signal available, and reading a missing attribute instead of
         // testing for it is the kind of thing that throws once, in a live world, on a boss fight.
-        assertTrue(DefaultAttributes.hasDefinitionFor(EntityType.ENDER_DRAGON));
-        assertEquals(4, MobTiers.tierOf(EntityType.ENDER_DRAGON));
+        assertTrue(DefaultAttributes.hasSupplier(EntityTypes.ENDER_DRAGON));
+        assertEquals(4, MobTiers.tierOf(EntityTypes.ENDER_DRAGON));
     }
 
     @Test
@@ -149,9 +150,9 @@ class MobTiersTest {
         // iron golem is the only vanilla mob it catches (100 health); a horse is the nearest miss at
         // 53, and a rule written as ">= 50" would silently sweep every horse, donkey, mule and llama
         // in the game into T2.
-        assertEquals(2, MobTiers.tierOf(EntityType.IRON_GOLEM));
-        assertEquals(1, MobTiers.tierOf(EntityType.HORSE));
-        assertEquals(1, MobTiers.tierOf(EntityType.LLAMA));
+        assertEquals(2, MobTiers.tierOf(EntityTypes.IRON_GOLEM));
+        assertEquals(1, MobTiers.tierOf(EntityTypes.HORSE));
+        assertEquals(1, MobTiers.tierOf(EntityTypes.LLAMA));
     }
 
     @Test
@@ -161,9 +162,9 @@ class MobTiersTest {
         // helps -- nether-wastes piglins are legitimately NATURAL. At a 5.0 threshold that farm would
         // pay 800 a kill instead of 300. The blaze (6.0) is what the rule exists to catch, and its
         // farm is spawner-fed, which stage 1 already closes.
-        assertEquals(2, MobTiers.tierOf(EntityType.ZOMBIFIED_PIGLIN));
-        assertEquals(2, MobTiers.tierOf(EntityType.PIGLIN));
-        assertEquals(3, MobTiers.tierOf(EntityType.BLAZE));
+        assertEquals(2, MobTiers.tierOf(EntityTypes.ZOMBIFIED_PIGLIN));
+        assertEquals(2, MobTiers.tierOf(EntityTypes.PIGLIN));
+        assertEquals(3, MobTiers.tierOf(EntityTypes.BLAZE));
     }
 
     @Test
@@ -171,8 +172,8 @@ class MobTiersTest {
         // Deliberately NOT the "minecraft:wither_skeleton" the kills map uses. This table is hand
         // written in advanced.yml next to experience.yml's Combat.Multiplier, which has used this
         // form for a decade -- and a namespaced key would need quoting in YAML to survive the colon.
-        assertEquals("Wither_Skeleton", MobTiers.configKeyOf(EntityType.WITHER_SKELETON));
-        assertEquals("Zombie", MobTiers.configKeyOf(EntityType.ZOMBIE));
+        assertEquals("Wither_Skeleton", MobTiers.configKeyOf(EntityTypes.WITHER_SKELETON));
+        assertEquals("Zombie", MobTiers.configKeyOf(EntityTypes.ZOMBIE));
     }
 
     // --- completeness ----------------------------------------------------------------------------
@@ -184,7 +185,7 @@ class MobTiersTest {
 
         final List<String> broken = new ArrayList<>();
         for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
-            if (!DefaultAttributes.hasDefinitionFor(type)) {
+            if (!DefaultAttributes.hasSupplier(type)) {
                 continue; // not a living entity: boats, arrows, item frames.
             }
             final int tier = MobTiers.tierOf((EntityType<? extends LivingEntity>) type);
