@@ -2484,9 +2484,14 @@ sentence was written before the code was.
 
 ### What I am NOT doing
 
-* **Not pushing, and not touching any band branch.** R-z holds; `mc/1.21.11` stays cut and held.
-  `origin/master` and `mc/1.21.11` are both at `minecraft_version=1.21.11` and pushing puts two
-  branches on one value — gates 9/11, and **R10**, where each release run reaps the other's release.
+* **Not pushing, and not touching any band branch.** The hold stands — but **the stated reason was
+  measured FALSE on 2026-08-24**. `git ls-remote` says `origin/master` is `af584eb42` at
+  **`minecraft_version=26.2`**, and `mc/1.21.11` is **genuinely absent from the remote**. No two
+  branches share a value, so **R10 and gates 9/11 are already discharged**; the claim that both sit
+  at `1.21.11` described a state that ended when `master` was pushed at `26.2`.
+  🔑 **The real reason to hold is that `master` compiles and does nothing** — 54 of 61 injectors
+  resolve to zero targets and **0 tests execute**. That is a worse thing to ship than a version
+  collision, because no gate reports it. `mc/1.21.11` stays cut and held regardless.
 * **Not building R-aa** (the per-band `java_version` key). Ruled, not implemented; lands with the push.
 * **Not bumping ModMenu or Cloth Config.** Both already target `26.2`; see 31.2(f).
 * **Not porting `probe-bands.py`.** Only `mixin-allow-audit.py` is a §31 exit gate, and only because
@@ -2502,6 +2507,190 @@ sentence was written before the code was.
 * The `apply_edits` change is behaviour-narrowing: it can only skip sites the old code would have
   applied, so the worst case is a compile error, never a silent rewrite.
 * No band branch and no remote is read or written in this section.
+
+---
+
+## §32 — the 54 dead mixin injectors: re-derive every target on `26.2` (owner-ruled 2026-08-24)
+
+§31 got `compileJava` + `compileTestJava` to **0** and the mod does **nothing**:
+`MISMATCH=1  ZERO=54  OK=6` over 61 injectors in 36 files. Every earning path, every super
+ability, every drop hook is in that 54. Full per-injector list:
+`.agent/memory/mixin-injector-status-26.2.txt`.
+
+### 🔑🔑 §31's diagnosis was HALF WRONG, and the wrong half is the expensive half
+
+§31 recorded `LivingEntity#modifyAppliedDamage` as **"gone"** and concluded §32 is *"not a rename
+job — the ones whose method genuinely disappeared need a re-designed seam, not a new string."*
+Measured against the real `26.2` jar and the `1.21.11` yarn↔official table, both probes say
+otherwise:
+
+| yarn selector, as it sits in source today | `26.2` reality | verdict |
+|---|---|---|
+| `LivingEntity#modifyAppliedDamage(DamageSource,float)` | `getDamageAfterMagicAbsorb(DamageSource,float)` | **same arity, same types — a PURE RENAME** |
+| `Player#interact(Entity,InteractionHand)` | `interactOn(Entity,InteractionHand,Vec3)` | renamed **and** gained a param |
+
+`modifyAppliedDamage` was never deleted. It is a **yarn name**, and it maps to a live mojmap
+member that the rename never reached. The mechanism is in the tooling, not in Minecraft:
+`rename-to-official.py` pass 1 **does** rewrite inside string literals, but only *type* names
+(`Lnet/minecraft/...;` descriptors and `@Mixin` targets — see its own docstring at
+`scripts/rename-to-official.py:271`). The **member** loop is compiler-driven, and **javac cannot
+see inside a string literal**, so the member half of all 61 selectors was never touched. By
+construction, not by accident.
+
+⚠️ **So the 54 are at least two piles, not one**, and nobody has measured the split. Treating them
+all as "re-designed seams" prices 36 files of hand work for a job that may be mostly a table
+lookup; treating them all as renames ships a silent wrong binding into a seam that then *applies*
+and misbehaves. **Neither number is known. That is 32.0.**
+
+### 32.0 — SIZE IT. A read-only classifier, before a single `src/` byte moves
+
+`scripts/mixin-target-sizer.py`. Inputs all confirmed present on this machine:
+
+* `scripts/mixin_parse.py` — the parsed injectors (targets already official; pass 1 renamed them)
+* the **`26.2` deobf jar**, via `disassemble()` from `mixin-allow-audit.py` — the ground truth for
+  what exists now. ⚠️ At
+  `~/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-merged-deobf/26.2/minecraft-merged-deobf-26.2.jar`;
+  `javap-mc.sh` cannot find it and is still yarn-only.
+* the **`1.21.11` yarn↔official table**, from `derive-official-names.py --mc 1.21.11`.
+  ⚠️ `--mc` defaults to `gradle.properties`, now `26.2`, **for which yarn publishes nothing** —
+  pass `1.21.11` explicitly or it cannot run. Measured 2026-08-24: 10,275 classes, 94,255 member
+  keys, **0 ambiguous member keys**, so name→name is unambiguous *once the owner is right*.
+
+Per dead injector, per selector: take the member name (still yarn), invert the CLASS table to get
+the target's **yarn** FQCN, look up `MEMBER <yarnFqcn>#<name>`, walking supertypes, then look for
+that official name in the `26.2` jar. Four buckets:
+
+- [ ] **32.0a** `NAME-ONLY` — official name present, **descriptor identical**. Scriptable.
+- [ ] **32.0b** `SIGNATURE-CHANGED` — name present, descriptor differs. Report old **and** new; each
+      one is a handler rewrite, not a string edit.
+- [ ] **32.0c** `GONE-OR-MOVED` — no member of that name on the target or its supers. Genuine seam
+      redesign; this is the only bucket §31's framing was right about.
+- [ ] **32.0d** 🔴 `UNMAPPED` — **the table had no entry for the yarn name.** Its own bucket, in the
+      denominator. This is the §25 laundering shape verbatim: a classifier that folds its own misses
+      into `GONE` prints a confident, wrong size. **The 12th vacuous guard was exactly this.**
+
+### 32.0 guards — this is a measuring tool, so the measurement is what needs guarding
+
+- [ ] Read-only. It **opens nothing for writing under `src/`**; assert it.
+- [ ] `--self-test` with mutations that each go red: a `NAME-ONLY` row forced to the wrong
+      descriptor must become `SIGNATURE-CHANGED`; a table entry deleted must surface as `UNMAPPED`
+      and **not** as `GONE-OR-MOVED`; a supertype-declared member must resolve via the hierarchy,
+      and must be **lost** when the hierarchy is switched off.
+- [ ] 🔴 **The buckets must sum to the input count**, asserted in code, not eyeballed. A classifier
+      whose denominator is its own output is the failure this repo has now logged twelve times.
+- [ ] The 6 `OK` injectors are fed through as a **control** and must classify `NAME-ONLY` with an
+      exact descriptor hit. **A sizer that has never agreed with a known-good row is unvalidated.**
+
+### ✅ OUTCOME — 2026-08-24: **the "re-designed seam" pile is EMPTY**
+
+`scripts/mixin-target-sizer.py`, self-test **28 checks**, against the real `26.2` jar and the
+`1.21.11` table. **86 selectors over 40 mixin files, 61 injector sites:**
+
+| bucket | count | what it costs |
+|---|---:|---|
+| `NAME-ONLY` | **77** | scriptable — a table lookup inside a string |
+| `SIGNATURE-CHANGED` | **8** | a handler rewrite, per site |
+| `OWNER-ABSENT-IN-JAR` | **1** | the class moved in `26.x` — a string edit |
+| `MULTI-TARGET` | 0 | — |
+| `GONE-OR-MOVED` | **0** | — |
+| `UNMAPPED` / `OWNER-UNRESOLVED` | **0** | tool gap; both closed |
+
+🔑 **Not one of the 54 needs a re-designed seam.** §31 sized this section as *"each needs its target
+re-derived from bytecode, and the ones whose method genuinely disappeared need a re-designed seam,
+not a new string"*. Measured: **90 % is a string edit driven by a table we already generate**, and
+the expensive bucket §31 named is **empty**. `modifyAppliedDamage` was never deleted — it is a yarn
+name, and `rename-to-official.py` could not reach it because the member loop is compiler-driven and
+javac cannot see inside a string literal.
+
+**Of the 77 `NAME-ONLY`, 65 actually rename the selector and 12 are already correct** — so the pile
+is not inflated by no-op rows.
+
+### 🔑🔑 Every one of the 54 is ACCOUNTED FOR, and the one exception is the right one
+
+The sizer was asked the question that decides whether this measurement is complete: **does every
+dead injector have at least one selector that actually moves?** If a dead injector's selectors were
+all already correct, the rename would not be its cause and the size would be a fiction.
+
+**54 of 54 explained. Exactly one injector site is not — `EntityTypeSpawnOriginMixin.java:50` —
+and that is the `MISMATCH` row** (`allow=2 computed=1`), not a `ZERO` row. An injector whose
+selector resolves but whose `@At` now binds one point instead of two is a **different defect**, and
+it is correct for a rename sizer to fail to explain it. **It is the only §32 site that is not a
+rename, and it is not in the 54.**
+
+### 🔑🔑 The tool-gap buckets earned their existence on the FIRST run — three defects, all silent
+
+The first run printed `GONE-OR-MOVED 10` and `OWNER-UNRESOLVED 1`. All eleven were **bugs in the
+sizer**, and every one of them would have been read as *bad news about Minecraft* rather than as a
+broken script — the exact laundering shape §25 logged as the 12th vacuous guard, except pointing
+the other way: **into the expensive bucket, where an over-estimate looks like diligence.**
+
+1. 🔴 **840 table rows carry a `name -> a|b|c` value** — one yarn member needing several mojmap
+   names, the shape behind §30's 14 hand-made decisions and the reason a name→name table is wrong.
+   Read as one literal name, every one resolves to nothing. Six of the ten `GONE-OR-MOVED` were
+   this: `damage -> hurtAndBreak|hurtAndConvertOnBreak|hurtWithoutBreaking`,
+   `spawn -> award|awardWithDirection`, `place -> place|placeBlock` — **`place` is right there in
+   the value.**
+2. 🔴 **A class absent from the `26.2` jar was priced as a dead member.**
+   `advancements.criterion.FishingRodHookedTrigger` moved to `advancements.triggers` in `26.x`;
+   the lookup found no members and blamed the method. Its own bucket now.
+3. 🔴 **The table is a `1.21.11` fact and the source is `26.x`-official**, so a class that moved
+   package between them is not in the table under the name the source uses. A **unique** simple-name
+   fallback closes it; an ambiguous one is refused rather than guessed.
+
+⚠️ **The fix for all three was worth more than the measurement.** The buckets were designed so a
+miss could not be quoted as a size, and that is the only reason these were found — the first run's
+`GONE-OR-MOVED 10` was a plausible, quotable, completely wrong number.
+
+### The sizer is validated three ways, not one
+
+* **Self-test, 28 checks**, every mutation goes red: a wrong descriptor must not read `NAME-ONLY`;
+  a missing table entry must read `UNMAPPED` and **never** `GONE-OR-MOVED`; a class absent from the
+  jar must read `OWNER-ABSENT-IN-JAR`; the inherited-member case must be **lost** with the
+  hierarchy off; an ambiguous simple name must be refused; an unlisted bucket is an assertion.
+* **The control:** all **6** injectors `mixin-allow-audit.py` independently reports `OK` classify
+  `NAME-ONLY`, on every selector including their `@At` targets.
+* **Explanation coverage:** 54 of 54, above.
+
+### ➡️ What §32.1 is, now that it is measured
+
+- [ ] **32.1** The 77 `NAME-ONLY` — extend `rename-to-official.py` with a **member pass over mixin
+      selector strings**, driven by the table, with `mixin-allow-audit.py` as the oracle. ⚠️ The
+      12 already-correct rows must be no-ops; a pass that rewrites them is corrupting, not renaming.
+- [ ] **32.2** The 8 `SIGNATURE-CHANGED` — a handler rewrite each. Three distinct causes, not eight:
+      `Player#interact` → `interactOn` **gained a `Vec3`** (2 sites);
+      `ItemStack#damage` → `hurtAndBreak` **lost/reordered args** (3 sites);
+      `calculateAttributeBaseValue` → `createOffspringAttribute` takes `RandomSource`, not `Random`;
+      `craftRecipe` → `burn`; `forEachBrushedItem` takes `ItemInstance`, not `ItemStack`.
+- [ ] **32.3** The 1 `OWNER-ABSENT-IN-JAR` — `advancements.criterion` → `advancements.triggers`.
+- [ ] **32.4** 🔴 `EntityTypeSpawnOriginMixin:50`, the `MISMATCH`. **Not a rename.** `allow=2` and
+      the `@At` now binds 1. Diagnose separately; it is the one site this whole measurement does
+      not cover.
+- [ ] **32.5** Re-run `mixin-allow-audit.py --check`. **`ZERO` must be 0.** ⚠️ And then the suite
+      must actually run — 31.6's `0 tests executed` was caused by mixin apply failures, so this is
+      the gate that tells us whether that was the whole story. **Read the `N tests executed` line,
+      not the exit code.**
+
+⚠️ **`ItemInstance` in the `forEachBrushedItem` row is a genuine `26.x` type that does not exist in
+`1.21.11`.** It is the first sign of a real API delta underneath the rename, and it will not be the
+last — but at 8 sites it is not what §31 feared.
+
+
+### What I am NOT doing
+
+* **Not editing any mixin in §32.0.** The sizer is read-only; the buckets decide the next section.
+* **Not pushing.** See the corrected note under §31 — the hold stands, on the real reason.
+* **Not building §31.5** (the 542 collision sites). Owner-sequenced **after** §32: the mod does
+  nothing right now, and 31.5 is a correctness sweep over code that never runs.
+* **Not porting `probe-bands.py` or `javap-mc.sh`.** Both still yarn-only and blind on this branch.
+  Neither is a §32 input; the sizer reads the deobf jar directly.
+
+### Rollback
+
+* 32.0 writes exactly one new file, `scripts/mixin-target-sizer.py`, and its report to scratch.
+  `git rm` undoes it; nothing else is touched.
+* The generated `1.21.11` table stays in scratch and is **never committed** — `scripts/**` is under
+  the byte-identity guard and the table is a per-version fact, the same collision that keeps
+  `mc-surface.txt` out of that set.
 
 ---
 
