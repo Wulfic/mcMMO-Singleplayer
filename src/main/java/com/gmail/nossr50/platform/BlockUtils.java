@@ -8,6 +8,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.TagKey;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.core.BlockPos;
@@ -235,9 +238,20 @@ public final class BlockUtils {
      * @param blockState the broken block's state
      * @return the group name, or {@code null} if the block drops no Hylian treasure
      */
+    /**
+     * The {@code minecraft:saplings} block tag.
+     *
+     * <p>Declared here rather than taken from {@code BlockTags} because 26.2 dropped the
+     * {@code SAPLINGS} CONSTANT from that class. The tag itself is unaffected and still ships
+     * (<code>data/minecraft/tags/block/saplings.json</code>), so resolving it by id is exact
+     * rather than a substitute -- and it keeps working on every version that has the tag.
+     */
+    private static final TagKey<Block> SAPLINGS =
+            TagKey.create(Registries.BLOCK, Identifier.withDefaultNamespace("saplings"));
+
     public static @Nullable String getHylianTreasureGroup(@NotNull BlockState blockState) {
         return BlockRules.hylianTreasureGroup(idPath(blockState.getBlock()),
-                () -> blockState.isIn(BlockTags.SAPLINGS),
+                () -> blockState.is(SAPLINGS),
                 () -> blockState.is(BlockTags.FLOWER_POTS));
     }
 
@@ -377,7 +391,7 @@ public final class BlockUtils {
         for (int i = 0; i < moved.size(); i++) {
             final BlockPos pos = moved.get(i);
             movedFrom[i] = pos.asLong();
-            movedTo[i] = pos.offset(motion).asLong();
+            movedTo[i] = pos.relative(motion).asLong();
         }
         final long[] brokenKeys = new long[broken.size()];
         for (int i = 0; i < broken.size(); i++) {

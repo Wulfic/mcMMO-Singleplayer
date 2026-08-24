@@ -392,7 +392,7 @@ public final class SmeltingListener {
             if (!(entry.value() instanceof SmeltingRecipe recipe) || !hasOreBlockInput(recipe, ores)) {
                 continue;
             }
-            final ItemStack result = recipe.assemble(EMPTY_RECIPE_INPUT, server.registryAccess());
+            final ItemStack result = recipe.assemble(EMPTY_RECIPE_INPUT);
             if (!result.isEmpty()) {
                 products.add(result.getItem());
             }
@@ -424,7 +424,7 @@ public final class SmeltingListener {
                 .filter(item -> item instanceof BlockItem)
                 .filter(item -> McMMOMod.getMaterialMapStore()
                         .isOre(BuiltInRegistries.ITEM.getKey(item).getPath()))
-                .map(BuiltInRegistries.ITEM::getEntry)
+                .map(BuiltInRegistries.ITEM::wrapAsHolder)
                 .toList();
     }
 

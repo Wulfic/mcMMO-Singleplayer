@@ -807,7 +807,7 @@ public final class BlockBreakListener {
      */
     private static void awardLakeRaiderTreasure(McMMOPlayer mmoPlayer, ServerLevel world,
             BlockPos pos, ServerPlayer breaker, String blockId) {
-        if (!breaker.wasUnderwater()) {
+        if (!breaker.isUnderWater()) {
             return;
         }
         final MovementManager agility = mmoPlayer.getMovementManager();

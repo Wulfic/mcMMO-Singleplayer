@@ -213,7 +213,7 @@ public final class PetCombatSweep {
                 .toList();
 
         final Optional<Mob> chosen =
-                PetTargeting.nearestToPlayer(eligible, player::squaredDistanceTo);
+                PetTargeting.nearestToPlayer(eligible, player::distanceToSqr);
         chosen.ifPresent(pet::setTarget);
     }
 

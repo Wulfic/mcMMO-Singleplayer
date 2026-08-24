@@ -135,7 +135,7 @@ public final class PetFollowTeleport {
         if (world == null) {
             return 0;
         }
-        final AABB searchBox = AABB.of(from, radius * 2, radius * 2, radius * 2);
+        final AABB searchBox = AABB.ofSize(from, radius * 2, radius * 2, radius * 2);
         final List<TamableAnimal> pets = world.getEntitiesOfClass(TamableAnimal.class, searchBox,
                 pet -> isFollower(pet, player));
 
@@ -185,7 +185,7 @@ public final class PetFollowTeleport {
 
         final Vec3 destination = player.position();
         // Cast load-bearing below 1.21.9, and not usable on 1.21.6 – 1.21.8 — see bringPetsFrom.
-        final boolean placed = pet.teleport((ServerLevel) player.level(), destination.x, destination.y,
+        final boolean placed = pet.teleportTo((ServerLevel) player.level(), destination.x, destination.y,
                 destination.z, EnumSet.noneOf(Relative.class), pet.getYRot(), pet.getXRot(),
                 false);
         if (!placed) {

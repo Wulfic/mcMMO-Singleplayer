@@ -89,7 +89,7 @@ public final class TextUtils {
         if (formatting == ChatFormatting.RESET) {
             return Style.EMPTY;
         }
-        if (formatting.isColor()) {
+        if (TextColor.fromLegacyFormat(formatting) != null) {
             // A colour code resets active decorations, matching legacy section-code behaviour.
             return Style.EMPTY.withColor(formatting);
         }

@@ -197,7 +197,7 @@ public final class PlayerMovementTracker {
     }
 
     private static void onServerTick(@NotNull MinecraftServer server) {
-        for (ServerPlayer player : server.getPlayers().getPlayerList()) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             try {
                 tickPlayer(player);
             } catch (Exception e) {
@@ -575,7 +575,7 @@ public final class PlayerMovementTracker {
      */
     private static void applyLeadLungs(@NotNull ServerPlayer player,
             @NotNull MovementManager agility) {
-        if (!player.wasUnderwater()) {
+        if (!player.isUnderWater()) {
             return;
         }
         final int topUp = agility.consumeLeadLungsAirTopUp();

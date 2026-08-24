@@ -361,7 +361,7 @@ public final class FishingListener {
             ThreadLocalRandom rng) {
         final Map<String, Holder<Enchantment>> byId = new LinkedHashMap<>();
         for (Holder<Enchantment> entry : serverPlayer.registryAccess()
-                .getOrThrow(Registries.ENCHANTMENT).getIndexedEntries()) {
+                .lookupOrThrow(Registries.ENCHANTMENT).listElements().toList()) {
             entry.unwrapKey().ifPresent(key -> byId.put(key.identifier().getPath(), entry));
         }
         warnUnknownWhitelistedEnchantments(book, byId.keySet());
@@ -386,7 +386,7 @@ public final class FishingListener {
         final ItemEnchantments.Mutable builder = new ItemEnchantments.Mutable(
                 EnchantmentHelper.getEnchantmentsForCrafting(treasureStack));
         builder.set(byId.get(picked.get().enchantmentId()), picked.get().level());
-        EnchantmentHelper.set(treasureStack, builder.toImmutable());
+        EnchantmentHelper.setEnchantments(treasureStack, builder.toImmutable());
         return true;
     }
 
@@ -457,7 +457,7 @@ public final class FishingListener {
         }
 
         final Registry<Enchantment> enchantmentRegistry =
-                serverPlayer.registryAccess().getOrThrow(Registries.ENCHANTMENT);
+                serverPlayer.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
         final Map<String, Holder<Enchantment>> resolved = new HashMap<>();
         final List<EnchantmentTreasure> candidates = new ArrayList<>();
 
@@ -490,7 +490,7 @@ public final class FishingListener {
         Collections.shuffle(candidates, rng);
 
         final Set<Holder<Enchantment>> alreadyOnItem =
-                EnchantmentHelper.keySetForCrafting(treasureStack).getEnchantments();
+                EnchantmentHelper.getEnchantmentsForCrafting(treasureStack).keySet();
         final List<EnchantmentTreasure> chosen = fishingManager.selectMagicHunterEnchants(candidates,
                 (selectedSoFar, candidate) -> conflictsWithAny(alreadyOnItem, selectedSoFar, resolved,
                         candidate),
@@ -505,7 +505,7 @@ public final class FishingListener {
         for (EnchantmentTreasure treasure : chosen) {
             builder.set(resolved.get(treasure.enchantmentId()), treasure.level());
         }
-        EnchantmentHelper.set(treasureStack, builder.toImmutable());
+        EnchantmentHelper.setEnchantments(treasureStack, builder.toImmutable());
         return true;
     }
 

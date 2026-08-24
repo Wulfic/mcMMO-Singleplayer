@@ -4,7 +4,7 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
@@ -35,29 +35,30 @@ public final class McMMOInfoScreen extends Screen {
         final int buttonWidth = 220;
         int y = this.height / 2;
 
-        this.addDrawableChild(Button.builder(
+        this.addRenderableWidget(Button.builder(
                 Component.literal("Open Config Folder"), button -> openConfigFolder())
                 .bounds(centerX - buttonWidth / 2, y, buttonWidth, 20)
                 .build());
 
         y += 24;
-        this.addDrawableChild(Button.builder(
-                Component.translatable("gui.done"), button -> close())
+        this.addRenderableWidget(Button.builder(
+                Component.translatable("gui.done"), button -> onClose())
                 .bounds(centerX - buttonWidth / 2, y, buttonWidth, 20)
                 .build());
     }
 
     @Override
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        super.render(context, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY,
+            float delta) {
+        super.extractRenderState(context, mouseX, mouseY, delta);
         final int centerX = this.width / 2;
-        context.drawCenteredTextWithShadow(this.textRenderer, Component.literal("mcMMO"),
+        context.centeredText(this.font, Component.literal("mcMMO"),
                 centerX, this.height / 2 - 60, 0xFFFFFF);
-        context.drawCenteredTextWithShadow(this.textRenderer,
+        context.centeredText(this.font,
                 Component.literal("Install the Cloth Config API mod to edit mcMMO settings in-game.")
                         .withStyle(ChatFormatting.GRAY),
                 centerX, this.height / 2 - 40, 0xAAAAAA);
-        context.drawCenteredTextWithShadow(this.textRenderer,
+        context.centeredText(this.font,
                 Component.literal("Otherwise, edit the .yml files directly. Changes apply on world load.")
                         .withStyle(ChatFormatting.GRAY),
                 centerX, this.height / 2 - 28, 0xAAAAAA);
@@ -73,9 +74,9 @@ public final class McMMOInfoScreen extends Screen {
     }
 
     @Override
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.setScreenAndShow(parent);
         }
     }
 }

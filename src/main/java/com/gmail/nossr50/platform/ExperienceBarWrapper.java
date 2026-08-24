@@ -9,7 +9,9 @@ import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.text.TextUtils;
 import com.gmail.nossr50.util.player.PlayerLevelUtils;
 import com.gmail.nossr50.util.text.StringUtils;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.UUID;
 import net.minecraft.world.BossEvent;
 import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerPlayer;
@@ -39,6 +41,26 @@ public final class ExperienceBarWrapper implements ExperienceBar {
     /** The skill level the title currently reflects, so it is only re-rendered on a level change. */
     private int lastLevelRendered;
 
+    /**
+     * The boss bar's network id, stable for one player's one skill.
+     *
+     * <p>26.2 added a leading {@code UUID} to the {@link ServerBossEvent} constructor. That id is
+     * what the client keys the bar on, so the choice is load-bearing rather than cosmetic:
+     * {@code UUID.randomUUID()} would mint a new bar every time a wrapper is constructed, and this
+     * wrapper is deliberately re-creatable — the class note above exists because the
+     * {@link ServerPlayer} is rebuilt on respawn and End-exit. A fresh id there would leave the
+     * previous bar orphaned on the client instead of replacing it, and mcMMO already caps how many
+     * bars may show at once.
+     *
+     * <p>Derived from the profile UUID rather than the live entity for the same reason {@code show()}
+     * re-resolves the handle: the profile id survives the entity being replaced.
+     */
+    private static UUID barId(McMMOPlayer mmoPlayer, PrimarySkillType skill) {
+        final UUID owner = mmoPlayer.getProfile().getUniqueId();
+        return UUID.nameUUIDFromBytes(
+                ("mcmmo:xpbar:" + owner + ':' + skill.name()).getBytes(StandardCharsets.UTF_8));
+    }
+
     public ExperienceBarWrapper(PrimarySkillType primarySkillType, McMMOPlayer mmoPlayer) {
         this.primarySkillType = primarySkillType;
         this.mmoPlayer = mmoPlayer;
@@ -47,6 +69,7 @@ public final class ExperienceBarWrapper implements ExperienceBar {
 
         final ExperienceConfig config = McMMOMod.getExperienceConfig();
         this.bossBar = new ServerBossEvent(
+                barId(mmoPlayer, primarySkillType),
                 renderTitle(),
                 mapColor(config.getExperienceBarColorName(primarySkillType)),
                 mapStyle(config.getExperienceBarStyleName(primarySkillType)));

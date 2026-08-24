@@ -1361,7 +1361,8 @@ public final class EntityDamageListener {
             // Away from the attacker: takeKnockback's x/z are the vector *from* the source, and it
             // negates them internally, so pass the attacker-to-target direction as-is.
             target.knockback(knockback,
-                    attacker.getX() - target.getX(), attacker.getZ() - target.getZ());
+                    attacker.getX() - target.getX(), attacker.getZ() - target.getZ(),
+                    source, amount);
         }
         NotificationManager.sendPlayerInformation(mmoPlayer, NotificationType.SUBSKILL_MESSAGE,
                 "Parkour.SubSkill.Smash.Proc");

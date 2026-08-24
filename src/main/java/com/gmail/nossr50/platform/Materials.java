@@ -78,7 +78,7 @@ public final class Materials {
             McMMOMod.LOGGER.warn("No vanilla item for material name '{}'", name);
             return Optional.empty();
         }
-        return Optional.of(BuiltInRegistries.ITEM.get(id));
+        return Optional.of(BuiltInRegistries.ITEM.getValue(id));
     }
 
     /**
@@ -97,7 +97,7 @@ public final class Materials {
             McMMOMod.LOGGER.warn("No vanilla block for material name '{}'", name);
             return Optional.empty();
         }
-        return Optional.of(BuiltInRegistries.BLOCK.get(id));
+        return Optional.of(BuiltInRegistries.BLOCK.getValue(id));
     }
 
     /** Whether a vanilla item exists for the given name. Does not log on miss. */

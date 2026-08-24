@@ -50,7 +50,7 @@ public final class BlockDrops {
             return false;
         }
         final Holder<Enchantment> silkTouch = world.registryAccess()
-                .getOrThrow(Registries.ENCHANTMENT)
+                .lookupOrThrow(Registries.ENCHANTMENT)
                 .getOrThrow(Enchantments.SILK_TOUCH);
         return EnchantmentHelper.getItemEnchantmentLevel(silkTouch, tool) > 0;
     }

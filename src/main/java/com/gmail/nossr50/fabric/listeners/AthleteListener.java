@@ -65,7 +65,7 @@ public final class AthleteListener {
         if (server == null) {
             return null;
         }
-        for (ServerPlayer player : server.getPlayers().getPlayerList()) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (player.getFoodData() == hungerManager) {
                 return player;
             }

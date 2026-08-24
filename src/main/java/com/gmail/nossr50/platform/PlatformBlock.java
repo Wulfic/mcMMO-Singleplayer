@@ -89,11 +89,11 @@ public final class PlatformBlock {
     // --- Navigation (Bukkit getRelative) ------------------------------------
 
     public @NotNull PlatformBlock getRelative(@NotNull Direction direction) {
-        return new PlatformBlock(world, pos.offset(direction));
+        return new PlatformBlock(world, pos.relative(direction));
     }
 
     public @NotNull PlatformBlock getRelative(@NotNull Direction direction, int distance) {
-        return new PlatformBlock(world, pos.offset(direction, distance));
+        return new PlatformBlock(world, pos.relative(direction, distance));
     }
 
     // --- Drops (Bukkit getDrops) --------------------------------------------

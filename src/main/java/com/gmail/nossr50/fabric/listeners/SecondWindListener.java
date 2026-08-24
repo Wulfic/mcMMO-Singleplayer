@@ -193,13 +193,13 @@ public final class SecondWindListener {
      * shoulder still connects instead of requiring pixel-accurate aim.
      */
     private static void dart(@NotNull ServerPlayer player, @NotNull SecondWindResult result) {
-        final Vec3 look = player.getRotationVector().normalized();
-        final Vec3 lunge = look.multiply(result.magnitude());
+        final Vec3 look = player.getLookAngle().normalize();
+        final Vec3 lunge = look.scale(result.magnitude());
         setVelocity(player, player.getDeltaMovement().add(lunge.x, Math.max(0.1, lunge.y * 0.5), lunge.z));
 
         final ServerLevel world = (ServerLevel) player.level();
         final Vec3 from = player.position();
-        final Vec3 to = from.add(look.multiply(result.dartRange()));
+        final Vec3 to = from.add(look.scale(result.dartRange()));
         final AABB path = new AABB(from, to).inflate(DART_HIT_RADIUS);
 
         final List<Entity> hits = world.getEntities(player, path,
@@ -209,7 +209,8 @@ public final class SecondWindListener {
             target.hurtServer(world, world.damageSources().playerAttack(player),
                     (float) result.dartDamage());
             // Knock the target away from the player, along the horizontal lunge direction.
-            target.knockback(result.dartKnockback(), -look.x, -look.z);
+            target.knockback(result.dartKnockback(), -look.x, -look.z,
+                    world.damageSources().playerAttack(player), (float) result.dartDamage());
         }
     }
 
@@ -230,7 +231,7 @@ public final class SecondWindListener {
     /** Limitless: a forward-and-up burst for a gliding player. */
     private static void limitless(@NotNull ServerPlayer player,
             @NotNull SecondWindResult result) {
-        final Vec3 look = player.getRotationVector().normalized();
+        final Vec3 look = player.getLookAngle().normalize();
         final double boost = result.magnitude();
         setVelocity(player, player.getDeltaMovement()
                 .add(look.x * boost, look.y * boost + LIMITLESS_LIFT, look.z * boost));

@@ -212,7 +212,7 @@ public final class PlatformLivingEntity {
     }
 
     private void flingAlong(@NotNull Entity source, double multiplier) {
-        handle.setVelocity(source.getRotationVector().normalized().scale(multiplier));
+        handle.setDeltaMovement(source.getLookAngle().normalize().scale(multiplier));
         handle.needsSync = true;
     }
 
@@ -227,7 +227,7 @@ public final class PlatformLivingEntity {
      */
     public void teleportTo(@NotNull PlatformPlayer owner) {
         final Vec3 dest = owner.getPos();
-        handle.teleport(owner.getWorld(), dest.x, dest.y, dest.z,
+        handle.teleportTo(owner.getWorld(), dest.x, dest.y, dest.z,
                 EnumSet.noneOf(Relative.class), handle.getYRot(), handle.getXRot(), false);
     }
 

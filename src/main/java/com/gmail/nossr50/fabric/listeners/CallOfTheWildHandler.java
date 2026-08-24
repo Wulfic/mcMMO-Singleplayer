@@ -16,7 +16,7 @@ import com.gmail.nossr50.util.sounds.SoundType;
 import com.gmail.nossr50.platform.text.TextUtils;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
@@ -146,9 +146,9 @@ public final class CallOfTheWildHandler {
 
     private static Mob createEntity(CallOfTheWildType type, ServerLevel world) {
         return switch (type) {
-            case WOLF -> new Wolf(EntityType.WOLF, world);
-            case CAT -> new Cat(EntityType.CAT, world);
-            case HORSE -> new Horse(EntityType.HORSE, world);
+            case WOLF -> new Wolf(EntityTypes.WOLF, world);
+            case CAT -> new Cat(EntityTypes.CAT, world);
+            case HORSE -> new Horse(EntityTypes.HORSE, world);
         };
     }
 

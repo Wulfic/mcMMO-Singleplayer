@@ -228,7 +228,7 @@ public final class PlatformPlayer {
             McMMOMod.LOGGER.warn("No vanilla sound for id '{}'", soundRegistryId);
             return;
         }
-        SoundEvent soundEvent = BuiltInRegistries.SOUND_EVENT.get(id);
+        SoundEvent soundEvent = BuiltInRegistries.SOUND_EVENT.getValue(id);
         Vec3 pos = getPos();
         // except = null → all players in range hear it (the one player, in singleplayer).
         getWorld().playSound(null, pos.x, pos.y, pos.z, soundEvent, toVanilla(category), volume,
@@ -346,7 +346,7 @@ public final class PlatformPlayer {
      */
     public boolean hasFeatherFallingBoots() {
         Holder<Enchantment> featherFalling = getWorld().registryAccess()
-                .getOrThrow(Registries.ENCHANTMENT)
+                .lookupOrThrow(Registries.ENCHANTMENT)
                 .getOrThrow(Enchantments.FEATHER_FALLING);
         return EnchantmentHelper.getEnchantmentLevel(featherFalling, handle) > 0;
     }
@@ -380,7 +380,7 @@ public final class PlatformPlayer {
      */
     public boolean isHoldingItem(@NotNull String itemName) {
         final ItemStack held = handle.getMainHandItem();
-        return Materials.item(itemName).map(held::isOf).orElse(false);
+        return Materials.item(itemName).map(item -> held.getItem() == item).orElse(false);
     }
 
     /**
@@ -467,7 +467,7 @@ public final class PlatformPlayer {
         final int originalDigSpeed = EnchantmentHelper.getItemEnchantmentLevel(efficiency, stack);
         EnchantmentHelper.updateEnchantments(stack, builder -> builder.set(efficiency,
                 originalDigSpeed + enchantBuff));
-        CustomData.set(DataComponents.CUSTOM_DATA, stack,
+        CustomData.update(DataComponents.CUSTOM_DATA, stack,
                 nbt -> nbt.putInt(SUPER_ABILITY_BOOST_KEY, originalDigSpeed));
     }
 
@@ -520,7 +520,7 @@ public final class PlatformPlayer {
         if (!nbt.contains(SUPER_ABILITY_BOOST_KEY)) {
             return; // not a boosted stack.
         }
-        final int originalDigSpeed = nbt.getInt(SUPER_ABILITY_BOOST_KEY, 0);
+        final int originalDigSpeed = nbt.getIntOr(SUPER_ABILITY_BOOST_KEY, 0);
         final Holder<Enchantment> efficiency = efficiencyEntry();
         if (originalDigSpeed > 0) {
             EnchantmentHelper.updateEnchantments(stack, builder -> builder.set(efficiency, originalDigSpeed));
@@ -528,7 +528,7 @@ public final class PlatformPlayer {
             EnchantmentHelper.updateEnchantments(stack,
                     builder -> builder.removeIf(entry -> entry.is(Enchantments.EFFICIENCY)));
         }
-        CustomData.set(DataComponents.CUSTOM_DATA, stack,
+        CustomData.update(DataComponents.CUSTOM_DATA, stack,
                 marker -> marker.remove(SUPER_ABILITY_BOOST_KEY));
     }
 
@@ -540,7 +540,7 @@ public final class PlatformPlayer {
     /** Resolve the {@code Efficiency} enchantment entry from the world's dynamic registry. */
     private @NotNull Holder<Enchantment> efficiencyEntry() {
         return getWorld().registryAccess()
-                .getOrThrow(Registries.ENCHANTMENT)
+                .lookupOrThrow(Registries.ENCHANTMENT)
                 .getOrThrow(Enchantments.EFFICIENCY);
     }
 

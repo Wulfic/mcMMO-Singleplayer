@@ -8,7 +8,7 @@ import com.gmail.nossr50.fabric.mixin.HoeTillingActionsAccessor;
 import com.gmail.nossr50.util.McTestRegistries;
 import java.util.Arrays;
 import java.util.List;
-import net.minecraft.advancements.criterion.BredAnimalsTrigger;
+import net.minecraft.advancements.triggers.BredAnimalsTrigger;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.BrewingStandBlockEntity;
