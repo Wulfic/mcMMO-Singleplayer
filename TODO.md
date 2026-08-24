@@ -2185,6 +2185,250 @@ Classify every survivor as **mechanical miss** (⇒ fix in §30) or **genuine `2
 
 ---
 
+## §31 — the genuine `26.x` API delta: `master` to green (owner-ruled 2026-08-24)
+
+**Entry state, measured 2026-08-24** — `master` `af584eb42`, clean tree, `minecraft_version=26.2`:
+
+```
+baseline: 56 errors (maxerrs=20,000)
+  src/main: 56
+  src/test: 0
+  task compileJava: FAILED
+  task compileTestJava: NOT RUN      <- still not a pass
+```
+
+**Owner rulings for this section (2026-08-24):**
+
+1. **§31 ends when the whole tree is green** — `compileJava` **and** `compileTestJava` compile, and
+   the suite passes. It does not stop at "main hits zero". The test tree's size is unknown going in
+   and that is accepted.
+2. **30.5c is worked inside §31, with tooling** — not deferred, and not closed by sampling. The
+   receiver type is filtered mechanically first; only the survivors are read by hand. Reviewing 562
+   rows by eye is how the real one gets missed.
+3. **The rewriter is hardened before anything else** — see 31.0.
+
+### 🔴 31.0 — rule zero: `rename-to-official.py` is CORRUPTING IDENTIFIERS
+
+§30 recorded the 56 survivors as "the first real price of `26.x`, and none of them are mechanical".
+**That is false.** Four of them are damage this repo's own source rewriter did, and finding the
+second one is the part that matters.
+
+**The defect** — `apply_edits`, `scripts/rename-to-official.py:868-872`. javac reports a column; when
+the token at that column does not match (javac's caret for a member sits on the `.`, not on the
+member), the code falls back to:
+
+```python
+idx = row.find(old)
+```
+
+An **unanchored substring search over the whole line, taking the first hit**. It has no word
+boundary and no notion of whether the hit is a member access or a bare identifier.
+
+| Site | Was | Became | Mechanism |
+|---|---|---|---|
+| `FishingListener:389`, `:508`, `RepairSalvageListener:614` | `builder.build()` | `toImmutableer.build()` | `find("build")` hit `build` **inside the receiver** `builder`; the real member was never renamed |
+| `SmeltingListener:413` | `final Ingredient ingredient = recipe.ingredient();` | `final Ingredient input = recipe.input();` | `find("ingredient")` hit the **local variable declaration** first; `ingredient::acceptsItem` on the next line was left behind |
+
+**🔑🔑 The blast-radius audit that looked conclusive missed the second one.** A token-set diff of
+`master`'s `src/` against `origin/master`'s adds 243 identifiers, exactly one of which is bogus
+(`toImmutableer`). That audit is only sensitive to corruption that **invents a new token**.
+`ingredient` → `input` mangles into a name that already exists everywhere in the tree, so it is
+invisible to it — the same shape as the `Registry#getId` finding one section earlier, arrived at
+from the opposite direction. **A clean audit result bounds only what the audit can see.**
+
+**🔑 What javac CAN see, and it is more than §30 assumed.** Both corruptions surfaced as
+`cannot find symbol: variable X, location: class <one of OUR classes>` — a *bare* identifier failing
+to resolve inside our own type, which is a shape that never occurs from a genuine MC rename. That is
+a real, cheap detector, and it is the basis of 31.1.
+
+**The residual, stated honestly:** a corruption is invisible to javac only when the rewrite is
+*consistent* (declaration and every use, which is harmless) or when the mangled name collides with
+another in-scope identifier of assignable type. 31.1 is what bounds that.
+
+Deliverables:
+
+- [x] **31.0a** `apply_edits` refuses rather than guesses. It now tries javac's column **and
+      `col + 1`** — the caret sits on the `.`, so `col + 1` is the ordinary member hit — against
+      **whole-identifier offsets only**. Failing that it prefers occurrences reached through
+      `.`/`::` and applies **only if exactly one candidate survives**; otherwise the site is
+      **skipped and reported** into the worklist, never applied at an arbitrary offset. Fail closed
+      — a skipped site leaves a compile error, which this section prefers to a silent rewrite.
+      The change is behaviour-narrowing: it can only decline sites the old code would have applied.
+- [x] **31.0b** Self-test **76 → 94 checks**, and four mutations are watched go red:
+      left word boundary off, right word boundary off, member preference off, refusal off.
+      🔴 **The first cut of these fixtures was VACUOUS and only the mutation run showed it.** They
+      replayed the two real corruptions but passed javac's *real* caret column — and `col + 1`
+      resolves the member before anchoring or member-preference is ever consulted, so breaking
+      either guard left the suite at **88 checks, 0 failed**. The fixtures that carry weight pass an
+      **unusable** caret (1b, 2b, 3b). A further wrinkle: with the left boundary off, a spurious hit
+      always starts mid-identifier and is therefore never preceded by `.`, so member-preference
+      *rescues* it — the left boundary is only observable where there is no member hit at all
+      (`hasSAPLINGS && SAPLINGS`). **Each guard needed a fixture built for that guard alone.**
+      14th vacuous-guard sighting, and self-inflicted inside the fix for the 13th.
+- [x] **31.0c** All 4 repaired, each signature resolved **against the `26.2` jar** first:
+      `ItemEnchantments$Mutable#toImmutable()` exists (so `builder.toImmutable()`, not
+      `builder.build()`), `SingleItemRecipe#input()` exists and `AbstractCookingRecipe extends
+      SingleItemRecipe` (so the **member** rename was right and only the **declaration** edit was
+      wrong), and `Ingredient#acceptsItem(Holder<Item>)` exists.
+      ⚠️ **`javap-mc.sh` cannot answer any of that on this branch** — it looks for the *yarn-remapped*
+      `minecraft-merged-<ver>-*-v2.jar`, which 26.x never publishes. Went at
+      `minecraft-merged-deobf-26.2.jar` directly with `javap -cp`; it is already unobfuscated. That
+      script joins `probe-bands.py` and `mixin-allow-audit.py` as yarn-blind on `master`.
+      🔑 **56 → 54, not 52.** Repairing corruption REVEALS errors as well as removing them: two of
+      the four sites were masking genuine `26.x` deltas underneath
+      (`EnchantmentHelper.set(ItemStack, ItemEnchantments)` no longer exists). Those two moved into
+      31.2 rather than disappearing.
+
+### 31.1 — bound the residual: audit every bare-identifier rewrite
+
+The rewriter's damage is exactly "an edit that landed on something that was not a member access".
+That set is reconstructable from the diff without re-running anything.
+
+- [x] **31.1a** `scripts/rename-damage-audit.py`. Pairs removed↔added tokens on every changed line
+      and buckets each 1:1 identifier rewrite. **3,598 rewrites** across 144 files: 1,728 reached
+      through `.`/`::`/`/`, 1,870 bare UpperCamel (class renames — expected in bulk), 0 bare
+      ALL_CAPS, and **0 bare lowerCamel**, which is the suspect bucket.
+      ⚠️ **The first run reported 60 suspects and 56 were noise** — package segments inside **mixin
+      descriptor strings** (`"Lnet/minecraft/util/math/Vec3d;IF)V"`), where the separator is `/`
+      rather than `.`. Adding `/` to the access set drops it to the 4 real ones. That deliberately
+      blinds the audit *inside* descriptor strings; the trade is accepted and written into the
+      script, because a selector is not something javac validates either and it has its own gate
+      (`mixin-allow-audit.py --check` against real bytecode).
+- [x] **31.1b** The proof that it can fail came free: run it against **`af584eb42`**, the committed
+      tree that still carries the corruptions. It reports **exactly 4** — the three `builder` sites
+      and the one `ingredient` declaration, and nothing else. Against the repaired working tree it
+      reports **0**. Both numbers were taken; neither was assumed.
+      🔑 **The residual is now bounded rather than hoped for.** What remains invisible is a rewrite
+      that was *consistent* (declaration and every use — harmless) or one that mangled into another
+      in-scope identifier of assignable type. Nothing else survives this audit.
+- [x] **31.1c** Recorded here and in `.agent/memory/gotchas.md` (two entries: the rewriter defect,
+      and `javap-mc.sh` being yarn-blind on this branch).
+
+### 31.2 — the genuine deltas: main to zero
+
+**54 errors** after 31.0c (56 − 4 corruptions + 2 they were masking), in six groups. Signatures are **verified against the jar with
+`scripts/javap-mc.sh`, never recalled** — that rule exists because of GitHub #7.
+
+**(a) The `Holder$Reference` wrapper — 5 sites, ONE cause.** `BlockDrops:54`, `PlatformPlayer:350`,
+`PlatformPlayer:544` (`getOrThrow(ResourceKey<Enchantment>)`), `FishingListener:364`
+(`getIndexedEntries()`), `FishingListener:460` (`Reference<T>` will not conform to
+`Registry<Enchantment>`). Every one has `location: class Reference<Registry<Enchantment>>` — the code
+is holding a `Holder.Reference` where it wants the **registry itself**. This is one accessor on the
+`RegistryAccess` / `HolderLookup` path resolved once, then five call sites; it is not five fixes.
+⚠️ §30's 30.1b already identified this owner as carrying "a genuine `26.x` member delta" — it is the
+same five sites, now the largest single group.
+
+**(b) Renamed members the loop structurally could not reach — 11 sites.** Three are
+`invalid method reference` (`ServerPlayer::squaredDistanceTo`, `DefaultedRegistry::getEntry`,
+`ItemStack::isOf`), and that is a **gap in the loop, not an MC delta**: the site parser handles
+`.member(` call syntax and does not recognise `Type::member`. `distanceToSqr` is already in the
+renamed tree elsewhere, so the table knew the answer and the loop could not apply it.
+Also here: `MinecraftServer#getPlayers` ×2, `ServerPlayer#wasUnderwater` ×2,
+`EnchantmentHelper#keySetForCrafting`, `ChatFormatting#isColor`, `BlockTags.SAPLINGS`.
+- [ ] Decide whether to teach the loop `Type::member` or fix the three by hand. **Three sites is not
+      the argument** — the argument is whether the test tree (31.4) holds more of them, which is
+      unknown until 31.3. Defer the decision to 31.3; do not hand-fix before then.
+
+**(c) `EntityType.WOLF` / `.CAT` / `.HORSE` — 3 sites, and the cause is NOT yet known.** The import is
+`net.minecraft.world.entity.EntityType`, the correct mojmap FQN, and these constants exist there on
+every prior version. `javap` the class before touching the source. Do not assume a rename; if the
+constants are present, the rewriter is implicated again and this belongs in 31.1.
+
+**(d) Signature changes — ~26 sites.** Each needs a real code change, not a rename:
+`LivingEntity#knockback` now takes `(…, DamageSource, float)` ×2 · `Entity#teleport` now takes a
+single `TeleportTransition` ×2 · `AABB#of` now takes a `BoundingBox` · `SingleItemRecipe#assemble`
+lost its `Frozen` argument · `ServerBossEvent`'s constructor gained a leading `UUID` ·
+`CompoundTag#getInt` lost its default-value overload, and two sites pass a lambda where a
+`CompoundTag` is now required · `Vec2` / `Vec3` / `Vec3i` / `Direction` conversions in
+`SecondWindListener` (×4), `BlockUtils:380`, `PlatformBlock:92` / `:96` · `PlatformPlayer:231`
+(`Optional<Reference<SoundEvent>>`) · `PlatformLivingEntity:215` (lossy `double`→`float`) ·
+`Materials:81` / `:100` (inference bounds).
+⚠️ **`ServerBossEvent`'s new `UUID` is a behaviour decision, not a signature fix.** A fresh random
+UUID per bar and a stable per-player one are both compilable and only one is right — see
+`ExperienceBarWrapper`. Record the choice in `decisions.md`.
+
+**(e) The package move — 1 cause, 2 errors, and it is a MIXIN.**
+`net.minecraft.advancements.criterion` → `net.minecraft.advancements.triggers`;
+`BredAnimalsCriterionMixin` targets `BredAnimalsTrigger`.
+🔴 **A mixin's `@Mixin` target and `@Inject` selectors are STRINGS.** The compiler validates the
+imported type and nothing else, so a green build here proves nothing about whether the injector still
+applies. This one file is why `mixin-allow-audit.py --check` is a **hard gate on §31 exit** (31.6),
+not a nice-to-have — and that script still reads yarn names on this branch, so it is blind today.
+
+**(f) The client screen — 11 sites, `McMMOInfoScreen`.** `GuiGraphics` absent from
+`net.minecraft.client.gui`, `addDrawableChild` ×2, `textRenderer` ×3, `client` ×2, and two methods
+that no longer override. ⚠️ **The file WAS processed by the rename** (38 lines changed), so these are
+survivors, not a skipped file — `textRenderer` → `font` and `client` → `minecraft` are ordinary table
+rows that did not resolve, most likely because the owner is a ModMenu / `Screen` supertype the table
+does not carry. ModMenu `20.0.1` and Cloth `26.2.155` both already target `26.2`, so **the
+dependencies are not the blocker** and no version bump is in scope here.
+
+### 31.3 — the first real `compileTestJava` number
+
+- [ ] Once main is zero, `--baseline` again and record **`src/test`** with `task compileTestJava`
+      printed beside it. This is the first time the test tree has been compiled since the rename.
+- [ ] Classify it the same way: rewriter damage / mechanical miss / genuine `26.x` delta. **11 of the
+      12 silent `getId` sites lived here**, so expect this tree to carry the rewriter's damage at a
+      higher rate than main did, not a lower one.
+- [ ] Decide 31.2(b)'s `Type::member` question against this number.
+
+### 31.4 — test tree to zero
+
+Same loop, same rules. Nothing is deleted or `@Disabled` to make a number move — a test that will not
+compile gets fixed or gets a written reason, never a suppression.
+
+### 31.5 — 30.5c: the 562 unreviewed collision sites, filtered by tooling
+
+Carried in from §30 on the owner's ruling. Sampling says they are dominated by false positives
+(`Map.get`, `List.add`, `Set.contains` on plain Java collections that merely share a name with a
+colliding MC member) — but `Registry#getId` was 42 sites, **12 of which javac never mentioned**, and
+one of those was a live `equals()` comparison in main source that returned false forever.
+
+- [ ] **31.5a** Filter mechanically: drop every site whose **receiver type is not an MC type**. The
+      audit already scopes a file to its MC imports; the missing half is resolving the receiver at the
+      site. Report the before/after count — the drop is the deliverable.
+- [ ] **31.5b** Read every survivor by hand. Record the count reviewed, not just the count fixed.
+- [ ] **31.5c** A mutation proving the filter can still fail: re-introduce one
+      `BuiltInRegistries.*.getId(` and watch it survive the filter and get reported. **A filter that
+      has never been shown to catch anything is a filter that removes everything.**
+
+### 31.6 — exit gates
+
+Green `compileJava` + `compileTestJava` is **not** the end of §31.
+
+- [ ] Full suite passes; read the `N tests executed` line, not `BUILD SUCCESSFUL` — Gradle skips the
+      doc-guard tests on an up-to-date tree and prints success either way.
+- [ ] `scripts/mixin-allow-audit.py --check` passes **on this branch**. 🔴 It still reads yarn names
+      and is blind here; porting it is part of 9.3's remainder and is a hard prerequisite, because
+      31.2(e) moved a mixin's target package and **no compiler on earth checks a mixin selector**.
+- [ ] `scripts/extract-mc-surface.py` regenerated (needs `./gradlew classes testClasses` first — a
+      stale `build/classes` yields a confidently wrong manifest) and the diff committed.
+- [ ] 30.6 — `.hprof` into `.gitignore`. ⚠️ Rides the owed gate-10 sweep; cannot land alone.
+- [ ] `scripts/rename-to-official.py --self-test` green, with the 31.0b mutations in it.
+
+### What I am NOT doing
+
+* **Not pushing, and not touching any band branch.** R-z holds; `mc/1.21.11` stays cut and held.
+  `origin/master` and `mc/1.21.11` are both at `minecraft_version=1.21.11` and pushing puts two
+  branches on one value — gates 9/11, and **R10**, where each release run reaps the other's release.
+* **Not building R-aa** (the per-band `java_version` key). Ruled, not implemented; lands with the push.
+* **Not bumping ModMenu or Cloth Config.** Both already target `26.2`; see 31.2(f).
+* **Not porting `probe-bands.py`.** Only `mixin-allow-audit.py` is a §31 exit gate, and only because
+  31.2(e) moves a mixin target.
+* **Not running the boot or gameplay smoke harnesses.** They need a built jar; they are §32.
+* **Not re-deriving the rename from scratch.** Considered and rejected by the owner — it discards the
+  14 hand-decided multi-target rows. 31.1 bounds the damage instead.
+
+### Rollback
+
+* `git reset --hard af584eb42` restores `master` to the §31 entry state. Sufficient **only because the
+  tree is clean before the run** — assert that before any `--write`.
+* The `apply_edits` change is behaviour-narrowing: it can only skip sites the old code would have
+  applied, so the worst case is a compile error, never a silent rewrite.
+* No band branch and no remote is read or written in this section.
+
+---
+
 ## Other open work
 
 - [x] ✅ **DONE 2026-08-20 — `scripts/gradle-key-identity-audit.py` closes R-w′.** Ship-gate **11**,

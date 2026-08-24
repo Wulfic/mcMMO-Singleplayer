@@ -410,7 +410,7 @@ public final class SmeltingListener {
      * deprecated in this version.
      */
     private static boolean hasOreBlockInput(SmeltingRecipe recipe, List<Holder<Item>> ores) {
-        final Ingredient input = recipe.input();
+        final Ingredient ingredient = recipe.input();
         return ores.stream().anyMatch(ingredient::acceptsItem);
     }
 

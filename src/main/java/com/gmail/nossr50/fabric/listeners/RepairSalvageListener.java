@@ -611,7 +611,7 @@ public final class RepairSalvageListener {
         final ItemEnchantments.Mutable builder =
                 new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
         levels.forEach(builder::set);
-        return toImmutableer.build();
+        return builder.toImmutable();
     }
 
     /**

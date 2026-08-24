@@ -386,7 +386,7 @@ public final class FishingListener {
         final ItemEnchantments.Mutable builder = new ItemEnchantments.Mutable(
                 EnchantmentHelper.getEnchantmentsForCrafting(treasureStack));
         builder.set(byId.get(picked.get().enchantmentId()), picked.get().level());
-        EnchantmentHelper.set(treasureStack, toImmutableer.build());
+        EnchantmentHelper.set(treasureStack, builder.toImmutable());
         return true;
     }
 
@@ -505,7 +505,7 @@ public final class FishingListener {
         for (EnchantmentTreasure treasure : chosen) {
             builder.set(resolved.get(treasure.enchantmentId()), treasure.level());
         }
-        EnchantmentHelper.set(treasureStack, toImmutableer.build());
+        EnchantmentHelper.set(treasureStack, builder.toImmutable());
         return true;
     }
 

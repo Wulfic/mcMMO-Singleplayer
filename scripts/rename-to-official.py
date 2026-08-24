@@ -843,7 +843,13 @@ def run_loop(ren: Renamer, root: Path, maxerrs: int, rounds: int,
         if not edits:
             print("  no resolvable member sites this round -- stopping", file=sys.stderr)
             break
-        applied += apply_edits(edits, write)
+        got, skipped = apply_edits(edits, write)
+        applied += got
+        for s in skipped:
+            worklist.append(s)
+        if skipped:
+            print(f"  {len(skipped)} site(s) REFUSED -- see the worklist",
+                  file=sys.stderr)
         if not write:
             print("  DRY RUN -- nothing written, so the next round would be identical; stopping",
                   file=sys.stderr)
@@ -851,8 +857,54 @@ def run_loop(ren: Renamer, root: Path, maxerrs: int, rounds: int,
     return {"history": history, "applied": applied, "worklist": worklist}
 
 
-def apply_edits(edits: dict, write: bool) -> int:
+IDENT_CH = re.compile(r"[A-Za-z0-9_$]")
+
+
+def anchored_offsets(row: str, name: str) -> list[int]:
+    """Every offset in `row` where `name` occurs as a WHOLE identifier.
+
+    The word boundary is the entire point. `row.find("build")` inside `builder.build()` returns
+    the offset of `build` INSIDE THE RECEIVER, and rewriting there produced `toImmutableer.build()`
+    at three sites in this repo -- a corrupted local variable and an unrenamed member, from one
+    edit. See TODO.md section 31.0.
+    """
+    out: list[int] = []
+    n, start = len(name), 0
+    while True:
+        i = row.find(name, start)
+        if i < 0:
+            return out
+        start = i + 1
+        if i and IDENT_CH.match(row[i - 1]):
+            continue
+        if i + n < len(row) and IDENT_CH.match(row[i + n]):
+            continue
+        out.append(i)
+
+
+def is_member_access(row: str, i: int) -> bool:
+    """True when the identifier at `i` is reached through `.` or `::`, ignoring spaces."""
+    j = i - 1
+    while j >= 0 and row[j] in " \t":
+        j -= 1
+    if j < 0:
+        return False
+    return row[j] == "." or (j >= 1 and row[j] == ":" and row[j - 1] == ":")
+
+
+def apply_edits(edits: dict, write: bool) -> tuple[int, list[str]]:
+    """Apply member renames. REFUSES any site whose offset cannot be resolved unambiguously.
+
+    Every edit the loop produces is a MEMBER rename -- `run_loop` only ever enqueues a symbol
+    javac reported with a `location:` type. So the correct target is an occurrence reached through
+    `.` or `::`, and an occurrence that is neither is a bare identifier of OUR OWN: a local, a
+    parameter, a field. Rewriting one of those is the defect this function exists to refuse.
+
+    Fail closed: an unresolvable site is skipped and REPORTED, leaving a compile error. That is
+    strictly better than a silent rewrite, which is what the previous `row.find(old)` fallback did.
+    """
     n = 0
+    skipped: list[str] = []
     for path, sites in edits.items():
         lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
         # Dedupe. Gradle echoes every javac error TWICE -- once as task output and again inside
@@ -862,18 +914,34 @@ def apply_edits(edits: dict, write: bool) -> int:
         # rewrite right-to-left so an earlier column edit cannot shift a later one
         for line_no, col, old, new in sites:
             if not 1 <= line_no <= len(lines):
+                skipped.append(f"{path}:{line_no} {old} -> {new}: line out of range")
                 continue
             row = lines[line_no - 1]
-            if row[col:col + len(old)] != old:
-                idx = row.find(old)
-                if idx < 0:
+            spans = anchored_offsets(row, old)
+            target = None
+            # 1. javac's own column -- but only when it lands on a WHOLE identifier. The caret for
+            #    a member sits on the `.`, not on the member, so col+1 is the ordinary hit.
+            for c in (col, col + 1):
+                if c in spans:
+                    target = c
+                    break
+            if target is None:
+                # 2. no usable column. Prefer the occurrences that are genuinely member accesses,
+                #    and apply ONLY if exactly one candidate survives.
+                members = [i for i in spans if is_member_access(row, i)]
+                pick = members or spans
+                if len(pick) != 1:
+                    skipped.append(
+                        f"{path}:{line_no} {old} -> {new}: caret col {col} is not a whole "
+                        f"identifier; {len(spans)} whole-identifier hit(s), {len(members)} of them "
+                        f"member access(es) -- REFUSING to guess an offset")
                     continue
-                col = idx
-            lines[line_no - 1] = row[:col] + new + row[col + len(old):]
+                target = pick[0]
+            lines[line_no - 1] = row[:target] + new + row[target + len(old):]
             n += 1
         if write:
             path.write_text("".join(lines), encoding="utf-8", newline="")
-    return n
+    return n, skipped
 
 
 # --------------------------------------------------------------------------------------------
@@ -1152,14 +1220,95 @@ def self_test() -> int:
         p.write_text("class T { void f() { a.bb(); a.cc(); } }\n", encoding="utf-8")
         # the duplicate is deliberate: Gradle echoes every error twice, and applying a site twice
         # corrupts the line rather than failing loudly
-        n = apply_edits({p: [(1, 22, "bb", "BBBB"), (1, 30, "cc", "C"),
-                             (1, 22, "bb", "BBBB")]}, write=True)
+        n, sk = apply_edits({p: [(1, 22, "bb", "BBBB"), (1, 30, "cc", "C"),
+                                 (1, 22, "bb", "BBBB")]}, write=True)
+        check("no site refused on exact columns", sk, [])
         check("edits applied (duplicate collapsed)", n, 2)
         check("edits right-to-left safe", p.read_text(encoding="utf-8"),
               "class T { void f() { a.BBBB(); a.C(); } }\n")
         p.write_text("class T {}\n", encoding="utf-8")
         apply_edits({p: [(1, 0, "class", "CLASS")]}, write=False)
         check("dry run writes nothing", p.read_text(encoding="utf-8"), "class T {}\n")
+
+        # ---- 31.0: the two corruptions that REACHED master's src/, replayed ---------------
+        #
+        # Both came from the unanchored `row.find(old)` fallback. javac's caret for a member sits
+        # on the `.`, so the exact-column check missed, and `find` then took the FIRST substring
+        # hit anywhere on the line. Neither of these is hypothetical: see TODO.md 31.0.
+
+        # (1) FishingListener:389 / :508, RepairSalvageListener:614.
+        #     `find("build")` hit `build` inside the RECEIVER `builder`.
+        p.write_text("        EnchantmentHelper.set(s, builder.build());\n", encoding="utf-8")
+        dot = p.read_text(encoding="utf-8").index(".build()")   # the caret column javac reports
+        n, sk = apply_edits({p: [(1, dot, "build", "toImmutable")]}, write=True)
+        check("31.0 receiver `builder` is NOT rewritten", p.read_text(encoding="utf-8"),
+              "        EnchantmentHelper.set(s, builder.toImmutable());\n")
+        check("31.0 receiver case applied exactly one edit", (n, sk), (1, []))
+
+        # (2) SmeltingListener:413.
+        #     `find("ingredient")` hit the local variable DECLARATION before the member call.
+        p.write_text("        final Ingredient ingredient = recipe.ingredient();\n",
+                     encoding="utf-8")
+        dot = p.read_text(encoding="utf-8").index(".ingredient()")
+        n, sk = apply_edits({p: [(1, dot, "ingredient", "input")]}, write=True)
+        check("31.0 local declaration is NOT rewritten", p.read_text(encoding="utf-8"),
+              "        final Ingredient ingredient = recipe.input();\n")
+        check("31.0 declaration case applied exactly one edit", (n, sk), (1, []))
+
+        # ---- the same two shapes with an UNUSABLE caret ----------------------------------
+        #
+        # 🔑 The four checks above are VACUOUS with respect to both guards. They pass javac's real
+        # caret column, and `col + 1` resolves the member before anchoring or member-preference is
+        # ever consulted -- breaking either guard leaves them green. That was measured, not
+        # assumed. These are the cases that put the guards under test: no usable caret, so the
+        # answer comes from `anchored_offsets` and the member filter alone.
+
+        # (1b) right-hand word boundary carries this one: `build` occurs inside the RECEIVER
+        #      `builder`, and there it is ALSO preceded by a `.`, so member-preference cannot
+        #      separate them. Only the boundary can.
+        p.write_text("        a.builder.build();\n", encoding="utf-8")
+        n, sk = apply_edits({p: [(1, 0, "build", "toImmutable")]}, write=True)
+        check("31.0 unusable caret: receiver `builder` still not rewritten",
+              p.read_text(encoding="utf-8"), "        a.builder.toImmutable();\n")
+        check("31.0 unusable caret: receiver case applied one edit", (n, sk), (1, []))
+
+        # (2b) member-preference carries this one: two whole-identifier hits, and only one of
+        #      them is reached through a `.`. The other is the local variable DECLARATION.
+        p.write_text("        final Ingredient ingredient = recipe.ingredient();\n",
+                     encoding="utf-8")
+        n, sk = apply_edits({p: [(1, 0, "ingredient", "input")]}, write=True)
+        check("31.0 unusable caret: declaration still not rewritten",
+              p.read_text(encoding="utf-8"),
+              "        final Ingredient ingredient = recipe.input();\n")
+        check("31.0 unusable caret: declaration case applied one edit", (n, sk), (1, []))
+
+        # (3) fail-closed: a caret that lands nowhere usable and TWO equally plausible member
+        #     hits must REFUSE, not pick one. A skipped site leaves a compile error, which is the
+        #     outcome this whole section prefers over a silent rewrite.
+        p.write_text("        a.get(); b.get();\n", encoding="utf-8")
+        n, sk = apply_edits({p: [(1, 0, "get", "getKey")]}, write=True)
+        check("31.0 ambiguous site refuses", n, 0)
+        check("31.0 ambiguous site is REPORTED", len(sk), 1)
+        check("31.0 ambiguous site left the source untouched", p.read_text(encoding="utf-8"),
+              "        a.get(); b.get();\n")
+
+        # (3b) the LEFT word boundary, isolated. `SAPLINGS` is also the tail of `hasSAPLINGS`,
+        #      and neither hit is a member access -- so member-preference cannot separate them and
+        #      the left boundary is the only thing standing between this and a corrupted line.
+        p.write_text("        if (hasSAPLINGS && SAPLINGS) return;\n", encoding="utf-8")
+        n, sk = apply_edits({p: [(1, 0, "SAPLINGS", "SAPLING")]}, write=True)
+        check("31.0 name embedded in a longer identifier is not rewritten",
+              p.read_text(encoding="utf-8"), "        if (hasSAPLINGS && SAPLING) return;\n")
+        check("31.0 embedded-name case applied one edit", (n, sk), (1, []))
+
+        # (4) a bare STATIC-IMPORT reference has no `.` at all -- it must still resolve, because
+        #     there is exactly one whole-identifier hit. This is why the rule is "prefer member
+        #     accesses", not "require them".
+        p.write_text("        if (state.is(SAPLINGS)) return;\n", encoding="utf-8")
+        n, sk = apply_edits({p: [(1, 0, "SAPLINGS", "SAPLING")]}, write=True)
+        check("31.0 unambiguous bare reference still applies", p.read_text(encoding="utf-8"),
+              "        if (state.is(SAPLING)) return;\n")
+        check("31.0 bare reference applied exactly one edit", (n, sk), (1, []))
 
     # ---- MUTATIONS: each must be DETECTED, i.e. the guard must change the answer ----------
     print("\n  mutations (each must change the result -- a guard that cannot fail is decoration):")
@@ -1198,6 +1347,41 @@ def self_test() -> int:
     txt = 'import net.minecraft.world.level.Level;\nclass A { String s = "World"; }\n'
     _, unmasked = re.subn(r"(?<![.\w])World\b", "Level", txt)
     check("M3 masking OFF changes the answer (0 -> 1)", unmasked, 1)
+
+    # M0: restore the pre-31.0 unanchored fallback -> BOTH real corruptions must come back.
+    #     This is the mutation that matters: the fix is only believable if the old behaviour is
+    #     demonstrably different, on the exact inputs that shipped.
+    def m0(edits, write):
+        n = 0
+        for path, sites in edits.items():
+            lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+            for line_no, col, old, new in sorted(set(sites), key=lambda s: (-s[0], -s[1])):
+                row = lines[line_no - 1]
+                if row[col:col + len(old)] != old:
+                    idx = row.find(old)
+                    if idx < 0:
+                        continue
+                    col = idx
+                lines[line_no - 1] = row[:col] + new + row[col + len(old):]
+                n += 1
+            if write:
+                path.write_text("".join(lines), encoding="utf-8", newline="")
+        return n
+
+    with tempfile.TemporaryDirectory() as td:
+        q = Path(td) / "M.java"
+        q.write_text("        EnchantmentHelper.set(s, builder.build());\n", encoding="utf-8")
+        m0({q: [(1, q.read_text(encoding="utf-8").index(".build()"), "build", "toImmutable")]},
+           write=True)
+        check("M0 unanchored fallback reproduces `toImmutableer` (the shipped corruption)",
+              "toImmutableer" in q.read_text(encoding="utf-8"), True)
+        q.write_text("        final Ingredient ingredient = recipe.ingredient();\n",
+                     encoding="utf-8")
+        m0({q: [(1, q.read_text(encoding="utf-8").index(".ingredient()"), "ingredient", "input")]},
+           write=True)
+        check("M0 unanchored fallback reproduces the renamed DECLARATION",
+              q.read_text(encoding="utf-8"),
+              "        final Ingredient input = recipe.ingredient();\n")
 
     # M4: disable the nested-owner branch -> a resolvable type must read as unresolvable again
     orig_ro = Renamer.resolve_owner
