@@ -2651,16 +2651,94 @@ miss could not be quoted as a size, and that is the only reason these were found
   `NAME-ONLY`, on every selector including their `@At` targets.
 * **Explanation coverage:** 54 of 54, above.
 
-### ➡️ What §32.1 is, now that it is measured
+### 🔴 32.0b — the `SIGNATURE-CHANGED` bucket was INFLATED BY 4, and the cause is a THIRD blind spot
 
-- [ ] **32.1** The 77 `NAME-ONLY` — extend `rename-to-official.py` with a **member pass over mixin
-      selector strings**, driven by the table, with `mixin-allow-audit.py` as the oracle. ⚠️ The
-      12 already-correct rows must be no-ops; a pass that rewrites them is corrupting, not renaming.
-- [ ] **32.2** The 8 `SIGNATURE-CHANGED` — a handler rewrite each. Three distinct causes, not eight:
-      `Player#interact` → `interactOn` **gained a `Vec3`** (2 sites);
-      `ItemStack#damage` → `hurtAndBreak` **lost/reordered args** (3 sites);
-      `calculateAttributeBaseValue` → `createOffspringAttribute` takes `RandomSource`, not `Random`;
-      `craftRecipe` → `burn`; `forEachBrushedItem` takes `ItemInstance`, not `ItemStack`.
+Measured 2026-08-24, before a line of §32.1 was written, by reading the sizer's own `--detail`
+output instead of its summary table. Four of the eight `SIGNATURE-CHANGED` rows carry a **yarn type
+name inside the descriptor they are being judged against**:
+
+```
+ShearableInteractMixin:49   want (IL net/minecraft/entity/LivingEntity ;L…/EquipmentSlot;)V
+                            have (IL net/minecraft/world/entity/LivingEntity ;L…/EquipmentSlot;)V
+HorseChildAttributesMixin:82 want (DDDDL net/minecraft/util/math/random/Random ;)D
+                            have (DDDDL net/minecraft/util/RandomSource ;)D
+```
+
+The `want` side is **half-renamed**: `EquipmentSlot` moved to its mojmap path, `LivingEntity` did
+not. That is not Minecraft changing a signature — it is one descriptor with two different mappings
+applied to it, and the sizer compared it verbatim.
+
+🔑🔑 **The mechanism is STRING CONCATENATION, and it is the third distinct thing that hides a name
+from a rename pass.** The source spells the selector across a Java `+`:
+
+```java
+target = "Lnet/minecraft/world/item/ItemStack;damage(ILnet/minecraft/entity/"
+       + "LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;)V"
+```
+
+`rename-to-official.py` pass 1 runs its regex over the **raw file**, so it is handed
+`net/minecraft/entity/` (a package, no class — no match) and `LivingEntity;…` (no `net/minecraft`
+prefix at all — no match). `mixin_parse.join_string_concat` joins the fragments; **javac and the
+regex never did.** So the count of blind spots is now three, all in the same file:
+
+1. javac cannot see inside a string literal → the **member** half of all 61 selectors (§32.0).
+2. `\b` does not anchor after the `L` of a JVM descriptor → every `@At` target (fixed in §30).
+3. **A name split across a `"…" + "…"` boundary is invisible to a regex over the raw text** — new.
+
+**Scanned the whole tree for the shape** (`scan_stale_types.py`, read-only): **exactly 4 real
+sites**, listed above plus `ArmadilloBrushMixin:85` and `BeehiveHarvestMixin:131`. A 5th hit is
+`MixinAllowCoverageTest.java:169`'s `net.minecraft.Foo` — a deliberate test fixture, correctly
+unmapped. **There is no long tail here; the shape is bounded at 4.**
+
+Both fixed descriptors resolve to exactly one live member, verified against the `26.2` jar:
+`hurtAndBreak(ILnet/minecraft/world/entity/LivingEntity;L…/EquipmentSlot;)V` and
+`createOffspringAttribute(DDDDLnet/minecraft/util/RandomSource;)D`. **So the corrected split is:**
+
+| bucket | was | is | why it moved |
+|---|---:|---:|---|
+| `NAME-ONLY` | 77 | **81** | 4 rows were mis-judged on a half-renamed descriptor |
+| `SIGNATURE-CHANGED` | 8 | **4** | `interactOn` ×2, `burn`, `dropFromEntityInteractLootTable` |
+| `OWNER-ABSENT-IN-JAR` | 1 | 1 | unchanged |
+
+⚠️ **The correction went the same direction as the first one: the expensive bucket was wrong, and
+wrong upward.** §31 priced 54 seam redesigns and there were none; §32.0 priced 8 handler rewrites
+and there are 4. **An over-estimate reads as diligence and nobody audits it.** Both were found only
+by refusing to quote the summary line without reading the rows under it.
+
+✅ **`ItemStack implements ItemInstance` in `26.2`** (checked, `javap`: `ItemInstance` is a
+1,081-byte interface extending `TypedInstance<Item>`). So the `forEachBrushedItem` row is a
+descriptor edit plus a handler param widening — **not** a type that has no counterpart. The §32.0
+note calling it "a genuine `26.x` type that does not exist in `1.21.11`" is right about the type and
+wrong about the cost.
+
+### ➡️ §32.1 — the plan, revised by 32.0b
+
+- [ ] **32.1a — fix the sizer first.** `mixin-target-sizer.py` normalises every `Lnet/minecraft/…;`
+      in a selector descriptor through the **CLASS** table (yarn → official) before comparing, and
+      records the fixed descriptor on the row. Guards: a name already official is left alone; a name
+      in neither direction is left alone (a `26.x`-only class is not a miss); **self-test mutations**
+      — a half-renamed descriptor must classify `NAME-ONLY` **and** report a descriptor fix, and
+      with normalisation off the same row must go back to `SIGNATURE-CHANGED`. Re-run: expect
+      **81 / 4 / 1**, and the 6-injector control must stay `NAME-ONLY`.
+- [ ] **32.1b — the member pass.** `rename-to-official.py --mixin-selectors`, which **imports
+      `classify()` from the sizer** (owner-ruled: one classifier, one writer — the sizer's 28
+      self-test checks and its 6-injector control are what validate the decision, and a second copy
+      of the table/hierarchy/`a|b|c` logic is exactly the three bugs §32.0's first run had).
+      * Rewrites a selector **only** on a `NAME-ONLY` verdict. Every other bucket is left untouched
+        and listed.
+      * **Matches by joined value, never by guesswork:** for each row it locates the concatenation
+        group whose joined text **equals the selector the sizer classified**. Not found → refuse,
+        do not fall back to a looser match. Found more than once with disagreeing verdicts → refuse.
+      * **Concatenation-aware writer:** the replacement is computed on the joined value, then mapped
+        back through an offset table to the fragment(s) it touches. A span inside one fragment is
+        edited in place; a span crossing a boundary merges **only** the fragments it crosses. The
+        `+` layout everywhere else is preserved byte-for-byte.
+      * 🔴 **Dry-run is the default; `--write` is the opt-in** (standing owner ruling, §29).
+      * ⚠️ **The 12 already-correct rows must be NO-OPS.** A pass that "renames" them is corrupting,
+        not renaming — this is §31.0's defect verbatim, and it shipped last time.
+- [ ] **32.2** The **4** genuine `SIGNATURE-CHANGED`, three causes: `Player#interact` → `interactOn`
+      **gained a `Vec3`** (2 sites); `craftRecipe` → `burn` (different args entirely);
+      `forEachBrushedItem` → `dropFromEntityInteractLootTable` takes `ItemInstance`, not `ItemStack`.
 - [ ] **32.3** The 1 `OWNER-ABSENT-IN-JAR` — `advancements.criterion` → `advancements.triggers`.
 - [ ] **32.4** 🔴 `EntityTypeSpawnOriginMixin:50`, the `MISMATCH`. **Not a rename.** `allow=2` and
       the `@At` now binds 1. Diagnose separately; it is the one site this whole measurement does
@@ -2670,9 +2748,30 @@ miss could not be quoted as a size, and that is the only reason these were found
       the gate that tells us whether that was the whole story. **Read the `N tests executed` line,
       not the exit code.**
 
-⚠️ **`ItemInstance` in the `forEachBrushedItem` row is a genuine `26.x` type that does not exist in
-`1.21.11`.** It is the first sign of a real API delta underneath the rename, and it will not be the
-last — but at 8 sites it is not what §31 feared.
+### 32.1 guards — this pass rewrites source in place, so it is rule-zero material
+
+- [ ] **Dry-run default**, `--write` opt-in, and the dry run prints the exact before/after text of
+      every site it would touch — a diff, not a count.
+- [ ] **Refuse on an empty plan.** Zero `NAME-ONLY` rows means the table or the jar is wrong, not
+      that there is no work; exit non-zero rather than writing nothing and printing OK.
+- [ ] **Touch only files under `src/**/mixin/`** and only inside a selector string the sizer
+      classified. Asserted against the resolved path, not the pattern.
+- [ ] **Idempotence is a test, not a hope:** a second `--write` run must report **0 sites**. That is
+      the mechanical form of "the 12 no-op rows stayed no-ops".
+- [ ] **The undo is `git checkout -- src/`** and it is only valid because the tree is committed and
+      clean before the run — verified with `git status --short`, in that order.
+- [ ] `--self-test` with the concatenation shapes as fixtures: single literal, two fragments with
+      the span inside one, two fragments with the span **crossing** the boundary, three fragments
+      with the span crossing the second boundary only. Each asserts the untouched fragments are
+      byte-identical.
+
+### Rollback for §32.1
+
+* Every source edit is one `git checkout -- src/` away while the tree is otherwise clean; the tree
+  is committed at `efa0a056f` before the first `--write`.
+* `scripts/mixin-target-sizer.py` and `scripts/rename-to-official.py` are tracked; `git checkout --
+  scripts/` reverses the tooling half independently.
+* No band branch is touched and nothing is pushed — the R-z hold stands until `master` boots.
 
 
 ### What I am NOT doing

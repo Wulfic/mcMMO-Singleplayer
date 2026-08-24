@@ -238,6 +238,7 @@ def load_class(jar: str, fqcn: str) -> ClassInfo | None:
 @dataclass
 class Table:
     off2yarn: dict[str, str] = field(default_factory=dict)
+    yarn2off: dict[str, str] = field(default_factory=dict)  # the other direction, for DESCRIPTORS
     members: dict[str, str] = field(default_factory=dict)  # "yarnFqcn#name" -> official name(s)
     class_collisions: int = 0
     # official SIMPLE name -> the yarn FQCNs that reach it. The fallback for a class that MOVED
@@ -273,6 +274,7 @@ class Table:
                     t.class_collisions += 1
                 else:
                     t.off2yarn[val] = key
+                t.yarn2off[key] = val
                 t.off_simple.setdefault(val.rsplit(".", 1)[-1], set()).add(key)
             elif kind == "MEMBER":
                 t.members[key] = val
@@ -321,6 +323,49 @@ def parse_selector(raw: str) -> Sel | None:
 
 
 # --------------------------------------------------------------------------------------------
+# Descriptor normalisation -- the THIRD blind spot
+# --------------------------------------------------------------------------------------------
+INTERNAL = re.compile(r"L(net/minecraft/[A-Za-z0-9_/$]+);")
+
+
+def normalize_types(table: Table, text: str) -> tuple[str, list[tuple[str, str]]]:
+    """Rewrite any YARN type name inside a JVM descriptor to its official name.
+
+    WHY: `rename-to-official.py` pass 1 runs its regex over the RAW source, and this repo spells
+    long selectors across a Java string concatenation:
+
+        target = "Lnet/minecraft/world/item/ItemStack;damage(ILnet/minecraft/entity/"
+               + "LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;)V"
+
+    The regex is handed `net/minecraft/entity/` (a package, no class -> no match) and
+    `LivingEntity;...` (no `net/minecraft` prefix at all -> no match), so ONE descriptor ends up
+    with two different mappings applied to it. `mixin_parse` joins the fragments; the regex never
+    did. Comparing that half-renamed descriptor verbatim against the jar reports SIGNATURE-CHANGED
+    for what is a pure rename -- measured 2026-08-24 as 4 of the 8 in section 32.0's table.
+
+    Fails SAFE in both directions, because both mistakes are silent:
+      * a name that is ALREADY official is left alone (it is a fact about 26.x, not a yarn name);
+      * a name in NEITHER map is left alone -- a class that exists only in 26.x is not a miss, and
+        rewriting it to a guess would be the laundering shape this script exists to refuse.
+
+    -> (normalised text, [(before, after), ...])
+    """
+    fixes: list[tuple[str, str]] = []
+
+    def sub(m: re.Match) -> str:
+        dotted = m.group(1).replace("/", ".")
+        if dotted in table.off2yarn:              # already official
+            return m.group(0)
+        moj = table.yarn2off.get(dotted)
+        if moj is None:                           # unknown to the table: leave it, do not guess
+            return m.group(0)
+        fixes.append((dotted, moj))
+        return "L" + moj.replace(".", "/") + ";"
+
+    return INTERNAL.sub(sub, text), fixes
+
+
+# --------------------------------------------------------------------------------------------
 # Classification -- pure over an Env, so --self-test can drive it with synthetic data
 # --------------------------------------------------------------------------------------------
 @dataclass
@@ -328,6 +373,7 @@ class Env:
     table: Table
     load: object  # (fqcn) -> ClassInfo | None
     use_hierarchy: bool = True
+    normalize: bool = True   # off = the pre-32.0b behaviour, kept so a mutation can prove the fix
 
 
 def hierarchy(env: Env, fqcn: str) -> list[str]:
@@ -348,14 +394,23 @@ def hierarchy(env: Env, fqcn: str) -> list[str]:
     return order
 
 
-def classify(env: Env, target: str, sel: Sel) -> tuple[str, str]:
-    """-> (bucket, detail). Never raises; an unresolvable input gets its OWN bucket, never GONE."""
+def classify(env: Env, target: str, sel: Sel) -> tuple[str, str, str | None]:
+    """-> (bucket, detail, chosen official name or None).
+
+    Never raises; an unresolvable input gets its OWN bucket, never GONE. The third element is the
+    single official name a NAME-ONLY verdict resolved to -- the only thing a writer is allowed to
+    act on, and None for every other bucket so a caller cannot act on a guess.
+    """
     owner = sel.owner or target
+    if env.normalize and sel.desc:
+        fixed, _ = normalize_types(env.table, sel.desc)
+        if fixed != sel.desc:
+            sel = Sel(sel.owner, sel.name, fixed, sel.is_field)
 
     # A class absent from the 26.x jar has MOVED. That is a string edit, and folding it into
     # GONE-OR-MOVED prices a package rename as a seam redesign.
     if env.load(owner) is None:
-        return "OWNER-ABSENT-IN-JAR", f"{owner} is not in the 26.x jar -- the class moved"
+        return "OWNER-ABSENT-IN-JAR", f"{owner} is not in the 26.x jar -- the class moved", None
 
     chain = hierarchy(env, owner)
 
@@ -374,8 +429,8 @@ def classify(env: Env, target: str, sel: Sel) -> tuple[str, str]:
 
     if official is None:
         if not mapped_any_owner:
-            return "OWNER-UNRESOLVED", f"{owner} not in the yarn<->official table"
-        return "UNMAPPED", f"no table entry for #{sel.name} on {owner} or its supers"
+            return "OWNER-UNRESOLVED", f"{owner} not in the yarn<->official table", None
+        return "UNMAPPED", f"no table entry for #{sel.name} on {owner} or its supers", None
 
     # One yarn member can need SEVERAL mojmap names; the table joins them with '|'.
     names = [n for n in official.split("|") if n]
@@ -389,7 +444,7 @@ def classify(env: Env, target: str, sel: Sel) -> tuple[str, str]:
                 live.setdefault(m.name, []).append(m)
 
     if not live:
-        return "GONE-OR-MOVED", f"{sel.name} -> {official}, absent from {owner} and its supers{note}"
+        return "GONE-OR-MOVED", f"{sel.name} -> {official}, absent from {owner} and its supers{note}", None
 
     if sel.desc is None:
         fits = list(live)
@@ -397,18 +452,89 @@ def classify(env: Env, target: str, sel: Sel) -> tuple[str, str]:
         fits = [n for n, ms in live.items() if any(m.desc.startswith(sel.desc) for m in ms)]
 
     if len(fits) == 1:
-        return "NAME-ONLY", f"{sel.name} -> {fits[0]}{note}"
+        return "NAME-ONLY", f"{sel.name} -> {fits[0]}{note}", fits[0]
     if len(fits) > 1:
         return "MULTI-TARGET", (
             f"{sel.name} -> {'|'.join(sorted(fits))} -- all live on {owner}; "
             f"pick one per site{note}"
-        )
+        ), None
     # Names are live but no descriptor fits: the signature moved.
     have = sorted({m.desc for ms in live.values() for m in ms})
     return "SIGNATURE-CHANGED", (
         f"{sel.name} -> {'|'.join(sorted(live))}; want {sel.desc} have "
         + " | ".join(have) + note
-    )
+    ), None
+
+
+def rewrite_selector_text(table: Table, raw: str, new_name: str) -> tuple[str, list[tuple[str, str]]]:
+    """The NAME-ONLY rewrite, as TEXT: the member name replaced, every yarn type name normalised.
+
+    Split out from `classify` on purpose. `classify` decides; this reconstructs. The writer in
+    `rename-to-official.py` imports BOTH, so there is exactly one parser, one table lookup and one
+    reconstruction in the repo -- a second copy is how section 32.0's first run grew three silent
+    bugs at once.
+
+    -> (new selector text, the type fixes applied). Returns the input unchanged when it is already
+    correct: the 12 already-right rows must be NO-OPS, and a pass that "renames" them is corrupting.
+    """
+    s, fixes = normalize_types(table, raw)
+    start = 0
+    head = s.split("(", 1)[0]
+    if s.startswith("L") and ";" in head:
+        start = s.index(";") + 1
+    end = len(s)
+    for stop in ("(", ":"):
+        idx = s.find(stop, start)
+        if idx != -1:
+            end = min(end, idx)
+    return s[:start] + new_name + s[end:], fixes
+
+
+def name_is_live(env: Env, target: str, sel: Sel) -> bool:
+    """Is the selector's CURRENT (yarn) name ALSO a real member of the 26.x target?
+
+    Measured 2026-08-24 on `FireworkRocketEntity`: 26.2 carries BOTH `explode(ServerLevel)` and
+    `dealExplosionDamage(ServerLevel)`, and `explode` CALLS the other one and then `discard()`s the
+    entity. The selector said `explode`, so `mixin-allow-audit.py` reported the injector **OK** --
+    it bound one point, just not the one the handler was written for. The rename fixes it, and
+    `--check` was never going to say so either way.
+
+    So a rewrite over a live old name is not a no-op-or-fix; it REBINDS. That is a per-site
+    judgement, and this flags it rather than deciding it.
+
+    ⚠️ The DESCRIPTOR is part of the question, not a refinement of it. `BlockItem` in 26.2 carries
+    both `place(BlockPlaceContext)InteractionResult` and `placeBlock(BlockPlaceContext,BlockState)Z`,
+    and the selector is `place(...)Z` -- the name is live, the SELECTOR is not, so that injector
+    binds nothing today and its rename cannot rebind anything. Matching on the name alone reports
+    it as a judgement call and buries the one site that really is one.
+    """
+    owner = sel.owner or target
+    for cls in hierarchy(env, owner):
+        info = env.load(cls)
+        if not info:
+            continue
+        for m in info.members:
+            if m.name != sel.name:
+                continue
+            if sel.desc is None or m.desc.startswith(sel.desc):
+                return True
+    return False
+
+
+def plan_for(env: Env, target: str, raw: str) -> tuple[str, str, str | None]:
+    """-> (bucket, detail, the rewritten selector text or None). The writer's ONLY entry point.
+
+    None means "do not touch this site", for every reason: unparseable, or any bucket other than
+    NAME-ONLY. A caller cannot reach a rewrite without a verdict that earned one.
+    """
+    sel = parse_selector(raw)
+    if sel is None:
+        return "UNPARSEABLE", f"cannot parse selector {raw!r}", None
+    bucket, detail, chosen = classify(env, target, sel)
+    if bucket != "NAME-ONLY" or chosen is None:
+        return bucket, detail, None
+    new_raw, _ = rewrite_selector_text(env.table, raw, chosen)
+    return bucket, detail, new_raw
 
 
 # --------------------------------------------------------------------------------------------
@@ -437,7 +563,7 @@ def collect(env: Env, root: Path) -> list[Row]:
                 sel = parse_selector(raw)
                 if sel is None:
                     continue
-                b, d = classify(env, target, sel)
+                b, d, _ = classify(env, target, sel)
                 rows.append(Row(mf.path.name, inj.line, inj.kind, inj.handler, "method", raw, b, d))
             for at in inj.ats:
                 if not at.target.strip():
@@ -445,7 +571,7 @@ def collect(env: Env, root: Path) -> list[Row]:
                 sel = parse_selector(at.target)
                 if sel is None:
                     continue
-                b, d = classify(env, target, sel)
+                b, d, _ = classify(env, target, sel)
                 slot = f"@At({at.value or '?'})"
                 rows.append(Row(mf.path.name, inj.line, inj.kind, inj.handler, slot, at.target, b, d))
     return rows
@@ -510,6 +636,9 @@ def _fake_env(classes=None, drop_members=(), drop_classes=(), use_hierarchy=True
         LIVING: ClassInfo(LIVING, (ENTITY,), (
             Member("getDamageAfterMagicAbsorb", DMG),
             Member("hurtAndBreak", "(I)V"),
+            # The 32.0b shape: an overload whose descriptor names a class that yarn spelled
+            # differently. Only reachable once the selector's descriptor is normalised.
+            Member("hurtAndBreak", "(IL" + LIVING.replace(".", "/") + ";)V"),
             Member("hurtWithoutBreaking", "(J)V"),
         )),
         ENTITY: ClassInfo(ENTITY, (), (Member("position", "()Lnet/minecraft/world/phys/Vec3;"),)),
@@ -522,7 +651,16 @@ def _fake_env(classes=None, drop_members=(), drop_classes=(), use_hierarchy=True
         t.off2yarn.pop(k, None)
     for val, key in list(t.off2yarn.items()):
         t.off_simple.setdefault(val.rsplit(".", 1)[-1], set()).add(key)
+    t.yarn2off = {y: o for o, y in t.off2yarn.items()}
     return Env(t, lambda f: known.get(f), use_hierarchy)
+
+
+def _fake_env_no_norm() -> Env:
+    """The pre-32.0b sizer: descriptors compared verbatim. Kept ONLY so a mutation can prove that
+    turning normalisation off puts the four half-renamed rows back in SIGNATURE-CHANGED."""
+    e = _fake_env()
+    e.normalize = False
+    return e
 
 
 def self_test() -> int:
@@ -614,6 +752,56 @@ def self_test() -> int:
                   parse_selector("damage"))[0], "GONE-OR-MOVED")
     check("a `a|b` value with both live but NO descriptor fit is SIGNATURE-CHANGED",
           classify(env, LIVING, parse_selector("damage(Lfoo/Bar;)V"))[0], "SIGNATURE-CHANGED")
+
+    print("32.0b -- a HALF-RENAMED descriptor, the string-concatenation blind spot")
+    YARN_L = "Lnet/minecraft/entity/LivingEntity;"
+    OFF_L = "L" + LIVING.replace(".", "/") + ";"
+    half = "damage(I" + YARN_L + ")V"
+    check("a yarn type inside the descriptor is normalised, so the row is NAME-ONLY",
+          classify(env, LIVING, parse_selector(half))[0], "NAME-ONLY")
+    check("MUTATION: with normalisation OFF the same row goes back to SIGNATURE-CHANGED",
+          classify(_fake_env_no_norm(), LIVING, parse_selector(half))[0], "SIGNATURE-CHANGED")
+    check("an ALREADY-OFFICIAL type is left alone (it is a 26.x fact, not a yarn name)",
+          normalize_types(env.table, "(I" + OFF_L + ")V"), ("(I" + OFF_L + ")V", []))
+    check("a type in NEITHER map is left alone, never guessed",
+          normalize_types(env.table, "(Lnet/minecraft/no/Such;)V"),
+          ("(Lnet/minecraft/no/Such;)V", []))
+
+    print("the rewrite -- what the writer in rename-to-official.py is handed")
+    check("the member name is replaced AND the descriptor normalised",
+          rewrite_selector_text(env.table, half, "hurtAndBreak")[0],
+          "hurtAndBreak(I" + OFF_L + ")V")
+    check("an explicit owner prefix survives the rewrite",
+          rewrite_selector_text(env.table, "Lnet/minecraft/world/item/ItemStack;" + half,
+                                "hurtAndBreak")[0],
+          "Lnet/minecraft/world/item/ItemStack;hurtAndBreak(I" + OFF_L + ")V")
+    check("a FIELD selector rewrites the name, not the type",
+          rewrite_selector_text(env.table, OFF_L + "HEALTH:F", "health")[0], OFF_L + "health:F")
+    check("a TRUNCATED descriptor keeps its truncation",
+          rewrite_selector_text(env.table, "damage(I" + YARN_L, "hurtAndBreak")[0],
+          "hurtAndBreak(I" + OFF_L)
+    check("NO-OP: an already-correct selector comes back BYTE-IDENTICAL",
+          rewrite_selector_text(env.table, "hurtAndBreak(I" + OFF_L + ")V", "hurtAndBreak")[0],
+          "hurtAndBreak(I" + OFF_L + ")V")
+    check("plan_for hands the writer a rewrite ONLY on NAME-ONLY",
+          plan_for(env, LIVING, half)[2], "hurtAndBreak(I" + OFF_L + ")V")
+    check("MUTATION: plan_for refuses to rewrite a MULTI-TARGET row",
+          plan_for(env, LIVING, "damage")[2], None)
+    check("MUTATION: plan_for refuses to rewrite a SIGNATURE-CHANGED row",
+          plan_for(env, LIVING, "damage(Lfoo/Bar;)V")[2], None)
+
+    print("REBIND detection -- the FireworkRocketEntity shape, which allow-audit calls OK")
+    check("the OLD name being live on the target is detected",
+          name_is_live(env, LIVING, parse_selector("hurtAndBreak(I)V")), True)
+    check("a name that is NOT on the target reads as not live",
+          name_is_live(env, LIVING, parse_selector("modifyAppliedDamage" + DMG)), False)
+    check("MUTATION: with the hierarchy OFF an INHERITED live name is missed",
+          name_is_live(_fake_env(use_hierarchy=False), LIVING, parse_selector("position")), False)
+    check("MUTATION: the same name with a NON-MATCHING descriptor is NOT live (the BlockItem "
+          "shape: place(ctx) exists, place(ctx,state)Z does not)",
+          name_is_live(env, LIVING, parse_selector("hurtAndBreak(Lfoo/Bar;)V")), False)
+    check("an INHERITED live name is found through the supertype",
+          name_is_live(env, LIVING, parse_selector("position")), True)
 
     print("owner resolution -- a class that MOVED between 1.21.11 and 26.x")
     MOVED = "net.minecraft.world.entity.Living2"
