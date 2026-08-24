@@ -54,13 +54,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BeehiveHarvestMixin {
 
     private static final String ON_USE_WITH_ITEM =
-            "onUseWithItem(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/block/state/BlockState;"
+            "useItemOn(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/block/state/BlockState;"
                     + "Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;"
                     + "Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;"
                     + "Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;";
 
     private static final String IS_LIT_CAMPFIRE_IN_RANGE =
-            "Lnet/minecraft/world/level/block/CampfireBlock;isLitCampfireInRange("
+            "Lnet/minecraft/world/level/block/CampfireBlock;isSmokeyPos("
                     + "Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Z";
 
     /**
@@ -91,7 +91,7 @@ public abstract class BeehiveHarvestMixin {
      * and one vanilla only reaches once it has decided the harvest is going ahead.
      */
     @Inject(method = ON_USE_WITH_ITEM, allow = 1,
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/ItemStack;decrement(I)V"))
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/ItemStack;shrink(I)V"))
     private void mcmmo$onHoneyBottled(ItemStack stack, BlockState state, Level world, BlockPos pos,
             Player player, InteractionHand hand, BlockHitResult hit,
             CallbackInfoReturnable<InteractionResult> cir) {
@@ -130,7 +130,7 @@ public abstract class BeehiveHarvestMixin {
      */
     @ModifyArg(method = ON_USE_WITH_ITEM, allow = 1, index = 0,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/world/item/ItemStack;damage(ILnet/minecraft/entity/"
+                    target = "Lnet/minecraft/world/item/ItemStack;hurtAndBreak(ILnet/minecraft/world/entity/"
                             + "LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;)V"))
     private int mcmmo$saveHiveToolDurability(int damageAmount, LivingEntity holder,
             EquipmentSlot slot) {

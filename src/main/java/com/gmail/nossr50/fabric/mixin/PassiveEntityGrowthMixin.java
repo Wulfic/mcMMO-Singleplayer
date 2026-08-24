@@ -68,7 +68,7 @@ public abstract class PassiveEntityGrowthMixin {
      * so a handful of entities per tick at most — vanilla skips the call entirely once the age
      * settles at zero, which is where every idle adult sits.
      */
-    @Inject(method = "setBreedingAge(I)V", allow = 1, at = @At("HEAD"))
+    @Inject(method = "setAge(I)V", allow = 1, at = @At("HEAD"))
     private void mcmmo$onBreedingAgeChange(int newAge, CallbackInfo ci) {
         HusbandryListener.onBreedingAgeChange((AgeableMob) (Object) this, this.breedingAge,
                 newAge);
@@ -81,7 +81,7 @@ public abstract class PassiveEntityGrowthMixin {
      * rather than a call site, which is what makes this cover all six feeding paths — including the
      * three that arrive via the one-argument overload — from a single injection.
      */
-    @ModifyVariable(method = "growUp(IZ)V", allow = 1, at = @At("HEAD"), argsOnly = true, ordinal = 0)
+    @ModifyVariable(method = "ageUp(IZ)V", allow = 1, at = @At("HEAD"), argsOnly = true, ordinal = 0)
     private int mcmmo$onGrowthApplied(int growthSeconds) {
         return HusbandryListener.onGrowthApplied((AgeableMob) (Object) this, growthSeconds);
     }

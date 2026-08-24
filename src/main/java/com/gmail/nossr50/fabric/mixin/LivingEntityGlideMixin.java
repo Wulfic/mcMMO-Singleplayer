@@ -39,9 +39,9 @@ public abstract class LivingEntityGlideMixin {
      * forward (Fleet Footed air), slower downward (Glide).
      */
     @ModifyExpressionValue(
-            method = "travelGliding",
+            method = "travelFallFlying",
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/world/entity/LivingEntity;calcGlidingVelocity"
+                    target = "Lnet/minecraft/world/entity/LivingEntity;updateFallFlyingMovement"
                             + "(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;"),
             // One call site in this method; cap it so a future remap that widens the match is a
             // build failure rather than a silent second injection.

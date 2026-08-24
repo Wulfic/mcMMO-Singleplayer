@@ -46,7 +46,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(BrewingStandBlockEntity.class)
 public abstract class BrewingStandBlockEntityMixin {
 
-    @Inject(method = "canCraft", allow = 1, at = @At("HEAD"), cancellable = true)
+    @Inject(method = "isBrewable", allow = 1, at = @At("HEAD"), cancellable = true)
     private static void mcmmo$forceMcMMOBrewRecognition(PotionBrewing registry,
             NonNullList<ItemStack> slots, CallbackInfoReturnable<Boolean> cir) {
         if (AlchemyListener.isValidBrew(slots)) {
@@ -54,7 +54,7 @@ public abstract class BrewingStandBlockEntityMixin {
         }
     }
 
-    @Inject(method = "craft", allow = 1, at = @At("HEAD"), cancellable = true)
+    @Inject(method = "doBrew", allow = 1, at = @At("HEAD"), cancellable = true)
     private static void mcmmo$onBrewCraft(Level world, BlockPos pos,
             NonNullList<ItemStack> slots, CallbackInfo ci) {
         if (AlchemyListener.isValidBrew(slots)) {
@@ -63,7 +63,7 @@ public abstract class BrewingStandBlockEntityMixin {
         }
     }
 
-    @Inject(method = "tick", allow = 1, at = @At("HEAD"))
+    @Inject(method = "serverTick", allow = 1, at = @At("HEAD"))
     private static void mcmmo$applyCatalysisBrewSpeed(Level world, BlockPos pos, BlockState state,
             BrewingStandBlockEntity blockEntity, CallbackInfo ci) {
         AlchemyListener.applyCatalysis(pos, blockEntity);

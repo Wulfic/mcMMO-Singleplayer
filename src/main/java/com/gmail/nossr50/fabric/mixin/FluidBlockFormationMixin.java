@@ -39,7 +39,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class FluidBlockFormationMixin {
 
     @Inject(
-            method = "receiveNeighborFluids(Lnet/minecraft/world/level/Level;"
+            method = "shouldSpreadLiquid(Lnet/minecraft/world/level/Level;"
                     + "Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z", allow = 3,
             at = @At("RETURN"))
     private void mcmmo$onFluidFormedBlock(Level world, BlockPos pos, BlockState state,

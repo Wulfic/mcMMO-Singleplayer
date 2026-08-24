@@ -47,10 +47,10 @@ public abstract class ShearableInteractMixin {
      * rather than assuming that whoever holds the interaction stash is the shearer.
      */
     @ModifyArg(
-            method = "interactMob(Lnet/minecraft/world/entity/player/Player;"
+            method = "mobInteract(Lnet/minecraft/world/entity/player/Player;"
                     + "Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;", allow = 1,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/world/item/ItemStack;damage(ILnet/minecraft/entity/"
+                    target = "Lnet/minecraft/world/item/ItemStack;hurtAndBreak(ILnet/minecraft/world/entity/"
                             + "LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;)V"),
             index = 0)
     private int mcmmo$saveShearDurability(int damageAmount) {

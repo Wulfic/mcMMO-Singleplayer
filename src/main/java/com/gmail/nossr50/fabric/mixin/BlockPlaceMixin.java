@@ -36,7 +36,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BlockPlaceMixin {
 
     @Inject(
-            method = "place(Lnet/minecraft/world/item/context/BlockPlaceContext;"
+            method = "placeBlock(Lnet/minecraft/world/item/context/BlockPlaceContext;"
                     + "Lnet/minecraft/world/level/block/state/BlockState;)Z", allow = 1,
             at = @At("RETURN"))
     private void mcmmo$onBlockPlaced(BlockPlaceContext context, BlockState state,

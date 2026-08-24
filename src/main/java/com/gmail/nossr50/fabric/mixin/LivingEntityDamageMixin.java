@@ -24,7 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityDamageMixin {
 
-    @ModifyReturnValue(method = "modifyAppliedDamage", allow = 4, at = @At("RETURN"))
+    @ModifyReturnValue(method = "getDamageAfterMagicAbsorb", allow = 4, at = @At("RETURN"))
     private float mcmmo$reduceAppliedDamage(float appliedDamage, DamageSource source, float amount) {
         return EntityDamageListener.onModifyAppliedDamage(
                 (LivingEntity) (Object) this, source, appliedDamage);
@@ -54,7 +54,7 @@ public abstract class LivingEntityDamageMixin {
      * one needed to cover players. The consumer still verifies entity <em>and</em> source identity
      * before trusting the reading — see {@code EntityDamageListener#recordPreArmorDamage}.
      */
-    @Inject(method = "applyArmorToDamage", allow = 1, at = @At("HEAD"))
+    @Inject(method = "getDamageAfterArmorAbsorb", allow = 1, at = @At("HEAD"))
     private void mcmmo$capturePreArmorDamage(DamageSource source, float amount,
             CallbackInfoReturnable<Float> cir) {
         EntityDamageListener.recordPreArmorDamage((LivingEntity) (Object) this, source, amount);

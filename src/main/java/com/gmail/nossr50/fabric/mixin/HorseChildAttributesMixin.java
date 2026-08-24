@@ -41,7 +41,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class HorseChildAttributesMixin {
 
     private static final String SET_CHILD_ATTRIBUTES =
-            "setChildAttributes(Lnet/minecraft/world/entity/AgeableMob;"
+            "setOffspringAttributes(Lnet/minecraft/world/entity/AgeableMob;"
                     + "Lnet/minecraft/world/entity/animal/equine/AbstractHorse;)V";
 
     /**
@@ -79,8 +79,8 @@ public abstract class HorseChildAttributesMixin {
      * allowed"; capping it at 1 would be worse than the error, because it would bias only the
      * in-range path and silently leave extreme rolls untouched.
      */
-    @ModifyReturnValue(method = "calculateAttributeBaseValue(DDDDLnet/minecraft/util/math/random/"
-            + "Random;)D", allow = 3, at = @At("RETURN"))
+    @ModifyReturnValue(method = "createOffspringAttribute(DDDDLnet/minecraft/util/RandomSource;)D",
+            allow = 3, at = @At("RETURN"))
     private static double mcmmo$biasChildAttribute(double rolled, double parentA, double parentB,
             double min, double max, RandomSource random) {
         return HusbandryListener.applySelectiveBreedingBias(rolled, min, max);

@@ -34,7 +34,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Animal.class)
 public abstract class AnimalLovePlayerMixin {
 
-    @Inject(method = "lovePlayer", allow = 1, at = @At("TAIL"))
+    @Inject(method = "setInLove", allow = 1, at = @At("TAIL"))
     private void mcmmo$onLovePlayer(Player player, CallbackInfo ci) {
         HusbandryListener.onLovePlayer((Animal) (Object) this, player);
     }

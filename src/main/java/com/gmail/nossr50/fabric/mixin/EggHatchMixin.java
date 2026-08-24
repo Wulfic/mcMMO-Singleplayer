@@ -35,7 +35,7 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class EggHatchMixin {
 
     private static final String ON_COLLISION =
-            "onCollision(Lnet/minecraft/world/phys/HitResult;)V";
+            "onHit(Lnet/minecraft/world/phys/HitResult;)V";
     private static final String NEXT_INT =
             "Lnet/minecraft/util/RandomSource;nextInt(I)I";
 

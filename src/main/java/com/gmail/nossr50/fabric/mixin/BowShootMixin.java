@@ -33,7 +33,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BowShootMixin {
 
     @Inject(
-            method = "onStoppedUsing(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;"
+            method = "releaseUsing(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;"
                     + "Lnet/minecraft/world/entity/LivingEntity;I)Z", allow = 1,
             at = @At("HEAD"))
     private void mcmmo$captureBowForce(ItemStack stack, Level world, LivingEntity user,
@@ -47,7 +47,7 @@ public abstract class BowShootMixin {
     }
 
     @Inject(
-            method = "onStoppedUsing(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;"
+            method = "releaseUsing(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;"
                     + "Lnet/minecraft/world/entity/LivingEntity;I)Z", allow = 4,
             at = @At("RETURN"))
     private void mcmmo$clearBowForce(ItemStack stack, Level world, LivingEntity user,

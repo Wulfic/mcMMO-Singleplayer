@@ -34,7 +34,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class ProjectileSpawnMixin {
 
     @Inject(
-            method = "spawn(Lnet/minecraft/world/entity/projectile/Projectile;"
+            method = "spawnProjectile(Lnet/minecraft/world/entity/projectile/Projectile;"
                     + "Lnet/minecraft/server/level/ServerLevel;"
                     + "Lnet/minecraft/world/item/ItemStack;"
                     + "Ljava/util/function/Consumer;)"

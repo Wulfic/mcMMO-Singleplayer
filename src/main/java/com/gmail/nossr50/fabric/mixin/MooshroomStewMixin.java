@@ -37,10 +37,10 @@ public abstract class MooshroomStewMixin {
      * from the three-argument one the bucket path uses, which is what keeps the two hooks from
      * colliding on a mooshroom that inherits both paths.
      */
-    @Inject(method = "interactMob(Lnet/minecraft/world/entity/player/Player;"
+    @Inject(method = "mobInteract(Lnet/minecraft/world/entity/player/Player;"
             + "Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;", allow = 1,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/world/item/ItemUtils;exchangeStack("
+                    target = "Lnet/minecraft/world/item/ItemUtils;createFilledResult("
                             + "Lnet/minecraft/world/item/ItemStack;"
                             + "Lnet/minecraft/world/entity/player/Player;"
                             + "Lnet/minecraft/world/item/ItemStack;Z)Lnet/minecraft/world/item/ItemStack;"))

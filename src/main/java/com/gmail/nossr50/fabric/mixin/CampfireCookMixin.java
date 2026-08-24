@@ -74,12 +74,12 @@ public abstract class CampfireCookMixin {
      *               Master Chef procs
      */
     @ModifyArg(
-            method = "litServerTick",
+            method = "cookTick",
             allow = 1,
             index = 4,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/Containers;spawn("
+                    target = "Lnet/minecraft/world/Containers;dropItemStack("
                             + "Lnet/minecraft/world/level/Level;DDD"
                             + "Lnet/minecraft/world/item/ItemStack;)V"))
     private static ItemStack mcmmo$onCampfireCook(ItemStack result,

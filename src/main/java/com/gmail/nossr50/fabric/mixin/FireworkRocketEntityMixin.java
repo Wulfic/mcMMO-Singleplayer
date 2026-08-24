@@ -44,7 +44,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(FireworkRocketEntity.class)
 public abstract class FireworkRocketEntityMixin {
 
-    @Inject(method = "explode", allow = 1, at = @At("HEAD"), cancellable = true)
+    @Inject(method = "dealExplosionDamage", allow = 1, at = @At("HEAD"), cancellable = true)
     private void mcmmo$skipCosmeticFireworkDamage(ServerLevel world, CallbackInfo ci) {
         final FireworkRocketEntity self = (FireworkRocketEntity) (Object) this;
         if (MetadataStore.has(self, ParticleEffectUtils.COSMETIC_FIREWORK_KEY)) {

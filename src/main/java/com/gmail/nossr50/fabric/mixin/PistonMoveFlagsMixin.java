@@ -37,7 +37,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class PistonMoveFlagsMixin {
 
     @Inject(
-            method = "move(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;"
+            method = "moveBlocks(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;"
                     + "Lnet/minecraft/core/Direction;Z)Z", allow = 2,
             at = @At("RETURN"))
     private void mcmmo$onPistonMoved(Level world, BlockPos pos, Direction dir, boolean retract,

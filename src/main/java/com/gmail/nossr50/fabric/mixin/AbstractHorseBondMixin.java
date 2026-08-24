@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(AbstractHorse.class)
 public abstract class AbstractHorseBondMixin {
 
-    @Inject(method = "bondWithPlayer", allow = 1, at = @At("RETURN"))
+    @Inject(method = "tameWithName", allow = 1, at = @At("RETURN"))
     private void mcmmo$onBond(Player player, CallbackInfoReturnable<Boolean> cir) {
         if (Boolean.TRUE.equals(cir.getReturnValue())) {
             TamingListener.onEntityTamed(player, (AbstractHorse) (Object) this);

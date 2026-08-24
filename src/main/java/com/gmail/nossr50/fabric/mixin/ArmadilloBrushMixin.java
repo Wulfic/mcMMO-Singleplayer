@@ -59,7 +59,7 @@ public abstract class ArmadilloBrushMixin {
      * check with "Scanned 0 target(s)", which reads like a missing <em>method</em> rather than a
      * mismatched owner and sends you hunting for the wrong thing.
      */
-    @ModifyArg(method = "brushScute", allow = 1, index = 4,
+    @ModifyArg(method = "brushOffScute", allow = 1, index = 4,
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/world/entity/animal/armadillo/Armadillo;forEachBrushedItem("
                             + "Lnet/minecraft/server/level/ServerLevel;"
@@ -82,10 +82,10 @@ public abstract class ArmadilloBrushMixin {
      * {@code interactMob}, after {@code brushScute} has returned — so it hangs off that call instead.
      * There is exactly one {@code damage} call in the method.
      */
-    @ModifyArg(method = "interactMob(Lnet/minecraft/world/entity/player/Player;"
+    @ModifyArg(method = "mobInteract(Lnet/minecraft/world/entity/player/Player;"
             + "Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;", allow = 1, index = 0,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/world/item/ItemStack;damage(ILnet/minecraft/entity/"
+                    target = "Lnet/minecraft/world/item/ItemStack;hurtAndBreak(ILnet/minecraft/world/entity/"
                             + "LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;)V"))
     private int mcmmo$saveBrushDurability(int damageAmount, LivingEntity holder,
             EquipmentSlot slot) {

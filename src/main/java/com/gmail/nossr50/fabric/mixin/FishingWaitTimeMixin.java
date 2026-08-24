@@ -63,7 +63,7 @@ public abstract class FishingWaitTimeMixin {
     private int waitTimeReductionTicks;
 
     @Redirect(
-            method = "tickFishingLogic",
+            method = "catchingFish",
             slice = @Slice(from = @At(value = "CONSTANT", args = "intValue=600")),
             at = @At(
                     value = "INVOKE",

@@ -35,10 +35,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class SnowGolemTrailMixin {
 
     @Inject(
-            method = "tickMovement()V",
+            method = "aiStep()V",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/level/Level;setBlockState"
+                    target = "Lnet/minecraft/world/level/Level;setBlockAndUpdate"
                             + "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z"),
             allow = 1)
     private void mcmmo$onSnowGolemLaidSnow(CallbackInfo ci, @Local BlockPos pos) {

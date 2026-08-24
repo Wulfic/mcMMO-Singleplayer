@@ -40,7 +40,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class FishingBobberUseMixin {
 
     @ModifyArg(
-            method = "use", allow = 2,
+            method = "retrieve", allow = 2,
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/advancements/criterion/FishingRodHookedTrigger;trigger("
@@ -55,10 +55,10 @@ public abstract class FishingBobberUseMixin {
     }
 
     @Inject(
-            method = "use",
+            method = "retrieve",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/entity/projectile/FishingHook;pullHookedEntity("
+                    target = "Lnet/minecraft/world/entity/projectile/FishingHook;pullEntity("
                             + "Lnet/minecraft/world/entity/Entity;)V"),
             require = 1,
             allow = 1)
@@ -74,7 +74,7 @@ public abstract class FishingBobberUseMixin {
      * the reel proceeds and discards the bobber as normal; the only side effect is melting the ice sheet
      * the player is looking at into a fishing hole. See {@link FishingListener#tryIceFishing}.
      */
-    @Inject(method = "use", allow = 1, at = @At("HEAD"))
+    @Inject(method = "retrieve", allow = 1, at = @At("HEAD"))
     private void mcmmo$tryIceFishing(ItemStack usedItem, CallbackInfoReturnable<Integer> cir) {
         FishingListener.tryIceFishing((FishingHook) (Object) this);
     }
@@ -94,7 +94,7 @@ public abstract class FishingBobberUseMixin {
      * confiscated catch and the orb is destroyed rather than boosted, as intended.
      */
     @ModifyArg(
-            method = "use",
+            method = "retrieve",
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/world/entity/ExperienceOrb;<init>("

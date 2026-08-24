@@ -26,7 +26,7 @@ public abstract class TntExplodeMixin {
             method = "explode", allow = 1,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/level/Level;createExplosion("
+                    target = "Lnet/minecraft/world/level/Level;explode("
                             + "Lnet/minecraft/world/entity/Entity;"
                             + "Lnet/minecraft/world/damagesource/DamageSource;"
                             + "Lnet/minecraft/world/level/ExplosionDamageCalculator;"

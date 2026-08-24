@@ -52,7 +52,7 @@ public abstract class LivingEntityShearDropsMixin {
      * <p>{@code argsOnly} with {@code ordinal = 0} targets the parameter itself; it is the only
      * {@code BiConsumer} in the signature, so the match is unambiguous.
      */
-    @ModifyVariable(method = "forEachShearedItem", allow = 1, at = @At("HEAD"), argsOnly = true, ordinal = 0)
+    @ModifyVariable(method = "dropFromShearingLootTable", allow = 1, at = @At("HEAD"), argsOnly = true, ordinal = 0)
     private BiConsumer<ServerLevel, ItemStack> mcmmo$onShearedItems(
             BiConsumer<ServerLevel, ItemStack> dropper) {
         return HusbandryListener.onShearedItems((LivingEntity) (Object) this, dropper);

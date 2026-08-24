@@ -35,12 +35,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class LavaFluidStoneFormationMixin {
 
     @Inject(
-            method = "flow(Lnet/minecraft/world/level/LevelAccessor;Lnet/minecraft/core/BlockPos;"
+            method = "spreadTo(Lnet/minecraft/world/level/LevelAccessor;Lnet/minecraft/core/BlockPos;"
                     + "Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/Direction;"
                     + "Lnet/minecraft/world/level/material/FluidState;)V",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/level/LevelAccessor;setBlockState"
+                    target = "Lnet/minecraft/world/level/LevelAccessor;setBlock"
                             + "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z"),
             allow = 1)
     private void mcmmo$onLavaFormedStone(LevelAccessor world, BlockPos pos, BlockState state,

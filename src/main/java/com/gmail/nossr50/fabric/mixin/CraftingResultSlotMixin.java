@@ -48,7 +48,7 @@ public abstract class CraftingResultSlotMixin {
     @Shadow
     private int amount;
 
-    @Inject(method = "onCrafted(Lnet/minecraft/world/item/ItemStack;)V", allow = 1, at = @At("HEAD"))
+    @Inject(method = "checkTakeAchievements(Lnet/minecraft/world/item/ItemStack;)V", allow = 1, at = @At("HEAD"))
     private void mcmmo$onCraftedItemTaken(ItemStack stack, CallbackInfo ci) {
         CookingListener.onCraftedItemTaken(player, stack, amount);
     }

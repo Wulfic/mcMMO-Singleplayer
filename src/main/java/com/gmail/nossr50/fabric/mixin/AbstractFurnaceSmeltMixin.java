@@ -56,7 +56,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class AbstractFurnaceSmeltMixin {
 
     @Inject(
-            method = "tick",
+            method = "serverTick",
             allow = 1,
             at = @At(
                     value = "INVOKE",
@@ -72,11 +72,11 @@ public abstract class AbstractFurnaceSmeltMixin {
     }
 
     @Inject(
-            method = "tick",
+            method = "serverTick",
             allow = 1,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;setLastRecipe("
+                    target = "Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;setRecipeUsed("
                             + "Lnet/minecraft/world/item/crafting/RecipeHolder;)V"))
     private static void mcmmo$onSecondSmelt(ServerLevel world, BlockPos pos, BlockState state,
             AbstractFurnaceBlockEntity blockEntity, CallbackInfo ci) {
@@ -85,11 +85,11 @@ public abstract class AbstractFurnaceSmeltMixin {
     }
 
     @ModifyExpressionValue(
-            method = "tick",
+            method = "serverTick",
             allow = 1,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;getFuelTime("
+                    target = "Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;getBurnDuration("
                             + "Lnet/minecraft/world/level/block/entity/FuelValues;"
                             + "Lnet/minecraft/world/item/ItemStack;)I"))
     private static int mcmmo$applyFuelEfficiency(int burnTime, ServerLevel world, BlockPos pos,
@@ -112,13 +112,13 @@ public abstract class AbstractFurnaceSmeltMixin {
      * {@code getRecipesUsedAndDropExperience}, because that call site lives in a lambda.
      */
     @ModifyArg(
-            method = "dropExperience(Lnet/minecraft/server/level/ServerLevel;"
+            method = "createExperience(Lnet/minecraft/server/level/ServerLevel;"
                     + "Lnet/minecraft/world/phys/Vec3;IF)V",
             allow = 1,
             index = 2,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/entity/ExperienceOrb;spawn("
+                    target = "Lnet/minecraft/world/entity/ExperienceOrb;award("
                             + "Lnet/minecraft/server/level/ServerLevel;"
                             + "Lnet/minecraft/world/phys/Vec3;I)V"))
     private static int mcmmo$boostVanillaXp(int amount) {
