@@ -2431,13 +2431,52 @@ one of those was a live `equals()` comparison in main source that returned false
 
 ### 31.6 — exit gates
 
-Green `compileJava` + `compileTestJava` is **not** the end of §31.
+Green `compileJava` + `compileTestJava` is **not** the end of §31, and this section is why that
+sentence was written before the code was.
 
-- [ ] Full suite passes; read the `N tests executed` line, not `BUILD SUCCESSFUL` — Gradle skips the
-      doc-guard tests on an up-to-date tree and prints success either way.
-- [ ] `scripts/mixin-allow-audit.py --check` passes **on this branch**. 🔴 It still reads yarn names
-      and is blind here; porting it is part of 9.3's remainder and is a hard prerequisite, because
-      31.2(e) moved a mixin's target package and **no compiler on earth checks a mixin selector**.
+- [ ] 🔴🔴 **The suite does not run at all. 0 tests executed.** Not "some tests fail" — JUnit cannot
+      **discover** them: `TestEngine with ID 'junit-jupiter' failed to discover tests`, on every one
+      of the four forks. The tests load under Knot (fabric-loader-junit), so class loading applies
+      the mixins, and **a mixin that fails to apply aborts the transform**:
+
+      ```
+      Mixin [mcmmo.mixins.json:PlayerEntityInteractMixin] FAILED during APPLY
+        @Inject annotation on mcmmo$beginInteraction could not find any targets matching
+        'interact(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;)
+         Lnet/minecraft/world/InteractionResult;' in net/minecraft/world/entity/player/Player
+      ```
+
+      ⚠️ **`BUILD FAILED` here was reported to the shell as exit 0**, because the command ended in a
+      pipe. The repo's own "a piped exit code is the PIPE's" gotcha, hit again. **Read the
+      `N tests executed` line**, which was **0** — `build/test-results/` held zero suite XML files.
+- [x] ✅ **`mixin-allow-audit.py` now runs on a 26.x branch** — `find_jar` falls back to
+      `minecraft-merged-deobf-<mc>.jar`. 26.x ships unobfuscated and yarn publishes nothing for it,
+      so the old glob for the *yarn-remapped* artifact could never match, and **the one gate that can
+      see a mixin selector was unusable on the only branch whose selectors had just been rewritten.**
+- [ ] 🔴🔴 **54 of 61 injectors resolve to ZERO targets. `MISMATCH=1  ZERO=54  OK=6`.**
+
+      This is the real price of `26.x`, and the compile was never going to show it. A mixin's
+      `method = "..."` selector is a **string**: passes 1+2 rewrote the *type* names inside those
+      strings (that is why the damage audit saw 56 package-segment rewrites in descriptors), the
+      member loop never touched them because **javac cannot see inside a string literal**, and the
+      target methods then moved in `26.2` anyway. Two confirmed by javap against the jar:
+      `Player#interact(Entity, InteractionHand)` **does not exist** in 26.2, and
+      `LivingEntity#modifyAppliedDamage` is gone — its neighbourhood is now
+      `getDamageAfterArmorAbsorb` / `getDamageAfterMagicAbsorb` / `actuallyHurt`.
+
+      🔑 **Every earning path, every super ability, every drop hook is in that 54.** The mod
+      compiles and does nothing. This is exactly the shape the memory entry
+      `[[band-1-21-1-shipped-summon-gap]]` records — *application is not coverage* — except here it
+      is not even applying.
+
+      **The 6 that survive** are the injectors whose targets happened not to move:
+      `BredAnimalsCriterionMixin` (the one 31.2(e) re-pointed at `advancements.triggers`),
+      `EndermanEndermiteLureMixin`, `FireworkRocketEntityMixin`, `FoodComponentMixin`,
+      `HungerManagerExhaustionMixin`, `MobConversionOriginMixin`.
+
+      ➡️ **This is §32, and it is not a rename job.** Each of the 54 needs its target re-derived from
+      `26.2` bytecode, and the ones whose method genuinely disappeared need a re-designed seam, not a
+      new string. Sizing it is the first task, not the last.
 - [ ] `scripts/extract-mc-surface.py` regenerated (needs `./gradlew classes testClasses` first — a
       stale `build/classes` yields a confidently wrong manifest) and the diff committed.
 - [ ] 30.6 — `.hprof` into `.gitignore`. ⚠️ Rides the owed gate-10 sweep; cannot land alone.

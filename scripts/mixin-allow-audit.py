@@ -70,8 +70,14 @@ def gradle_prop(name: str) -> str:
     raise SystemExit(f"error: {name} missing from gradle.properties")
 
 
+DEOBF_MAVEN = (
+    Path.home()
+    / ".gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-merged-deobf"
+)
+
+
 def find_jar(mc: str) -> Path:
-    # ⚠️ The trailing '-' in the glob is load-bearing: without it '1.21.1' also matches the
+    # ⚠️ The trailing '-' in the globs is load-bearing: without it '1.21.1' also matches the
     # '1.21.11' directory. Same prefix hazard as scripts/javap-mc.sh and the release workflow's
     # tag-reaping glob. Do not "simplify" it.
     hits = sorted(
@@ -79,16 +85,30 @@ def find_jar(mc: str) -> Path:
         for p in LOOM_MAVEN.glob(f"{mc}-*/minecraft-merged-{mc}-*-v2.jar")
         if "-intermediary-" not in p.name and p.name.startswith(f"minecraft-merged-{mc}-")
     )
-    if not hits:
-        raise SystemExit(
-            f"error: no yarn-mapped merged jar for Minecraft {mc} in the Loom cache.\n"
-            f"  looked in: {LOOM_MAVEN}\n"
-            f"  Loom only caches a version once a build has resolved it:\n"
-            f"    ./gradlew -Pminecraft_version={mc} -Pyarn_mappings=<VER+build.N> build\n"
-            f"  The yarn build number is NOT derivable from the MC version -- look it up at\n"
-            f"    https://meta.fabricmc.net/v2/versions/yarn/{mc}"
-        )
-    return hits[0]
+    if hits:
+        return hits[0]
+
+    # 26.x: Minecraft ships UNOBFUSCATED and yarn publishes nothing for it (meta returns []), so
+    # there is no remapped artifact and Loom caches the jar under a different coordinate entirely.
+    # The classes are already in official names, which is what this branch's mixins target, so this
+    # jar is the authority -- there is no mapping step left to be missing.
+    #
+    # Without this branch the script died with "no yarn-mapped merged jar" on `master`, which made
+    # the ONE gate that can see a mixin selector unusable on the only branch whose selectors had
+    # just been rewritten. See TODO.md §31.6.
+    deobf = sorted(DEOBF_MAVEN.glob(f"{mc}/minecraft-merged-deobf-{mc}.jar"))
+    if deobf:
+        return deobf[0]
+
+    raise SystemExit(
+        f"error: no merged jar for Minecraft {mc} in the Loom cache.\n"
+        f"  looked in: {LOOM_MAVEN}\n"
+        f"         and: {DEOBF_MAVEN}   (26.x ships unobfuscated; no yarn artifact exists)\n"
+        f"  Loom only caches a version once a build has resolved it:\n"
+        f"    ./gradlew -Pminecraft_version={mc} build\n"
+        f"  For a yarn-mapped version the build number is NOT derivable from the MC version --\n"
+        f"  look it up at https://meta.fabricmc.net/v2/versions/yarn/{mc}"
+    )
 
 
 # --------------------------------------------------------------------------------------------
