@@ -76,39 +76,184 @@ DEOBF_MAVEN = (
 )
 
 
+class JarSelectionError(SystemExit):
+    """Raised when the cache cannot be resolved to exactly one jar in the RIGHT naming."""
+
+
+def gradle_prop_opt(name: str) -> str | None:
+    """gradle_prop, but absence is an ANSWER rather than a fatal error.
+
+    `yarn_mappings` is absent on a 26.x branch by design -- from 26.1 Minecraft ships unobfuscated
+    and yarn publishes nothing for it (meta returns []), so build.gradle names no mappings
+    artifact. That absence is how this script learns which naming the branch's mixin selectors are
+    written in. Do not "fix" it into a default.
+    """
+    for line in (REPO / "gradle.properties").read_text(encoding="utf-8").splitlines():
+        if line.startswith(f"{name}="):
+            return line.split("=", 1)[1].strip()
+    return None
+
+
+def choose_jar(mc: str, yarn_mappings: str | None, merged: list[str], deobf: list[str]) -> str:
+    """Pick the ONE cached jar whose naming matches what this branch's selectors are written in.
+
+    Pure -- takes file NAMES and returns a name -- so the entire decision is testable without a
+    Loom cache. See --self-test.
+
+    WHY THIS IS NOT `sorted(hits)[0]`, which is what it used to be:
+
+    The Loom cache is keyed by MC version and is SHARED BY EVERY PROJECT AND BRANCH ON THE MACHINE,
+    so one MC version can hold several jars in DIFFERENT NAMINGS at the same time. On 2026-08-25
+    the 1.21.11 entry held two:
+
+        minecraft-merged-1.21.11-loom.mappings.1_21_11.layered+hash.1830767244-v2.jar  MOJANG-named
+        minecraft-merged-1.21.11-net.fabricmc.yarn.1_21_11.1.21.11+build.6-v2.jar      yarn-named
+
+    `sorted()[0]` prefers 'loom...' to 'net.fabricmc...' on the alphabet alone. mc/1.21.11's mixins
+    are yarn-named, so every selector was resolved against a MOJMAP jar and the gate reported
+    ZERO=61 -- all 61 injectors dead, on a band that ships and boots clean. That reads exactly like
+    a catastrophically broken mod, and the mojmap jar had been left in the shared cache by OUR OWN
+    section 33 rename tooling hours earlier.
+
+    The INVERSE is the dangerous one, and it is why this refuses instead of guessing. A ZERO flood
+    is at least loud. Had the naming mismatch been PARTIAL -- a jar sharing some names with the
+    branch's -- the output would have been a plausible mixture of OK and ZERO rows, and this gate
+    exists precisely to be BELIEVED about which injectors are dead.
+
+    So: match on the mappings coordinate the branch DECLARES, and fail closed on anything the rule
+    cannot resolve to exactly one jar. An unproven jar is not a jar.
+    """
+    nl = "\n"
+    if yarn_mappings is None:
+        # 26.x: unobfuscated, so the deobf artifact is the authority. A mapped jar in `merged`
+        # here belongs to ANOTHER branch or project and must never be used on this branch -- the
+        # old code returned it FIRST, in preference to the right one.
+        if len(deobf) == 1:
+            return deobf[0]
+        if not deobf:
+            stray = ""
+            if merged:
+                stray = (
+                    f"  NOTE: {len(merged)} MAPPED jar(s) for {mc} are cached and were IGNORED --"
+                    f"{nl}        they belong to another branch or project:{nl}    "
+                    + f"{nl}    ".join(sorted(merged))
+                    + nl
+                )
+            raise JarSelectionError(
+                f"error: no unobfuscated merged jar for Minecraft {mc}.{nl}"
+                f"  gradle.properties declares no yarn_mappings, so this branch is 26.x and the{nl}"
+                f"  deobf artifact is the only correct authority.{nl}"
+                f"  looked in: {DEOBF_MAVEN}{nl}"
+                f"{stray}"
+                f"  Loom caches a version once a build has resolved it:  ./gradlew build"
+            )
+        raise JarSelectionError(
+            f"error: {len(deobf)} unobfuscated jars for Minecraft {mc}; cannot tell which:{nl}  "
+            + f"{nl}  ".join(sorted(deobf))
+        )
+
+    # A yarn branch. Require BOTH the publisher and the exact declared mappings version: the
+    # publisher alone would still match a DIFFERENT yarn build, and every row this gate prints is
+    # a per-name resolution against that jar.
+    want = [n for n in merged if "net.fabricmc.yarn" in n and yarn_mappings in n]
+    if len(want) == 1:
+        return want[0]
+    if not want:
+        refused = ""
+        if merged:
+            refused = (
+                f"  {len(merged)} jar(s) ARE cached for {mc}, in a naming this branch does not{nl}"
+                f"  use, and were REFUSED rather than guessed at:{nl}    "
+                + f"{nl}    ".join(sorted(merged))
+                + nl
+            )
+        raise JarSelectionError(
+            f"error: no yarn-mapped merged jar for Minecraft {mc} at "
+            f"yarn_mappings={yarn_mappings}.{nl}"
+            f"{refused}"
+            f"  Loom caches a version once a build has resolved it:{nl}"
+            f"    ./gradlew -Pminecraft_version={mc} build{nl}"
+            f"  The yarn build number is NOT derivable from the MC version -- look it up at{nl}"
+            f"    https://meta.fabricmc.net/v2/versions/yarn/{mc}"
+        )
+    raise JarSelectionError(
+        f"error: {len(want)} jars match yarn_mappings={yarn_mappings} for {mc}; cannot tell "
+        f"which:{nl}  " + f"{nl}  ".join(sorted(want))
+    )
+
+
 def find_jar(mc: str) -> Path:
-    # ⚠️ The trailing '-' in the globs is load-bearing: without it '1.21.1' also matches the
+    # The trailing '-' in the globs is load-bearing: without it '1.21.1' also matches the
     # '1.21.11' directory. Same prefix hazard as scripts/javap-mc.sh and the release workflow's
     # tag-reaping glob. Do not "simplify" it.
-    hits = sorted(
-        p
+    merged = {
+        p.name: p
         for p in LOOM_MAVEN.glob(f"{mc}-*/minecraft-merged-{mc}-*-v2.jar")
         if "-intermediary-" not in p.name and p.name.startswith(f"minecraft-merged-{mc}-")
-    )
-    if hits:
-        return hits[0]
+    }
+    deobf = {p.name: p for p in DEOBF_MAVEN.glob(f"{mc}/minecraft-merged-deobf-{mc}.jar")}
+    chosen = choose_jar(mc, gradle_prop_opt("yarn_mappings"), list(merged), list(deobf))
+    return (merged | deobf)[chosen]
 
-    # 26.x: Minecraft ships UNOBFUSCATED and yarn publishes nothing for it (meta returns []), so
-    # there is no remapped artifact and Loom caches the jar under a different coordinate entirely.
-    # The classes are already in official names, which is what this branch's mixins target, so this
-    # jar is the authority -- there is no mapping step left to be missing.
-    #
-    # Without this branch the script died with "no yarn-mapped merged jar" on `master`, which made
-    # the ONE gate that can see a mixin selector unusable on the only branch whose selectors had
-    # just been rewritten. See TODO.md §31.6.
-    deobf = sorted(DEOBF_MAVEN.glob(f"{mc}/minecraft-merged-deobf-{mc}.jar"))
-    if deobf:
-        return deobf[0]
 
-    raise SystemExit(
-        f"error: no merged jar for Minecraft {mc} in the Loom cache.\n"
-        f"  looked in: {LOOM_MAVEN}\n"
-        f"         and: {DEOBF_MAVEN}   (26.x ships unobfuscated; no yarn artifact exists)\n"
-        f"  Loom only caches a version once a build has resolved it:\n"
-        f"    ./gradlew -Pminecraft_version={mc} build\n"
-        f"  For a yarn-mapped version the build number is NOT derivable from the MC version --\n"
-        f"  look it up at https://meta.fabricmc.net/v2/versions/yarn/{mc}"
-    )
+def selftest_jar_selection() -> int:
+    """Prove choose_jar picks the branch's naming and REFUSES everything it cannot prove.
+
+    A gate with no self-test is a gate nobody can tell has gone inert, and this one had none at
+    all -- which is how it spent an unknown number of sessions able to report ZERO=61 against the
+    wrong jar. Case 1 IS the live defect: it fails on the pre-fix `sorted()[0]`.
+    """
+    YARN = "minecraft-merged-1.21.11-net.fabricmc.yarn.1_21_11.1.21.11+build.6-v2.jar"
+    MOJ = "minecraft-merged-1.21.11-loom.mappings.1_21_11.layered+hash.1830767244-v2.jar"
+    OTHER_YARN = "minecraft-merged-1.21.11-net.fabricmc.yarn.1_21_11.1.21.11+build.4-v2.jar"
+    DEOBF = "minecraft-merged-deobf-26.2.jar"
+    failures: list[str] = []
+
+    def ok(label: str, got, want) -> None:
+        if got != want:
+            failures.append(f"{label}: got {got!r}, wanted {want!r}")
+
+    def refuses(label: str, *args) -> None:
+        try:
+            got = choose_jar(*args)
+        except JarSelectionError:
+            return
+        failures.append(f"{label}: chose {got!r} where it should have REFUSED")
+
+    # 1. THE LIVE DEFECT. Both namings cached; the yarn branch must get the yarn jar.
+    #    sorted()[0] returns MOJ here, because 'loom' sorts before 'net.fabricmc'.
+    ok("yarn branch prefers its own naming",
+       choose_jar("1.21.11", "1.21.11+build.6", [MOJ, YARN], []), YARN)
+
+    # 2. Only a foreign naming cached -> REFUSE. Never silently audit against a mojmap jar.
+    refuses("yarn branch with only a mojmap jar", "1.21.11", "1.21.11+build.6", [MOJ], [])
+
+    # 3. The publisher is not enough: a DIFFERENT yarn build must not satisfy the declared one.
+    refuses("wrong yarn build number", "1.21.11", "1.21.11+build.6", [OTHER_YARN], [])
+
+    # 4. Ambiguity fails closed rather than sorting.
+    dupes = [YARN, "minecraft-merged-1.21.11-net.fabricmc.yarn.1_21_11.1.21.11+build.6-v2.copy.jar"]
+    refuses("two jars matching one coordinate", "1.21.11", "1.21.11+build.6", dupes, [])
+
+    # 5. 26.x (no yarn_mappings) takes the deobf jar...
+    ok("26.x takes deobf", choose_jar("26.2", None, [], [DEOBF]), DEOBF)
+
+    # 6. ...and IGNORES a stray mapped jar rather than preferring it, which the old code did.
+    refuses("26.x with only a stray mapped jar", "26.2", None, [MOJ], [])
+
+    # 7. Nothing cached at all -> refuse, in both modes.
+    refuses("yarn branch, empty cache", "1.21.11", "1.21.11+build.6", [], [])
+    refuses("26.x, empty cache", "26.2", None, [], [])
+
+    print("=== SELF-TEST: jar selection ===")
+    if failures:
+        for f in failures:
+            print(f"  FAIL -- {f}")
+        print(f"  {len(failures)} failure(s)")
+        return 1
+    print("  PASS -- 8 cases: the branch's own naming is chosen, and a foreign naming, a wrong")
+    print("          yarn build, an ambiguous match and an empty cache are all REFUSED.")
+    return 0
 
 
 # --------------------------------------------------------------------------------------------
@@ -386,7 +531,16 @@ def main() -> int:
         help="exit 1 on any MISMATCH, ZERO or MANUAL result (the control check)",
     )
     ap.add_argument("-v", "--verbose", action="store_true", help="print per-site notes")
+    ap.add_argument(
+        "--self-test",
+        action="store_true",
+        help="prove the jar selector picks this branch's naming and refuses what it cannot "
+        "prove, then exit",
+    )
     args = ap.parse_args()
+
+    if args.self_test:
+        return selftest_jar_selection()
 
     mc = args.mc or gradle_prop("minecraft_version")
     jar = find_jar(mc)
