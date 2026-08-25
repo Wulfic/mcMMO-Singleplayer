@@ -39,16 +39,23 @@ status, because nothing reads it. **Re-measure before quoting this table.**
 | build | `compileJava` + `compileTestJava` **green** on `26.2` |
 | suite | **1,852 executed, 1,851 green, 1 red** — the red is the owner-deferred docs row |
 | mixin gate | `mixin-allow-audit.py --check` **passes**: `ZERO=0  MISMATCH=0  OK=60`, plus 1 `SLICE` row hand-verified |
-| boot | ⬜ **`boot-check.sh` has NEVER run on `26.2`. This is the R-z hold condition — a green suite is not it.** |
+| boot | ✅ **PASSED on `26.2`, 2026-08-25 (§35).** Real standalone Fabric server, loader `0.19.3`, fabric-api `0.158.0+26.2`. Canary rejected, mcMMO initialised, configs loaded, `/mcmmo` rendered, `/mcstats` dispatched, clean shutdown. **0 ERROR/FATAL, 0 mixin failures.** Harness `--self-test` 4/4 first. |
+| gameplay | ✅ **PASSED on `26.2`, 2026-08-25 (§35).** `gameplay-smoke.sh` — **30 passed, 0 failed, 0 inconclusive**, a real carpet player through mining, digging, both combat paths, repair, cooking, a super ability and the version gates. Carpet `26.2` exists on Modrinth. ⚠️ Its FIRST run reported `repair` red; that was **the harness, not the mod** — see §35 below. |
 
-🔴 **The hold on pushing is NOT the version collision any more.** That reason was measured false on
-2026-08-24: `origin/master` is at `26.2` and `mc/1.21.11` is absent from the remote, so no two
-branches share a `minecraft_version` and **R10 and gates 9/11 are already discharged**.
-🔑 **The real reason to hold is that nothing has proven the mod RUNS.** Until `26.2` boots, a push
-ships a jar whose only evidence is a unit suite — and §32 is the section that found a mixin bound to
-the *wrong live method* while every gate in this repo read green. `mc/1.21.11` stays held regardless.
+✅ **BOTH of the old reasons to hold are now discharged.** The version collision was measured false
+on 2026-08-24 (`origin/master` is at `26.2`, `mc/1.21.11` is absent from the remote, so no two
+branches share a `minecraft_version` — **R10 and gates 9/11 already clear**), and on 2026-08-25
+**`boot-check.sh` went green on `26.2`**, which was the R-z hold condition itself.
 
-**Push order, once `boot-check.sh` is green on `26.2`:** `master` and `mc/1.21.11` together, after
+🔴 **The hold is now an OWNER DECISION, not a missing gate** (2026-08-25): nothing is pushed and
+`mc/1.21.11` stays held while the rest of the §9 list is worked locally. Do not read the discharged
+gates as permission — re-ask before any push.
+
+⚠️ **A clean boot is still not coverage.** §32 found a mixin bound to the *wrong live method* while
+every structural gate read green, and `mc/1.21.1` shipped a `/summon` origin gap past 67/67 injectors
+and a clean boot. Boot proves the jar LOADS; the earning paths are `gameplay-smoke.sh`'s job.
+
+**Push order, when the owner lifts the hold:** `master` and `mc/1.21.11` together, after
 gates 7/9/10/11 pass at `--local`, carrying the owed gate-10/11 sweep and **R-aa** in the same push.
 
 ---
@@ -254,7 +261,7 @@ largest input it will ever be given.
 | **9.2** toolchain | ✅ **DONE (§27), and its premise was measured FALSE.** `26.x` builds on the **existing Loom 1.17.13**. What changed: plugin id → `net.fabricmc.fabric-loom`, `mappings` line **removed entirely**, `modImplementation` → `implementation`, Java 21 → **25** (Mojang's own manifest requirement) |
 | **9.3** translate the source **and** the tooling | ✅ **SOURCE DONE (§28–§33)**: 2,639 → 0 compile errors, 54 → 0 dead injectors, 186 → 1 red tests. ⬜ **TOOLING HALF STILL OPEN** — see below |
 | **9.4** cut the band | 🟡 **HALF DONE.** (a) *Which branch?* — ruled: `26.x` **becomes `master`** and `1.21.11` was cut to `mc/1.21.11` (R-z, honouring R-f). (b) *One band or two?* — **answered: TWO.** Fabric API, ModMenu and Cloth Config independently draw `[26.1, 26.1.1, 26.1.2]` vs `[26.2]`, so `master` takes `26.2` alone and `26.1.x` is a future band. ⚠️ Three ecosystem projects agreeing is not proof about *this mod's* surface; the definitive check is `probe-bands.py`, which needs 9.3's tooling half |
-| **9.5** full ship gate | ⬜ **NOT STARTED.** `boot-check.sh` and `gameplay-smoke.sh` will need version-specific fixture work (Carpet build, command syntax) |
+| **9.5** full ship gate | 🟡 **HALF DONE (§35).** `boot-check.sh` ✅ and `gameplay-smoke.sh` ✅ both green on `26.2`. The expected version-specific fixture work **did not materialise**: carpet publishes a `26.2` build and every command in the scenario parsed unchanged. What DID bite was a latent harness defect that `26.2` merely happened to expose — see §35. Gates 3–11 of the ship gate are still unrun on this branch |
 
 ### ⬜ 9.3's tooling half — what still reads yarn names
 
@@ -279,7 +286,11 @@ The band cannot run its own gates until its tooling speaks official names.
 
 ### ⬜ Carried out of §31 – §33 — the open list
 
-- [ ] 🔴 **`boot-check.sh` on `26.2`.** The R-z hold condition. Nothing else in this list gates a push.
+- [x] ✅ **`boot-check.sh` on `26.2`** — PASSED 2026-08-25 (§35). The R-z hold condition, discharged.
+      🔑 **Loom registers NO `remapJar` on `26.x`**, because Minecraft ships unobfuscated there and
+      `build.gradle` names no mappings artifact — so the shipping artifact is the plain `jar` task.
+      `./gradlew remapJar` fails with *"Task 'remapJar' not found"* on this branch and works on every
+      band branch, which is a per-band build-graph difference no gate in this repo looks at.
 - [ ] 🔴 **The docs pass** — `README.md` + `wiki/**`, all seven branches, **one commit** (owner-
       sequenced). `README.md` has no `26.2` row and its floor sentence still says *"neither is the
       `26.x` line yet"*; that is the single red test in the suite, deliberately left red. Both files
