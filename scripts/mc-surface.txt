@@ -913,7 +913,7 @@ CLASS	net.minecraft.entity.attribute.DefaultAttributeRegistry
 CLASS	net.minecraft.entity.attribute.EntityAttribute
 CLASS	net.minecraft.entity.attribute.EntityAttributeInstance
 CLASS	net.minecraft.entity.attribute.EntityAttributeModifier
-CLASS	net.minecraft.entity.attribute.EntityAttributeModifier.Operation
+CLASS	net.minecraft.entity.attribute.EntityAttributeModifier$Operation
 CLASS	net.minecraft.entity.attribute.EntityAttributes
 CLASS	net.minecraft.entity.boss.BossBar
 CLASS	net.minecraft.entity.boss.ServerBossBar
@@ -1219,8 +1219,8 @@ STATICFIELD	net.minecraft.entity.SpawnReason#SPAWNER
 STATICFIELD	net.minecraft.entity.SpawnReason#SPAWN_ITEM_USE
 STATICFIELD	net.minecraft.entity.SpawnReason#STRUCTURE
 STATICFIELD	net.minecraft.entity.SpawnReason#TRIAL_SPAWNER
-STATICFIELD	net.minecraft.entity.attribute.EntityAttributeModifier.Operation#ADD_MULTIPLIED_TOTAL
-STATICFIELD	net.minecraft.entity.attribute.EntityAttributeModifier.Operation#ADD_VALUE
+STATICFIELD	net.minecraft.entity.attribute.EntityAttributeModifier$Operation#ADD_MULTIPLIED_TOTAL
+STATICFIELD	net.minecraft.entity.attribute.EntityAttributeModifier$Operation#ADD_VALUE
 STATICFIELD	net.minecraft.entity.attribute.EntityAttributes#ARMOR
 STATICFIELD	net.minecraft.entity.attribute.EntityAttributes#ATTACK_DAMAGE
 STATICFIELD	net.minecraft.entity.attribute.EntityAttributes#FOLLOW_RANGE

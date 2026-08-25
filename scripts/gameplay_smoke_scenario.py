@@ -351,6 +351,17 @@ PHASES: list[Phase] = [
             *_look(2.0, -59.5, 0.5),
             "execute if block 2 -60 0 minecraft:iron_block run say ===MARK repair-anvil-placed===",
             f"player {BOT} use once",   # arms the confirmation
+            # ⚠️⚠️ THE GAP IS LOAD-BEARING. carpet's `player use once` arms ONE use for the next
+            # tick, so two written back-to-back are consumed in the SAME tick and only one
+            # right-click ever reaches UseBlockCallback. The phase then reports exactly what a dead
+            # listener looks like -- "REPAIR did NOT move" -- while the mod is behaving correctly.
+            # Measured on 26.2, 2026-08-25: with no gap the server logged a SINGLE onUseBlock for
+            # the anvil (kind=REPAIR, anvilAction=true) and checkConfirmation(true) returned false,
+            # which is the RIGHT answer to one click.
+            # ⚠️ 1s, not 3s. RepairManager's confirmation window is 3 SECONDS and the second click
+            # must land inside it; pacing a gap exactly ON that boundary is how this repo has
+            # produced a false failure before.
+            "SLEEP 1",
             f"player {BOT} use once",   # confirms -> the actual repair
             "SLEEP 3",
         ],
@@ -369,6 +380,11 @@ PHASES: list[Phase] = [
             _give("weapon.mainhand", "minecraft:iron_pickaxe[minecraft:damage=200]"),
             *_look(2.0, -59.5, 0.5),
             f"player {BOT} use once",
+            # The same gap, for the same reason, and here it matters MORE: a control that silently
+            # delivers one click where the phase above delivers two is not the same experiment, so
+            # "Repair stayed flat" would be evidence about a DIFFERENT action. A control must differ
+            # from its phase in exactly one variable -- here, the block.
+            "SLEEP 1",
             f"player {BOT} use once",
             "SLEEP 3",
             "execute if block 2 -60 0 minecraft:cobblestone run say ===MARK repair-control-clicked===",
