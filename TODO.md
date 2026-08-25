@@ -3007,11 +3007,68 @@ step was then restored and the class re-run green.
 - [x] **33.1b** done — `RegistryBootstrapControlTest`, mutation-verified
 - [x] **33.1c** done — re-triaged from zero; the table above is the re-measurement
 
-### 33.4 — `FoodListenerTest` ×2, uncovered by 33.1 (NEW)
+### ✅ 33.4 — a **fifth blind spot**: a narrow overload deleted while a wider one survives
 
-Two assertions read `expected minecraft:strength but got minecraft:strength` — identical text, so
-this is an object-identity comparison over something that now has two distinct instances, not a
-wrong effect. It was invisible while the whole class NPE'd. **Diagnose before pricing.**
+`FoodListenerTest` ×2, uncovered by 33.1, both reading
+`expected minecraft:strength but got minecraft:strength` — identical text on both sides of a
+comparison that returned false.
+
+**Diagnosed off the two jars, not guessed.** `assertEffectApplied` calls
+`applied.equals(expected)` where `applied` is a `MobEffectInstance` and `expected` is a
+`Holder<MobEffect>`:
+
+* on `1.21.11`, `StatusEffectInstance` carried an **overload**
+  `equals(RegistryEntry<StatusEffect>)` beside `equals(Object)`, so the call bound to the typed one
+  and compared what it looks like it compares;
+* `26.x` **deleted that overload**. The call did not break — it silently rebound to
+  `equals(Object)`, which compiles, runs, and is `false` for every input, because a
+  `MobEffectInstance` is never a `Holder`.
+
+The replacement is `MobEffectInstance.is(Holder<MobEffect>)`.
+
+#### 🔑🔑 Why this is a NEW shape, and not §29's
+
+§29 established that *"a compiler loop cannot see a member that is PRESENT but WRONG"*. This is the
+next rung down: **the member is not merely present, it is present with a WIDER signature that
+accepts anything.** javac is not silent by accident here — it is silent by the language rules. And
+nothing else in the toolchain looks: not the mixin allow-audit (no mixin involved), not
+`mc-surface.txt` (the call is recorded, and it is still a real method), not the boundary guard. The
+only instrument is a red test, and only if that test was running — these two were behind 33.1's NPE.
+
+#### ✅ Swept, and the sweep is BOUNDED rather than best-effort
+
+A call can only have rebound this way if the receiver's class **had** a narrow `equals` overload on
+`1.21.11` that `26.2` lacks. That set is computable, so it was computed — both jars parsed at the
+class-file level (all 10,952 classes, not a `javap` sample):
+
+| | non-`Object` `equals` overloads under `net/minecraft/` |
+|---|---|
+| `1.21.11` | **13** |
+| `26.2` | **6** |
+
+Of the 7 that vanished, 6 are unreachable from this mod: four are client-render/input internals
+(`GlDebug$DebugMessage`, `SimpleFramebufferFactory`, `ClosableFactory`, `KeyBinding`) and the rest are
+`$1` comparison-strategy inner classes. **The seventh is `StatusEffectInstance` — the one that bit
+us.** `Vec2f`, `TypeFilter` and `KeyBinding` appear nowhere in `src/`, verified by grep. So the
+`equals` family is closed, not merely spot-checked.
+
+#### 🔴 The same sweep found an UNCONTROLLED ban one file away
+
+`PowerCookEffectTableTest.noRowGrantsFireResistanceOrWaterBreathing` is two `assertFalse`es over
+`effect.equals(MobEffects.…)` with **nothing proving the comparison can ever be true**. Had that
+comparison rebound the way `FoodListenerTest`'s did, it would not have gone red — it would have gone
+**silently permanently green**, a ban that can no longer detect a banned row. Its sibling
+(`theCadenceCheckActuallyCatchesAPerTickEffect`) has had exactly such a control since it was written;
+this one never did.
+
+`theBanCheckCanActuallyMatchAnEffect` is now that control, and it drives the comparison **through
+`resolve()`** as well as against the constant, so a `Holder` arriving by a different route is caught.
+Measured result: both sides are `Holder`, the equality is the registry's own reference identity, and
+**the ban is sound today** — which is now a fact rather than an assumption.
+
+📌 **Carried debt:** the `equals` family is closed; the general shape is not. *Any* method
+whose narrow overload was dropped while a wider one survives rebinds silently. Enumerating that
+across the whole `26.x` delta is a bigger scan than §33 — logged as risk **R13**.
 
 ### 33.2 — the band-metadata guards cannot parse `26.2`
 

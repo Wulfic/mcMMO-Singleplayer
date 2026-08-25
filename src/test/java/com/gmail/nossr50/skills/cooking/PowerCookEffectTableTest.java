@@ -175,6 +175,38 @@ class PowerCookEffectTableTest {
         }
     }
 
+    /**
+     * The reference point for the ban above, which had none.
+     *
+     * <p>⚠️⚠️ <b>Two {@code assertFalse}es over a comparison, with nothing proving the
+     * comparison can ever be true.</b> That is the shape this project keeps finding, and §33.4
+     * found a live instance of exactly it one file away: {@code MobEffectInstance} lost its
+     * {@code equals(Holder&lt;MobEffect&gt;)} overload in {@code 26.x}, the call silently rebound to
+     * {@code equals(Object)}, and the comparison became permanently false. There it surfaced as a red
+     * {@code assertTrue}. Here the same rebind would have surfaced as <b>nothing at all</b> — a
+     * ban that passes because it can no longer detect anything.
+     *
+     * <p>Both sides here are {@code Holder} and the equality is the registry's own reference
+     * identity, so the ban is sound today. This test is what makes that a measured fact rather than
+     * an assumption, and it is what will go red if a future version changes it.
+     */
+    @Test
+    void theBanCheckCanActuallyMatchAnEffect() {
+        assertTrue(MobEffects.FIRE_RESISTANCE.equals(MobEffects.FIRE_RESISTANCE),
+                "a Holder does not compare equal to ITSELF, so noRowGrantsFireResistanceOrWater"
+                        + "Breathing cannot detect a banned row and is proving nothing");
+        assertFalse(MobEffects.FIRE_RESISTANCE.equals(MobEffects.WATER_BREATHING),
+                "two DIFFERENT effects compare equal, so the ban would reject every row");
+
+        // ...and the same comparison driven the way the real test drives it: through resolve(), so a
+        // Holder that arrives by a different route than the constant would be caught here.
+        final Holder<MobEffect> viaRegistry = Potions.matchEffect("fire_resistance");
+        assertNotNull(viaRegistry, "fire_resistance must resolve, or the probe below is vacuous");
+        assertTrue(viaRegistry.equals(MobEffects.FIRE_RESISTANCE),
+                "the Holder resolve() returns is not equal to the MobEffects constant the ban "
+                        + "compares against -- the ban is comparing two things that can never match");
+    }
+
     @Test
     void noRowIsAFoodVanillaAlreadyBuffs() {
         // Derived, never written down: Stage 0 found the hand-authored list of these was wrong on

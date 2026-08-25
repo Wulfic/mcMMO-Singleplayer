@@ -305,10 +305,26 @@ class FoodListenerTest {
                 .thenReturn(new CookingManager.PowerCookEffect(effectName, ticks));
     }
 
-    /** Assert exactly one effect was applied, and that it is this one. */
+    /**
+     * Assert exactly one effect was applied, and that it is this one.
+     *
+     * <p>⚠️⚠️ <b>This must be {@code is(Holder)}, never {@code equals}, and the difference is
+     * invisible to the compiler.</b> Through {@code 1.21.11} {@code MobEffectInstance} carried an
+     * {@code equals(Holder&lt;MobEffect&gt;)} <em>overload</em> alongside {@code equals(Object)}, so
+     * {@code applied.equals(expected)} bound to the typed one and did the right thing. {@code 26.x}
+     * removed that overload. The call did not break — it silently rebound to
+     * {@code equals(Object)}, which compiles, runs, and returns {@code false} for every input,
+     * because a {@code MobEffectInstance} is never a {@code Holder}. The assertion became
+     * unsatisfiable while still reading as a comparison.
+     *
+     * <p>That is a distinct failure shape from the ones §29 catalogued: not a member that moved or
+     * was renamed — javac catches those — but a <b>narrow overload deleted while a wider one
+     * survives</b>. Nothing in the toolchain reports it: not javac, not the mixin allow-audit, not
+     * the MC-surface manifest. Only a red test does, and only if the test was running.
+     */
     private void assertEffectApplied(Holder<MobEffect> expected, int expectedTicks) {
         final MobEffectInstance applied = captureEffect();
-        assertTrue(applied.equals(expected),
+        assertTrue(applied.is(expected),
                 "expected " + expected.getRegisteredName() + " but got "
                         + applied.getEffect().getRegisteredName());
         assertEquals(expectedTicks, applied.getDuration());
