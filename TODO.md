@@ -2713,14 +2713,14 @@ wrong about the cost.
 
 ### ➡️ §32.1 — the plan, revised by 32.0b
 
-- [ ] **32.1a — fix the sizer first.** `mixin-target-sizer.py` normalises every `Lnet/minecraft/…;`
+- [x] **32.1a — fix the sizer first.** `mixin-target-sizer.py` normalises every `Lnet/minecraft/…;`
       in a selector descriptor through the **CLASS** table (yarn → official) before comparing, and
       records the fixed descriptor on the row. Guards: a name already official is left alone; a name
       in neither direction is left alone (a `26.x`-only class is not a miss); **self-test mutations**
       — a half-renamed descriptor must classify `NAME-ONLY` **and** report a descriptor fix, and
       with normalisation off the same row must go back to `SIGNATURE-CHANGED`. Re-run: expect
       **81 / 4 / 1**, and the 6-injector control must stay `NAME-ONLY`.
-- [ ] **32.1b — the member pass.** `rename-to-official.py --mixin-selectors`, which **imports
+- [x] **32.1b — the member pass.** `rename-to-official.py --mixin-selectors`, which **imports
       `classify()` from the sizer** (owner-ruled: one classifier, one writer — the sizer's 28
       self-test checks and its 6-injector control are what validate the decision, and a second copy
       of the table/hierarchy/`a|b|c` logic is exactly the three bugs §32.0's first run had).
@@ -2736,14 +2736,14 @@ wrong about the cost.
       * 🔴 **Dry-run is the default; `--write` is the opt-in** (standing owner ruling, §29).
       * ⚠️ **The 12 already-correct rows must be NO-OPS.** A pass that "renames" them is corrupting,
         not renaming — this is §31.0's defect verbatim, and it shipped last time.
-- [ ] **32.2** The **4** genuine `SIGNATURE-CHANGED`, three causes: `Player#interact` → `interactOn`
+- [x] **32.2** The **4** genuine `SIGNATURE-CHANGED`, three causes: `Player#interact` → `interactOn`
       **gained a `Vec3`** (2 sites); `craftRecipe` → `burn` (different args entirely);
       `forEachBrushedItem` → `dropFromEntityInteractLootTable` takes `ItemInstance`, not `ItemStack`.
-- [ ] **32.3** The 1 `OWNER-ABSENT-IN-JAR` — `advancements.criterion` → `advancements.triggers`.
-- [ ] **32.4** 🔴 `EntityTypeSpawnOriginMixin:50`, the `MISMATCH`. **Not a rename.** `allow=2` and
+- [x] **32.3** The 1 `OWNER-ABSENT-IN-JAR` — `advancements.criterion` → `advancements.triggers`.
+- [x] **32.4** 🔴 `EntityTypeSpawnOriginMixin:50`, the `MISMATCH`. **Not a rename.** `allow=2` and
       the `@At` now binds 1. Diagnose separately; it is the one site this whole measurement does
       not cover.
-- [ ] **32.5** Re-run `mixin-allow-audit.py --check`. **`ZERO` must be 0.** ⚠️ And then the suite
+- [x] **32.5** Re-run `mixin-allow-audit.py --check`. **`ZERO` must be 0.** ⚠️ And then the suite
       must actually run — 31.6's `0 tests executed` was caused by mixin apply failures, so this is
       the gate that tells us whether that was the whole story. **Read the `N tests executed` line,
       not the exit code.**
@@ -2772,6 +2772,108 @@ wrong about the cost.
 * `scripts/mixin-target-sizer.py` and `scripts/rename-to-official.py` are tracked; `git checkout --
   scripts/` reverses the tooling half independently.
 * No band branch is touched and nothing is pushed — the R-z hold stands until `master` boots.
+
+
+### ✅ OUTCOME — 2026-08-24, session 17: `--check` PASSES, 60 of 61 injectors bind
+
+| | 32.0 measured | after 32.1–32.4 |
+|---|---|---|
+| `MISMATCH` | 1 | **0** |
+| `ZERO` | 54 | **0** |
+| `SLICE` | (hidden) | 1 — the audit declining to score, not a defect |
+| `OK` | 6 | **60** |
+
+What each stage actually cost, against what it was priced at:
+
+| stage | priced | actual |
+|---|---|---|
+| 32.1 the `NAME-ONLY` pile | 77 sites, scriptable | **64 sites**, one `--write` run, idempotent |
+| 32.2 `SIGNATURE-CHANGED` | 8 handler rewrites | **4**, of which only **2** touched a handler |
+| 32.3 the class move | 1 string edit | 1 string edit |
+| 32.4 the `MISMATCH` | "diagnose separately" | **a moved seam** — see below |
+| 32.6 `@Shadow`/`@Accessor` | **not in the plan at all** | **4 of 8 members still yarn** |
+
+### 🔑🔑 Two defects that EVERY existing gate reported as green
+
+Both were found by pulling on a row that looked like tooling noise, not by a gate.
+
+1. **`FireworkRocketEntityMixin` was bound to the wrong method, and the allow-audit said `OK`.**
+   26.2 carries both `explode(ServerLevel)` and `dealExplosionDamage(ServerLevel)`; `explode`
+   broadcasts the visual, fires the game event, **calls `dealExplosionDamage`, then `discard()`s the
+   entity**. The selector said `explode`, so the injector applied and bound exactly one point —
+   `allow=1 computed=1`, a clean row. Cancelling at HEAD there suppressed the visual and skipped the
+   discard, leaking one entity per cosmetic firework. This is §29's *"a compiler loop cannot see a
+   member that is PRESENT but WRONG"* restated for the mixin layer: **application is not
+   correctness**, and `--check` cannot tell the two states apart. The sizer flags this class as
+   `REBIND` now, and exactly one site qualified.
+
+2. **`EntityTypeSpawnOriginMixin` was on a seam that had become a pass-through.** The `create` chain
+   INVERTED in 26.x: `create(Level, EntitySpawnReason)` used to be the bottom and now wraps its
+   argument in `new EntitySpawnRequest(reason, false)` and delegates to a **new**
+   `create(Level, EntitySpawnRequest)`, which is the only overload that calls the entity factory.
+   The injector still applied. Every caller that builds its own `EntitySpawnRequest` walked past it,
+   unstamped — and an unstamped mob **counts toward mob mastery**, which is the spawner-farm case
+   Hunter's D-HU1 gate exists to refuse. The only symptom anywhere was `allow=2 computed=1`, which
+   **loads fine**, because `allow` is an upper bound.
+
+### 🔴 32.6 — the FOURTH blind spot: `@Shadow` / `@Accessor` / `@Invoker`
+
+Not in the §32 plan, because nothing had ever looked. Found by pulling on the `SLICE` row:
+`FishingWaitTimeMixin` shadows `waitTimeReductionTicks`, and 26.2 calls that field `lureSpeed`.
+
+**Nothing in this repo was ever going to say so.** A `@Shadow` member is *declared in the mixin*, so
+javac type-checks it against the mixin's own declaration and never asks whether the target has it —
+there is no `cannot find symbol`, so the §30/§31 compiler loop is **structurally blind**. An
+`@Accessor` names its field in a **string**, which is the selector blind spot verbatim.
+`mixin-allow-audit.py` scores **injectors**, so it reports nothing either way. It fails at **mixin
+apply time**, i.e. at game start, after every gate has gone green.
+
+**4 of 8 were still spelled in yarn** — `amount`→`removeCount`, `waitTimeReductionTicks`→`lureSpeed`,
+`TILLING_ACTIONS`→`TILLABLES`, `breedingAge`→`age` — all four confirmed twice, by the `26.2` jar and
+by the `1.21.11` table independently. ⚠️ **None of them were broken by 26.x. They were missed by the
+original port and have been wrong on every band since.** `mixin-target-sizer.py --shadows` is now
+the guard; it exits 1 on anything but `PRESENT`, and refuses an empty scan outright.
+
+### 🔑 A third correction, and all three went the same direction
+
+§31 priced **54 seam redesigns**; there were 0. §32.0 priced **8 handler rewrites**; there were 4,
+and only 2 touched a handler. Both `SIGNATURE-CHANGED` survivors that looked expensive were cheap
+once read off the bytecode: `craftRecipe`→`burn` is called once in `serverTick` in the same position,
+so only the target string moves; and `ItemStack` **implements** the new `ItemInstance` interface, so
+that handler widens one parameter. **An over-estimate reads as diligence and nobody audits it** —
+each correction needed the rows under the summary line to be read, not the summary line.
+
+### ⚠️ The `SLICE` row is the audit's limit, not a defect
+
+`mixin-allow-audit.py` cannot score a sliced injector: it reports the **unsliced** count, so
+`FishingWaitTimeMixin`'s `@Redirect` shows `allow=1 computed=3`. Verified by hand instead — 26.2's
+`catchingFish` still pushes `sipush 600` immediately before the `Mth.nextInt(random, 100, 600)` that
+assigns `timeUntilLured`, so the `@Slice(from = CONSTANT intValue=600)` resolves and binds one of the
+three. ⚠️ **It was invisible until now**: `computed == 0` outranks `sliced` in the status ladder, so
+while the selector bound nothing this row read `ZERO`.
+
+### 🔴 32.5 — the suite runs, and Java 25 broke every mock
+
+The gate is *"the suite must actually run"*, and it does — 31.6's `0 tests executed` was indeed the
+mixin failures. But **every test that mocks anything then threw**, for a reason with nothing to do
+with mixins:
+
+```
+IllegalArgumentException: Java 25 (69) is not supported by the current version of Byte Buddy
+which officially supports Java 24 (68)
+```
+
+`mockito_version=5.14.2` carries Byte Buddy **1.17.7**. Bumped to **5.23.0**, which does support Java
+25. 🔑 **`mockito_version` is classified SHARED by `gradle-key-identity-audit.py`, and it stays
+shared** — a newer Mockito runs fine on the bands' Java 21, so one value still satisfies all seven.
+⚠️ But the comment justifying that classification (*"nothing about these tracks the Minecraft
+version"*) is only half true now: it tracks the **JDK**, and R-aa makes the JDK band-local, so the
+key's FLOOR is set by the newest JDK any band uses. That reasoning is now written into
+`gradle.properties` beside the key.
+
+🔴 **`mockito_version` therefore JOINS the owed gate-10/11 sweep**, with the `scripts/**` files and
+`.gitignore`. A band left behind is not merely stale here — gate 11 requires this key **identical**,
+so the next audit fails until every branch carries `5.23.0`.
 
 
 ### What I am NOT doing
