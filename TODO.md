@@ -2895,6 +2895,83 @@ so the next audit fails until every branch carries `5.23.0`.
 
 ---
 
+---
+
+## §33 — the first real suite on `26.2`: **1,846 executed, 1,660 green, 186 red** (measured 2026-08-24)
+
+§32 closed the gate it owned: `mixin-allow-audit.py --check` **passes**, and the suite **runs** —
+which answers §31.6's open question, *"was `0 tests executed` entirely the mixin apply failures?"*
+**Yes.** This section is the 186 that are left, and **not one of them is a mixin**.
+
+🔑 **The triage is lopsided, and that is the finding.** 171 of 186 are ONE cause, and the other 15
+are five small ones. A count of "186 failures" invites a 26-class march; the measurement says it is
+closer to six jobs.
+
+| # | cause | what it is |
+|---:|---|---|
+| **171** | `NullPointerException: Components not bound yet` | **one test-harness fix** — see 33.1 |
+| 7 | `UnfinishedStubbingException` in 5 listener tests | almost certainly *downstream* of 33.1 — a mock stubbed with a call that threw mid-stubbing. **Re-measure after 33.1 before touching one line of it.** |
+| 4 | `not a bare major.minor.patch version: "26.2"` | `BandVersionLabelTest` ×3 + `BandDocsMatchRealityTest` ×1 — the repo's own band metadata cannot parse a `26.x` version string |
+| 2 | `mc-ids.txt has no section for 26.2` | `ConfigIdManifestTest` — the id manifest predates the band |
+| 1 | `multiBreedSpreadsToEveryEligibleAnimalInRange` expected 30, got 0 | possibly real; unknown until 33.1 |
+| 1 | `ClearRegisteredXPGainTaskTest` NPE on `PlayerProfile` | possibly real; unknown until 33.1 |
+
+### 33.1 — `Components not bound yet`: 26.x binds item components onto the REGISTRY HOLDER
+
+Diagnosed from the `26.2` jar, not guessed:
+
+* `Holder$Reference` now carries a `DataComponentMap` with `areComponentsBound()`,
+  `bindComponents(DataComponentMap)` and `components()` — and `components()` is what throws.
+* `BuiltInRegistries.DATA_COMPONENT_INITIALIZERS` is a `DataComponentInitializers`, whose
+  `build(HolderLookup.Provider)` returns `List<PendingComponents<?>>`, each with `.apply()`.
+* The classes that drive it are `ReloadableServerResources` (server) and `RegistryDataCollector`
+  (client) — i.e. **binding happens during data-pack load, not during `Bootstrap.bootStrap()`**.
+
+`McTestRegistries.bootstrap()` calls `Bootstrap.bootStrap()` and stops, which was sufficient on
+every band up to `1.21.11`. On `26.2` it leaves every holder unbound, so the first test that reads a
+component NPEs — and 171 do.
+
+- [ ] **33.1a** Extend `McTestRegistries.bootstrap()` to run the initializers after
+      `Bootstrap.bootStrap()`, over a `HolderLookup.Provider` built from the built-in registries.
+      ⚠️ **Resolve the provider from the jar, not from memory** — that is the exact shape this
+      section keeps punishing.
+- [ ] **33.1b** 🔴 **The guard this needs is a CONTROL, not a green suite.** `McTestRegistries`
+      already carries `itemRegistryIsPopulated()` and `entityTypeRegistryIsPopulated()` for exactly
+      this reason — *"a broken bootstrap reads as a clean pass from the outside"*. Add the component
+      equivalent: assert a known vanilla item's components ARE bound after `bootstrap()`, and that
+      the assertion FAILS with the new step removed. A bootstrap fix with no such test is the
+      thirteenth vacuous guard waiting to happen.
+- [ ] **33.1c** Re-run the suite and **re-triage from zero.** The 7 stubbing failures and the 2
+      "possibly real" rows are unknowns until this lands; treating them as separate work now would
+      price six jobs where there may be one.
+
+### 33.2 — the band-metadata guards cannot parse `26.2`
+
+`BandVersionLabelTest` and `BandDocsMatchRealityTest` both assert a **bare `major.minor.patch`**
+version. Mojang's `26.x` scheme is `26.2` — two components — so these fail on the format, not on the
+content. ⚠️ **This is a real ruling, not a test bug**: R-x/R-y made `README.md` and
+`wiki/Installation.md` part of the byte-identity set *because* `BandDocsMatchRealityTest` pins the
+support floor below every shipped version, and that test now cannot even parse this branch's
+version. Decide the version grammar before editing either test, and check the R-x collision again —
+a floor of `1.20.6` is not comparable to `26.2` under a comparator that assumes three components.
+
+### 33.3 — `scripts/mc-ids.txt` has no `26.2` section
+
+`ConfigIdManifestTest` reads the committed manifest, which lists `1.21`…`1.21.11`. Regenerating is
+`scripts/extract-mc-ids.py --write` from the version's data-generator dump. ⚠️⚠️ **That manifest is a
+fact about Minecraft, not about a branch — it is CHERRY-PICKED, never regenerated per band** (the
+inverse of the `mc-surface.txt` rule; do not carry that one over).
+
+### What I am NOT doing
+
+* **Not touching the 7 stubbing failures or the 2 unknowns before 33.1c re-measures.** They sit
+  downstream of a bootstrap that throws; guessing at them now is how a one-job section becomes six.
+* **Not pushing.** The R-z hold stands until `master` boots — and the suite being green is not that
+  proof either; `boot-check.sh` is.
+* **Not sweeping gate 10/11 yet** (owner-sequenced): `scripts/**`, `.gitignore`, and now
+  **`mockito_version`**, which gate 11 requires IDENTICAL on all seven.
+
+
 ## Other open work
 
 - [x] ✅ **DONE 2026-08-20 — `scripts/gradle-key-identity-audit.py` closes R-w′.** Ship-gate **11**,
