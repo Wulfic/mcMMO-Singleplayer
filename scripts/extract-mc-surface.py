@@ -273,6 +273,42 @@ POOL_REF_RE = re.compile(
 CTOR_NAMES = ('"<init>"', "<init>", '"<clinit>"', "<clinit>")
 
 
+def pool_refs_detailed(javap_text: str) -> set[tuple[str, str, str]]:
+    """As pool_refs, but keeping the DESCRIPTOR javap already resolved. -> {(TYPE, VALUE, DESC)}
+
+    The descriptor is the half that decides an OVERLOAD, and it is the only reason this function
+    exists separately. `mc-surface.txt` records a member as `owner#name`, which is all a
+    present/absent probe needs; but a yarn name covering several overloads maps to several DIFFERENT
+    mojmap names, and nothing in the manifest can choose between them. 33 records were in that state
+    (TODO section 25). The descriptor resolves it, and javap has had it all along -- pool_refs used
+    to bind it and throw it away.
+
+    ⚠️ Descriptors here are in YARN-NAMED terms, because that is what our bytecode is compiled
+    against (Loom remaps MC before javac ever sees it). They are directly comparable to tiny's
+    `named` namespace and to nothing else.
+
+    ⚠️ One (TYPE, VALUE) may carry SEVERAL descriptors -- code that calls two overloads of one yarn
+    name. That is not ambiguity, it is a record that genuinely renames two ways, and the caller must
+    not collapse it.
+    """
+    found: set[tuple[str, str, str]] = set()
+    for line in javap_text.splitlines():
+        m = POOL_REF_RE.match(line)
+        if not m:
+            continue
+        kind, owner, name, desc = m.groups()
+        if not owner.startswith("net/minecraft/"):
+            continue
+        dotted = owner.replace("/", ".")
+        if name in CTOR_NAMES:
+            found.add(("CALLEDCTOR", f"{dotted}#{dotted.rsplit('.', 1)[-1]}", desc))
+        elif kind == "Fieldref":
+            found.add(("ACCESSEDFIELD", f"{dotted}#{name}", desc))
+        else:
+            found.add(("CALLEDMETHOD", f"{dotted}#{name}", desc))
+    return found
+
+
 def pool_refs(javap_text: str) -> set[tuple[str, str]]:
     """Every net.minecraft member referenced by the disassembled class(es). -> {(TYPE, VALUE)}
 
@@ -287,29 +323,28 @@ def pool_refs(javap_text: str) -> set[tuple[str, str]]:
     prints a constructor declaration, so the member search matches it unchanged. Its value is almost
     entirely in the SIGNATURE, not in present/absent: every class has some constructor, but
     `TntEntity(World, double, double, double, LivingEntity)` gaining an argument is a compile break.
+
+    A <clinit> is never referenced by another class; a <init> is. Either way the member that must
+    exist on the owner is the type's own name.
+
+    This is deliberately a PROJECTION of pool_refs_detailed rather than a second scan of the same
+    text. Two scanners over one input are two things that must agree, with nothing checking that
+    they do -- and the manifest is the artifact seven branches are graded against.
     """
-    found: set[tuple[str, str]] = set()
-    for line in javap_text.splitlines():
-        m = POOL_REF_RE.match(line)
-        if not m:
-            continue
-        kind, owner, name, _desc = m.groups()
-        if not owner.startswith("net/minecraft/"):
-            continue
-        dotted = owner.replace("/", ".")
-        if name in CTOR_NAMES:
-            # A <clinit> is never referenced by another class; a <init> is. Either way the member
-            # that must exist on the owner is the type's own name.
-            found.add(("CALLEDCTOR", f"{dotted}#{dotted.rsplit('.', 1)[-1]}"))
-        elif kind == "Fieldref":
-            found.add(("ACCESSEDFIELD", f"{dotted}#{name}"))
-        else:
-            found.add(("CALLEDMETHOD", f"{dotted}#{name}"))
-    return found
+    return {(kind, value) for kind, value, _desc in pool_refs_detailed(javap_text)}
 
 
-def bytecode_refs() -> tuple[set[tuple[str, str]], int]:
-    """Disassemble every compiled class in both trees. -> (records, class file count)."""
+# Both trees compiled is ~500 class files. A PARTIAL tree is the dangerous state: it yields a
+# smaller manifest and a thinner descriptor set, both of which read as a valid answer. Measured
+# 2026-08-20: a half-finished 26.2 build left 181 class files on disk, and only this floor said so.
+CLASS_FILE_FLOOR = 400
+
+
+def bytecode_refs(detailed: bool = False):
+    """Disassemble every compiled class in both trees. -> (records, class file count).
+
+    `detailed=True` returns (TYPE, VALUE, DESC) triples instead -- see pool_refs_detailed.
+    """
     files = sorted(str(p.relative_to(REPO)) for tree in CLASS_TREES for p in tree.rglob("*.class"))
     if not files:
         raise SystemExit(
@@ -318,7 +353,8 @@ def bytecode_refs() -> tuple[set[tuple[str, str]], int]:
             "       member reference (hole 3). Build first:  ./gradlew classes testClasses"
         )
 
-    records: set[tuple[str, str]] = set()
+    records: set = set()
+    scan = pool_refs_detailed if detailed else pool_refs
     # One JVM start per chunk. 516 files one at a time is minutes of process spawn on Windows.
     CHUNK = 80
     for i in range(0, len(files), CHUNK):
@@ -328,7 +364,7 @@ def bytecode_refs() -> tuple[set[tuple[str, str]], int]:
         )
         if p.returncode != 0 and not p.stdout:
             raise SystemExit(f"error: javap failed on chunk {i // CHUNK}: {(p.stderr or '').strip()[:400]}")
-        records |= pool_refs(p.stdout or "")
+        records |= scan(p.stdout or "")
     return records, len(files)
 
 
@@ -349,6 +385,53 @@ def balanced(text: str, open_idx: int) -> str:
                 return text[open_idx + 1 : i]
         i += 1
     return ""
+
+
+def normalise_nested(fqn: str) -> str:
+    """`a.b.Outer.Inner` -> `a.b.Outer$Inner`, the JVM binary spelling. Idempotent.
+
+    WHY THIS EXISTS. The manifest is written by two scans that disagreed about how to spell a
+    nested type: the bytecode scan reads it out of a constant pool, where it is ALWAYS
+    `Outer$Inner`, while the source scan took the spelling straight off an `import` line, where
+    Java writes `Outer.Inner`. One import of a nested type -- `AttributeModifier.Operation` in
+    SkillAttributeService -- was therefore recorded three ways: a dotted `CLASS` row, two dotted
+    `STATICFIELD` rows, and the `$` form for the very same type from the bytecode side.
+
+    It was survivable only because `probe-bands.py` and `derive-official-names.py` BOTH compensate,
+    via a `name_candidates()` that maps a dotted tail back to `$`. That is two consumers carrying a
+    workaround for one producer, and a third consumer that forgets simply reports the type ABSENT
+    on every band -- a false positive that reads exactly like a real API removal.
+
+    ⚠️ Split at the OUTERMOST capitalised segment, not the innermost. Iterating from the end and
+    stopping at the first `Upper.Upper` pair renders `a.b.Outer.Inner.Leaf` as
+    `a.b.Outer.Inner$Leaf`, which is a binary name no classloader will ever resolve. Everything
+    from the first capitalised segment onwards is a type.
+
+    ⚠️ Only ever called on `net.minecraft.*` names. Package segments are lowercase by convention
+    there, and the whole rule rests on that; a codebase with a capitalised package would need a
+    real parser instead.
+    """
+    if "$" in fqn:
+        return fqn
+    parts = fqn.split(".")
+    idx = next((k for k, seg in enumerate(parts) if seg[:1].isupper()), None)
+    if idx is None or idx == len(parts) - 1:
+        return fqn
+    return ".".join(parts[: idx + 1]) + "$" + "$".join(parts[idx + 1 :])
+
+
+def import_map(names) -> dict[str, str]:
+    """Simple name -> fully-qualified name, for one file's imports.
+
+    ⚠️ The KEY comes off the ORIGINAL dotted import; only the VALUE is normalised. `Operation` is
+    what the source says, and keying on the normalised `AttributeModifier$Operation` would mean no
+    reference in the file ever resolves again -- a silent drop of every constant that type carries.
+    """
+    out: dict[str, str] = {}
+    for fq in names:
+        simple = fq.rsplit(".", 1)[-1]
+        out[simple] = normalise_nested(fq) if fq.startswith("net.minecraft.") else fq
+    return out
 
 
 def resolve(simple: str, imports: dict[str, str]) -> str | None:
@@ -425,16 +508,95 @@ def manifest_diff(committed: str, generated: str) -> tuple[list[str], list[str]]
     return sorted(have - want), sorted(want - have)
 
 
+DESCRIPTOR_HEADER = (
+    "# mcMMO call-site DESCRIPTORS -- generated by scripts/extract-mc-surface.py --descriptors\n"
+    "#\n"
+    "# SCRATCH. Do NOT commit this into scripts/. It is derived from a per-branch build, and\n"
+    "# everything under scripts/ must be byte-identical on every branch (branch-file-identity-audit)\n"
+    "# while a per-branch generated fact must DIFFER (manifest-identity-audit). A file that is both\n"
+    "# is unshippable by construction -- the same collision that keeps mc-surface.txt out of the\n"
+    "# identity set.\n"
+    "#\n"
+    "# Descriptors are in YARN-NAMED terms: our bytecode is compiled against the Loom-remapped MC\n"
+    "# jar. They compare to tiny's `named` namespace and to nothing else.\n"
+    "#\n"
+    "# Format: TYPE<TAB>owner#member<TAB>descriptor\n"
+)
+
+
+def write_descriptors(out: "Path | None") -> int:
+    """READ-ONLY scan -> the (TYPE, VALUE, DESC) triples. Refuses to write inside scripts/.
+
+    The refusal is not politeness. A per-branch derived file under scripts/ breaks the two
+    cross-branch guards against each other, and the failure is silent on the branch that produced
+    it -- every record in it is true there.
+    """
+    if out is not None:
+        resolved = out.resolve()
+        if resolved.parent == (REPO / "scripts").resolve():
+            print("refusing to write a per-branch derived file into scripts/: " + str(resolved),
+                  file=sys.stderr)
+            print("       It would have to be byte-identical on every branch (gate 10) AND differ",
+                  file=sys.stderr)
+            print("       per branch (gate 9). Write it outside the repo.", file=sys.stderr)
+            return 2
+
+    triples, class_files = bytecode_refs(detailed=True)
+
+    # Same floor as --check, and for a sharper reason here: a partial tree does not fail, it just
+    # yields FEWER descriptors -- and a missing descriptor degrades silently to the name-only path,
+    # which is precisely the ambiguity this mode exists to remove.
+    if class_files < CLASS_FILE_FLOOR:
+        print("FAIL: only " + str(class_files) + " class files disassembled; both trees compiled "
+              "should be >= " + str(CLASS_FILE_FLOOR) + ".", file=sys.stderr)
+        print("      A partial tree yields a partial descriptor set, and a missing descriptor reads",
+              file=sys.stderr)
+        print("      as 'no descriptor' rather than as an error. Run ./gradlew classes testClasses.",
+              file=sys.stderr)
+        return 1
+    if not triples:
+        print("FAIL: zero descriptor records from a tree that passed the class-file floor.",
+              file=sys.stderr)
+        return 1
+
+    per_member: dict = {}
+    for k, v, d in triples:
+        per_member.setdefault((k, v), set()).add(d)
+
+    text = DESCRIPTOR_HEADER + "".join(
+        k + "\t" + v + "\t" + d + "\n" for k, v, d in sorted(triples))
+    if out is None:
+        sys.stdout.write(text)
+    else:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(text.encode("utf-8"))
+
+    overloaded = sum(1 for ds in per_member.values() if len(ds) > 1)
+    where = "" if out is None else " -> " + str(out)
+    print("descriptors: " + str(len(triples)) + " triples over " + str(len(per_member)) +
+          " members (" + str(overloaded) + " called at more than one descriptor)" + where,
+          file=sys.stderr)
+    print("  class files disassembled: " + str(class_files), file=sys.stderr)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(REPO / "scripts" / "mc-surface.txt"))
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--self-test", action="store_true",
                     help="prove the constant detector can fire and can stay quiet, then exit")
+    ap.add_argument("--descriptors", action="store_true",
+                    help="READ-ONLY: dump call-site descriptors (scratch; never into scripts/)")
+    ap.add_argument("-o", "--descriptors-out", default=None,
+                    help="write --descriptors here instead of stdout")
     args = ap.parse_args()
 
     if args.self_test:
         return self_test()
+
+    if args.descriptors:
+        return write_descriptors(Path(args.descriptors_out) if args.descriptors_out else None)
 
     for tree in SRC_TREES:
         if not tree.is_dir():
@@ -452,14 +614,14 @@ def main() -> int:
             raw = path.read_text(encoding="utf-8")
             text = strip_comments(raw)
             for sym in IMPORT_RE.findall(text):
-                records.add(("CLASS", sym))
+                records.add(("CLASS", normalise_nested(sym)))
             for sym in STATIC_IMPORT_RE.findall(text):
                 owner, _, member = sym.rpartition(".")
-                records.add(("STATICMEMBER", f"{owner}#{member}"))
+                records.add(("STATICMEMBER", f"{normalise_nested(owner)}#{member}"))
             # Constants are resolved against this file's OWN imports, so `Items` means whatever
             # this file imported it to mean. Strings are blanked here but kept above.
             no_str = strip_comments(raw, strip_strings=True)
-            imports = {fq.rsplit(".", 1)[-1]: fq for fq in ANY_IMPORT_RE.findall(no_str)}
+            imports = import_map(ANY_IMPORT_RE.findall(no_str))
             for owner, member in constant_refs(no_str, imports):
                 records.add(("STATICFIELD", f"{owner}#{member}"))
 
@@ -478,7 +640,7 @@ def main() -> int:
 
     for path in mixin_files:
         text = strip_comments(path.read_text(encoding="utf-8"))
-        imports = {fq.rsplit(".", 1)[-1]: fq for fq in ANY_IMPORT_RE.findall(text)}
+        imports = import_map(ANY_IMPORT_RE.findall(text))
 
         targets: list[str] = []
         for m in MIXIN_HEAD_RE.finditer(text):
@@ -588,9 +750,9 @@ def main() -> int:
             print("FAIL: zero CALLEDMETHOD records. The bytecode scan found nothing -- hole 3 is "
                   "open again. Is build/classes current?", file=sys.stderr)
             ok = False
-        if class_files < 400:
+        if class_files < CLASS_FILE_FLOOR:
             print(f"FAIL: only {class_files} class files disassembled; both trees compiled should be "
-                  ">= 400. Run ./gradlew classes testClasses.", file=sys.stderr)
+                  f">= {CLASS_FILE_FLOOR}. Run ./gradlew classes testClasses.", file=sys.stderr)
             ok = False
         if len(mixin_files) != 42:
             print(f"WARN: expected 42 mixin files, found {len(mixin_files)}", file=sys.stderr)
@@ -609,12 +771,41 @@ def main() -> int:
 #   table it validated, and audit-item-1-2 shipped one where the wrong source produced the right
 #   number. A guard that has never failed is not known to work.
 
-SELF_TEST_IMPORTS = {
-    "Items": "net.minecraft.item.Items",
-    "EntityAttributeModifier": "net.minecraft.entity.attribute.EntityAttributeModifier",
-    "Text": "net.minecraft.text.Text",
-    "PrimarySkillType": "com.gmail.nossr50.datatypes.skills.PrimarySkillType",
-}
+# ⚠️ Built through import_map() from RAW import strings rather than written out as a finished
+# dict. A hand-written fixture cannot exercise the producer, and the nested-spelling defect lived
+# in exactly the step a hand-written fixture skips: `import ...EntityAttributeModifier.Operation;`
+# used to reach the resolver still spelled with a dot.
+SELF_TEST_IMPORT_LINES = [
+    "net.minecraft.item.Items",
+    "net.minecraft.entity.attribute.EntityAttributeModifier",
+    "net.minecraft.entity.attribute.EntityAttributeModifier.Operation",
+    "net.minecraft.text.Text",
+    "com.gmail.nossr50.datatypes.skills.PrimarySkillType",
+    "java.util.Map.Entry",
+]
+SELF_TEST_IMPORTS = import_map(SELF_TEST_IMPORT_LINES)
+
+# (name, expected) for normalise_nested. The negatives carry the weight: a normaliser that fires on
+# a plain top-level class rewrites every ordinary record in the manifest into a name that resolves
+# nowhere, and nothing downstream would say so -- probe-bands would just report the whole surface
+# absent on every band, which reads as a catastrophic API break rather than as a tooling bug.
+NESTED_CASES: list[tuple[str, str]] = [
+    ("net.minecraft.entity.attribute.EntityAttributeModifier.Operation",
+     "net.minecraft.entity.attribute.EntityAttributeModifier$Operation"),
+    # OUTERMOST split, not innermost -- `Outer.Inner$Leaf` is a binary name nothing resolves.
+    ("net.minecraft.a.Outer.Inner.Leaf", "net.minecraft.a.Outer$Inner$Leaf"),
+    # Idempotent: the bytecode scan already hands over the `$` form.
+    ("net.minecraft.entity.attribute.EntityAttributeModifier$Operation",
+     "net.minecraft.entity.attribute.EntityAttributeModifier$Operation"),
+    ("net.minecraft.world.BossEvent$BossBarColor",
+     "net.minecraft.world.BossEvent$BossBarColor"),
+    # Negatives -- a plain top-level class must come through untouched.
+    ("net.minecraft.item.Items", "net.minecraft.item.Items"),
+    ("net.minecraft.world.entity.ai.attributes.AttributeModifier",
+     "net.minecraft.world.entity.ai.attributes.AttributeModifier"),
+    # All-lowercase: no type segment at all, so there is nothing to split.
+    ("net.minecraft.util.math", "net.minecraft.util.math"),
+]
 
 # (description, source fragment, expected records)
 SELF_TEST_CASES: list[tuple[str, str, set[tuple[str, str]]]] = [
@@ -626,6 +817,12 @@ SELF_TEST_CASES: list[tuple[str, str, set[tuple[str, str]]]] = [
      set()),  # Registries is NOT in the import map below -> correctly unresolvable
     ("nested type on the way to the member",
      "var op = EntityAttributeModifier.Operation.ADD_VALUE;",
+     {("net.minecraft.entity.attribute.EntityAttributeModifier$Operation", "ADD_VALUE")}),
+    # The SAME type reached through an import OF THE NESTED TYPE, which is how SkillAttributeService
+    # actually writes it. This is the case that used to record a dotted owner while the bytecode
+    # scan recorded the `$` form for the identical member.
+    ("nested type IMPORTED directly, then used bare",
+     "var op = Operation.ADD_VALUE;",
      {("net.minecraft.entity.attribute.EntityAttributeModifier$Operation", "ADD_VALUE")}),
     ("inline fully-qualified, no import at all",
      "if (x == net.minecraft.item.Items.STICK) return;",
@@ -690,6 +887,39 @@ POOL_SELF_TEST_CASES: list[tuple[str, str, set[tuple[str, str]]]] = [
      set()),
 ]
 
+
+# --- the DESCRIPTOR half of the bytecode scan -------------------------------------------------
+#
+# The manifest records a member as `owner#name`, which is all a present/absent probe needs. The
+# descriptor is what decides an OVERLOAD, and 33 surface records could not be translated without it
+# (TODO section 25). So the case that matters most is the OVERLOAD PAIR below: two javap lines that
+# collapse to ONE mc-surface record and must stay TWO descriptor triples. A scanner that drops the
+# descriptor still passes every case above -- this is the one it cannot pass.
+POOL_DESC_CASES: list[tuple[str, str, set[tuple[str, str, str]]]] = [
+    ("descriptor is kept verbatim",
+     "  #25 = Methodref  #26.#27  // net/minecraft/entity/Entity.getEntityWorld:()Lnet/minecraft/world/World;",
+     {("CALLEDMETHOD", "net.minecraft.entity.Entity#getEntityWorld",
+       "()Lnet/minecraft/world/World;")}),
+    ("field descriptor is the field TYPE",
+     "  #57 = Fieldref  #50.#58  // net/minecraft/util/math/Vec3d.x:D",
+     {("ACCESSEDFIELD", "net.minecraft.util.math.Vec3d#x", "D")}),
+    ("constructor keeps its <init> descriptor, which is the whole value of the record",
+     '  #67 = Methodref  #55.#68  // net/minecraft/entity/TntEntity."<init>":(Lnet/minecraft/world/World;DDD)V',
+     {("CALLEDCTOR", "net.minecraft.entity.TntEntity#TntEntity",
+       "(Lnet/minecraft/world/World;DDD)V")}),
+    ("a quiet line stays quiet in the detailed scanner too",
+     "  #72 = Methodref #73.#74 // java/lang/String.length:()I",
+     set()),
+]
+
+# Two real Block#dropStack overloads -- the exact shape behind `popResource` vs `popResourceFromFace`.
+OVERLOAD_PAIR = [
+    "  #81 = Methodref #82.#83 // net/minecraft/block/Block.dropStack:"
+    "(Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/item/ItemStack;)V",
+    "  #84 = Methodref #82.#85 // net/minecraft/block/Block.dropStack:"
+    "(Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/math/Direction;"
+    "Lnet/minecraft/item/ItemStack;)V",
+]
 
 # --- and the comparator gets the same treatment as the detectors ------------------------------
 #
@@ -758,6 +988,35 @@ def _diff_self_test_cases() -> list[tuple[str, str, list[str], list[str]]]:
 
 def self_test() -> int:
     failures: list[str] = []
+
+    # --- nested-type spelling ---------------------------------------------------------------
+    for fqn, want in NESTED_CASES:
+        got = normalise_nested(fqn)
+        if got != want:
+            failures.append(f"  [nested]   {fqn}" + '\\n' +
+                            f"    expected {want}" + '\\n' +
+                            f"    got      {got}")
+
+    # The import map must normalise the VALUE and leave the KEY as the source spells it.
+    im = import_map(SELF_TEST_IMPORT_LINES)
+    if im.get("Operation") != "net.minecraft.entity.attribute.EntityAttributeModifier$Operation":
+        failures.append("  [nested]   import_map lost the nested value: "
+                        f"{im.get('Operation')!r}")
+    if "EntityAttributeModifier$Operation" in im:
+        failures.append("  [nested]   import_map keyed on the NORMALISED name -- no reference in "
+                        "the file can resolve any more")
+    # Non-MC imports are left alone on purpose: the rule leans on lowercase packages, which only
+    # net.minecraft is guaranteed to honour.
+    if im.get("Entry") != "java.util.Map.Entry":
+        failures.append(f"  [nested]   a non-MC import was rewritten: {im.get('Entry')!r}")
+
+    # MUTATION: the pre-fix behaviour -- take the import spelling verbatim. It must go red here,
+    # otherwise the cases above are satisfied by something that is not doing the work.
+    naive = {fq.rsplit(".", 1)[-1]: fq for fq in SELF_TEST_IMPORT_LINES}
+    if naive.get("Operation") == im.get("Operation"):
+        failures.append("  [nested]   MUTATION DID NOT FIRE: the naive import map agrees with "
+                        "import_map, so normalisation is not being exercised")
+
     for desc, fragment, expected in SELF_TEST_CASES:
         text = strip_comments(fragment, strip_strings=True)
         got = constant_refs(text, SELF_TEST_IMPORTS)
@@ -776,6 +1035,43 @@ def self_test() -> int:
     if combined_got != combined_expected:
         failures.append("  [bytecode] all pool lines in one pass\n"
                         f"    expected {sorted(combined_expected)}\n    got      {sorted(combined_got)}")
+
+    # --- descriptors ------------------------------------------------------------------------
+    for desc, line, expected in POOL_DESC_CASES:
+        got = pool_refs_detailed(line)
+        if got != expected:
+            failures.append("  [descriptor] " + desc +
+                            "\n    expected " + str(sorted(expected)) +
+                            "\n    got      " + str(sorted(got)))
+
+    # THE case. Two overloads: ONE manifest record, TWO descriptor triples. If these numbers are
+    # ever equal the descriptor carries no information and the 33 ambiguous records come back.
+    pair_text = chr(10).join(OVERLOAD_PAIR)
+    pair_flat = pool_refs(pair_text)
+    pair_detailed = pool_refs_detailed(pair_text)
+    if len(pair_flat) != 1:
+        failures.append("  [descriptor] overload pair should collapse to 1 manifest record, got " +
+                        str(sorted(pair_flat)))
+    if len(pair_detailed) != 2:
+        failures.append("  [descriptor] overload pair should keep 2 descriptor triples, got " +
+                        str(sorted(pair_detailed)))
+
+    # MUTATION: a scanner that discards the descriptor. It must lose the overload -- if this does
+    # NOT go red, the assertions above are satisfied by something that is not doing the work.
+    blinded = {(k, v, "") for k, v, _d in pair_detailed}
+    if len(blinded) >= len(pair_detailed):
+        failures.append("  [descriptor] MUTATION DID NOT FIRE: blinding the descriptor did not "
+                        "reduce the triple count, so the overload case proves nothing")
+
+    # The projection must never drift from its source -- pool_refs is DEFINED as pool_refs_detailed
+    # with the descriptor dropped, and the manifest seven branches are graded against comes from it.
+    all_lines = chr(10).join([l for _, l, _ in POOL_SELF_TEST_CASES] +
+                             [l for _, l, _ in POOL_DESC_CASES] + OVERLOAD_PAIR)
+    if pool_refs(all_lines) != {(k, v) for k, v, _d in pool_refs_detailed(all_lines)}:
+        failures.append("  [descriptor] pool_refs is not the projection of pool_refs_detailed")
+
+    if not any(e for _, _, e in POOL_DESC_CASES):
+        failures.append("  descriptor self-test has no positive case")
 
     # --- the manifest comparator ------------------------------------------------------------
     diff_cases = _diff_self_test_cases()
@@ -830,8 +1126,11 @@ def self_test() -> int:
         for f in failures:
             print(f, file=sys.stderr)
         return 1
+    desc_pos = sum(1 for _, _, e in POOL_DESC_CASES if e)
     print(f"self-test: PASS -- source {positives}+/{negatives}-, "
-          f"bytecode {bc_pos}+/{bc_neg}-, manifest {diff_fire} firing/{diff_quiet} quiet")
+          f"bytecode {bc_pos}+/{bc_neg}-, manifest {diff_fire} firing/{diff_quiet} quiet, "
+          f"descriptor {desc_pos}+/{len(POOL_DESC_CASES) - desc_pos}- "
+          f"(overload pair 1 record/2 triples, mutation checked)")
     return 0
 
 
