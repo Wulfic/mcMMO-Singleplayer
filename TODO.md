@@ -3023,6 +3023,49 @@ support floor below every shipped version, and that test now cannot even parse t
 version. Decide the version grammar before editing either test, and check the R-x collision again —
 a floor of `1.20.6` is not comparable to `26.2` under a comparator that assumes three components.
 
+### ✅ OUTCOME 33.2 — 2026-08-25: it was a **rule-1 violation**, not a grammar decision
+
+The version grammar did not need designing. `mc/1.21.1` **already carries the widened pattern** —
+`^(\d+)\.(\d+)(?:\.(\d+))?$`, authored there on 2026-08-19 with a full rationale, because
+`supported_minecraft_versions=1.21,1.21.1` fails the three-component rule for the same reason `26.2`
+does. It never reached `master`.
+
+🔴 **That is exactly the failure mode rule 1 exists to prevent, and it cost this section a day of
+plan.** §33 priced 33.2 as an open ruling with an R-x/R-y collision to think through; the answer had
+been written down on a band branch six days earlier and was invisible from here. `drift-audit.py`
+cannot see it either — it answers *"which `master` fixes have not reached a band"*, and this travels
+the other way. **There is no guard for a fix authored on a band. The only one is rule 1 itself.**
+
+The fix landed on `master` verbatim from the band (37 insertions, 4 deletions, byte-identical hunks),
+which is where it should have been in the first place. All three `BandVersionLabelTest` failures
+close. The R-x collision the section worried about does not exist: `BandDocsMatchRealityTest.compare`
+already zero-pads to the longer operand, so `1.20.6` vs `26.2` was always comparable.
+
+#### 🔑🔑 …and the back-port alone would have left the guard SILENTLY OFF
+
+`previousPatch` read a two-component version as patch 0 and returned `null` for it, and
+`theRangeDoesNotReachBelowTheDeclaredMinimum` **returns early on `null`**. On `mc/1.21.1` that is a
+rounding error — its list starts at `1.21` but the guard still has `1.21.1` behind it. On `master`,
+whose entire declared list is `26.2`, it turns the lower-bound guard **completely off**: green, and
+proving nothing, on the one branch being actively ported. Thirteenth vacuous guard, arriving inside
+the fix for the twelfth.
+
+The rule is now *decrement the component the version actually spells*: `1.21.6` → `1.21.5`,
+`1.21` → `1.20`, `26.2` → `26.1`. All three are real releases their band's predicate correctly
+rejects. An explicit `x.y.0` and an `x.0` still return `null`, because there is genuinely nothing
+below them.
+
+✅ **Proved by mutation, not by the suite going green.** Setting `depends.minecraft` to
+`>=26.1 <26.3` turns `theRangeDoesNotReachBelowTheDeclaredMinimum` **red** — before this change the
+same mutation was green, because the guard never ran. Restored afterwards; `fabric.mod.json` is
+unchanged in the diff.
+
+⚠️ **This changes an assertion the band authored** (`assertNull(previousPatch("1.21"))` →
+`assertEquals("1.20", …)`). Verified safe to back-port: `mc/1.21.1` declares
+`">=1.21 <1.21.2"`, which rejects `1.20`.
+
+- [x] **33.2** done — grammar back-ported from `mc/1.21.1`, plus the null-skip fix master needed
+
 ### 33.3 — `scripts/mc-ids.txt` has no `26.2` section
 
 `ConfigIdManifestTest` reads the committed manifest, which lists `1.21`…`1.21.11`. Regenerating is
