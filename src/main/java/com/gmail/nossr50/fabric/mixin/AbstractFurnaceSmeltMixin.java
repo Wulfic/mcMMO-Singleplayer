@@ -60,11 +60,10 @@ public abstract class AbstractFurnaceSmeltMixin {
             allow = 1,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;craftRecipe("
-                            + "Lnet/minecraft/core/RegistryAccess;"
-                            + "Lnet/minecraft/world/item/crafting/RecipeHolder;"
-                            + "Lnet/minecraft/world/item/crafting/SingleRecipeInput;"
-                            + "Lnet/minecraft/core/NonNullList;I)Z"))
+                    target = "Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;burn("
+                            + "Lnet/minecraft/core/NonNullList;"
+                            + "Lnet/minecraft/world/item/ItemStack;"
+                            + "Lnet/minecraft/world/item/ItemStack;)V"))
     private static void mcmmo$onSmeltComplete(ServerLevel world, BlockPos pos, BlockState state,
             AbstractFurnaceBlockEntity blockEntity, CallbackInfo ci) {
         final ItemStack input = blockEntity.getItem(0); // INPUT_SLOT_INDEX

@@ -5,6 +5,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -35,16 +36,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Player.class)
 public abstract class PlayerEntityInteractMixin {
 
-    @Inject(method = "interact(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;)"
-            + "Lnet/minecraft/world/InteractionResult;", allow = 1, at = @At("HEAD"))
-    private void mcmmo$beginInteraction(Entity target, InteractionHand hand,
+    @Inject(method = "interactOn(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;"
+            + "Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/InteractionResult;",
+            allow = 1, at = @At("HEAD"))
+    private void mcmmo$beginInteraction(Entity target, InteractionHand hand, Vec3 hitPos,
             CallbackInfoReturnable<InteractionResult> cir) {
         HusbandryListener.beginPlayerInteraction((Player) (Object) this, target);
     }
 
-    @Inject(method = "interact(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;)"
-            + "Lnet/minecraft/world/InteractionResult;", allow = 4, at = @At("RETURN"))
-    private void mcmmo$endInteraction(Entity target, InteractionHand hand,
+    @Inject(method = "interactOn(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;"
+            + "Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/InteractionResult;",
+            allow = 4, at = @At("RETURN"))
+    private void mcmmo$endInteraction(Entity target, InteractionHand hand, Vec3 hitPos,
             CallbackInfoReturnable<InteractionResult> cir) {
         HusbandryListener.endPlayerInteraction();
     }

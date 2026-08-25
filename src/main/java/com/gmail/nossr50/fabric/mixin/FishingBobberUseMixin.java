@@ -43,7 +43,7 @@ public abstract class FishingBobberUseMixin {
             method = "retrieve", allow = 2,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/advancements/criterion/FishingRodHookedTrigger;trigger("
+                    target = "Lnet/minecraft/advancements/triggers/FishingRodHookedTrigger;trigger("
                             + "Lnet/minecraft/server/level/ServerPlayer;"
                             + "Lnet/minecraft/world/item/ItemStack;"
                             + "Lnet/minecraft/world/entity/projectile/FishingHook;"

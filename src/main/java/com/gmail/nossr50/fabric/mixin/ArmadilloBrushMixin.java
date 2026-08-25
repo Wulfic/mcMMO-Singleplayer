@@ -6,6 +6,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.armadillo.Armadillo;
+import net.minecraft.world.item.ItemInstance;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.loot.LootTable;
 import net.minecraft.resources.ResourceKey;
@@ -61,12 +62,13 @@ public abstract class ArmadilloBrushMixin {
      */
     @ModifyArg(method = "brushOffScute", allow = 1, index = 4,
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/world/entity/animal/armadillo/Armadillo;forEachBrushedItem("
+                    target = "Lnet/minecraft/world/entity/animal/armadillo/Armadillo;"
+                            + "dropFromEntityInteractLootTable("
                             + "Lnet/minecraft/server/level/ServerLevel;"
                             + "Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/entity/Entity;"
-                            + "Lnet/minecraft/world/item/ItemStack;Ljava/util/function/BiConsumer;)Z"))
+                            + "Lnet/minecraft/world/item/ItemInstance;Ljava/util/function/BiConsumer;)Z"))
     private BiConsumer<ServerLevel, ItemStack> mcmmo$onBrushedItems(ServerLevel world,
-            ResourceKey<LootTable> lootTable, Entity brusher, ItemStack brush,
+            ResourceKey<LootTable> lootTable, Entity brusher, ItemInstance brush,
             BiConsumer<ServerLevel, ItemStack> dropper) {
         return HusbandryListener.onBrushedItems((Entity) (Object) this, brusher, dropper);
     }
