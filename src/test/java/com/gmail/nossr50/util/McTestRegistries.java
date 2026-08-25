@@ -6,7 +6,10 @@ import net.minecraft.SharedConstants;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.item.Item;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.component.DataComponentInitializers;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.Identifier;
 
 /**
@@ -31,7 +34,58 @@ public final class McTestRegistries {
         }
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        bindDataComponents();
         bootstrapped = true;
+    }
+
+    /**
+     * Binds the per-registry-entry {@link net.minecraft.core.component.DataComponentMap}s that
+     * {@code Bootstrap.bootStrap()} does <em>not</em> bind.
+     *
+     * <p>⚠️ <b>This is a {@code 26.x} requirement that did not exist on any earlier band, and its
+     * absence is silent until something reads a component.</b> Through {@code 1.21.11} an item's
+     * components lived on the {@code Item} instance, so a plain bootstrap was enough. From
+     * {@code 26.x} they live on the registry <em>holder</em>: {@code Holder.Reference} gained
+     * {@code bindComponents} / {@code areComponentsBound}, and {@code components()} throws
+     * {@code NullPointerException: Components not bound yet} until something binds them. In the real
+     * game that "something" is data-pack load — {@code ReloadableServerResources} on the server,
+     * {@code RegistryDataCollector} on the client — neither of which a unit test runs. 171 tests
+     * NPE'd on the first {@code 26.2} suite run for exactly this reason.
+     *
+     * <p>Resolved from the {@code 26.2} jar, not from memory:
+     * {@code BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(HolderLookup.Provider)} returns one
+     * {@code PendingComponents} per registry and {@code apply()} performs the binding. {@code build}
+     * pre-seeds an entry for <em>every</em> registry the provider lists and hands
+     * {@code DataComponentMap.EMPTY} to holders no initializer touched, so every holder in every
+     * listed registry ends up bound — not just the ones with real components. That matters: an
+     * unbound holder throws, it does not read as empty.
+     *
+     * <p>🔑 <b>The provider has to include the data-pack registries, and that was measured, not
+     * assumed.</b> The obvious choice —
+     * {@code RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)} — lists 95
+     * registries and does <em>not</em> contain {@code minecraft:damage_type}, so the first
+     * {@code fireResistant()} item's initializer dies with
+     * {@code IllegalStateException: Missing tag TagKey[minecraft:damage_type / minecraft:is_fire]}
+     * and nothing binds at all. {@link VanillaRegistries#createLookup()} lists 141 and is the same
+     * lookup Mojang's own {@code RegistryComponentsReport} data provider is handed, which is the one
+     * other place in the jar that calls {@code build} outside a running game.
+     *
+     * <p>⚠️ <b>What this does NOT give you: tag CONTENTS.</b> A component that references a tag comes
+     * back as an unresolved {@code NamedSet(TagKey[...])[null]}, because tag membership lives in the
+     * data pack and no data pack is loaded. That is the pre-existing "{@code isIn(TagKey)} throws in
+     * unit tests" condition, unchanged on every band — not a regression introduced here. Assert on
+     * component <em>presence</em> and on scalar component values; never on tag membership.
+     *
+     * <p>Deliberately not caught: if this throws, every downstream test would fail on a component
+     * read anyway, and a bootstrap that swallows its own failure is precisely the vacuous-guard shape
+     * {@link #itemComponentsAreBound()} exists to rule out.
+     */
+    private static void bindDataComponents() {
+        final HolderLookup.Provider provider = VanillaRegistries.createLookup();
+        for (DataComponentInitializers.PendingComponents<?> pending
+                : BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(provider)) {
+            pending.apply();
+        }
     }
 
     /**
@@ -67,6 +121,27 @@ public final class McTestRegistries {
     public static boolean itemRegistryIsPopulated() {
         return BuiltInRegistries.ITEM.containsKey(Identifier.withDefaultNamespace("iron_sword"))
                 && BuiltInRegistries.ITEM.containsKey(Identifier.withDefaultNamespace("stone"));
+    }
+
+    /**
+     * True if item registry entries actually had their data components bound.
+     *
+     * <p>The {@link #itemRegistryIsPopulated} argument, one layer down. A populated registry whose
+     * holders are unbound is not a working bootstrap — every component read throws — and from the
+     * outside "this band has no such component" and "nothing ever bound them" are again the same
+     * observation. Any test that concludes something from a component being absent or default has to
+     * rule the second one out first.
+     *
+     * <p>Iron sword is chosen because its component map is non-empty on every version in scope
+     * (durability at minimum), so an <em>empty</em> map here is as much a failure as a throw.
+     */
+    public static boolean itemComponentsAreBound() {
+        final Optional<Item> ironSword = optionalVanillaItem("iron_sword");
+        if (ironSword.isEmpty()) {
+            return false;
+        }
+        return ironSword.get().builtInRegistryHolder().areComponentsBound()
+                && !ironSword.get().components().isEmpty();
     }
 
     /**

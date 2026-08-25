@@ -2945,6 +2945,74 @@ component NPEs — and 171 do.
       "possibly real" rows are unknowns until this lands; treating them as separate work now would
       price six jobs where there may be one.
 
+### ✅ OUTCOME — 2026-08-25: **186 → 9**, and the triage call was right
+
+`McTestRegistries.bootstrap()` now runs the component initializers. One change closed **177** of the
+186, including every row this section had priced as "unknown until 33.1":
+
+| before | after | row |
+|---:|---:|---|
+| 171 | **0** | `NullPointerException: Components not bound yet` |
+| 7 | **0** | `UnfinishedStubbingException` — was downstream of the throw, exactly as predicted |
+| 1 | **0** | `ClearRegisteredXPGainTaskTest` NPE on `PlayerProfile` — same |
+| 1 | 1 | `multiBreedSpreadsToEveryEligibleAnimalInRange` — survives, so it is real |
+| 4 | 3 | the band-metadata grammar (33.2); the 4th is now a *docs* failure, see below |
+| 2 | 2 | `mc-ids.txt` has no `26.2` section (33.3) |
+| 0 | **2** | 🔑 **NEW** — `FoodListenerTest`, uncovered by the fix, see 33.4 |
+
+**1,850 executed, 1,841 green, 9 red, 0 skipped.**
+
+🔑 **Not pricing the six jobs separately was worth 8 of them.** Three rows were listed as unknown
+and all three were one bug; had they been worked as separate items, three correct fixes would have
+been written for a defect that did not exist by the time anyone reached it.
+
+#### 🔑🔑 The provider is the whole fix, and the obvious provider is WRONG
+
+`BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(provider)` is the call, but *which* provider
+decides whether it works at all — and the first choice failed, loudly, on the first run:
+
+* `RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)` lists **95** registries and
+  does **not** contain `minecraft:damage_type`. `Item.Properties.fireResistant()` resolves
+  `DamageTypeTags.IS_FIRE` inside its initializer, so the very first fire-resistant item throws
+  `IllegalStateException: Missing tag TagKey[minecraft:damage_type / minecraft:is_fire]` and
+  **nothing binds at all**.
+* `VanillaRegistries.createLookup()` lists **141**, includes the data-pack registries, and is the
+  same lookup Mojang hands its own `RegistryComponentsReport` — the only other caller of `build()`
+  in the jar outside a running game. Verified by reading a real map back: iron sword comes out with
+  `max_damage=250`, `max_stack_size=1`, `attribute_modifiers`, `tool`, `weapon`, the lot.
+
+⚠️ **What it still does not give you is tag CONTENTS.** A tag-referencing component reads back as an
+unresolved `NamedSet(TagKey[...])[null]`. That is the pre-existing "`isIn(TagKey)` throws in a unit
+test" condition on every band, not a regression — but it means a test may assert on component
+*presence* and on scalar values, never on tag membership.
+
+#### 33.1b — the control, proved by mutation rather than asserted
+
+`RegistryBootstrapControlTest` is new and is the only class in the tree that asserts the bootstrap
+itself rather than using it as a precondition. It holds four assertions: the two registries populate
+(`itemRegistryIsPopulated`, `entityTypeRegistryIsPopulated` were previously *offered* by
+`McTestRegistries` and never actually asserted anywhere), components are bound, and a bound map has
+real content.
+
+That last one is not padding. `areComponentsBound()` alone would still pass if the initializers ran
+over an empty provider and handed every holder `DataComponentMap.EMPTY` — a bootstrap that binds
+nothing while reporting success. Both halves are asserted.
+
+✅ **Mutated, not assumed.** Commenting out the `bindDataComponents()` call turns
+`itemComponentsAreBound()` and `aBoundComponentMapHasRealContent()` red and leaves the two
+registry-population tests green — which is the correct shape: they do not depend on binding. The
+step was then restored and the class re-run green.
+
+- [x] **33.1a** done — `McTestRegistries.bindDataComponents()`
+- [x] **33.1b** done — `RegistryBootstrapControlTest`, mutation-verified
+- [x] **33.1c** done — re-triaged from zero; the table above is the re-measurement
+
+### 33.4 — `FoodListenerTest` ×2, uncovered by 33.1 (NEW)
+
+Two assertions read `expected minecraft:strength but got minecraft:strength` — identical text, so
+this is an object-identity comparison over something that now has two distinct instances, not a
+wrong effect. It was invisible while the whole class NPE'd. **Diagnose before pricing.**
+
 ### 33.2 — the band-metadata guards cannot parse `26.2`
 
 `BandVersionLabelTest` and `BandDocsMatchRealityTest` both assert a **bare `major.minor.patch`**
