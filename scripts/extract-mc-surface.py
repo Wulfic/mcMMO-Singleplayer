@@ -387,6 +387,53 @@ def balanced(text: str, open_idx: int) -> str:
     return ""
 
 
+def normalise_nested(fqn: str) -> str:
+    """`a.b.Outer.Inner` -> `a.b.Outer$Inner`, the JVM binary spelling. Idempotent.
+
+    WHY THIS EXISTS. The manifest is written by two scans that disagreed about how to spell a
+    nested type: the bytecode scan reads it out of a constant pool, where it is ALWAYS
+    `Outer$Inner`, while the source scan took the spelling straight off an `import` line, where
+    Java writes `Outer.Inner`. One import of a nested type -- `AttributeModifier.Operation` in
+    SkillAttributeService -- was therefore recorded three ways: a dotted `CLASS` row, two dotted
+    `STATICFIELD` rows, and the `$` form for the very same type from the bytecode side.
+
+    It was survivable only because `probe-bands.py` and `derive-official-names.py` BOTH compensate,
+    via a `name_candidates()` that maps a dotted tail back to `$`. That is two consumers carrying a
+    workaround for one producer, and a third consumer that forgets simply reports the type ABSENT
+    on every band -- a false positive that reads exactly like a real API removal.
+
+    ⚠️ Split at the OUTERMOST capitalised segment, not the innermost. Iterating from the end and
+    stopping at the first `Upper.Upper` pair renders `a.b.Outer.Inner.Leaf` as
+    `a.b.Outer.Inner$Leaf`, which is a binary name no classloader will ever resolve. Everything
+    from the first capitalised segment onwards is a type.
+
+    ⚠️ Only ever called on `net.minecraft.*` names. Package segments are lowercase by convention
+    there, and the whole rule rests on that; a codebase with a capitalised package would need a
+    real parser instead.
+    """
+    if "$" in fqn:
+        return fqn
+    parts = fqn.split(".")
+    idx = next((k for k, seg in enumerate(parts) if seg[:1].isupper()), None)
+    if idx is None or idx == len(parts) - 1:
+        return fqn
+    return ".".join(parts[: idx + 1]) + "$" + "$".join(parts[idx + 1 :])
+
+
+def import_map(names) -> dict[str, str]:
+    """Simple name -> fully-qualified name, for one file's imports.
+
+    ⚠️ The KEY comes off the ORIGINAL dotted import; only the VALUE is normalised. `Operation` is
+    what the source says, and keying on the normalised `AttributeModifier$Operation` would mean no
+    reference in the file ever resolves again -- a silent drop of every constant that type carries.
+    """
+    out: dict[str, str] = {}
+    for fq in names:
+        simple = fq.rsplit(".", 1)[-1]
+        out[simple] = normalise_nested(fq) if fq.startswith("net.minecraft.") else fq
+    return out
+
+
 def resolve(simple: str, imports: dict[str, str]) -> str | None:
     """Map a name used in @Mixin(...) to a fully-qualified net.minecraft class."""
     simple = simple.strip()
@@ -567,14 +614,14 @@ def main() -> int:
             raw = path.read_text(encoding="utf-8")
             text = strip_comments(raw)
             for sym in IMPORT_RE.findall(text):
-                records.add(("CLASS", sym))
+                records.add(("CLASS", normalise_nested(sym)))
             for sym in STATIC_IMPORT_RE.findall(text):
                 owner, _, member = sym.rpartition(".")
-                records.add(("STATICMEMBER", f"{owner}#{member}"))
+                records.add(("STATICMEMBER", f"{normalise_nested(owner)}#{member}"))
             # Constants are resolved against this file's OWN imports, so `Items` means whatever
             # this file imported it to mean. Strings are blanked here but kept above.
             no_str = strip_comments(raw, strip_strings=True)
-            imports = {fq.rsplit(".", 1)[-1]: fq for fq in ANY_IMPORT_RE.findall(no_str)}
+            imports = import_map(ANY_IMPORT_RE.findall(no_str))
             for owner, member in constant_refs(no_str, imports):
                 records.add(("STATICFIELD", f"{owner}#{member}"))
 
@@ -593,7 +640,7 @@ def main() -> int:
 
     for path in mixin_files:
         text = strip_comments(path.read_text(encoding="utf-8"))
-        imports = {fq.rsplit(".", 1)[-1]: fq for fq in ANY_IMPORT_RE.findall(text)}
+        imports = import_map(ANY_IMPORT_RE.findall(text))
 
         targets: list[str] = []
         for m in MIXIN_HEAD_RE.finditer(text):
@@ -724,12 +771,41 @@ def main() -> int:
 #   table it validated, and audit-item-1-2 shipped one where the wrong source produced the right
 #   number. A guard that has never failed is not known to work.
 
-SELF_TEST_IMPORTS = {
-    "Items": "net.minecraft.item.Items",
-    "EntityAttributeModifier": "net.minecraft.entity.attribute.EntityAttributeModifier",
-    "Text": "net.minecraft.text.Text",
-    "PrimarySkillType": "com.gmail.nossr50.datatypes.skills.PrimarySkillType",
-}
+# ⚠️ Built through import_map() from RAW import strings rather than written out as a finished
+# dict. A hand-written fixture cannot exercise the producer, and the nested-spelling defect lived
+# in exactly the step a hand-written fixture skips: `import ...EntityAttributeModifier.Operation;`
+# used to reach the resolver still spelled with a dot.
+SELF_TEST_IMPORT_LINES = [
+    "net.minecraft.item.Items",
+    "net.minecraft.entity.attribute.EntityAttributeModifier",
+    "net.minecraft.entity.attribute.EntityAttributeModifier.Operation",
+    "net.minecraft.text.Text",
+    "com.gmail.nossr50.datatypes.skills.PrimarySkillType",
+    "java.util.Map.Entry",
+]
+SELF_TEST_IMPORTS = import_map(SELF_TEST_IMPORT_LINES)
+
+# (name, expected) for normalise_nested. The negatives carry the weight: a normaliser that fires on
+# a plain top-level class rewrites every ordinary record in the manifest into a name that resolves
+# nowhere, and nothing downstream would say so -- probe-bands would just report the whole surface
+# absent on every band, which reads as a catastrophic API break rather than as a tooling bug.
+NESTED_CASES: list[tuple[str, str]] = [
+    ("net.minecraft.entity.attribute.EntityAttributeModifier.Operation",
+     "net.minecraft.entity.attribute.EntityAttributeModifier$Operation"),
+    # OUTERMOST split, not innermost -- `Outer.Inner$Leaf` is a binary name nothing resolves.
+    ("net.minecraft.a.Outer.Inner.Leaf", "net.minecraft.a.Outer$Inner$Leaf"),
+    # Idempotent: the bytecode scan already hands over the `$` form.
+    ("net.minecraft.entity.attribute.EntityAttributeModifier$Operation",
+     "net.minecraft.entity.attribute.EntityAttributeModifier$Operation"),
+    ("net.minecraft.world.BossEvent$BossBarColor",
+     "net.minecraft.world.BossEvent$BossBarColor"),
+    # Negatives -- a plain top-level class must come through untouched.
+    ("net.minecraft.item.Items", "net.minecraft.item.Items"),
+    ("net.minecraft.world.entity.ai.attributes.AttributeModifier",
+     "net.minecraft.world.entity.ai.attributes.AttributeModifier"),
+    # All-lowercase: no type segment at all, so there is nothing to split.
+    ("net.minecraft.util.math", "net.minecraft.util.math"),
+]
 
 # (description, source fragment, expected records)
 SELF_TEST_CASES: list[tuple[str, str, set[tuple[str, str]]]] = [
@@ -741,6 +817,12 @@ SELF_TEST_CASES: list[tuple[str, str, set[tuple[str, str]]]] = [
      set()),  # Registries is NOT in the import map below -> correctly unresolvable
     ("nested type on the way to the member",
      "var op = EntityAttributeModifier.Operation.ADD_VALUE;",
+     {("net.minecraft.entity.attribute.EntityAttributeModifier$Operation", "ADD_VALUE")}),
+    # The SAME type reached through an import OF THE NESTED TYPE, which is how SkillAttributeService
+    # actually writes it. This is the case that used to record a dotted owner while the bytecode
+    # scan recorded the `$` form for the identical member.
+    ("nested type IMPORTED directly, then used bare",
+     "var op = Operation.ADD_VALUE;",
      {("net.minecraft.entity.attribute.EntityAttributeModifier$Operation", "ADD_VALUE")}),
     ("inline fully-qualified, no import at all",
      "if (x == net.minecraft.item.Items.STICK) return;",
@@ -906,6 +988,35 @@ def _diff_self_test_cases() -> list[tuple[str, str, list[str], list[str]]]:
 
 def self_test() -> int:
     failures: list[str] = []
+
+    # --- nested-type spelling ---------------------------------------------------------------
+    for fqn, want in NESTED_CASES:
+        got = normalise_nested(fqn)
+        if got != want:
+            failures.append(f"  [nested]   {fqn}" + '\\n' +
+                            f"    expected {want}" + '\\n' +
+                            f"    got      {got}")
+
+    # The import map must normalise the VALUE and leave the KEY as the source spells it.
+    im = import_map(SELF_TEST_IMPORT_LINES)
+    if im.get("Operation") != "net.minecraft.entity.attribute.EntityAttributeModifier$Operation":
+        failures.append("  [nested]   import_map lost the nested value: "
+                        f"{im.get('Operation')!r}")
+    if "EntityAttributeModifier$Operation" in im:
+        failures.append("  [nested]   import_map keyed on the NORMALISED name -- no reference in "
+                        "the file can resolve any more")
+    # Non-MC imports are left alone on purpose: the rule leans on lowercase packages, which only
+    # net.minecraft is guaranteed to honour.
+    if im.get("Entry") != "java.util.Map.Entry":
+        failures.append(f"  [nested]   a non-MC import was rewritten: {im.get('Entry')!r}")
+
+    # MUTATION: the pre-fix behaviour -- take the import spelling verbatim. It must go red here,
+    # otherwise the cases above are satisfied by something that is not doing the work.
+    naive = {fq.rsplit(".", 1)[-1]: fq for fq in SELF_TEST_IMPORT_LINES}
+    if naive.get("Operation") == im.get("Operation"):
+        failures.append("  [nested]   MUTATION DID NOT FIRE: the naive import map agrees with "
+                        "import_map, so normalisation is not being exercised")
+
     for desc, fragment, expected in SELF_TEST_CASES:
         text = strip_comments(fragment, strip_strings=True)
         got = constant_refs(text, SELF_TEST_IMPORTS)
