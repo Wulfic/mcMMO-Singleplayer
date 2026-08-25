@@ -2,6 +2,7 @@ package com.gmail.nossr50.fabric.listeners;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -865,10 +866,40 @@ class HusbandryListenerTest {
         assertEquals(30, spread, "every eligible neighbour in the radius is set in love");
     }
 
-    /** Whether this mock ever had {@code lovePlayer} called on it. */
+    /**
+     * The method {@link #wasSetInLove} matches on, as a name rather than a call.
+     *
+     * <p>⚠️⚠️ <b>A string is invisible to a renamer, and this one held the OLD name for the
+     * whole {@code 26.x} port.</b> It read {@code "lovePlayer"} — the yarn name — while the
+     * production call had been renamed to {@code setInLove}. Nothing matched, the spread count came
+     * back {@code 0}, and the compiler had no opinion because a string literal is not an identifier.
+     *
+     * <p>🔴 The sibling test {@code multiBreedSkipsAnimalsThatCannotBreed} did not notice,
+     * and could not: it asserts {@code verify(x, never()).setInLove(any())}, which a spread of zero
+     * satisfies perfectly. One test went red and one went green on the same broken behaviour.
+     * {@link #theInvocationNameThisFileMatchesOnStillExists()} is what stops that recurring.
+     */
+    private static final String SET_IN_LOVE = "setInLove";
+
+    /**
+     * ✅ The guard on the string above — the whole reason it is a named constant.
+     *
+     * <p>Reflection is the only instrument that can see this. If {@code Animal#setInLove} is renamed
+     * on a future Minecraft, {@link #wasSetInLove} would go on compiling and start reporting that
+     * nothing was ever set in love, which reads as a behaviour regression in a completely different
+     * subsystem. This turns that into a one-line failure that names the cause.
+     */
+    @Test
+    void theInvocationNameThisFileMatchesOnStillExists() throws NoSuchMethodException {
+        assertNotNull(Animal.class.getMethod(SET_IN_LOVE, Player.class),
+                SET_IN_LOVE + " is no longer a method on Animal, so wasSetInLove() matches nothing "
+                        + "and every multi-breed spread assertion in this file reports zero");
+    }
+
+    /** Whether this mock ever had {@link #SET_IN_LOVE} called on it. */
     private static boolean wasSetInLove(Animal animal) {
         return Mockito.mockingDetails(animal).getInvocations().stream()
-                .anyMatch(invocation -> invocation.getMethod().getName().equals("lovePlayer"));
+                .anyMatch(invocation -> invocation.getMethod().getName().equals(SET_IN_LOVE));
     }
 
     @Test

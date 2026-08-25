@@ -3190,6 +3190,64 @@ the file the gate reads.
 audit is however many rows it happens to contain. **Not fixed here — outside §33, and the fix is a
 gate change plus a config change that has to reach every band.** Logged as open work.
 
+### ✅ 33.5 — the Husbandry failure was real, and it was a STRING the renamer could not see
+
+`multiBreedSpreadsToEveryEligibleAnimalInRange` expected 30 and got **0**. It survived 33.1, so it
+was never a component-binding casualty.
+
+`HusbandryListener` calls `neighbour.setInLove(serverPlayer)`. The test's `wasSetInLove` helper
+counted invocations whose method name equalled the **string literal** `"lovePlayer"` — the yarn
+name, left behind by the §9.3 rename because **a string is not an identifier and no renamer, and no
+compiler, has any opinion about it.** Confirmed against the jar: `setInLove(Player)` is the only such
+method on `26.2`'s `Animal`; `lovePlayer` does not exist.
+
+🔴 **And its sibling went GREEN on the same broken behaviour.**
+`multiBreedSkipsAnimalsThatCannotBreed` asserts `verify(x, never()).setInLove(any())` — which a
+spread of **zero** satisfies perfectly. One test red, one green, one bug. The green one is the
+dangerous half: had the red one not existed, the whole multi-breed subsystem would have read as
+verified while doing nothing.
+
+✅ **Swept and bounded**: that literal was the **only** `getMethod().getName().equals("…")` site in
+the entire test tree, so this family is closed rather than spot-checked.
+
+✅ **Guarded, not just fixed.** The name is now a constant with
+`theInvocationNameThisFileMatchesOnStillExists`, which reflects `Animal.class.getMethod(SET_IN_LOVE,
+Player.class)`. Reflection is the only instrument that can see a stale method-name string; without
+it, the next rename silently reports "nothing was ever set in love" and reads as a behaviour
+regression in a different subsystem.
+
+## ✅ §33 EXIT STATE — 2026-08-25: **1,852 executed, 1,851 green, 1 red**
+
+From **186 red** to **1**. The single remaining failure is
+`BandDocsMatchRealityTest.everyVersionThisBandShipsAppearsInTheReadme`: `README.md` has no `26.2`
+row in its version matrix, and its floor sentence still says *"neither is the `26.x` line yet"*.
+📌 **Deliberately left red — owner-deferred** (2026-08-25): docs are being addressed in one pass once
+the code is complete, and `README.md`/`wiki/**` are in R-y's byte-identity set, so the edit has to
+land on all seven branches at once anyway.
+
+| § | was | now |
+|---|---:|---|
+| 33.1 | 179 | component binding — one fix, mutation-controlled |
+| 33.2 | 3 | grammar back-ported from `mc/1.21.1` + the null-skip it hid |
+| 33.3 | 2 | `mc-ids.txt` — after repairing the cross-check that had gone inert |
+| 33.4 | 2 | a narrow `equals` overload deleted while `equals(Object)` survived |
+| 33.5 | 1 | a yarn method name surviving as a string literal |
+| docs | 1 | 📌 deferred |
+
+🔑🔑 **Four of the five were invisible to every gate this repo owns**, and three of them were
+invisible *by construction*: a wider overload javac must accept, a string literal no renamer parses,
+and a guard whose skip-reason was hard-coded to the only cause its author knew. The fifth
+(§33.2) was a fix that existed — on a band branch nobody was looking at.
+
+### 📌 Still owed, carried out of §33
+
+* **Docs pass** — `README.md` + `wiki/**`, all seven branches, one commit (owner-sequenced).
+* **Gate 10/11 sweep** — `scripts/**` (now including `mc-ids.txt` and `extract-mc-ids.py`),
+  `.gitignore`, `mockito_version`. Gate 11 requires that key identical on all seven.
+* **R13** — the general overload-rebind shape; only the `equals` family is closed.
+* **`config.yml` is outside the config-id gate** — and carries at least one dead id (`Chain`).
+* **`scripts/boot-check.sh` on `26.2`** — the actual R-z hold condition. A green suite is not it.
+
 ### What I am NOT doing
 
 * **Not touching the 7 stubbing failures or the 2 unknowns before 33.1c re-measures.** They sit
