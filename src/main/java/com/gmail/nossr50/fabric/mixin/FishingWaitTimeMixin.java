@@ -21,14 +21,14 @@ import org.spongepowered.asm.mixin.injection.Slice;
  *
  * <pre>{@code
  * this.waitCountdown = MathHelper.nextInt(this.random, 100, 600);
- * this.waitCountdown = this.waitCountdown - this.waitTimeReductionTicks;
+ * this.waitCountdown = this.waitCountdown - this.lureSpeed;
  * }</pre>
  *
  * <p>Those hardcoded {@code 100}/{@code 600} are exactly what Bukkit's {@code FishHook#getMinWaitTime}/
  * {@code getMaxWaitTime} returned by default, so redirecting this one call gives us legacy's three API
  * calls at once: the redirect receives vanilla's own bounds (nothing hardcoded here), draws from the
  * mcMMO-reduced range instead, and — since the reduction was already folded into the max-wait bonus —
- * adds {@code waitTimeReductionTicks} back so the subtraction on the next line cancels out. That
+ * adds {@code lureSpeed} back so the subtraction on the next line cancels out. That
  * add-back <i>is</i> legacy's {@code setApplyLure(false)}, which existed to dodge a Minecraft bug where
  * Lure above level 3 breaks fishing.
  *
@@ -60,7 +60,7 @@ public abstract class FishingWaitTimeMixin {
      */
     @Shadow
     @Final
-    private int waitTimeReductionTicks;
+    private int lureSpeed;
 
     @Redirect(
             method = "catchingFish",
@@ -73,6 +73,6 @@ public abstract class FishingWaitTimeMixin {
             allow = 1)
     private int mcmmo$masterAnglerWaitCountdown(RandomSource random, int minWaitTicks, int maxWaitTicks) {
         return FishingListener.resolveWaitCountdown((FishingHook) (Object) this, random,
-                minWaitTicks, maxWaitTicks, this.waitTimeReductionTicks);
+                minWaitTicks, maxWaitTicks, this.lureSpeed);
     }
 }

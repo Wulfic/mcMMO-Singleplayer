@@ -215,7 +215,7 @@ class FishingManagerTest {
 
     @Test
     void resolveMasterAnglerWaitTimesFromLureTicksMatchesTheLureLevelOverload() {
-        // The Fabric seam hands us vanilla's waitTimeReductionTicks instead of an enchantment level.
+        // The Fabric seam hands us vanilla's lureSpeed instead of an enchantment level.
         // That field is exactly lureLevel * 100, so both entry points must resolve identically —
         // if the conversion constant drifts, this catches it.
         for (int lureLevel = 0; lureLevel <= 4; lureLevel++) {

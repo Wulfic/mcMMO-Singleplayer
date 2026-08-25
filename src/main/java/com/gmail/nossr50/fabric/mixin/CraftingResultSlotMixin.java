@@ -18,12 +18,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * <p>{@code onCrafted(ItemStack)} is the funnel: both ways of getting an item out of a crafting
  * result slot go through it (bytecode-verified — a normal take is {@code onTakeItem} →
  * {@code onCrafted(stack)}, a shift-click is {@code onQuickTransfer} →
- * {@code onCrafted(stack, amount)} → {@code onCrafted(stack)}). See {@link CookingListener} for why
+ * {@code onCrafted(stack, removeCount)} → {@code onCrafted(stack)}). See {@link CookingListener} for why
  * this seam, rather than a recipe- or item-level one, is what keeps the 1.21 auto-crafter out.
  *
  * <h2>⚠️ HEAD is mandatory, and RETURN would fail silently</h2>
- * The batch size is the slot's private {@code amount}, and the <b>last statement of the method sets
- * it to 0</b> (bytecode: {@code aload_0; iconst_0; putfield amount}). A RETURN injection would
+ * The batch size is the slot's private {@code removeCount}, and the <b>last statement of the method sets
+ * it to 0</b> (bytecode: {@code aload_0; iconst_0; putfield removeCount}). A RETURN injection would
  * therefore read {@code 0} for every craft ever made, award nothing, and compile perfectly.
  *
  * <p>No {@code allow} is needed: this is a HEAD injection into a named method rather than a call-site
@@ -46,10 +46,10 @@ public abstract class CraftingResultSlotMixin {
      * out — which is why the injection below is at HEAD.
      */
     @Shadow
-    private int amount;
+    private int removeCount;
 
     @Inject(method = "checkTakeAchievements(Lnet/minecraft/world/item/ItemStack;)V", allow = 1, at = @At("HEAD"))
     private void mcmmo$onCraftedItemTaken(ItemStack stack, CallbackInfo ci) {
-        CookingListener.onCraftedItemTaken(player, stack, amount);
+        CookingListener.onCraftedItemTaken(player, stack, removeCount);
     }
 }

@@ -59,7 +59,7 @@ public abstract class PassiveEntityGrowthMixin {
      * what vanilla is about to overwrite, with no dependence on that getter staying unoverridden.
      */
     @Shadow
-    protected int breedingAge;
+    protected int age;
 
     /**
      * Report every breeding-age change; the listener picks out the baby→adult crossing.
@@ -70,7 +70,7 @@ public abstract class PassiveEntityGrowthMixin {
      */
     @Inject(method = "setAge(I)V", allow = 1, at = @At("HEAD"))
     private void mcmmo$onBreedingAgeChange(int newAge, CallbackInfo ci) {
-        HusbandryListener.onBreedingAgeChange((AgeableMob) (Object) this, this.breedingAge,
+        HusbandryListener.onBreedingAgeChange((AgeableMob) (Object) this, this.age,
                 newAge);
     }
 

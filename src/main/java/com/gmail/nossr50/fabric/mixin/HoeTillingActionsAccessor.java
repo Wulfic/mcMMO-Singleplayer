@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 /**
- * Read access to {@code HoeItem#TILLING_ACTIONS}, so mcMMO can tell a right-click that <i>tills</i>
+ * Read access to {@code HoeItem#TILLABLES}, so mcMMO can tell a right-click that <i>tills</i>
  * from a right-click that merely readies the hoe (GitHub #1).
  *
  * <p>Tilling is a right-click with a hoe, and so is readying the hoe for Green Terra — the same
@@ -39,7 +39,7 @@ public interface HoeTillingActionsAccessor {
      *
      * @return the live map; treat it as read-only
      */
-    @Accessor("TILLING_ACTIONS")
+    @Accessor("TILLABLES")
     static Map<Block, Pair<Predicate<UseOnContext>, Consumer<UseOnContext>>>
             getTillingActions() {
         throw new AssertionError("mixin did not apply");

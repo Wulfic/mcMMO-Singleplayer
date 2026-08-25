@@ -613,6 +613,159 @@ def report(rows: list[Row], detail: bool) -> None:
 
 
 # --------------------------------------------------------------------------------------------
+# @Shadow / @Accessor / @Invoker -- the fourth blind spot (TODO 32.6)
+#
+# A @Shadow member is DECLARED in the mixin, so javac type-checks it against the mixin's own
+# declaration and never asks whether the target really has it. An @Accessor names its field in a
+# string. Neither is a call site, so:
+#
+#   * the compiler loop cannot see them -- there is no "cannot find symbol" to drive it;
+#   * `mixin-allow-audit.py` cannot see them -- it scores INJECTORS, not shadowed members;
+#   * they fail at MIXIN APPLY time, i.e. at game start, long after every gate has gone green.
+#
+# Measured 2026-08-24 on 26.2: 4 of 7 were still spelled in YARN, untouched by section 30 and
+# section 31, and one of them (`FishingHook.waitTimeReductionTicks` -> `lureSpeed`) sits under the
+# one @Redirect whose @Slice the allow-audit already cannot score. Two independent methods agree on
+# all four: the 26.2 jar, and the 1.21.11 yarn<->official table.
+# --------------------------------------------------------------------------------------------
+_SHADOW_RE = re.compile(
+    r"@(Shadow|Accessor|Invoker)\b\s*(?:\(\s*(?:value\s*=\s*)?\"([^\"]*)\"[^)]*\))?",
+)
+_DECL_TAIL = re.compile(r"([A-Za-z_$][\w$]*)\s*(\(|;|=)")
+_PREFIXES = ("get", "set", "is", "invoke", "call")
+
+
+def _member_of_declaration(text: str, start: int) -> tuple[str | None, bool]:
+    """The member NAME a @Shadow/@Accessor annotation is attached to. -> (name, is_method).
+
+    Skips any further annotations and modifiers, then takes the identifier that sits immediately
+    before `(`, `;` or `=` -- which is the member name for both a field and a method, and is why
+    this does not need to understand generics or array types.
+    """
+    i = start
+    n = len(text)
+    while i < n:
+        while i < n and text[i].isspace():
+            i += 1
+        if i < n and text[i] == "@":                      # another annotation: @Final, @Mutable
+            i += 1
+            while i < n and (text[i].isalnum() or text[i] in "_$."):
+                i += 1
+            while i < n and text[i].isspace():
+                i += 1
+            if i < n and text[i] == "(":                  # annotation arguments
+                # STRING-AWARE, via mixin_parse.balanced: an annotation argument in this repo is
+                # routinely a JVM descriptor, and descriptors are full of `(` and `)`. Counting
+                # parens naively stops inside the first one and reads the rest of the declaration
+                # as the member name.
+                try:
+                    _, i = mixin_parse.balanced(text, i)
+                except ValueError:
+                    return None, False
+            continue
+        break
+    m = _DECL_TAIL.search(text, i)
+    if not m:
+        return None, False
+    return m.group(1), m.group(2) == "("
+
+
+def _accessor_target(name: str) -> str:
+    """`getBrewTime` -> `brewTime`. An @Accessor with no explicit value names its field by
+    convention, and Mixin lower-cases the first letter after the prefix."""
+    for p in _PREFIXES:
+        if name.startswith(p) and len(name) > len(p) and name[len(p)].isupper():
+            rest = name[len(p):]
+            return rest[0].lower() + rest[1:]
+    return name
+
+
+@dataclass
+class ShadowRow:
+    file: str
+    line: int
+    kind: str          # Shadow | Accessor | Invoker
+    member: str
+    target: str
+    bucket: str
+    detail: str
+
+
+SHADOW_BUCKETS = ("PRESENT", "RENAMED", "ABSENT-UNMAPPED", "OWNER-ABSENT-IN-JAR")
+
+
+def classify_shadow(env: Env, target: str, member: str) -> tuple[str, str]:
+    """-> (bucket, detail). RENAMED carries the name the table and the jar BOTH agree on."""
+    if env.load(target) is None:
+        return "OWNER-ABSENT-IN-JAR", f"{target} is not in the 26.x jar"
+    chain = hierarchy(env, target)
+    for cls in chain:
+        info = env.load(cls)
+        if info and any(m.name == member for m in info.members):
+            return "PRESENT", f"{member} is live on {cls}"
+    # Not there. The table is the only thing that can name the replacement, and a miss must land
+    # in its OWN bucket -- an unmapped member is a hole in this script, not a fact about 26.x.
+    for cls in chain:
+        yarn, _ = env.table.yarn_for(cls)
+        if yarn is None:
+            continue
+        hit = env.table.members.get(f"{yarn}#{member}")
+        if hit is None:
+            continue
+        for cand in hit.split("|"):
+            for c2 in chain:
+                info = env.load(c2)
+                if info and any(m.name == cand for m in info.members):
+                    return "RENAMED", f"{member} -> {cand}  (live on {c2})"
+    return "ABSENT-UNMAPPED", f"{member} is absent from {target} and the table has no replacement"
+
+
+def shadow_rows(env: Env, root: Path) -> list[ShadowRow]:
+    rows: list[ShadowRow] = []
+    for mf in mixin_parse.all_mixins(root):
+        if not mf.targets:
+            continue
+        text = mf.path.read_text(encoding="utf-8")
+        code = mixin_parse.strip_comments(text)
+        for m in _SHADOW_RE.finditer(code):
+            kind, explicit = m.group(1), m.group(2)
+            declared, is_method = _member_of_declaration(code, m.end())
+            if declared is None:
+                continue
+            if explicit:
+                member = explicit
+            elif kind == "Shadow":
+                member = declared
+            else:
+                member = _accessor_target(declared)
+            line = code.count("\n", 0, m.start()) + 1
+            for target in mf.targets:
+                bucket, detail = classify_shadow(env, target, member)
+                rows.append(ShadowRow(mf.path.name, line, kind, member, target, bucket, detail))
+    return rows
+
+
+def shadow_report(rows: list[ShadowRow]) -> int:
+    counts = Counter(r.bucket for r in rows)
+    assert sum(counts.values()) == len(rows), "BUG: shadow buckets do not sum to the input"
+    unknown = set(counts) - set(SHADOW_BUCKETS)
+    assert not unknown, f"BUG: unreported shadow bucket(s) {sorted(unknown)}"
+    for r in sorted(rows, key=lambda r: (SHADOW_BUCKETS.index(r.bucket), r.file, r.line)):
+        if r.bucket != "PRESENT":
+            print(f"{r.bucket:<20} {r.file:<34}:{r.line:<5} @{r.kind:<9} {r.detail}")
+    print()
+    for b in SHADOW_BUCKETS:
+        print(f"{b:<22} {counts.get(b, 0):>4}")
+    print(f"{'TOTAL':<22} {len(rows):>4}   shadowed members over "
+          f"{len({r.file for r in rows})} mixin files")
+    if not rows:
+        raise SystemExit("FATAL: no @Shadow/@Accessor members found at all -- the parser is broken,\n"
+                         "       and 'none' looks exactly like 'all fine'.")
+    bad = sum(counts.get(b, 0) for b in SHADOW_BUCKETS if b != "PRESENT")
+    return 1 if bad else 0
+
+
+# --------------------------------------------------------------------------------------------
 # Self-test -- the mutations are the point
 # --------------------------------------------------------------------------------------------
 LIVING = "net.minecraft.world.entity.LivingEntity"
@@ -818,6 +971,55 @@ def self_test() -> int:
           hierarchy(_fake_env(classes={"A": ClassInfo("A", ("B",), ()),
                                        "B": ClassInfo("B", ("A",), ())}), "A"), ["A", "B"])
 
+    print("@Shadow / @Accessor -- the fourth blind spot, invisible to javac AND to the allow-audit")
+    check("a @Shadow field name is read off the declaration",
+          _member_of_declaration("    private int amount;", 0), ("amount", False))
+    check("@Final between the annotation and the declaration is skipped",
+          _member_of_declaration("\n    @Final\n    private int amount;", 0), ("amount", False))
+    check("an annotation WITH ARGUMENTS between them is skipped",
+          _member_of_declaration('\n    @Final @Mixin(a = "b;c(") private int amount;', 0),
+          ("amount", False))
+    check("a @Shadow METHOD is read as a method",
+          _member_of_declaration(" protected void ageUp(int x);", 0), ("ageUp", True))
+    check("a field with an initialiser still yields the name",
+          _member_of_declaration(" private int amount = 3;", 0), ("amount", False))
+    check("an @Accessor with no value derives the field from the method name",
+          _accessor_target("getBrewTime"), "brewTime")
+    check("... and from a setter", _accessor_target("setBrewTime"), "brewTime")
+    check("... and leaves a name with no prefix alone", _accessor_target("brewTime"), "brewTime")
+    check("... and does not eat a prefix that is not followed by a capital",
+          _accessor_target("getter"), "getter")
+
+    check("a live shadowed member is PRESENT",
+          classify_shadow(env, LIVING, "hurtAndBreak")[0], "PRESENT")
+    check("an INHERITED shadowed member resolves through the supertype",
+          classify_shadow(env, LIVING, "position")[0], "PRESENT")
+    check("a shadowed member the table can re-point is RENAMED",
+          classify_shadow(env, LIVING, "modifyAppliedDamage")[0], "RENAMED")
+    check("RENAMED carries the replacement, not just the verdict",
+          "getDamageAfterMagicAbsorb" in classify_shadow(env, LIVING, "modifyAppliedDamage")[1],
+          True)
+    check("ANTI-LAUNDERING: an absent member with NO table entry is ABSENT-UNMAPPED",
+          classify_shadow(env, LIVING, "noSuchMember")[0], "ABSENT-UNMAPPED")
+    check("a class absent from the jar is OWNER-ABSENT-IN-JAR, not a dead member",
+          classify_shadow(env, "net.minecraft.world.entity.NoSuchClass", "x")[0],
+          "OWNER-ABSENT-IN-JAR")
+    check("MUTATION: with the hierarchy OFF the INHERITED member stops being PRESENT",
+          classify_shadow(_fake_env(use_hierarchy=False), LIVING, "position")[0],
+          "ABSENT-UNMAPPED")
+    try:
+        shadow_report([])
+        check("MUTATION: an EMPTY shadow scan is refused, not reported as clean",
+              "no raise", "<SystemExit>")
+    except SystemExit:
+        check("MUTATION: an EMPTY shadow scan is refused, not reported as clean",
+              "<SystemExit>", "<SystemExit>")
+    try:
+        shadow_report([ShadowRow("f", 1, "Shadow", "m", "t", "INVENTED", "")])
+        check("MUTATION: an UNREPORTED shadow bucket is refused", "no assertion", "<assertion>")
+    except AssertionError:
+        check("MUTATION: an UNREPORTED shadow bucket is refused", "<assertion>", "<assertion>")
+
     print("the denominator")
     rows = [Row("f", 1, "@Inject", "h", "method", "s", b, "") for b in BUCKETS]
     try:
@@ -842,6 +1044,11 @@ def main() -> int:
     ap.add_argument("--table", help="yarn<->official table from derive-official-names.py")
     ap.add_argument("--mc", help="Minecraft version of the jar (default: gradle.properties)")
     ap.add_argument("--detail", action="store_true", help="print every classified selector")
+    ap.add_argument("--shadows", action="store_true",
+                    help="audit @Shadow/@Accessor/@Invoker members instead of selectors. These "
+                         "are DECLARATIONS, not call sites: javac cannot see them, the allow-audit "
+                         "scores injectors only, and a stale one fails at mixin APPLY time. "
+                         "Exits 1 if any is not PRESENT.")
     args = ap.parse_args()
 
     if args.self_test:
@@ -861,6 +1068,8 @@ def main() -> int:
           f"{table.class_collisions} class collisions)\n")
 
     env = Env(table, lambda f: load_class(str(jar), f))
+    if args.shadows:
+        return shadow_report(shadow_rows(env, SRC))
     rows = collect(env, SRC)
     if not rows:
         raise SystemExit("FATAL: no selectors found -- refusing to report a size of zero")

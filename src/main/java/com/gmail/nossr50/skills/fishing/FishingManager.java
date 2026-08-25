@@ -637,7 +637,7 @@ public class FishingManager extends SkillManager {
      *
      * <p>This is the faithful shape for the Fabric port: legacy computed
      * {@code convertedLureBonus = lureLevel * 100} from the Bukkit enchantment level, and vanilla's
-     * {@code FishingBobberEntity.waitTimeReductionTicks} — the value the bobber subtracts from its
+     * {@code FishingHook.lureSpeed} — the value the bobber subtracts from its
      * freshly drawn wait countdown — is <i>exactly</i> that same figure (the {@code Lure} enchantment's
      * {@code fishing_time_reduction} effect is 5 seconds per level, i.e. {@value #LURE_TICKS_PER_LEVEL}
      * ticks per level). So the mixin can hand us the bobber's own field and no enchantment-registry
