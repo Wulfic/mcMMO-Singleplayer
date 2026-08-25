@@ -3130,6 +3130,66 @@ unchanged in the diff.
 fact about Minecraft, not about a branch — it is CHERRY-PICKED, never regenerated per band** (the
 inverse of the `mc-surface.txt` rule; do not carry that one over).
 
+### ✅ OUTCOME 33.3 — 2026-08-25: the manifest has a `26.2` section, and the generator had a **hole**
+
+`scripts/extract-mc-ids.py --mc 26.2 --write` — 1,196 blocks, 1,537 items, +2,733 ids, one NEW
+section, **zero deletions** (insertions-only diff, matching the dry run exactly).
+`ConfigIdManifestTest` closes, and `config-id-audit.py` exits 0 with no
+DEAD-ON-EVERY-VERSION rows.
+
+⚠️ This file is a fact about **Minecraft**, not about a branch — it is **cherry-picked** to each
+band, never regenerated there. It joins the owed gate-10/11 sweep.
+
+#### 🔴 The generator skipped its own cross-check and gave a FALSE reason for it
+
+The first dry run printed:
+
+```
+1196 blocks  1537 items [no asset cross-check available below 1.21.4 -- this is why we are here]
+```
+
+**`26.2` is not below `1.21.4`.** The cross-validation — registry dump vs the jar's
+`assets/minecraft/items/`, which the script's own header calls *"permanent, not a one-time proof"*
+and which **blocks a write on disagreement** — did not run, and the line explaining why was wrong.
+
+Cause: `merged_jar()` knew exactly one Loom cache layout,
+`minecraft-merged/<version>-net.fabricmc.yarn.*/`. From `26.1` Minecraft ships unobfuscated, yarn
+publishes nothing (`meta.fabricmc.net` returns `[]`), and Loom caches
+`minecraft-merged-deobf/<version>/` with **no mappings coordinate in the path at all**. The lookup
+returned `None`, `asset_ids()` returned `None`, and the caller attributed that to the one reason it
+knew about.
+
+🔑🔑 **A skipped check that explains itself with the wrong reason is worse than one that says
+nothing, because it closes the question.** Two genuinely different conditions were collapsed into
+one message: *"this version has no `assets/minecraft/items/`"* (expected below 1.21.4, and the
+entire reason this script exists) and *"no merged jar is cached at all"* (a broken environment).
+`why_no_assets()` now reports which one actually applied, by name and by path.
+
+With the layout taught, the cross-check runs and agrees exactly:
+
+```
+1196 blocks  1537 items [cross-checked against the jar assets: exact]
+```
+
+⚠️ **The manifest was written only after that.** A `26.2` section generated while the guard was
+inert would have been unverified data in a file every band trusts.
+
+### 🔴 NEW — `config.yml` is OUTSIDE the config-id gate entirely
+
+Found while confirming the one absent row above. `config-id-audit.py` extracts its 689 references
+from **6 files** — `treasures.yml`, `fishing_treasures.yml`, `repair.vanilla.yml`,
+`salvage.vanilla.yml`, `potions.yml`, `experience.yml` — and **`config.yml` is not one of them**.
+
+`config.yml`'s `Bonus_Drops` section is a long list of block ids, and it names `Chain: true` with
+**no `Iron_Chain` sibling**. `chain` was renamed `iron_chain` in `1.21.9` (with `copper_chain` and
+`exposed_copper_chain` added alongside), so that row has been dead on `1.21.9`–`26.2` — two shipped
+bands and master. `experience.yml` carries **both** names and is correct; it is correct because it is
+the file the gate reads.
+
+⚠️ **The point is the hole, not the row.** One row is a bug; a whole config file outside the
+audit is however many rows it happens to contain. **Not fixed here — outside §33, and the fix is a
+gate change plus a config change that has to reach every band.** Logged as open work.
+
 ### What I am NOT doing
 
 * **Not touching the 7 stubbing failures or the 2 unknowns before 33.1c re-measures.** They sit
