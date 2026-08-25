@@ -306,12 +306,16 @@ The band cannot run its own gates until its tooling speaks official names.
       sequenced). `README.md` has no `26.2` row and its floor sentence still says *"neither is the
       `26.x` line yet"*; that is the single red test in the suite, deliberately left red. Both files
       are in R-y's byte-identity set, so the edit lands everywhere at once or not at all.
-- [ ] 🔴 **The owed gate-10/11 sweep**, which several items now ride and **none can land alone**:
-      `scripts/**` (including `mc-ids.txt` + `extract-mc-ids.py`), `.gitignore` (30.6 — `.hprof`),
-      and **`mockito_version=5.23.0`**, which gate 11 requires **identical on all seven**.
+- [ ] 🔴 **The owed gate-10/11 sweep** — 🔧 **IN FLIGHT as §37; the scope is measured there, not here.**
+      **9 paths** for gate 10 (all `scripts/**`; `master` proved the winner on every one) and **1 key**
+      for gate 11 (`mockito_version`). ⚠️ **`.gitignore` was NOT owed** — the `30.6` / `.hprof` claim
+      that stood here was stale, all eight branches already carry blob `b432715f0`.
       🔑 Mockito had to move: Byte Buddy 1.17.7 rejects **Java 25 (69)** outright, so every mocking
-      test threw. It stays `SHARED` — a newer Mockito runs fine on the bands' Java 21 — but its
+      test threw. It stays `SHARED` — a newer Mockito is *expected* to run on the bands' Java 21, and
+      §37 step 4 is the first thing that will ever have **tested** that — but its
       **floor is now set by the newest JDK any band uses**, which R-aa makes band-local.
+      🔴 `gradle.properties` is inside `release.yml`'s `paths:` filter, so the mockito half **rides the
+      `mod_version` bump with R-aa** or it fires seven release runs R-t refuses. §37 splits the commits.
 - [ ] 🔴 **R-aa — the per-band `java_version` key.** Ruled, not built. `release.yml:117` still pins
       `'21'` on all eight branches while `26.x` needs 25, and the workflow must stay byte-identical
       under P19-1. Deferred deliberately: `release.yml` is inside its own `paths:` filter, so touching
@@ -362,6 +366,132 @@ this repo's whole gate stack reports as passing, and three are blind **by constr
 
 ⚠️ **`26.1 > 1.21.11` sorts correctly under semver**, so version *predicates* need no special-casing.
 The obstacle was never the version string.
+
+---
+
+## §37 — the owed gate-10/11 sweep — 🔴 IN FLIGHT
+
+**Tier 2.** Seven band branches, a generated artifact per band, and a key that changes what a push
+does. Written down before the first edit.
+
+### What the two gates actually report — measured 2026-08-25, `--local`
+
+Gate 10 (`branch-file-identity-audit.py`) — **9 violating paths**, all `scripts/**`:
+
+| path | shape | winner |
+|---|---|---|
+| `derive-official-names.py` | DIFFERS (7 bands / master) | master |
+| `extract-mc-ids.py` | DIFFERS | master |
+| `extract-mc-surface.py` | DIFFERS | master |
+| `gameplay_smoke_scenario.py` | DIFFERS | master |
+| `mc-ids.txt` | DIFFERS | master |
+| `mixin-allow-audit.py` | DIFFERS | master |
+| `mixin-target-sizer.py` | ABSENT on all 7 | master |
+| `rename-damage-audit.py` | ABSENT on all 7 | master |
+| `rename-to-official.py` | ABSENT on all 7 | master |
+
+Gate 11 (`gradle-key-identity-audit.py`) — **1 key**: `mockito_version` is `5.14.2` on all seven
+bands and `5.23.0` on `master`, and the key is classified `SHARED`.
+
+✅ **`.gitignore` is NOT owed.** All eight branches carry blob `b432715f0`. The `30.6` / `.hprof`
+line in the carried list was stale — the change had already reached every branch. Removed from the
+list rather than re-carried.
+
+### 🔑 The "which side is correct" gate, discharged mechanically
+
+Gate 10 names a difference, never a culprit, and R-y's first run found `master` wrong. So this was
+**measured, not assumed**: for each of the six DIFFERS paths, walk `git rev-list master -- <path>`
+and ask whether the bands' blob is a state `master` itself passed through.
+
+**All six: yes.** The band blob is an ancestor state on `master` in every case, so no band-authored
+content exists to lose and `master` is the winner on all nine paths. *(The check is cheap and it is
+the only thing separating this from the R-y shape — run it, do not skip it because rule 1 says
+`master` usually wins.)*
+
+### 🔴 Why this cannot be a `git checkout master -- scripts/` and walk away
+
+**`extract-mc-surface.py` changes GENERATED output on every band.** §36's `normalise_nested()` folds
+`Outer.Inner` to the JVM binary `Outer$Inner` at the import step — and **every band carries the same
+dotted import**, `EntityAttributeModifier.Operation` in `SkillAttributeService`. So carrying the
+generator without regenerating each band's `scripts/mc-surface.txt` turns **gate 8 red on seven
+branches in order to make gate 10 green**.
+
+That is the standing rule, and it is the whole cost of this sweep: **the generator back-ports, the
+generated file is REGENERATED.** One build per band.
+⚠️ `mc-surface.txt` is gate 9's artifact and must stay **distinct** per branch — it is excluded from
+gate 10 and must NEVER be carried. Regenerate it; never copy it.
+
+### 🔴 The mockito bump changes what a PUSH does — so it gets its own commit
+
+`gradle.properties` is inside `release.yml`'s `paths:` filter. Every previous gate-10 carry commit
+was `scripts/**`-only and said so explicitly *("this push neither builds nor releases")*. This one is
+not: pushing `mockito_version` to seven bands fires **seven release runs**, and R-t's stale-version
+gate refuses every one of them because `mod_version` has not moved since `v1.2.0` shipped. **Seven
+red runs, reporting to the tab nobody watches (R11).**
+
+That is the identical shape that deferred **R-aa**. So the sweep lands as **two commits per band**:
+
+* **A — `scripts/**` + the regenerated `mc-surface.txt`.** Outside the `paths:` filter. Pushable on
+  its own, whenever the hold lifts. Closes gate 10.
+* **B — `gradle.properties`, `mockito_version` only.** Inside the filter. **Rides the `mod_version`
+  bump, with R-aa**, exactly as the push order already says. Closes gate 11.
+
+Gate 11 therefore stays RED until the version bump, deliberately and on the record. Splitting the
+commits is what makes that a choice rather than a trap.
+
+### The per-band recipe — seven times, `mc/1.21.1 · .3 · .4 · .5 · .8 · .10 · .11`
+
+1. `git checkout <band>` — tree must be clean first.
+2. Carry the nine paths **by name**, `git checkout master -- <path>` each. 🔴 **Never
+   `git checkout master -- .`** and never `-- scripts/`, which would drag `mc-surface.txt` across.
+3. `mockito_version` → `5.23.0`, that key alone, in `gradle.properties`.
+4. `./gradlew --no-daemon --stacktrace --no-build-cache build -Pmod_version=1.2.0` — gate 1.
+   ⚠️ Read the **`N executed`** line, not `BUILD SUCCESSFUL`; confirm `> Task :test` is **bare**, not
+   `FROM-CACHE`. This is the leg that proves **Mockito 5.23.0 actually runs on the bands' Java 21**
+   rather than asserting it — the claim in `gradle.properties` is currently untested on every band.
+5. `python scripts/extract-mc-surface.py` — regenerate. Then `--check` must **PASS**.
+   ⚠️ Record the **record count**. §17: `compileJava` came back `FROM-CACHE` on every band and the
+   per-band record count was the only thing proving the classes were that band's own.
+6. `python scripts/mixin-allow-audit.py --mc <version> --check` — the carried gate must still pass
+   on a `1.21.x` branch. Its `find_jar` fallback was added for `26.x`; **nothing has ever run the
+   new file on a band.**
+7. `python scripts/config-id-audit.py --self-test` then `--check` — `mc-ids.txt` gained a `26.2`
+   section; prove that does not disturb a band's own section.
+8. Commit A, then commit B. `Backport-of:` trailer per source commit.
+
+### After all seven — the cross-branch gates, `--self-test` first, then `--local`
+
+* **9** `manifest-identity-audit.py --require-bands 8` — 0 collisions. 🔴 **This is the one that can
+  fail as a RESULT of the sweep**: seven manifests regenerated in one session on one box is the
+  build-cache-hit scenario gate 9 exists for. Exit 2 is not a pass.
+* **10** `branch-file-identity-audit.py --require-bands 8` — expect **0** differing paths.
+* **11** `gradle-key-identity-audit.py --require-bands 8` — expect gate 11 GREEN once commit B is on
+  every band, and it will be, locally.
+
+### What I am NOT doing
+
+* **Not pushing anything.** The hold is an owner decision; every commit here is local. `origin` is
+  untouched, and `git ls-remote` gets re-read before any history operation.
+* **Not touching `release.yml` / R-aa.** Same deferral, same reason, bundled with the version bump.
+* **Not carrying `mc-surface.txt`** — gate 9 requires it to differ.
+* **Not doing the docs pass** — still owner-sequenced, still one commit across all seven.
+* **Not translating `probe-bands.py` / `javap-mc.sh`** — that is 9.3's remaining tooling half and a
+  separate item; carrying them unchanged is correct here because they are identical already.
+
+### Rollback
+
+Pre-sweep tips, recorded before the first edit:
+
+```
+master     13fefb85a   mc/1.21.5    e9bd67a60
+mc/1.21.1  ce3f91c41   mc/1.21.8    b64088dcf
+mc/1.21.3  14206a5aa   mc/1.21.10   f90571abe
+mc/1.21.4  e0f9ab825   mc/1.21.11   e3b356c0b
+```
+
+Undo for any band: `git reset --hard <sha above>` on that branch. Nothing is pushed, so no remote
+state is at risk and no history is rewritten. 🔴 `git checkout -- <path>` is NOT the undo here — it
+destroys uncommitted work; check `git status --short` first.
 
 ---
 
