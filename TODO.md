@@ -270,13 +270,24 @@ The band cannot run its own gates until its tooling speaks official names.
 - [ ] **`probe-bands.py`** — still yarn-only, so **this branch cannot be probed at all**, which is why
       9.4(b) rests on ecosystem evidence rather than on our own surface.
 - [ ] **`javap-mc.sh`** — still yarn-only.
-- [ ] **`scripts/mc-surface.txt`** — yarn-named; must be regenerated under official names now that the
-      tree compiles. ⚠️ Run `./gradlew classes testClasses` first — a stale `build/classes` yields a
-      confidently wrong manifest — then commit the diff.
-- [ ] **Normalise nested-type spelling in `extract-mc-surface.py`** — deliberately NOT done in §28:
-      identical seven-branch blast radius, and `derive-official-names.py` already compensates via
-      `name_candidates`. **Bundle it with the manifest regeneration above**, which is the change that
-      pays the blast radius anyway.
+- [x] ✅ **`scripts/mc-surface.txt` regenerated under official names (§36).** 1415 yarn records →
+      **1433 official**, `--check` **PASS**. `./gradlew classes testClasses` ran first and
+      `build/classes` was complete (537 class files, the same number `--check` disassembles).
+- [x] ✅ **Nested-type spelling normalised in `extract-mc-surface.py` (§36)**, bundled with the
+      regeneration exactly as planned. `normalise_nested()` + `import_map()` fold `Outer.Inner` to the
+      JVM binary `Outer$Inner` **at the import step**, which is where the two scans diverged: the
+      bytecode scan always reads `$` out of a constant pool, the source scan took the spelling
+      straight off an `import` line. One import — `AttributeModifier.Operation` in
+      `SkillAttributeService` — produced a dotted `CLASS` row and two dotted `STATICFIELD` rows for a
+      type the bytecode side spelled with `$`. **Dotted-nested rows: 3 → 0.**
+      🔑 **It was survivable only because TWO consumers carried the workaround** (`probe-bands.py`
+      and `derive-official-names.py` both have a `name_candidates()` that maps the dotted tail back).
+      A third consumer that forgets simply reports the type ABSENT on every band — a false positive
+      shaped exactly like a real API removal.
+      ⚠️ Split at the **outermost** capitalised segment. Stopping at the first `Upper.Upper` pair from
+      the end renders `Outer.Inner.Leaf` as `Outer.Inner$Leaf`, a binary name nothing resolves.
+      ✅ Seven unit cases (including three negatives and the non-MC `java.util.Map.Entry`), plus a
+      **mutation verified to go red on 5 checks** when the pre-fix behaviour is restored.
 - [x] ✅ **`mixin-allow-audit.py` runs on a `26.x` branch** — `find_jar` falls back to
       `minecraft-merged-deobf-<mc>.jar`. 26.x ships unobfuscated and yarn publishes nothing for it, so
       the old glob for the *yarn-remapped* artifact could never match: **the one gate that can see a
