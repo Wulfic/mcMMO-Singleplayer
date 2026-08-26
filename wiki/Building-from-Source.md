@@ -94,14 +94,15 @@ Each supported Minecraft version band is its own branch. `master` **is** the new
 
 | Branch | Band |
 |---|---|
-| `master` | 1.21.11 |
+| `master` | 26.2 |
+| `mc/1.21.11` | 1.21.11 |
 | `mc/1.21.10` | 1.21.9 – 1.21.10 |
 | `mc/1.21.8` | 1.21.6 – 1.21.8 |
 | `mc/1.21.5` | 1.21.5 |
 | `mc/1.21.4` | 1.21.4 |
 | `mc/1.21.3` | 1.21.2 – 1.21.3 |
 
-A branch pins its own `minecraft_version` and `yarn_mappings` in `gradle.properties`, and its own band range in `fabric.mod.json`. Checking one out and running `./gradlew build` produces that band's jar with no further configuration — there is no preprocessor and no version switch to set.
+A branch pins its own `minecraft_version`, its own `java_version` and its own band range in `fabric.mod.json`. Checking one out and running `./gradlew build` produces that band's jar with no further configuration — there is no preprocessor and no version switch to set. The `1.21.x` branches also pin `yarn_mappings`; the `26.x` line has no such key, because Minecraft ships unobfuscated from `26.1` and yarn publishes nothing for it.
 
 **Fixes land on `master` first, always**, then propagate to the band branches. Each propagation commit carries a `Backport-of: <sha>` trailer naming the `master` commit it came from, which makes `git log --grep='Backport-of: <sha>'` a mechanical answer to *"did this fix reach every band?"*. A `master` commit that deliberately must not propagate says so in the commit instead. This matters more than it looks: almost every bug this project gets is version-agnostic logic, so a fix that lands on one band and is forgotten on another produces no error anywhere — the bug just quietly comes back for that band's players.
 
