@@ -169,10 +169,21 @@ java {
     }
 }
 
+// javac stops reporting after 100 errors, notes it in one line, and exits with the SAME code as a
+// run that reported everything. It does not fail -- it TRUNCATES, and the truncated number looks
+// exactly as authoritative as the true one. That has turned a sizing into a guess twice:
+//   * TODO.md 27  -- MC 26.2 read as a platform/-only break at the cap. Lifted: 2,639 errors across
+//                    96 files, and the extra 2,539 decided the shape of the whole port.
+//   * TODO.md 42  -- mc/26.1.2's test tree read 30 errors at the cap. Lifted: 61, across 8 files.
+// -Xmaxwarns is deliberately NOT lifted: its cap has never misled anything here, and with
+// -Xlint:deprecation below it would add thousands of lines to every band's build.
+def compilerErrorCap = 10000
+
 tasks.withType(JavaCompile).configureEach {
     it.options.encoding = 'UTF-8'
     it.options.release = javaLevel
     it.options.compilerArgs << '-Xlint:deprecation'
+    it.options.compilerArgs << '-Xmaxerrs' << compilerErrorCap.toString()
 }
 
 test {
@@ -193,14 +204,26 @@ test {
     def resolvedBandVersions = bandVersions.join(',')
     def resolvedModVersion = project.mod_version.toString()
     def resolvedJavaLevel = javaLevel.toString()
+    // TODO.md 44.2. Hands CompilerErrorCapTest the args compileJava ACTUALLY RESOLVED, realized here
+    // at configuration time. Deliberately NOT the text of this file and NOT a re-derivation of
+    // compilerErrorCap above: a guard that greps build.gradle for the string '-Xmaxerrs' passes while
+    // the flag sits in a withType block that never matches compileJava, or after a later
+    // `compilerArgs = [...]` assignment drops it. Both leave the string in the file. This reads the
+    // task.
+    def resolvedCompilerArgs = tasks.named('compileJava').get().options.compilerArgs.join(' ')
     systemProperty 'mcmmo.build.version', resolvedVersion
     systemProperty 'mcmmo.build.bandVersions', resolvedBandVersions
     systemProperty 'mcmmo.build.modVersion', resolvedModVersion
     // R-aa. Hands BandToolchainLevelTest the level THIS BUILD resolved, so the guard checks the
     // wiring rather than re-reading gradle.properties and agreeing with itself.
     systemProperty 'mcmmo.build.javaVersion', resolvedJavaLevel
+    systemProperty 'mcmmo.build.compilerArgs', resolvedCompilerArgs
     inputs.property 'mcmmo.build.version', resolvedVersion
     inputs.property 'mcmmo.build.javaVersion', resolvedJavaLevel
+    // Without this the guard is served a CACHED PASS after the args change -- the same defect
+    // measured on 2026-08-18, where three real workflow mutations all scored "not caught" because
+    // :test never re-ran.
+    inputs.property 'mcmmo.build.compilerArgs', resolvedCompilerArgs
 
     // ⚠️⚠️ A FILE A GUARD TEST READS MUST BE DECLARED AS A TASK INPUT, or Gradle does not know the
     // test depends on it — and with org.gradle.caching=true it serves a CACHED PASS after that file
