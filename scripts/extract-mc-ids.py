@@ -77,6 +77,9 @@ MANIFEST = REPO / "scripts" / "mc-ids.txt"
 
 LOOM = Path.home() / ".gradle" / "caches" / "fabric-loom"
 MERGED = LOOM / "minecraftMaven" / "net" / "minecraft" / "minecraft-merged"
+# 26.x ships unobfuscated and yarn publishes nothing for it, so Loom caches the jar under a
+# different artifact id with no mappings coordinate in the directory name. See merged_jar().
+MERGED_DEOBF = LOOM / "minecraftMaven" / "net" / "minecraft" / "minecraft-merged-deobf"
 
 ITEM, BLOCK = "item", "block"
 KINDS = (BLOCK, ITEM)
@@ -208,17 +211,31 @@ def registry_ids(version: str) -> dict[str, set[str]]:
 
 
 def merged_jar(version: str) -> Path | None:
-    """The yarn-mapped merged jar, for the cross-check. Mirrors config-id-audit.py's lookup.
+    """The merged Minecraft jar, for the cross-check. Mirrors config-id-audit.py's lookup.
 
     ⚠️ Deliberately duplicated rather than imported: each script under scripts/ has to be
     cherry-pickable to a band branch on its own. The trailing '-' is load-bearing -- without it
     1.21.1 also matches the 1.21.11 directory.
+
+    ⚠️⚠️ TWO CACHE LAYOUTS, and knowing only the first one produced a CONFIDENTLY WRONG
+    DIAGNOSTIC. Through 1.21.11 Loom caches a yarn-mapped jar under
+    `minecraft-merged/<version>-net.fabricmc.yarn.<...>/`. From 26.1 Minecraft ships unobfuscated and
+    yarn publishes nothing for it -- meta.fabricmc.net returns [] -- so Loom caches
+    `minecraft-merged-deobf/<version>/minecraft-merged-deobf-<version>.jar` instead, with no mappings
+    coordinate in the path at all.
+
+    A lookup that knew only the yarn layout returned None for 26.2, which made asset_ids() return
+    None, which made the caller print "no asset cross-check available below 1.21.4" -- for a version
+    that is emphatically NOT below 1.21.4. The cross-validation that is the whole point of this
+    script was skipped, and the reason it gave was false. Skipping is sometimes correct here; saying
+    WHY it skipped is not optional.
     """
     for d in MERGED.glob(f"{version}-net.fabricmc.yarn.*"):
         for j in d.glob(f"minecraft-merged-{version}-*-v2.jar"):
             if j.name.startswith(f"minecraft-merged-{version}-"):
                 return j
-    return None
+    deobf = MERGED_DEOBF / version / f"minecraft-merged-deobf-{version}.jar"
+    return deobf if deobf.is_file() else None
 
 
 def asset_ids(version: str) -> dict[str, set[str]] | None:
@@ -242,6 +259,21 @@ def asset_ids(version: str) -> dict[str, set[str]] | None:
     if not items or not blocks:
         return None
     return {ITEM: items, BLOCK: blocks}
+
+
+def why_no_assets(version: str) -> str:
+    """Why asset_ids() returned None for this version -- reported verbatim, never inferred.
+
+    There are two genuinely different reasons and they need different responses. "The jar has no
+    assets/minecraft/items/" is expected below 1.21.4 and is the reason this script exists. "No
+    merged jar is cached at all" is a broken environment, and reporting it as the first one hides it.
+    """
+    jar = merged_jar(version)
+    if jar is None:
+        return (f"no merged jar cached for {version} under {MERGED} or {MERGED_DEOBF} -- "
+                f"build against this version first")
+    return (f"{jar.name} has no assets/minecraft/items/ or blockstates/ "
+            f"(expected below 1.21.4; this is why the registry dump exists)")
 
 
 def cross_validate(version: str, registry: dict[str, set[str]],
@@ -278,8 +310,12 @@ def generate(versions: list[str]) -> dict[str, dict[str, set[str]]]:
         registry = registry_ids(v)
         assets = asset_ids(v)
         if assets is None:
+            # ⚠️ STATE THE REASON THAT ACTUALLY APPLIED. This line used to assert "below 1.21.4"
+            # unconditionally, which was false for 26.2 -- a jar the lookup simply could not find --
+            # and a skipped cross-check that explains itself with the wrong reason is worse than one
+            # that says nothing, because it closes the question.
             print(f"      {len(registry[BLOCK]):5} blocks {len(registry[ITEM]):5} items "
-                  f"[no asset cross-check available below 1.21.4 -- this is why we are here]")
+                  f"[no asset cross-check: {why_no_assets(v)}]")
         else:
             problems = cross_validate(v, registry, assets)
             if problems:
