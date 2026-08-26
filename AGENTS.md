@@ -171,6 +171,21 @@ python scripts/drift-audit.py --self-test && python scripts/drift-audit.py --mas
    be applied retroactively to one somebody merely forgot. A silent skip is the thing being
    prevented; a stated skip is the fix.
 
+   ⚠️ **There is exactly ONE exception, and it is closed** (ruling **R-ab**, 2026-08-26). The
+   `26.x` conversion produced **eleven** `master`-only commits that are un-propagatable by
+   construction — they rename `master` from yarn to official Minecraft names — and every one was
+   committed **without** the trailer. Six are already published, so amending them is impossible,
+   and gate 7 therefore failed on **every run, forever** — which is precisely how the **twelfth**
+   missing commit, a genuine forgotten back-port, becomes invisible. `scripts/drift-waivers.txt`
+   excuses those eleven and nothing else.
+   🔑 **It cannot grow into a general escape hatch.** The file declares a `cutoff:` sha and the
+   auditor **REFUSES** any waiver whose commit is not an ancestor of it. Nothing committed after
+   the cutoff can ever be waived there, so rule 3 above remains the only opt-out for new work.
+   Widening the exception means **moving the cutoff** — one line, in a commit, with a reason.
+   🔴 **Do not move the cutoff to make a red gate go green.** A red gate 7 means a fix did not
+   reach a band; that is the finding, not the obstacle. A waiver that stops excusing anything is
+   reported **STALE** and must be deleted, not left to accumulate.
+
 ✅ **`drift-audit.py` now tracks `scripts/`-only and `.github/`-only commits** (R9a, 2026-08-13).
 Tooling is exactly what a band needs to run its own gates, and a divergent `release.yml` changes how
 a band *ships* — both used to be invisible, and the auditor reported a confident *"No drift"* either
@@ -237,7 +252,7 @@ Tooling (all converse-checked; run them, don't trust them because they printed s
 
 | Script | Answers |
 |---|---|
-| `scripts/drift-audit.py` | which `master` fixes have not reached each band. `--self-test` proves it can still detect drift — **run that first**, because "no drift" is also what a broken auditor prints |
+| `scripts/drift-audit.py` | which `master` fixes have not reached each band. `--self-test` proves it can still detect drift — **run that first**, because "no drift" is also what a broken auditor prints. ⚠️ Reads `scripts/drift-waivers.txt` (R-ab): eleven retroactively-excused `26.x` commits, locked to a `cutoff:` sha so it can never cover anything newer. Waived commits print as **`retro-waived`**, never folded into `propagated` — they did not reach a band and never will. ⚠️⚠️ **`band_branches()` PREFERS REMOTE refs**, so a pre-push run in this working copy grades the **stale remote** and answers a question nobody asked; the honest run is inside `git clone --local --no-hardlinks . <scratch>`, where `origin/*` maps onto the local branches |
 | `scripts/mixin-allow-audit.py` | the true per-band injection-point count for every mixin injector, from bytecode. `--check` must pass before a band ships |
 | `scripts/extract-mc-surface.py` | regenerates the MC contact-surface manifest. **Two scans, and neither supersedes the other**: source text (imports, `<McClass>.<CONSTANT>` fields, mixin selectors) *and* `javap -v` over `build/classes` for called methods, accessed fields and constructors. javac **inlines compile-time constants**, so the bytecode scan alone loses them; a source regex cannot resolve a receiver type, so the source scan alone loses instance-method calls. ⚠️ Run `./gradlew classes testClasses` first — a stale `build/classes` yields a confidently wrong answer. ✅ **`--check` is READ-ONLY and compares against the COMMITTED manifest** (P16-1, 2026-08-18) — it used to regenerate and then grade its own output, so a file describing a *different Minecraft* passed every time. A plain run is now the deliberate regeneration, and its diff gets committed. ⚠️ **This is not a full guard**: the manifest is a per-band generated fact, and a manifest that is valid *for another branch* is true on every line, so no per-branch check can see it — two bands with byte-identical manifests is the only tell |
 | `scripts/probe-bands.py` | which of the **1386** MC symbols differ on a version (`--control` guards it) |

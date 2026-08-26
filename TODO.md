@@ -160,6 +160,8 @@ withdrew R-v, so R-l's 16-version target is LIVE again and is the current scope.
 | **R-y** | **Does the identity guard cover `README.md`/`wiki/`? (owner-ruled 2026-08-20)** | ✅ **RULED (owner): YES — both are IN `branch-file-identity-audit.py`.** Closes the call carried from §21.6. R9's noise argument is about a *per-push* audit and does not transfer to a **ship gate**. 🔑 **It found a real defect on its first run**: `mc/1.21.1` had corrected a `wiki/Husbandry.md` sentence that is false on that band, **on that band only** — a rule-1 violation, invisible to `drift-audit.py` by design (it asks whether a `master` commit reached a band, never whether a band holds a fix `master` lacks), so six branches served wrong text to a shipped band's players with every gate green. 🔴 **Depends on R-x.** `BandDocsMatchRealityTest` needs the documented floor strictly below every version a branch ships; `1.20.6` covers all seven **only because no band ships below `1.21`**. Reopen the `1.20` line and these two files must leave the set in the same change, or no state satisfies both guards. |
 | **R-z** | **Which branch becomes `26.x`? (owner-ruled 2026-08-20)** | ✅ **RULED (owner): `26.x` becomes `master`, and `1.21.11` is cut to `mc/1.21.11`.** Follows from R-f (master = newest supported band) once `26.1 > 1.21.11` is granted. 🔴 **It trips R10 for as long as the cut is held**: `mc/1.21.11` and `origin/master` both sit at `minecraft_version=1.21.11`, and two branches on one value means each release run reaps the other's release. The mitigation is that the cut stays **unpushed** until `master` compiles — so **R-z is the reason nothing may be pushed**, not merely a topology note. ⚠️ Recorded here on 2026-08-20 because it had been ruled in §27 and written only to `.agent/memory/`, which is not committed (R-n) and therefore invisible to a fresh clone. |
 | **R-aa** | **Java 25 vs gate 10 (owner-ruled 2026-08-20)** | ✅ **RULED (owner): read the Java level from a new per-band `gradle.properties` key.** `26.x` needs Java 25 (Mojang’s own manifest requirement, §27) while `release.yml:117` pins `'21'` and must stay byte-identical on every branch under **P19-1** — no single state satisfies both. The workflow text becomes identical again by referring to the key; the **value** is per-band, exactly like `minecraft_version`. Classifies as `BAND_LOCAL` in `gradle-key-identity-audit.py`, so it needs **no new mechanism** — the existing per-key guard already covers it. **Rejected:** installing both JDKs on every branch — it keeps the text identical too, but selects the level *implicitly* via toolchain resolution instead of declaring it, and R-y’s precedent is that a shared file states its per-band facts rather than inferring them. ⚠️ **Ruled, not built.** It lands in the same change that makes `master` pushable; building it earlier would put a `25` in a workflow on six branches that need `21`. |
+| **R-ab** | **Gate 7 is permanently red — how? (owner-ruled 2026-08-26)** | ✅ **RULED (owner): a waiver file, `scripts/drift-waivers.txt`.** The same **11** `master`-only `26.x` commits read MISSING on every band; they cannot be back-ported by construction, they should have carried `Backport-not-needed:`, and **six are already published** so amending them is off the table — AGENTS.md forbids applying the opt-out retroactively regardless. So gate 7 fails on every run for a reason no work clears, which is exactly how the **12th** missing commit — a genuine forgotten back-port — becomes invisible. 🔑 **The waiver is structurally retroactive-only: it declares a `cutoff:` sha and REFUSES any waiver whose commit is not an ancestor of it**, so it cannot decay into a general escape hatch that repeals rule 3 — widening the exception means moving the cutoff, which is one reviewable line in a diff. **Rejected:** a `Backport-base:` marker moving each band's base below the `26.x` rename — cheaper to read, but it drops any genuine pre-rename drift out of the window along with the 11. ⚠️ **Explicitly NOT ruled:** lowering `--require-bands` or not running the gate. Both are the make-the-symptom-disappear move AGENTS.md's attempt-budget section names outright. Built in §40. |
+| **R-ac** | **§41 + §42 scope and the push hold (owner-ruled 2026-08-26)** | ✅ **RULED (owner), three parts.** (1) **Build the whole R-aa bundle** — the per-band `java_version` key, the `mod_version` bump, §37's deferred commit B and the docs pass, as ONE change per branch, because each alone touches `gradle.properties` and fires a release run R-t refuses. (2) **Cut `mc/26.1.2` this session**, which closes the declared 16-version scope at nine branches — subject to the one check §39 left open: whether `0.155.2+26.1.2` actually LOADS on `26.1`, read out of the jar's own `fabric.mod.json`, not assumed. (3) 📌 **The push hold STANDS**, re-confirmed for the third session running. Nothing is pushed; re-ask. R14's ~24% suite flake is a second reason — a red release run is currently indistinguishable from a real regression. |
 
 ### 🔑 What R-m′ taught, and why it is written down here
 
@@ -1095,6 +1097,201 @@ edition is at `2a6b0c9a3`; the 12-version `1.21.x` edition it replaced is at `8a
 byte-identical on all seven band branches. `git checkout 2a6b0c9a3 -- plans/BAND_TABLE.md` restores
 the previous one. No other tracked file changes. 🔴 `git checkout -- <path>` on a DIRTY file
 destroys uncommitted work — `git status --short <path>` first.
+
+---
+
+## §40 — the gate-7 waiver file — 🔴 IN FLIGHT (ruling **R-ab**, owner 2026-08-26)
+
+**The problem is in the §38 block above and is unchanged**: the same **11** `master`-only `26.x`
+commits read MISSING on every band, they cannot be back-ported by construction, they should have
+carried `Backport-not-needed:` and do not, and **six are already published** so amending them is off
+the table. Gate 7 therefore fails on every run for a reason no work clears — and the **12th** missing
+commit, a genuine forgotten back-port, reads exactly like the eleven.
+
+✅ **RULED (owner, 2026-08-26): the waiver file.** `scripts/drift-waivers.txt`, read by
+`drift-audit.py`, under gate 10 so it is byte-identical on every branch. **Rejected: moving the band
+base** — a `Backport-base:` marker is cheaper to read but drops *any* genuine pre-rename drift out of
+the window with the 11, and the whole point of this exercise is that a silent skip is the defect.
+
+### 🔑 The design problem, and the one mechanism that answers it
+
+A waiver file is an escape hatch, and an escape hatch that anyone can extend tomorrow **repeals rule
+3**. AGENTS.md's opt-out is load-bearing precisely because it *"lives in the commit that made the
+decision and cannot be applied retroactively"*. A plain sha-list gives that property up.
+
+**So the file is structurally retroactive-only: it declares a `cutoff:` sha, and a waiver whose
+commit is NOT an ancestor of that cutoff is REFUSED.** Tomorrow's commit cannot be waived, because
+tomorrow's commit is not an ancestor of a frozen cutoff. Widening the exception means **moving the
+cutoff**, which is one line in a diff, in a commit, with a reason — reviewable, which a growing list
+of shas is not.
+
+### The format
+
+```
+# scripts/drift-waivers.txt
+cutoff: bdc429115
+<40-hex sha>  <reason, non-empty>
+```
+
+### Fail-closed rules — every one gets a self-test case
+
+| # | Condition | Result |
+|---|---|---|
+| 1 | `cutoff:` line missing while entries exist | exit **2** |
+| 2 | more than one `cutoff:` line | exit **2** |
+| 3 | sha is not 7–40 hex | exit **2** |
+| 4 | sha resolves to no commit, or is ambiguous | exit **2** |
+| 5 | **sha is not an ancestor of `cutoff`** | exit **2** — the retroactivity lock |
+| 6 | reason empty or whitespace | exit **2** |
+| 7 | a waiver that matched **no** commit in any band's window | **stale**, exit **1** |
+| 8 | file absent | zero waivers, exit unaffected (its absence is **gate 10's** job, not this one's) |
+
+🔑 **Rule 7 is what stops the file rotting.** A waiver that has stopped applying is the same
+credit-for-nothing shape as `unmatched_trailers`, which this script already reports — and a waiver
+list nobody prunes is how the 12th commit hides all over again, one level up.
+
+⚠️ **A waiver never suppresses a `Backport-of:` mismatch and never adds coverage.** It converts
+exactly one classification, `MISSING` → `retro-waived`, and the report prints that count separately
+so the operator can never read a waived commit as a propagated one.
+
+### Steps
+
+- [ ] **40.1** `scripts/drift-waivers.txt` — `cutoff: bdc429115`, the 11 shas, one reason each.
+- [ ] **40.2** `scripts/drift-audit.py` — parse + validate + the `retro_waived` classification, the
+      stale-waiver report, and the counts in `format_reports()` / `--json`.
+- [ ] **40.3** Extend `--self-test` with the eight rules above **plus the anti-vacuity case**: a
+      genuinely forgotten commit must STILL be reported MISSING while waivers are in play. A waiver
+      mechanism that swallows the real signal is worse than the red gate it replaced.
+- [ ] **40.4** `AGENTS.md` — document the waiver as the narrow, cutoff-locked exception to rule 3.
+      It is the only tracked agent-facing doc; a mechanism that lives only in a script is a
+      mechanism the next agent works around.
+- [ ] **40.5** Run gate 7 honestly — inside `git clone --local --no-hardlinks . <scratch>`, because
+      `band_branches()` prefers REMOTE refs and a bare run grades the stale remote.
+- [ ] **40.6** Sweep: `AGENTS.md` + `scripts/**` to every band. **No `gradle.properties`, no
+      `release.yml`, no `src/**` → outside `release.yml`'s `paths:` filter → no release run fires.**
+
+### What I am NOT doing
+
+* **Not lowering `--require-bands`, not skipping the gate.** Both are the make-the-symptom-disappear
+  move AGENTS.md names outright.
+* **Not amending or rewriting any of the 11.** Six are published; the ruling exists because that
+  repair is forbidden.
+* **Not pushing.** The hold was re-confirmed by the owner 2026-08-26.
+
+### Rollback
+
+Pre-edit tips are recorded in the execution log below at execution time. Nothing is pushed, so no
+remote state is at risk. 🔴 `git checkout -- <path>` is NOT the undo for a dirty file — it destroys
+uncommitted work; `git status --short <path>` first.
+
+---
+
+## §41 — the R-aa bundle: per-band `java_version`, the `mod_version` bump, commit B, the docs pass
+
+✅ **AUTHORISED (owner, 2026-08-26): build the whole bundle.** These four land as ONE change per
+branch because each of them alone touches `gradle.properties`, which is **inside `release.yml`'s
+`paths:` filter** — four separate commits on eight branches is thirty-two release runs, and R-t's
+stale-version gate refuses every one of them that does not carry a bump.
+
+### 41.1 — R-aa, the per-band `java_version` key
+
+🔑 **The fact already exists per band — in THREE hardcoded places in `build.gradle`** (`master`'s
+`sourceCompatibility` / `targetCompatibility` / `toolchain` / `options.release` all say `25`; every
+band says `21`) **and a FOURTH in `release.yml`, where it is hardcoded `'21'` on all eight.** R-aa's
+ruling is that the value gets declared once and read; leaving `build.gradle`'s copies hardcoded would
+replace one drifting source of truth with two.
+
+- [ ] `gradle.properties`: `java_version=25` on `master`, `21` on every band.
+- [ ] `build.gradle`: read it, and **refuse if absent** — a missing key must fail the build, not
+      default to a silent `21` that compiles `master` against the wrong release.
+- [ ] `.github/workflows/release.yml`: a `Read the JDK level this band builds with` step **before**
+      `setup-java` (checkout is already above it), feeding `java-version:`. The step errors on an
+      empty value. The workflow text becomes byte-identical again, which is what P19-1 requires.
+- [ ] `scripts/gradle-key-identity-audit.py`: `java_version` → `BAND_LOCAL`. ⚠️ Not `DISTINCT` — the
+      seven `1.21.x` bands legitimately share `21`, and `DISTINCT` would demand eight different
+      numbers. ⚠️ Not left unclassified: gate 11 fails closed on an unclassified key **only when it
+      differs**, and this one differs the moment `master` and a band are compared.
+- [ ] A guard test that fails if this is reverted: `release.yml` must carry **no** hardcoded
+      `java-version: '<n>'` literal, must reference the step output, and the declared
+      `java_version` must equal the release level the build actually resolved (handed over as a
+      system property, the way `mcmmo.build.version` already is — a guard that re-derives the value
+      from the file keeps passing when the real wiring breaks).
+
+### 41.2 — the `mod_version` bump
+
+🔴 **OWNER CALL — R-w set the last value explicitly and this one is the same shape.** `v1.2.0`
+shipped on all seven branches (§23), so R-t refuses any push until this moves. Ask before writing it.
+
+### 41.3 — commit B
+
+`mockito_version=5.23.0` on every band. §37 measured it and deferred it for exactly this reason: it
+is a `gradle.properties` edit and fires a release run unless it rides the bump.
+
+### 41.4 — the docs pass
+
+The suite's **one red row** — `BandDocsMatchRealityTest#everyVersionThisBandShipsAppearsInTheReadme`
+— `README.md` never learned that `master` ships `26.2`. ⚠️ **`wiki/` and `README.md` are under gate
+10 (R-y), so the docs pass is byte-identical on all eight branches or gate 10 goes red.**
+⚠️ **Gradle SKIPS the doc-guard tests**: a docs-only change leaves `:test` up-to-date. **Read the
+`N executed` line, never `SUCCESSFUL`.**
+
+### What I am NOT doing
+
+* **Not raising `BAND_COUNT` in `drift-audit.yml` yet.** It counts **pushed** bands and the remote
+  still holds six. Raising it while the push hold stands makes the weekly run red for a reason that
+  is not drift. It moves in the push, with §42's band.
+* **Not touching R14's flake remedy.** `build.gradle`, separate decision, still open.
+* **Not pushing.**
+
+---
+
+## §42 — cut `mc/26.1.2` — ✅ AUTHORISED (owner, 2026-08-26)
+
+📌 **Renumbered.** §39 and the memory call this cut "§40"; the gate-7 ruling took that slot first.
+Same work, same scope: the band covers `26.1`, `26.1.1`, `26.1.2`, pins `minecraft_version=26.1.2`,
+and declares `depends.minecraft` `>=26.1 <26.2`. **After it, the declared 16-version scope is
+complete** — nine branches.
+
+### 🔴 The one check this cut OWES, before anything else
+
+The band pins **one** `fabric_version` and must RUN on all three versions. `0.155.2+26.1.2` is the
+candidate. **Whether it loads on `26.1` is a `fabric.mod.json` `depends` fact to be READ out of the
+jar, not assumed** — §39 named it and deliberately did not answer it. If it does not load on `26.1`,
+**stop and report**; do not pin a version that cannot run on its own band.
+
+### Ordering
+
+**§40 and §41 land first**, so the new branch is cut from a `master` that already carries the waiver
+file, the `java_version` key and the docs pass — it inherits all three and owes no follow-up sweep.
+🔑 That is the cheap direction: cutting first turns every one of §40's and §41's seven-band sweeps
+into an eight-band sweep.
+
+### Steps — the per-band recipe above, x.1 – x.10, plus
+
+- [ ] `java_version=25` (Mojang's manifest: all four `26.x` are Java 25). §39 measured this, so
+      R-aa has one boundary, not a third value.
+- [ ] **No `yarn_mappings` key** — from `26.1` Minecraft ships unobfuscated and yarn publishes
+      nothing. Same as `master`.
+- [ ] **x.7 runs `mixin-allow-audit.py` BEFORE the full gate**, and 🔑 **the injector total is a
+      per-band fact** — §38 measured 61 / 62 / 68 across the existing bands. `master`'s number
+      proves nothing here.
+- [ ] 🔴 **`LivingEntity#knockback` spans this exact boundary** — the band has the 3-arg form,
+      `26.2` carries a 5-arg overload alongside it, and a call rebinds **silently** because javac
+      must accept it. This is the §33.4 shape and it does **not** announce itself on a compile.
+- [ ] **x.9** `--require-bands` / `BAND_COUNT` — moves with the push, not before it.
+
+### What I am NOT doing
+
+* **Not pushing the branch.** The hold covers it. A cut branch that is never pushed trips nothing.
+* **Not re-measuring the band.** §39 settled it: `26.1`/`26.1.1`/`26.1.2` differ on **zero of 1424**
+  records. 🔴 Read §39's 84-record itemisation as **rows to look at, never as work to do** — §31
+  priced 54 seam redesigns and there were 0.
+
+### Rollback
+
+The branch is new and unpushed: `git branch -D mc/26.1.2` from `master` is the complete undo, and
+nothing else on disk changes. Confirm with `git branch --contains` that no other ref depends on it
+first.
 
 ---
 
