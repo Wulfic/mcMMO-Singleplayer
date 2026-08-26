@@ -1,0 +1,62 @@
+# Retroactive back-port waivers -- read by scripts/drift-audit.py.  Ruling R-ab, 2026-08-26.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# AGENTS.md rule 3 says a master commit that must not propagate declares it IN THE COMMIT:
+#
+#     Backport-not-needed: touches only the 1.21.11 toolchain pin
+#
+# and that the opt-out "lives in the commit that made the decision and cannot be applied
+# retroactively to one somebody merely forgot".  That is the right rule and it stays.
+#
+# The 26.x conversion broke it, once, at scale.  Eleven master-only commits rename master from
+# yarn to official Minecraft names, pin the 26.2 toolchain, or repair the suite for it.  Applying
+# any of them to a yarn band would break that band -- they are un-propagatable BY CONSTRUCTION --
+# and every one of them was committed without the trailer.  Six are already on origin/master, so
+# rewriting them is off the table regardless of what the rule says.
+#
+# So gate 7 failed on EVERY run, forever, for a reason no amount of work could clear.  That is not
+# a cosmetic problem: the TWELFTH missing commit -- a genuine forgotten back-port, the exact defect
+# this auditor exists to catch -- reads identically to the eleven.  A permanently red gate detects
+# nothing, because nobody reads it.
+#
+# WHY THIS IS NOT A HOLE IN RULE 3
+# --------------------------------
+# An escape hatch anyone can extend tomorrow repeals the rule it excepts.  This one cannot be:
+#
+#     A waiver whose commit is NOT AN ANCESTOR OF THE `cutoff:` SHA BELOW IS REFUSED (exit 2).
+#
+# Tomorrow's commit is not an ancestor of a frozen cutoff, so it cannot be waived here -- the
+# trailer remains the only opt-out for anything new.  Widening the exception means MOVING the
+# cutoff, which is one line in a diff, in a commit, with a reason: reviewable, which a quietly
+# growing list of shas is not.  Do not move it to make a red gate go green.
+#
+# The auditor also fails closed on: a missing or duplicated cutoff, a sha that is not 7-40 hex, a
+# sha that resolves to no commit or is ambiguous, an empty reason -- and it reports a waiver that
+# has stopped matching anything as STALE (exit 1), so this file cannot rot into credit for nothing.
+#
+# FORMAT
+# ------
+#     cutoff: <sha>            exactly one, required whenever any entry follows
+#     <sha>  <reason>          reason non-empty; everything after the sha is the reason
+#     # ...                    comment; blank lines ignored
+#
+# ASCII only.  Every line here prints on the drift-REPORTING path, and a Windows cp1252 console
+# cannot encode anything else -- see the note at the top of drift-audit.py.
+
+cutoff: bdc429115236527749608abe04c51f105b08185c
+
+# --- The 26.x rename: master speaks official Minecraft names, every band speaks yarn -----------
+fcb2d4bbffdcd94024098858a58ffa1b0d6ed473  Pins master to the 26.2 toolchain. A band pins its own; gradle.properties is BAND_LOCAL by construction.
+30b3eb3c25bc76d182b5f51dc4982ad1257d61c1  9.3 rename sizer -- classifies yarn->official call sites. Meaningless on a branch that has no official names.
+9b02b7b23f7fa629d3b644a3a4a1647443b9375a  9.3 mixin selector writer -- rewrites yarn selectors to official. Would unbind every injector on a yarn band.
+72cbdc867a106ea9828ba22380f9884dd7ecafc0  9.3 the 64 selector renames themselves. Same reason: the yarn names it replaces are the CORRECT ones on a band.
+07266070d6cc935b1ddddc674b849e9a08b906a1  9.3 four 26.x signature changes plus a class move. The old signatures are what the bands compile against.
+8abf23e659a4c4a39dd7df44609a4799676deb9f  9.3 four @Shadow members left in yarn. Fixing them to official breaks a yarn band's mixins.
+409e999a55135e3742aef33127d1d9fa28fa6806  9.3 the spawn-origin seam moved to a chain that INVERTED in 26.x. The bands' chain did not invert.
+
+# --- Section 33: repairing the suite for 26.x, after the rename --------------------------------
+1fc86d86c87878119b8d113d63f2406ca75b997e  33.1 -- 26.x binds DataComponents onto the registry HOLDER. Below 26.x they bind onto the entry.
+f688b91a08d05aa80631ce7e29df83b794218b1c  33.2 -- the version grammar. Already correct on every band; this commit brought master level with them.
+b62c50917f5dfa873b389d53e7cf6578aa765dbb  33.4 -- a narrow overload deleted in 26.x while a wider one survives. The narrow form still exists on the bands.
+d5fb36dbfb76c6c64a10610f77babc13fdfaae6e  33.5 -- a yarn method name surviving as a STRING LITERAL. On a yarn band that literal is right.
