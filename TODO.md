@@ -1676,6 +1676,94 @@ below as needing *"the next real run"*:
 
 ---
 
+## §44 — lift javac's 100-error cap — 🔴 IN FLIGHT on `master`
+
+✅ **AUTHORISED (owner, 2026-08-26):** NEXT item 2. Scope is `master` **plus the sweep to all eight
+bands**, and **nothing is pushed** — see 44.4 for why that is the whole point rather than caution.
+
+🔑 **Why this is worth a section at all.** `javac` stops reporting after **100** errors and says so in
+one line nobody reads. Twice now that cap has turned a *measurement* into a *guess*:
+
+* **§27** — MC `26.2` looked like a `platform/`-only break. Lifting the cap turned 100 into **2,639
+  errors across 96 files**, and the extra 2,539 were the ones that decided the shape of the port.
+* **§42** — `mc/26.1.2`'s test tree reported **30** errors. With the cap lifted: **61**, across 8
+  files. The fix was authored on the band, then **deliberately reverted there** because rule 1 says
+  `master` first. That revert is the debt this section pays.
+
+⚠️ **The cap does not fail. It truncates and exits with the same code.** A sizing run reads a number
+that is exactly as authoritative-looking as the true one, and every downstream estimate inherits it.
+
+### 44.1 — the change on `master`
+
+- [ ] `build.gradle`: `tasks.withType(JavaCompile)` gains `-Xmaxerrs <cap>`. One named local, so the
+      value and the value handed to the guard cannot disagree.
+- [ ] **Not** `-Xmaxwarns`. Its 100-cap has never misled anything here, and lifting it turns
+      `-Xlint:deprecation` into thousands of lines on every band. Out of scope, stated so.
+
+### 44.2 — the guard: `CompilerErrorCapTest`
+
+🔴 **A test that greps `build.gradle` for the string `-Xmaxerrs` is the 14th/15th vacuous guard
+again** — *"the string appears in the file"* proved nothing twice already this month. The file text
+is not the fact; **what the `compileJava` task resolved** is.
+
+So the guard reads the **effective `compilerArgs` of the realized `compileJava` task**, handed over
+as a system property the way R-aa hands over `mcmmo.build.javaVersion`:
+
+- [ ] build.gradle exports `mcmmo.build.compilerArgs` — the joined args of `compileJava` **as
+      resolved**, not a separately-computed string.
+- [ ] `inputs.property` on it, or `:test` serves a **cached pass** after the args change. That exact
+      failure was measured on 2026-08-18 and made three workflow mutations score *"not caught"*.
+- [ ] The test asserts `-Xmaxerrs` is present **and its value parses as an integer above 100** — the
+      number 100 is the defect, so an assertion that does not name it cannot fail for the right
+      reason.
+- [ ] **Watch it fail first**, with the flag removed, and read the message.
+
+🔑 This catches what a grep cannot: `compilerArgs` moved to a `withType` block that does not match
+`compileJava`, or overwritten later by an `= [...]` assignment. Both leave the string in the file.
+
+### 44.3 — the sweep, per rule 1
+
+- [ ] `master` first, then cherry-pick to all **eight** bands, each carrying `Backport-of: <sha>`.
+- [ ] `mc/26.1.2` gets it too — it is where §42 hit the cap, and where the band-local fix was
+      reverted rather than kept.
+- [ ] Gate 10 (`branch-file-identity-audit.py`) does **not** cover `build.gradle`, and gate 11
+      (`gradle-key-identity-audit.py`) covers `gradle.properties`, not this file. **Nothing
+      cross-branch enforces this one**, which is exactly why the sweep is part of the same session
+      rather than a follow-up.
+
+### 44.4 — 🔴 NOTHING IS PUSHED, and that is a decision, not timidity
+
+`build.gradle` is **inside `release.yml`'s `paths:` filter**. A push therefore fires a release run on
+every branch it touches, and `mod_version` is `1.3.0-SNAPSHOT` on all nine while `v1.3.0` is already
+published — so **R-t's stale-version gate refuses, nine times.** Nine red runs, reporting to a tab
+nobody opens (**R11**), for a change that alters **no shipped bytecode whatsoever**.
+
+Owner ruling (2026-08-26): **commit all nine, push none.** It rides out with the next change that
+bumps `mod_version`, exactly as the carried-debt row said it should.
+⚠️ **The consequence to plan around: nine local branches sit ahead of the remote until then.** Every
+cross-branch gate here prefers **remote** refs (`drift-audit.py`'s `band_branches()`, gate 10's
+`origin/master`), so re-running them now grades a remote that has never seen this commit and prints a
+confident, useless *"clean"*. **Do not read a green gate 7/10 this session as evidence the sweep
+landed** — `git log --grep` over the local branches is the only honest reading until the push.
+
+### What I am NOT doing
+
+* **Not pushing anything.** See 44.4.
+* **Not bumping `mod_version`** to manufacture a green release run for a build-config change.
+* **Not lifting `-Xmaxwarns`.** See 44.1.
+* **Not touching `scripts/rename-to-official.py`**, which already lifts the cap itself via an init
+  script (`--maxerrs`, default 100,000). It is unaffected either way.
+
+### Rollback
+
+| step | undo |
+|---|---|
+| 44.1 / 44.2 | `git revert <sha>` on `master` — build config and one test file, nothing generated |
+| 44.3 | `git revert <sha>` per band, or `git reset --hard <recorded sha>` **only while the branch is unpushed** — the pre-change tips are recorded in 44.5 before the first cherry-pick |
+| all of it | 🟢 **Zero remote blast radius: nothing is pushed, no tag moves, no release is touched.** This is the cheapest section in the file to reverse, and it stays that way only while 44.4 holds |
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
