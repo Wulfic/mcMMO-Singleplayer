@@ -62,6 +62,7 @@ from loomjar import (  # noqa: E402
     gradle_prop,
     gradle_prop_opt,
     cached_jars,
+    version_key,
 )
 
 REPO = Path(__file__).resolve().parent.parent
@@ -113,14 +114,20 @@ def refuse_cross_naming(versions: list[str], nrecords: int) -> list[str]:
     skipped version reads as a clean run, which is exactly how section 37's `--require-bands 8`
     managed to print "No drift" over an exit code of 2.
     """
+    return [v for v, _ in _cross_naming(versions, nrecords, report=True)]
+
+
+def _cross_naming(
+    versions: list[str], nrecords: int, report: bool
+) -> list[tuple[str, str]]:
     mine = branch_naming()
     wrong = []
     for v in versions:
         jar, naming = jar_for(v)
         if jar is not None and naming != mine:
             wrong.append((v, naming))
-    if not wrong:
-        return []
+    if not wrong or not report:
+        return wrong
     print(
         f"\n❌ REFUSING {len(wrong)} version(s): their cached jar is not in this branch's naming.\n"
         f"   This branch's mc-surface.txt is {mine}-named ({SURFACE.name}, "
@@ -135,7 +142,37 @@ def refuse_cross_naming(versions: list[str], nrecords: int) -> list[str]:
         "   reported as the former. Probe a branch against versions IT ships.",
         file=sys.stderr,
     )
-    return [v for v, _ in wrong]
+    return wrong
+
+
+def probeable_versions(nrecords: int) -> list[str]:
+    """The auto-discovered default set, filtered to versions this branch can actually probe.
+
+    🔑 WHY THIS IS A FILTER AND `refuse_cross_naming` IS A REFUSAL -- they are answers to two
+    different questions, and collapsing them breaks one of the two.
+
+    An EXPLICIT `--versions 1.21.8,26.2` is a request for a specific comparison. Honouring it
+    across a naming boundary produces a false band boundary, and quietly dropping half of it
+    produces a table that answers a question nobody asked. So that refuses.
+
+    The DEFAULT set is "every version cached on this box", and since section 38 that is both
+    caches -- so on a yarn band it now contains 26.1 and 26.2, and on master it contains all 19
+    yarn versions. Refusing there would make the bare `python scripts/probe-bands.py` invocation
+    fail on every branch in the repo, which is a regression dressed as strictness. Nothing is
+    misreported by leaving a version out of a set the tool chose itself, PROVIDED it is said out
+    loud -- which is the whole difference between a filter and a silent skip.
+    """
+    all_cached = cached_versions()
+    wrong = dict(_cross_naming(all_cached, nrecords, report=False))
+    keep = [v for v in all_cached if v not in wrong]
+    if wrong:
+        mine = branch_naming()
+        print(
+            f"note: {len(wrong)} cached version(s) are not {mine}-named and are not in the "
+            f"default set: {', '.join(sorted(wrong, key=version_key))}\n"
+            f"      (naming this branch cannot probe. Ask for one explicitly and it REFUSES.)"
+        )
+    return keep
 
 
 def load_surface() -> list[tuple[str, str]]:
@@ -495,16 +532,19 @@ def main() -> int:
     if args.self_test:
         return selftest_decl_parsing()
 
-    versions = [v.strip() for v in args.versions.split(",") if v.strip()] or cached_versions()
-    if not versions:
-        print("error: no cached versions. Resolve them through Loom first.", file=sys.stderr)
-        return 2
+    explicit = [v.strip() for v in args.versions.split(",") if v.strip()]
 
     recs = load_surface()
     classes = sorted({o for k, v in recs if (o := owner_of(k, v))})
-    print(f"{len(recs)} records over {len(classes)} distinct classes; versions: {', '.join(versions)}")
-    print(f"this branch is {branch_naming()}-named")
+    print(f"{len(recs)} records over {len(classes)} distinct classes; "
+          f"this branch is {branch_naming()}-named")
 
+    versions = explicit or probeable_versions(len(recs))
+    if not versions:
+        print("error: no cached versions this branch can probe. Resolve them through Loom first.",
+              file=sys.stderr)
+        return 2
+    print(f"versions: {', '.join(versions)}")
     # 🔴 BEFORE ANY PROBING. A cross-naming probe does not fail, it returns a full sweep of ABSENT
     # rows, and the control check relocates rather than catching it. See refuse_cross_naming.
     if refuse_cross_naming(versions, len(recs)):
