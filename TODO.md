@@ -35,7 +35,7 @@ status, because nothing reads it.** Re-measure before quoting this table.
 | | state |
 |---|---|
 | branches | **NINE, all on the remote.** `master` (`26.2`) + `mc/26.1.2` + the seven `1.21.x` bands |
-| vs `origin` | **every branch is ahead by exactly 3**, deliberately unpushed — §44's two commits plus §45's. Nothing is behind. ⚠️ The previous edition of this row said **1** while the true count was already **2**; re-measure with `git rev-list --left-right --count origin/<b>...<b>` rather than quoting it |
+| vs `origin` | **every branch is ahead by four**, deliberately unpushed — §44's two commits (code, docs) plus §45's two. Nothing is behind. 🔴 **Do not quote this number; run `git rev-list --left-right --count origin/<b>...<b>`.** This row has now been wrong **twice in two commits**: it said `1` when the truth was `2`, was corrected to `3`, and was stale again one commit later because the docs commit that corrected it also incremented it. **A status row cannot count the commit it is written in** |
 | `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.0-SNAPSHOT` |
 | releases | **NINE published at `v1.3.0`** (§43.4) — the declared 16-version scope is downloadable |
 | build | ✅ **green on all nine**, each built on its own band this session (§44.3) |
