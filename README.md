@@ -6,10 +6,10 @@ super abilities for vanilla Minecraft — no server, no database, no plugin plat
 
 | | |
 |---|---|
-| **Minecraft** | 1.21 – 1.21.11 — one build per version band, see [Supported versions](#supported-versions) |
+| **Minecraft** | 1.21 – 1.21.11 and 26.2 — one build per version band, see [Supported versions](#supported-versions) |
 | **Mod loader** | Fabric Loader ≥ 0.19.3 |
 | **Required dependency** | Fabric API |
-| **Java** | 21+ |
+| **Java** | 21+ on the `1.21.x` bands; **25+** on the `26.x` line, which is Minecraft's own requirement there |
 | **License** | GPL‑3.0‑only (inherited from upstream mcMMO) |
 
 📖 **[Full documentation is on the Wiki](../../wiki)** — per‑skill pages, every sub‑skill's numbers,
@@ -24,6 +24,7 @@ the mod's Minecraft‑facing surface is identical, so a single jar covers all of
 
 | Minecraft | Jar file | Fabric API | Mod Menu | Cloth Config |
 |---|---|---|---|---|
+| **26.2** | `mcmmo-<version>+mc26.2.jar` | `0.158.0+26.2` | `20.0.1` | `26.2.155` |
 | **1.21.11** | `mcmmo-<version>+mc1.21.11.jar` | `0.141.4+1.21.11` | `17.0.0` | `21.11.153` |
 | **1.21.9 – 1.21.10** | `mcmmo-<version>+mc1.21.9-1.21.10.jar` | `0.138.4+1.21.10` | `16.0.1` | `20.0.149` |
 | **1.21.6 – 1.21.8** | `mcmmo-<version>+mc1.21.6-1.21.8.jar` | `0.136.1+1.21.8` | `15.0.2` | `19.0.147` |
@@ -32,7 +33,9 @@ the mod's Minecraft‑facing surface is identical, so a single jar covers all of
 | **1.21.2 – 1.21.3** | `mcmmo-<version>+mc1.21.2-1.21.3.jar` | `0.114.1+1.21.3` | `12.0.1` | `16.0.143` |
 | **1.21 – 1.21.1** | `mcmmo-<version>+mc1.21-1.21.1.jar` | `0.116.15+1.21.1` | `11.0.4` | `15.0.140` |
 
-Every band needs **Fabric Loader ≥ 0.19.3** and **Java 21+**. The `+mc…` suffix on the filename is
+Every band needs **Fabric Loader ≥ 0.19.3**. The `1.21.x` bands need **Java 21+**; the `26.x` line
+needs **Java 25+**, because that is what Minecraft itself requires there. The `+mc…` suffix on the
+filename is
 the band the jar serves: a single version (`+mc1.21.5`) or a range written out at both ends
 (`+mc1.21.6-1.21.8`, which covers `1.21.7` as well). Pick the jar whose label contains your Minecraft
 version — the name is the whole answer, so there is nothing to cross-reference.
@@ -43,7 +46,8 @@ startup with a clear message instead of misbehaving quietly. The two are kept in
 (`BandVersionLabelTest`), so a filename that promises a version the loader would refuse fails the
 build rather than reaching a download page.
 
-Minecraft **1.20.6 and older are not supported**, and neither is the `26.x` line yet.
+Minecraft **1.20.6 and older are not supported**. The `26.x` line **is** supported: `26.2` has its
+own band above.
 
 ### What differs between bands
 
@@ -352,16 +356,18 @@ exist only for older ones.
 
 | Branch | Band |
 |---|---|
-| `master` | 1.21.11 |
+| `master` | 26.2 |
+| `mc/1.21.11` | 1.21.11 |
 | `mc/1.21.10` | 1.21.9 – 1.21.10 |
 | `mc/1.21.8` | 1.21.6 – 1.21.8 |
 | `mc/1.21.5` | 1.21.5 |
 | `mc/1.21.4` | 1.21.4 |
 | `mc/1.21.3` | 1.21.2 – 1.21.3 |
 
-A branch pins its own `minecraft_version` and `yarn_mappings` in `gradle.properties` and its own
-band range in `fabric.mod.json`, so checking one out and running `./gradlew build` produces that
-band's jar with no further configuration.
+A branch pins its own `minecraft_version`, its own `java_version` and its own band range in
+`fabric.mod.json`, so checking one out and running `./gradlew build` produces that band's jar with
+no further configuration. The `1.21.x` branches also pin `yarn_mappings`; the `26.x` line carries no
+such key, because Minecraft ships unobfuscated from `26.1` and yarn publishes nothing for it.
 
 Fixes land on `master` first and are propagated to the band branches, each propagation commit
 carrying a `Backport-of: <sha>` trailer naming the `master` commit it came from. Releases are

@@ -1100,7 +1100,7 @@ destroys uncommitted work — `git status --short <path>` first.
 
 ---
 
-## §40 — the gate-7 waiver file — 🔴 IN FLIGHT (ruling **R-ab**, owner 2026-08-26)
+## §40 — the gate-7 waiver file — ✅ DONE (ruling **R-ab**, owner 2026-08-26)
 
 **The problem is in the §38 block above and is unchanged**: the same **11** `master`-only `26.x`
 commits read MISSING on every band, they cannot be back-ported by construction, they should have
@@ -1156,19 +1156,76 @@ so the operator can never read a waived commit as a propagated one.
 
 ### Steps
 
-- [ ] **40.1** `scripts/drift-waivers.txt` — `cutoff: bdc429115`, the 11 shas, one reason each.
-- [ ] **40.2** `scripts/drift-audit.py` — parse + validate + the `retro_waived` classification, the
+- [x] **40.1** `scripts/drift-waivers.txt` — `cutoff: bdc429115`, the 11 shas, one reason each.
+- [x] **40.2** `scripts/drift-audit.py` — parse + validate + the `retro_waived` classification, the
       stale-waiver report, and the counts in `format_reports()` / `--json`.
-- [ ] **40.3** Extend `--self-test` with the eight rules above **plus the anti-vacuity case**: a
+- [x] **40.3** Extend `--self-test` with the eight rules above **plus the anti-vacuity case**: a
       genuinely forgotten commit must STILL be reported MISSING while waivers are in play. A waiver
       mechanism that swallows the real signal is worse than the red gate it replaced.
-- [ ] **40.4** `AGENTS.md` — document the waiver as the narrow, cutoff-locked exception to rule 3.
+- [x] **40.4** `AGENTS.md` — document the waiver as the narrow, cutoff-locked exception to rule 3.
       It is the only tracked agent-facing doc; a mechanism that lives only in a script is a
       mechanism the next agent works around.
-- [ ] **40.5** Run gate 7 honestly — inside `git clone --local --no-hardlinks . <scratch>`, because
+- [x] **40.5** Run gate 7 honestly — inside `git clone --local --no-hardlinks . <scratch>`, because
       `band_branches()` prefers REMOTE refs and a bare run grades the stale remote.
-- [ ] **40.6** Sweep: `AGENTS.md` + `scripts/**` to every band. **No `gradle.properties`, no
+- [x] **40.6** Sweep: `AGENTS.md` + `scripts/**` to every band. **No `gradle.properties`, no
       `release.yml`, no `src/**` → outside `release.yml`'s `paths:` filter → no release run fires.**
+
+### ✅ Outcome — measured 2026-08-26, all eight branches
+
+**Gate 7 exits 0 for the first time since §33.** Run honestly, inside
+`git clone --local --no-hardlinks . <scratch>`:
+
+```
+=== origin/mc/1.21.1    17 propagated,  9 waived, 11 retro-waived, 0 MISSING
+=== origin/mc/1.21.3    40 propagated, 10 waived, 11 retro-waived, 0 MISSING
+=== origin/mc/1.21.4    47 propagated, 12 waived, 11 retro-waived, 0 MISSING
+=== origin/mc/1.21.5    48 propagated, 12 waived, 11 retro-waived, 0 MISSING
+=== origin/mc/1.21.8    51 propagated, 12 waived, 11 retro-waived, 0 MISSING
+=== origin/mc/1.21.10   60 propagated, 13 waived, 11 retro-waived, 0 MISSING
+=== origin/mc/1.21.11   11 propagated,  8 waived, 11 retro-waived, 0 MISSING
+No drift  (77 retro-waived; those never reached a band and never will)
+```
+
+🔑 **The intermediate run is the proof the mechanism works.** Immediately after the `master`
+commit and *before* the sweep, gate 7 reported the eleven as `retro-waived` and **exactly one**
+`MISSING` — §40's own commit, genuinely un-propagated at that moment. That is the twelfth-commit
+scenario, live: previously it would have been the twelfth line in a block of eleven that everyone
+had learned to scroll past.
+
+Gates **9, 10 and 11 also exit 0** on all eight branches. Gate 10 is now **50 shared paths** — the
+new `scripts/drift-waivers.txt` joined the set automatically, because the guard expands its globs
+over the **union** of every branch's tree rather than a hardcoded list.
+
+### 🔑🔑 The self-test was VACUOUS on its first pass, in two ways, and both had to be fixed
+
+Nine mutations were run against the implementation. Seven were caught immediately. **The two that
+were not are the two that mattered:**
+
+1. **Deleting the retroactivity lock scored GREEN.** `must_refuse()` asserted only that *some*
+   `WaiverError` was raised, and a second, unrelated check (`rc != 0` on the ancestor probe)
+   happened to raise on the same input. The lock is the entire reason this file does not repeal
+   rule 3, and the test proving it was decoration.
+2. **Which meant a `load_waivers()` that refused EVERY input would have passed all nine refusal
+   cases** and proved nothing at all.
+
+Both closed by asserting that **each refusal names its own reason**. Re-run: **9/9 caught**, and
+the two new mutations added for them (`the ancestor check deleted outright`, `load_waivers refuses
+everything`) both fire.
+
+⚠️ **This is the 14th vacuous-guard sighting in this repo and it followed the standard shape** —
+the assertion was true, the code did refuse, and the thing being *measured* was not the thing being
+*claimed*.
+
+### ⚠️ What this does NOT buy
+
+* **`retro-waived` is not `propagated`.** Those eleven commits did not reach a band and never will.
+  The counts are printed separately for exactly that reason; folding them together would make the
+  waiver file a way to launder drift into coverage.
+* **A green gate 7 still says nothing about a fix authored ON a band** — the auditor asks whether a
+  `master` commit reached a band, never whether a band holds a fix `master` lacks. That is R-y's
+  guard, and it is the direction that has actually produced a defect (`mc/1.21.1`'s wiki sentence).
+* **The weekly CI leg is still weekly, still default-branch-only, still reporting to a tab nobody
+  opens** (R11). Gate 7 going green does not change that; the hand-run before a push is the check.
 
 ### What I am NOT doing
 
@@ -1186,7 +1243,7 @@ uncommitted work; `git status --short <path>` first.
 
 ---
 
-## §41 — the R-aa bundle: per-band `java_version`, the `mod_version` bump, commit B, the docs pass
+## §41 — the R-aa bundle — 🔶 master DONE, the seven-band sweep is what remains
 
 ✅ **AUTHORISED (owner, 2026-08-26): build the whole bundle.** These four land as ONE change per
 branch because each of them alone touches `gradle.properties`, which is **inside `release.yml`'s
@@ -1219,8 +1276,10 @@ replace one drifting source of truth with two.
 
 ### 41.2 — the `mod_version` bump
 
-🔴 **OWNER CALL — R-w set the last value explicitly and this one is the same shape.** `v1.2.0`
-shipped on all seven branches (§23), so R-t refuses any push until this moves. Ask before writing it.
+✅ **RULED (owner, 2026-08-26): `1.3.0-SNAPSHOT`.** Minor, not patch — consistent with R-w, which
+chose a minor for the `MACES` gate on the grounds that a skill vanishing on a band is a
+user-visible behaviour change rather than a bug fix. Supporting a whole new Minecraft generation
+and adding a band is strictly larger than that.
 
 ### 41.3 — commit B
 
@@ -1234,6 +1293,62 @@ The suite's **one red row** — `BandDocsMatchRealityTest#everyVersionThisBandSh
 10 (R-y), so the docs pass is byte-identical on all eight branches or gate 10 goes red.**
 ⚠️ **Gradle SKIPS the doc-guard tests**: a docs-only change leaves `:test` up-to-date. **Read the
 `N executed` line, never `SUCCESSFUL`.**
+
+### ✅ Outcome on `master` — measured 2026-08-26
+
+| | |
+|---|---|
+| build | `classes` + `testClasses` green on `26.2` with the level read from the key |
+| suite | **1,858 executed, 0 failures, 0 errors** — the docs row that had been red since §33 is closed. Previous best was 1,852 run / **1 red** |
+| new guard | `BandToolchainLevelTest`, 6 tests, **7/7 mutations caught** |
+| bytecode | class-file major **69** = Java 25, matching the declared `java_version=25` |
+
+🔑🔑 **The guard that matters reads the CLASS FILE, not another file.** Checking that the build
+handed the suite a number matching `gradle.properties` proves only that two strings agree — a
+`build.gradle` that had kept its literal `25` and also passed a literal `25` would pass it. Reading
+bytes 6–7 of the test's own `.class` proves `javac` actually ran with `--release <n>`, which is the
+fact the player's launcher enforces. That failure is silent in every other direction: a band
+compiled against the wrong release **builds** clean, **tests** clean, and dies at the launcher with
+`UnsupportedClassVersionError`.
+
+### 🔑 Two things the mutation run found that were not planned
+
+1. **One assertion was VACUOUS and had to be strengthened.** Deleting the `$GITHUB_OUTPUT` write
+   from the workflow's read step left the whole suite **green**: `theReleaseWorkflowReadsTheLevelFrom
+   GradleProperties` matched `java_version=` inside the `grep` command itself and
+   `steps.jdk.outputs.java_version` on the `setup-java` line that referenced an output which no
+   longer existed. The workflow would have installed **nothing**, and failed only in CI, on a real
+   release run. Closed with a pattern that requires the export.
+2. **A second, independent guard already exists and was not designed.** Mutating
+   `options.release = javaLevel` to a hardcoded `21` never reaches the test at all — Gradle's
+   JVM-version attribute matching refuses to **resolve** ModMenu and Cloth Config (built for 25)
+   against a 21 toolchain, and the build dies during dependency resolution. Worth knowing, because
+   it means the bytecode assertion cannot be exercised that way; it is exercised by mutating its
+   own offset constant instead.
+
+### ⬜ The seven-band sweep — what is NOT a file copy
+
+⚠️⚠️ **`gradle.properties` CANNOT be copied from `master` on a band.** Three keys in it are
+per-band and copying them would break the band outright:
+
+| key | on `master` | on a `1.21.x` band |
+|---|---|---|
+| `java_version` | `25` | **`21`** |
+| `minecraft_version` | `26.2` | the band's own |
+| `supported_minecraft_versions` | `26.2` | the band's own |
+| `mod_version` | `1.3.0-SNAPSHOT` | **same** (R-p) |
+| `mockito_version` | `5.23.0` | **same** — this is §37's commit B |
+
+⚠️ **`build.gradle` is not a file copy either.** The bands' copies differ from `master`'s beyond
+the Java block (mappings, for one), so the read-the-key change is applied surgically per band.
+
+Copied verbatim, because a guard requires it: `.github/workflows/release.yml` and
+`scripts/gradle-key-identity-audit.py` and `README.md` + `wiki/**` (gate 10, byte-identical), and
+`BandToolchainLevelTest.java` (propagatable `src/`).
+
+🔴 **This sweep touches `gradle.properties`, so it IS inside `release.yml`'s `paths:` filter.** It
+fires a release run on every branch it is pushed to — which is exactly why R-aa, commit B and the
+bump were bundled into one commit, and why nothing here is pushed.
 
 ### What I am NOT doing
 

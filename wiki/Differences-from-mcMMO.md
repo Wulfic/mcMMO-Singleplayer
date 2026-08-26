@@ -117,7 +117,7 @@ They are listed here for completeness rather than as a warning, because **there 
 
 ## Blocked, not dropped
 
-**Alchemy Concoctions tier gating.** The custom-ingredient tree in `potions.yml` loads and works, but the level gate that should restrict which tier you can brew has no seam to hook in 1.21.11 — the relevant vanilla method is static and carries no block position, so there's no way to find out whose brewing stand it is.
+**Alchemy Concoctions tier gating.** The custom-ingredient tree in `potions.yml` loads and works, but the level gate that should restrict which tier you can brew has no seam to hook — the relevant vanilla method is static and carries no block position, so there is no way to find out whose brewing stand it is. That is a property of the method rather than of any one Minecraft version.
 
 ---
 
