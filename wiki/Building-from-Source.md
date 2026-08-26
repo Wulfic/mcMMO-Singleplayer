@@ -95,6 +95,7 @@ Each supported Minecraft version band is its own branch. `master` **is** the new
 | Branch | Band |
 |---|---|
 | `master` | 26.2 |
+| `mc/26.1.2` | 26.1 – 26.1.2 |
 | `mc/1.21.11` | 1.21.11 |
 | `mc/1.21.10` | 1.21.9 – 1.21.10 |
 | `mc/1.21.8` | 1.21.6 – 1.21.8 |
