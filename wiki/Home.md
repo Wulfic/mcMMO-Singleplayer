@@ -6,7 +6,7 @@ RPG skills, levelling, sub-skills and active super abilities for vanilla Minecra
 
 | | |
 |---|---|
-| **Minecraft** | 1.21 – 1.21.11 and 26.2 — one build per version band, see [Installation](Installation#supported-versions) |
+| **Minecraft** | 1.21 – 1.21.11 and 26.1 – 26.2 — one build per version band, see [Installation](Installation#supported-versions) |
 | **Mod loader** | Fabric Loader ≥ 0.19.3 |
 | **Required dependency** | Fabric API |
 | **Java** | 21+ on the `1.21.x` bands; 25+ on the `26.x` line |
