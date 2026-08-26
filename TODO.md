@@ -1839,7 +1839,7 @@ ee1340bd7'` across the local branches is the only honest reading — it returns 
 
 ---
 
-## §45 — R14: stop Mockito self-attaching, so the suite stops flaking — 🔴 IN FLIGHT on `master`
+## §45 — R14: stop Mockito self-attaching, so the suite stops flaking — ✅ DONE on `master` AND all eight bands, PUSHED NOWHERE
 
 **Tier 2.** One shared file (`build.gradle`), one new guard, nine branches. It carries the same push
 deferral as §44 and rides the same `mod_version` bump — see 45.6.
@@ -1969,6 +1969,41 @@ means the warning is expected on every one of them today, and must be gone on ev
 filter and all nine branches sit at `1.3.0-SNAPSHOT` with `v1.3.0` published, so a push fires nine
 release runs that R-t's stale-version gate refuses. §45 rides the next `mod_version` bump **with
 §44** — one push, two build-config changes, nine branches.
+
+### 45.7 — outcome, and the tips to reverse it
+
+✅ **Done on `master` and all eight bands. Pushed nowhere.** `master` `b92be8721`, then one
+cherry-pick per band, each carrying `Backport-of: b92be8721` — verified present **8 of 8** with
+`git log <band> --grep='Backport-of: b92be8721'`, not assumed from the cherry-pick exiting 0.
+
+| branch | pre-§45 tip (the `reset --hard` target) | §45 tip | executed / failed |
+|---|---|---|---|
+| `master` | `6304d4b33` | `b92be8721` | **1,865 / 0** |
+| `mc/26.1.2` | `6daca0cee` | `5cc291488` | **1,865 / 0** |
+| `mc/1.21.11` | `6683f04b9` | `f3e6e3ba5` | **1,859 / 0** |
+| `mc/1.21.10` | `ff953feff` | `440214f4a` | **1,859 / 0** |
+| `mc/1.21.8` | `dd95f89bf` | `8afc4e18b` | **1,859 / 0** |
+| `mc/1.21.5` | `462e57ae7` | `11878cf22` | **1,860 / 0** |
+| `mc/1.21.4` | `606ae3a62` | `0f01ddfa7` | **1,867 / 0** |
+| `mc/1.21.3` | `3cccef825` | `94b161010` | **1,861 / 0** |
+| `mc/1.21.1` | `505ac1f41` | `8a40b1132` | **1,863 / 0** |
+
+Every branch is **+3 against `origin`, 0 behind**. Each count is **+4** on that branch's own
+pre-§45 figure — the guard's four tests, and nothing else moved. ⚠️ The spread across bands is
+per-band gating, as always; it is not a master-vs-band split.
+
+🔑 **The evidence is the missing warning, not the green suite.** The suite was already green on a
+re-run *with* the defect, so a pass proves nothing on its own. What changed is mechanical: the
+*"Mockito is currently self-attaching"* line and the JVM's *"A Java agent has been loaded
+dynamically"* warning were **present** in `build/test-results/test/` before, and are **absent from
+every file** on all nine branches after. Each fork now logs *"Sharing is only supported for boot
+loader classes"* instead — four of them, one per fork, which is the agent loading at VM start.
+
+📌 **`mc/1.21.10` is the band R14 was measured on** (449 of 1846 red, 2026-08-25). It is now
+1,859 / 0 with zero self-attach warnings.
+
+⚠️ **Gradle discards a fork's stderr**, so none of the above is visible on the console on any branch.
+Read `build/test-results/test/*.xml`. A silent console is not evidence.
 
 ### Rollback
 
@@ -2187,6 +2222,14 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
 - [x] ✅ **`mc/26.1.2`'s boot check and gameplay smoke — CLOSED 2026-08-26 (§43.1),** before the
       band was ever pushed: boot-check **exit 0** (0 ERROR, 0 mixin failures) and gameplay smoke
       **30 passed / 0 failed / 0 inconclusive**, with the mod-less control failing as it must.
+
+- [x] ✅ **R14's suite flake — CLOSED 2026-08-26 (§45).** Mockito's agent is installed at VM start
+      via `-javaagent` on `master` (`b92be8721`) and cherry-picked to all eight bands; all nine built
+      green with the self-attach warning gone from every result file. Guarded by
+      `MockitoAgentPreinstalledTest`, which reads **this JVM**, not `build.gradle`'s text. 🔴
+      **Committed, NOT pushed** — it rides the next `mod_version` bump with §44, see §45.6.
+      ⚠️ R14's originally-recorded remedy (`-XX:+EnableDynamicAgentLoading`) was **wrong**: it is
+      compared against a warning string and never reaches the self-attaching call. Do not re-add it.
 
 - [ ] 🔴 **Manifest debt piece 1** — see *Other open work*. Piece 2 shipped as
       `scripts/manifest-identity-audit.py` (Phase 18).
