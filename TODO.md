@@ -35,7 +35,7 @@ status, because nothing reads it.** Re-measure before quoting this table.
 | | state |
 |---|---|
 | branches | **NINE, all on the remote.** `master` (`26.2`) + `mc/26.1.2` + the seven `1.21.x` bands |
-| vs `origin` | **every branch is ahead by four**, deliberately unpushed — §44's two commits (code, docs) plus §45's two. Nothing is behind. 🔴 **Do not quote this number; run `git rev-list --left-right --count origin/<b>...<b>`.** This row has now been wrong **twice in two commits**: it said `1` when the truth was `2`, was corrected to `3`, and was stale again one commit later because the docs commit that corrected it also incremented it. **A status row cannot count the commit it is written in** |
+| vs `origin` | **every branch is ahead by six** once this commit lands — §44's two, §45's three, §46's one. Nothing is behind. Measured `0 6` on all nine. Nothing is behind. 🔴 **Do not quote this number; run `git rev-list --left-right --count origin/<b>...<b>`.** This row has now been wrong **twice in two commits**: it said `1` when the truth was `2`, was corrected to `3`, and was stale again one commit later because the docs commit that corrected it also incremented it. **A status row cannot count the commit it is written in** |
 | `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.0-SNAPSHOT` |
 | releases | **NINE published at `v1.3.0`** (§43.4) — the declared 16-version scope is downloadable |
 | build | ✅ **green on all nine**, each built on its own band this session (§44.3) |
@@ -317,10 +317,12 @@ The band cannot run its own gates until its tooling speaks official names.
       `build.gradle` names no mappings artifact — so the shipping artifact is the plain `jar` task.
       `./gradlew remapJar` fails with *"Task 'remapJar' not found"* on this branch and works on every
       band branch, which is a per-band build-graph difference no gate in this repo looks at.
-- [ ] 🔴 **The docs pass** — `README.md` + `wiki/**`, all seven branches, **one commit** (owner-
-      sequenced). `README.md` has no `26.2` row and its floor sentence still says *"neither is the
-      `26.x` line yet"*; that is the single red test in the suite, deliberately left red. Both files
-      are in R-y's byte-identity set, so the edit lands everywhere at once or not at all.
+- [x] ✅ **The docs pass — DONE.** `README.md` carries the `26.2` and `26.1 – 26.1.2` rows, and the
+      *"neither is the `26.x` line yet"* floor sentence is gone from `README.md` and `wiki/**` alike
+      (grepped 2026-08-26, zero hits). The suite is 0-failure on all nine, so the deliberately-red
+      test is green too. ⚠️ This row sat unchecked while the work was already shipped — the same
+      *"a status row is never updated by the commit that changes the status"* shape as the vs-origin
+      row above, and the second instance found in one pass.
 - [x] ✅ **The owed gate-10/11 sweep — DONE (§37).** Gates 9, 10 and 11 all exit 0 at `--local`.
       **9 paths** for gate 10 (all `scripts/**`; `master` proved the winner on every one) and **1 key**
       for gate 11 (`mockito_version`). ⚠️ **`.gitignore` was NOT owed** — the `30.6` / `.hprof` claim
@@ -335,11 +337,12 @@ The band cannot run its own gates until its tooling speaks official names.
       75 test files importing `org.mockito`.
       🔴 `gradle.properties` is inside `release.yml`'s `paths:` filter, so the mockito half **rides the
       `mod_version` bump with R-aa** or it fires seven release runs R-t refuses. §37 splits the commits.
-- [ ] 🔴 **R-aa — the per-band `java_version` key.** Ruled, not built. `release.yml:117` still pins
-      `'21'` on all eight branches while `26.x` needs 25, and the workflow must stay byte-identical
-      under P19-1. Deferred deliberately: `release.yml` is inside its own `paths:` filter, so touching
-      it on the six live bands fires six release runs that R-t's stale-version gate refuses. **Bundle
-      it with the `mod_version` bump when `26.2` actually ships.**
+- [x] ✅ **R-aa — the per-band `java_version` key — BUILT (§41.1).** `release.yml` no longer pins a
+      number: a *"Read the JDK level this band builds with"* step reads `java_version` from
+      `gradle.properties`, errors on an absent or non-integer value, and feeds
+      `java-version: ${{ steps.jdk.outputs.java_version }}` at line 142. Verified against the file
+      2026-08-26. ⚠️ This row still read *"Ruled, not built. `release.yml:117` still pins `'21'`"*
+      four sections after §41 marked all five of its sub-boxes done — third instance in one pass.
 - [ ] 🟡 **R13 — the general overload-rebind shape.** §33.4 closed the `equals` family only. *Any*
       method whose narrow overload is deleted while a wider one survives rebinds **silently**, because
       javac must accept it by the language rules. No gate covers the general case.
@@ -2015,6 +2018,134 @@ Read `build/test-results/test/*.xml`. A silent console is not evidence.
 
 ---
 
+## §46 — `SPAWN_ITEM_USE` gets harness coverage — ✅ DONE on `master`, PUSHED NOWHERE
+
+**The gap.** `MobOrigins.classify` maps three constants onto `MobOrigin.PLAYER_PLACED` —
+`SPAWN_ITEM_USE`, `COMMAND`, `DISPENSER` — and the gameplay smoke covers **`COMMAND` alone**
+(`combat-summon-control`). `SPAWN_ITEM_USE` is unit-tested only. That is not a theoretical gap: on
+`mc/1.21.1` the two paths **came apart** — `loadEntityWithPassengers` lost its `SpawnReason`
+parameter, so `/summon`-ed mobs went unstamped while spawn eggs stayed correct — and every
+structural gate stayed green through it (67/67 injectors, 4 seams applying, clean boot). Only a live
+kill found it. A band can regress the egg path today and nothing in this repo would say so.
+
+### 46.1 — five hypotheses refuted, all statically, before a line was written
+
+The 2026-08-19 attempt exhausted its budget and was withdrawn, leaving one recorded lead:
+*"check whether carpet's USE reaches `useOnBlock` at all — if not, use a **dispenser**."*
+🔴 **That lead is REFUTED, and the fallback rests on a false premise.** Read out of the jars:
+
+| # | Hypothesis | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Wrong item id | refuted 08-19 | `Replaced a slot on Tester with [Cow Spawn Egg]` |
+| 2 | Bad aim / nothing to click | refuted 08-19 | block confirmed, Rotation dump confirmed |
+| 3 | Gamemode restriction | refuted 08-19 | Survival, `spawn-protection=0` |
+| 4 | **Carpet cannot drive an ITEM interaction** | 🔴 **REFUTED** | `EntityPlayerActionPack$ActionType$1.execute` offset **196** calls `ServerPlayerGameMode.useItemOn(...)`, the vanilla route into `ItemStack#useOn` |
+| 5 | **Carpet's `itemUseCooldown` swallowed the click** | 🔴 **REFUTED** | `Action.tick` calls `inactiveTick` **before** `execute` whenever `interval == 1 && !isContinuous`, and `once()` is `(limit=1, interval=1)`. `ActionType$1.inactiveTick` stores `iconst_0` into `itemUseCooldown`. The cooldown is always zero on a `use once` |
+
+🔑 **The vanilla path is clean end to end**, so the fault was never in the mechanism:
+`useItemOn` → `blockState.useItemOn` (stone: PASS) → `useWithoutItem` (PASS) → `ItemStack.useOn`
+→ `SpawnEggItem.useOn` → `spawnMob`, which stamps **`EntitySpawnReason.SPAWN_ITEM_USE` at offset 6**.
+`SpawnEggItem.useOn` has exactly one silent-`FAIL` exit — `EntityType.canSpawn(level)` — and it
+cannot fire here: `Builder`'s constructor stores `allowedInPeaceful = true` (offset 79–81) and only
+`notInPeaceful()` clears it, which MOOSHROOM's chain never calls.
+⚠️ **`itemUseCooldown` is a real trap for any FUTURE `use interval` phase** — there `interval != 1`,
+`inactiveTick` never runs, and `execute` returns **`true`** off the cooldown branch having done
+nothing. A swallowed click that reports success. It is only `once()` that is safe.
+
+### 46.2 — the actual defect surface: the probe, not the mechanism
+
+Nothing on the vanilla side can explain the 08-19 symptom, which relocates it into the withdrawn
+phase's own code. The one trap that fits *"no error, no effect"* is the harness's own:
+🔴 **the world is `level-type=minecraft\:flat` and superflat SPAWNS COWS.** `_acquire_natural_target`
+depends on exactly that. So a `@e[type=cow,sort=nearest]` probe near the spawn point can tag a
+**worldgen** cow — which is a false PASS, not a false fail, and would have been far worse than the
+withdrawal. Whatever the 08-19 phase measured, a cow-based probe could not have proved it either way.
+
+**Ruling: the marker species must be one worldgen cannot produce here.** `minecraft:mooshroom`
+needs mushroom-fields; superflat plains never generates one, so `@e[type=minecraft:mooshroom]` is
+unambiguous by construction. `mooshroom_spawn_egg` is present in **all 14** versions in
+`scripts/mc-ids.txt`, so the choice back-ports to every band.
+
+### 46.3 — the phase
+
+- [x] ✅ `combat-spawn-egg-control` in `scripts/gameplay_smoke_scenario.py`, the twin of
+      `combat-summon-control` and placed next to it, asserting the **origin stamp directly** rather
+      than inferring it from XP staying flat — the §22 ruling that renamed its sibling.
+- [x] ✅ Marker `eggtarget-spawned` proves the use actually placed a mob (an unconfirmed action reports
+      INCONCLUSIVE, never PASS — the harness's existing rule).
+- [x] ✅ Marker `eggtarget-stamped` is the subject: `execute if data entity ... "fabric:attachments"."mcmmo:mob_origin"`.
+      **`if`, not `unless`** — a player-placed mob must HAVE the path.
+- [x] ✅ `flat=["UNARMED","SWORDS","AXES"]` with a kill, mirroring the sibling: a mob the player placed
+      pays nothing.
+- [x] ✅ The anti-vacuity floor is `3 + len(gates) + sum(len(p.up) + len(p.flat) for p in PHASES)`
+      — **derived, so adding the phase moves it by itself.** Verify it moved; a floor that did not
+      move is the 16th vacuous guard.
+
+### 46.4 — what proves it
+
+- [x] ✅ The scorer's `--self-test` first (it gates every run).
+- [x] ✅ A live `scripts/gameplay-smoke.sh` run on `26.2`, expecting the phase count to rise from 30.
+- [x] ✅ 🔑 **A mutation, not a green run.** Green proves nothing here — the phase must be shown to go
+      RED when the stamp is absent. Drive it by removing the egg from the hand (no mob → INCONCLUSIVE,
+      not PASS) and by asserting the converse (`unless data`) to prove the probe reads a real path.
+
+### 46.5 — the outcome, MEASURED on `26.2`
+
+✅ **DONE on `master`. The 08-19 verdict is reversed: carpet's `use once` DOES place a spawn egg.**
+Live evidence, `build/gameplay-smoke/26.2`: `Replaced a slot on Tester with [Mooshroom Spawn Egg]`
+→ `Added tag 'eggtarget' to Mooshroom` → `===MARK eggtarget-spawned===` →
+`===MARK eggtarget-stamped===` → `===MARK eggtarget-killed===`.
+
+| run | phase verdict | total | exit |
+|---|---|---|---|
+| **baseline** | 3 × `[PASS]` (UNARMED/SWORDS/AXES correctly stayed) | **33 passed, 0 failed, 0 inconclusive** | **0** |
+| **M1** — egg → `air` | `[INCONCLUSIVE]` missing **`eggtarget-spawned`, `eggtarget-stamped`** | 30 / 0 / 1 | **1** |
+| **M2** — `if data` → `unless data` | `[INCONCLUSIVE]` missing **`eggtarget-stamped`** only | 30 / 0 / 1 | **1** |
+
+🔑 **M2 is the assertion that matters, and it is the one that proves non-vacuity.** Under `unless`
+the marker cannot fire *precisely because the attachment path exists* — so the probe reads a real
+`fabric:attachments`.`mcmmo:mob_origin` path rather than a condition that is true either way. And
+`eggtarget-spawned` still fired under M2 while `eggtarget-stamped` did not, which shows the two
+markers are **independent**: M2 isolates the stamp, M1 takes out both.
+🔑 **M1 is confirmed at the cause, not just the symptom** — the M1 log contains **zero** occurrences
+of "mooshroom", so no mob existed to tag. The egg is the operative ingredient.
+🔑 **Both mutations exit 1**, so the failure reaches the ship gate rather than only looking red on a
+console. Baseline exits 0.
+
+✅ **The anti-vacuity floor moved BY ITSELF**, 25 → 28 (`3 + len(gates) + sum(up+flat)`): the phase's
+three `flat` assertions are counted by the derived expression, so adding a phase without assertions
+would have been caught. 30 → 33 total passes, which is that same +3.
+
+**Corroboration from a second direction, unplanned:** the baseline run logs
+`Hunter: mob-mastery counters are live — first counted kill this session was 'minecraft:cow'`, and
+the mooshroom was killed **before** that cow. The egg-spawned mob was therefore not counted toward
+mob mastery — the gate holding, observed without reference to the marker.
+⚠️ `MobOrigins.announceFirstMark` fires **once per session** (`compareAndSet`), so the egg mob emits
+no log line of its own; the `execute if data` marker is the only *direct* evidence and had to be.
+
+⚠️ **Still NOT covered: `DISPENSER`.** Of the three constants mapping to `PLAYER_PLACED`, the harness
+now drives `COMMAND` and `SPAWN_ITEM_USE`. `DISPENSER` remains unit-tested only. That is a smaller
+gap than the one just closed and is recorded rather than fixed.
+
+### What I am NOT doing
+
+- **Not the dispenser.** Its premise is refuted, and `DISPENSER` is a *different* constant —
+  it would have covered a third origin while leaving the stated gap open and reported as closed.
+- **Not touching `MobOrigins` or any mixin.** This is harness-only; `src/main` is untouched.
+- **Not R13, §31.5, or manifest debt piece 1.** Separate items, unchanged.
+
+### Blast radius and rollback
+
+🟢 **No `src/main` change, nothing generated, nothing published.** `scripts/gameplay_smoke_scenario.py`
+is under gate 10's byte-identity set, so the commit must reach every band or gate 10 goes red —
+that is the only cross-branch obligation this creates. Undo is `git revert <sha>`, or
+`git reset --hard <recorded tip>` while unpushed.
+🔴 **It does NOT ride out alone**: `scripts/**` is outside `release.yml`'s `paths:` filter, but §44
+and §45 are still unpushed on all nine branches, so any push of this branch carries them too. It
+therefore waits for the same `mod_version` bump.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
@@ -2027,28 +2158,15 @@ instead of grepping one hardcoded skill name (⚠️ the wording in `SkillAvaila
 **interface**, not prose) · the anti-vacuity floor is derived and exact at **30**, not `3 + sum(...)`
 · R-y ruled `README.md`/`wiki/` **into** the identity guard (§24).
 
-- [ ] 🔴 **THE SPAWN-EGG HALF IS NOT DONE — attempt budget exhausted, phase withdrawn.**
-      A `combat-spawn-egg-control` phase was written and **removed before commit** rather than ship a
-      red ship-gate to seven branches. The three refuted hypotheses are worth more than the code was:
+- [x] ✅ **THE SPAWN-EGG HALF IS DONE (§46, 2026-08-26) — and the 08-19 verdict was WRONG.**
+      `combat-spawn-egg-control` drives a real `mooshroom_spawn_egg` through carpet's `use once`,
+      green on `26.2`, both mutations red at exit 1. **Carpet's `use once` places a spawn egg
+      perfectly well**; the recorded *"it will not"* was a false conclusion drawn from three correct
+      refutations, and the recorded fallback was worse than useless — a **dispenser** yields
+      `SpawnReason.DISPENSER`, a DIFFERENT constant, so it would have covered a third origin while
+      reporting this gap closed. Full reasoning and the five refuted hypotheses in §46.
+      ⚠️ **`DISPENSER` is now the only `PLAYER_PLACED` constant with no harness coverage.**
 
-      **Symptom:** `player Tester use once` holding `minecraft:cow_spawn_egg` spawns nothing and logs
-      nothing — no error, no effect. Measured twice, identically.
-
-      **Refuted, each with log evidence — do NOT re-test these:**
-      1. *Wrong item id* — `Replaced a slot on Tester with [Cow Spawn Egg]`, so it IS in mainhand.
-      2. *Bad aim / nothing to click* — rewritten to the idiom `cook-campfire` and `super-ability`
-         both use successfully (`setblock 2 -60 0`, then `_look(2.0, -59.5, 0.5)` — AT the face
-         plane). Rotation dumps confirm the aim took.
-      3. *Gamemode restriction* — `Set Tester's game mode to Survival Mode`, `spawn-protection=0`.
-
-      **Where to look next:** whether fabric-carpet's `use once` reaches `ItemStack#useOnBlock` at
-      all, or only the block's own `onUse`. Every `use once` phase that works is a **block**
-      interaction; placing an entity is an **item** interaction, and no phase in this harness has ever
-      proven that path. If carpet cannot drive it, a **dispenser** loaded with the egg reaches the
-      same `spawnFromItemStack` seam with no player raycast at all.
-
-      ⚠️ Until then `SPAWN_ITEM_USE` is **covered by unit tests only** and the harness covers
-      `COMMAND` alone. That is a real gap, and it is the gap `mc/1.21.1` fell through.
 - [ ] 🔴 **THE LIVE PLAY-TEST — owner only. Oldest debt in the queue.**
       **Taming:** shoot a zombie at ~25 blocks with a wolf at your heels in **passive** mode and watch
       it close; then sneak-right-click it with a bone. **Skills tab:** neither the tab, nor a locked
