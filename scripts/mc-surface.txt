@@ -916,7 +916,7 @@ CLASS	net.minecraft.entity.attribute.DefaultAttributeRegistry
 CLASS	net.minecraft.entity.attribute.EntityAttribute
 CLASS	net.minecraft.entity.attribute.EntityAttributeInstance
 CLASS	net.minecraft.entity.attribute.EntityAttributeModifier
-CLASS	net.minecraft.entity.attribute.EntityAttributeModifier.Operation
+CLASS	net.minecraft.entity.attribute.EntityAttributeModifier$Operation
 CLASS	net.minecraft.entity.attribute.EntityAttributes
 CLASS	net.minecraft.entity.boss.BossBar
 CLASS	net.minecraft.entity.boss.ServerBossBar
@@ -1008,6 +1008,7 @@ CLASS	net.minecraft.screen.slot.FurnaceOutputSlot
 CLASS	net.minecraft.server.MinecraftServer
 CLASS	net.minecraft.server.command.CommandManager
 CLASS	net.minecraft.server.command.ServerCommandSource
+CLASS	net.minecraft.server.command.SummonCommand
 CLASS	net.minecraft.server.network.ServerPlayerEntity
 CLASS	net.minecraft.server.world.ServerWorld
 CLASS	net.minecraft.sound.SoundCategory
@@ -1089,6 +1090,7 @@ METHOD	net.minecraft.item.BlockItem#place(Lnet/minecraft/item/ItemPlacementConte
 METHOD	net.minecraft.item.BowItem#onStoppedUsing(Lnet/minecraft/item/ItemStack;Lnet/minecraft/world/World;
 METHOD	net.minecraft.screen.slot.CraftingResultSlot#onCrafted(Lnet/minecraft/item/ItemStack;)V
 METHOD	net.minecraft.screen.slot.FurnaceOutputSlot#onCrafted(Lnet/minecraft/item/ItemStack;)V
+METHOD	net.minecraft.server.command.SummonCommand#summon(Lnet/minecraft/server/command/ServerCommandSource;
 METHOD	net.minecraft.world.explosion.Explosion#affectWorld(Z)V
 MIXINCLASS	net.minecraft.advancement.criterion.BredAnimalsCriterion
 MIXINCLASS	net.minecraft.block.BeehiveBlock
@@ -1128,6 +1130,7 @@ MIXINCLASS	net.minecraft.item.BowItem
 MIXINCLASS	net.minecraft.item.HoeItem
 MIXINCLASS	net.minecraft.screen.slot.CraftingResultSlot
 MIXINCLASS	net.minecraft.screen.slot.FurnaceOutputSlot
+MIXINCLASS	net.minecraft.server.command.SummonCommand
 MIXINCLASS	net.minecraft.world.explosion.Explosion
 STATICFIELD	net.minecraft.block.Blocks#AIR
 STATICFIELD	net.minecraft.block.Blocks#ANVIL
@@ -1220,8 +1223,8 @@ STATICFIELD	net.minecraft.entity.SpawnReason#SPAWNER
 STATICFIELD	net.minecraft.entity.SpawnReason#SPAWN_EGG
 STATICFIELD	net.minecraft.entity.SpawnReason#STRUCTURE
 STATICFIELD	net.minecraft.entity.SpawnReason#TRIAL_SPAWNER
-STATICFIELD	net.minecraft.entity.attribute.EntityAttributeModifier.Operation#ADD_MULTIPLIED_TOTAL
-STATICFIELD	net.minecraft.entity.attribute.EntityAttributeModifier.Operation#ADD_VALUE
+STATICFIELD	net.minecraft.entity.attribute.EntityAttributeModifier$Operation#ADD_MULTIPLIED_TOTAL
+STATICFIELD	net.minecraft.entity.attribute.EntityAttributeModifier$Operation#ADD_VALUE
 STATICFIELD	net.minecraft.entity.attribute.EntityAttributes#GENERIC_ARMOR
 STATICFIELD	net.minecraft.entity.attribute.EntityAttributes#GENERIC_ATTACK_DAMAGE
 STATICFIELD	net.minecraft.entity.attribute.EntityAttributes#GENERIC_FOLLOW_RANGE
