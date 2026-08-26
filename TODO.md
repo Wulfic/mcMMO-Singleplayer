@@ -122,7 +122,7 @@ gate 6's `gameplay-smoke.sh` 29/29 — **neither has ever run on `26.2`.**
 |---|---|---|
 | `1.21` … `1.21.11` | 12 versions, 7 bands | ✅ **SHIPPED**, all at `v1.2.0` |
 | `26.2` | `26.2` | 🔴 **IN FLIGHT — `master`.** Compiles, suite green, **has never booted** |
-| `26.1.x` | `26.1`, `26.1.1`, `26.1.2` | ⬜ **a future band**, not part of this one — three ecosystem projects draw the line at `26.2` (§27) |
+| `26.1.x` | `26.1`, `26.1.1`, `26.1.2` | ⬜ **ONE band, MEASURED (§39)** — the three differ on **zero of 1424** records, so one branch `mc/26.1.2` serves all three. Its 84-record delta from `26.2` is already itemised. **Not cut yet** |
 | `1.20.x` | `1.20` … `1.20.6` | 🚫 **OUT OF SCOPE (R-x)** — withdrawn on scope, **never priced** |
 
 ⚠️⚠️ **Read a probe-row count as *rows to look at*, never as work to do.** The completed bands are the
@@ -260,7 +260,7 @@ largest input it will ever be given.
 | **9.1** derive the yarn→official table | ✅ **DONE (§25).** `scripts/derive-official-names.py`, three-way join through Mojang's own ProGuard map, 43-check self-test, **100% of the 1,389 MC symbols**. ⚠️ The table is `1.21.11`→`1.21.11`: it prices the **translation**, never the `26.1` API delta. Never quote the 100% as a §9 estimate |
 | **9.2** toolchain | ✅ **DONE (§27), and its premise was measured FALSE.** `26.x` builds on the **existing Loom 1.17.13**. What changed: plugin id → `net.fabricmc.fabric-loom`, `mappings` line **removed entirely**, `modImplementation` → `implementation`, Java 21 → **25** (Mojang's own manifest requirement) |
 | **9.3** translate the source **and** the tooling | ✅ **SOURCE DONE (§28–§33)**: 2,639 → 0 compile errors, 54 → 0 dead injectors, 186 → 1 red tests. ⬜ **TOOLING HALF STILL OPEN** — see below |
-| **9.4** cut the band | 🟡 **HALF DONE.** (a) *Which branch?* — ruled: `26.x` **becomes `master`** and `1.21.11` was cut to `mc/1.21.11` (R-z, honouring R-f). (b) *One band or two?* — ✅ **TWO, and it is MEASURED now (§38), not inferred.** `probe-bands.py --versions 26.1,26.2 --control 26.2` on `master`: control green, **84 of 1424 records vary**, and the two versions do **not** collapse into one band. The ecosystem split (`[26.1, 26.1.1, 26.1.2]` vs `[26.2]`) reached the same conclusion by a different route. **`master` takes `26.2` alone; `26.1.x` is a future band.** ⚠️ `26.1.1`/`26.1.2` are still unprobed — nothing here says where the boundary inside `26.1.x` falls, only that `26.1` is on the far side of one |
+| **9.4** cut the band | 🟡 **HALF DONE.** (a) *Which branch?* — ruled: `26.x` **becomes `master`** and `1.21.11` was cut to `mc/1.21.11` (R-z, honouring R-f). (b) *One band or two?* — ✅ **TWO, and it is MEASURED now (§38), not inferred.** `probe-bands.py --versions 26.1,26.2 --control 26.2` on `master`: control green, **84 of 1424 records vary**, and the two versions do **not** collapse into one band. The ecosystem split (`[26.1, 26.1.1, 26.1.2]` vs `[26.2]`) reached the same conclusion by a different route. **`master` takes `26.2` alone; `26.1.x` is a future band.** ✅ **§39 closed the residue**: `26.1.1` and `26.1.2` were Loom-resolved and probed, and all three `26.1.x` versions are **identical on 1424 of 1424 records** — so the `26.1.x` line is ONE band, `mc/26.1.2`, and the declared 16-version scope needs exactly **one more branch** |
 | **9.5** full ship gate | 🟡 **HALF DONE (§35).** `boot-check.sh` ✅ and `gameplay-smoke.sh` ✅ both green on `26.2`. The expected version-specific fixture work **did not materialise**: carpet publishes a `26.2` build and every command in the scenario parsed unchanged. What DID bite was a latent harness defect that `26.2` merely happened to expose — see §35. Gates 3–11 of the ship gate are still unrun on this branch |
 
 ### ⬜ 9.3's tooling half — what still reads yarn names
@@ -377,7 +377,7 @@ The obstacle was never the version string.
 
 ---
 
-## §38 — 9.3's tooling half: `probe-bands.py` + `javap-mc.sh` speak official names — 🔴 IN FLIGHT
+## §38 — 9.3's tooling half: `probe-bands.py` + `javap-mc.sh` speak official names — ✅ DONE
 
 **Tier 2.** Two scripts, one new shared module, a generated `BAND_TABLE.md`, and a seven-band
 gate-10 sweep. Written down before the first edit.
@@ -939,6 +939,162 @@ source comments) is in `TODO-multiversion-through-phase-21.md`. Nothing has been
 | **31** | the genuine `26.x` API delta | ✅ main **and** test tree to 0. Then found **54 of 61 injectors dead** — *the mod compiled and did nothing* |
 | **32** | re-derive every injector target | ✅ `--check` **passes**, `ZERO 54 → 0`, `OK 6 → 60`. Found blind spots 2, 3 and 4 |
 | **33** | the first real suite on `26.2` | ✅ **186 red → 1**, 1,852 executed. Found blind spot 5; the last red is the deferred docs row |
+
+---
+
+## §39 — all four non-beta `26.x` releases, MEASURED — ✅ the bands are settled
+
+**Owner-scoped 2026-08-26: probe and settle the bands ONLY.** No branch cut, no build, no ship
+gate. Those are the next section's problem, and pricing them before this measurement existed is
+what §31 (54 seam redesigns → 0) and §32.0 (8 handler rewrites → 4) both got wrong.
+
+### The scope, read from Mojang's own manifest — not from memory
+
+Exactly **four** non-beta `26.x` releases exist: **`26.1`, `26.1.1`, `26.1.2`, `26.2`.** Latest
+release is `26.2`; the newest snapshot is `26.3-snapshot-10`, so there is **no `26.3` to cover
+yet**. That matches this plan's declared scope of 16 versions (12 × `1.21.x` + 4 × `26.x`).
+
+📌 **`master` declares `supported_minecraft_versions=26.2` alone, so `26.1`, `26.1.1` and `26.1.2`
+are covered by NO branch.** Three of the four `26.x` releases ship to nobody today. That is the gap
+this section measures and the next one closes.
+
+### 38.6 left the question half-answered, and this is the other half
+
+§38 proved `26.1` and `26.2` are different bands. It said **nothing** about where the boundary
+inside the `26.1.x` line falls, and explicitly refused to write one down from the ecosystem's
+answer. Getting the rest needed two Loom resolves.
+
+`26.1.1` and `26.1.2` were **not cached**. Both were resolved through a **throwaway Gradle project
+in the scratchpad** — the repo was never touched, no `gradle.properties` edited, no branch switched:
+
+```
+settings.gradle   pluginManagement { repositories { maven 'https://maven.fabricmc.net/'; gradlePluginPortal() } }
+build.gradle      id 'net.fabricmc.fabric-loom' version '1.17.13'
+                  dependencies { minecraft "com.mojang:minecraft:${project.mcver}" }   // NO mappings line
+                  tasks.register('resolveMc') { doLast { configurations.compileClasspath.resolve().each { println it } } }
+run               ./gradlew --no-daemon -Pmcver=26.1.1 resolveMc      (~25s each)
+```
+
+⚠️ **Editing `master`'s own `gradle.properties` to provoke the resolve would have been the obvious
+move and is the wrong one** — it dirties the one file two cross-branch guards watch (R-a's
+`minecraft_version`, R-w′'s per-key audit) for a cache side effect.
+
+### 🔑 The jars were verified BEFORE the probe ran, not after
+
+A probe against a bad jar does not error — it reports **the entire Minecraft API as ABSENT**, which
+is §38's defect 2 and reads exactly like a real band boundary. So the two newly-resolved jars were
+checked independently first:
+
+| version | `net/minecraft` classes | obfuscated-shaped names |
+|---|---|---|
+| `26.1` | 10,208 | 0 |
+| `26.1.1` | 10,208 | 0 |
+| `26.1.2` | 10,208 | 0 |
+| `26.2` | 10,372 | 0 |
+
+### ✅ THE ANSWER — two bands, and the `26.1.x` line is one of them
+
+```
+probe-bands.py --versions 26.1,26.1.1,26.1.2,26.2 --control 26.2
+1433 records over 212 distinct classes; this branch is official-named
+control check: 26.2 resolves all 1424 records - probe trusted
+bands: 2 -> 26.1,26.1.1,26.1.2 | 26.2
+varying records: 84 of 1424
+```
+
+| version | PRESENT | ABSENT |
+|---|---|---|
+| `26.1` | 1360 | 64 |
+| `26.1.1` | 1360 | 64 |
+| `26.1.2` | 1360 | 64 |
+| `26.2` | **1424** | 0 |
+
+**`26.1`, `26.1.1` and `26.1.2` differ on ZERO of 1424 records.** Not "close" — identical, record
+for record, including the resolved declaration string of every one. `26.2` differs from all three
+by the same 84.
+
+🔑 **The collapse is itself the anti-degeneracy proof, and it is worth stating because the failure
+mode here is silent.** Had either new jar failed to resolve, that version would have gone ~1424
+ABSENT and formed its **own** band — it would not have landed byte-identical on top of a `26.1`
+that was probed in §38 from a different cache entry. And the control resolving 1424 of 1424 rules
+out all four being degenerate together.
+
+⚠️ **The 10,208-vs-10,372 class counts above are corroboration, NOT the measurement.** Equal class
+counts would sit happily on top of a renamed method; only the record-level compare settles it.
+
+### 🎉 The band's port work was ALREADY priced in §38, before anyone knew its size
+
+Because the three `26.1.x` versions are identical, §38's itemisation of the 84 varying records
+applies **unchanged to the whole band** — one branch, one jar, one set of fixes, three versions
+served. Restated here so §40 does not re-measure:
+
+* **64 ABSENT on the band, PRESENT on `26.2`.** Dominated by one thing: **`EntityTypes` does not
+  exist below `26.2`** — the class plus 26 `ACCESSEDFIELD` + 26 `STATICFIELD` constants is ~53 of
+  the 64. Then `EntitySpawnRequest` (class + `#reason`), `BredAnimalsTrigger`
+  (class + `MIXINCLASS` + `#trigger`), the `monster.cubemob` package (`Slime`, `MagmaCube`),
+  `ColorCollection#pick`, `Items#WOOL`.
+* **20 signature-only changes.** `Potions.*` moved `Holder$Reference<Potion>` → `Holder<Potion>`
+  (8 fields × 2 record kinds = 16), `AgeableMob#setBaby` gained `final`,
+  `AbstractHorse#createOffspringAttribute` went package-private → `public`, and
+  `EntityType#create` swapped `Consumer<T>` for `PostSpawnProcessor<T>`.
+
+🔴 **Read that as *rows to look at*, never as work to do.** §31 priced 54 seam redesigns and there
+were 0; §32.0 priced 8 handler rewrites and there were 4. **The sizer classifies; the renamer
+writes.**
+
+🔴 **`LivingEntity#knockback` is an R13 sighting and it spans this boundary.** The band has the
+3-arg form; `26.2` carries a 5-arg `(double, double, double, DamageSource, float)` **alongside**
+it. A call written against one rebinds to the other **silently**, because javac must accept it —
+the narrow-overload-deleted-while-a-wider-one-survives shape §33.4 closed only for `equals`.
+**This one does not announce itself on a compile.**
+
+### The topology this implies — ONE new branch closes the declared scope
+
+Derived from the measurement plus R-a (branch-per-band) and R-z (`26.x` is `master`), **not** from
+the ecosystem's packaging:
+
+| Branch | MC versions covered | `minecraft_version` | `depends.minecraft` |
+|---|---|---|---|
+| `master` | `26.2` | `26.2` | `~26.2` (today) |
+| **`mc/26.1.2` — TO BE CUT** | `26.1`, `26.1.1`, `26.1.2` | `26.1.2` | `>=26.1 <26.2` |
+
+**Branch named for, and pinned to, the NEWEST version in its band** — the convention every existing
+band already follows (`mc/1.21.8` covers `1.21.6`–`1.21.8` and pins `1.21.8`; `mc/1.21.10` covers
+`1.21.9`–`1.21.10` and pins `1.21.10`). Do not name it `mc/26.1`.
+
+✅ **After that cut the declared 16-version scope is COMPLETE**: 9 branches — `master` (`26.2`),
+`mc/26.1.2` (3 versions), and the seven `1.21.x` bands (12 versions).
+✅ **R10 is not tripped**: every branch resolves to a distinct `minecraft_version`.
+✅ **fabric-loader `0.19.3` covers all four** `26.x` releases — the same pin `master` already has.
+✅ **Java 25 on all four**, read from each version's own Mojang manifest (`javaVersion.majorVersion`:
+`26.1`→25, `26.1.1`→25, `26.1.2`→25, `26.2`→25; `1.21.11`→21). So the new band inherits `master`'s
+toolchain unchanged and **R-aa's per-band `java_version` still has exactly one boundary to express**
+— `26.x` at 25, `1.21.x` at 21 — not a third value.
+
+⚠️ **Fabric API publishes SEPARATELY for each of the four**, newest per version `0.145.1+26.1`,
+`0.145.4+26.1.1`, `0.155.2+26.1.2`, `0.158.0+26.2`. **That is not a band boundary** — Fabric API
+republishes per version as a matter of course, and 9.4(b) was answered against our own surface
+rather than that packaging. But it IS a live question for the cut: the band pins **one**
+`fabric_version` and must RUN on all three. `0.155.2+26.1.2` is the candidate; whether it loads on
+`26.1` is a `fabric.mod.json` `depends` fact to CHECK, not to assume. Same shape the `1.21.x` bands
+already solve — `mc/1.21.8` pins one `fabric_version` and serves three versions.
+
+### What I am NOT doing
+
+* **Not cutting `mc/26.1.2`.** Owner-scoped to the measurement. The cut is §40.
+* **Not pushing anything.** The hold was re-confirmed by the owner this session.
+* **Not probing `26.3`.** It does not exist as a release; the newest is `26.3-snapshot-10`.
+* **Not resolving the fabric-api question.** Named above as a check the cut owes, not answered here.
+* **Not touching `gradle.properties`, `build.gradle` or `release.yml`.** R-aa, commit B and R14's
+  remedy all stay bundled with the `mod_version` bump.
+
+### Rollback
+
+`plans/BAND_TABLE.md` is regenerated by this section from 2 versions to 4. The prior 2-version
+edition is at `2a6b0c9a3`; the 12-version `1.21.x` edition it replaced is at `8a289a45c` and
+byte-identical on all seven band branches. `git checkout 2a6b0c9a3 -- plans/BAND_TABLE.md` restores
+the previous one. No other tracked file changes. 🔴 `git checkout -- <path>` on a DIRTY file
+destroys uncommitted work — `git status --short <path>` first.
 
 ---
 
