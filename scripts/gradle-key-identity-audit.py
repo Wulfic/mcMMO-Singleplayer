@@ -124,6 +124,15 @@ BAND_LOCAL = {
     "fabric_version",
     "modmenu_version",
     "cloth_config_version",
+    # R-aa, 2026-08-26. The JDK level this band compiles and ships against: 25 on the 26.x line
+    # (Mojang's own version manifest), 21 on every 1.21.x band. BAND_LOCAL and NOT `DISTINCT`,
+    # because there is exactly ONE boundary here, not a value per branch -- seven bands
+    # legitimately share `21`, and DISTINCT would demand eight different numbers.
+    #
+    # 🔑 It needs a classification at all because this guard fails closed on an UNCLASSIFIED key
+    # only when that key DIFFERS between branches -- and this one differs the moment master and any
+    # band are compared. Leaving it out would turn every run red for a value that is correct.
+    "java_version",
 }
 
 
