@@ -29,7 +29,6 @@ import java.nio.file.Path;
 import java.util.UUID;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.damagesource.DamageSource;
@@ -170,7 +169,7 @@ class EntityDamageListenerHunterTest {
 
     private static Zombie zombie() {
         final Zombie zombie = mock(Zombie.class);
-        Mockito.doReturn(EntityTypes.ZOMBIE).when(zombie).getType();
+        Mockito.doReturn(EntityType.ZOMBIE).when(zombie).getType();
         lenient().when(zombie.getUUID()).thenReturn(UUID.randomUUID());
         return zombie;
     }

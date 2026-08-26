@@ -4,7 +4,6 @@ import java.util.Optional;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.SharedConstants;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.item.Item;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentInitializers;
@@ -149,7 +148,7 @@ public final class McTestRegistries {
      * have it — {@link #optionalVanillaItem} for creatures.
      *
      * <p>The live case is the copper golem, which arrives part-way through the supported range. Below
-     * that, {@code EntityTypes.COPPER_GOLEM} and {@code CopperGolemEntity} are both a compile error
+     * that, {@code EntityType.COPPER_GOLEM} and {@code CopperGolemEntity} are both a compile error
      * rather than a failing assertion, so a test that names either cannot be built from one source
      * tree across bands.
      *

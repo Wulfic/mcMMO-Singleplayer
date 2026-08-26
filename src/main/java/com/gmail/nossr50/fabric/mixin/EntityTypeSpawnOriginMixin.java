@@ -3,7 +3,7 @@ package com.gmail.nossr50.fabric.mixin;
 import com.gmail.nossr50.platform.MobOrigins;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.EntitySpawnRequest;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -37,17 +37,26 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * <h2>The descriptor is load-bearing</h2>
  * {@code EntityType} declares several {@code create} overloads and they form a chain, so injecting
  * into more than one would double-stamp. The full descriptor picks the single one at the bottom of
- * it: the {@code EntitySpawnRequest} overload is the only one that actually calls the entity factory
- * ({@code factory.create(type, level)}); the {@code EntitySpawnReason} overload wraps its argument in
- * {@code new EntitySpawnRequest(reason, false)} and delegates, and the six-argument overload calls
- * <em>that</em>. The generic {@code T} erases to {@code Entity}.
+ * it. On this band that is the {@code EntitySpawnReason} overload: it is the only one that calls the
+ * entity factory ({@code factory.create(type, level)}), and the six-argument overload delegates
+ * straight into it. The generic {@code T} erases to {@code Entity}.
+ *
+ * <p>⚠️ Which overload sits at the bottom is NOT a fixed fact about {@code EntityType} — it has
+ * already moved once, when a newer Minecraft introduced an {@code EntitySpawnRequest} wrapper and
+ * pushed the bottom onto that. Re-read the chain per band; see the warning below.
  *
  * <p>⚠️ <b>Read that chain off the bytecode before moving this injector, in either direction.</b>
- * The {@code EntitySpawnReason} overload was the bottom when this was written and is a pass-through
- * now, and the change is silent: an injector left on the wrapper still applies, still binds, and is
- * simply skipped by every caller that builds its own {@code EntitySpawnRequest}. The allow-audit
- * reported that as a count MISMATCH — one binding where two were declared — which is a hint, not a
- * diagnosis, and no test would have failed.
+ * Which overload sits at the bottom is a per-band fact and it has already moved once. On this band
+ * there is no {@code EntitySpawnRequest} type at all, so {@code create(Level, EntitySpawnReason)}
+ * <em>is</em> the bottom: verified in the merged jar, it calls {@code factory.create(type, level)}
+ * directly and returns from two places (the disabled-feature-flag {@code null} and the factory
+ * result), which is what {@code allow = 2} expects. The six-argument overload delegates into it, so
+ * nothing double-stamps.
+ *
+ * <p>The reason to re-read rather than reason it out: on a band where the wrapper and the bottom
+ * have swapped, an injector left on the wrapper still applies, still binds, and is simply skipped by
+ * every caller that goes around it. The allow-audit reports that as a count MISMATCH — one binding
+ * where two were declared — which is a hint, not a diagnosis, and no test fails.
  *
  * <p>Note this fires for {@code SpawnReason.LOAD} as well, i.e. for every mob in every chunk that
  * loads. That is why {@link MobOrigins#stampOnSpawn} writes nothing for a qualifying origin: the work
@@ -58,14 +67,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class EntityTypeSpawnOriginMixin {
 
     @Inject(
-            method = "create(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/EntitySpawnRequest;)"
+            method = "create(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/EntitySpawnReason;)"
                     + "Lnet/minecraft/world/entity/Entity;", allow = 2,
             at = @At("RETURN"))
-    private void mcmmo$stampSpawnOrigin(Level world, EntitySpawnRequest request,
+    private void mcmmo$stampSpawnOrigin(Level world, EntitySpawnReason reason,
             CallbackInfoReturnable<Entity> cir) {
         // Two returns, both stamped: the early null when a spawn check refuses, and the factory
         // result. The return value is also null when the entity type sits behind a disabled feature
         // flag; stampOnSpawn handles that, along with the client-side and non-living cases.
-        MobOrigins.stampOnSpawn(world, request.reason(), cir.getReturnValue());
+        MobOrigins.stampOnSpawn(world, reason, cir.getReturnValue());
     }
 }

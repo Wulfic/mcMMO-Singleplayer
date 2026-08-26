@@ -43,7 +43,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.armadillo.Armadillo;
 import net.minecraft.world.entity.animal.cow.Cow;
@@ -98,7 +97,7 @@ class HusbandryListenerTest {
      * do with this one.
      */
     private static ItemStack wool() {
-        return new ItemStack(Items.WOOL.pick(DyeColor.WHITE));
+        return new ItemStack(Items.WHITE_WOOL);
     }
 
     private UUID uuid;
@@ -183,7 +182,7 @@ class HusbandryListenerTest {
         final Cow animal = mock(Cow.class);
         // doReturn, not when/thenReturn: getType() is declared EntityType<?>, and the wildcard
         // capture makes the type-safe form uncompilable against a concrete EntityType<CowEntity>.
-        Mockito.doReturn(EntityTypes.COW).when(animal).getType();
+        Mockito.doReturn(EntityType.COW).when(animal).getType();
         lenient().when(animal.isAlive()).thenReturn(alive);
         lenient().when(animal.getAge()).thenReturn(breedingAge);
         lenient().when(animal.canFallInLove()).thenReturn(canEat);
@@ -197,7 +196,7 @@ class HusbandryListenerTest {
 
     private Animal pig() {
         final Pig animal = mock(Pig.class);
-        Mockito.doReturn(EntityTypes.PIG).when(animal).getType();
+        Mockito.doReturn(EntityType.PIG).when(animal).getType();
         lenient().when(animal.isAlive()).thenReturn(true);
         lenient().when(animal.getAge()).thenReturn(0);
         lenient().when(animal.canFallInLove()).thenReturn(true);
@@ -214,7 +213,7 @@ class HusbandryListenerTest {
     /** A calf with a breeding age and a working attachment slot for the bred-by marker. */
     private AgeableMob calf(int breedingAge) {
         final Cow baby = mock(Cow.class);
-        Mockito.doReturn(EntityTypes.COW).when(baby).getType();
+        Mockito.doReturn(EntityType.COW).when(baby).getType();
         lenient().when(baby.getAge()).thenReturn(breedingAge);
         lenient().when(baby.level()).thenReturn(world);
         stubAttachments(baby);
@@ -677,7 +676,7 @@ class HusbandryListenerTest {
 
     private AgeableMob shearableSheep() {
         final Sheep sheep = mock(Sheep.class);
-        Mockito.doReturn(EntityTypes.SHEEP).when(sheep).getType();
+        Mockito.doReturn(EntityType.SHEEP).when(sheep).getType();
         lenient().when(sheep.level()).thenReturn(world);
         stubAttachments(sheep);
         return sheep;
@@ -753,7 +752,7 @@ class HusbandryListenerTest {
         }
 
         assertEquals(2, dropper.delivered.size(), "a successful roll must double the yield");
-        assertEquals(Items.WOOL.pick(DyeColor.WHITE), dropper.delivered.get(1).getItem(),
+        assertEquals(Items.WHITE_WOOL, dropper.delivered.get(1).getItem(),
                 "the bonus must be a copy of what vanilla actually dropped");
     }
 

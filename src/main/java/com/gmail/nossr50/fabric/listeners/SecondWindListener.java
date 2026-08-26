@@ -209,8 +209,7 @@ public final class SecondWindListener {
             target.hurtServer(world, world.damageSources().playerAttack(player),
                     (float) result.dartDamage());
             // Knock the target away from the player, along the horizontal lunge direction.
-            target.knockback(result.dartKnockback(), -look.x, -look.z,
-                    world.damageSources().playerAttack(player), (float) result.dartDamage());
+            target.knockback(result.dartKnockback(), -look.x, -look.z);
         }
     }
 

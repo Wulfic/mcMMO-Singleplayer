@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.wolf.Wolf;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
@@ -356,7 +355,7 @@ class PetFollowTeleportTest {
         // doReturn, not when/thenReturn: getType() is declared EntityType<?>, whose capture no
         // concrete EntityType can be assigned to through the generic thenReturn signature.
         // Stubbed for the "left behind" log lines, which name the pet.
-        lenient().doReturn(EntityTypes.WOLF).when(wolf).getType();
+        lenient().doReturn(EntityType.WOLF).when(wolf).getType();
         return wolf;
     }
 
