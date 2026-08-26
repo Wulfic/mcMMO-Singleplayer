@@ -53,29 +53,89 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from loomjar import (  # noqa: E402
+    JarSelectionError,
+    branch_naming,
+    cached_versions,
+    choose_lookup_jar,
+    gradle_prop,
+    gradle_prop_opt,
+    cached_jars,
+)
+
 REPO = Path(__file__).resolve().parent.parent
 SURFACE = REPO / "scripts" / "mc-surface.txt"
-LOOM = Path.home() / ".gradle" / "caches" / "fabric-loom" / "minecraftMaven" / "net" / "minecraft" / "minecraft-merged"
 
 
-def cached_versions() -> list[str]:
-    if not LOOM.is_dir():
+def jar_for(version: str) -> tuple[Path | None, str]:
+    """That version's merged jar and the NAMING its class names are in.
+
+    🔴 SECTION 38 — WHY THE NAMING COMES BACK WITH IT.
+    This used to glob `{version}-net.fabricmc.yarn.*` and return a bare Path, which had two
+    consequences. A 26.x branch could not be probed at all (yarn publishes nothing from 26.1, so
+    the glob is empty by construction). And, worse, nothing anywhere in this script knew that a
+    jar's names and mc-surface.txt's names are written in two different schemes — see
+    `refuse_cross_naming` below for what that would have printed.
+    """
+    merged, deobf = cached_jars(version)
+    if not merged and not deobf:
+        return None, ""
+    try:
+        name, naming, _ = choose_lookup_jar(
+            version, gradle_prop_opt("yarn_mappings"), list(merged), list(deobf)
+        )
+    except JarSelectionError as e:
+        print(str(e), file=sys.stderr)
+        return None, ""
+    return (merged | deobf)[name], naming
+
+
+def refuse_cross_naming(versions: list[str], nrecords: int) -> list[str]:
+    """Refuse any version whose jar is in a different naming from this branch's manifest.
+
+    🔴🔴 WHY THIS IS A REFUSAL AND NOT A WARNING, AND WHY THE CONTROL CHECK CANNOT DO IT.
+
+    `mc-surface.txt` is generated from THIS branch's own sources and bytecode (section 36), so its
+    records are in this branch's naming. Resolve them against a jar in the other naming and every
+    single one reads ABSENT -- not an error, not a crash: a clean run reporting that the version
+    removed the entire Minecraft API.
+
+    The control check does not catch it. Its fallback is
+    `control = args.control if args.control in result else live[-1]`, so probing `1.21.8,26.2`
+    from master silently RELOCATES the control to 26.2, passes, and prints
+    `control check: ... probe trusted` directly above a band table claiming 1.21.8 deleted
+    everything. A guard that moves out of the way is worse than no guard, because the output still
+    carries its endorsement.
+
+    So this runs FIRST, refuses by name, and says how many records it would have mis-reported --
+    the number is the point. Fail closed: an unprobeable version is refused, never skipped. A
+    skipped version reads as a clean run, which is exactly how section 37's `--require-bands 8`
+    managed to print "No drift" over an exit code of 2.
+    """
+    mine = branch_naming()
+    wrong = []
+    for v in versions:
+        jar, naming = jar_for(v)
+        if jar is not None and naming != mine:
+            wrong.append((v, naming))
+    if not wrong:
         return []
-    out = set()
-    for d in LOOM.iterdir():
-        m = re.match(r"^(.+?)-net\.fabricmc\.yarn\.", d.name)
-        if m:
-            out.add(m.group(1))
-    return sorted(out, key=lambda v: [int(x) for x in re.findall(r"\d+", v)])
-
-
-def jar_for(version: str) -> Path | None:
-    # The trailing '-' is load-bearing: without it 1.21.1 also matches the 1.21.11 directory.
-    for d in LOOM.glob(f"{version}-net.fabricmc.yarn.*"):
-        for j in d.glob(f"minecraft-merged-{version}-*-v2.jar"):
-            if j.name.startswith(f"minecraft-merged-{version}-"):
-                return j
-    return None
+    print(
+        f"\n❌ REFUSING {len(wrong)} version(s): their cached jar is not in this branch's naming.\n"
+        f"   This branch's mc-surface.txt is {mine}-named ({SURFACE.name}, "
+        f"{nrecords} records).",
+        file=sys.stderr,
+    )
+    for v, naming in wrong:
+        print(f"     {v:<10} cached {naming}-named -> all {nrecords} records would read ABSENT",
+              file=sys.stderr)
+    print(
+        "   That is not a band boundary, it is a scheme mismatch, and it would have been\n"
+        "   reported as the former. Probe a branch against versions IT ships.",
+        file=sys.stderr,
+    )
+    return [v for v, _ in wrong]
 
 
 def load_surface() -> list[tuple[str, str]]:
@@ -138,9 +198,24 @@ def member_of(kind: str, val: str) -> str | None:
     return None
 
 
+# 🔴 SECTION 38 -- THE SUPERTYPE LISTS ARE `[^{]+?`, NOT A CHARACTER WHITELIST.
+#
+# They were `[\w.$,<>\s]+?`, which has no `?` in it. On 26.2 `Entity`'s declaration ends
+#
+#     ..., net.minecraft.core.TypedInstance<net.minecraft.world.entity.EntityType<?>> {
+#
+# so the WHOLE LINE failed to match, `Entity` was never parsed at all, and every member inherited
+# from it -- getX, getUUID, getDeltaMovement, isSprinting -- read ABSENT on the version this branch
+# compiles against. A whitelist of "characters a type name can contain" is a claim about a language
+# that keeps adding to it; the declaration line is delimited by `{` and nothing else, so match to
+# the delimiter. `_split_types` already strips generics, wildcards included, from whatever it gets.
+#
+# 🔑 Nothing but the control check could have caught this. The failure is a regex that quietly
+# does not match -- no exception, no diagnostic, just a class missing from a dict and a sweep of
+# false ABSENTs that look exactly like a real API removal.
 DECL_RE = re.compile(
     r"^[\w\s]*?(?:class|interface|enum|record|@interface)\s+([\w.$]+)(?:<[^{]*?>)?"
-    r"(?:\s+extends\s+([\w.$,<>\s]+?))?(?:\s+implements\s+([\w.$,<>\s]+?))?\s*\{",
+    r"(?:\s+extends\s+([^{]+?))?(?:\s+implements\s+([^{]+?))?\s*\{",
 )
 
 
@@ -174,12 +249,25 @@ def nonmc_classpath(control: str) -> str:
     minecraftMaven one the rest of this script reads -- injection is per-project by construction.
     One jar per fabric-api module, newest first, keeps the command line bounded; any version
     declares the member names, which is all this lookup needs.
+
+    ⚠️ SECTION 38 -- TWO GLOBS, AND NEVER `{control}*`. The version directory is
+    `<version>-<mappings coordinate>` on a yarn branch but a BARE `<version>` on 26.x, where there
+    is no mappings coordinate to append (`.../minecraft-merged-bfb32e66d2/26.2/...`). The single
+    `{control}-*` glob therefore matched nothing at all on 26.x, and this function degraded in
+    silence to fabric-api jars only -- so every interface-injected member read ABSENT on the
+    control. `{control}*` would "fix" it and reintroduce the prefix hazard the trailing '-' exists
+    for: it matches 26.2 AND a future 26.2.1. Two exact shapes, not one loose one.
     """
     parts: list[str] = []
-    for p in sorted(REPO.glob(
-            f".gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-merged-*/{control}-*/*.jar")):
-        if not p.name.endswith("-sources.jar"):
-            parts.append(str(p))
+    seen: set[str] = set()
+    for pattern in (
+        f".gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-merged-*/{control}/*.jar",
+        f".gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-merged-*/{control}-*/*.jar",
+    ):
+        for p in sorted(REPO.glob(pattern)):
+            if not p.name.endswith("-sources.jar") and str(p) not in seen:
+                seen.add(str(p))
+                parts.append(str(p))
     fabric = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "net.fabricmc.fabric-api"
     for module in sorted(fabric.glob("*")) if fabric.is_dir() else []:
         jars = [j for j in sorted(module.rglob("*.jar"), reverse=True)
@@ -289,18 +377,123 @@ def find_member(
     return []
 
 
+def selftest_decl_parsing() -> int:
+    """Prove DECL_RE parses the declaration shapes javap actually emits.
+
+    🔑 WHY THIS EXISTS AT ALL. Until section 38 the only thing standing behind this regex was the
+    control check, and the control check is a whole-probe assertion -- it says "N records are
+    ABSENT on a version that compiles", not "one class failed to parse". That is enough to STOP a
+    bad run and useless for finding the cause: the 26.2 failure surfaced as 40+ ABSENT rows spread
+    across ServerPlayer, Animal and Wolf, and the cause was one unmatched line for `Entity`.
+
+    Every case below is a REAL declaration line, copied from javap output, not an invented one.
+    Cases 1-3 are the three that the pre-fix character whitelist rejected on 26.2.
+    """
+    E = "net.minecraft.world.entity.Entity"
+    cases: list[tuple[str, str, str, list[str]]] = [
+        # (label, line, expected class name, supertypes that MUST appear)
+        (
+            "wildcard generic in implements (the 26.2 Entity defect)",
+            "public abstract class net.minecraft.world.entity.Entity implements "
+            "net.minecraft.world.Nameable, net.minecraft.core.TypedInstance"
+            "<net.minecraft.world.entity.EntityType<?>> {",
+            E,
+            ["net.minecraft.world.Nameable", "net.minecraft.core.TypedInstance"],
+        ),
+        (
+            "wildcard generic in an interface's extends",
+            "public interface net.minecraft.core.component.DataComponentMap extends "
+            "java.lang.Iterable<net.minecraft.core.component.TypedDataComponent<?>>, "
+            "net.minecraft.core.component.DataComponentGetter {",
+            "net.minecraft.core.component.DataComponentMap",
+            ["java.lang.Iterable", "net.minecraft.core.component.DataComponentGetter"],
+        ),
+        (
+            "wildcard generic after several plain interfaces",
+            "public abstract class net.minecraft.world.level.block.entity.BlockEntity implements "
+            "net.minecraft.util.debug.DebugValueSource, net.minecraft.core.TypedInstance"
+            "<net.minecraft.world.level.block.entity.BlockEntityType<?>> {",
+            "net.minecraft.world.level.block.entity.BlockEntity",
+            ["net.minecraft.util.debug.DebugValueSource", "net.minecraft.core.TypedInstance"],
+        ),
+        (
+            "plain extends",
+            "public class net.minecraft.server.level.ServerPlayer extends "
+            "net.minecraft.world.entity.player.Player {",
+            "net.minecraft.server.level.ServerPlayer",
+            ["net.minecraft.world.entity.player.Player"],
+        ),
+        # 🔴 THE CASE THE `[^{]+?` RELAXATION COULD HAVE BROKEN. A greedy or mis-ordered match
+        # would let `extends` swallow " implements ..." whole and lose the interface list.
+        (
+            "extends AND implements -- the split must land in the right place",
+            "public abstract class net.minecraft.world.entity.player.Player extends "
+            "net.minecraft.world.entity.Avatar implements "
+            "net.minecraft.world.entity.ContainerUser {",
+            "net.minecraft.world.entity.player.Player",
+            ["net.minecraft.world.entity.Avatar", "net.minecraft.world.entity.ContainerUser"],
+        ),
+        (
+            "enum",
+            "public final class net.minecraft.world.entity.EquipmentSlot extends "
+            "java.lang.Enum<net.minecraft.world.entity.EquipmentSlot> {",
+            "net.minecraft.world.entity.EquipmentSlot",
+            ["java.lang.Enum"],
+        ),
+        (
+            "nested type, $-spelled",
+            "public static final class net.minecraft.world.entity.EntityAttachment$Builder {",
+            "net.minecraft.world.entity.EntityAttachment$Builder",
+            [],
+        ),
+    ]
+
+    failures: list[str] = []
+    for label, line, want_name, want_supers in cases:
+        m = DECL_RE.match(line)
+        if not m:
+            failures.append(f"{label}: DID NOT MATCH -- the class would be silently missing")
+            continue
+        if m.group(1) != want_name:
+            failures.append(f"{label}: name {m.group(1)!r}, wanted {want_name!r}")
+        got = _split_types(m.group(2)) + _split_types(m.group(3))
+        for s in want_supers:
+            if s not in got:
+                failures.append(f"{label}: supertype {s!r} lost; got {got!r}")
+
+    print("=== SELF-TEST: javap declaration parsing ===")
+    if failures:
+        for f in failures:
+            print(f"  FAIL -- {f}")
+        print(f"  {len(failures)} failure(s)")
+        return 1
+    print(f"  PASS -- {len(cases)} real javap declaration lines parse, wildcard generics included,")
+    print("          and extends/implements still split at the right word.")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--versions", default="")
     ap.add_argument("--out", default=str(REPO / "plans" / "BAND_TABLE.md"))
-    ap.add_argument("--control", default="1.21.11",
-                    help="version the mod is known to compile against; must resolve 100%% of records")
+    # 🔴 SECTION 38: NOT a hardcoded version. `1.21.11` stood here while master moved to 26.2, and
+    # a hardcoded control is the exact staleness shape javap-mc.sh had already fixed for itself --
+    # a value that is right on the branch it was written on and silently wrong on every other.
+    # gradle.properties is the one place that always describes THIS branch.
+    ap.add_argument("--control", default=gradle_prop("minecraft_version"),
+                    help="version the mod is known to compile against; must resolve 100%% of "
+                         "records. Defaults to this branch's minecraft_version.")
     ap.add_argument("--allow-control-failures", action="store_true",
                     help="continue despite a failed control check (for debugging the probe only)")
+    ap.add_argument("--self-test", action="store_true",
+                    help="prove the declaration parser on real javap output, then exit")
     ap.add_argument("--no-nonmc-classify", action="store_true",
                     help="skip the fabric-api classification pass, so every control ABSENT is "
                          "reported raw (for auditing what the classifier is absorbing)")
     args = ap.parse_args()
+
+    if args.self_test:
+        return selftest_decl_parsing()
 
     versions = [v.strip() for v in args.versions.split(",") if v.strip()] or cached_versions()
     if not versions:
@@ -310,13 +503,19 @@ def main() -> int:
     recs = load_surface()
     classes = sorted({o for k, v in recs if (o := owner_of(k, v))})
     print(f"{len(recs)} records over {len(classes)} distinct classes; versions: {', '.join(versions)}")
+    print(f"this branch is {branch_naming()}-named")
+
+    # 🔴 BEFORE ANY PROBING. A cross-naming probe does not fail, it returns a full sweep of ABSENT
+    # rows, and the control check relocates rather than catching it. See refuse_cross_naming.
+    if refuse_cross_naming(versions, len(recs)):
+        return 2
 
     # version -> record -> (state, signature)
     result: dict[str, dict[tuple[str, str], tuple[str, str]]] = {}
     missing_jar: list[str] = []
 
     for v in versions:
-        jar = jar_for(v)
+        jar, _naming = jar_for(v)
         if not jar:
             missing_jar.append(v)
             continue
@@ -353,8 +552,27 @@ def main() -> int:
     # ones in the band table. The first draft of this probe reported 6, all of them bugs: static
     # member imports filed as classes, nested types written with '.' instead of '$', and inherited
     # members that javap never lists.
-    control = args.control if args.control in result else (live[-1] if live else None)
-    control_absent = [r for r in recs if result[control][r][0] == "ABSENT"] if control else []
+    # 🔴🔴 SECTION 38: A CONTROL THAT IS NOT IN THE PROBED SET IS AN ERROR, NEVER A RELOCATION.
+    # This line used to read
+    #
+    #     control = args.control if args.control in result else (live[-1] if live else None)
+    #
+    # so a control that was not probed silently became `live[-1]` -- and the run then printed
+    # `control check: <other version> resolves all N records - probe trusted` over a table the
+    # requested control had never validated. The endorsement is the damage: the whole reason the
+    # control exists is that the first draft of this probe reported 6 false ABSENTs, and a guard
+    # that quietly re-points at a different subject cannot catch its successor.
+    if args.control not in result:
+        print(
+            f"\n❌ CONTROL {args.control} WAS NOT PROBED, so nothing here is trusted.\n"
+            f"   probed: {', '.join(live)}\n"
+            f"   The control is the only thing separating a real ABSENT from a defect in this\n"
+            f"   script. Add it to --versions, or name a probed version with --control.",
+            file=sys.stderr,
+        )
+        return 3
+    control = args.control
+    control_absent = [r for r in recs if result[control][r][0] == "ABSENT"]
 
     # --- classify the control's ABSENT rows: which of them are not Minecraft's at all? ---------
     #
@@ -369,7 +587,8 @@ def main() -> int:
     # different axis this table does not measure. Dropped LOUDLY: printed here and listed in the
     # generated table, so the set can never grow in silence.
     nonmc: list[tuple[str, str]] = []
-    if control and control_absent and not args.no_nonmc_classify:
+    # `control` is guaranteed non-None since section 38 -- an unprobed control now returns 3.
+    if control_absent and not args.no_nonmc_classify:
         aux = nonmc_classpath(control)
         if aux:
             aux_members, aux_supers = javap_all(aux, sorted({o for k, v in control_absent if (o := owner_of(k, v))}))
@@ -391,7 +610,7 @@ def main() -> int:
         recs = [r for r in recs if r not in drop]
         control_absent = [r for r in control_absent if r not in drop]
 
-    if control and control_absent:
+    if control_absent:
         print(f"\n❌ PROBE IS UNTRUSTWORTHY: {len(control_absent)} record(s) ABSENT on the control "
               f"version {control}, which the mod demonstrably compiles against:", file=sys.stderr)
         for kind, val in control_absent[:20]:
@@ -399,7 +618,7 @@ def main() -> int:
         print("   Fix the probe before believing any band data.", file=sys.stderr)
         if not args.allow_control_failures:
             return 3
-    elif control:
+    else:
         print(f"control check: {control} resolves all {len(recs)} records - probe trusted")
 
     # --- band collapse: versions whose ENTIRE resolution is identical are one band ----------

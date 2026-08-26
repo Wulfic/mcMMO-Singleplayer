@@ -260,16 +260,20 @@ largest input it will ever be given.
 | **9.1** derive the yarn→official table | ✅ **DONE (§25).** `scripts/derive-official-names.py`, three-way join through Mojang's own ProGuard map, 43-check self-test, **100% of the 1,389 MC symbols**. ⚠️ The table is `1.21.11`→`1.21.11`: it prices the **translation**, never the `26.1` API delta. Never quote the 100% as a §9 estimate |
 | **9.2** toolchain | ✅ **DONE (§27), and its premise was measured FALSE.** `26.x` builds on the **existing Loom 1.17.13**. What changed: plugin id → `net.fabricmc.fabric-loom`, `mappings` line **removed entirely**, `modImplementation` → `implementation`, Java 21 → **25** (Mojang's own manifest requirement) |
 | **9.3** translate the source **and** the tooling | ✅ **SOURCE DONE (§28–§33)**: 2,639 → 0 compile errors, 54 → 0 dead injectors, 186 → 1 red tests. ⬜ **TOOLING HALF STILL OPEN** — see below |
-| **9.4** cut the band | 🟡 **HALF DONE.** (a) *Which branch?* — ruled: `26.x` **becomes `master`** and `1.21.11` was cut to `mc/1.21.11` (R-z, honouring R-f). (b) *One band or two?* — **answered: TWO.** Fabric API, ModMenu and Cloth Config independently draw `[26.1, 26.1.1, 26.1.2]` vs `[26.2]`, so `master` takes `26.2` alone and `26.1.x` is a future band. ⚠️ Three ecosystem projects agreeing is not proof about *this mod's* surface; the definitive check is `probe-bands.py`, which needs 9.3's tooling half |
+| **9.4** cut the band | 🟡 **HALF DONE.** (a) *Which branch?* — ruled: `26.x` **becomes `master`** and `1.21.11` was cut to `mc/1.21.11` (R-z, honouring R-f). (b) *One band or two?* — ✅ **TWO, and it is MEASURED now (§38), not inferred.** `probe-bands.py --versions 26.1,26.2 --control 26.2` on `master`: control green, **84 of 1424 records vary**, and the two versions do **not** collapse into one band. The ecosystem split (`[26.1, 26.1.1, 26.1.2]` vs `[26.2]`) reached the same conclusion by a different route. **`master` takes `26.2` alone; `26.1.x` is a future band.** ⚠️ `26.1.1`/`26.1.2` are still unprobed — nothing here says where the boundary inside `26.1.x` falls, only that `26.1` is on the far side of one |
 | **9.5** full ship gate | 🟡 **HALF DONE (§35).** `boot-check.sh` ✅ and `gameplay-smoke.sh` ✅ both green on `26.2`. The expected version-specific fixture work **did not materialise**: carpet publishes a `26.2` build and every command in the scenario parsed unchanged. What DID bite was a latent harness defect that `26.2` merely happened to expose — see §35. Gates 3–11 of the ship gate are still unrun on this branch |
 
 ### ⬜ 9.3's tooling half — what still reads yarn names
 
 The band cannot run its own gates until its tooling speaks official names.
 
-- [ ] **`probe-bands.py`** — still yarn-only, so **this branch cannot be probed at all**, which is why
-      9.4(b) rests on ecosystem evidence rather than on our own surface.
-- [ ] **`javap-mc.sh`** — still yarn-only.
+- [x] ✅ **`probe-bands.py` speaks official names (§38)** — jar resolution moved to the shared
+      `scripts/loomjar.py`, plus a **cross-naming refusal**, a **non-relocating control** and a
+      `--self-test`. `master` is probeable, and 9.4(b) is now measured rather than inferred.
+- [x] ✅ **`javap-mc.sh` resolves through the same module (§38)** — and it had been serving a
+      **wrong answer on `1.21.11` since §33**: `sort | head -1` picked the mojmap `loom.mappings`
+      jar over the yarn one, so `net.minecraft.item.ItemStack` read *class not found* under a
+      confident `# javap against Minecraft 1.21.11` banner. Now has a `--self-test` too.
 - [x] ✅ **`scripts/mc-surface.txt` regenerated under official names (§36).** 1415 yarn records →
       **1433 official**, `--check` **PASS**. `./gradlew classes testClasses` ran first and
       `build/classes` was complete (537 class files, the same number `--check` disassembles).
@@ -370,6 +374,257 @@ this repo's whole gate stack reports as passing, and three are blind **by constr
 
 ⚠️ **`26.1 > 1.21.11` sorts correctly under semver**, so version *predicates* need no special-casing.
 The obstacle was never the version string.
+
+---
+
+## §38 — 9.3's tooling half: `probe-bands.py` + `javap-mc.sh` speak official names — 🔴 IN FLIGHT
+
+**Tier 2.** Two scripts, one new shared module, a generated `BAND_TABLE.md`, and a seven-band
+gate-10 sweep. Written down before the first edit.
+
+### Why this is not "rename some strings"
+
+Neither script contains a yarn *identifier*. Both are yarn-only because of **where they look for a
+jar**, and the jar's naming is the whole contract: a probe run against a jar in the wrong naming
+does not error, it reports **the entire Minecraft API as ABSENT**.
+
+Owner decisions taken 2026-08-25, before any code: **(a)** do the tooling *and* run the 9.4(b)
+probe; **(b)** extract a shared chooser rather than a third copy; **(c)** sweep the seven bands
+immediately rather than deferring gate 10.
+
+### 🔴 Four defects, all measured on disk — not inferred
+
+**1. `javap-mc.sh` serves a WRONG ANSWER on `1.21.11` today.** It ends its jar search in
+`sort | head -1` — the exact `sorted()[0]` defect §37 found in the mixin gate — and the poisoned
+cache entry is still on this box:
+
+```
+$ find ... -iname "minecraft-merged-1.21.11-*-v2.jar" -not -iname "*-intermediary-*" | sort | head -1
+.../1.21.11-loom.mappings.1_21_11.layered+hash.1830767244-v2/...-v2.jar      <- MOJMAP
+   (over)  .../1.21.11-net.fabricmc.yarn.1_21_11.1.21.11+build.6-v2/...-v2.jar   <- yarn, the right one
+```
+
+🔴 **This is the tool `AGENTS.md` names as the cure for recalling an MC signature** — *"verify MC
+signatures, never recall them"*. On `mc/1.21.11` it would report a real yarn member absent, with a
+`# javap against Minecraft 1.21.11` banner over it. A wrong answer from the authority is worse than
+no answer. **It has no `--self-test`**, same as the mixin gate before §37.
+
+**2. `probe-bands.py` cannot see a `26.x` jar at all.** `cached_versions()` enumerates by the regex
+`^(.+?)-net\.fabricmc\.yarn\.` and `jar_for()` globs `{version}-net.fabricmc.yarn.*` — 26.x has no
+yarn artifact by construction (§27: yarn meta returns `[]`). Both return empty, so `master` is
+unprobeable, which is the whole reason 9.4(b) rests on ecosystem evidence.
+
+**3. 🔴🔴 The control check CANNOT catch a cross-naming probe — it silently relocates.**
+
+```python
+control = args.control if args.control in result else (live[-1] if live else None)
+```
+
+`--control` defaults to the hardcoded `1.21.11`. Probe `1.21.8,26.2` from `master` and `1.21.11` is
+not in `result`, so the control **slides to `live[-1]` = `26.2`**, passes cleanly, and `1.21.8`
+reports ~1433 ABSENT — *"1.21.8 removed the entire Minecraft API"*, printed under
+`control check: ... probe trusted`. **That is a false band boundary of the maximum possible
+magnitude, produced by the guard that exists to prevent exactly it.** The hardcoded default is
+also the staleness shape `javap-mc.sh` already fixed for itself: read the version from
+`gradle.properties`.
+
+**4. `nonmc_classpath()` finds nothing on `26.x`.** It globs
+`minecraft-merged-*/{control}-*/*.jar`; the trailing `-` is load-bearing against the `1.21.1` /
+`1.21.11` prefix hazard, but the 26.x project cache directory is bare `26.2`:
+
+```
+.gradle/loom-cache/.../minecraft-merged-bfb32e66d2/26.2/minecraft-merged-bfb32e66d2-26.2.jar
+```
+
+So the interface-injection classifier silently degrades to fabric-api jars only, and every
+`getAttached`-shaped record reads ABSENT on the control — which under fix 3 becomes a hard refusal
+rather than a shrug. Two globs (`{control}` and `{control}-*`), never `{control}*`.
+
+### The design — `scripts/loomjar.py`, one chooser, three consumers
+
+`choose_jar()` and `find_jar()` move out of `mixin-allow-audit.py` into a new
+`scripts/loomjar.py`, unchanged in behaviour, and gain one thing the mixin gate never needed:
+the chooser **returns the naming it resolved** (`yarn` | `official`), not just a path.
+
+That naming is what makes fix 3 mechanical rather than a convention:
+
+* the **branch's** naming = `yarn_mappings` present in `gradle.properties`? `yarn` : `official`
+  (§37's rule, already trusted by the mixin gate)
+* the **manifest's** naming = the branch's, because `mc-surface.txt` is generated from this
+  branch's own sources and bytecode (§36)
+* therefore **`probe-bands.py` REFUSES any version whose jar naming is not the branch's**, by name,
+  with the count it would otherwise have mis-reported — instead of probing it and returning 1433
+  ABSENT rows.
+
+⚠️ **Fail closed, and refuse rather than skip.** A skipped version reads as a clean run; §37's
+`--require-bands 8` → *"No drift"* + exit 2 is this repo's standing evidence that a sentence and an
+exit code disagree in exactly this situation.
+
+`--control` defaults to `gradle.properties`' `minecraft_version`, and a control that is not in the
+probed set is a **hard error**, never a relocation.
+
+### Steps
+
+- [x] ✅ **38.1** `scripts/loomjar.py` — move `choose_jar`/`find_jar` verbatim, return `(Path, naming)`.
+      `--self-test` carries §37's 8 cases forward **unchanged** plus new naming-return assertions.
+      🔑 The §37 lesson on mutants: *a faithful reproduction of the pre-fix code*, failing exactly
+      the predicted cases. A crude mutant that dies with an `IndexError` before case 1 reports
+      **proves nothing**.
+- [x] ✅ **38.2** `mixin-allow-audit.py` imports it; its own `--self-test` must still pass **8/8** with
+      no case edited. That is the regression proof for the move.
+- [x] ✅ **38.3** `javap-mc.sh` resolves through `loomjar.py` (owner ruled: shell calls the Python —
+      one implementation, and this script is already Python-adjacent via the repo's other gates).
+      Add `--self-test`. **Prove the fix on the live poisoned `1.21.11` cache**: it must now pick
+      the `net.fabricmc.yarn...build.6` jar, and that is a demonstrable before/after on this box.
+- [x] ✅ **38.4** `probe-bands.py`: `cached_versions()` unions both caches; `jar_for()` → `loomjar`;
+      cross-naming **refusal**; `--control` from `gradle.properties`, missing control = hard error;
+      `nonmc_classpath()` two-glob fix.
+- [ ] **38.5** ⚠️ **Control first, on a band, before believing anything on `master`.**
+      `probe-bands.py --versions 1.21.8,1.21.11 --control 1.21.11` on `mc/1.21.11` must reproduce
+      the band table it already produces. A rewritten probe that has only ever run on the new branch
+      has no baseline.
+- [x] ✅ **38.6** **The 9.4(b) probe.** `26.1` and `26.2` deobf jars are both already cached (verified:
+      `minecraft-merged-deobf/{26.1,26.2}/`), so this needs no network. Probe `26.1,26.2` from
+      `master`, control `26.2`. **`26.1.1` / `26.1.2` are NOT cached** and need a Loom resolve each —
+      out of this section unless the `26.1` result is ambiguous.
+      🔑 The question is *"one band or two"*: identical fingerprints ⇒ `26.1`–`26.2` is one band and
+      the three-ecosystem-projects split was wrong; differing ⇒ our own surface confirms it.
+      ⚠️ **A record-count match is not a fingerprint match.** Read the band collapse, not the total.
+- [x] ✅ **38.7** Regenerate `plans/BAND_TABLE.md` if 38.6 changes it; update 9.4(b)'s row from
+      *"rests on ecosystem evidence"* to the measured answer.
+- [ ] **38.8** The seven-band gate-10 sweep, §37's recipe (below). Owner ruled: **now, not deferred.**
+
+### ✅ Outcome on `master` — measured 2026-08-26
+
+| step | result |
+|---|---|
+| `loomjar.py --self-test` | ✅ **11 cases** — §37's 8 carried unedited, + 3 naming, + 9 lookup (23 total across the three) |
+| `mixin-allow-audit.py --self-test` | ✅ 8 + 3, no case edited — the regression proof for the move |
+| `mixin-allow-audit.py --check` | ✅ `SLICE=1 OK=60 (total 61)` — **identical to §37's record** |
+| `javap-mc.sh --self-test` | ✅ 7 cases (argument splitting) |
+| `probe-bands.py --self-test` | ✅ 7 real javap declaration lines |
+| cross-naming refusal | ✅ `--versions 1.21.8,26.2` → exit **2**, naming the version and the 1433 records it would have mis-reported |
+| non-relocating control | ✅ `--versions 26.2 --control 26.1` → exit **3** |
+| **9.4(b)** | ✅ `--versions 26.1,26.2 --control 26.2` → control green, **2 bands, 84 of 1424 records vary** |
+
+`plans/BAND_TABLE.md` + `.json` regenerated for `26.1`/`26.2`. The 12-version `1.21.x` table it
+replaced is **not lost**: byte-identical copies are on all seven band branches, and master's own is
+at `8a289a45c`. Checked before overwriting, not after.
+
+### 🔑🔑 Three defects §38 found, none of which it caused
+
+**1. `javap-mc.sh` had the §37 alphabet defect and was serving a WRONG ANSWER.**
+Demonstrated, not asserted — the jar `sort | head -1` picked, asked for a yarn class:
+
+```
+$ javap -cp <the loom.mappings...layered jar> net.minecraft.item.ItemStack
+Error: class not found: net.minecraft.item.ItemStack
+```
+
+That is the answer `scripts/javap-mc.sh 1.21.11 net.minecraft.item.ItemStack` gave, under a
+`# javap against Minecraft 1.21.11` banner, for as long as §33's rename tooling had been leaving a
+mojmap jar in the shared cache. **`AGENTS.md` names this script as the cure for recalling an MC
+fact.** It now prints the naming it resolved and warns when that is not this branch's.
+
+**2. 🔴🔴 `DECL_RE` could not parse a WILDCARD GENERIC, so `Entity` was never parsed on `26.2`.**
+The supertype lists were a character whitelist, `[\w.$,<>\s]+?`, with no `?` in it. On `26.2`:
+
+```
+public abstract class net.minecraft.world.entity.Entity implements ...,
+    net.minecraft.core.TypedInstance<net.minecraft.world.entity.EntityType<?>> {
+```
+
+The whole line failed to match, so `Entity` was **absent from the members dict** and every member
+inherited from it — `getX`, `getUUID`, `getDeltaMovement`, `isSprinting` — read ABSENT across
+`ServerPlayer`, `Animal`, `Wolf`, `Cow`, `Pig`. Three manifest classes were affected
+(`Entity`, `BlockEntity`, `DataComponentMap`), all three via `TypedInstance<...<?>>` or
+`Iterable<...<?>>`.
+
+🔑 **Only the control check could have caught it, and it did — that is the whole reason it exists.**
+The failure mode is a regex that quietly does not match: no exception, no diagnostic, just a class
+missing from a dict and a sweep of false ABSENTs shaped exactly like a real API removal.
+🔑 **And the control check could not LOCALISE it.** It reported 40+ ABSENTs spread over five
+classes; the cause was one unmatched line. That gap is why `--self-test` now exists here, built
+from real javap output rather than invented lines.
+✅ **Measured on a band, not assumed:** `0` of `mc/1.21.11`'s 202 manifest classes hit this, against
+`3` of master's 212 — it is a `26.x`-shaped defect. And any band it *had* hit would have gone red on
+that band's own control check, which is how the published `BAND_TABLE.md`s are covered.
+⚠️ The fix is `[^{]+?` — match to the delimiter, not a whitelist of characters a type name may
+contain. A whitelist is a claim about a language that keeps adding to it.
+⚠️ The classifier's non-Minecraft exclusion list **shrank 25 → 9** once `Entity` parsed. The
+inflated 25 was the same defect: members that resolve fine on Minecraft were being absorbed as
+"fabric-api interface injection" because the walk that would have found them was broken.
+
+**3. `nonmc_classpath()` found nothing at all on `26.x`.** Its glob was `{control}-*`, and the 26.x
+project cache directory is a bare `26.2` with no mappings coordinate to append. It degraded in
+silence to fabric-api jars only. Two exact globs now — `{control}` and `{control}-*`, never
+`{control}*`, which would reintroduce the `26.2`/`26.2.1` prefix hazard the trailing `-` exists for.
+
+### 📌 What the 84 varying records say about a future `26.1` band
+
+Recorded so the band is not re-priced from scratch — **and read it as *rows to look at*, never as
+work to do**: §31 priced 54 seam redesigns and there were 0.
+
+* **64 ABSENT on `26.1`, PRESENT on `26.2`.** Dominated by one thing: **`EntityTypes` does not
+  exist on `26.1`** — the class plus 26 `ACCESSEDFIELD` and 26 `STATICFIELD` constants
+  (`COW`, `WOLF`, `ZOMBIE`, …) is ~53 of the 64. Then `EntitySpawnRequest` (class + `#reason`),
+  `BredAnimalsTrigger` (class + `MIXINCLASS` + `#trigger`), the `monster.cubemob` package
+  (`Slime`, `MagmaCube`), `ColorCollection#pick`, `Items#WOOL`.
+* **20 signature-only changes.** `Potions.*` moved `Holder$Reference<Potion>` → `Holder<Potion>`
+  (8 fields × 2 record kinds = 16), `AgeableMob#setBaby` gained `final`,
+  `AbstractHorse#createOffspringAttribute` went package-private → `public`, and
+  `EntityType#create` swapped `Consumer<T>` for `PostSpawnProcessor<T>`.
+* 🔴 **`LivingEntity#knockback` is an R13 sighting.** `26.1` has the 3-arg form; `26.2` carries a
+  5-arg `(double, double, double, DamageSource, float)` alongside it. That is exactly the
+  narrow-overload-deleted-while-a-wider-one-survives shape §33.4 closed only for `equals` — a call
+  written against one rebinds to the other **silently**, because javac must accept it.
+
+### ⚠️ Still open after §38
+
+- [ ] **`26.1.1` / `26.1.2` are unprobed.** Neither is in the Loom cache and each needs a resolve.
+      §38 proves `26.1` is a different band from `26.2`; it says **nothing** about where the
+      boundary inside the `26.1.x` line falls. Do not write one down from the ecosystem's answer.
+- [ ] **The gate-10 sweep for §38's four paths** — see below.
+
+### The sweep — §37's recipe, narrowed
+
+Paths carried per band: `scripts/loomjar.py` (**new**), `scripts/javap-mc.sh`,
+`scripts/probe-bands.py`, `scripts/mixin-allow-audit.py`. **Four paths, all under `scripts/`.**
+
+✅ **Outside `release.yml`'s `paths:` filter** — one commit per band, no `gradle.properties`, so
+this fires **no release runs**. §37's commit-B problem does not recur here.
+🔴 **`mc-surface.txt` is NOT touched and must NOT be carried** — gate 9 requires it to differ, and
+none of these four edits changes generated output, so **no per-band regeneration is owed either**.
+That is the one way this sweep is cheaper than §37's.
+⚠️ Still run per band: `mixin-allow-audit.py --self-test` **and** `--check`. The band's mixins are
+yarn and the chooser moved — a green `master` proves nothing about the yarn path.
+⚠️ `--require-bands` is **7**, not 8. Exit 2 is not a pass.
+
+### What I am NOT doing
+
+* **Not pushing anything.** The hold is an owner decision (2026-08-25) and is unchanged by this
+  work. `git ls-remote` re-read at the start of this section: `origin/master` `848c9d7b9`,
+  `mc/1.21.11` still **absent from the remote**, six bands unmoved.
+* **Not resolving `26.1.1` / `26.1.2` through Loom** unless 38.6 comes back ambiguous.
+* **Not touching `gradle.properties`, `build.gradle` or `release.yml`** — commit B, R-aa and R14's
+  remedy all stay bundled with the `mod_version` bump.
+* **Not doing the docs pass.** Still owner-sequenced, still one commit across all seven.
+* **Not re-scoping R13 or §31.5.** Separate items, unchanged.
+
+### Rollback
+
+Pre-edit tips, recorded 2026-08-25 before the first edit:
+
+```
+master     8a289a45c   mc/1.21.5    1864c9cf0
+mc/1.21.1  1541771c7   mc/1.21.8    4584ca2c8
+mc/1.21.3  5e435930f   mc/1.21.10   c7eedf554
+mc/1.21.4  f7710691c   mc/1.21.11   abb074586
+```
+
+Undo for any band: `git reset --hard <sha above>` on that branch. Nothing is pushed, so no remote
+state is at risk and no history is rewritten. 🔴 `git checkout -- <path>` is NOT the undo — it
+destroys uncommitted work; `git status --short` first.
 
 ---
 
