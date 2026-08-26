@@ -1245,7 +1245,7 @@ uncommitted work; `git status --short <path>` first.
 
 ---
 
-## §41 — the R-aa bundle — 🔶 master DONE, the seven-band sweep is what remains
+## §41 — the R-aa bundle — ✅ DONE, master AND all seven bands
 
 ✅ **AUTHORISED (owner, 2026-08-26): build the whole bundle.** These four land as ONE change per
 branch because each of them alone touches `gradle.properties`, which is **inside `release.yml`'s
@@ -1260,17 +1260,17 @@ band says `21`) **and a FOURTH in `release.yml`, where it is hardcoded `'21'` on
 ruling is that the value gets declared once and read; leaving `build.gradle`'s copies hardcoded would
 replace one drifting source of truth with two.
 
-- [ ] `gradle.properties`: `java_version=25` on `master`, `21` on every band.
-- [ ] `build.gradle`: read it, and **refuse if absent** — a missing key must fail the build, not
+- [x] `gradle.properties`: `java_version=25` on `master`, `21` on every band.
+- [x] `build.gradle`: read it, and **refuse if absent** — a missing key must fail the build, not
       default to a silent `21` that compiles `master` against the wrong release.
-- [ ] `.github/workflows/release.yml`: a `Read the JDK level this band builds with` step **before**
+- [x] `.github/workflows/release.yml`: a `Read the JDK level this band builds with` step **before**
       `setup-java` (checkout is already above it), feeding `java-version:`. The step errors on an
       empty value. The workflow text becomes byte-identical again, which is what P19-1 requires.
-- [ ] `scripts/gradle-key-identity-audit.py`: `java_version` → `BAND_LOCAL`. ⚠️ Not `DISTINCT` — the
+- [x] `scripts/gradle-key-identity-audit.py`: `java_version` → `BAND_LOCAL`. ⚠️ Not `DISTINCT` — the
       seven `1.21.x` bands legitimately share `21`, and `DISTINCT` would demand eight different
       numbers. ⚠️ Not left unclassified: gate 11 fails closed on an unclassified key **only when it
       differs**, and this one differs the moment `master` and a band are compared.
-- [ ] A guard test that fails if this is reverted: `release.yml` must carry **no** hardcoded
+- [x] A guard test that fails if this is reverted: `release.yml` must carry **no** hardcoded
       `java-version: '<n>'` literal, must reference the step output, and the declared
       `java_version` must equal the release level the build actually resolved (handed over as a
       system property, the way `mcmmo.build.version` already is — a guard that re-derives the value
@@ -1328,7 +1328,7 @@ compiled against the wrong release **builds** clean, **tests** clean, and dies a
    it means the bytecode assertion cannot be exercised that way; it is exercised by mutating its
    own offset constant instead.
 
-### ⬜ The seven-band sweep — what is NOT a file copy
+### ✅ The seven-band sweep — DONE, and it was NOT a file copy
 
 ⚠️⚠️ **`gradle.properties` CANNOT be copied from `master` on a band.** Three keys in it are
 per-band and copying them would break the band outright:
@@ -1347,6 +1347,13 @@ the Java block (mappings, for one), so the read-the-key change is applied surgic
 Copied verbatim, because a guard requires it: `.github/workflows/release.yml` and
 `scripts/gradle-key-identity-audit.py` and `README.md` + `wiki/**` (gate 10, byte-identical), and
 `BandToolchainLevelTest.java` (propagatable `src/`).
+
+✅ **VERIFIED COMPLETE — read off the nine branches' own `gradle.properties` blobs, 2026-08-26**
+(§43): `java_version` is present on every branch, `25` on `master` + `mc/26.1.2` and `21` on the
+seven `1.21.x` bands; `mod_version=1.3.0-SNAPSHOT` and `mockito_version=5.23.0` are identical on all
+nine. ⚠️ **This heading previously said the sweep still remained, and that was false.** A plan file
+that under-reports finished work invites someone to redo it on eight branches — the mirror image of
+the docs defect §21 found, and just as invisible.
 
 🔴 **This sweep touches `gradle.properties`, so it IS inside `release.yml`'s `paths:` filter.** It
 fires a release run on every branch it is pushed to — which is exactly why R-aa, commit B and the
@@ -1521,17 +1528,17 @@ run happens **first** or the evidence arrives after the players do.
 
 Run on a `mc/26.1.2` checkout, **`--self-test` first on every gate that has one**:
 
-- [ ] gate 2 — `python scripts/mixin-allow-audit.py --mc 26.1.2 --check`. **Before** the build.
-- [ ] gate 1 — `./gradlew --no-daemon --stacktrace build -Pmod_version=1.3.0` (the resolved,
+- [x] gate 2 — `python scripts/mixin-allow-audit.py --mc 26.1.2 --check`. **Before** the build.
+- [x] gate 1 — `./gradlew --no-daemon --stacktrace build -Pmod_version=1.3.0` (the resolved,
       `-SNAPSHOT`-stripped value CI uses — a bare `build` is not what ships). ⚠️ Read the
       **`N executed`** line, not `BUILD SUCCESSFUL`; confirm `> Task :test` is bare, not `FROM-CACHE`.
       ⚠️ Confirm `build/libs/` holds exactly ONE non-sources jar before reading a name off it.
       ⚠️ **R14 — the suite flakes at ~24% of tests** (Byte Buddy self-attach racing 4 forks). A red
       run is re-run ONCE; a second red in the same place is a regression, not the flake.
-- [ ] gate 3 — `scripts/boot-check.sh --self-test`, then `scripts/boot-check.sh <jar> 26.1.2`.
+- [x] gate 3 — `scripts/boot-check.sh --self-test`, then `scripts/boot-check.sh <jar> 26.1.2`.
       ⚠️ **Exit 1 = the mod is bad. Exit 2 = ENVIRONMENT and NOTHING was proven about the mod.**
       Never report a 2 as a boot failure.
-- [ ] gate 6 — `scripts/gameplay-smoke.sh <jar> 26.1.2`, then `GAMEPLAY_SMOKE_CONTROL=1` on the same
+- [x] gate 6 — `scripts/gameplay-smoke.sh <jar> 26.1.2`, then `GAMEPLAY_SMOKE_CONTROL=1` on the same
       scenario, which **must FAIL**. A harness whose control also passes has measured nothing.
       ✅ **Feasibility measured before planning, not assumed:** Modrinth publishes fabric-carpet
       `26.1`, and its `game_versions` list includes `26.1.2` — queried 2026-08-26. Java 25 is the
@@ -1539,6 +1546,35 @@ Run on a `mc/26.1.2` checkout, **`--self-test` first on every gate that has one*
       🔑 **Expect the harness's own quirks, not just the mod's**: carpet's `use once` arms ONE use per
       TICK (§35), and `SPAWN_ITEM_USE` is not driveable by this harness at all — that gap is open
       debt above, not a finding of this run.
+
+
+### ✅ 43.1 Outcome — measured 2026-08-26, on a `mc/26.1.2` checkout
+
+| gate | result |
+|---|---|
+| 2 — `mixin-allow-audit.py --mc 26.1.2 --check` | self-test 4+3 cases green, then **`SLICE=1 OK=60`, 61 injectors, every declared `allow` reproduces and none resolves to 0 sites** |
+| 1 — `build -Pmod_version=1.3.0` | `> Task :test` **bare** (not `FROM-CACHE`, not `UP-TO-DATE`), **1,858 executed / 0 failures / 0 errors / 0 skipped** across 164 suites, counted out of the JUnit XML rather than read off `BUILD SUCCESSFUL`. Jar: `mcmmo-1.3.0+mc26.1-26.1.2.jar` |
+| 3 — `boot-check.sh 26.1.2` | self-test 4/4, then **exit 0**: console live (canary rejected), mcMMO initialised, configs loaded, `/mcmmo` renders, `/mcstats` dispatches, clean shutdown, **0 ERROR/FATAL, 0 mixin failures** |
+| 6 — `gameplay-smoke.sh 26.1.2` | scorer self-test 9/9, then **30 passed / 0 failed / 0 inconclusive**, 0 ERROR, 0 mixin failures |
+| 6-control — `GAMEPLAY_SMOKE_CONTROL=1` | **failed as it must** — `0 passed, 1 failed, 1 inconclusive`; with mcMMO removed the fake player renders no `/mcstats` at all, so every phase reads unscoreable |
+
+🔑 **What the live run bought that the structural gates could not.** Every earning path fired
+on a Minecraft this mod had never been run on: MINING 0→198 and EXCAVATION 0→273 with each other's
+skill held flat, UNARMED 0→610 and SWORDS 0→202 likewise, REPAIR 0→880 against a control phase that
+correctly paid nothing, COOKING 0→151 off a campfire, and Super Breaker firing for real
+(`cooldowns.SUPER_BREAKER` stamped). `/mcstats` agreed with the stored profile on all 24 skills.
+**`mine-placed` correctly paid ZERO**, which means the placed-block tracker persisted across this
+band's own chunk save path — a K9 seam with no compile-time evidence anywhere.
+
+🔑 **Both version gates resolved on `26.1.2`, and this is the first time either has been read
+on the `26.x` line**: the band has the items `MACES` works on *and* the items `SPEARS` works on, and
+`/mcstats` lists both. R-x left the `MACES` gate inert on every in-scope `1.21.x` version; on this
+band it is live and it answered.
+
+⚠️ **What is still NOT covered on this band**, unchanged by this run: `SPAWN_ITEM_USE` — no phase
+in this harness has ever driven an *item* interaction (carpet's `use once` reaches a block's `onUse`
+only). That is the gap `mc/1.21.1` fell through, it is open debt below, and a green 30/30 does not
+touch it.
 
 ### 43.2 — `TODO.md` says something false, and it gets fixed first
 
@@ -1548,21 +1584,25 @@ checklist is unticked. **Read from disk 2026-08-26: the sweep is DONE** — all 
 `mod_version=1.3.0-SNAPSHOT` and `mockito_version=5.23.0`. A plan file that under-reports finished
 work invites someone to redo it on eight branches.
 
-- [ ] Correct the §41 heading and tick its sweep, citing the measured values.
+- [x] Correct the §41 heading and tick its sweep, citing the measured values.
 
 ### 43.3 — x.9, the band floor, BEFORE the push
 
-- [ ] `BAND_COUNT: '6'` → `'8'` in `.github/workflows/drift-audit.yml`. **`master` first (rule 1).**
+- [x] `BAND_COUNT: '6'` → `'8'` in `.github/workflows/drift-audit.yml`. **`master` first (rule 1).**
       🔑 **8, not 9.** `--require-bands` counts `mc/**` branches ONLY; `master` is not a band. After
       this push the remote holds eight: `26.1.2 · 1.21.11 · .10 · .8 · .5 · .4 · .3 · .1`. §37
       measured the failure mode — passing one too many returns **exit 2** while the same run still
       prints *"No drift"* above it.
-- [ ] Sweep the identical file to all eight bands — `.github/workflows/*.yml` is under gate 10 and
+- [x] Sweep the identical file to all eight bands — `.github/workflows/*.yml` is under gate 10 and
       must be **byte-identical** on every branch, so a `master`-only edit turns gate 10 red.
       ⚠️ **`git add` on `.github/**` stages NOTHING** — the directory is gitignored (R-g) while the
       files are tracked (R-r). It needs `-f`, or the commit ships without the workflow.
       ✅ This path is **not** in `release.yml`'s `paths:` filter, so the edit fires no release on its
       own. It rides the push either way.
+
+✅ **Done 2026-08-26** — `BAND_COUNT: '6'` → `'8'` on `master`, then the identical blob carried to
+all eight bands. Both files were **one blob on all nine branches** before the edit (`git ls-tree`,
+not `rev-parse <ref>:<path>`, which MSYS mangles), so the carry is exact rather than a merge.
 
 ### 43.4 — the push, and what it actually does
 
