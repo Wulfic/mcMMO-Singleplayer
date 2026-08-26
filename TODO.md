@@ -35,7 +35,7 @@ status, because nothing reads it.** Re-measure before quoting this table.
 | | state |
 |---|---|
 | branches | **NINE, all on the remote.** `master` (`26.2`) + `mc/26.1.2` + the seven `1.21.x` bands |
-| vs `origin` | **every branch is ahead by exactly 1** — §44's `-Xmaxerrs` commit, deliberately unpushed. Nothing is behind |
+| vs `origin` | **every branch is ahead by exactly 3**, deliberately unpushed — §44's two commits plus §45's. Nothing is behind. ⚠️ The previous edition of this row said **1** while the true count was already **2**; re-measure with `git rev-list --left-right --count origin/<b>...<b>` rather than quoting it |
 | `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.0-SNAPSHOT` |
 | releases | **NINE published at `v1.3.0`** (§43.4) — the declared 16-version scope is downloadable |
 | build | ✅ **green on all nine**, each built on its own band this session (§44.3) |
@@ -1839,6 +1839,147 @@ ee1340bd7'` across the local branches is the only honest reading — it returns 
 
 ---
 
+## §45 — R14: stop Mockito self-attaching, so the suite stops flaking — 🔴 IN FLIGHT on `master`
+
+**Tier 2.** One shared file (`build.gradle`), one new guard, nine branches. It carries the same push
+deferral as §44 and rides the same `mod_version` bump — see 45.6.
+
+### 45.0 — what was measured, and what the recorded remedy got wrong
+
+R14 records the remedy as *"`-XX:+EnableDynamicAgentLoading` (or a lower `maxParallelForks`)"*.
+🔴 **The first half of that is wrong, and wrong in the direction that hides the defect.**
+
+Read out of `mockito-core-5.23.0.jar` with `javap -c`, not recalled.
+`org.mockito.internal.PremainAttachAccess.getInstrumentation()` resolves in this order:
+
+1. `org.mockito.internal.PremainAttach.getInstrumentation()`, loaded **from the system classloader** —
+   the `-javaagent` path. Non-null, return.
+2. `net.bytebuddy.agent.Installer.getInstrumentation()` — the same, for a byte-buddy agent.
+3. If the VM is **>= Java 21** *and* `RuntimeMXBean.getInputArguments()` does **not** contain the
+   literal string `-XX:+EnableDynamicAgentLoading`, print the *"Mockito is currently self-attaching"*
+   line to `System.err`.
+4. `net.bytebuddy.agent.ByteBuddyAgent.install()` — **unconditionally, whatever step 3 decided.**
+
+🔑🔑 **`-XX:+EnableDynamicAgentLoading` is tested against a warning string at step 3 and is never
+consulted at step 4.** It suppresses the message and leaves the racing call exactly where it was.
+Since that message is the only visible tell that a fork took the attach path, adding it would have
+made R14 **harder to see while still flaking** — a remedy that buys negative information.
+
+**Pre-state, measured on `master` (JDK 25) 2026-08-26** by re-running one Mockito test and reading
+`build/test-results/test/*.xml` rather than the console, which discards fork stderr:
+
+```
+[Test worker/INFO]: [STDERR]: Mockito is currently self-attaching to enable the inline-mock-maker.
+[Attach Listener/INFO]: [STDERR]: WARNING: A Java agent has been loaded dynamically
+                                  (byte-buddy-agent-1.17.7.jar)
+```
+
+So the racing path is live on `master` today, not only on the band where the 449-failure run happened.
+⚠️ **Gradle discards a fork's stderr by default.** The console showed nothing at all; the warning is
+only in the XML report. Do not read a silent console as *"it is not self-attaching"*.
+
+### 45.1 — the fix: install the agent at VM start
+
+`mockito-core-5.23.0.jar` declares `Premain-Class: org.mockito.internal.PremainAttach` and
+`Can-Retransform-Classes: true` — verified by reading the jar's `META-INF/MANIFEST.MF`. Putting that
+jar on the test JVM's command line as `-javaagent` satisfies **step 1**, so steps 3 and 4 never run:
+no warning, no self-attach, no external helper process, and therefore **nothing for four forks to
+race**. This is the fix Mockito's own message asks for.
+
+A dedicated `mockitoAgent` configuration with `transitive = false` resolves to exactly that one jar,
+so `singleFile` is unambiguous — no `find | head -1` glob, which is the shape `brew-smoke.sh` was
+already corrected for.
+
+### 45.2 — what I am NOT doing
+
+* **Not adding `-XX:+EnableDynamicAgentLoading`.** See 45.0. It hides the tell and fixes nothing.
+  Once the agent is installed, step 3 is unreachable anyway, so the flag would be dead on arrival.
+* **Not touching `maxParallelForks`.** The race is removed at its source; cutting forks would trade
+  a fixed ~53s-per-JVM bootstrap cost for a fix that is already complete. The 4 is load-bearing and
+  reasoned about in place.
+* **Not bumping `mockito_version`.** R14's own finding is that the bump did not cause this.
+* **Not bumping `mod_version`** to manufacture a green release run for a build-config change.
+* **Not pushing.** See 45.6.
+
+### 45.3 — the guard
+
+`MockitoAgentPreinstalledTest`, in `com.gmail.nossr50.guards` beside `CompilerErrorCapTest`.
+
+🔑 **It reads the JVM it is running in, not a Gradle property and not `build.gradle`'s text.** §44
+had to export `mcmmo.build.compilerArgs` because the compiler is not the JVM the test runs in. Here
+the thing under test **is** this JVM, so the stronger reading is available and the weaker one is not
+excusable. Three assertions, each failing for a different reason:
+
+1. `ManagementFactory.getRuntimeMXBean().getInputArguments()` carries a `-javaagent:` naming
+   `mockito-core` — the launcher actually received the flag.
+2. `ClassLoader.getSystemClassLoader().loadClass("org.mockito.internal.PremainAttach")`'s
+   `getInstrumentation()` is **non-null**. 🔑 This is the exact expression Mockito evaluates at step 1,
+   evaluated against the exact classloader Mockito uses. Assertion 1 can pass while this fails — an
+   agent jar on the command line that is the wrong artifact, or a premain that did not run.
+3. The **inline** mock maker is the active one, proved by doing something only it can do. Without
+   this, 1 and 2 are ceremony: if the maker is ever switched to the subclass one, the attach path
+   is gone and the guard would keep passing while asserting nothing anybody depends on. That is the
+   vacuity shape this repo has now caught fifteen times.
+
+**Mutations to watch fail before the guard is believed** — each must be observed red, not argued:
+
+| # | mutation | outcome — all four **observed**, not argued |
+|---|---|---|
+| M1 | remove the `-javaagent` wiring from `build.gradle` | ✅ 1 and 2 red, **and `:test` re-ran while every other task reported `UP-TO-DATE`** — no cached pass, which was the 2026-08-18 defect. Both messages quote the fork's *actual* argument list |
+| M2 | add `-XX:+EnableDynamicAgentLoading` **on top of** the working fix | ✅ **only** assertion 4 red. The other three stay green because the fix still works — which is the point: the flag is orthogonal to it |
+| M3 | force the subclass mock maker (`mockito-extensions/org.mockito.plugins.MockMaker`) | ✅ **only** the vacuity assertion red, naming the maker that took over |
+| M4 | point the agent at `byte-buddy-agent` instead of mockito-core | ✅ **passes, and must** — see below |
+
+🔴 **M4 was written as a mutation, ran as a refutation, and changed the guard.** The first draft
+asserted the agent argument *named `mockito-core`* and that *`PremainAttach` specifically* held the
+instrumentation. But a byte-buddy agent satisfies **step 2**, which removes the race just as
+completely — so that draft went **red on a correctly configured build**. An over-strict guard is not
+a safe guard: it is one somebody weakens later, on a day when it is wrong and they are in a hurry.
+The assertion now checks the property that actually matters — **step 1 or step 2 yields an
+`Instrumentation`, so step 4 is unreachable** — and `mockito-core` survives only in the failure text
+as *what `build.gradle` wires today*.
+
+🔑 **A second refutation, from the same run.** `net.bytebuddy.agent.Installer.getInstrumentation()`
+**throws** when no byte-buddy agent is loaded, rather than returning null; the first draft called
+`fail()` on that throw and went red with the correct wiring in place. Mockito does not treat it that
+way — `PremainAttachAccess.doGetInstrumentation` wraps its whole body in
+`catch (Exception) -> return null`, confirmed by reading the method's **exception table**. The helper
+now mirrors that exactly. ⚠️ **A guard that models a mechanism has to model the mechanism's
+error handling too**, or it disagrees with the code it is guarding and the disagreement is what goes
+red.
+
+### 45.4 — verification on `master`
+
+* Full suite green, and the **`N executed` line read**, not `BUILD SUCCESSFUL`.
+* The *"Mockito is currently self-attaching"* line **absent from every file** in
+  `build/test-results/test/`, checked mechanically. Its absence is the whole point of the change and
+  is not visible on the console.
+* ⚠️ **A green suite is not proof the flake is gone** — the suite was green on a re-run *with* the
+  defect. The evidence is the mechanism plus the missing warning, not one passing run.
+
+### 45.5 — propagation
+
+`master` first (rule 1), then cherry-pick to all eight bands with `Backport-of: <sha>`. Every band
+builds on its own band. ⚠️ The bands run **Java 21**, `master` runs **25**; step 3's Java-21 floor
+means the warning is expected on every one of them today, and must be gone on every one after.
+
+### 45.6 — push posture
+
+🔴 **Held, on the owner ruling of 2026-08-26.** `build.gradle` is inside `release.yml`'s `paths:`
+filter and all nine branches sit at `1.3.0-SNAPSHOT` with `v1.3.0` published, so a push fires nine
+release runs that R-t's stale-version gate refuses. §45 rides the next `mod_version` bump **with
+§44** — one push, two build-config changes, nine branches.
+
+### Rollback
+
+| step | undo |
+|---|---|
+| 45.1 / 45.3 | `git revert <sha>` on `master` — one build-config block and one new test file, nothing generated |
+| 45.5 | `git revert <sha>` per band, or `git reset --hard <recorded tip>` **only while unpushed** — tips recorded in 45.7 before the first cherry-pick |
+| all of it | 🟢 **Zero remote blast radius: nothing pushed, no tag moved, no release touched.** Holds only while 45.6 does |
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
@@ -1997,6 +2138,18 @@ test run in the shell that hides the bug proves nothing.**
 ---
 
 ## Risk register
+
+✅ **R14 — CLOSED on `master` 2026-08-26 by §45** (committed, **not pushed** — it rides the next
+`mod_version` bump with §44). Mockito's agent is now installed at VM start via `-javaagent`, so
+`PremainAttachAccess` returns at **step 1** and never reaches `ByteBuddyAgent.install()`. Proved by
+mechanism, not by one green run: the *"Mockito is currently self-attaching"* line and the dynamic
+agent-load warning are **absent from all 166 files** in `build/test-results/test/`, where they were
+present before. Guarded by `MockitoAgentPreinstalledTest`, 4/4 mutations observed.
+🔴 **The remedy recorded below was WRONG, and wrong in the direction that hides the defect.**
+`-XX:+EnableDynamicAgentLoading` is compared against a warning string at step 3 and is **never
+consulted at step 4**, which self-attaches regardless — it silences the only visible tell and leaves
+the race running. The guard now asserts that flag is **absent**. The original text is kept below
+because the diagnosis was right and only the fix was wrong.
 
 🆕 **R14 — the suite flakes at ~24% of tests, and the flake is indistinguishable from a regression.**
 Byte Buddy's inline mock maker attaches an agent per test fork through an external helper process;
