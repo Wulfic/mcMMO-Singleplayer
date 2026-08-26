@@ -32,7 +32,7 @@ status, because nothing reads it. **Re-measure before quoting this table.**
 
 | | state |
 |---|---|
-| `master` | `d5fb36dbf`, `minecraft_version=26.2`, **18 commits ahead of `origin/master`, unpushed** |
+| `master` | `minecraft_version=26.2`, **unpushed commits ahead of `origin/master`**. ⚠️ **Re-measure with `git rev-list --count origin/master..master`; a status line is never updated by the commit that changes it** |
 | `origin/master` | `af584eb42`, already at `26.2` — **the `26.x` conversion IS pushed**; §31–§33 is what is not |
 | `mc/1.21.11` | `e3b356c0b`, **local only, never pushed**. Holds the `1.21.11` band; released as `mc1.21.11-v1.2.0` back when `master` *was* that band |
 | six older bands | pushed, released at `v1.2.0`, untouched by any of this |
@@ -306,14 +306,18 @@ The band cannot run its own gates until its tooling speaks official names.
       sequenced). `README.md` has no `26.2` row and its floor sentence still says *"neither is the
       `26.x` line yet"*; that is the single red test in the suite, deliberately left red. Both files
       are in R-y's byte-identity set, so the edit lands everywhere at once or not at all.
-- [ ] 🔴 **The owed gate-10/11 sweep** — 🔧 **IN FLIGHT as §37; the scope is measured there, not here.**
+- [x] ✅ **The owed gate-10/11 sweep — DONE (§37).** Gates 9, 10 and 11 all exit 0 at `--local`.
       **9 paths** for gate 10 (all `scripts/**`; `master` proved the winner on every one) and **1 key**
       for gate 11 (`mockito_version`). ⚠️ **`.gitignore` was NOT owed** — the `30.6` / `.hprof` claim
       that stood here was stale, all eight branches already carry blob `b432715f0`.
-      🔑 Mockito had to move: Byte Buddy 1.17.7 rejects **Java 25 (69)** outright, so every mocking
-      test threw. It stays `SHARED` — a newer Mockito is *expected* to run on the bands' Java 21, and
-      §37 step 4 is the first thing that will ever have **tested** that — but its
-      **floor is now set by the newest JDK any band uses**, which R-aa makes band-local.
+      🔑 Mockito had to move: `5.14.2` carries **Byte Buddy 1.15.4**, which rejects **Java 25 (class
+      file 69)** outright, so every mocking test threw on the 26.x toolchain. *(An earlier edition of
+      this line blamed `1.17.7` — that is the version `5.23.0` carries, i.e. the fix, not the fault.)*
+      It stays `SHARED`, and its **floor is set by the newest JDK any band uses**, which R-aa makes
+      band-local.
+      ✅ **"A newer Mockito is fine on the bands' Java 21" is now MEASURED, not asserted** (§37): the
+      full suite ran on all seven bands under `5.23.0` — 1846 to 1854 executed, 0 failures each, with
+      75 test files importing `org.mockito`.
       🔴 `gradle.properties` is inside `release.yml`'s `paths:` filter, so the mockito half **rides the
       `mod_version` bump with R-aa** or it fires seven release runs R-t refuses. §37 splits the commits.
 - [ ] 🔴 **R-aa — the per-band `java_version` key.** Ruled, not built. `release.yml:117` still pins
@@ -369,7 +373,7 @@ The obstacle was never the version string.
 
 ---
 
-## §37 — the owed gate-10/11 sweep — 🔴 IN FLIGHT
+## §37 — the owed gate-10/11 sweep — ✅ DONE (gate 10 + gate 9 green; gate 11 green LOCALLY)
 
 **Tier 2.** Seven band branches, a generated artifact per band, and a key that changes what a push
 does. Written down before the first edit.
@@ -468,6 +472,81 @@ commits is what makes that a choice rather than a trap.
 * **11** `gradle-key-identity-audit.py --require-bands 8` — expect gate 11 GREEN once commit B is on
   every band, and it will be, locally.
 
+### ✅ Outcome — measured 2026-08-25, all seven bands
+
+Two commits per band, exactly as planned. **Nothing is pushed.**
+
+| gate | before | after |
+|---|---|---|
+| **10** `branch-file-identity-audit --local --require-bands 7` | 9 violating paths (6 DIFFERS, 3 ABSENT) | ✅ **exit 0 — 48 shared paths byte-identical on all eight branches** |
+| **11** `gradle-key-identity-audit --local --require-bands 7` | `mockito_version` diverged | ✅ **exit 0 — 10 SHARED agree, 2 DISTINCT differ** |
+| **9** `manifest-identity-audit --local --require-bands 7` | (not the target) | ✅ **exit 0 — all 8 manifests distinct** |
+
+⚠️ **`--require-bands` counts `mc/**` branches ONLY, so the argument is 7, not 8.** Passing `8`
+returns **exit 2**, which the ship gate says is *not a pass* — and the same run still prints
+*"No drift"* above it. **Read the exit code, not the sentence.**
+⚠️ Gate 11 is green **locally only**. Commit B is unpushed by design (below), so `origin` still
+diverges on `mockito_version` until the `mod_version` bump.
+
+Per band: `gradle build` green with `> Task :test` **bare**, manifest regenerated, gate 8 `--check`
+PASS, `mixin-allow-audit --self-test` + `--check` PASS, `config-id-audit --self-test` + `--check`
+PASS. Test counts differ per band and that is correct — 1846 to 1854.
+
+### 🔑🔑 Two defects the sweep FOUND, neither of which it caused
+
+**1. The mixin gate picked its jar by ALPHABET — `ZERO=61` on `mc/1.21.11`.**
+Every injector reported dead on a band that ships and boots clean. `find_jar` ended in
+`sorted(hits)[0]`, and the Loom cache is keyed by MC version and **shared by every project and
+branch on the machine**, so `1.21.11` held two jars in different namings — a yarn one and a
+MOJANG-named `loom.mappings...layered+hash` one that **our own §33 rename tooling created hours
+earlier**. `loom` sorts before `net.fabricmc`.
+✅ Confirmed pre-existing by running the band's **own pre-sweep copy** as a control: identical
+`ZERO=61`. Fixed on `master` first (rule 1), then carried.
+🔑 **The gate had no `--self-test` at all**, alone among the gates here — which is how it could
+answer confidently against the wrong jar indefinitely. Now 8 cases, `choose_jar()` pure.
+⚠️ **The first mutation proved nothing**: a crude mutant died with an `IndexError` on the
+empty-cache case before case 1 ever reported. A faithful reproduction of the pre-fix code fails
+exactly the 5 predicted cases. **A mutant that goes red for the wrong reason is not verification.**
+🔑 Only `1.21.11` was poisoned — the one version the rename work targeted, and the one band that is
+**not pushed**. That is why it hid.
+
+**2. `mc/1.21.1`'s committed manifest was STALE — gate 8 was RED on that band, and it shipped.**
+Every other band regenerated to exactly the 3 rows §36 predicts. This one moved **1413 → 1416,
++6/−3**, the extra three being `SummonCommand` as CLASS, METHOD and MIXINCLASS — this band's own
+`/summon` origin fix, the gap every structural gate missed when it shipped. The mixin landed; the
+generated manifest was never regenerated to match.
+Confirmed, not inferred: `--check` against the **committed** manifest exits 1 —
+*"3 record(s) it carries that this build never references, 6 it is missing."*
+🔴 **Why nobody saw it: gate 8 is a hand-run ship-gate step.** It is not in `release.yml`, so no push
+has ever executed it. **A band-specific source addition silently invalidates that band's generated
+manifest, and nothing unattended reads it.** This is the general shape, not a `1.21.1` quirk.
+
+### 🔴 Carried out of §37, still open
+
+- [ ] 🔴 **Commit B is unpushed on all seven bands, deliberately.** `gradle.properties` is inside
+      `release.yml`'s `paths:` filter, so pushing the `mockito_version` half fires **seven release
+      runs** that R-t's stale-version gate refuses. It rides the `mod_version` bump **with R-aa**.
+      Until then gate 11 is green locally and red against `origin`.
+- [ ] ⚠️⚠️ **NEW RISK R14 — the suite has a ~24%-of-tests FLAKE.** `mc/1.21.10`'s first full build
+      reported **449 of 1846 failing**, all
+      `Could not initialize plugin: MockMaker` → `Could not self-attach to current VM using external
+      process`. A clean `cleanTest test` re-run on the same commit was **1846/0**, and `mc/1.21.11`
+      passed 1846/0 first try on the same Mockito.
+      **Mechanism:** `test { maxParallelForks = 4 }`, and Byte Buddy's **inline** mock maker attaches
+      an agent per fork through an **external helper process** on Windows. Four forks race that spawn.
+      🔑 **NOT introduced by the 5.23.0 bump** — the inline mock maker is the 5.x default in `5.14.2`
+      too. The bump only gave a latent harness defect an occasion to show.
+      🔴 **Why it is a risk and not an annoyance:** `release.yml` runs this suite on every push, a red
+      release run is already the normal outcome of an ordinary push, and a 449-failure red reads
+      exactly like a real regression. **Nobody re-runs a red they believe.**
+      ⬜ **Remedy needs an owner decision, deliberately NOT taken here:** `-XX:+EnableDynamicAgentLoading`
+      or a lower `maxParallelForks` in `build.gradle` — a shared file inside `release.yml`'s `paths:`
+      filter, so changing it on seven bands fires seven release runs. Same constraint as R-aa.
+      ⚠️ **Do not characterise this from one run.** What settled it was the MECHANISM plus a band that
+      passed first try — not the single green re-run.
+- [ ] ⬜ **`.gitignore` was never owed** — all eight branches already carried blob `b432715f0`. The
+      carried list had been asserting otherwise. Corrected; nothing to do.
+
 ### What I am NOT doing
 
 * **Not pushing anything.** The hold is an owner decision; every commit here is local. `origin` is
@@ -509,7 +588,7 @@ source comments) is in `TODO-multiversion-through-phase-21.md`. Nothing has been
 | **8.3** | `mc/1.21.1`, the last `1.21.x` band | ✅ SHIPPED `mc1.21.1-v1.2.0`. Re-scoped by R-m′ — nothing ships disabled |
 | **22** | the `1.20` line | 🚫 **WITHDRAWN (R-x)** before any of it was built. 22.1 (the `MACES` gate) had already shipped and stays |
 | **23** | back-port §22.1, ship `v1.2.0` | ✅ seven releases at `v1.2.0`. Exposed **R-w′** — `mod_version` fell between two cross-branch guards |
-| **24** | docs join the identity guard (R-y) | ✅ gate 10, 24 → 44 paths. Its **first run** found `master` + 5 bands serving a wiki claim false on `mc/1.21.1` — and the **band** was right |
+| **24** | docs join the identity guard (R-y) | ✅ gate 10, 24 → 44 paths (**48 since §37**). Its **first run** found `master` + 5 bands serving a wiki claim false on `mc/1.21.1` — and the **band** was right |
 | **25** | is the yarn→official table derivable? | ✅ yes — 100% of 1,389 symbols. 9.1's premise was measured **false**: yarn's `official` column is the *obfuscated* name |
 | **26** | gate-10 sweep for the new script | ✅ all seven branches. 🔑 `drift-audit.py --master master` **prefers remote refs** — a pre-push run grades stale bands and prints `No drift` |
 | **27** | the `26.x` toolchain, measured | ✅ builds on the **existing** Loom; `master` pinned to `26.2`. Java 25 collides with gate 10 → **R-aa** |
@@ -678,6 +757,16 @@ test run in the shell that hides the bug proves nothing.**
 ---
 
 ## Risk register
+
+🆕 **R14 — the suite flakes at ~24% of tests, and the flake is indistinguishable from a regression.**
+Byte Buddy's inline mock maker attaches an agent per test fork through an external helper process;
+`maxParallelForks = 4` races it. Measured 2026-08-25 on `mc/1.21.10`: **449 of 1846 red**, then
+**1846/0** on a clean re-run of the same commit. **Not caused by the Mockito bump** — the inline
+mock maker is the 5.x default in `5.14.2` too. `release.yml` runs this suite on every push, where a
+red run is already the normal outcome, so the failure mode is that a REAL regression gets re-run
+away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer forks) touches
+`build.gradle`, which is inside `release.yml`'s `paths:` filter — same deferral shape as R-aa.
+
 
 | # | Risk | State |
 |---|---|---|
