@@ -25,38 +25,40 @@ manifest — a lookup, not a judgment call.
 
 ## 🔴 WHERE THIS STANDS RIGHT NOW — read before touching anything
 
-✅ **Measured 2026-08-25 from `git ls-remote`, `git branch`, `gradle.properties` and the last suite
-run — not carried forward from the previous edition.** Three separate editions of this file described
-a status that had already changed: a status sentence is never updated by the commit that changes the
-status, because nothing reads it. **Re-measure before quoting this table.**
+✅ **Re-measured 2026-08-26 from `git branch`, `gradle.properties` and the suite runs of this
+session — not carried forward.** Three separate editions of this file described a status that had
+already changed: a status sentence is never updated by the commit that changes the status, because
+nothing reads it. **Re-measure before quoting this table.**
 
 | | state |
 |---|---|
-| `master` | `minecraft_version=26.2`, **unpushed commits ahead of `origin/master`**. ⚠️ **Re-measure with `git rev-list --count origin/master..master`; a status line is never updated by the commit that changes it** |
-| `origin/master` | `af584eb42`, already at `26.2` — **the `26.x` conversion IS pushed**; §31–§33 is what is not |
-| `mc/1.21.11` | `e3b356c0b`, **local only, never pushed**. Holds the `1.21.11` band; released as `mc1.21.11-v1.2.0` back when `master` *was* that band |
-| six older bands | pushed, released at `v1.2.0`, untouched by any of this |
-| build | `compileJava` + `compileTestJava` **green** on `26.2` |
-| suite | **1,852 executed, 1,851 green, 1 red** — the red is the owner-deferred docs row |
-| mixin gate | `mixin-allow-audit.py --check` **passes**: `ZERO=0  MISMATCH=0  OK=60`, plus 1 `SLICE` row hand-verified |
-| boot | ✅ **PASSED on `26.2`, 2026-08-25 (§35).** Real standalone Fabric server, loader `0.19.3`, fabric-api `0.158.0+26.2`. Canary rejected, mcMMO initialised, configs loaded, `/mcmmo` rendered, `/mcstats` dispatched, clean shutdown. **0 ERROR/FATAL, 0 mixin failures.** Harness `--self-test` 4/4 first. |
-| gameplay | ✅ **PASSED on `26.2`, 2026-08-25 (§35).** `gameplay-smoke.sh` — **30 passed, 0 failed, 0 inconclusive**, a real carpet player through mining, digging, both combat paths, repair, cooking, a super ability and the version gates. Carpet `26.2` exists on Modrinth. ⚠️ Its FIRST run reported `repair` red; that was **the harness, not the mod** — see §35 below. |
+| branches | **NINE.** `master` (`26.2`) + `mc/26.1.2` + the seven `1.21.x` bands. ⚠️ **Re-measure with `git rev-list --count origin/master..master`** |
+| `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.0-SNAPSHOT`. **Unpushed commits ahead of `origin/master`** |
+| `mc/26.1.2` | **NEW, §42.** Covers `26.1`, `26.1.1`, `26.1.2`. **Local only, never pushed.** Closes the declared 16-version scope |
+| `mc/1.21.11` | **Local only, never pushed** |
+| six older bands | pushed, released at `v1.2.0`. Each now carries unpushed §40/§41/§42 commits |
+| build | green on `master` (`26.2`, Java 25) and on `mc/26.1.2` (`26.1.2`, Java 25) |
+| suite | ✅ **1,858 executed, 0 failures** on `master` **and** on `mc/26.1.2`. The docs row red since §33 is CLOSED |
+| gate 7 (drift) | ✅ **exit 0** — first time since §33. 11 commits `retro-waived` under R-ab; **0 MISSING** on all eight bands |
+| gate 9 (manifest) | ✅ exit 0 at eight bands. Tripped correctly on the fresh cut and was fixed by regeneration |
+| gate 10 (shared layer) | ✅ exit 0 — **50 shared paths** byte-identical on all nine branches |
+| gate 11 (per-key) | ✅ exit 0 — shared keys agree, distinct keys differ |
+| mixin gate | ✅ `--check` passes on `master` (`ZERO=0 OK=60 SLICE=1`) and on `mc/26.1.2` (same) |
+| boot | ✅ `26.2` (§35). 🔴 **`26.1.2` NOT boot-checked** |
+| gameplay | ✅ `26.2` 30/30 (§35). 🔴 **`26.1.2` NOT smoke-tested** |
 
-✅ **BOTH of the old reasons to hold are now discharged.** The version collision was measured false
-on 2026-08-24 (`origin/master` is at `26.2`, `mc/1.21.11` is absent from the remote, so no two
-branches share a `minecraft_version` — **R10 and gates 9/11 already clear**), and on 2026-08-25
-**`boot-check.sh` went green on `26.2`**, which was the R-z hold condition itself.
+📌 **The push hold STANDS** — owner decision, re-confirmed 2026-08-26 (R-ac), third session running.
+Nothing is pushed. **Re-ask before any push.** R14's ~24% suite flake is a second reason: a red
+release run is currently indistinguishable from a real regression.
 
-🔴 **The hold is now an OWNER DECISION, not a missing gate** (2026-08-25): nothing is pushed and
-`mc/1.21.11` stays held while the rest of the §9 list is worked locally. Do not read the discharged
-gates as permission — re-ask before any push.
+⚠️ **A clean compile and a green gate are STRUCTURAL.** §32 found a mixin bound to the *wrong live
+method* while every structural gate read green, `mc/1.21.1` shipped a `/summon` origin gap past
+67/67 injectors and a clean boot, and §42 found an injector on the new band that compiled perfectly
+and bound to **nothing**. Application is not coverage.
 
-⚠️ **A clean boot is still not coverage.** §32 found a mixin bound to the *wrong live method* while
-every structural gate read green, and `mc/1.21.1` shipped a `/summon` origin gap past 67/67 injectors
-and a clean boot. Boot proves the jar LOADS; the earning paths are `gameplay-smoke.sh`'s job.
-
-**Push order, when the owner lifts the hold:** `master` and `mc/1.21.11` together, after
-gates 7/9/10/11 pass at `--local`, carrying the owed gate-10/11 sweep and **R-aa** in the same push.
+**Push order, when the owner lifts the hold:** everything together, after gates 7/9/10/11 pass at
+eight bands in a local clone — carrying `BAND_COUNT` / `--require-bands` raised to the real pushed
+band count (x.9), which is deliberately NOT done while the hold stands.
 
 ---
 
@@ -1447,6 +1449,40 @@ double-stamps. ⚠️ The doc then went on to describe `26.2`'s chain **as fact*
 the same *"MC fact recorded as the reason for code"* shape as GitHub #7. It now states this band's
 chain and says outright that the bottom is a per-band fact.
 
+### 🔑🔑 The cut tripped gate 9 immediately, and that is the guard earning its keep
+
+A freshly cut band inherits `master`'s `scripts/mc-surface.txt`, and that file is a **per-band
+generated fact**. Inherited, it described `26.2` while the branch ships `26.1.2` — and **every line
+in it was individually true**, which is precisely why no per-branch check can ever see this.
+`manifest-identity-audit.py` caught it as a byte-identical collision with `master`, the only angle
+from which it is visible at all.
+
+Regenerated after `rm -rf build/classes && ./gradlew classes testClasses` — a stale `build/classes`
+yields a confidently wrong answer rather than an error. **1436 records on `master` → 1430 here.**
+🔑 **The count differing is the evidence**, not the diff: identical counts would mean a build-cache
+hit had handed this band another band's classes, which is the failure that guard actually exists to
+find.
+
+⚠️ **Two `scripts/` files, opposite rules, and getting them backwards is silent:**
+
+| file | rule |
+|---|---|
+| `scripts/mc-surface.txt` | a fact about **this branch** — REGENERATE per band, never carry |
+| `scripts/mc-ids.txt` | a fact about **Minecraft** — cherry-pick whole, never regenerate per band |
+
+### ✅ Gates after the cut — eight bands, all four green
+
+Run inside `git clone --local --no-hardlinks . <scratch>`, self-test first on each:
+
+```
+drift-audit.py                 selftest=0  gate=0   No drift (77 retro-waived)
+manifest-identity-audit.py     selftest=0  gate=0   No collisions
+branch-file-identity-audit.py  selftest=0  gate=0   50 shared paths identical
+gradle-key-identity-audit.py   selftest=0  gate=0   shared agree, distinct differ
+```
+
+Suites: **`master` 1,858 executed / 0 failed**, **`mc/26.1.2` 1,858 executed / 0 failed.**
+
 ### ⚠️ What the cut does NOT yet have
 
 * **No boot check and no gameplay smoke on `26.1.2`.** `master` has both on `26.2` (§35). A clean
@@ -1654,6 +1690,18 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
 ---
 
 ## Carried debt (open items only — closed rows are in the archives)
+
+- [ ] 🟡 **`-Xmaxerrs` is not lifted in `build.gradle`, and the 100-error cap has now misled a
+      sizing TWICE.** §27 recorded it (*"javac's 100-error cap made the first run look
+      `platform/`-only"*) and §42 hit it again immediately: `mc/26.1.2`'s test tree reported **30**
+      errors, and **61** with the cap lifted, across 8 files. The fix is one token
+      (`<< '-Xmaxerrs' << '10000'`) and it was **deliberately reverted** on the band rather than
+      kept, because rule 1 says it lands on `master` first. **Do that, then sweep** — `build.gradle`
+      is inside `release.yml`'s `paths:` filter, so it rides a `mod_version` bump like everything
+      else in that file.
+- [ ] 🔴 **`mc/26.1.2` has no boot check and no gameplay smoke.** `master` has both on `26.2` (§35).
+      Structural gates are green on the band, and §42 itself is the reminder that structural is not
+      coverage: an injector there compiled perfectly and bound to nothing.
 
 - [ ] 🔴 **Manifest debt piece 1** — see *Other open work*. Piece 2 shipped as
       `scripts/manifest-identity-audit.py` (Phase 18).
