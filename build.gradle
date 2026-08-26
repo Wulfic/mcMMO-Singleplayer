@@ -138,18 +138,40 @@ processResources {
     // migrated in later phases; only fabric.mod.json + mixin configs matter now.
 }
 
+// The JDK level for THIS BAND, read from gradle.properties (ruling R-aa). It used to be hardcoded
+// here four times over -- sourceCompatibility, targetCompatibility, the toolchain and
+// options.release -- plus a fifth copy in release.yml, which stayed pinned to '21' on every branch
+// including the one that needs 25. One declared value, every consumer reads it.
+//
+// ⚠️ REFUSES rather than defaulting. A default is worse than a crash here: compiling a band against
+// the wrong release produces a jar that builds clean, tests clean, and fails at the player's
+// launcher with UnsupportedClassVersionError. Nothing in this repo's gates would see it.
+if (!project.hasProperty('java_version')) {
+    throw new GradleException(
+            "gradle.properties declares no java_version. It is a PER-BAND fact (26.x needs 25, the " +
+            "1.21.x bands need 21) and both build.gradle and .github/workflows/release.yml read it " +
+            "from there -- see ruling R-aa. Add java_version=<n> rather than reinstating a literal.")
+}
+def declaredJavaVersion = project.java_version.toString().trim()
+if (!(declaredJavaVersion ==~ /\d+/)) {
+    throw new GradleException(
+            "gradle.properties has java_version='${declaredJavaVersion}', which is not a plain " +
+            "integer. Write the major version alone, e.g. java_version=21.")
+}
+def javaLevel = declaredJavaVersion as Integer
+
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_25
-    targetCompatibility = JavaVersion.VERSION_25
+    sourceCompatibility = JavaVersion.toVersion(javaLevel)
+    targetCompatibility = JavaVersion.toVersion(javaLevel)
     toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+        languageVersion = JavaLanguageVersion.of(javaLevel)
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
     it.options.encoding = 'UTF-8'
-    it.options.release = 25
+    it.options.release = javaLevel
     it.options.compilerArgs << '-Xlint:deprecation'
 }
 
@@ -170,10 +192,15 @@ test {
     def resolvedVersion = project.version.toString()
     def resolvedBandVersions = bandVersions.join(',')
     def resolvedModVersion = project.mod_version.toString()
+    def resolvedJavaLevel = javaLevel.toString()
     systemProperty 'mcmmo.build.version', resolvedVersion
     systemProperty 'mcmmo.build.bandVersions', resolvedBandVersions
     systemProperty 'mcmmo.build.modVersion', resolvedModVersion
+    // R-aa. Hands BandToolchainLevelTest the level THIS BUILD resolved, so the guard checks the
+    // wiring rather than re-reading gradle.properties and agreeing with itself.
+    systemProperty 'mcmmo.build.javaVersion', resolvedJavaLevel
     inputs.property 'mcmmo.build.version', resolvedVersion
+    inputs.property 'mcmmo.build.javaVersion', resolvedJavaLevel
 
     // ⚠️⚠️ A FILE A GUARD TEST READS MUST BE DECLARED AS A TASK INPUT, or Gradle does not know the
     // test depends on it — and with org.gradle.caching=true it serves a CACHED PASS after that file

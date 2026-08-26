@@ -110,11 +110,36 @@ jobs:
         with:
           fetch-depth: 0          # full history: tag ops + branch push + notes
 
-      - name: Set up JDK 21
+      # --- The JDK level is a PER-BAND fact (ruling R-aa) ---------------------
+      # 26.x requires Java 25; every 1.21.x band requires 21. This file must be
+      # BYTE-IDENTICAL on every branch under P19-1, so it cannot carry either
+      # number -- it reads the one gradle.properties declares. Before R-aa it
+      # was hardcoded '21' on all eight branches, including the one that needs
+      # 25, and nothing anywhere said so.
+      #
+      # Runs BEFORE setup-java, which is why it cannot use the `meta` step
+      # below: setup-java has to know the level before it installs anything.
+      - name: Read the JDK level this band builds with
+        id: jdk
+        run: |
+          jv=$(grep -E '^java_version=' gradle.properties | head -n1 | cut -d= -f2- | tr -d '[:space:]')
+          if [ -z "$jv" ]; then
+            echo "::error::gradle.properties declares no java_version. It is per-band (26.x needs 25, the 1.21.x bands need 21) and this workflow reads it rather than pinning a number -- see ruling R-aa."
+            exit 1
+          fi
+          case "$jv" in
+            ''|*[!0-9]*)
+              echo "::error::java_version='$jv' is not a plain integer. Write the major version alone, e.g. java_version=21."
+              exit 1 ;;
+          esac
+          echo "java_version=$jv" >> "$GITHUB_OUTPUT"
+          echo "Building this band with JDK $jv"
+
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: ${{ steps.jdk.outputs.java_version }}
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4   # dependency + build caching

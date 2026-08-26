@@ -17,6 +17,7 @@ Both mods are versioned per Minecraft release, so the pair you want depends on w
 
 | Your Minecraft | Mod Menu | Cloth Config |
 |---|---|---|
+| **26.2** | `20.0.1` | `26.2.155` |
 | **1.21.11** | `17.0.0` | `21.11.153` |
 | **1.21.9 – 1.21.10** | `16.0.1` | `20.0.149` |
 | **1.21.6 – 1.21.8** | `15.0.2` | `19.0.147` |

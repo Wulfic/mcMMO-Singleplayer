@@ -369,7 +369,7 @@ Earn XP by brewing potions.
 | Catalysis | 1 | Increases brewing speed — up to **4× faster** at max level. |
 | Concoctions | 8 | Brew potions with more ingredients. |
 
-> **Concoctions tier gating is not implemented.** The custom-ingredient tree in `potions.yml` loads, but the level gate that should restrict which tier you can brew has no seam in 1.21.11 to hook.
+> **Concoctions tier gating is not implemented.** The custom-ingredient tree in `potions.yml` loads, but the level gate that should restrict which tier you can brew has no seam to hook — the vanilla method is static and carries no block position.
 
 ## Cooking
 
