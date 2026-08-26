@@ -2,34 +2,73 @@
 
 **Scope:** Fabric only. Target: every stable **`1.21.x` (12)** and **`26.x` (4)** = **16 versions**.
 NeoForge/Forge deferred (see bottom). The `1.20` line was ruled IN by R-v and back OUT by **R-x**
-(2026-08-20) before any of it was built — see §22.
+(2026-08-20) before any of it was built — it is out of scope on **scope grounds, never measured**.
 
 **Strategy:** branch-per-band (ruling **R-a**). `master` **is** the newest band; `mc/**` exists only
 for older bands and is cut by hand. A **band** = a contiguous range of MC versions across which
 mcMMO's touched surface is identical, measured by `scripts/probe-bands.py` against the 1415-record
 manifest — a lookup, not a judgment call.
 
-> **Archives.** Phases 0–7: [plans/completed/TODO-multiversion-phases-0-7.md](plans/completed/TODO-multiversion-phases-0-7.md).
-> Everything through Phase 21 — a **complete verbatim copy** of this file as it stood at `06eaaf7ae`,
-> before the Phase-22 rewrite: [plans/completed/TODO-multiversion-through-phase-21.md](plans/completed/TODO-multiversion-through-phase-21.md).
-> That archive is the only place the superseded rulings (R-b, R-m), the completed phases 10–21 and
-> the closed debt rows keep their full reasoning. **Everything below is forward work.**
+> **Archives — three files, and they hold the evidence this one summarises.**
+> Phases 0–7: [plans/completed/TODO-multiversion-phases-0-7.md](plans/completed/TODO-multiversion-phases-0-7.md).
+> Everything through Phase 21 (verbatim copy at `06eaaf7ae`):
+> [plans/completed/TODO-multiversion-through-phase-21.md](plans/completed/TODO-multiversion-through-phase-21.md).
+> **§8.3 and §22 – §33** (verbatim copy at `d5fb36dbf`, the whole `26.2` port):
+> [plans/completed/TODO-multiversion-through-section-33.md](plans/completed/TODO-multiversion-through-section-33.md).
+>
+> ⚠️ **Do not re-derive a number that lives in an archive, and do not re-open a call recorded there.**
+> The `2,639 → 0` compile ladder, the `54 → 0` injector re-derivation and the `186 → 1` suite triage
+> each cost a session; this file carries the *result*, the archive carries *how it was arrived at* and
+> what was refuted on the way. **Everything below is forward work.**
 
 ---
 
-## What ships today — 7 branches, **12 of 12** `1.21.x`
+## 🔴 WHERE THIS STANDS RIGHT NOW — read before touching anything
 
-✅ **Read 2026-08-19 from `gh release list` and from each branch's own `gradle.properties` /
-`fabric.mod.json` — not retyped.** The previous edition of this table was stale in three columns at
-once: it named 5 branches when 6 had shipped, and still carried the `2.2.050` tags that Phase 13
-replaced with the `1.x` line.
+✅ **Measured 2026-08-25 from `git ls-remote`, `git branch`, `gradle.properties` and the last suite
+run — not carried forward from the previous edition.** Three separate editions of this file described
+a status that had already changed: a status sentence is never updated by the commit that changes the
+status, because nothing reads it. **Re-measure before quoting this table.**
+
+| | state |
+|---|---|
+| `master` | `minecraft_version=26.2`, **unpushed commits ahead of `origin/master`**. ⚠️ **Re-measure with `git rev-list --count origin/master..master`; a status line is never updated by the commit that changes it** |
+| `origin/master` | `af584eb42`, already at `26.2` — **the `26.x` conversion IS pushed**; §31–§33 is what is not |
+| `mc/1.21.11` | `e3b356c0b`, **local only, never pushed**. Holds the `1.21.11` band; released as `mc1.21.11-v1.2.0` back when `master` *was* that band |
+| six older bands | pushed, released at `v1.2.0`, untouched by any of this |
+| build | `compileJava` + `compileTestJava` **green** on `26.2` |
+| suite | **1,852 executed, 1,851 green, 1 red** — the red is the owner-deferred docs row |
+| mixin gate | `mixin-allow-audit.py --check` **passes**: `ZERO=0  MISMATCH=0  OK=60`, plus 1 `SLICE` row hand-verified |
+| boot | ✅ **PASSED on `26.2`, 2026-08-25 (§35).** Real standalone Fabric server, loader `0.19.3`, fabric-api `0.158.0+26.2`. Canary rejected, mcMMO initialised, configs loaded, `/mcmmo` rendered, `/mcstats` dispatched, clean shutdown. **0 ERROR/FATAL, 0 mixin failures.** Harness `--self-test` 4/4 first. |
+| gameplay | ✅ **PASSED on `26.2`, 2026-08-25 (§35).** `gameplay-smoke.sh` — **30 passed, 0 failed, 0 inconclusive**, a real carpet player through mining, digging, both combat paths, repair, cooking, a super ability and the version gates. Carpet `26.2` exists on Modrinth. ⚠️ Its FIRST run reported `repair` red; that was **the harness, not the mod** — see §35 below. |
+
+✅ **BOTH of the old reasons to hold are now discharged.** The version collision was measured false
+on 2026-08-24 (`origin/master` is at `26.2`, `mc/1.21.11` is absent from the remote, so no two
+branches share a `minecraft_version` — **R10 and gates 9/11 already clear**), and on 2026-08-25
+**`boot-check.sh` went green on `26.2`**, which was the R-z hold condition itself.
+
+🔴 **The hold is now an OWNER DECISION, not a missing gate** (2026-08-25): nothing is pushed and
+`mc/1.21.11` stays held while the rest of the §9 list is worked locally. Do not read the discharged
+gates as permission — re-ask before any push.
+
+⚠️ **A clean boot is still not coverage.** §32 found a mixin bound to the *wrong live method* while
+every structural gate read green, and `mc/1.21.1` shipped a `/summon` origin gap past 67/67 injectors
+and a clean boot. Boot proves the jar LOADS; the earning paths are `gameplay-smoke.sh`'s job.
+
+**Push order, when the owner lifts the hold:** `master` and `mc/1.21.11` together, after
+gates 7/9/10/11 pass at `--local`, carrying the owed gate-10/11 sweep and **R-aa** in the same push.
+
+---
+
+## What ships today — 6 branches pushed, plus `master`
 
 ⚠️ **There is no per-version jar and there never was. One jar covers a band**, via the range in its
 own `fabric.mod.json`.
 
 | Branch | MC versions covered | `depends.minecraft` | Released tag |
 |---|---|---|---|
-| `master` | `1.21.11` | `~1.21.11` | `mc1.21.11-v1.2.0` |
+| `master` | `26.2` | `~26.2` | ⬜ **nothing released yet** — §9 in flight |
+| `mc/1.21.11` | `1.21.11` | `~1.21.11` | `mc1.21.11-v1.2.0`, tagged while `master` held the band ⚠️ **branch unpushed** |
 | `mc/1.21.10` | `1.21.9`, `1.21.10` | `>=1.21.9 <1.21.11` | `mc1.21.10-v1.2.0` |
 | `mc/1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | `>=1.21.6 <1.21.9` | `mc1.21.8-v1.2.0` |
 | `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v1.2.0` |
@@ -37,123 +76,64 @@ own `fabric.mod.json`.
 | `mc/1.21.3` | `1.21.2`, `1.21.3` | `>=1.21.2 <1.21.4` | `mc1.21.3-v1.2.0` |
 | `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | `mc1.21.1-v1.2.0` |
 
-**Coverage is continuous `1.21` → `1.21.11` — the whole `1.21` line, 12 of 12.** `mod_version` is `1.2.0-SNAPSHOT` on all seven
-branches; **seven** releases are published at `v1.2.0` (2026-08-20, §23), 0 drafts, one per band — read from `gh release list`
-and `git ls-remote --tags`, not inferred from the seven green runs.
+**Shipped coverage is continuous `1.21` → `1.21.11` — the whole `1.21` line, 12 of 12.** `mod_version`
+is `1.2.0-SNAPSHOT` on every branch; **seven** releases at `v1.2.0`, 0 drafts, one per band.
 
-✅ **The dangling `mc1.21.11-v2.2.050-build.3` tag is GONE.** `git ls-remote --tags origin` on
-2026-08-20 returns the seven `v1.2.0` tags and `v1.21.11-baseline`, and nothing else. This paragraph
-used to say that tag *survives deliberately* and that no sweep could reach it — true when written,
-false now, and nothing reported the change.
-🔑 **Nothing in the ten gates reads the remote TAG list.** Gates 9 and 10 compare branches; the
-release sweep enumerates `gh release list`, which a bare tag is invisible to *by the same argument
-this paragraph made*. So the claim was checkable only by hand, and only because §23 happened to look.
-**Re-read `git ls-remote --tags` before repeating any statement about which tags exist.**
+🔑 **Nothing in the eleven gates reads the remote TAG list.** Gates 9/10/11 compare branches; the
+release sweep enumerates `gh release list`, which a bare tag is invisible to. **Re-read
+`git ls-remote --tags` before repeating any statement about which tags exist.**
 
 ---
 
 ## Skill coverage per band — audited 2026-08-19
 
-**The question: does every band ship every skill?** Answered mechanically, by comparing git **blob
-shas** across all seven branches rather than by reading the code on one of them:
+**Does every band ship every skill?** Answered mechanically, by comparing git **blob shas** across
+branches rather than by reading the code on one of them — `PrimarySkillType.java`,
+`SkillAvailability.java` and `SkillGating.java` were byte-identical on all seven.
 
-| File | Blob sha, all 7 branches |
-|---|---|
-| `datatypes/skills/PrimarySkillType.java` | `c7d1269203` |
-| `util/skills/SkillAvailability.java` | `17bc72b8d5` |
-| `util/skills/SkillGating.java` | `1858831bc9` |
+✅ **26 skill constants**, identical everywhere. *(AGILITY is deliberately absent — retired
+2026-08-17, its perks re-parented onto Parkour, Swimming and Flying.)*
 
-✅ **26 skill constants, byte-identical on `master` and all six band branches:**
-ALCHEMY · ARCHERY · AXES · COOKING · CROSSBOWS · EXCAVATION · FISHING · FLYING · HERBALISM · HUNTER ·
-HUSBANDRY · MACES · MINING · PARKOUR · REPAIR · SALVAGE · SMELTING · SPEARS · STEALTH · SWIMMING ·
-SWORDS · TAMING · TRIDENTS · UNARMED · UNARMORED · WOODCUTTING.
-*(AGILITY is deliberately absent — retired 2026-08-17, its perks re-parented onto Parkour, Swimming
-and Flying. That retirement reached every band; Phase 21 fixed the docs half that had not.)*
+✅ **Exactly one version gate exists.** `SkillAvailability#isSkillSupported` returns `true` for
+everything except entries in its **skill → required-id-paths** map, and each entry is decided by a
+**registry probe** — *does this version have the item?* — never by a version number. `SPEARS` is the
+only row that fires on a real band.
 
-✅ **Exactly one version gate exists, and it names exactly one skill.**
-`SkillAvailability#isSkillSupported` returns `true` for everything except `SPEARS`, which is decided
-by a **registry probe** — *does this version have a spear item?* — rather than by a version number.
-So across every band from `1.21` to `1.21.11`, **all 26 skills are live except Spears below the
-version that introduced spear items**, which is the ruled behaviour and not a gap.
+🟡 **The `MACES` row is INERT on every in-scope version.** `Items.MACE` ships from `1.20.5` and R-x
+withdrew the `1.20` line, so nothing that exists can disable it. The code stays — the *mechanism* is
+live via `SPEARS`, and `26.x` will need it — but this is the **vacuity shape this repo has caught
+thirteen times**. Its disabling half is reachable only through `setSupportedForTesting`.
+⚠️ **Do not read a green `MACES` test as evidence the gate works on a real band.**
+⚠️ **Do not close a future gap by adding a version number.** One registry expression, correct on every
+band, needing no edit when the next band is cut: add a `GATED` map entry, never a second hardcoded
+field.
+⚠️ **Residual (risk R12):** the map is hand-maintained. A NEW skill whose items postdate the floor is
+added to `PrimarySkillType` and to nothing else, and nothing goes red.
 
-🔴 **That audit is a statement about SOURCE, and one band has no jar.** `mc/1.21.1` does not compile
-yet (§8.3). Identical source across seven branches proves the skill *roster* is uniform; it does not
-prove a skill *fires*. The per-band evidence for "it fires" is gate 1's suite count (~1719) and gate
-6's `gameplay-smoke.sh` 29/29 — both have run on the six shipped bands, neither has run on
-`mc/1.21.1`.
-
-### 🟡 MACES was gated 2026-08-19 (§22.1) — and R-x made that row INERT on every in-scope version
-
-**Measured, after the fact, and the premise below was wrong in one detail that matters:** `Items.MACE`
-is **ABSENT `1.20` – `1.20.4` and PRESENT from `1.20.5`** — the mace is not a `1.21` item. The section
-as originally written implied it postdated the whole `1.20` line.
-
-🔴 **R-x (2026-08-20) withdrew the `1.20` line, so `Items.MACE` is PRESENT on all 16 in-scope versions
-and the `MACES` entry can never fire.** The code shipped in `v1.2.0` and **stays** — the *mechanism* is
-live (`SPEARS` is gated on 6 of the 7 shipped bands) and `26.x` will need it. But the `MACES` row
-itself is now unreachable from any branch that exists, which is the **vacuity shape this repo has
-caught twelve times**. Its disabling half is reachable only through `setSupportedForTesting`.
-⚠️ **Do not read a green `MACES` test as evidence the gate works on a real band.** The `SPEARS` rows
-are that evidence; the `MACES` rows prove only that the map is wired.
-
-The reasoning below is kept because it is still the argument for the mechanism:
-
-
-`SkillAvailability`'s javadoc states the load-bearing assumption in its own words:
-
-> *"Every other skill's subject matter — ores, crops, mobs, the anvil — **predates the floor of the
-> supported range**."*
-
-That is true at a `1.21` floor, went false under R-v's `1.20` floor, and is true again under R-x.
-⚠️ **It is NOT going back into the javadoc.** It was only ever true by accident of where the floor
-sat, and re-asserting it re-arms exactly the rot R-v exposed in a day. Measured 2026-08-19, not
-recalled:
-
-- `scripts/mc-surface.txt` carries `net.minecraft.item.Items#MACE` as both `STATICFIELD` and
-  `ACCESSEDFIELD`.
-- `MaterialMapStore#fillMaces` (line 561) adds the single registry id path `"mace"`.
-- So below the version that introduced the mace, `isMace` matches nothing and **`MACES` is inert** —
-  listed by `/mcstats`, present in the configs, permanently stuck at level 0. That is *precisely* the
-  state the Spears ruling of 2026-08-11 exists to reject.
-
-⚠️ **This was the `master`-side prerequisite for the `1.20` line** (§22.1) — the one piece of Phase 22
-that could not be done on a band branch. R-x withdrew that line **after** the code shipped; it is kept
-for the mechanism, not for the `MACES` row.
-
-⚠️ **It is also vacuity-prone.** Every band that exists today **has** maces, so a test asserting
-"MACES is enabled here" passes with no gate present at all — the disabling half is unreachable from
-any branch the code can be written on. Use `setSupportedForTesting`, as the Spears wiring test now
-does.
-
-⚠️ **Do not fix this by adding a version number.** `SkillAvailability` is written the way it is on
-purpose: one registry expression, correct on every band, needing no edit when the next band is cut.
-Generalise the probe to a **skill → required-id-paths** map; do not special-case a second field.
+🔴 **That audit is a statement about SOURCE.** Identical source proves the skill *roster* is uniform;
+it does not prove a skill *fires*. The per-band evidence for "it fires" is gate 1's suite count and
+gate 6's `gameplay-smoke.sh` 29/29 — **neither has ever run on `26.2`.**
 
 ---
 
 ## What is genuinely missing — **all 4 `26.x`** — `1.21.x` is COMPLETE
 
-| Band | MC versions | Probe rows (absent · sig-changed) | Status |
-|---|---|---|---|
-| `1.21.1` | `1.21`, `1.21.1` | 65 · 60 = **125** | ✅ **SHIPPED** `mc1.21.1-v1.2.0` — §8.3, re-released §23 |
-| `1.20.x` | `1.20` … `1.20.6` (7 versions) | **never measured** — 22.0 was stopped mid-run and wrote nothing | 🚫 **OUT OF SCOPE (R-x, 2026-08-20)** |
-| `26.x` | `26.1`, `26.1.1`, `26.1.2`, `26.2` | n/a — **full yarn→official rename** | ⬜ §9 |
-
-⚠️⚠️ **Read a row count as *rows to look at*, never as work to do.** The completed bands are the
-calibration, and the table over-predicts by 3–6×:
-
-| Band | Table said | Real code changes |
+| Band | MC versions | Status |
 |---|---|---|
-| `mc/1.21.10` | 10 | **1** |
-| `mc/1.21.8` | 32 | **6** |
-| `mc/1.21.5` | 27 | **~8**, two of them redesigns |
-| `mc/1.21.4` | 42 | **19 compile errors** across 15 files, 16 of them pure renames |
-| `mc/1.21.3` | 44 | **20 compile errors**, plus 4 silently-broken injectors |
+| `1.21` … `1.21.11` | 12 versions, 7 bands | ✅ **SHIPPED**, all at `v1.2.0` |
+| `26.2` | `26.2` | 🔴 **IN FLIGHT — `master`.** Compiles, suite green, **has never booted** |
+| `26.1.x` | `26.1`, `26.1.1`, `26.1.2` | ⬜ **ONE band, MEASURED (§39)** — the three differ on **zero of 1424** records, so one branch `mc/26.1.2` serves all three. Its 84-record delta from `26.2` is already itemised. **Not cut yet** |
+| `1.20.x` | `1.20` … `1.20.6` | 🚫 **OUT OF SCOPE (R-x)** — withdrawn on scope, **never priced** |
 
-What the table *cannot* price is the difference between a **signature change** and an **absence**:
-`getEntityWorld` cost `mc/1.21.5` **3** broken sites and `mc/1.21.8` **57**, from the same one row.
-🔑 **R-m′ is the case where the proxy broke outright** — `1.21.1`'s 125 rows were mostly one
-mechanical rename apiece. Re-derive the work from the symbols before trusting a multiplier.
+⚠️⚠️ **Read a probe-row count as *rows to look at*, never as work to do.** The completed bands are the
+calibration and the counts over-predict by 3–6× (`mc/1.21.10`: 10 rows → **1** real change;
+`mc/1.21.8`: 32 → **6**; `mc/1.21.1`: 125 → mostly one mechanical rename apiece). What a row count
+cannot price is the difference between a **signature change** and an **absence**: `getEntityWorld`
+cost `mc/1.21.5` **3** broken sites and `mc/1.21.8` **57**, from the same one row.
+🔑 **And the estimate errs the same way at the top of the range.** §31 priced **54 seam redesigns**;
+there were **0**. §32.0 priced **8 handler rewrites**; there were **4**, only 2 touching a handler.
+**An over-estimate reads as diligence and nobody audits it.** Re-derive the work from the symbols
+before trusting any multiplier.
 
 ---
 
@@ -178,6 +158,10 @@ withdrew R-v, so R-l's 16-version target is LIVE again and is the current scope.
 | **R-x** | **Drop the `1.20` line (owner-ruled 2026-08-20)** | ✅ **RULED (owner): the supported range is `1.21` – `1.21.11` plus `26.x`. No `1.20.x` version is supported.** Withdraws R-v and restores R-l's **16-version** target. ⚠️⚠️ **This is a SCOPE ruling, not a feasibility finding.** 22.0 never ran to completion — it was stopped mid-run — so **the `1.20` line was never priced**, and nothing may be written anywhere claiming it was found too expensive. §9 (`26.x`) is explicitly **unaffected** and remains the next project. |
 | **R-w** | **`mod_version` for this cycle (owner-ruled 2026-08-20)** | ✅ **RULED (owner): `1.2.0-SNAPSHOT`, minor not patch.** §22.1's `MACES` gate is a user-visible behaviour change — a skill can now vanish on a band — not a bug fix. Nothing has released since `v1.1.0`, and R-t's gate has been refusing every push on all seven branches since. Per R-p the value is identical on every branch; per **R-w′** below, no gate checks that. |
 | **R-y** | **Does the identity guard cover `README.md`/`wiki/`? (owner-ruled 2026-08-20)** | ✅ **RULED (owner): YES — both are IN `branch-file-identity-audit.py`.** Closes the call carried from §21.6. R9's noise argument is about a *per-push* audit and does not transfer to a **ship gate**. 🔑 **It found a real defect on its first run**: `mc/1.21.1` had corrected a `wiki/Husbandry.md` sentence that is false on that band, **on that band only** — a rule-1 violation, invisible to `drift-audit.py` by design (it asks whether a `master` commit reached a band, never whether a band holds a fix `master` lacks), so six branches served wrong text to a shipped band's players with every gate green. 🔴 **Depends on R-x.** `BandDocsMatchRealityTest` needs the documented floor strictly below every version a branch ships; `1.20.6` covers all seven **only because no band ships below `1.21`**. Reopen the `1.20` line and these two files must leave the set in the same change, or no state satisfies both guards. |
+| **R-z** | **Which branch becomes `26.x`? (owner-ruled 2026-08-20)** | ✅ **RULED (owner): `26.x` becomes `master`, and `1.21.11` is cut to `mc/1.21.11`.** Follows from R-f (master = newest supported band) once `26.1 > 1.21.11` is granted. 🔴 **It trips R10 for as long as the cut is held**: `mc/1.21.11` and `origin/master` both sit at `minecraft_version=1.21.11`, and two branches on one value means each release run reaps the other's release. The mitigation is that the cut stays **unpushed** until `master` compiles — so **R-z is the reason nothing may be pushed**, not merely a topology note. ⚠️ Recorded here on 2026-08-20 because it had been ruled in §27 and written only to `.agent/memory/`, which is not committed (R-n) and therefore invisible to a fresh clone. |
+| **R-aa** | **Java 25 vs gate 10 (owner-ruled 2026-08-20)** | ✅ **RULED (owner): read the Java level from a new per-band `gradle.properties` key.** `26.x` needs Java 25 (Mojang’s own manifest requirement, §27) while `release.yml:117` pins `'21'` and must stay byte-identical on every branch under **P19-1** — no single state satisfies both. The workflow text becomes identical again by referring to the key; the **value** is per-band, exactly like `minecraft_version`. Classifies as `BAND_LOCAL` in `gradle-key-identity-audit.py`, so it needs **no new mechanism** — the existing per-key guard already covers it. **Rejected:** installing both JDKs on every branch — it keeps the text identical too, but selects the level *implicitly* via toolchain resolution instead of declaring it, and R-y’s precedent is that a shared file states its per-band facts rather than inferring them. ⚠️ **Ruled, not built.** It lands in the same change that makes `master` pushable; building it earlier would put a `25` in a workflow on six branches that need `21`. |
+| **R-ab** | **Gate 7 is permanently red — how? (owner-ruled 2026-08-26)** | ✅ **RULED (owner): a waiver file, `scripts/drift-waivers.txt`.** The same **11** `master`-only `26.x` commits read MISSING on every band; they cannot be back-ported by construction, they should have carried `Backport-not-needed:`, and **six are already published** so amending them is off the table — AGENTS.md forbids applying the opt-out retroactively regardless. So gate 7 fails on every run for a reason no work clears, which is exactly how the **12th** missing commit — a genuine forgotten back-port — becomes invisible. 🔑 **The waiver is structurally retroactive-only: it declares a `cutoff:` sha and REFUSES any waiver whose commit is not an ancestor of it**, so it cannot decay into a general escape hatch that repeals rule 3 — widening the exception means moving the cutoff, which is one reviewable line in a diff. **Rejected:** a `Backport-base:` marker moving each band's base below the `26.x` rename — cheaper to read, but it drops any genuine pre-rename drift out of the window along with the 11. ⚠️ **Explicitly NOT ruled:** lowering `--require-bands` or not running the gate. Both are the make-the-symptom-disappear move AGENTS.md's attempt-budget section names outright. Built in §40. |
+| **R-ac** | **§41 + §42 scope and the push hold (owner-ruled 2026-08-26)** | ✅ **RULED (owner), three parts.** (1) **Build the whole R-aa bundle** — the per-band `java_version` key, the `mod_version` bump, §37's deferred commit B and the docs pass, as ONE change per branch, because each alone touches `gradle.properties` and fires a release run R-t refuses. (2) **Cut `mc/26.1.2` this session**, which closes the declared 16-version scope at nine branches — subject to the one check §39 left open: whether `0.155.2+26.1.2` actually LOADS on `26.1`, read out of the jar's own `fabric.mod.json`, not assumed. (3) 📌 **The push hold STANDS**, re-confirmed for the third session running. Nothing is pushed; re-ask. R14's ~24% suite flake is a second reason — a red release run is currently indistinguishable from a real regression. |
 
 ### 🔑 What R-m′ taught, and why it is written down here
 
@@ -194,7 +178,7 @@ figure in this repo, and there must not be one written from memory.**
 
 ---
 
-## The per-band recipe — used by §8 and §9 alike
+## The per-band recipe — used by every band cut
 
 Each branch is cut **from `master`, never from the previous band** — otherwise band N inherits band
 N−1's back-compat fixes and the diffs stop being independent. The *learning* transfers even though
@@ -254,1151 +238,1102 @@ the branch does not.
 
 ---
 
-## §8.3 — `mc/1.21.1` (`1.21`, `1.21.1`) ✅ SHIPPED
+## §9 — the `26.x` band — 🔴 IN FLIGHT on `master`
 
-The last `1.21.x` band, released as `mc1.21.1-v1.2.0` (shipped at `v1.1.0`; re-released by §23). **Re-scoped by R-m′ — nothing ships disabled,
-and there was no `master`-side piece**, so it was an ordinary band cut.
-
-⚠️ **This heading read `🔴 IN FLIGHT`, and the body below it described an uncommitted red working
-tree, for a band that had shipped AND released.** The checklist items underneath were all ticked
-correctly; only the prose above them rotted. That is the third instance of the same shape in this
-file — a status sentence is not updated by the commit that changes the status, because nothing reads
-it. **When a phase closes, grep this file for its heading, not just its checkboxes.**
-
-The port itself is fully reproducible: both rename sweeps were scripted and every name was resolved
-from `javap` on the `1.21.1` merged jar.
-
-- [x] **Attribute rename sweep** — 14 replacements across `SkillAttributeService`,
-      `CallOfTheWildHandler`, `EntityDamageListener`, `PetCombatSweep`, `MobTiers`:
-      `ARMOR`→`GENERIC_ARMOR`, `MOVEMENT_SPEED`→`GENERIC_MOVEMENT_SPEED`,
-      `MAX_HEALTH`→`GENERIC_MAX_HEALTH`, `ATTACK_DAMAGE`→`GENERIC_ATTACK_DAMAGE`,
-      `JUMP_STRENGTH`→`GENERIC_JUMP_STRENGTH`, `FOLLOW_RANGE`→`GENERIC_FOLLOW_RANGE`,
-      `WATER_MOVEMENT_EFFICIENCY`→`GENERIC_WATER_MOVEMENT_EFFICIENCY`, and
-      **`SNEAKING_SPEED`→`PLAYER_SNEAKING_SPEED`**.
-      ⚠️⚠️ **The prefix is NOT uniform.** A sed-style
-      `s/EntityAttributes\./EntityAttributes.GENERIC_/` compiles for four of five `Managed` records
-      and fails on the fifth — the shape that produces a "nearly done" band. Resolve each field
-      against `javap`, one at a time.
-- [x] **Three method renames** — 9 replacements across 7 files: `getEntityPos()`→`getPos()`,
-      `isGliding()`→`isFallFlying()`, `getOptionalValue(`→`getOrEmpty(`.
-      ⚠️ `getEntityWorld()` **does exist** at `1.21.1` — do not copy `mc/1.21.8`'s resolution.
-
-**Measured effect: 67 compile errors → 44.** Every affected file is in `fabric/` or `platform/` —
-Phase 2's boundary cap held, no skill logic touched.
-
-### ⬜ The remaining 44 — RE-MEASURED 2026-08-19 against the `1.21.1` merged jar
-
-⚠️ **The table this replaces was an estimate, and it was wrong in both directions.** It named rows
-that do not appear in the compiler's output (`AbstractCowEntity`/`AbstractBoatEntity` counted 8; they
-are 4) and it **missed six signature changes entirely** — `NbtCompound#getInt`, `LivingEntity#damage`,
-`Entity#teleport`, `PotionContentsComponent`'s constructor, `BeehiveBlock#dropHoneycomb`, and the
-`UseItemCallback` return type. **Work from `compileJava`, never from this table.**
-Every signature below was resolved with `scripts/javap-mc.sh` against the `1.21.1` merged jar.
-
-#### Group 1 — mechanical, signature resolved (28 errors)
-
-| Symbol on `master` | `1.21.1` form | Sites |
-|---|---|---|
-| `DynamicRegistryManager#getOrThrow(k)` | `#get(k)` — returns the registry directly | 5 |
-| `UseItemCallback` returns `ActionResult` | returns **`TypedActionResult<ItemStack>`** (`class_1271<class_1799>`, verified in `fabric-events-interaction-v0-0.116.15`) | 4 |
-| `LivingEntity#damage(ServerWorld, src, amt)` | `#damage(src, amt)` | 2 |
-| `Entity#teleport(…, yaw, pitch, boolean)` | 7-arg, **no trailing flag** | 2 |
-| `EquipmentSlot.VALUES` | `EquipmentSlot.values()` | 2 |
-| `AbstractBoatEntity` | `BoatEntity` (`ChestBoatEntity` extends it, so the `instanceof` still covers both) | 2 |
-| `AbstractCowEntity` | `CowEntity` (`MooshroomEntity` extends it) | 2 |
-| `ExplosionImpl` | `Explosion` — the concrete class at this version | 2 |
-| `NbtCompound#getInt(key, default)` | `#getInt(key)` — already returns `0` when absent | 1 |
-| `BeehiveBlock#dropHoneycomb(6 args)` | `#dropHoneycomb(World, BlockPos)` | 1 |
-| `PotionContentsComponent(4 args)` | `(Optional<RegistryEntry<Potion>>, Optional<Integer>, List<StatusEffectInstance>)` | 1 |
-| `LivingEntity#getLootTableKey()` | `#getLootTable()` | 1 |
-| `Tameable#getOwnerReference()` | `#getOwnerUuid()` — still null-checkable | 1 |
-| `SmeltingRecipe#ingredient()` | `AbstractCookingRecipe#getIngredients().getFirst()` | 1 |
-| `Ingredient#acceptsItem(RegistryEntry<Item>)` | `Ingredient#test(ItemStack)` — the arg shape changes, not just the name | 1 |
-
-#### Group 2 — absent, needs a decision recorded (7 errors)
-
-| Symbol | Finding | Resolution |
-|---|---|---|
-| `SoundCategory.UI` | **absent** below `1.21.2` | 🔑 an exhaustive platform→MC mapping; the arm cannot be deleted. Map to the nearest slider and say so in the code |
-| `CommandManager.requirePermissionLevel` + `.GAMEMASTERS_CHECK` | **both absent** at `1.21.1`. ⚠️ `mc/1.21.8`'s fix (`requirePermissionLevel(2)`) does **not** transfer — only the constant was missing there, the method existed | `source -> source.hasPermissionLevel(2)`. Same permission, this version's spelling |
-| `SpawnReason.SPAWN_ITEM_USE` | renamed — is `SPAWN_EGG` at `1.21.1` | rename the switch label |
-| `SpawnReason.LOAD`, `.DIMENSION_TRAVEL` | **absent** at `1.21.1` | drop both labels; the switch stays exhaustive at this version's 17 constants. ⚠️ `MobOrigins`' class doc explains `stampOnSpawn`'s early return *by naming these two* — the code fact holds, the named reasons do not. Restate without pinning them |
-| `TameableEntity#setTamedBy(p)` | absent; `setOwner(PlayerEntity)` is the predecessor | `setOwner(player)` |
-| `AbstractHorseEntity#setOwner(p)` | absent — horses are `Tameable` but not `TameableEntity` here | `setTame(true)` + `setOwnerUuid(player.getUuid())` |
-
-#### Group 3 — the four seams (9 errors) 🔴
-
-✅ **Measured: all four have a real `1.21.1` predecessor, so R-m′ holds and nothing ships disabled.**
-The `ExplosionImpl` row is a **fourth** seam the old table did not identify as one.
-
-| Seam | `1.21.1` target | Shape change |
-|---|---|---|
-| **Eating** — `FoodComponentMixin`, `ConsumableComponent` | `LivingEntity#eatFood(World, ItemStack, FoodComponent)` | food data still lives on `FoodComponent`; there is no `ConsumableComponent` to split off |
-| **Sneak** — `PlayerMovementTracker`, `PlayerInput` | `ServerPlayerEntity#updateInput(float, float, boolean, boolean)` | ⚠️ a **setter the packet handler calls**, not a getter. 4th flag is sneaking |
-| **Conversion** — `MobConversionOriginMixin` | `MobEntity#convertTo(EntityType<T>, boolean)` | the 4-arg context funnel collapses to a **single** 2-arg method — the "two overloads, inject the funnel" reasoning in the javadoc does not apply here |
-| **Explosion** — `ExplosionDropsMixin` | `Explosion#affectWorld(boolean)` + `AbstractBlockState#onExploded(World, BlockPos, Explosion, BiConsumer)` | 🔴 **the real redesign.** `destroyBlocks(List<BlockPos>)` does not exist; its body is inside `affectWorld`. `Explosion#getWorld()` is also gone — `world` is a **private field**, so `BlastMiningListener` needs a `@Accessor`/`@Shadow` route, and it is a `World`, not a `ServerWorld` |
-
-🔴 **The eating-seam row is still the boot-failure row.** An unresolvable `@At` does **not** degrade
-gracefully: on `mc/1.21.5` two of them took out `Blocks.<clinit>`, then `Items.<clinit>`, and cascaded
-into **302 failing tests across 34 unrelated classes**. Read the root cause, never the count.
-
-⚠️ **Every `allow = N` in Group 3 is now unmeasured.** The counts in those javadocs were measured on
-a different version's bytecode. `scripts/mixin-allow-audit.py` is ship-gate 2 and must run **before**
-gate 1 — see `Finish 8.3` below.
-
-⚠️ **`EntityNavigation#setMaxFollowRange` does not exist below `1.21.2`.** That absence is *why* the
-Taming reach fix uses the attribute rather than the navigation setter — nothing to port here, but do
-not "simplify" it back on `master` either.
-
-⚠️⚠️ **`./gradlew … | tail` MASKS THE EXIT CODE** — a run reported exit 0 while Gradle printed
-`BUILD FAILED` with 67 errors, and `tail -60` truncated those 67 down to the 11 that happened to be
-last. Redirect to a file and check `$?`.
-
-### 🟢 Ship-gate 2 PASSES — was 15 ZERO, now 0 (2026-08-19)
-
-`python scripts/mixin-allow-audit.py --check` now exits **0**:
-`SLICE=1  OK=66  (total 67)` — *"every declared allow reproduces, and no injector resolves to 0
-sites."* The single SLICE (`FishingWaitTimeMixin`) is **pre-existing** and the gate accepts it.
-`./gradlew compileJava` exits 0.
-
-🔴 **`compileTestJava` is now the blocker, and that is expected.** 13 errors, all in
-`HusbandryListenerTest`, calling the `onShearedItems`/`onBrushedItems` API this work replaced.
-⚠️⚠️ **Those tests are the guard for exactly the behaviour that changed — port them, never delete
-them.** The mapping and the two stale assertions to restate are in `.agent/memory/state.md`.
-
-Originally 15 of 61 injectors bound to **nothing**. Per §8.3 that is the boot-failure class, not a
-warning — an unresolvable `@At` does not degrade gracefully.
-
-⚠️⚠️ **`| tail` masked this and produced a wrong "gate 2 passed" call.**
-`python … --check 2>&1 | tail -40; echo "EXIT=$?"` reports **`tail`'s** status, which is always 0.
-§8.3 already documents this for `./gradlew`; it applies to **every** piped command. Redirect, then
-read `$?`. The script's own banner (`FAIL: 15 injector(s) need attention`) was the tell.
-
-#### 🔴 A second defect class gate 2 CANNOT see — the handler's own signature
-
-`AbstractFurnaceBlockEntity#tick` takes **`World`** at `1.21.1`, not `ServerWorld`. Three handlers in
-`AbstractFurnaceSmeltMixin` declare `ServerWorld world`, and **two of the three are reported `OK` by
-gate 2** — because the audit resolves the **`@At` target**, not the handler's parameter list. A
-handler whose descriptor does not match its target method is refused at apply time, exactly like a
-ZERO binding, and it hides behind a green row.
-
-🔑 **So `ZERO=0` is necessary, not sufficient.** Gate 1 (the mixin-application test) is what actually
-catches this class, which is why gate 2 passing is not permission to skip it. The mixin's javadoc
-also asserts *"`tick` is only ever handed a `ServerWorld`"* — a version-pinned claim, false here.
-
-#### Resolutions — every one measured against the `1.21.1` merged jar
-
-**Group A — mechanical (11 injectors).** A rename or a descriptor, no design choice.
-
-| Mixin | Injectors | `1.21.1` form |
-|---|---|---|
-| `TameableEntityTameMixin` | 1 | `setTamedBy` → **`setOwner(PlayerEntity)`**, the rename already applied in `CallOfTheWildHandler` |
-| `AbstractFurnaceSmeltMixin` | 2 | `craftRecipe(DynamicRegistryManager, RecipeEntry, DefaultedList, int)` — **no `SingleStackRecipeInput`**; `getFuelTime(ItemStack)` — **no `FuelRegistry`**. Plus the `World` fix above, which also touches the two `OK` rows |
-| `BowShootMixin` | 2 | `onStoppedUsing(ItemStack, World, LivingEntity, int)` returns **`void`**, not `boolean` → `CallbackInfo`, not `CallbackInfoReturnable<Boolean>` |
-| `TntExplodeMixin` | 1 | `explode()` and the 9-arg `createExplosion` both exist; the call **returns `Explosion`, not `void`** — only the descriptor's return type moved. `index = 6` still selects the power |
-| `BeehiveHarvestMixin` | 4 | `onUseWithItem` returns **`ItemActionResult`**, not `ActionResult`; `dropHoneycomb(World, BlockPos)` is the 2-arg static |
-| `EntityTypeSpawnOriginMixin` | 1 | `create(World, SpawnReason)` is absent, but **`create(ServerWorld, Consumer, BlockPos, SpawnReason, boolean, boolean)` exists** and is the spawn funnel. Retarget, do not redesign |
-
-**Group B — absent seams, owner-ruled 2026-08-19. ✅ ALL BUILT, all binding.** Each was measured
-absent *and* its predecessor measured present, so **nothing ships disabled** and R-m′ still holds.
-
-🔴 **`EntityTypeSpawnOriginMixin` was misfiled as Group A on a first read, and that was the most
-dangerous call of the session.** `MobOrigins` rests on `EntityType#create(World, SpawnReason)` being
-the one factory no subclass can dodge. At `1.21.1` it does not exist and **nothing single replaces
-it**: spawners reach `loadEntityWithPassengers(NbtCompound, World, Function)`, which has **no
-`SpawnReason` parameter at all**, and breeding reaches `create(World)`. Only egg/dispenser/portal
-reach the 6-arg `create`. **That 6-arg method DOES exist, so retargeting to it BINDS — the audit goes
-green while spawner-farmed and bred mobs are silently unmarked.** Strictly worse than the ZERO it
-replaces, because a ZERO is at least loud. Ruled: **per-origin injectors** —
-`MobSpawnerOriginMixin` (`serverTick`), `TrialSpawnerOriginMixin` (`trySpawnMob`),
-`AnimalBreedOriginMixin` (`breed`), plus the 6-arg `create` for the paths that do carry a reason.
-
-🔑 **Three gate lessons worth keeping:** `allow` is evaluated **per target class**, so a 4-target
-mixin with one site each needs `allow = 1`; a bare injector is reported **MISSING**; and
-**`@ModifyConstant` is invisible to the gate** (`computed=0`), so it must not be used here — an
-injector the ship gate cannot verify defeats the gate.
-
-| Seam | Why it is absent | 🔑 Ruled resolution |
-|---|---|---|
-| `ArmadilloBrushMixin` — brush loot | No `LivingEntity#forEachBrushedItem`. `brushScute()` drops the scute **inline** via `dropStack`, with no loot table, no `BiConsumer` funnel and **no brusher parameter** | Inject at the **`brushScute()` call inside `interactMob`**, where the `PlayerEntity` is in scope. ⚠️ The existing javadoc claims the dispenser exclusion is *"a property of the signature"* — **that is false on this band**, the parameter it relies on does not exist. `interactMob` is a **stricter** gate (a dispenser never calls it), so the behaviour is preserved, but the *reason* must be restated |
-| `LivingEntityShearDropsMixin` — Bountiful Harvest bonus | No `forEachShearedItem`. Each `Shearable` drops **inline in its own `sheared(SoundCategory)`** — `SheepEntity` loops `dropItem(ItemConvertible, int)` | Port **per-implementor**: `@Mixin({SheepEntity, MooshroomEntity, SnowGolemEntity, BoggedEntity})` on `sheared` — the same four targets `ShearableInteractMixin` already proves. Four `allow = N` counts, each measured separately |
-| `LivingEntityGlideMixin` — glide bonus | No `travelGliding`, no `calcGlidingVelocity`. The glide math is **inlined in `travel`** (`isFallFlying` at offset 565), with no discrete helper call to intercept | `@Inject` at **`travel`'s TAIL, gated on `isFallFlying()`**. ⚠️ Deliberately **not** a `@Slice` — an unresolvable `@Slice` is *silently dropped and the injector still applies*, which is the one failure this band cannot afford. ⚠️ The application point moves from an intermediate to the resulting velocity; **verify the numbers against `master` before calling it done** |
-| `ProjectileSpawnMixin` — Archery arrow mark | No static `ProjectileEntity#spawn(…)` funnel at this version | Inject on **`ProjectileEntity#setOwner(Entity)`** — public, universal, one target. ⚠️ **Verify NBT load restores the owner by uuid rather than through `setOwner`**, or a chunk reload re-marks old arrows |
-
-🔑 **`EntityTypeSpawnOriginMixin` is still the one to be most careful with.** A dead binding there
-disables the Hunter anti-farm gate *silently* — spawner mobs quietly start counting — and
-`MobOriginsTest` covers the **classifier**, not the **binding**, so the suite is green either way.
-That is the `[[smelting-furnace-arm]]` shape: invisible by construction.
-
-### ✅ 8.3 SHIPPED (2026-08-19) — `mc1.21.1-v1.1.0`
-
-- [x] Resolve the remaining 44, inside `fabric/`/`platform/` only.
-- [x] Recipe steps **x.7** (gates), **x.10** (docs floor + this band's row, `40cf1b218`), push,
-      release. Run `32308459500` green; release published, **not** draft; the other six releases
-      re-checked and **none orphaned** by the tag-reaping sweep.
-- [x] **`1.21.x` coverage is complete: 12 of 12.**
-- [x] **x.8 back-port — DONE 2026-08-19.** ⚠️ It was **larger than the commit it is named after**,
-      and the extra half was invisible from the ticket: `40cf1b218` moved the three table headers and
-      added this band's row, but the **floor sentence** (*"Minecraft `1.21.1` and older are not
-      supported"* → *"`1.20.6` and older"*) had moved in an **earlier** band commit, at cut time,
-      because `BandDocsMatchRealityTest` fires then by design. Cherry-picking `40cf1b218` alone would
-      have left six branches with a header reading `1.21 – 1.21.11` three paragraphs above a sentence
-      denying `1.21` — a half-fix that reads **correct in the diff** and is wrong on the page.
-      🔑 **The unit that propagates is the cumulative state of the file, not the commit that last
-      touched it.** Carried as the full delta: the three docs files made byte-identical to this
-      band's, on `master` and all five other bands.
-- [x] **x.8b — `TODO.md` had diverged AGAIN, 602 lines vs 882, and this was not in the ticket at
-      all.** Phase 21 closed the "five blobs" divergence; **two band-authored docs-only `TODO.md`
-      commits re-opened it within the same session** — `c12624569` (which carries the **R-v ruling
-      and the whole §22 plan**) and `b2ac4824f` (the 8.3 shipped record). Both are docs-only, so
-      defect B swallowed both.
-      🔴 **`master` was still describing §8.3 as "IN FLIGHT / UNPUSHED"** for a band that had shipped
-      and released. 🔑🔑 **The hole re-opens on its own the moment anyone writes plan text on a band
-      branch** — closing it once does not keep it closed, because nothing fails when it re-opens.
-      All seven now carry one blob again.
-- [x] **x.9 — `--require-bands` 5 → 6.** `BAND_COUNT` in `.github/workflows/drift-audit.yml`, which
-      the workflow's own comments confirm counts `mc/**` only, `master` excluded — six bands on
-      `origin`, so `6`. `master` first, then byte-identical to every band (gate 10's shared layer).
-
-#### How x.8 was executed — and the one deliberate choice in it
-
-1. `master` first (rule 1), taking `README.md`, `wiki/Home.md`, `wiki/Installation.md` and `TODO.md`
-   from `mc/1.21.1`, **plus** a refresh of `BandDocsMatchRealityTest`'s stale javadoc pointer
-   (*"next cut this fires on `mc/1.21.3` (TODO 8.2)"* — both 8.2 and 8.3 have shipped).
-2. That javadoc refresh is **not padding, and it is the deliberate choice**: it is owed under the
-   caveat-expiry rule regardless, and putting it in the same commit gives the docs change a `src/`
-   half — which is the **only** thing that makes `drift-audit.py` able to see it (Phase 21, defect
-   B: a docs edit propagates iff its commit also touched `src/`).
-   ⚠️ **Named here so it does not silently become a habit.** "Add a `src/` edit so the auditor sees
-   the commit" is a correct move only when the `src/` edit was independently owed. When it is not,
-   the honest fix is to teach the auditor about docs — not to dress the commit up.
-3. Cherry-picked to all five remaining bands with `Backport-of:` trailers; `mc/1.21.1` took only the
-   parts it lacked.
-
-**What this explicitly did NOT do:** no jar was rebuilt, no smoke harness run, no release cut.
-Verified rather than assumed — `release.yml`'s `paths:` filter lists only `src/**`, the gradle files
-and `release.yml` itself, so a docs or `drift-audit.yml` push cannot fire a release run, and there is
-no tag-reaping exposure. **Rollback** for every step is `git revert <sha>` on the branch in question;
-nothing was rewritten, deleted, or force-pushed.
-
-#### The one defect the ship gate caught — and what it says about the other gates
-
-`combat-egg-control`: a `/summon`-ed cow paid UNARMED `(0,0) -> (0,610)`. At `1.21.1`
-`loadEntityWithPassengers` carries **no `SpawnReason`** (at `1.21.11` it does), so `/summon` reached
-no reason-carrying factory and `EntityTypeSpawnOriginMixin`'s 6-arg `create` was never on its path.
-Fixed by `SummonCommandOriginMixin` (`e7fae0d91`), the fifth origin seam, same shape as the two
-spawner halves.
-
-🔑🔑 **Every structural gate was green while this was broken.** `mixin-allow-audit` reported OK on
-all 67 injectors; `MixinApplicationTest` named four origin seams that all genuinely applied;
-`boot-check` was clean. **Only a live mob dying to a live player found it** — the §8.3 prediction
-that a bound-but-inert retarget is *"strictly worse than the ZERO it replaced"*, confirmed in the
-one way the cheap gates cannot reach.
-⚠️ **And the severity was nearly misread.** *"The egg-farm guard is off on this band"* is **false**:
-`SpawnEggItem → spawnFromItemStack → spawn → create(…SpawnReason,ZZ)` **is** the injected method, so
-eggs, dispensers and portals were always marked. Only `/summon` — an operator command — leaked.
-Which is also why the hole looked impossible: every path a person would check by hand was covered.
-⚠️ **The phase is named `combat-egg-control` and argues about `Eggs.Multiplier`, yet drives
-`/summon`.** On `master` both stamp, so the proxy was invisible; here the test and its stated subject
-came apart. Worth pointing it at a real spawn egg on `master` — a `scripts/**` change, so master-first
-across all seven branches.
-
-#### The test port — the last blocker before the ship gate (planned 2026-08-19)
-
-`compileJava` and ship-gate 2 are green; `compileTestJava` is **red on 13 errors**, all in
-`HusbandryListenerTest`, and the suite carries **two further failures that compile fine**. Both were
-found by reading the seams rather than the error list, which is the point: a reflective assertion
-about a **deleted** mixin is a green compile and a red run.
-
-⚠️⚠️ **These tests are the guard for exactly the behaviour this band changed. They get PORTED, never
-deleted** (`[[deleting-a-tests-wrong-answer]]`).
-
-**Step 1 — main code: `onBrushed` takes the delivery flag** (owner-ruled 2026-08-19).
-`ArmadilloBrushMixin` currently owns the *"vanilla delivered no scute, so pay nothing"* guard in its
-own `if (!brushed) return false;`. That is unreachable from a unit test, and it is the guard the verb
-rests on — brushing has **no** upstream gate the way `isShearable()` gates shearing, so *"an item
-actually changed hands"* is the only proof a harvest happened. Move it down:
-`onBrushed(Entity armadillo, Entity brusher, boolean brushed)` returns early on `!brushed`, and the
-mixin becomes a pass-through. The adapter gets dumber and the guard gets a test.
-
-**Step 2 — port the 13 errors.** The shear verb's `BiConsumer` funnel does not exist on this band, so
-the `Dropper` double-delivery assertions have no subject:
-
-| Old | New |
-|---|---|
-| `onShearedItems(sheared, dropper).accept(world, stack)` | `beginShear(sheared)` → `onShearDropStack(stack)` → `endShear()` |
-| `onBrushedItems(armadillo, brusher, dropper).accept(...)` | `onBrushed(armadillo, brusher, brushed)` → `boolean` |
-
-⚠️ **`delivered.size() == 2` becomes "the returned stack's count doubled".** The bonus is now one
-`ItemStack` of 2, not two deliveries — one `ItemEntity` that cannot desynchronise from the first
-drop's position or pickup delay.
-⚠️ **Two brush comments assert the dispenser exclusion is *"a property of the signature"*. That is
-false on this band** — there is no funnel and no brusher argument to inspect, so the gate is the call
-site (`interactMob`, which a dispenser never reaches). **Restate the reason; do not just re-point the
-call.** A comment naming the wrong gate is the `[[version-pinned-comments-rot]]` shape.
-⚠️ `theBonusDropIsRolledOncePerShearNotOncePerItem` keeps its subject — the roll is still decided
-once, at `beginShear`, and read by every `onShearDropStack`. Its brush sibling loses its per-item
-subject entirely and restates as *"one brush resolves the sub-skill exactly once"*.
-
-**Step 3 — `MixinApplicationTest`, which compiles and lies** (owner-ruled: both halves, this commit).
-
-- 🔴 `husbandryShearDropMixinApplies` asserts `LivingEntity` carries an `onShearedItems` handler.
-  **That mixin was deleted this session.** Replace with the three seams that actually ship here:
-  `ShearPayoutMixin` (`beginShear`/`endShear` on all **four** species — a per-species assertion, same
-  reason `bountifulHarvestDurabilitySaveAppliesToEveryShearableItNames` has one), `EntityShearDropMixin`
-  (`doubleShearDrop` on `Entity`) and `MooshroomShearDropsMixin` (`mooshroomBonusMushrooms`).
-- 🔴 **Zero coverage for four mixins**, three of them new this session: `ArmadilloBrushMixin`,
-  `MobSpawnerOriginMixin`, `TrialSpawnerOriginMixin`, `AnimalBreedOriginMixin`. Extend
-  `mobOriginMixinsApply` to name all four origin seams.
-
-🔑🔑 **This is the structural guard for the session's worst finding.** `MobOrigins` rested on
-`EntityType#create(World, SpawnReason)` being the one factory no subclass can dodge; **at `1.21.1`
-that method does not exist and nothing single replaces it.** The 6-arg `create` *does* exist, so
-retargeting to it **binds** — ship-gate 2 goes green while spawner-farmed and bred mobs go silently
-unmarked, which is strictly worse than the ZERO it replaced. Only a per-seam assertion sees that.
-
-**Step 4 — gates, in order.** `compileTestJava` → `./gradlew test` (⚠️ read the **`N executed`** line,
-not `SUCCESSFUL` — `[[gradle-skips-doc-guard-tests]]`) → re-run `mixin-allow-audit.py --check`, because
-step 1 touches a mixin body.
-
-**Step 5 — close out.** Caveat-expiry pass (grep `README.md` + `wiki/` for the **symptoms**, not the
-files touched), then this section, then **ONE commit. Do not push** — `de34dcf3b` touches
-`gradle.properties`, which is inside `release.yml`'s `paths:` filter, so the first push fires a release
-run on this band.
-
-**What this is NOT doing:** no new seams, no `master`-side change (R-m′ ruled none is needed), no
-recipe steps x.7+ — those start once the suite is green.
-
-#### ✅ DONE (2026-08-19) — and the suite found six things the compile error was hiding
-
-`./gradlew test`: **1844 executed, 0 failures, 0 errors, 0 skipped.**
-`python scripts/mixin-allow-audit.py --check`: **PASS** (`SLICE=1 OK=66`, total 67).
-
-Steps 1–3 landed as planned. What the plan did **not** anticipate is that a red `compileTestJava`
-runs **no tests at all**, and mixins apply *lazily* — so nothing had ever class-loaded a target on
-this band. The moment the suite ran it reported **9 failures across 6 classes**, none of them in the
-ported file:
-
-| Was | Actually |
-|---|---|
-| `CampfireCookMixin` did not apply | `@Local(argsOnly) ServerWorld`, but `litServerTick` takes `World`. Fixed by capturing `World` and narrowing — the pattern `AbstractFurnaceSmeltMixin` already uses |
-| `FireworkRocketEntityMixin` did not apply | `@Inject` handler declared a `ServerWorld` param; `explode()` takes none |
-| `foodComponentMixinApplies` | asserted the handler on `FoodComponent`; the mixin was retargeted to `LivingEntity` this port. **Third** reflective assertion found naming a class its mixin no longer targets |
-| `SuperAbilityListenerTillingTest` ×3 | harness stubbed only `getEntityWorld()`; `ItemUsageContext`'s constructor calls `getWorld()` here. Both are stubbed now, so the harness is band-agnostic |
-| `PlatformPlayerTest` | `SoundCategory.UI` does not exist here. Production already maps `UI → MASTER` deliberately; the **test** demanded a same-name mapping for every constant. Now band-aware, with a count check so "skip what vanilla lacks" cannot become "skip everything", plus a new test pinning the fallback |
-| `BlockUtilsTest` | asserted an unbound tag **throws**. Whether it throws or quietly answers `false` is a per-version MC behaviour. Laziness is now proven **directly** on `BlockRules` with a supplier that throws if called — stronger, and true on every band |
-
-🔑🔑 **Ship-gate 2's `ZERO=0` is necessary and NOT sufficient.** Both non-applying injectors sat in
-`OK ... computed=1` rows: the audit resolves the injection point and counts sites, and never
-type-checks the handler's own parameter list. `MixinApplicationTest` is the gate that sees this
-class of defect — which is why the four previously-uncovered mixins were added to it.
-✅ Non-vacuity checked by mutation: removing `MobSpawnerOriginMixin` from `mcmmo.mixins.json` turns
-`mobOriginMixinsApply` red with the right message. Restored from a backup, not from `git checkout`.
-
-⚠️⚠️ **`BandVersionLabelTest` rejected `"1.21"` as "not a bare major.minor.patch version" — and its
-own self-test asserted that rejection was correct.** It is not: Mojang ships the head of every minor
-line with two components, so `1.21`, `1.20` and `1.19` are real, literal version strings with no
-`1.21.0` to write instead. The parser now treats a missing patch as `0`, and the self-test's wrong
-answer was **corrected in place** (still asserting that genuinely malformed input is rejected) rather
-than deleted. **`1.21` itself has this shape — it is the head of `mc/1.21.1`'s range — so the fix was load-bearing
-for a band that ships.** (It would also have unblocked every `1.20` head; R-x makes that moot.)
-
-🔴 **FIVE of these changes are version-agnostic and are owed to `master`.** The band port itself is
-correctly authored here — a port is not a fix — but these were *found* here and are true everywhere,
-and AGENTS.md is explicit that a fix authored directly on a band branch is a defect. **They must be
-re-authored on `master` and propagated, not left to be re-discovered band by band:**
-
-| Change | Why it is not band-local |
-|---|---|
-| `BandVersionLabelTest` — optional patch component | `1.21`, `1.20`, `1.19` are real version strings. **Blocks every `x.y` band** — `mc/1.21.1` ships one today, and `26.x` will |
-| `PlatformPlayerTest` — band-aware category mapping + fallback test | The mirror enum is a superset on *every* older band, not just this one |
-| `BlockUtilsTest` — laziness proven on `BlockRules` directly | The old proxy depended on a per-version MC behaviour; the replacement is stronger everywhere |
-| `SuperAbilityListenerTillingTest` — stub both world accessors | Makes the harness band-agnostic; costs `master` nothing |
-| `wiki/Husbandry.md` — *"a copy of whatever the harvest handed over"* | One wiki serves every band, and *"the loot roll run a second time"* is false on this one |
-
-⚠️ The two mixin fixes (`CampfireCookMixin`, `FireworkRocketEntityMixin`) are **genuinely band-local**
-— on `master` those targets take the parameters the handlers already declare. Do **not** propagate
-them; a `Backport-not-needed:` reason is the right record if they ever look like drift.
-
-⬜ **Left for recipe step x.7 (release), deliberately:** `README.md` and `wiki/Installation.md` still
-head their tables with *"Minecraft 1.21.2 – 1.21.11"* and carry no row for this band. The **floor**
-sentence had to move now (`BandDocsMatchRealityTest` fires at *cut* time, by design — a floor above
-what the branch ships tells this band's players their jar does not exist), but the table row needs
-the released jar's Fabric API and Loader versions, which do not exist until the band ships. Move the
-header's lower bound to `1.21` and add the row **in the same commit as the release**, or the docs
-promise a download that is not there.
-
----
-
-## §22 — the `1.20` line 🚫 WITHDRAWN (owner-ruled 2026-08-20, R-x)
-
-**R-v extended the floor to `1.20` on 2026-08-19. R-x withdrew it on 2026-08-20, before any `1.20`
-work started.** Scope is back to R-l's **16 versions** — the 12 shipped `1.21.x` plus the 4 `26.x` of
-§9. Nothing had to be reverted: **22.0 was stopped mid-run and wrote no output**, and 22.1 had
-already shipped in `v1.2.0` and stays.
-
-⚠️⚠️ **This is a scope ruling, NOT a feasibility finding.** The DataComponents cliff below `1.20.5`
-is measured and real, but it was never *priced* — no probe row count for any `1.20.x` version exists
-anywhere in this repo. **Do not record, here or in a commit or in `.agent/memory/`, that the `1.20`
-line was found too expensive.** It was not measured. R-m′ is the standing reminder of what an
-unmeasured cost estimate does once it is written down as the reason for a decision.
-
-### What was measured before the withdrawal — facts that stay true
-
-These are facts about **Minecraft**, resolved with `javap` against the yarn-mapped merged jars, so
-they do not rot with scope:
-
-| Symbol | `1.20` – `1.20.4` | `1.20.5` – `1.21.11` |
-|---|---|---|
-| `net.minecraft.item.Items#MACE` | **ABSENT** | PRESENT |
-| `net.minecraft.component.DataComponentTypes` | **ABSENT** | PRESENT |
-
-🔑 **The two boundaries COINCIDE exactly.** Any future attempt at the `1.20` line pays for the NBT
-item-data backend and for the mace gate on the same five versions — one decision, not two.
-
-⚠️ **The mace is NOT a `1.21` item.** It ships from `1.20.5`. The plan asserted otherwise for a day,
-unmeasured — the exact shape of GitHub #7.
-
-⚠️ **All seven `1.20.x` yarn-mapped merged jars are still in the Loom cache** (`1.20` … `1.20.6`,
-yarn builds looked up per version from `meta.fabricmc.net`, never derived). A future 22.0 does not
-have to re-fetch them.
-⚠️ **Loom FAILS on these versions** at its post-merge transform step (`Failed to apply transformation
-to net/minecraft/client/model/Model.class`). The merged jar is written **before** that step and is
-complete — verify by resolving a class with `javap`, never by the gradle exit code.
-
-### What was NOT done, and stays not done
-
-22.0 (the probe), 22.2 (the item-data seam), 22.3–22.4 (the band cuts), 22.5 (the tooling reach to
-`1.20`), 22.6 (`--require-bands` and the docs floor move) and 22.7 (its caveat-expiry pass) are all
-**withdrawn**.
-
-✅ **No documentation debt is owed.** The support floor in `README.md` and `wiki/Installation.md`
-still says `1.21`, because R-v was withdrawn before 22.6 moved it — the docs were never wrong.
-`BandDocsMatchRealityTest` is the mechanical check on that and it is green.
-
-- [x] **22.1 — DONE 2026-08-19, shipped in `v1.2.0`. `SkillAvailability` generalised; `MACES` gated.**
-      A **skill → required-id-paths** map, not a second hardcoded field, with a
-      `setSupportedForTesting`-driven test proving both directions.
-      🔴 **Under R-x the `MACES` entry is inert on every in-scope version.** Kept for the mechanism,
-      not for the row — see the skill-coverage section above.
-
----
-
-## §9 — the `26.x` band
-
-**Its own mini-project (R-e). Do not absorb it into a sweep.** Gated behind at least one completed
-ordinary band, so the loop is known to work before the hard band starts.
+**Its own mini-project (R-e). Do not absorb it into a sweep.**
 
 From `26.1` Minecraft **ships unobfuscated** — verified against the real artifact (`26.2` server jar:
 7,434 `net/minecraft/*` classes, zero obfuscated names). Mappings are absent because they are no
-longer *needed*, not because tooling is missing.
-
-**But Mojang names are not yarn names, and the schemes differ structurally:**
-
-| | official (`26.x`) | yarn (what this mod is written in) |
-|---|---|---|
-| item stack | `net.minecraft.world.item.ItemStack` | `net.minecraft.item.ItemStack` |
-| server player | `net.minecraft.server.level.ServerPlayer` | `net.minecraft.server.network.ServerPlayerEntity` |
-| food | `net.minecraft.world.food.FoodProperties` | `net.minecraft.component.type.FoodComponent` |
-
-So this band is a **wholesale rename of the entire MC-facing surface**: ~164 imports, 42 mixins, 44
-method selectors, 19 `@At` descriptors, plus every MC type named in a method body.
+longer *needed*, not because tooling is missing. But **Mojang names are not yarn names, and the
+schemes differ structurally** (`net.minecraft.item.ItemStack` → `net.minecraft.world.item.ItemStack`;
+`ServerPlayerEntity` → `ServerPlayer`; `FoodComponent` → `FoodProperties`), so this band is a
+**wholesale rename of the entire MC-facing surface**.
 
 🔑🔑 **This is what vindicated R-a.** No preprocessor directive can bridge an identifier rename of
 this size; a branch is the only honest representation.
 
-- [ ] **9.1 Derive the yarn→official translation table.** 🔴 **Its original premise was MEASURED
-      FALSE on 2026-08-20 — see §25.** It claimed yarn's `v2` mappings carry an `official` column
-      holding Mojang names, so the table was a two-column read. The columns exist, but for any pre-`26`
-      version yarn's `official` namespace holds the **obfuscated** name (`a`, `b`, `c`), not
-      `net/minecraft/world/item/ItemStack`. As written, 9.1 derived nothing.
-      ✅ **ANSWERED 2026-08-20 (§25): it IS derivable — a script, not a month.** A three-way join
-      through Mojang's own ProGuard map covers **100% of the 1,389 MC symbols** in
-      `scripts/mc-surface.txt` (`scripts/derive-official-names.py`, 43-check self-test).
-      🔴 **Two caveats that bound it, and neither is zero:** **33** records map to several mojmap
-      names and need the call-site descriptor to choose; and the table is **`1.21.11`→`1.21.11`**, so
-      it prices the TRANSLATION, never the `26.1` API delta. Do not quote the 100% as a §9 estimate.
-- [ ] **9.2 Toolchain.** `26.x` needs a newer Loom than our **1.17.13**, and `build.gradle:30` pins
-      `net.fabricmc:yarn:${yarn_mappings}:v2`, which 404s for every `26.x`. ⚠️ **Confirm exact plugin
-      coordinates at the time of the attempt — do not pin from this note, it will be stale.**
-- [ ] **9.3 Translate the tooling, not just the source.** `scripts/mc-surface.txt` is yarn-named and
-      **does not apply to this band**, so `probe-bands.py` cannot probe it at all until 9.1 lands.
-      `mixin-allow-audit.py` and `extract-mc-surface.py` read the same names. **The band cannot run its
-      own gates until its tooling speaks official names.**
-- [ ] **9.4** Cut `mc/26.x` per the recipe; `depends.minecraft` covers `26.1`–`26.2`.
-- [ ] **9.5** Full ship gate. Expect `boot-check.sh` and `gameplay-smoke.sh` to need version-specific
-      fixture work (Carpet build, command syntax).
+🔑🔑 **And it is what vindicated Phase 2's platform seal.** The rename hit **96 of the 295 main source
+files — every one of them in `fabric/` (74) or `platform/` (22), and 0 of the other 189.** Recipe
+**x.5** predicted exactly that on the evidence of two ordinary API breaks; it then held against the
+largest input it will ever be given.
 
-⚠️ `26.1 > 1.21.11` sorts correctly under semver, so version *predicates* need no special-casing. The
-obstacle was never the version string.
-
----
-
-## §23 — back-port §22.1, and ship `v1.2.0` (owner-ruled 2026-08-20, R-w) ✅ DONE
-
-**Two `master` commits are drifted on all six bands, and nothing can release until `mod_version`
-moves off `1.1.0`.** `616f69298` (the `MACES` gate) and `6f3fd63cc` (the `brew-smoke.sh` jar-glob
-refusal), confirmed MISSING on all six by `drift-audit.py --master master --require-bands 6` after
-its `--self-test` passed.
-
-### 🔴 R-w′ — a `mod_version` bump is INVISIBLE to gate 7, and the hole is in the auditor's design
-
-`scripts/drift-audit.py` lists `gradle.properties` in **`BAND_LOCAL_PATHS`** — correctly, because
-`minecraft_version` and `supported_minecraft_versions` are per-band by construction (R-a) and a
-`master` toolchain bump must never be reported as missing on a band. But `mod_version` lives in that
-same file and is explicitly **NOT** per-band (R-p): it is identical on every branch, or R-p is broken.
-
-So a commit touching `gradle.properties` **and nothing else** is dropped by the auditor exactly the
-way a docs-only commit is — the **third** instance of this shape (Phase 21's docs exclusion, then the
-commit-shape variant, now a path exclusion). This one bites harder than either:
-
-- A band left behind **cannot release at all**. R-t's gate refuses an already-shipped version, so the
-  band silently stops shipping — and red is now the normal outcome of any `src/**` push, so nothing
-  distinguishes it.
-- A band bumped to a *different* number breaks R-p, and the version starts meaning different content
-  depending on which branch you read it from.
-
-⚠️ **Gate 10 cannot cover it either.** `branch-file-identity-audit.py` cannot demand a byte-identical
-`gradle.properties` — `minecraft_version` **must** differ, and gate 9 is the guard that says so.
-**No gate in the ten watches `mod_version` across branches.** For this sweep it is done by hand and
-verified per branch against the table below; the standing guard is filed under Other open work.
-
-### The work
-
-- [x] **23.1 — DONE. `master` `0d8bc0490`: bump to `1.2.0-SNAPSHOT`.** `gradle.properties` + this plan text.
-      ⚠️ There is no `src/` half to ride with, so this commit is invisible to gate 7 twice over.
-      `BandVersionLabelTest` reads `mod_version` off disk and asserts plain unpadded semver that
-      round-trips through Fabric's own parser — confirm `1.2.0-SNAPSHOT` still passes it.
-- [x] **23.2 — DONE. 61/61 injectors; 1846 executed, 0 failures, 162 classes. Ship-gate `master`, then push.** Gate 2 before gate 1 (x.7). Read the `N executed`
-      line, not `BUILD SUCCESSFUL`; expect ~1846 executed, 0 failures.
-- [x] **23.3 — DONE. All six, three trailers each.** Per band, cherry-pick `616f69298` then `6f3fd63cc`, then
-      bump `mod_version`. Each `master` sha gets its own `Backport-of:` trailer — the auditor's
-      `TRAILER` regex is `re.M` and reads every line, so one commit may legitimately carry several.
-      ⚠️ **Never cut a band branch here**; these six already exist (AGENTS.md, no-new-branches).
-- [x] **23.4 — DONE. Every band green; see the count table below.** gate 2 at that band's `minecraft_version`, then
-      gate 1. A band whose count comes in under `master`'s had something disabled to get there.
-- [x] **23.5 — DONE. 0 MISSING, 7 distinct manifests, 23 identical shared paths.** Push, then gates 7 / 9 / 10 at `--require-bands 6`.** `--self-test` each first. Gate 7
-      audits `origin/master`, and gates 9/10 default to `origin/**` — **push first, then audit.**
-      Expect 0 MISSING, 7 distinct manifests, 0 differing shared paths.
-- [x] **23.6 — DONE. Seven green, seven releases at `v1.2.0`, 0 drafts, every `v1.1.0` tag reaped.** Read all seven release runs, by STEP not by colour.** With the bump they should
-      publish `mc<VER>-v1.2.0` per branch. Then update the *"What ships today"* tag column above from
-      `v1.1.0` to `v1.2.0` — that column is a claim about what actually shipped, so it moves only
-      after `gh release list` says so, never in anticipation.
-
-### `mod_version` — verified per branch (R-w′ has no automated leg; this table IS the check)
-
-| Branch | tip | `mod_version` | injectors | tests executed | released |
-|---|---|---|---|---|---|
-| `master` | `0d8bc0490` | ✅ `1.2.0-SNAPSHOT` | 61/61 | **1846** (162 cls) | ✅ `mc1.21.11-v1.2.0` |
-| `mc/1.21.10` | `2938b1583` | ✅ | 61/61 | **1846** (162 cls) | ✅ `mc1.21.10-v1.2.0` |
-| `mc/1.21.8` | `751be9107` | ✅ | 61/61 | **1846** (162 cls) | ✅ `mc1.21.8-v1.2.0` |
-| `mc/1.21.5` | `49cc7e034` | ✅ | 61/61 | **1847** (162 cls) | ✅ `mc1.21.5-v1.2.0` |
-| `mc/1.21.4` | `f3d970546` | ✅ | 61/61 | **1854** (164 cls) | ✅ `mc1.21.4-v1.2.0` |
-| `mc/1.21.3` | `ab566f55d` | ✅ | 61/61 | **1848** (163 cls) | ✅ `mc1.21.3-v1.2.0` |
-| `mc/1.21.1` | `fb6091fae` | ✅ | **67/68** (SLICE=1) | **1850** (162 cls) | ✅ `mc1.21.1-v1.2.0` |
-
-🔑 **Every band's count is HIGHER than `master`'s, and each surplus was traced rather than waved
-through.** The gate's wording — *"a lower count means something was disabled"* — says nothing about a
-higher one, so the check had to be per-CLASS, not per-total. Four bands carry extra tests that are
-band adaptations pre-dating §23:
-
-- `mc/1.21.4` +2 classes (`ArmadilloBrushDispenserExclusionTest`, `MobOriginRestampSeamTest`),
-  `mc/1.21.3` +1 (the first of those).
-- `mc/1.21.5` +1 test in `PlatformPlayerTest`: vanilla has no `UI` sound category below `1.21.6`, so
-  the same-name mapping loop exempts it and a second test asserts the exemption is *justified*.
-- `mc/1.21.1` +4, one each in `MixinApplicationTest`, `HusbandryListenerTest`,
-  `PlayerMovementTrackerTest`, `PlatformPlayerTest`.
-
-⚠️ **The comparison that mattered was `comm -23` — is any `master` test MISSING on the band.** It was
-empty on every band. A total-vs-total check would have read all six as "fine, more tests", and a
-band that had silently *lost* a `master` test while gaining two of its own would have passed it.
-
-### ⚠️ What §23 nearly shipped — a back-port helper that printed OK and wrote nothing
-
-`MSYS_NO_PATHCONV=1` — this repo's own prescribed remedy for the Phase-18 `rev-parse <ref>:<path>`
-trap — stops git translating `/tmp/msg.txt` to a Windows path. So `git commit --amend -F /tmp/msg.txt`
-failed on `mc/1.21.8`, **all three `Backport-of:` trailers were silently dropped**, and the helper
-printed `OK` three times because it checked the cherry-pick's exit code and never the amend's.
-
-🔑🔑 **This is Phase 20's lesson a second time: nothing checks that REMEDIES compose.** The same
-env var that fixes one gate turned another off, in a different tool, four months later. Two fixes,
-both required:
-
-- The message now goes in via **stdin** (`git commit -F -`), which no path translation can touch.
-- The helper **verifies its own post-condition** — it re-reads the trailer off `HEAD` and exits 3 if
-  it does not match — and refuses on `master` or a dirty tree. A helper that reports success it did
-  not verify is worse than no helper: it produces six branches of plausible-looking commits.
-
-⚠️ Gate 7 would have caught the two `src/`-touching commits on the next audit. It would **not** have
-caught the third: `gradle.properties` is in `BAND_LOCAL_PATHS`, so the bump's missing trailer was
-invisible by construction — R-w′ and this defect intersecting on the one commit neither guard covers.
-
-### What I am NOT doing
-
-- **Not** building the standing `mod_version`-identity gate inside this sweep. It is a `scripts/**`
-  change, which is a seven-branch operation in its own right, and folding it in would mean the
-  back-port commits no longer match what they claim to back-port. Filed under Other open work.
-- **Not** touching `README.md` / `wiki/`. No documented claim names `mod_version`, and the support
-  floor is unchanged by this work — so the caveat-expiry pass has nothing to grep for here.
-- **Not** starting §22.0. It is next, and it is gated on this landing.
-
-### Rollback
-
-Nothing here is irreversible: every step is an ordinary commit on an existing branch, and the undo is
-`git revert <sha>` per branch. The one outward-facing step is 23.6's **releases** — those publish
-under a *new* tag `mc<VER>-v1.2.0`, so they cannot overwrite `v1.1.0`, which stays fetchable
-throughout. That is R-t working as designed, and it is why the bump had to be a real bump.
-
----
-
-## §24 — the docs layer joins the identity guard (owner-ruled 2026-08-20, R-y)
-
-**Owner ruled `README.md` and `wiki/` IN to `branch-file-identity-audit.py`**, closing the call
-carried from §21.6. The ruling immediately paid for itself: the very first measurement found a real
-violation that had been sitting on a shipped band.
-
-### What the measurement found, before a line of code was written
-
-`README.md` is byte-identical on all seven branches. `wiki/` is not — **`mc/1.21.1` carries a
-different `wiki/Husbandry.md`**, and it is the *band* that is right:
-
-```
-master, and 5 bands:  "The bonus is the animal's own loot roll run a second time"
-mc/1.21.1:            "The bonus is a copy of whatever the harvest actually handed over"
-```
-
-`mc/1.21.1` commit `72de23ad7` states the reason outright — *"restates the Bountiful Harvest wiki
-sentence that described the bonus as the loot roll run a second time — **false here, and one wiki
-serves every band**"*. That band has no shear loot funnel; its seam doubles the returned stack's
-count. So the sentence on `master` is **false for `1.21.1` players**, and the band's replacement is
-the band-agnostic statement that is true on both implementations — exactly what AGENTS.md's
-*"state the code fact that holds on every band"* rule asks for.
-
-🔑🔑 **This is the docs-propagation hole running BACKWARDS, and it is a rule-1 violation.** Rule 1 is
-*fixes land on `master` FIRST, always* — and the reason is visible here: a correction authored on a
-band reaches exactly one branch, while the wrong text keeps serving the other six. `drift-audit.py`
-is structurally blind to it (it asks whether a `master` commit reached a band, never whether a band
-holds a fix `master` lacks), and it was right to stay quiet. **Every existing guard was green while a
-shipped page was wrong.**
-
-### 🔴 The latent collision — checked BEFORE implementing, and it is why this is safe
-
-The R-w′ shape: ruling a file identical is unshippable if another guard requires it to **differ**.
-`BandDocsMatchRealityTest` reads `README.md` and `wiki/Installation.md` and asserts the documented
-support floor sits **strictly below every version this branch ships**. If any band ever ships a
-version at or under the floor, the floor sentence must go per-band — and the two guards would then
-have no state that satisfies both.
-
-Measured, not assumed:
-
-| | value |
+| | state |
 |---|---|
-| documented floor (both files, all seven branches) | `1.20.6` |
-| oldest version shipped by ANY branch (`mc/1.21.1`) | `1.21` |
+| **9.1** derive the yarn→official table | ✅ **DONE (§25).** `scripts/derive-official-names.py`, three-way join through Mojang's own ProGuard map, 43-check self-test, **100% of the 1,389 MC symbols**. ⚠️ The table is `1.21.11`→`1.21.11`: it prices the **translation**, never the `26.1` API delta. Never quote the 100% as a §9 estimate |
+| **9.2** toolchain | ✅ **DONE (§27), and its premise was measured FALSE.** `26.x` builds on the **existing Loom 1.17.13**. What changed: plugin id → `net.fabricmc.fabric-loom`, `mappings` line **removed entirely**, `modImplementation` → `implementation`, Java 21 → **25** (Mojang's own manifest requirement) |
+| **9.3** translate the source **and** the tooling | ✅ **SOURCE DONE (§28–§33)**: 2,639 → 0 compile errors, 54 → 0 dead injectors, 186 → 1 red tests. ⬜ **TOOLING HALF STILL OPEN** — see below |
+| **9.4** cut the band | 🟡 **HALF DONE.** (a) *Which branch?* — ruled: `26.x` **becomes `master`** and `1.21.11` was cut to `mc/1.21.11` (R-z, honouring R-f). (b) *One band or two?* — ✅ **TWO, and it is MEASURED now (§38), not inferred.** `probe-bands.py --versions 26.1,26.2 --control 26.2` on `master`: control green, **84 of 1424 records vary**, and the two versions do **not** collapse into one band. The ecosystem split (`[26.1, 26.1.1, 26.1.2]` vs `[26.2]`) reached the same conclusion by a different route. **`master` takes `26.2` alone; `26.1.x` is a future band.** ✅ **§39 closed the residue**: `26.1.1` and `26.1.2` were Loom-resolved and probed, and all three `26.1.x` versions are **identical on 1424 of 1424 records** — so the `26.1.x` line is ONE band, `mc/26.1.2`, and the declared 16-version scope needs exactly **one more branch** |
+| **9.5** full ship gate | 🟡 **HALF DONE (§35).** `boot-check.sh` ✅ and `gameplay-smoke.sh` ✅ both green on `26.2`. The expected version-specific fixture work **did not materialise**: carpet publishes a `26.2` build and every command in the scenario parsed unchanged. What DID bite was a latent harness defect that `26.2` merely happened to expose — see §35. Gates 3–11 of the ship gate are still unrun on this branch |
 
-`1.20.6 < 1.21`, so **one floor value satisfies every band**, which is precisely why `README.md` is
-already identical everywhere. ⚠️ **This holds because of R-x.** R-v's `1.20` line would have put a
-band's shipped versions *below* the floor and forced the collision open. If the `1.20` floor is ever
-revisited, **this ruling must be revisited in the same breath** — `README.md` and `wiki/Installation.md`
-would have to leave the identity set, or the repo stops being shippable.
+### ⬜ 9.3's tooling half — what still reads yarn names
 
-### The work
+The band cannot run its own gates until its tooling speaks official names.
 
-- [x] **24.1** Fix `wiki/Husbandry.md` on `master`: adopt `mc/1.21.1`'s band-agnostic wording.
-      `master` first, per rule 1, even though the text originated on a band.
-- [x] **24.2** Add `README.md` and `wiki/**` to `INCLUDE` in `scripts/branch-file-identity-audit.py`.
-      Record the ruling, this incident, and the `BandDocsMatchRealityTest` collision in the docstring
-      — the collision warning belongs next to `EXCLUDE`'s `mc-surface.txt` note, in the same voice.
-- [x] **24.3** Extend `--self-test` with a firing case over a docs path, so the widened set is proved
-      to be *audited* and not merely *listed*. A path added to `INCLUDE` that no test exercises is a
-      path that can be dropped by a refactor with nothing going red.
-- [x] **24.4** Update `AGENTS.md`: the gate-10 tooling row now names the docs layer, and the
-      *"docs are deliberately NOT tracked"* paragraph must be narrowed to what it actually means —
-      that is a statement about `drift-audit.py`, and left as-is it now reads as *"no guard covers
-      docs"*, which is the doc-argues-against-the-guard failure P19-1 exists to stop.
-- [x] **24.5 — DONE.** `--self-test` OK (2 quiet, **8** firing, 1 warning, 4 detector mutations);
-      the pre-fix run against `origin` fired on exactly the one known row, exit 1. Suite forced with
-      `--rerun-tasks`: **1846 executed, 0 failures, 0 errors, 0 skipped** — read off the JUnit XML,
-      not off `BUILD SUCCESSFUL`.
-- [x] **24.6 — DONE.** `master` `a99e93d05`; back-ported as the cumulative **file state** to all six
-      bands, each with `Backport-of: a99e93d05`. All seven pushed. 🔑 On `mc/1.21.1` the checkout
-      staged **three** files, not four — `wiki/Husbandry.md` was already correct there, which is the
-      proof that `master` adopted that band's exact bytes rather than a retyped equivalent.
+- [x] ✅ **`probe-bands.py` speaks official names (§38)** — jar resolution moved to the shared
+      `scripts/loomjar.py`, plus a **cross-naming refusal**, a **non-relocating control** and a
+      `--self-test`. `master` is probeable, and 9.4(b) is now measured rather than inferred.
+- [x] ✅ **`javap-mc.sh` resolves through the same module (§38)** — and it had been serving a
+      **wrong answer on `1.21.11` since §33**: `sort | head -1` picked the mojmap `loom.mappings`
+      jar over the yarn one, so `net.minecraft.item.ItemStack` read *class not found* under a
+      confident `# javap against Minecraft 1.21.11` banner. Now has a `--self-test` too.
+- [x] ✅ **`scripts/mc-surface.txt` regenerated under official names (§36).** 1415 yarn records →
+      **1433 official**, `--check` **PASS**. `./gradlew classes testClasses` ran first and
+      `build/classes` was complete (537 class files, the same number `--check` disassembles).
+- [x] ✅ **Nested-type spelling normalised in `extract-mc-surface.py` (§36)**, bundled with the
+      regeneration exactly as planned. `normalise_nested()` + `import_map()` fold `Outer.Inner` to the
+      JVM binary `Outer$Inner` **at the import step**, which is where the two scans diverged: the
+      bytecode scan always reads `$` out of a constant pool, the source scan took the spelling
+      straight off an `import` line. One import — `AttributeModifier.Operation` in
+      `SkillAttributeService` — produced a dotted `CLASS` row and two dotted `STATICFIELD` rows for a
+      type the bytecode side spelled with `$`. **Dotted-nested rows: 3 → 0.**
+      🔑 **It was survivable only because TWO consumers carried the workaround** (`probe-bands.py`
+      and `derive-official-names.py` both have a `name_candidates()` that maps the dotted tail back).
+      A third consumer that forgets simply reports the type ABSENT on every band — a false positive
+      shaped exactly like a real API removal.
+      ⚠️ Split at the **outermost** capitalised segment. Stopping at the first `Upper.Upper` pair from
+      the end renders `Outer.Inner.Leaf` as `Outer.Inner$Leaf`, a binary name nothing resolves.
+      ✅ Seven unit cases (including three negatives and the non-MC `java.util.Map.Entry`), plus a
+      **mutation verified to go red on 5 checks** when the pre-fix behaviour is restored.
+- [x] ✅ **`mixin-allow-audit.py` runs on a `26.x` branch** — `find_jar` falls back to
+      `minecraft-merged-deobf-<mc>.jar`. 26.x ships unobfuscated and yarn publishes nothing for it, so
+      the old glob for the *yarn-remapped* artifact could never match: **the one gate that can see a
+      mixin selector was unusable on the only branch whose selectors had just been rewritten.**
+- [x] ✅ **`scripts/mixin-target-sizer.py`** — new. Classifies every injector target off `26.2`
+      bytecode, and `--shadows` covers the `@Shadow`/`@Accessor`/`@Invoker` blind spot below.
 
-### Gates after the push — all four green against `origin`
+### ⬜ Carried out of §31 – §33 — the open list
 
-| Gate | Result |
-|---|---|
-| 7 `drift-audit.py` | self-test passed, then **0 MISSING** on all six bands |
-| 9 `manifest-identity-audit.py` | no collisions — every manifest distinct |
-| 10 `branch-file-identity-audit.py` | **44 paths** × 7 branches, byte-identical (was 24 paths pre-R-y) |
-| 11 `gradle-key-identity-audit.py` | 12 keys — 10 shared agree, 2 distinct differ |
+- [x] ✅ **`boot-check.sh` on `26.2`** — PASSED 2026-08-25 (§35). The R-z hold condition, discharged.
+      🔑 **Loom registers NO `remapJar` on `26.x`**, because Minecraft ships unobfuscated there and
+      `build.gradle` names no mappings artifact — so the shipping artifact is the plain `jar` task.
+      `./gradlew remapJar` fails with *"Task 'remapJar' not found"* on this branch and works on every
+      band branch, which is a per-band build-graph difference no gate in this repo looks at.
+- [ ] 🔴 **The docs pass** — `README.md` + `wiki/**`, all seven branches, **one commit** (owner-
+      sequenced). `README.md` has no `26.2` row and its floor sentence still says *"neither is the
+      `26.x` line yet"*; that is the single red test in the suite, deliberately left red. Both files
+      are in R-y's byte-identity set, so the edit lands everywhere at once or not at all.
+- [x] ✅ **The owed gate-10/11 sweep — DONE (§37).** Gates 9, 10 and 11 all exit 0 at `--local`.
+      **9 paths** for gate 10 (all `scripts/**`; `master` proved the winner on every one) and **1 key**
+      for gate 11 (`mockito_version`). ⚠️ **`.gitignore` was NOT owed** — the `30.6` / `.hprof` claim
+      that stood here was stale, all eight branches already carry blob `b432715f0`.
+      🔑 Mockito had to move: `5.14.2` carries **Byte Buddy 1.15.4**, which rejects **Java 25 (class
+      file 69)** outright, so every mocking test threw on the 26.x toolchain. *(An earlier edition of
+      this line blamed `1.17.7` — that is the version `5.23.0` carries, i.e. the fix, not the fault.)*
+      It stays `SHARED`, and its **floor is set by the newest JDK any band uses**, which R-aa makes
+      band-local.
+      ✅ **"A newer Mockito is fine on the bands' Java 21" is now MEASURED, not asserted** (§37): the
+      full suite ran on all seven bands under `5.23.0` — 1846 to 1854 executed, 0 failures each, with
+      75 test files importing `org.mockito`.
+      🔴 `gradle.properties` is inside `release.yml`'s `paths:` filter, so the mockito half **rides the
+      `mod_version` bump with R-aa** or it fires seven release runs R-t refuses. §37 splits the commits.
+- [ ] 🔴 **R-aa — the per-band `java_version` key.** Ruled, not built. `release.yml:117` still pins
+      `'21'` on all eight branches while `26.x` needs 25, and the workflow must stay byte-identical
+      under P19-1. Deferred deliberately: `release.yml` is inside its own `paths:` filter, so touching
+      it on the six live bands fires six release runs that R-t's stale-version gate refuses. **Bundle
+      it with the `mod_version` bump when `26.2` actually ships.**
+- [ ] 🟡 **R13 — the general overload-rebind shape.** §33.4 closed the `equals` family only. *Any*
+      method whose narrow overload is deleted while a wider one survives rebinds **silently**, because
+      javac must accept it by the language rules. No gate covers the general case.
+- [ ] 🟡 **§31.5 — the 562 unreviewed collision sites over 38 names.** Owner-sequenced after §32.
+      Sampling says they are dominated by false positives (`Map.get`, `List.add` on plain Java
+      collections sharing a name with a colliding MC member) — but `Registry#getId` was 42 sites,
+      **12 of which javac never mentioned**, and one was a live `equals()` in main source returning
+      false forever. Plan: (a) filter mechanically on receiver type, reporting the before/after count;
+      (b) read every survivor by hand, recording the count **reviewed**, not just fixed; (c) a
+      mutation re-introducing one `BuiltInRegistries.*.getId(` that must survive the filter and be
+      reported — **a filter never shown to catch anything is a filter that removes everything.**
+- [ ] 🟡 **`config.yml` is outside the config-id gate entirely**, and carries at least one dead id
+      (`Chain`). `config-id-audit.py` never reads it.
+- [ ] ⬜ **`build.gradle:2`'s bare `fabric-loom` id.** Resolved on `master` (it is the explicit
+      non-remap id); what the **bare** id does on the `1.21.x` branches is inferred, not measured. It
+      matters the next time a band's toolchain is touched.
+- [ ] ⬜ **`TODO.md`'s one-blob-on-every-branch invariant.** `master` no longer describes the same
+      product as the bands, so propagation cannot fix the drift this time. Decide at 9.5 whether the
+      invariant survives the `26.x` split at all.
 
-✅ **No release run fired, and this was CHECKED, not assumed** — `gh run list` filtered by all seven
-new SHAs returns empty. The `paths:` filter (`src/**`, the gradle files, `release.yml`) matches
-nothing in this push. That check exists because a recorded *"no release run fired"* was once **false
-on all seven branches**; the claim is only worth writing when it has been measured.
+### 🔑🔑 The five blind spots §29 – §33 found — every one read GREEN on every gate
 
-### Three defects found IN THE GUARD while widening it
+**This is the part of the archive worth re-reading before writing any guard.** Each is a defect class
+this repo's whole gate stack reports as passing, and three are blind **by construction**:
 
-1. 🔴 **The remediation hint was actively dangerous.** It said *"bring the bands to master's
-   version"* — and in the very case R-y found, `master` was the wrong one. An agent following it
-   would have overwritten the **correct** sentence on all seven branches. It now states that the
-   guard reports difference, never authorship, and cites this case as the counter-example.
-2. **The self-test's summary was already wrong.** Hardcoded `4 detector mutations` when only **3**
-   existed — the guard overstating its own coverage, and nothing could catch it. `check()` now
-   records each `"<CASE>:"` label and the summary is computed. A number describing the code it sits
-   in must be derived.
-3. **The fixture used `README.md` as base-commit filler**, which R-y silently promoted to an audited
-   path and broke QUIET1's count. Renamed `.fixture-base` (matches no include glob) rather than
-   patching the number — patching it would have left the same landmine for the next `INCLUDE` change.
+1. **A member that is PRESENT but WRONG.** A compiler loop cannot see it. All 27
+   `int cannot be dereferenced` errors were one row (`Registry#getId`) and were caught only by luck of
+   the return type; 12 more sites produced **no diagnostic at all**.
+2. **A mixin that APPLIES but binds the wrong live method.** `FireworkRocketEntityMixin` selected
+   `explode` where the real work moved to `dealExplosionDamage`; `allow=1 computed=1` — a clean row.
+   **Application is not correctness, and `--check` cannot tell the two states apart.**
+3. **A seam that became a PASS-THROUGH.** `EntityTypeSpawnOriginMixin`'s `create` chain inverted, so
+   every caller building its own `EntitySpawnRequest` walked past the injector unstamped — and an
+   unstamped mob counts toward mob mastery. The only symptom was `allow=2 computed=1`, which **loads
+   fine, because `allow` is an upper bound.**
+4. **`@Shadow` / `@Accessor` / `@Invoker` members.** A `@Shadow` is declared *in the mixin*, so javac
+   type-checks it against the mixin's own declaration and never asks whether the target has it;
+   `@Accessor` names its field in a **string**. `mixin-allow-audit.py` scores injectors only. It fails
+   at mixin **apply** time — game start, after every gate is green. **4 of 8 were still yarn, and none
+   were broken by 26.x: they were missed by the original port and wrong on every band since.**
+5. **A Minecraft name surviving as a STRING LITERAL.** No renamer parses it, javac cannot see inside
+   it. §33.5's Husbandry failure was exactly this.
 
-### What I am NOT doing
-
-- **Not** adding `TODO.md` to the identity set. The owner ruled `README.md`/`wiki/`, and this file is
-  a live plan edited on `master` mid-sweep by construction — it is red for the duration of every
-  sweep, including this one. Separate call, not folded in silently.
-- **Not** touching the floor sentence. It is correct on every branch and moving it is what would
-  *open* the collision above.
-- **Not** rewriting the six wiki pages the caveat-expiry pass would cover. 24.1 is one sentence with
-  a measured defect behind it; a general docs sweep is not this ruling.
-
-### Rollback
-
-Every step is an ordinary commit on an existing branch; the undo is `git revert <sha>` per branch.
-Nothing outward-facing: no `src/**` and no `gradle.properties`, so `release.yml`'s `paths:` filter
-does not fire and no release is touched. The live GitHub wiki is never pushed (R-k), so 24.1 changes
-a tracked page only.
+⚠️ **`26.1 > 1.21.11` sorts correctly under semver**, so version *predicates* need no special-casing.
+The obstacle was never the version string.
 
 ---
 
-## §25 — §9.1: is the yarn→official table derivable? (owner-ruled 2026-08-20: §9.1 only, then report)
+## §38 — 9.3's tooling half: `probe-bands.py` + `javap-mc.sh` speak official names — ✅ DONE
 
-**The gated first step of §9, and nothing more.** R-e makes `26.x` its own mini-project; this
-section answers one question and stops, so the ~164-import rename gets budgeted from a measurement
-instead of a guess.
+**Tier 2.** Two scripts, one new shared module, a generated `BAND_TABLE.md`, and a seven-band
+gate-10 sweep. Written down before the first edit.
 
-### 🔴 The defect in the plan, found before a line of code
+### Why this is not "rename some strings"
 
-§9.1 as written says the table is a two-column read of yarn's `v2` mappings. **It is not.** Measured
-against the cached `1.21.11+build.6` mappings:
+Neither script contains a yarn *identifier*. Both are yarn-only because of **where they look for a
+jar**, and the jar's naming is the whole contract: a probe run against a jar in the wrong naming
+does not error, it reports **the entire Minecraft API as ABSENT**.
+
+Owner decisions taken 2026-08-25, before any code: **(a)** do the tooling *and* run the 9.4(b)
+probe; **(b)** extract a shared chooser rather than a third copy; **(c)** sweep the seven bands
+immediately rather than deferring gate 10.
+
+### 🔴 Four defects, all measured on disk — not inferred
+
+**1. `javap-mc.sh` serves a WRONG ANSWER on `1.21.11` today.** It ends its jar search in
+`sort | head -1` — the exact `sorted()[0]` defect §37 found in the mixin gate — and the poisoned
+cache entry is still on this box:
 
 ```
-tiny 2 0  official  intermediary  named
-c    a    net/minecraft/class_7833   net/minecraft/util/math/RotationAxis
+$ find ... -iname "minecraft-merged-1.21.11-*-v2.jar" -not -iname "*-intermediary-*" | sort | head -1
+.../1.21.11-loom.mappings.1_21_11.layered+hash.1830767244-v2/...-v2.jar      <- MOJMAP
+   (over)  .../1.21.11-net.fabricmc.yarn.1_21_11.1.21.11+build.6-v2/...-v2.jar   <- yarn, the right one
 ```
 
-The `official` namespace is the **obfuscated** name. Yarn calls it *official* because it is the name
-Mojang **shipped**, not the name Mojang **wrote** — and for every version below `26.1` those are
-different things. The `26.x` premise (unobfuscated ship) is exactly what collapses the distinction,
-which is why the mistake is easy: it is true on the target band and false on every source band.
+🔴 **This is the tool `AGENTS.md` names as the cure for recalling an MC signature** — *"verify MC
+signatures, never recall them"*. On `mc/1.21.11` it would report a real yarn member absent, with a
+`# javap against Minecraft 1.21.11` banner over it. A wrong answer from the authority is worse than
+no answer. **It has no `--self-test`**, same as the mixin gate before §37.
 
-🔑 **Same shape as GitHub #7 and R-m′**: a plan step whose stated *reason* was never re-checked
-against the artifact. It would not have failed loudly — a two-column read of tiny v2 **succeeds** and
-emits a table of `class_7833 → RotationAxis`, which is a real mapping, just not the one §9 needs.
+**2. `probe-bands.py` cannot see a `26.x` jar at all.** `cached_versions()` enumerates by the regex
+`^(.+?)-net\.fabricmc\.yarn\.` and `jar_for()` globs `{version}-net.fabricmc.yarn.*` — 26.x has no
+yarn artifact by construction (§27: yarn meta returns `[]`). Both return empty, so `master` is
+unprobeable, which is the whole reason 9.4(b) rests on ecosystem evidence.
 
-### The derivation that does work — a three-way join
+**3. 🔴🔴 The control check CANNOT catch a cross-naming probe — it silently relocates.**
 
-| Input | Gives | Where |
+```python
+control = args.control if args.control in result else (live[-1] if live else None)
+```
+
+`--control` defaults to the hardcoded `1.21.11`. Probe `1.21.8,26.2` from `master` and `1.21.11` is
+not in `result`, so the control **slides to `live[-1]` = `26.2`**, passes cleanly, and `1.21.8`
+reports ~1433 ABSENT — *"1.21.8 removed the entire Minecraft API"*, printed under
+`control check: ... probe trusted`. **That is a false band boundary of the maximum possible
+magnitude, produced by the guard that exists to prevent exactly it.** The hardcoded default is
+also the staleness shape `javap-mc.sh` already fixed for itself: read the version from
+`gradle.properties`.
+
+**4. `nonmc_classpath()` finds nothing on `26.x`.** It globs
+`minecraft-merged-*/{control}-*/*.jar`; the trailing `-` is load-bearing against the `1.21.1` /
+`1.21.11` prefix hazard, but the 26.x project cache directory is bare `26.2`:
+
+```
+.gradle/loom-cache/.../minecraft-merged-bfb32e66d2/26.2/minecraft-merged-bfb32e66d2-26.2.jar
+```
+
+So the interface-injection classifier silently degrades to fabric-api jars only, and every
+`getAttached`-shaped record reads ABSENT on the control — which under fix 3 becomes a hard refusal
+rather than a shrug. Two globs (`{control}` and `{control}-*`), never `{control}*`.
+
+### The design — `scripts/loomjar.py`, one chooser, three consumers
+
+`choose_jar()` and `find_jar()` move out of `mixin-allow-audit.py` into a new
+`scripts/loomjar.py`, unchanged in behaviour, and gain one thing the mixin gate never needed:
+the chooser **returns the naming it resolved** (`yarn` | `official`), not just a path.
+
+That naming is what makes fix 3 mechanical rather than a convention:
+
+* the **branch's** naming = `yarn_mappings` present in `gradle.properties`? `yarn` : `official`
+  (§37's rule, already trusted by the mixin gate)
+* the **manifest's** naming = the branch's, because `mc-surface.txt` is generated from this
+  branch's own sources and bytecode (§36)
+* therefore **`probe-bands.py` REFUSES any version whose jar naming is not the branch's**, by name,
+  with the count it would otherwise have mis-reported — instead of probing it and returning 1433
+  ABSENT rows.
+
+⚠️ **Fail closed, and refuse rather than skip.** A skipped version reads as a clean run; §37's
+`--require-bands 8` → *"No drift"* + exit 2 is this repo's standing evidence that a sentence and an
+exit code disagree in exactly this situation.
+
+`--control` defaults to `gradle.properties`' `minecraft_version`, and a control that is not in the
+probed set is a **hard error**, never a relocation.
+
+### Steps
+
+- [x] ✅ **38.1** `scripts/loomjar.py` — move `choose_jar`/`find_jar` verbatim, return `(Path, naming)`.
+      `--self-test` carries §37's 8 cases forward **unchanged** plus new naming-return assertions.
+      🔑 The §37 lesson on mutants: *a faithful reproduction of the pre-fix code*, failing exactly
+      the predicted cases. A crude mutant that dies with an `IndexError` before case 1 reports
+      **proves nothing**.
+- [x] ✅ **38.2** `mixin-allow-audit.py` imports it; its own `--self-test` must still pass **8/8** with
+      no case edited. That is the regression proof for the move.
+- [x] ✅ **38.3** `javap-mc.sh` resolves through `loomjar.py` (owner ruled: shell calls the Python —
+      one implementation, and this script is already Python-adjacent via the repo's other gates).
+      Add `--self-test`. **Prove the fix on the live poisoned `1.21.11` cache**: it must now pick
+      the `net.fabricmc.yarn...build.6` jar, and that is a demonstrable before/after on this box.
+- [x] ✅ **38.4** `probe-bands.py`: `cached_versions()` unions both caches; `jar_for()` → `loomjar`;
+      cross-naming **refusal**; `--control` from `gradle.properties`, missing control = hard error;
+      `nonmc_classpath()` two-glob fix.
+- [x] ✅ **38.5** ⚠️ **Control first, on a band, before believing anything on `master`.**
+      `probe-bands.py --versions 1.21.8,1.21.11 --control 1.21.11` on `mc/1.21.11` must reproduce
+      the band table it already produces. A rewritten probe that has only ever run on the new branch
+      has no baseline.
+      ✅ **Ran 2026-08-26 on `mc/1.21.11`.** `control check: 1.21.11 resolves all 1406 records -
+      probe trusted`; `bands: 2 -> 1.21.8 | 1.21.11`; **varying 32 of 1406**. **32 is the exact
+      figure that band's committed `plans/BAND_TABLE.md` already carries for the `1.21.8` row**
+      (*"32 record(s)"* differs from newest), so the rewrite reproduces the published table rather
+      than a new answer. ⚠️ The record TOTAL moved (1377 → 1406 non-excluded) because the manifest
+      was regenerated in §36; **the total is not the baseline, the band collapse is**.
+- [x] ✅ **38.6** **The 9.4(b) probe.** `26.1` and `26.2` deobf jars are both already cached (verified:
+      `minecraft-merged-deobf/{26.1,26.2}/`), so this needs no network. Probe `26.1,26.2` from
+      `master`, control `26.2`. **`26.1.1` / `26.1.2` are NOT cached** and need a Loom resolve each —
+      out of this section unless the `26.1` result is ambiguous.
+      🔑 The question is *"one band or two"*: identical fingerprints ⇒ `26.1`–`26.2` is one band and
+      the three-ecosystem-projects split was wrong; differing ⇒ our own surface confirms it.
+      ⚠️ **A record-count match is not a fingerprint match.** Read the band collapse, not the total.
+- [x] ✅ **38.7** Regenerate `plans/BAND_TABLE.md` if 38.6 changes it; update 9.4(b)'s row from
+      *"rests on ecosystem evidence"* to the measured answer.
+- [x] ✅ **38.8** The seven-band gate-10 sweep, §37's recipe (below). Owner ruled: **now, not deferred.**
+      ✅ **Done 2026-08-26** — one commit per band, four `scripts/**` paths, no `gradle.properties`,
+      so **no release run fired**. Per-band results in the table below.
+
+### ✅ Outcome on `master` — measured 2026-08-26
+
+| step | result |
+|---|---|
+| `loomjar.py --self-test` | ✅ **11 cases** — §37's 8 carried unedited, + 3 naming, + 9 lookup (23 total across the three) |
+| `mixin-allow-audit.py --self-test` | ✅ 8 + 3, no case edited — the regression proof for the move |
+| `mixin-allow-audit.py --check` | ✅ `SLICE=1 OK=60 (total 61)` — **identical to §37's record** |
+| `javap-mc.sh --self-test` | ✅ 7 cases (argument splitting) |
+| `probe-bands.py --self-test` | ✅ 7 real javap declaration lines |
+| cross-naming refusal | ✅ `--versions 1.21.8,26.2` → exit **2**, naming the version and the 1433 records it would have mis-reported |
+| non-relocating control | ✅ `--versions 26.2 --control 26.1` → exit **3** |
+| **9.4(b)** | ✅ `--versions 26.1,26.2 --control 26.2` → control green, **2 bands, 84 of 1424 records vary** |
+
+`plans/BAND_TABLE.md` + `.json` regenerated for `26.1`/`26.2`. The 12-version `1.21.x` table it
+replaced is **not lost**: byte-identical copies are on all seven band branches, and master's own is
+at `8a289a45c`. Checked before overwriting, not after.
+
+### 🔑🔑 Three defects §38 found, none of which it caused
+
+**1. `javap-mc.sh` had the §37 alphabet defect and was serving a WRONG ANSWER.**
+Demonstrated, not asserted — the jar `sort | head -1` picked, asked for a yarn class:
+
+```
+$ javap -cp <the loom.mappings...layered jar> net.minecraft.item.ItemStack
+Error: class not found: net.minecraft.item.ItemStack
+```
+
+That is the answer `scripts/javap-mc.sh 1.21.11 net.minecraft.item.ItemStack` gave, under a
+`# javap against Minecraft 1.21.11` banner, for as long as §33's rename tooling had been leaving a
+mojmap jar in the shared cache. **`AGENTS.md` names this script as the cure for recalling an MC
+fact.** It now prints the naming it resolved and warns when that is not this branch's.
+
+**2. 🔴🔴 `DECL_RE` could not parse a WILDCARD GENERIC, so `Entity` was never parsed on `26.2`.**
+The supertype lists were a character whitelist, `[\w.$,<>\s]+?`, with no `?` in it. On `26.2`:
+
+```
+public abstract class net.minecraft.world.entity.Entity implements ...,
+    net.minecraft.core.TypedInstance<net.minecraft.world.entity.EntityType<?>> {
+```
+
+The whole line failed to match, so `Entity` was **absent from the members dict** and every member
+inherited from it — `getX`, `getUUID`, `getDeltaMovement`, `isSprinting` — read ABSENT across
+`ServerPlayer`, `Animal`, `Wolf`, `Cow`, `Pig`. Three manifest classes were affected
+(`Entity`, `BlockEntity`, `DataComponentMap`), all three via `TypedInstance<...<?>>` or
+`Iterable<...<?>>`.
+
+🔑 **Only the control check could have caught it, and it did — that is the whole reason it exists.**
+The failure mode is a regex that quietly does not match: no exception, no diagnostic, just a class
+missing from a dict and a sweep of false ABSENTs shaped exactly like a real API removal.
+🔑 **And the control check could not LOCALISE it.** It reported 40+ ABSENTs spread over five
+classes; the cause was one unmatched line. That gap is why `--self-test` now exists here, built
+from real javap output rather than invented lines.
+✅ **Measured on a band, not assumed:** `0` of `mc/1.21.11`'s 202 manifest classes hit this, against
+`3` of master's 212 — it is a `26.x`-shaped defect. And any band it *had* hit would have gone red on
+that band's own control check, which is how the published `BAND_TABLE.md`s are covered.
+⚠️ The fix is `[^{]+?` — match to the delimiter, not a whitelist of characters a type name may
+contain. A whitelist is a claim about a language that keeps adding to it.
+⚠️ The classifier's non-Minecraft exclusion list **shrank 25 → 9** once `Entity` parsed. The
+inflated 25 was the same defect: members that resolve fine on Minecraft were being absorbed as
+"fabric-api interface injection" because the walk that would have found them was broken.
+
+**3. `nonmc_classpath()` found nothing at all on `26.x`.** Its glob was `{control}-*`, and the 26.x
+project cache directory is a bare `26.2` with no mappings coordinate to append. It degraded in
+silence to fabric-api jars only. Two exact globs now — `{control}` and `{control}-*`, never
+`{control}*`, which would reintroduce the `26.2`/`26.2.1` prefix hazard the trailing `-` exists for.
+
+### 📌 What the 84 varying records say about a future `26.1` band
+
+Recorded so the band is not re-priced from scratch — **and read it as *rows to look at*, never as
+work to do**: §31 priced 54 seam redesigns and there were 0.
+
+* **64 ABSENT on `26.1`, PRESENT on `26.2`.** Dominated by one thing: **`EntityTypes` does not
+  exist on `26.1`** — the class plus 26 `ACCESSEDFIELD` and 26 `STATICFIELD` constants
+  (`COW`, `WOLF`, `ZOMBIE`, …) is ~53 of the 64. Then `EntitySpawnRequest` (class + `#reason`),
+  `BredAnimalsTrigger` (class + `MIXINCLASS` + `#trigger`), the `monster.cubemob` package
+  (`Slime`, `MagmaCube`), `ColorCollection#pick`, `Items#WOOL`.
+* **20 signature-only changes.** `Potions.*` moved `Holder$Reference<Potion>` → `Holder<Potion>`
+  (8 fields × 2 record kinds = 16), `AgeableMob#setBaby` gained `final`,
+  `AbstractHorse#createOffspringAttribute` went package-private → `public`, and
+  `EntityType#create` swapped `Consumer<T>` for `PostSpawnProcessor<T>`.
+* 🔴 **`LivingEntity#knockback` is an R13 sighting.** `26.1` has the 3-arg form; `26.2` carries a
+  5-arg `(double, double, double, DamageSource, float)` alongside it. That is exactly the
+  narrow-overload-deleted-while-a-wider-one-survives shape §33.4 closed only for `equals` — a call
+  written against one rebinds to the other **silently**, because javac must accept it.
+
+### ⚠️ Still open after §38
+
+- [ ] **`26.1.1` / `26.1.2` are unprobed.** Neither is in the Loom cache and each needs a resolve.
+      §38 proves `26.1` is a different band from `26.2`; it says **nothing** about where the
+      boundary inside the `26.1.x` line falls. Do not write one down from the ecosystem's answer.
+- [x] ✅ **The gate-10 sweep for §38's four paths** — done 2026-08-26, see below.
+
+### The sweep — §37's recipe, narrowed
+
+Paths carried per band: `scripts/loomjar.py` (**new**), `scripts/javap-mc.sh`,
+`scripts/probe-bands.py`, `scripts/mixin-allow-audit.py`. **Four paths, all under `scripts/`.**
+
+✅ **Outside `release.yml`'s `paths:` filter** — one commit per band, no `gradle.properties`, so
+this fires **no release runs**. §37's commit-B problem does not recur here.
+🔴 **`mc-surface.txt` is NOT touched and must NOT be carried** — gate 9 requires it to differ, and
+none of these four edits changes generated output, so **no per-band regeneration is owed either**.
+That is the one way this sweep is cheaper than §37's.
+⚠️ Still run per band: `mixin-allow-audit.py --self-test` **and** `--check`. The band's mixins are
+yarn and the chooser moved — a green `master` proves nothing about the yarn path.
+⚠️ `--require-bands` is **7**, not 8. Exit 2 is not a pass.
+
+#### ✅ Swept 2026-08-26 — seven bands, seven commits, nothing pushed
+
+Every row measured **on that band**, not inherited from `master`'s green run. The four files are
+byte-identical to `master` on all seven (`git rev-parse master:<path>` vs the band's blob).
+
+| Band | commit | `mixin-allow-audit.py --check` |
 |---|---|---|
-| Mojang ProGuard maps, `1.21.11` | mojmap → obf | URL sits in the **already-cached** `mojang_minecraft_info.json` (`client_mappings` 11.8 MB, `server_mappings` 8.7 MB) — no version-manifest lookup |
-| yarn `1.21.11+build.6` v2 `mappings.tiny` | obf → intermediary → named | already cached by Loom |
+| `mc/1.21.11` | `457fdd5ab` | `SLICE=1 OK=60` (total 61) |
+| `mc/1.21.10` | `2c9e23603` | `SLICE=1 OK=60` (total 61) |
+| `mc/1.21.8` | `6379634a9` | `SLICE=1 OK=60` (total 61) |
+| `mc/1.21.5` | `699d5c985` | `SLICE=1 OK=60` (total 61) |
+| `mc/1.21.4` | `ed36a9348` | `SLICE=1 OK=61` (total **62**) |
+| `mc/1.21.3` | `f0fe6df96` | `SLICE=1 OK=61` (total **62**) |
+| `mc/1.21.1` | `903db1125` | `SLICE=1 OK=67` (total **68**) |
 
-Join on the **obf** name ⇒ `yarn-named ↔ mojmap`, for classes, methods and fields alike.
+🔑 **Three different injector totals across the seven bands — 61, 62, 68.** That is the argument for
+running the gate per band rather than reading `master`'s 61 off this plan: a band-local count that
+matched `master`'s would have proved nothing, and one that did not would have looked like a defect.
+All four `--self-test`s pass on every band as well; the mixin gate's 8 selection cases are pure and
+cache-free, so they are the same 8 `master` runs, not a weaker band-local variant.
 
-⚠️ **The join is not a string match on members.** ProGuard writes member descriptors in *mojmap*
-types (`net.minecraft.world.item.ItemStack foo(int)`); yarn writes them in *obf* types (`(I)Lcso;`).
-A member key is only comparable once the ProGuard descriptor's types are themselves remapped through
-the class table. Skipping that silently drops every overload — and an overload-only loss reads as a
-coverage number a few percent low, not as an error.
+Cross-branch gates after the sweep, all seven branches local:
 
-### What §25 must actually answer
-
-Derivability is not the deliverable; **coverage of OUR surface** is. The table is only worth anything
-if it translates the 1,418 records in `scripts/mc-surface.txt`:
-
-| Record type | Count | Needs |
-|---|---|---|
-| `CALLEDMETHOD` | 508 | member join (descriptor remap) |
-| `ACCESSEDFIELD` | 307 | member join |
-| `STATICFIELD` | 289 | member join |
-| `CLASS` / `MIXINCLASS` | 180 / 37 | class join |
-| `METHOD` | 44 | member join |
-| `CALLEDCTOR` | 27 | member join |
-| `ATTARGET` | 19 | descriptor rewrite |
-| `STATICMEMBER` / `ACCESSOR` | 2 / 2 | member join |
-
-**The number that decides §9's budget is the residual** — records that resolve to no mojmap name.
-Every one is hand work, and the report must name them rather than count them.
-
-🔴 **A high coverage figure is NOT the same as "the rename is a script."** This table is
-`1.21.11`-to-`1.21.11`. `26.1` official names are `1.21.11` mojmap names **only where the API did not
-change between them**, and that delta is unmeasured and out of §25's scope. Nothing written here may
-be read as pricing the rename against `26.x` itself.
-
-### The work
-
-- [x] **25.1** `scripts/derive-official-names.py`. Reads the Loom-cached tiny v2 + the Mojang
-      ProGuard map; emits `yarn-named ↔ mojmap` for classes and members.
-- [x] **25.2** The self-test proves the **detectors**, not just the parsers — **43 checks**, of which
-      **6 are mutations** that must go red.
-- [x] **25.3** The control fires: a class present in tiny and absent from ProGuard is *reported*
-      unmatched, not dropped.
-- [x] **25.4** Run against `scripts/mc-surface.txt`. Numbers below.
-- [x] **25.5** §9.1 updated in place.
-
-### ✅ THE ANSWER: derivable, and it covers **100%** of the MC symbols we touch
-
-```
-RECORD TYPE       MAPPED  NOT-MC  RESIDUAL  TOTAL
-CALLEDMETHOD         482      26         0    508
-ACCESSEDFIELD        307       0         0    307
-STATICFIELD          289       0         0    289
-CLASS                180       0         0    180
-METHOD                44       0         0     44
-MIXINCLASS            37       0         0     37
-CALLEDCTOR            27       0         0     27
-ATTARGET              19       0         0     19
-ACCESSOR               2       0         0      2
-STATICMEMBER           2       0         0      2
--------------------------------------------------
-ALL                 1389      26         0   1415
-
-Coverage of ALL records:  1389/1415 = 98.2%   <- headline
-Coverage of MC symbols:   1389/1389 = 100.0%
-```
-
-Underlying table: **10,275 classes joined, 0 unmatched**; 94,255 yarn member names, 95,185 pairs.
-
-**§9.1 is answered: the rename table is a SCRIPT, not a month.** But read the next two sections
-before turning that into a budget — neither number below is zero.
-
-### The real hand-work budget: **33 ambiguous**, not 1,415 renames
-
-A yarn name that covers several overloads can map to **several different mojmap names**, and
-choosing needs the **call-site descriptor** — which `mc-surface.txt` does not record. 33 records are
-in this state. They are not guesses; each is a short, named decision:
-
-| yarn | mojmap candidates |
+| gate | result |
 |---|---|
-| `Block#dropStack` | `popResource` \| `popResourceFromFace` |
-| `BlockState#get` / `#with` | `getValue`\|`getValueOrElse` / `setValue`\|`setValueInternal` |
-| `ItemStack#copy` | `copy` \| `copyFrom` |
-| `Identifier#of` / `#tryParse` | `fromNamespaceAndPath`\|`parse` / `tryBuild`\|`tryParse` |
-| `Vec3d#add` / `#multiply` / `#ofCenter` | `add`\|`atLowerCornerWithOffset` / `multiply`\|`scale` / `atCenterOf`\|`upFromBottomCenterOf` |
-| `BlockPos#offset` | `offset` \| `relative` |
-| `Entity#getRotationVector` | `calculateViewVector` \| `getLookAngle` |
-| `LivingEntity#getPitch` / `#getYaw` | `getViewXRot`\|`getXRot` / `getViewYRot`\|`getYRot` |
-| `ServerWorld#playSound` | `playSeededSound` \| `playSound` |
-| `PlayerInventory#removeStack` | `removeItem` \| `removeItemNoUpdate` |
-| `NbtCompound#getInt` | `getInt` \| `getIntOr` |
-| `Registry#getEntry` | `get` \| `wrapAsHolder` |
-| `PlayerManager#getPlayer` | `getPlayer` \| `getPlayerByName` |
-| `ItemStack#damage` (`@At`) | `hurtAndBreak`\|`hurtAndConvertOnBreak`\|`hurtWithoutBreaking` |
-| `ExperienceOrbEntity#spawn` | `award` \| `awardWithDirection` |
-| `ItemScatterer#spawn` | `dropContents` \| `dropItemStack` |
-| `NbtComponent#set` | `set` \| `update` |
-| `StatusEffectInstance#equals` | `equals` \| `is` |
-| `DefaultedList#ofSize` | `createWithCapacity` \| `withSize` |
-| `Util$OperatingSystem#open` | `openFile`\|`openPath`\|`openUri` |
-| `BlockItem#place` | `place` \| `placeBlock` |
-| `CraftingResultSlot`/`FurnaceOutputSlot#onCrafted` | `checkTakeAchievements` \| `onQuickCraft` |
+| 9 — `manifest-identity-audit.py --local` | ✅ exit 0, every branch's manifest distinct |
+| 10 — `branch-file-identity-audit.py --local` | ✅ exit 0, **49 shared paths** byte-identical (was 45; `loomjar.py` + §37's three new files) |
+| 11 — `gradle-key-identity-audit.py --local` | ✅ exit 0, 12 keys watched — 10 SHARED, 2 DISTINCT |
+| 7 — `drift-audit.py --self-test` | ✅ exit 0 |
+| 7 — `drift-audit.py --master master --require-bands 7` | 🔴 exit 1 — **11 MISSING on every band, none of them §38's** |
 
-🔑 **The fix is cheap and belongs in `extract-mc-surface.py`, not here.** The bytecode scan
-already has the descriptor — it is discarded when the record is written. Emitting it would take
-this list to zero and would cost nothing at the call site. That is a §9.3 item, logged below.
+#### 🔴 Gate 7 has been permanently red since §33, and §38 is not why
 
-### The 26 that are NOT Minecraft symbols, and need no rename at all
+⚠️⚠️ **`drift-audit.py` prefers REMOTE refs** (`band_branches()` returns `origin/mc/**` when any
+exist), so a run in this working copy grades the STALE remote against local `master` and answers a
+question nobody asked. The honest pre-push run is a `git clone --local .` of this repo, where
+`origin/*` maps onto our local branches — that is how the row above was measured.
 
-Real call sites that no mapping carries, so they translate to themselves:
+The **same 11 commits** are MISSING on all seven bands, and every one of them is a `master`-only
+`26.x` commit that **cannot** be back-ported by construction:
 
-* **12 Fabric attachment calls** — `getAttached` / `setAttached` / `removeAttached` on `Entity`,
-  `LivingEntity`, `ZombieEntity`, `PassiveEntity`, `ArmorStandEntity`. Interface injection, not MC.
-* **6 injected/interface defaults** — `Text#getString`, `MutableText#getString`,
-  `DefaultedRegistry#iterator`, `IndexedIterable#iterator`, `DefaultedList#size`.
-* **4 `java.lang.Object`** — `EntityType#toString`, `ItemStack#toString`, `Identifier#toString`,
-  `RegistryEntry#equals`.
-* **4 synthetic enum** — `values`/`ordinal`/`valueOf` on `SpawnReason`, `SoundCategory`,
-  `Formatting`, `Direction`, `BossBar$Color`.
+```
+fcb2d4bbf  build(26.x): pin master to the 26.2 toolchain -- RED, and deliberately so
+30b3eb3c2  fix(9.3): the sizer over-priced by 4 -- a descriptor can be HALF-renamed
+9b02b7b23  feat(9.3): the mixin selector writer -- 64 sites, dry-run default, 1 REBIND
+72cbdc867  feat(9.3): the 64 selector renames -- ZERO 54 -> 5, OK 6 -> 54
+07266070d  fix(9.3): the 4 signature changes + the class move -- ZERO is 0
+8abf23e65  fix(9.3): the FOURTH blind spot -- 4 of 8 @Shadow members were still yarn
+409e999a5  fix(9.3): the spawn-origin seam moved to the bottom of a chain that INVERTED
+1fc86d86c  fix(33.1): 186 red -> 9 -- 26.x binds components onto the registry HOLDER
+f688b91a0  fix(33.2): the version grammar was already fixed ON A BAND and never reached master
+b62c50917  fix(33.4): a narrow overload deleted while a wider one survives -- javac CANNOT see it
+d5fb36dbf  fix(33.5): 186 red -> 1 -- a yarn method name survived as a STRING LITERAL
+```
 
-### 🔴 What this does NOT price — read before quoting 100% at anybody
+They rename `master` from yarn to official names. Applying any of them to a yarn band would break
+it. **They should have carried `Backport-not-needed:` and they do not** — every one is a rule-3
+violation committed at the time, not a back-port anyone forgot.
 
-1. **It is `1.21.11` → `1.21.11`.** It proves yarn names can be mechanically turned into the Mojang
-   names **of the same Minecraft**. `26.1`'s API is not `1.21.11`'s. Every symbol that MOVED between
-   them is invisible here and is the actual §9 risk.
-2. **Class + member names only.** Mixin `@At` descriptors, `@Accessor` targets and method signatures
-   still need the *type* names inside them rewritten — mechanical, but not counted above.
-3. **The toolchain is untouched** (§9.2), and `probe-bands.py` still cannot read a `26.x` band at
-   all until its manifest speaks official names (§9.3).
+🔴 **AGENTS.md forbids the obvious repair**: the opt-out *"lives in the commit that made the decision
+and cannot be applied retroactively to one somebody merely forgot"*, and six of these are already on
+`origin/master`, so rewriting them is off the table regardless.
 
-### Three defects found while building it — two mine, one in the manifest
+🔴 **So gate 7 now fails on every run, for a reason that will never clear itself** — which is
+precisely the *"reports to a tab nobody opens"* shape of risk **R11**, and the mechanism by which a
+REAL forgotten back-port becomes invisible: the 12th missing commit will read exactly like the 11.
+**This needs an owner ruling; it is not a defect §38 can fix.** The two shapes available:
 
-- 🔴 **The coverage metric could not detect its own broken leg.** First real-data run of the
-  `--no-hierarchy` mutation printed **`1146/1146 = 100.0%`**. Without a hierarchy every INHERITED
-  member is "declared nowhere", which the classifier filed as *NOT-AN-MC-SYMBOL* — so the misses
-  left the **denominator** and the percentage stayed perfect while a quarter of the surface went
-  unmapped. **A metric whose denominator shrinks when a leg breaks reports a smaller 100%, not a
-  failure.** Fixed by making the headline `MAPPED/TOTAL` and by refusing to infer "not an MC symbol"
-  when no hierarchy was loaded. The mutation now reads **98.2% → 81.0%, residual 0 → 256**.
-  🔑 This is the **12th vacuous-guard sighting** in this repo and the first where the laundering
-  was done by a *classifier* rather than an assertion.
-- ⚠️ **Identity-mapped classes were being silently dropped.** ProGuard writes both sides
-  dot-separated; tiny writes obf slash-separated. A truly obfuscated name (`cgk`) has no separator,
-  so the join worked *by accident* — and failed on the handful Mojang ships UNOBFUSCATED.
-  `net.minecraft.server.MinecraftServer` is one; it cost 7 surface records and **74** table classes.
-  Fixed by normalising at parse time. **74 → 0 unmatched.**
-- ⚠️ **`mc-surface.txt` spells nested types TWO ways.** `EntityAttributeModifier$Operation` on
-  line 106 (bytecode scan) and `EntityAttributeModifier.Operation` on line 917 (source scan) — same
-  type, same generated file. `probe-bands.py:name_candidates` already compensates, so this script
-  applies the identical rule rather than a second one. **Not fixed here** — fixing the generator
-  regenerates a per-branch manifest on seven branches, which is not this section's scope.
+* **A waiver file** — `scripts/drift-waivers.txt`, one sha + reason per line, read by the auditor,
+  under gate 10 so it is identical on every branch. Keeps the trailer rule intact for new commits
+  and makes the retroactive exception explicit, dated and reviewable in one place.
+* **Move the band base.** The `mc/**` branches all diverge BELOW the `26.x` rename, so a
+  `Backport-base:` marker (or re-cutting each band's merge-base record) would drop the 11 out of the
+  window entirely. Cheaper to read, but it hides any genuine pre-rename drift with them.
 
-### ➡️ Follow-ups this created (NOT done here)
-
-- [x] ✅ **DONE 2026-08-20 (§26) — the gate-10 sweep.** `scripts/derive-official-names.py` is a new file under `scripts/**`,
-      which `branch-file-identity-audit.py` requires byte-identical on every branch. Until it is
-      cherry-picked to all six bands, **gate 10 will report it MISSING on six branches** — expected,
-      not a regression. ⚠️ It audits `origin/master`, so push first.
-- [ ] **Emit the descriptor in `extract-mc-surface.py`'s member records** — takes the 33 ambiguous
-      rows to 0 and helps `probe-bands.py` too. Per-branch manifest regeneration; a §9.3-sized job.
-- [ ] **Normalise nested-type spelling in `extract-mc-surface.py`** — same commit as the above.
-
-### 🔴 Why the derived table is NOT committed
-
-It would collide the two cross-branch guards, the same way `mc-surface.txt` does:
-
-* The table is derived **from `scripts/mc-surface.txt`**, which is a **per-branch** fact that gate 9
-  (`manifest-identity-audit.py`) requires to **differ** between branches.
-* Anything under `scripts/**` is in gate 10 (`branch-file-identity-audit.py`), which requires
-  **byte-identity** on every branch.
-
-A per-branch-derived file inside the byte-identical set is unshippable by construction — exactly the
-R-x/R-y collision, and exactly why `mc-surface.txt` is excluded from gate 10. So the **script** is
-committed (shared layer, byte-identical, correct) and the **output is scratch**. The durable evidence
-is the self-test plus the numbers recorded above, not a checked-in artifact.
-
-⚠️ The script must therefore **not** write into the repo by default. Dry-run/stdout default, an
-explicit `-o <path>` to write, per `extract-mc-ids.py`'s `--write` convention.
+⚠️ **Do not resolve it by lowering `--require-bands` or by not running the gate.** Both are the
+"make the symptom disappear" move AGENTS.md's attempt-budget section names outright.
 
 ### What I am NOT doing
 
-- **Not** touching the toolchain (§9.2). No Loom bump, no `build.gradle` edit, no `gradle.properties`
-  change — so `release.yml`'s `paths:` filter never fires and no release is touched.
-- **Not** renaming a single import. §25 measures; §9.3+ acts.
-- **Not** cutting `mc/26.x`, and not translating `probe-bands.py` / `mixin-allow-audit.py` /
-  `extract-mc-surface.py` (§9.3).
-- **Not** pricing `26.x` itself — see the `1.21.11`-to-`1.21.11` caveat above.
-- **Not** back-porting. A new `scripts/**` file is gate-10 shared and must reach all seven branches,
-  but that is a push-time sweep, and this session was scoped **9.1 only, then report**. The sweep is
-  logged as the follow-up rather than done half-way.
+* **Not pushing anything.** The hold is an owner decision (2026-08-25) and is unchanged by this
+  work. `git ls-remote` re-read at the start of this section: `origin/master` `848c9d7b9`,
+  `mc/1.21.11` still **absent from the remote**, six bands unmoved.
+* **Not resolving `26.1.1` / `26.1.2` through Loom** unless 38.6 comes back ambiguous.
+* **Not touching `gradle.properties`, `build.gradle` or `release.yml`** — commit B, R-aa and R14's
+  remedy all stay bundled with the `mod_version` bump.
+* **Not doing the docs pass.** Still owner-sequenced, still one commit across all seven.
+* **Not re-scoping R13 or §31.5.** Separate items, unchanged.
 
 ### Rollback
 
-One new untracked file until it is committed; the undo before commit is deleting it, and after commit
-is `git revert <sha>`. No existing script is modified, no `src/**`, no `gradle.properties`. The Mojang
-ProGuard download lands in the scratch dir, never in the repo.
+Pre-edit tips, recorded 2026-08-25 before the first edit:
+
+```
+master     8a289a45c   mc/1.21.5    1864c9cf0
+mc/1.21.1  1541771c7   mc/1.21.8    4584ca2c8
+mc/1.21.3  5e435930f   mc/1.21.10   c7eedf554
+mc/1.21.4  f7710691c   mc/1.21.11   abb074586
+```
+
+Undo for any band: `git reset --hard <sha above>` on that branch. Nothing is pushed, so no remote
+state is at risk and no history is rewritten. 🔴 `git checkout -- <path>` is NOT the undo — it
+destroys uncommitted work; `git status --short` first.
 
 ---
 
-## §26 — the gate-10 sweep: `derive-official-names.py` reaches the six bands
+## §37 — the owed gate-10/11 sweep — ✅ DONE (gate 10 + gate 9 green; gate 11 green LOCALLY)
 
-**The one piece of live debt §25 created, and it is logged in §25's own follow-ups.**
-`scripts/derive-official-names.py` landed on `master` in `e15c72c05` and exists nowhere else.
-`scripts/**` is gate 10's include set, and gate 10 expands over the **union** of every branch's tree —
-so a file present on one branch and absent on six **is a violation**, not an omission. Gate 10 is red
-by construction until this sweep lands.
+**Tier 2.** Seven band branches, a generated artifact per band, and a key that changes what a push
+does. Written down before the first edit.
 
-⚠️ `e15c72c05` carries `Backport-not-needed:` — that trailer is about **`drift-audit.py` (gate 7)**,
-and it is correct: 9.1 measured `master`'s own contact surface, so the *measurement* does not
-propagate. It never said the *file* stays on `master`. Gate 7 and gate 10 want different things from
-the same commit, and both are satisfied here.
+### What the two gates actually report — measured 2026-08-25, `--local`
 
-### Measured first — the gap is exactly one file wide
+Gate 10 (`branch-file-identity-audit.py`) — **9 violating paths**, all `scripts/**`:
 
-Every gate-10 path, on all seven branches, blob-compared before a line was written
-(`git ls-tree -r` per branch, `scripts/mc-surface.txt` excluded per gate 10's own `EXCLUDE`):
-
-| Result | Count |
-|---|---|
-| gate-10 path/branch rows compared | 309 |
-| paths NOT present on all 7 branches | **1** — `scripts/derive-official-names.py` (1/7) |
-| paths with more than one distinct blob | **0** |
-
-So R-w′'s and R-y's scripts **already reached the bands**; this is not a backlog, it is one file.
-
-✅ **`TODO.md` is byte-identical on all six bands (`48c0f959e`) and equals `e15c72c05^:TODO.md`.**
-That is what makes a whole-commit cherry-pick clean rather than a conflict: applying `e15c72c05` to a
-band reproduces `master`'s exact `TODO.md` blob, so the one-blob-on-seven-branches state that
-§21 restored is preserved rather than re-broken.
-
-### Why no release run fires — checked, not assumed
-
-`release.yml`'s `paths:` filter is `src/**`, `build.gradle`, `settings.gradle`, `gradle.properties`,
-`gradle/**`, `gradlew`, `gradlew.bat`, `.github/workflows/release.yml`. This sweep touches `TODO.md`
-and `scripts/**` only, so **none of the seven pushes triggers a build or a release**.
-⚠️ The filter matches the **whole push**, not a commit — that is why this is checked against the full
-set of commits being pushed, not just the tip.
-
-### ✅ OUTCOME — 2026-08-20, all four cross-branch gates green
-
-Verified **before** the push, with `--local` / `--master master`, because every one of these guards
-defaults to `origin/**` and an unpushed `master` reads as clean. Each `--self-test` ran first.
-
-| Gate | Command | Result |
+| path | shape | winner |
 |---|---|---|
-| 7 `drift-audit.py` | `--master master --branch …×6 --require-bands 6` | 0 MISSING on all six bands; 197 propagated, 20 waived |
-| 9 `manifest-identity-audit.py` | `--local --require-bands 6` | 7 distinct `mc-surface.txt` — no collisions |
-| 10 `branch-file-identity-audit.py` | `--local --require-bands 6` | **45** shared paths byte-identical on 7 branches (44 → 45) |
-| 11 `gradle-key-identity-audit.py` | `--local --require-bands 6` | 12 keys, 10 SHARED / 2 DISTINCT, no violations |
+| `derive-official-names.py` | DIFFERS (7 bands / master) | master |
+| `extract-mc-ids.py` | DIFFERS | master |
+| `extract-mc-surface.py` | DIFFERS | master |
+| `gameplay_smoke_scenario.py` | DIFFERS | master |
+| `mc-ids.txt` | DIFFERS | master |
+| `mixin-allow-audit.py` | DIFFERS | master |
+| `mixin-target-sizer.py` | ABSENT on all 7 | master |
+| `rename-damage-audit.py` | ABSENT on all 7 | master |
+| `rename-to-official.py` | ABSENT on all 7 | master |
 
-✅ **All six band commits verified by BLOB, not by exit code.** Each band's `TODO.md` and
-`scripts/derive-official-names.py` were compared to `master`'s blob after the cherry-pick and matched
-exactly — the file-state assertion, which is the thing gate 10 actually enforces.
+Gate 11 (`gradle-key-identity-audit.py`) — **1 key**: `mockito_version` is `5.14.2` on all seven
+bands and `5.23.0` on `master`, and the key is classified `SHARED`.
 
-✅ **Step D found nothing, and was still the right check.** `derive-official-names.py --self-test`
-passes **43 checks on every one of the six bands**. Gate 10 proves the bytes agree; it cannot prove
-the file *runs* there, and a shared script that imports fine on `master` and dies on a band would sail
-straight through an identity audit. The self-test is hermetic — no network, no `build/classes`.
+✅ **`.gitignore` is NOT owed.** All eight branches carry blob `b432715f0`. The `30.6` / `.hprof`
+line in the carried list was stale — the change had already reached every branch. Removed from the
+list rather than re-carried.
 
-🔑 **The one trap worth writing down: `drift-audit.py --master master` is NOT a local audit.**
-Its `band_branches()` **prefers remote refs** and only falls back to local ones when `origin/mc/**`
-matches nothing. With six bands on `origin`, a plain `--master master` run compares the new local
-`master` against the **stale remote bands** and prints a confident *"No drift"* — a vacuous pass of
-exactly the shape this repo keeps finding. Forcing the local refs with repeated `--branch` is what
-makes the pre-push run mean anything. The other three guards have an explicit `--local` flag; this one
-does not, and the asymmetry is easy to miss.
+### 🔑 The "which side is correct" gate, discharged mechanically
 
-⚠️ **`Backport-of:` was belt-and-braces here, not the mechanism.** Gate 7 was already satisfied without
-it: `e15c72c05` is `waived` by its own `Backport-not-needed:` trailer, and the plan commit touches
-`TODO.md` only, which is not in `PROPAGATABLE_PREFIXES` and is therefore not propagatable at all. The
-trailers were checked against `unmatched_trailers` — `master_shas` spans the whole `base..master`
-range regardless of waiver, so both resolve and neither is flagged as a typo'd sha.
+Gate 10 names a difference, never a culprit, and R-y's first run found `master` wrong. So this was
+**measured, not assumed**: for each of the six DIFFERS paths, walk `git rev-list master -- <path>`
+and ask whether the bands' blob is a state `master` itself passed through.
 
-### The work — done
+**All six: yes.** The band blob is an ancestor state on `master` in every case, so no band-authored
+content exists to lose and `master` is the winner on all nine paths. *(The check is cheap and it is
+the only thing separating this from the R-y shape — run it, do not skip it because rule 1 says
+`master` usually wins.)*
 
-- [x] **A.** Plan committed on `master` — `03ae2806c`.
-- [x] **B.** `e15c72c05^..master` cherry-picked onto all six bands, one squashed commit each carrying
-      both `Backport-of:` trailers.
-- [x] **C.** Gates 7 / 9 / 10 / 11 green at `--local`, self-tests first, `--require-bands 6` throughout.
-- [x] **D.** `derive-official-names.py --self-test` — 43 checks on each of the six bands.
-- [x] **E.** Outcome recorded here and propagated; all seven branches pushed.
+### 🔴 Why this cannot be a `git checkout master -- scripts/` and walk away
+
+**`extract-mc-surface.py` changes GENERATED output on every band.** §36's `normalise_nested()` folds
+`Outer.Inner` to the JVM binary `Outer$Inner` at the import step — and **every band carries the same
+dotted import**, `EntityAttributeModifier.Operation` in `SkillAttributeService`. So carrying the
+generator without regenerating each band's `scripts/mc-surface.txt` turns **gate 8 red on seven
+branches in order to make gate 10 green**.
+
+That is the standing rule, and it is the whole cost of this sweep: **the generator back-ports, the
+generated file is REGENERATED.** One build per band.
+⚠️ `mc-surface.txt` is gate 9's artifact and must stay **distinct** per branch — it is excluded from
+gate 10 and must NEVER be carried. Regenerate it; never copy it.
+
+### 🔴 The mockito bump changes what a PUSH does — so it gets its own commit
+
+`gradle.properties` is inside `release.yml`'s `paths:` filter. Every previous gate-10 carry commit
+was `scripts/**`-only and said so explicitly *("this push neither builds nor releases")*. This one is
+not: pushing `mockito_version` to seven bands fires **seven release runs**, and R-t's stale-version
+gate refuses every one of them because `mod_version` has not moved since `v1.2.0` shipped. **Seven
+red runs, reporting to the tab nobody watches (R11).**
+
+That is the identical shape that deferred **R-aa**. So the sweep lands as **two commits per band**:
+
+* **A — `scripts/**` + the regenerated `mc-surface.txt`.** Outside the `paths:` filter. Pushable on
+  its own, whenever the hold lifts. Closes gate 10.
+* **B — `gradle.properties`, `mockito_version` only.** Inside the filter. **Rides the `mod_version`
+  bump, with R-aa**, exactly as the push order already says. Closes gate 11.
+
+Gate 11 therefore stays RED until the version bump, deliberately and on the record. Splitting the
+commits is what makes that a choice rather than a trap.
+
+### The per-band recipe — seven times, `mc/1.21.1 · .3 · .4 · .5 · .8 · .10 · .11`
+
+1. `git checkout <band>` — tree must be clean first.
+2. Carry the nine paths **by name**, `git checkout master -- <path>` each. 🔴 **Never
+   `git checkout master -- .`** and never `-- scripts/`, which would drag `mc-surface.txt` across.
+3. `mockito_version` → `5.23.0`, that key alone, in `gradle.properties`.
+4. `./gradlew --no-daemon --stacktrace --no-build-cache build -Pmod_version=1.2.0` — gate 1.
+   ⚠️ Read the **`N executed`** line, not `BUILD SUCCESSFUL`; confirm `> Task :test` is **bare**, not
+   `FROM-CACHE`. This is the leg that proves **Mockito 5.23.0 actually runs on the bands' Java 21**
+   rather than asserting it — the claim in `gradle.properties` is currently untested on every band.
+5. `python scripts/extract-mc-surface.py` — regenerate. Then `--check` must **PASS**.
+   ⚠️ Record the **record count**. §17: `compileJava` came back `FROM-CACHE` on every band and the
+   per-band record count was the only thing proving the classes were that band's own.
+6. `python scripts/mixin-allow-audit.py --mc <version> --check` — the carried gate must still pass
+   on a `1.21.x` branch. Its `find_jar` fallback was added for `26.x`; **nothing has ever run the
+   new file on a band.**
+7. `python scripts/config-id-audit.py --self-test` then `--check` — `mc-ids.txt` gained a `26.2`
+   section; prove that does not disturb a band's own section.
+8. Commit A, then commit B. `Backport-of:` trailer per source commit.
+
+### After all seven — the cross-branch gates, `--self-test` first, then `--local`
+
+* **9** `manifest-identity-audit.py --require-bands 8` — 0 collisions. 🔴 **This is the one that can
+  fail as a RESULT of the sweep**: seven manifests regenerated in one session on one box is the
+  build-cache-hit scenario gate 9 exists for. Exit 2 is not a pass.
+* **10** `branch-file-identity-audit.py --require-bands 8` — expect **0** differing paths.
+* **11** `gradle-key-identity-audit.py --require-bands 8` — expect gate 11 GREEN once commit B is on
+  every band, and it will be, locally.
+
+### ✅ Outcome — measured 2026-08-25, all seven bands
+
+Two commits per band, exactly as planned. **Nothing is pushed.**
+
+| gate | before | after |
+|---|---|---|
+| **10** `branch-file-identity-audit --local --require-bands 7` | 9 violating paths (6 DIFFERS, 3 ABSENT) | ✅ **exit 0 — 48 shared paths byte-identical on all eight branches** |
+| **11** `gradle-key-identity-audit --local --require-bands 7` | `mockito_version` diverged | ✅ **exit 0 — 10 SHARED agree, 2 DISTINCT differ** |
+| **9** `manifest-identity-audit --local --require-bands 7` | (not the target) | ✅ **exit 0 — all 8 manifests distinct** |
+
+⚠️ **`--require-bands` counts `mc/**` branches ONLY, so the argument is 7, not 8.** Passing `8`
+returns **exit 2**, which the ship gate says is *not a pass* — and the same run still prints
+*"No drift"* above it. **Read the exit code, not the sentence.**
+⚠️ Gate 11 is green **locally only**. Commit B is unpushed by design (below), so `origin` still
+diverges on `mockito_version` until the `mod_version` bump.
+
+Per band: `gradle build` green with `> Task :test` **bare**, manifest regenerated, gate 8 `--check`
+PASS, `mixin-allow-audit --self-test` + `--check` PASS, `config-id-audit --self-test` + `--check`
+PASS. Test counts differ per band and that is correct — 1846 to 1854.
+
+### 🔑🔑 Two defects the sweep FOUND, neither of which it caused
+
+**1. The mixin gate picked its jar by ALPHABET — `ZERO=61` on `mc/1.21.11`.**
+Every injector reported dead on a band that ships and boots clean. `find_jar` ended in
+`sorted(hits)[0]`, and the Loom cache is keyed by MC version and **shared by every project and
+branch on the machine**, so `1.21.11` held two jars in different namings — a yarn one and a
+MOJANG-named `loom.mappings...layered+hash` one that **our own §33 rename tooling created hours
+earlier**. `loom` sorts before `net.fabricmc`.
+✅ Confirmed pre-existing by running the band's **own pre-sweep copy** as a control: identical
+`ZERO=61`. Fixed on `master` first (rule 1), then carried.
+🔑 **The gate had no `--self-test` at all**, alone among the gates here — which is how it could
+answer confidently against the wrong jar indefinitely. Now 8 cases, `choose_jar()` pure.
+⚠️ **The first mutation proved nothing**: a crude mutant died with an `IndexError` on the
+empty-cache case before case 1 ever reported. A faithful reproduction of the pre-fix code fails
+exactly the 5 predicted cases. **A mutant that goes red for the wrong reason is not verification.**
+🔑 Only `1.21.11` was poisoned — the one version the rename work targeted, and the one band that is
+**not pushed**. That is why it hid.
+
+**2. `mc/1.21.1`'s committed manifest was STALE — gate 8 was RED on that band, and it shipped.**
+Every other band regenerated to exactly the 3 rows §36 predicts. This one moved **1413 → 1416,
++6/−3**, the extra three being `SummonCommand` as CLASS, METHOD and MIXINCLASS — this band's own
+`/summon` origin fix, the gap every structural gate missed when it shipped. The mixin landed; the
+generated manifest was never regenerated to match.
+Confirmed, not inferred: `--check` against the **committed** manifest exits 1 —
+*"3 record(s) it carries that this build never references, 6 it is missing."*
+🔴 **Why nobody saw it: gate 8 is a hand-run ship-gate step.** It is not in `release.yml`, so no push
+has ever executed it. **A band-specific source addition silently invalidates that band's generated
+manifest, and nothing unattended reads it.** This is the general shape, not a `1.21.1` quirk.
+
+### 🔴 Carried out of §37, still open
+
+- [ ] 🔴 **Commit B is unpushed on all seven bands, deliberately.** `gradle.properties` is inside
+      `release.yml`'s `paths:` filter, so pushing the `mockito_version` half fires **seven release
+      runs** that R-t's stale-version gate refuses. It rides the `mod_version` bump **with R-aa**.
+      Until then gate 11 is green locally and red against `origin`.
+- [ ] ⚠️⚠️ **NEW RISK R14 — the suite has a ~24%-of-tests FLAKE.** `mc/1.21.10`'s first full build
+      reported **449 of 1846 failing**, all
+      `Could not initialize plugin: MockMaker` → `Could not self-attach to current VM using external
+      process`. A clean `cleanTest test` re-run on the same commit was **1846/0**, and `mc/1.21.11`
+      passed 1846/0 first try on the same Mockito.
+      **Mechanism:** `test { maxParallelForks = 4 }`, and Byte Buddy's **inline** mock maker attaches
+      an agent per fork through an **external helper process** on Windows. Four forks race that spawn.
+      🔑 **NOT introduced by the 5.23.0 bump** — the inline mock maker is the 5.x default in `5.14.2`
+      too. The bump only gave a latent harness defect an occasion to show.
+      🔴 **Why it is a risk and not an annoyance:** `release.yml` runs this suite on every push, a red
+      release run is already the normal outcome of an ordinary push, and a 449-failure red reads
+      exactly like a real regression. **Nobody re-runs a red they believe.**
+      ⬜ **Remedy needs an owner decision, deliberately NOT taken here:** `-XX:+EnableDynamicAgentLoading`
+      or a lower `maxParallelForks` in `build.gradle` — a shared file inside `release.yml`'s `paths:`
+      filter, so changing it on seven bands fires seven release runs. Same constraint as R-aa.
+      ⚠️ **Do not characterise this from one run.** What settled it was the MECHANISM plus a band that
+      passed first try — not the single green re-run.
+- [ ] ⬜ **`.gitignore` was never owed** — all eight branches already carried blob `b432715f0`. The
+      carried list had been asserting otherwise. Corrected; nothing to do.
 
 ### What I am NOT doing
 
-- **Not** running the derivation on a band. The script is shared tooling; its **output** is per-branch
-  and must never be committed (§25). Presence + a green self-test is the whole requirement.
-- **Not** touching `src/**`, `gradle.properties`, or any toolchain file. §9.2 is untouched.
-- **Not** regenerating any band's `mc-surface.txt` — that is the §25 descriptor follow-up, a separate
-  §9.3-sized job.
-- **Not** bumping `mod_version`. Nothing releases; the seven `v1.2.0` releases stay exactly as they are.
+* **Not pushing anything.** The hold is an owner decision; every commit here is local. `origin` is
+  untouched, and `git ls-remote` gets re-read before any history operation.
+* **Not touching `release.yml` / R-aa.** Same deferral, same reason, bundled with the version bump.
+* **Not carrying `mc-surface.txt`** — gate 9 requires it to differ.
+* **Not doing the docs pass** — still owner-sequenced, still one commit across all seven.
+* **Not translating `probe-bands.py` / `javap-mc.sh`** — that is 9.3's remaining tooling half and a
+  separate item; carrying them unchanged is correct here because they are identical already.
 
 ### Rollback
 
-Every step is a commit on a named branch and nothing is pushed until C and D are green. Before the
-push the undo is `git reset --hard <recorded tip>` per branch — the pre-sweep tips are recorded below.
-After the push it is `git revert <sha>` on the affected branch; no history is rewritten, no tag or
-release is touched, and no remote branch is deleted.
+Pre-sweep tips, recorded before the first edit:
 
-**Pre-sweep tips (the rollback targets):** `master` `e15c72c05` · `mc/1.21.10` `a956e9cfd` ·
-`mc/1.21.8` `26214c02c` · `mc/1.21.5` `de78860fa` · `mc/1.21.4` `6c3520802` · `mc/1.21.3` `6551f9a52`
-· `mc/1.21.1` `7bf2a16ee`
+```
+master     13fefb85a   mc/1.21.5    e9bd67a60
+mc/1.21.1  ce3f91c41   mc/1.21.8    b64088dcf
+mc/1.21.3  14206a5aa   mc/1.21.10   f90571abe
+mc/1.21.4  e0f9ab825   mc/1.21.11   e3b356c0b
+```
+
+Undo for any band: `git reset --hard <sha above>` on that branch. Nothing is pushed, so no remote
+state is at risk and no history is rewritten. 🔴 `git checkout -- <path>` is NOT the undo here — it
+destroys uncommitted work; check `git status --short` first.
 
 ---
 
-## Other open work
+## §8.3, §22 – §33 — closed, and where the reasoning lives
 
-- [x] ✅ **DONE 2026-08-20 — `scripts/gradle-key-identity-audit.py` closes R-w′.** Ship-gate **11**,
-      and a fourth step-pair in `.github/workflows/drift-audit.yml`, so it has the same weekly
-      unattended leg as gates 7/9/10 rather than living on somebody's memory.
-      It is **per-KEY**, which is the only shape that fits: `SHARED` (identical everywhere —
-      `mod_version`, `maven_group`, `archives_base_name`, the toolchain/test pins, the `org.gradle.*`
-      tuning), `DISTINCT` (must differ — `minecraft_version`, `supported_minecraft_versions`, so it
-      carries **R10** as well), and `BAND_LOCAL` (may differ or agree — `yarn_mappings`,
-      `loader_version`, `fabric_version`, the client-integration pins). All **17** keys of the real
-      file are classified; none is fictional.
-      🔑 **It fails closed on the direction that can hurt.** An unclassified key is reported only if
-      it **differs** between branches — a new key that agrees everywhere passes quietly. Demanding
-      classification of every tuning knob is a rule nobody maintains; this one holds.
-      ✅ **Proven, not asserted.** `--self-test` = 3 quiet, 8 firing, 1 warning, **5 detector
-      mutations**, 1 parser case — every firing case is re-run with its detector stubbed and must go
-      green, or the assertion was never testing the detector. And it was then mutated against the
-      **real seven branches** in a throwaway clone: leaving `mc/1.21.5` at `1.1.0-SNAPSHOT` exits 1
-      and names it; colliding it onto `minecraft_version=1.21.4` exits 1 as an R10 collision.
-      ⚠️ **A green run on the real repo proves the branches agree, not that the value is right.**
+Full text in
+[plans/completed/TODO-multiversion-through-section-33.md](plans/completed/TODO-multiversion-through-section-33.md).
 
-### ✅ Harness fixes landed 2026-08-19 (`scripts/**` — gate-10 shared layer, so all seven branches)
+🔑 **How to resolve a `§n` reference with no heading in this file:** §8.3 and §22 – §33 are in the
+archive linked above; anything numbered lower (§10.7, §21.6, the Pass-1 `item N` numbers cited in
+source comments) is in `TODO-multiversion-through-phase-21.md`. Nothing has been deleted — only moved.
 
-- [x] **`brew-smoke.sh` no longer GUESSES its jar.** It picked `find ... | head -1`, so with two jars
-      in `build/libs` — a band switch, an interrupted release build, a stale jar from yesterday's
-      checkout — it certified whichever one `find` walked first and said nothing. It now **refuses an
-      ambiguous glob** (exit 2), takes `BREW_SMOKE_JAR=<path>` as the override, and carries a
-      `--self-test` (6 cases) covering both directions. Mutation-checked: restoring `head -1` reddens
-      exactly the two-jar case and nothing else.
-      🔑 Its two sibling harnesses take the jar as `$1`; this one cannot, because `$1..$3` are already
-      mode/ingredient/base — hence an env var rather than a fourth positional.
-- [x] **`combat-egg-control` renamed to `combat-summon-control`, and it now asserts the ORIGIN STAMP
-      directly.** The old name argued about `Experience_Formula.Eggs.Multiplier` while driving
-      `/summon`; on `mc/1.21.1` the two came apart — `loadEntityWithPassengers` lost its `SpawnReason`
-      parameter there, so `/summon`-ed mobs went unstamped while spawn eggs were stamped correctly
-      throughout.
-      🔑 The phase now asserts `execute if data ... "mcmmo:mob_origin"` instead of inferring the
-      origin from XP staying flat. The `1.21.1` defect surfaced as *"UNARMED moved"*, which reads as
-      *"combat XP is broken"* and cost a debugging session to trace. **A regression now names itself.**
-      ✅ Verified in-world on `1.21.11`: the phase passes with its new `summontarget-stamped` marker.
-      ⚠️ **A test standing in for its subject is only safe while the two agree.**
+| § | what it was | outcome |
+|---|---|---|
+| **8.3** | `mc/1.21.1`, the last `1.21.x` band | ✅ SHIPPED `mc1.21.1-v1.2.0`. Re-scoped by R-m′ — nothing ships disabled |
+| **22** | the `1.20` line | 🚫 **WITHDRAWN (R-x)** before any of it was built. 22.1 (the `MACES` gate) had already shipped and stays |
+| **23** | back-port §22.1, ship `v1.2.0` | ✅ seven releases at `v1.2.0`. Exposed **R-w′** — `mod_version` fell between two cross-branch guards |
+| **24** | docs join the identity guard (R-y) | ✅ gate 10, 24 → 44 paths (**48 since §37**). Its **first run** found `master` + 5 bands serving a wiki claim false on `mc/1.21.1` — and the **band** was right |
+| **25** | is the yarn→official table derivable? | ✅ yes — 100% of 1,389 symbols. 9.1's premise was measured **false**: yarn's `official` column is the *obfuscated* name |
+| **26** | gate-10 sweep for the new script | ✅ all seven branches. 🔑 `drift-audit.py --master master` **prefers remote refs** — a pre-push run grades stale bands and prints `No drift` |
+| **27** | the `26.x` toolchain, measured | ✅ builds on the **existing** Loom; `master` pinned to `26.2`. Java 25 collides with gate 10 → **R-aa** |
+| **28** | drive the 33 ambiguous records to 0 | ✅ **33 → 4**, all truncated mixin selectors no tool will ever fix. 🔑 one record needs **two** mojmap names, so a name→name table is wrong — **drive the rename by CALL SITES** |
+| **29** | the compiler-driven rename script | ✅ 2,643 → 126 errors. 🔑 the compiler loop is **necessary but not sufficient** — blind spot 1 above |
+| **30** | apply the rename to `master`'s `src/` | ✅ 2,639 → **56**. The collision audit was under-reporting **52×** in its default mode (13th vacuous-guard sighting) |
+| **31** | the genuine `26.x` API delta | ✅ main **and** test tree to 0. Then found **54 of 61 injectors dead** — *the mod compiled and did nothing* |
+| **32** | re-derive every injector target | ✅ `--check` **passes**, `ZERO 54 → 0`, `OK 6 → 60`. Found blind spots 2, 3 and 4 |
+| **33** | the first real suite on `26.2` | ✅ **186 red → 1**, 1,852 executed. Found blind spot 5; the last red is the deferred docs row |
+
+---
+
+## §39 — all four non-beta `26.x` releases, MEASURED — ✅ the bands are settled
+
+**Owner-scoped 2026-08-26: probe and settle the bands ONLY.** No branch cut, no build, no ship
+gate. Those are the next section's problem, and pricing them before this measurement existed is
+what §31 (54 seam redesigns → 0) and §32.0 (8 handler rewrites → 4) both got wrong.
+
+### The scope, read from Mojang's own manifest — not from memory
+
+Exactly **four** non-beta `26.x` releases exist: **`26.1`, `26.1.1`, `26.1.2`, `26.2`.** Latest
+release is `26.2`; the newest snapshot is `26.3-snapshot-10`, so there is **no `26.3` to cover
+yet**. That matches this plan's declared scope of 16 versions (12 × `1.21.x` + 4 × `26.x`).
+
+📌 **`master` declares `supported_minecraft_versions=26.2` alone, so `26.1`, `26.1.1` and `26.1.2`
+are covered by NO branch.** Three of the four `26.x` releases ship to nobody today. That is the gap
+this section measures and the next one closes.
+
+### 38.6 left the question half-answered, and this is the other half
+
+§38 proved `26.1` and `26.2` are different bands. It said **nothing** about where the boundary
+inside the `26.1.x` line falls, and explicitly refused to write one down from the ecosystem's
+answer. Getting the rest needed two Loom resolves.
+
+`26.1.1` and `26.1.2` were **not cached**. Both were resolved through a **throwaway Gradle project
+in the scratchpad** — the repo was never touched, no `gradle.properties` edited, no branch switched:
+
+```
+settings.gradle   pluginManagement { repositories { maven 'https://maven.fabricmc.net/'; gradlePluginPortal() } }
+build.gradle      id 'net.fabricmc.fabric-loom' version '1.17.13'
+                  dependencies { minecraft "com.mojang:minecraft:${project.mcver}" }   // NO mappings line
+                  tasks.register('resolveMc') { doLast { configurations.compileClasspath.resolve().each { println it } } }
+run               ./gradlew --no-daemon -Pmcver=26.1.1 resolveMc      (~25s each)
+```
+
+⚠️ **Editing `master`'s own `gradle.properties` to provoke the resolve would have been the obvious
+move and is the wrong one** — it dirties the one file two cross-branch guards watch (R-a's
+`minecraft_version`, R-w′'s per-key audit) for a cache side effect.
+
+### 🔑 The jars were verified BEFORE the probe ran, not after
+
+A probe against a bad jar does not error — it reports **the entire Minecraft API as ABSENT**, which
+is §38's defect 2 and reads exactly like a real band boundary. So the two newly-resolved jars were
+checked independently first:
+
+| version | `net/minecraft` classes | obfuscated-shaped names |
+|---|---|---|
+| `26.1` | 10,208 | 0 |
+| `26.1.1` | 10,208 | 0 |
+| `26.1.2` | 10,208 | 0 |
+| `26.2` | 10,372 | 0 |
+
+### ✅ THE ANSWER — two bands, and the `26.1.x` line is one of them
+
+```
+probe-bands.py --versions 26.1,26.1.1,26.1.2,26.2 --control 26.2
+1433 records over 212 distinct classes; this branch is official-named
+control check: 26.2 resolves all 1424 records - probe trusted
+bands: 2 -> 26.1,26.1.1,26.1.2 | 26.2
+varying records: 84 of 1424
+```
+
+| version | PRESENT | ABSENT |
+|---|---|---|
+| `26.1` | 1360 | 64 |
+| `26.1.1` | 1360 | 64 |
+| `26.1.2` | 1360 | 64 |
+| `26.2` | **1424** | 0 |
+
+**`26.1`, `26.1.1` and `26.1.2` differ on ZERO of 1424 records.** Not "close" — identical, record
+for record, including the resolved declaration string of every one. `26.2` differs from all three
+by the same 84.
+
+🔑 **The collapse is itself the anti-degeneracy proof, and it is worth stating because the failure
+mode here is silent.** Had either new jar failed to resolve, that version would have gone ~1424
+ABSENT and formed its **own** band — it would not have landed byte-identical on top of a `26.1`
+that was probed in §38 from a different cache entry. And the control resolving 1424 of 1424 rules
+out all four being degenerate together.
+
+⚠️ **The 10,208-vs-10,372 class counts above are corroboration, NOT the measurement.** Equal class
+counts would sit happily on top of a renamed method; only the record-level compare settles it.
+
+### 🎉 The band's port work was ALREADY priced in §38, before anyone knew its size
+
+Because the three `26.1.x` versions are identical, §38's itemisation of the 84 varying records
+applies **unchanged to the whole band** — one branch, one jar, one set of fixes, three versions
+served. Restated here so §40 does not re-measure:
+
+* **64 ABSENT on the band, PRESENT on `26.2`.** Dominated by one thing: **`EntityTypes` does not
+  exist below `26.2`** — the class plus 26 `ACCESSEDFIELD` + 26 `STATICFIELD` constants is ~53 of
+  the 64. Then `EntitySpawnRequest` (class + `#reason`), `BredAnimalsTrigger`
+  (class + `MIXINCLASS` + `#trigger`), the `monster.cubemob` package (`Slime`, `MagmaCube`),
+  `ColorCollection#pick`, `Items#WOOL`.
+* **20 signature-only changes.** `Potions.*` moved `Holder$Reference<Potion>` → `Holder<Potion>`
+  (8 fields × 2 record kinds = 16), `AgeableMob#setBaby` gained `final`,
+  `AbstractHorse#createOffspringAttribute` went package-private → `public`, and
+  `EntityType#create` swapped `Consumer<T>` for `PostSpawnProcessor<T>`.
+
+🔴 **Read that as *rows to look at*, never as work to do.** §31 priced 54 seam redesigns and there
+were 0; §32.0 priced 8 handler rewrites and there were 4. **The sizer classifies; the renamer
+writes.**
+
+🔴 **`LivingEntity#knockback` is an R13 sighting and it spans this boundary.** The band has the
+3-arg form; `26.2` carries a 5-arg `(double, double, double, DamageSource, float)` **alongside**
+it. A call written against one rebinds to the other **silently**, because javac must accept it —
+the narrow-overload-deleted-while-a-wider-one-survives shape §33.4 closed only for `equals`.
+**This one does not announce itself on a compile.**
+
+### The topology this implies — ONE new branch closes the declared scope
+
+Derived from the measurement plus R-a (branch-per-band) and R-z (`26.x` is `master`), **not** from
+the ecosystem's packaging:
+
+| Branch | MC versions covered | `minecraft_version` | `depends.minecraft` |
+|---|---|---|---|
+| `master` | `26.2` | `26.2` | `~26.2` (today) |
+| **`mc/26.1.2` — TO BE CUT** | `26.1`, `26.1.1`, `26.1.2` | `26.1.2` | `>=26.1 <26.2` |
+
+**Branch named for, and pinned to, the NEWEST version in its band** — the convention every existing
+band already follows (`mc/1.21.8` covers `1.21.6`–`1.21.8` and pins `1.21.8`; `mc/1.21.10` covers
+`1.21.9`–`1.21.10` and pins `1.21.10`). Do not name it `mc/26.1`.
+
+✅ **After that cut the declared 16-version scope is COMPLETE**: 9 branches — `master` (`26.2`),
+`mc/26.1.2` (3 versions), and the seven `1.21.x` bands (12 versions).
+✅ **R10 is not tripped**: every branch resolves to a distinct `minecraft_version`.
+✅ **fabric-loader `0.19.3` covers all four** `26.x` releases — the same pin `master` already has.
+✅ **Java 25 on all four**, read from each version's own Mojang manifest (`javaVersion.majorVersion`:
+`26.1`→25, `26.1.1`→25, `26.1.2`→25, `26.2`→25; `1.21.11`→21). So the new band inherits `master`'s
+toolchain unchanged and **R-aa's per-band `java_version` still has exactly one boundary to express**
+— `26.x` at 25, `1.21.x` at 21 — not a third value.
+
+⚠️ **Fabric API publishes SEPARATELY for each of the four**, newest per version `0.145.1+26.1`,
+`0.145.4+26.1.1`, `0.155.2+26.1.2`, `0.158.0+26.2`. **That is not a band boundary** — Fabric API
+republishes per version as a matter of course, and 9.4(b) was answered against our own surface
+rather than that packaging. But it IS a live question for the cut: the band pins **one**
+`fabric_version` and must RUN on all three. `0.155.2+26.1.2` is the candidate; whether it loads on
+`26.1` is a `fabric.mod.json` `depends` fact to CHECK, not to assume. Same shape the `1.21.x` bands
+already solve — `mc/1.21.8` pins one `fabric_version` and serves three versions.
+
+### What I am NOT doing
+
+* **Not cutting `mc/26.1.2`.** Owner-scoped to the measurement. The cut is §40.
+* **Not pushing anything.** The hold was re-confirmed by the owner this session.
+* **Not probing `26.3`.** It does not exist as a release; the newest is `26.3-snapshot-10`.
+* **Not resolving the fabric-api question.** Named above as a check the cut owes, not answered here.
+* **Not touching `gradle.properties`, `build.gradle` or `release.yml`.** R-aa, commit B and R14's
+  remedy all stay bundled with the `mod_version` bump.
+
+### Rollback
+
+`plans/BAND_TABLE.md` is regenerated by this section from 2 versions to 4. The prior 2-version
+edition is at `2a6b0c9a3`; the 12-version `1.21.x` edition it replaced is at `8a289a45c` and
+byte-identical on all seven band branches. `git checkout 2a6b0c9a3 -- plans/BAND_TABLE.md` restores
+the previous one. No other tracked file changes. 🔴 `git checkout -- <path>` on a DIRTY file
+destroys uncommitted work — `git status --short <path>` first.
+
+---
+
+## §40 — the gate-7 waiver file — 🔴 IN FLIGHT (ruling **R-ab**, owner 2026-08-26)
+
+**The problem is in the §38 block above and is unchanged**: the same **11** `master`-only `26.x`
+commits read MISSING on every band, they cannot be back-ported by construction, they should have
+carried `Backport-not-needed:` and do not, and **six are already published** so amending them is off
+the table. Gate 7 therefore fails on every run for a reason no work clears — and the **12th** missing
+commit, a genuine forgotten back-port, reads exactly like the eleven.
+
+✅ **RULED (owner, 2026-08-26): the waiver file.** `scripts/drift-waivers.txt`, read by
+`drift-audit.py`, under gate 10 so it is byte-identical on every branch. **Rejected: moving the band
+base** — a `Backport-base:` marker is cheaper to read but drops *any* genuine pre-rename drift out of
+the window with the 11, and the whole point of this exercise is that a silent skip is the defect.
+
+### 🔑 The design problem, and the one mechanism that answers it
+
+A waiver file is an escape hatch, and an escape hatch that anyone can extend tomorrow **repeals rule
+3**. AGENTS.md's opt-out is load-bearing precisely because it *"lives in the commit that made the
+decision and cannot be applied retroactively"*. A plain sha-list gives that property up.
+
+**So the file is structurally retroactive-only: it declares a `cutoff:` sha, and a waiver whose
+commit is NOT an ancestor of that cutoff is REFUSED.** Tomorrow's commit cannot be waived, because
+tomorrow's commit is not an ancestor of a frozen cutoff. Widening the exception means **moving the
+cutoff**, which is one line in a diff, in a commit, with a reason — reviewable, which a growing list
+of shas is not.
+
+### The format
+
+```
+# scripts/drift-waivers.txt
+cutoff: bdc429115
+<40-hex sha>  <reason, non-empty>
+```
+
+### Fail-closed rules — every one gets a self-test case
+
+| # | Condition | Result |
+|---|---|---|
+| 1 | `cutoff:` line missing while entries exist | exit **2** |
+| 2 | more than one `cutoff:` line | exit **2** |
+| 3 | sha is not 7–40 hex | exit **2** |
+| 4 | sha resolves to no commit, or is ambiguous | exit **2** |
+| 5 | **sha is not an ancestor of `cutoff`** | exit **2** — the retroactivity lock |
+| 6 | reason empty or whitespace | exit **2** |
+| 7 | a waiver that matched **no** commit in any band's window | **stale**, exit **1** |
+| 8 | file absent | zero waivers, exit unaffected (its absence is **gate 10's** job, not this one's) |
+
+🔑 **Rule 7 is what stops the file rotting.** A waiver that has stopped applying is the same
+credit-for-nothing shape as `unmatched_trailers`, which this script already reports — and a waiver
+list nobody prunes is how the 12th commit hides all over again, one level up.
+
+⚠️ **A waiver never suppresses a `Backport-of:` mismatch and never adds coverage.** It converts
+exactly one classification, `MISSING` → `retro-waived`, and the report prints that count separately
+so the operator can never read a waived commit as a propagated one.
+
+### Steps
+
+- [ ] **40.1** `scripts/drift-waivers.txt` — `cutoff: bdc429115`, the 11 shas, one reason each.
+- [ ] **40.2** `scripts/drift-audit.py` — parse + validate + the `retro_waived` classification, the
+      stale-waiver report, and the counts in `format_reports()` / `--json`.
+- [ ] **40.3** Extend `--self-test` with the eight rules above **plus the anti-vacuity case**: a
+      genuinely forgotten commit must STILL be reported MISSING while waivers are in play. A waiver
+      mechanism that swallows the real signal is worse than the red gate it replaced.
+- [ ] **40.4** `AGENTS.md` — document the waiver as the narrow, cutoff-locked exception to rule 3.
+      It is the only tracked agent-facing doc; a mechanism that lives only in a script is a
+      mechanism the next agent works around.
+- [ ] **40.5** Run gate 7 honestly — inside `git clone --local --no-hardlinks . <scratch>`, because
+      `band_branches()` prefers REMOTE refs and a bare run grades the stale remote.
+- [ ] **40.6** Sweep: `AGENTS.md` + `scripts/**` to every band. **No `gradle.properties`, no
+      `release.yml`, no `src/**` → outside `release.yml`'s `paths:` filter → no release run fires.**
+
+### What I am NOT doing
+
+* **Not lowering `--require-bands`, not skipping the gate.** Both are the make-the-symptom-disappear
+  move AGENTS.md names outright.
+* **Not amending or rewriting any of the 11.** Six are published; the ruling exists because that
+  repair is forbidden.
+* **Not pushing.** The hold was re-confirmed by the owner 2026-08-26.
+
+### Rollback
+
+Pre-edit tips are recorded in the execution log below at execution time. Nothing is pushed, so no
+remote state is at risk. 🔴 `git checkout -- <path>` is NOT the undo for a dirty file — it destroys
+uncommitted work; `git status --short <path>` first.
+
+---
+
+## §41 — the R-aa bundle: per-band `java_version`, the `mod_version` bump, commit B, the docs pass
+
+✅ **AUTHORISED (owner, 2026-08-26): build the whole bundle.** These four land as ONE change per
+branch because each of them alone touches `gradle.properties`, which is **inside `release.yml`'s
+`paths:` filter** — four separate commits on eight branches is thirty-two release runs, and R-t's
+stale-version gate refuses every one of them that does not carry a bump.
+
+### 41.1 — R-aa, the per-band `java_version` key
+
+🔑 **The fact already exists per band — in THREE hardcoded places in `build.gradle`** (`master`'s
+`sourceCompatibility` / `targetCompatibility` / `toolchain` / `options.release` all say `25`; every
+band says `21`) **and a FOURTH in `release.yml`, where it is hardcoded `'21'` on all eight.** R-aa's
+ruling is that the value gets declared once and read; leaving `build.gradle`'s copies hardcoded would
+replace one drifting source of truth with two.
+
+- [ ] `gradle.properties`: `java_version=25` on `master`, `21` on every band.
+- [ ] `build.gradle`: read it, and **refuse if absent** — a missing key must fail the build, not
+      default to a silent `21` that compiles `master` against the wrong release.
+- [ ] `.github/workflows/release.yml`: a `Read the JDK level this band builds with` step **before**
+      `setup-java` (checkout is already above it), feeding `java-version:`. The step errors on an
+      empty value. The workflow text becomes byte-identical again, which is what P19-1 requires.
+- [ ] `scripts/gradle-key-identity-audit.py`: `java_version` → `BAND_LOCAL`. ⚠️ Not `DISTINCT` — the
+      seven `1.21.x` bands legitimately share `21`, and `DISTINCT` would demand eight different
+      numbers. ⚠️ Not left unclassified: gate 11 fails closed on an unclassified key **only when it
+      differs**, and this one differs the moment `master` and a band are compared.
+- [ ] A guard test that fails if this is reverted: `release.yml` must carry **no** hardcoded
+      `java-version: '<n>'` literal, must reference the step output, and the declared
+      `java_version` must equal the release level the build actually resolved (handed over as a
+      system property, the way `mcmmo.build.version` already is — a guard that re-derives the value
+      from the file keeps passing when the real wiring breaks).
+
+### 41.2 — the `mod_version` bump
+
+🔴 **OWNER CALL — R-w set the last value explicitly and this one is the same shape.** `v1.2.0`
+shipped on all seven branches (§23), so R-t refuses any push until this moves. Ask before writing it.
+
+### 41.3 — commit B
+
+`mockito_version=5.23.0` on every band. §37 measured it and deferred it for exactly this reason: it
+is a `gradle.properties` edit and fires a release run unless it rides the bump.
+
+### 41.4 — the docs pass
+
+The suite's **one red row** — `BandDocsMatchRealityTest#everyVersionThisBandShipsAppearsInTheReadme`
+— `README.md` never learned that `master` ships `26.2`. ⚠️ **`wiki/` and `README.md` are under gate
+10 (R-y), so the docs pass is byte-identical on all eight branches or gate 10 goes red.**
+⚠️ **Gradle SKIPS the doc-guard tests**: a docs-only change leaves `:test` up-to-date. **Read the
+`N executed` line, never `SUCCESSFUL`.**
+
+### What I am NOT doing
+
+* **Not raising `BAND_COUNT` in `drift-audit.yml` yet.** It counts **pushed** bands and the remote
+  still holds six. Raising it while the push hold stands makes the weekly run red for a reason that
+  is not drift. It moves in the push, with §42's band.
+* **Not touching R14's flake remedy.** `build.gradle`, separate decision, still open.
+* **Not pushing.**
+
+---
+
+## §42 — cut `mc/26.1.2` — ✅ AUTHORISED (owner, 2026-08-26)
+
+📌 **Renumbered.** §39 and the memory call this cut "§40"; the gate-7 ruling took that slot first.
+Same work, same scope: the band covers `26.1`, `26.1.1`, `26.1.2`, pins `minecraft_version=26.1.2`,
+and declares `depends.minecraft` `>=26.1 <26.2`. **After it, the declared 16-version scope is
+complete** — nine branches.
+
+### 🔴 The one check this cut OWES, before anything else
+
+The band pins **one** `fabric_version` and must RUN on all three versions. `0.155.2+26.1.2` is the
+candidate. **Whether it loads on `26.1` is a `fabric.mod.json` `depends` fact to be READ out of the
+jar, not assumed** — §39 named it and deliberately did not answer it. If it does not load on `26.1`,
+**stop and report**; do not pin a version that cannot run on its own band.
+
+### Ordering
+
+**§40 and §41 land first**, so the new branch is cut from a `master` that already carries the waiver
+file, the `java_version` key and the docs pass — it inherits all three and owes no follow-up sweep.
+🔑 That is the cheap direction: cutting first turns every one of §40's and §41's seven-band sweeps
+into an eight-band sweep.
+
+### Steps — the per-band recipe above, x.1 – x.10, plus
+
+- [ ] `java_version=25` (Mojang's manifest: all four `26.x` are Java 25). §39 measured this, so
+      R-aa has one boundary, not a third value.
+- [ ] **No `yarn_mappings` key** — from `26.1` Minecraft ships unobfuscated and yarn publishes
+      nothing. Same as `master`.
+- [ ] **x.7 runs `mixin-allow-audit.py` BEFORE the full gate**, and 🔑 **the injector total is a
+      per-band fact** — §38 measured 61 / 62 / 68 across the existing bands. `master`'s number
+      proves nothing here.
+- [ ] 🔴 **`LivingEntity#knockback` spans this exact boundary** — the band has the 3-arg form,
+      `26.2` carries a 5-arg overload alongside it, and a call rebinds **silently** because javac
+      must accept it. This is the §33.4 shape and it does **not** announce itself on a compile.
+- [ ] **x.9** `--require-bands` / `BAND_COUNT` — moves with the push, not before it.
+
+### What I am NOT doing
+
+* **Not pushing the branch.** The hold covers it. A cut branch that is never pushed trips nothing.
+* **Not re-measuring the band.** §39 settled it: `26.1`/`26.1.1`/`26.1.2` differ on **zero of 1424**
+  records. 🔴 Read §39's 84-record itemisation as **rows to look at, never as work to do** — §31
+  priced 54 seam redesigns and there were 0.
+
+### Rollback
+
+The branch is new and unpushed: `git branch -D mc/26.1.2` from `master` is the complete undo, and
+nothing else on disk changes. Confirm with `git branch --contains` that no other ref depends on it
+first.
+
+---
+
+## Other open work — harness and playtest
+
+*Closed items are summarised in one line each; the full reasoning is in the archives.*
+
+**Closed 2026-08-19/20 — do not re-open:** `gradle-key-identity-audit.py` (ship-gate **11**, per-KEY,
+closes R-w′) · `brew-smoke.sh` refuses an ambiguous jar glob instead of taking `find | head -1` ·
+`combat-egg-control` → `combat-summon-control`, now asserting the **origin stamp** directly rather
+than inferring it from XP staying flat · the smoke scorer discovers gated skills from the boot log
+instead of grepping one hardcoded skill name (⚠️ the wording in `SkillAvailability#probe` is now an
+**interface**, not prose) · the anti-vacuity floor is derived and exact at **30**, not `3 + sum(...)`
+· R-y ruled `README.md`/`wiki/` **into** the identity guard (§24).
 
 - [ ] 🔴 **THE SPAWN-EGG HALF IS NOT DONE — attempt budget exhausted, phase withdrawn.**
       A `combat-spawn-egg-control` phase was written and **removed before commit** rather than ship a
-      red ship-gate to seven branches. Its text is not lost — it is the one thing the next attempt
-      should start from, and the three refuted hypotheses are worth more than the code:
+      red ship-gate to seven branches. The three refuted hypotheses are worth more than the code was:
 
-      **Symptom:** `player Tester use once` holding `minecraft:cow_spawn_egg` spawns nothing, and logs
-      nothing — no error, no effect. `Summoned new Cow` appears exactly once per run (the `/summon`
-      phase). Measured twice, identically.
+      **Symptom:** `player Tester use once` holding `minecraft:cow_spawn_egg` spawns nothing and logs
+      nothing — no error, no effect. Measured twice, identically.
 
       **Refuted, each with log evidence — do NOT re-test these:**
       1. *Wrong item id* — `Replaced a slot on Tester with [Cow Spawn Egg]`, so it IS in mainhand.
-      2. *Bad aim / nothing to click* — first draft aimed into the ground block's interior at
-         `(2.5, -60.5, 0.5)` and the ray clips the column edge at x=2.03; rewritten to the idiom
-         `cook-campfire` and `super-ability` both use successfully (`setblock 2 -60 0`, then
-         `_look(2.0, -59.5, 0.5)` — AT the face plane). Rotation dumps confirm both aims took.
+      2. *Bad aim / nothing to click* — rewritten to the idiom `cook-campfire` and `super-ability`
+         both use successfully (`setblock 2 -60 0`, then `_look(2.0, -59.5, 0.5)` — AT the face
+         plane). Rotation dumps confirm the aim took.
       3. *Gamemode restriction* — `Set Tester's game mode to Survival Mode`, `spawn-protection=0`.
 
-      **Where to look next:** whether fabric-carpet's `use once` reaches `ItemStack#useOnBlock` at all,
-      or only the block's own `onUse`. Every `use once` phase that works (anvil, campfire, pickaxe
-      ready) is a **block** interaction; placing an entity is an **item** interaction, and no phase in
-      this harness has ever proven that path. If carpet cannot drive it, a **dispenser** loaded with
-      the egg reaches the same `spawnFromItemStack` seam with no player raycast at all.
+      **Where to look next:** whether fabric-carpet's `use once` reaches `ItemStack#useOnBlock` at
+      all, or only the block's own `onUse`. Every `use once` phase that works is a **block**
+      interaction; placing an entity is an **item** interaction, and no phase in this harness has ever
+      proven that path. If carpet cannot drive it, a **dispenser** loaded with the egg reaches the
+      same `spawnFromItemStack` seam with no player raycast at all.
 
-      ⚠️ Until then the `SPAWN_ITEM_USE` origin is **covered by unit tests only**, and the harness
-      covers `COMMAND` alone. That is a real gap, and it is the gap `mc/1.21.1` fell through.
-- [x] **The scorer's version-gate check is gate-agnostic.** It grepped `"has spear items"` — a
-      hardcoded single skill that would have kept passing while saying nothing about `MACES`. It now
-      discovers the gated skills from the boot log by regex, cross-checks each against `/mcstats`, and
-      reports UNKNOWN when it finds **no** gate line at all (a reworded log message used to make the
-      whole check a silent no-op).
-      ⚠️ **The log wording in `SkillAvailability#probe` is now an INTERFACE**, not prose — see the
-      comment there before editing it.
-- [x] **The anti-vacuity floor was carrying one assertion of slack** (`3 + sum(...)`, counting no
-      gates), so any single assertion could disappear unseen. Now derived and exact: **30**.
-      Mutation-checked — regressing the gate loop to one skill reddens the clean run at 29 vs 30.
-
+      ⚠️ Until then `SPAWN_ITEM_USE` is **covered by unit tests only** and the harness covers
+      `COMMAND` alone. That is a real gap, and it is the gap `mc/1.21.1` fell through.
 - [ ] 🔴 **THE LIVE PLAY-TEST — owner only. Oldest debt in the queue.**
       **Taming:** shoot a zombie at ~25 blocks with a wolf at your heels in **passive** mode and watch
       it close; then sneak-right-click it with a bone. **Skills tab:** neither the tab, nor a locked
       row, nor the greyed state has ever been seen rendered. Next suspect if a boosted wolf still will
       not close: `FollowOwnerGoal` outranking `MeleeAttackGoal`. **Budget: 3 attempts.**
-- [x] ✅ **CLOSED 2026-08-20 by R-y — owner ruled BOTH IN.** See §24; the first run found
-      `wiki/Husbandry.md` wrong on six of seven branches. Original call: should
-      `branch-file-identity-audit.py` cover `README.md`/`wiki/`? R9's noise argument is about a *per-push* audit and does not transfer
-      cleanly to a *ship-gate* one, and byte-identity is exactly the property Phase 21 found violated.
-      But it changes a rule written into `AGENTS.md`, byte-identical on seven branches (P19-1) — a
-      seven-branch operation.
-      🔑 **`TODO.md` is the live evidence for it.** On 2026-08-19 the file measured 3552 lines on
-      `master` and 576–1486 lines on the five bands, each frozen at 2026-08-13/14 — five different
-      blobs of the same document, because every edit since had been docs-only.
-- [ ] ⬜ **`gameplay-smoke.sh`'s path bridge is only PARTIALLY demonstrated** — three call sites need a
-      running server and were fixed by inspection. Confirm on the next real smoke run.
 - [ ] ⬜ **Manifest debt, piece 1 — the last red row.** Validate manifest symbols against the band's
       merged jar; refuse a manifest naming a symbol the band does not have. Needs a Loom-cached jar
       and `probe-bands.py`'s resolver.
@@ -1406,6 +1341,8 @@ release is touched, and no remote branch is deleted.
       🔑🔑 **That blob was a perfectly valid manifest, for the wrong branch.** No per-branch check,
       automated or human, can tell "correct manifest" from "correct manifest belonging to a different
       branch" — on the branch it came from, every record is true. Only this piece can.
+- [ ] ⬜ **`gameplay-smoke.sh`'s path bridge is only PARTIALLY demonstrated** — three call sites need a
+      running server and were fixed by inspection. Confirm on the next real smoke run.
 - [ ] ⬜ **`ci-watch.sh --mutate` on Windows.** Fixed by Phase 20's `cygpath -w` bridge; re-confirm on
       the next ship gate that step 8's failure mode is *demonstrated* rather than asserted.
 
@@ -1515,9 +1452,19 @@ test run in the shell that hides the bug proves nothing.**
 
 ## Risk register
 
+🆕 **R14 — the suite flakes at ~24% of tests, and the flake is indistinguishable from a regression.**
+Byte Buddy's inline mock maker attaches an agent per test fork through an external helper process;
+`maxParallelForks = 4` races it. Measured 2026-08-25 on `mc/1.21.10`: **449 of 1846 red**, then
+**1846/0** on a clean re-run of the same commit. **Not caused by the Mockito bump** — the inline
+mock maker is the 5.x default in `5.14.2` too. `release.yml` runs this suite on every push, where a
+red run is already the normal outcome, so the failure mode is that a REAL regression gets re-run
+away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer forks) touches
+`build.gradle`, which is inside `release.yml`'s `paths:` filter — same deferral shape as R-aa.
+
+
 | # | Risk | State |
 |---|---|---|
-| R1 | Band count makes "all versions" unviable | ✅ **CLOSED AGAIN by R-x (2026-08-20).** R-v had re-opened it at ~11 bands; the `1.20` line is withdrawn, so the ceiling is **7 today + 1 for `26.x` = 8**. Re-opens the moment the floor moves again |
+| R1 | Band count makes "all versions" unviable | ✅ **CLOSED AGAIN by R-x (2026-08-20).** R-v had re-opened it at ~11 bands; the `1.20` line is withdrawn, so the ceiling is **8 branches today** (`master` at `26.2` + 7 `mc/**`, one of them still held) **and 9 once `26.1.x` is cut**. Re-opens the moment the floor moves again |
 | R2 | CI time explodes | **Downgraded** — branches build independently. Trigger: ~30 min per band |
 | R3 | Version-specific code leaks into skill logic | ✅ **CLOSED** — 26 → 0 leak sites; `PlatformBoundaryGuardTest` held on two real API breaks |
 | R4 | Silent mixin misbinding via dropped `@Slice` | ✅ **CLOSED** — `allow = N` on all 61 injectors, measured from bytecode |
@@ -1526,7 +1473,7 @@ test run in the shell that hides the bug proves nothing.**
 | R7 | Live playtest disrupted | ✅ Phase 0 tag + instance backup |
 | R8 | A fix lands on `master` and is silently never back-ported | 🟡 **DOWNGRADED, not closed.** All three legs exist: the convention, `drift-audit.py`, and the weekly run — which fires only from `master` and has now fired unattended (run `32005557735`). ⚠️ **The unattended leg is weekly and reports to a tab nobody opens (R11)**, so between a commit and the next Monday detection is still *"somebody remembers"*. **Each new band multiplies this** — 7 today, 8 once `26.x` lands (R-x withdrew R-v's ~11) — and the floor must be raised per cut (x.9) |
 | R9 | A fix outside `src/` never reaches a band, and the docs deny a band that ships | 🟡 **RE-OPENED IN PART by Phase 21.** R9a (propagation of `scripts/`+`.github/`) and R9b (`BandDocsMatchRealityTest`) both hold. But Phase 21 found a **third** hole: **a docs edit propagates iff its commit also touched `src/`** — the effective policy was never *"docs are not propagated"*, it was a coin flip that reads as a deliberate exclusion in every document describing it. ⚠️ `BandDocsMatchRealityTest` is not broken and **could never catch it**: it asks *"is what this branch's docs say true HERE?"* and was correctly green on all five. **Cross-branch equality is not correctness; correctness-per-branch is not equality.** The open owner call in *Other open work* is the candidate fix |
-| R10 | Two branches resolving to the same `minecraft_version` | 🔴 **LIVE.** The tag-reaping sweep is back on `master`, so every branch releases on push and two branches on one version means **each run deletes the other's release**. `release.yml` detects the collision and emits a `::warning::` — deliberately not a failure, which also means **nothing stops it**. ⚠️ R-x withdrew R-v's 4 extra branches, so the next new one is `26.x` — but `26.1`–`26.2` is a **4-version** band and the rule is load-bearing, not tidy |
+| R10 | Two branches resolving to the same `minecraft_version` | 🟡 **DISCHARGED FOR NOW, and the reason it was thought LIVE is itself the lesson.** Measured 2026-08-24: `origin/master` is at `26.2` and `mc/1.21.11` is **absent from the remote**, so no two branches share a value. The plan had asserted for four days that both sat at `1.21.11` — true when written, false the moment `master` was pushed at `26.2`, and nothing reported the change. ⚠️ **It re-arms the instant `mc/1.21.11` is pushed**, which is why the two must diverge *before* either goes out. The tag-reaping sweep is live on every branch, `release.yml` detects a collision and emits a `::warning::` — deliberately not a failure, so **nothing stops it** |
 | R11 | A band's release fails and nobody finds out | 🟡 **DOWNGRADED, still open.** It has happened once: §10.7 failed **four** band releases and was invisible for a day behind green local builds, a green ship gate, a green drift audit and a clean `git status`. `scripts/ci-watch.sh` (gate 8) reports four states rather than a boolean, because *"I could not see a run"* and *"the run passed"* are the two R11 conflates. ⚠️ **It is still a person running a command. A real close needs a notification, not a workflow** |
 | **R12** | **A skill is inert on a band and nothing says so** | 🟡 **MITIGATED 2026-08-19 (§22.1).** `SkillAvailability` now carries a **skill → required-id-paths** map rather than one field per skill; `MACES` is gated alongside `SPEARS`, and gating the next one is a single `GATED` entry with no call-site edit. The javadoc claim that every other skill *"predates the floor of the supported range"* is gone — it was load-bearing prose and R-v falsified it in a day. ⚠️ **R-x makes that sentence true again and it stays out**: it was only ever true by accident of the floor. Proven by 21 tests (was 15), and by mutation: making the gate dead (`return true`) reddens exactly the 4 wiring tests. ⚠️ **The registry-driven test did NOT fail under that mutation** — this band has both items, so only the `setSupportedForTesting` seam reaches the disabling half. Vacuity confirmed empirically, not argued. ⚠️ **Residual 1:** the map is still a hand-maintained list; a NEW skill whose items postdate the floor is added to `PrimarySkillType` and to nothing else, and nothing goes red. Auditing skills against required ids is not yet mechanical. ⚠️ **Residual 2 (R-x):** with the `1.20` line withdrawn, the `MACES` entry can never fire on any in-scope version — the only row that still exercises the gate on a real band is `SPEARS` |
 
@@ -1537,9 +1484,13 @@ test run in the shell that hides the bug proves nothing.**
 - [ ] 🔴 **Manifest debt piece 1** — see *Other open work*. Piece 2 shipped as
       `scripts/manifest-identity-audit.py` (Phase 18).
 - [ ] 🟡 **The `--require-bands` floors are hand-maintained** in `.github/workflows/drift-audit.yml`
-      and in ship-gate steps 9 and 10. **Now 6** (8.3's x.9, raised one cycle late). R-x withdrew the
-      `1.20` cuts, so the next — and, at current scope, only — raise is `26.x` (6 → 7). Nothing reminds
-      you; a stale floor is under-strict and the audit still passes.
+      and in ship-gate steps 9, 10 and 11. **Now 6** (8.3's x.9, raised one cycle late). ⚠️ **The next
+      raise is already earned and not yet made:** `mc/1.21.11` is cut and held, so the floor goes
+      **6 → 7 in the same push that publishes it**. R-x withdrew R-v's extra cuts, so `26.1.x` is the
+      only one after that. Nothing reminds you; a stale floor is under-strict and the audit still
+      passes.
+- [ ] 🟡 **R13 — the general overload-rebind shape**, and 🟡 **§31.5's 562 collision sites**. Both
+      carried out of §33; detail under §9.
 
 ---
 
@@ -1556,8 +1507,15 @@ test run in the shell that hides the bug proves nothing.**
 - **Never resolve a band difference by changing `minecraft_version` on `master`.**
 - **A guard that has never failed is not known to work.** Every script here carries a `--self-test` or
   a control run — because *"found nothing"* and *"there is nothing to find"* render identically.
-  🔑 **Twelve vacuous-assertion sightings so far**, the most recent inside a guard's own self-test.
-  Assume the next one is in whatever you are writing now.
+  🔑 **Thirteen vacuous-assertion sightings so far** — the most recent a collision audit under-
+  reporting by **52×** in the mode people actually run, exiting 1 either way so the exit code looked
+  identical. Assume the next one is in whatever you are writing now.
+- **A green gate is not evidence the code RUNS.** Five defect classes found in §29 – §33 read green on
+  every gate this repo owns, three of them blind *by construction*: a member present but wrong, a
+  mixin bound to the wrong live method, a seam that became a pass-through (`allow` is an **upper
+  bound**), a `@Shadow`/`@Accessor` member javac never type-checks against the target, and a
+  Minecraft name surviving as a **string literal**. Full detail under §9 — **read it before writing a
+  guard**, because each one was found by pulling on a row that looked like tooling noise.
 - **`BUILD SUCCESSFUL` is not "the tests ran."** Read the `N executed` line.
 - **Caveat-expiry pass** on every docs change: grep the **symptom**, not the file you edited. One wiki
   serves every band, so *"X works in \<version\>"* reads as *"X works for you"* three bands down. And
