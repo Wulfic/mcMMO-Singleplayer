@@ -1505,6 +1505,105 @@ first.
 
 ---
 
+## §43 — the live harness on `mc/26.1.2`, then THE PUSH — ⬜ IN PROGRESS
+
+✅ **AUTHORISED (owner, 2026-08-26):** scope is NEXT item 1 (boot check + gameplay smoke on the new
+band), **and the push hold R-ac is LIFTED for this session.** Item 2 (`-Xmaxerrs`) stays open.
+
+🔑 **Why item 1 comes before the push and not after.** `mc/26.1.2` was cut on structural evidence
+alone — a clean compile, `--check` green at `ZERO=0 OK=60`, 1,858/0 suite, four cross-branch gates at
+exit 0. **None of that is coverage.** §42 itself found an injector on that band that compiled
+perfectly and bound to nothing, and `mc/1.21.1` shipped a `/summon` origin gap past 67/67 injectors
+and a clean boot — only a live kill found it. Pushing publishes a release for that band, so the live
+run happens **first** or the evidence arrives after the players do.
+
+### 43.1 — the band's live harness
+
+Run on a `mc/26.1.2` checkout, **`--self-test` first on every gate that has one**:
+
+- [ ] gate 2 — `python scripts/mixin-allow-audit.py --mc 26.1.2 --check`. **Before** the build.
+- [ ] gate 1 — `./gradlew --no-daemon --stacktrace build -Pmod_version=1.3.0` (the resolved,
+      `-SNAPSHOT`-stripped value CI uses — a bare `build` is not what ships). ⚠️ Read the
+      **`N executed`** line, not `BUILD SUCCESSFUL`; confirm `> Task :test` is bare, not `FROM-CACHE`.
+      ⚠️ Confirm `build/libs/` holds exactly ONE non-sources jar before reading a name off it.
+      ⚠️ **R14 — the suite flakes at ~24% of tests** (Byte Buddy self-attach racing 4 forks). A red
+      run is re-run ONCE; a second red in the same place is a regression, not the flake.
+- [ ] gate 3 — `scripts/boot-check.sh --self-test`, then `scripts/boot-check.sh <jar> 26.1.2`.
+      ⚠️ **Exit 1 = the mod is bad. Exit 2 = ENVIRONMENT and NOTHING was proven about the mod.**
+      Never report a 2 as a boot failure.
+- [ ] gate 6 — `scripts/gameplay-smoke.sh <jar> 26.1.2`, then `GAMEPLAY_SMOKE_CONTROL=1` on the same
+      scenario, which **must FAIL**. A harness whose control also passes has measured nothing.
+      ✅ **Feasibility measured before planning, not assumed:** Modrinth publishes fabric-carpet
+      `26.1`, and its `game_versions` list includes `26.1.2` — queried 2026-08-26. Java 25 is the
+      active JDK (Temurin 25.0.4), which this band needs (`java_version=25`).
+      🔑 **Expect the harness's own quirks, not just the mod's**: carpet's `use once` arms ONE use per
+      TICK (§35), and `SPAWN_ITEM_USE` is not driveable by this harness at all — that gap is open
+      debt above, not a finding of this run.
+
+### 43.2 — `TODO.md` says something false, and it gets fixed first
+
+§41's heading still reads *"master DONE, the seven-band sweep is what remains"* and its sweep
+checklist is unticked. **Read from disk 2026-08-26: the sweep is DONE** — all nine branches carry
+`java_version` (25 on `master` + `mc/26.1.2`, 21 on the seven `1.21.x` bands),
+`mod_version=1.3.0-SNAPSHOT` and `mockito_version=5.23.0`. A plan file that under-reports finished
+work invites someone to redo it on eight branches.
+
+- [ ] Correct the §41 heading and tick its sweep, citing the measured values.
+
+### 43.3 — x.9, the band floor, BEFORE the push
+
+- [ ] `BAND_COUNT: '6'` → `'8'` in `.github/workflows/drift-audit.yml`. **`master` first (rule 1).**
+      🔑 **8, not 9.** `--require-bands` counts `mc/**` branches ONLY; `master` is not a band. After
+      this push the remote holds eight: `26.1.2 · 1.21.11 · .10 · .8 · .5 · .4 · .3 · .1`. §37
+      measured the failure mode — passing one too many returns **exit 2** while the same run still
+      prints *"No drift"* above it.
+- [ ] Sweep the identical file to all eight bands — `.github/workflows/*.yml` is under gate 10 and
+      must be **byte-identical** on every branch, so a `master`-only edit turns gate 10 red.
+      ⚠️ **`git add` on `.github/**` stages NOTHING** — the directory is gitignored (R-g) while the
+      files are tracked (R-r). It needs `-f`, or the commit ships without the workflow.
+      ✅ This path is **not** in `release.yml`'s `paths:` filter, so the edit fires no release on its
+      own. It rides the push either way.
+
+### 43.4 — the push, and what it actually does
+
+🔴 **BLAST RADIUS, stated before the command runs.** Nine branches push; `gradle.properties` moved on
+every one of them and **a `paths:` filter matches the WHOLE PUSH**, so `release.yml` fires
+**nine release runs**, each of which strips `-SNAPSHOT` and publishes **`mc<MCVER>-v1.3.0`**. Two of
+the nine branches — `mc/26.1.2` and `mc/1.21.11` — **do not exist on the remote yet** and are created
+by this push. This is outward-facing and visible to players.
+
+- [ ] Re-read `git ls-remote` and record every remote sha **before** pushing — that record is the
+      rollback, and it cannot be reconstructed afterwards.
+- [ ] Push `master` first (rule 1), then the eight bands.
+- [ ] **After** the push, the gates that can only run against the remote: 7 (`--self-test`, then
+      `--master master`), 9, 10, 11 at `--require-bands 8`, and 8 (`ci-watch.sh --mutate`, then
+      `ci-watch.sh HEAD`, **from the branch that was pushed**).
+      ⚠️ **Exit 2 is not a pass** on 9/10/11. ⚠️ Post-push, `drift-audit.py`'s preference for remote
+      refs stops being a trap and becomes the correct reading — the scratch-clone workaround is for
+      **pre**-push runs only.
+- [ ] Read the nine release runs. 🔴 **Red is the NORMAL outcome of a `src/**` push without a bump** —
+      but this push HAS a bump, so a red run here is a real failure. **Read the failing STEP.**
+
+### What I am NOT doing
+
+* **Not item 2** (`-Xmaxerrs`). Owner scoped this session to item 1 + the push; the cap has misled a
+  sizing twice and stays on the NEXT list.
+* **Not touching R14's flake remedy.** `build.gradle`, inside the `paths:` filter, own decision.
+* **Not re-measuring the band.** §39 settled `26.1`/`26.1.1`/`26.1.2` at zero of 1424 records apart.
+* **Not lowering any `--require-bands`** to make a gate green.
+
+### Rollback
+
+| step | undo |
+|---|---|
+| 43.1 | read-only — builds and throwaway servers under `build/`. Nothing committed |
+| 43.2 / 43.3 | `git revert <sha>` per branch; neither path is in `release.yml`'s `paths:` |
+| 43.4, branches that EXIST on the remote | `git push --force-with-lease origin <sha-recorded-above>:<branch>` — a rewrite of a shared branch, **owner call, not mine** |
+| 43.4, the two NEW remote branches | `git push origin --delete mc/26.1.2` / `mc/1.21.11` |
+| 43.4, a published release | ⚠️ **the release is the damage, not the diff.** Deleting a tag DRAFTS its release; the jar may already be downloaded. This does not fully reverse |
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
