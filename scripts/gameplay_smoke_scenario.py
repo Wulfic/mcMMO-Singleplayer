@@ -270,9 +270,9 @@ PHASES: list[Phase] = [
         "RENAMED from `combat-egg-control` on 2026-08-19: it drives /summon (SpawnReason COMMAND), "
         "never a spawn egg, and the old name hid that. On mc/1.21.1 the two came apart -- "
         "loadEntityWithPassengers lost its SpawnReason parameter, so /summon-ed mobs went unstamped "
-        "while spawn eggs were stamped correctly throughout. ⚠️ SPAWN_ITEM_USE IS THEREFORE NOT "
-        "COVERED HERE: a spawn-egg phase was attempted and withdrawn (carpet's `use once` will not "
-        "place an egg -- see TODO.md and .agent/memory/gotchas.md). This phase covers COMMAND only.",
+        "while spawn eggs were stamped correctly throughout. ⚠️ This phase covers COMMAND ONLY; "
+        "SPAWN_ITEM_USE is combat-spawn-egg-control's job, directly below. The two are separate "
+        "phases because mc/1.21.1 is proof that the two origins can regress independently.",
         commands=[
             _CLEAR_EAST,
             _give("weapon.mainhand", "minecraft:air"),
@@ -295,6 +295,70 @@ PHASES: list[Phase] = [
         up=[],
         flat=["UNARMED", "SWORDS", "AXES"],
         requires_markers=["summontarget-acquired", "summontarget-stamped", "summontarget-killed"],
+    ),
+    Phase(
+        name="combat-spawn-egg-control",
+        note="The SPAWN_ITEM_USE twin of combat-summon-control. MobOrigins maps THREE constants onto "
+        "PLAYER_PLACED -- SPAWN_ITEM_USE, COMMAND and DISPENSER -- and until this phase the harness "
+        "covered COMMAND alone. That is the exact seam mc/1.21.1 came apart on: "
+        "loadEntityWithPassengers lost its SpawnReason parameter, so /summon-ed mobs went UNSTAMPED "
+        "while spawn eggs stayed correct. The two paths can regress independently, so they are "
+        "asserted independently. Like its sibling, the subject is the STAMP, asserted directly.\n"
+        "\n"
+        "⚠️⚠️ THE SPECIES IS LEAD-BEARING AND IT IS NOT A COW. The world is `level-type=flat` and "
+        "superflat SPAWNS COWS -- _acquire_natural_target below depends on exactly that. So a "
+        "`@e[type=cow,sort=nearest]` probe near the spawn point can tag a WORLDGEN cow and report a "
+        "false PASS, which is worse than the false fail this phase replaces. Mooshroom needs "
+        "mushroom-fields, superflat plains never generates one, so `@e[type=mooshroom]` is "
+        "unambiguous by construction. `mooshroom_spawn_egg` is in all 14 versions of "
+        "scripts/mc-ids.txt, and MOOSHROOM's builder chain (EntityTypes, read from bytecode) never "
+        "calls notInPeaceful(), so `difficulty peaceful` in SETUP cannot silently refuse it -- "
+        "EntityType.canSpawn is SpawnEggItem.useOn's only silent-FAIL exit.\n"
+        "\n"
+        "⚠️ `use once` IS THE ONLY SAFE FORM HERE. Carpet's USE reads `itemUseCooldown` first and "
+        "returns TRUE off that branch having done nothing -- a swallowed click that reports success. "
+        "`Action.tick` calls `inactiveTick` (which zeroes the cooldown) only when `interval == 1`, "
+        "which `once()` satisfies and `use interval N` does not. Do not convert this to an interval.",
+        commands=[
+            _CLEAR_EAST,
+            # Leftovers from an earlier run of this phase would be tagged by the probe below.
+            "kill @e[type=minecraft:mooshroom]",
+            # Something to click. The floor is NOT used: a phase that depends on blocks it did not
+            # place is a phase that breaks when a mining phase is reordered above it.
+            "setblock 2 -60 0 minecraft:stone",
+            _give("weapon.offhand", "minecraft:air"),
+            _give("weapon.mainhand", "minecraft:mooshroom_spawn_egg"),
+            # Aim at the TOP face centre. SpawnEggItem.useOn spawns at pos.relative(face) when the
+            # clicked block has a collision shape, so the mob lands at 2,-59,0 -- which _CLEAR_EAST
+            # above has just guaranteed is air. Eye is at ~-58.38, so this ray first meets the block
+            # at the y=-59 plane, x=2.5: a top-face hit, not a side-face one.
+            *_look(2.5, -59.0, 0.5),
+            f"player {BOT} use once",
+            "SLEEP 2",
+            "execute positioned 2.5 -59 0.5 run "
+            "tag @e[type=minecraft:mooshroom,sort=nearest,limit=1] add eggtarget",
+            # An action that did not happen must report INCONCLUSIVE, never PASS.
+            "execute if entity @e[tag=eggtarget] run say ===MARK eggtarget-spawned===",
+            # THE SUBJECT. mcMMO writes `mcmmo:mob_origin` ONLY for an origin that does not count, so
+            # a player-placed mob must HAVE the path -- `if`, the converse of the natural-target
+            # probe. Path-existence form: no value match, no version-specific predicate grammar.
+            'execute if data entity @e[tag=eggtarget,limit=1] '
+            '"fabric:attachments"."mcmmo:mob_origin" run say ===MARK eggtarget-stamped===',
+            "data merge entity @e[tag=eggtarget,limit=1] {NoAI:1b,PersistenceRequired:1b}",
+            # ⚠️ MANDATORY, not tidiness: the strike position below is INSIDE this block, and every
+            # later combat phase tps its own target to 2.5 -60 0.5 too.
+            "setblock 2 -60 0 minecraft:air",
+            "tp @e[tag=eggtarget,limit=1] 2.5 -60 0.5",
+            _give("weapon.mainhand", "minecraft:air"),
+            *_look(2.5, -59.3, 0.5),
+            STRIKE,
+            "SLEEP 25",
+            HALT,
+            "execute unless entity @e[tag=eggtarget] run say ===MARK eggtarget-killed===",
+        ],
+        up=[],
+        flat=["UNARMED", "SWORDS", "AXES"],
+        requires_markers=["eggtarget-spawned", "eggtarget-stamped", "eggtarget-killed"],
     ),
     Phase(
         name="combat-fist",
