@@ -1360,7 +1360,7 @@ bump were bundled into one commit, and why nothing here is pushed.
 
 ---
 
-## §42 — cut `mc/26.1.2` — ✅ AUTHORISED (owner, 2026-08-26)
+## §42 — cut `mc/26.1.2` — ✅ CUT, and the 16-version scope is CLOSED
 
 📌 **Renumbered.** §39 and the memory call this cut "§40"; the gate-7 ruling took that slot first.
 Same work, same scope: the band covers `26.1`, `26.1.1`, `26.1.2`, pins `minecraft_version=26.1.2`,
@@ -1369,10 +1369,17 @@ complete** — nine branches.
 
 ### 🔴 The one check this cut OWES, before anything else
 
-The band pins **one** `fabric_version` and must RUN on all three versions. `0.155.2+26.1.2` is the
-candidate. **Whether it loads on `26.1` is a `fabric.mod.json` `depends` fact to be READ out of the
-jar, not assumed** — §39 named it and deliberately did not answer it. If it does not load on `26.1`,
-**stop and report**; do not pin a version that cannot run on its own band.
+✅ **ANSWERED, by reading the jar** (2026-08-26): `fabric-api 0.155.2+26.1.2` declares
+`"minecraft": "~26.1-"` — that is `>=26.1 <26.2`, so **one pin serves the whole band**. Also
+`"java": ">=25"` (matches `java_version=25`) and `"fabricloader": ">=0.18.4"` (our `0.19.3`
+satisfies it). §39 named this rather than assuming it, and the answer came out of the artefact.
+
+🔴 **But the same check on ModMenu came back NO, and that was not on anyone's list.** ModMenu
+publishes **nothing** targeting `26.1`: its releases run `18.0.0` (predicate `>1.26-`), then
+`19.0.0-alpha.1` and *everything* after, all of which demand `>=26.2`. **`master`'s `20.0.1` would
+refuse to load anywhere on this band.** `18.0.0` is the only build whose declared range admits
+`26.1`, so that is the pin — read from the jars' own `fabric.mod.json`, not inferred from version
+numbers. Cloth Config was fine: `26.1.154` is this line's own build and declares `>=26.1-`.
 
 ### Ordering
 
@@ -1394,6 +1401,58 @@ into an eight-band sweep.
       `26.2` carries a 5-arg overload alongside it, and a call rebinds **silently** because javac
       must accept it. This is the §33.4 shape and it does **not** announce itself on a compile.
 - [ ] **x.9** `--require-bands` / `BAND_COUNT` — moves with the push, not before it.
+
+### ✅ Outcome — measured 2026-08-26
+
+| | |
+|---|---|
+| branch | `mc/26.1.2`, cut off `master` at §41, **local only, never pushed** |
+| toolchain | `minecraft_version=26.1.2`, `supported_minecraft_versions=26.1,26.1.1,26.1.2`, `fabric_version=0.155.2+26.1.2`, `modmenu_version=18.0.0`, `cloth_config_version=26.1.154`, `java_version=25`, no `yarn_mappings` |
+| `.github` inheritance | exactly the three tracked paths (x.4) |
+| main source | **5 changes, ALL in `fabric/`** — the platform seal held for the third real MC API break |
+| mixin gate | `--check` **PASSES**: `ZERO=0  OK=60  SLICE=1` (total 61), the SLICE row hand-verified |
+| suite | **1,858 executed**, 3 red before the `master`-side artefacts landed, **0 after** |
+
+### 🔑🔑 Two findings worth more than the fixes
+
+1. **§39's `knockback` prediction was measured FALSE — in the safe direction.** It warned this band
+   would carry the **R13 silent-rebind** shape: *"the band has the 3-arg form, `26.2` carries a
+   5-arg alongside it, and a call rebinds silently because javac must accept it."* `26.2` has **no
+   3-arg `knockback` at all** — only the `DamageSource`-aware forms. So it is a hard compile error
+   in both directions and is the one version-boundary hazard on this band that **announces
+   itself**. 🔑 The general lesson stands and is the reason to keep writing predictions down: it was
+   checked, and checking is what turned a suspected silent hazard into a known loud one.
+2. **An injector COMPILED PERFECTLY AND BOUND TO NOTHING.** `FishingBobberUseMixin`'s `@At` target
+   names `Lnet/minecraft/advancements/triggers/FishingRodHookedTrigger;` **inside a selector
+   string**, and the `triggers` → `criterion` package move is invisible to javac. `allow=2,
+   computed=0`. **Every other gate was green.** This is the §33.5 shape, and it is exactly why x.7
+   runs `mixin-allow-audit.py` *before* the full gate: *"the compile errors went to zero"* has never
+   been the finish line.
+
+### 🔑 x.6 asked, and the answer was no on all five
+
+Every difference was checked for absorption on `master` first. None is absorbable: `EntityType.WOLF`
+does not exist on `26.2`, `advancements.criterion` does not exist on `26.2`, `EntitySpawnRequest`
+does not exist here, `monster.cubemob` does not exist here, and `knockback`'s two signatures share no
+common form. **There is no overlapping name on both sides for any of them**, which is R-m′'s stated
+failure condition for absorption. The band diff is the minimum.
+
+### 🔑 The spawn-origin mixin's own doc paid for itself
+
+It told the next reader to re-read the `create()` chain off the bytecode **before moving the
+injector, in either direction** — and it was right to insist. On this band `create(Level,
+EntitySpawnReason)` **is** the bottom: it calls `factory.create(type, level)` directly, returns from
+two places (matching `allow = 2`), and the six-argument overload delegates into it, so nothing
+double-stamps. ⚠️ The doc then went on to describe `26.2`'s chain **as fact**, which is false here —
+the same *"MC fact recorded as the reason for code"* shape as GitHub #7. It now states this band's
+chain and says outright that the bottom is a per-band fact.
+
+### ⚠️ What the cut does NOT yet have
+
+* **No boot check and no gameplay smoke on `26.1.2`.** `master` has both on `26.2` (§35). A clean
+  compile and a passing allow-audit are **structural**; `mc/1.21.1` shipped a `/summon` origin gap
+  past 67/67 injectors and a clean boot, and only a live kill found it.
+* **Not pushed**, so `BAND_COUNT` / `--require-bands` stay at their current values (x.9).
 
 ### What I am NOT doing
 
