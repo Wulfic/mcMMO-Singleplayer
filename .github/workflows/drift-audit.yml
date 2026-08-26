@@ -114,9 +114,17 @@ env:
   # '5' against six bands on origin. Nothing went red, because nothing can.
   #
   # Counts mc/** branches only, master excluded -- the same meaning for all three
-  # scripts below. Six bands on origin as of 2026-08-19: 1.21.1, 1.21.3, 1.21.4,
-  # 1.21.5, 1.21.8, 1.21.10.
-  BAND_COUNT: '6'
+  # scripts below. EIGHT bands on origin as of 2026-08-26: 1.21.1, 1.21.3, 1.21.4,
+  # 1.21.5, 1.21.8, 1.21.10, 1.21.11 and 26.1.2. The last two were cut locally in
+  # sections 33 and 42 and reached the remote in the same push that raised this
+  # number, which is why it moves 6 -> 8 in one step.
+  #
+  # 8, NOT 9. master is not a band: it IS the newest supported band (ruling R-a)
+  # and lives outside the mc/** namespace that every one of these scripts globs.
+  # Section 37 measured the failure mode of guessing high -- --require-bands 8
+  # against seven bands returns EXIT 2 while the very same run still prints
+  # "No drift" above it. Read the exit code, never the sentence.
+  BAND_COUNT: '8'
 
 jobs:
   audit:
