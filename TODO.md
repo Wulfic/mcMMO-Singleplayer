@@ -1512,7 +1512,7 @@ first.
 
 ---
 
-## §43 — the live harness on `mc/26.1.2`, then THE PUSH — ⬜ IN PROGRESS
+## §43 — the live harness on `mc/26.1.2`, then THE PUSH — ✅ DONE, all nine branches shipped
 
 ✅ **AUTHORISED (owner, 2026-08-26):** scope is NEXT item 1 (boot check + gameplay smoke on the new
 band), **and the push hold R-ac is LIFTED for this session.** Item 2 (`-Xmaxerrs`) stays open.
@@ -1612,17 +1612,49 @@ every one of them and **a `paths:` filter matches the WHOLE PUSH**, so `release.
 the nine branches — `mc/26.1.2` and `mc/1.21.11` — **do not exist on the remote yet** and are created
 by this push. This is outward-facing and visible to players.
 
-- [ ] Re-read `git ls-remote` and record every remote sha **before** pushing — that record is the
+- [x] Re-read `git ls-remote` and record every remote sha **before** pushing — that record is the
       rollback, and it cannot be reconstructed afterwards.
-- [ ] Push `master` first (rule 1), then the eight bands.
-- [ ] **After** the push, the gates that can only run against the remote: 7 (`--self-test`, then
+- [x] Push `master` first (rule 1), then the eight bands.
+- [x] **After** the push, the gates that can only run against the remote: 7 (`--self-test`, then
       `--master master`), 9, 10, 11 at `--require-bands 8`, and 8 (`ci-watch.sh --mutate`, then
       `ci-watch.sh HEAD`, **from the branch that was pushed**).
       ⚠️ **Exit 2 is not a pass** on 9/10/11. ⚠️ Post-push, `drift-audit.py`'s preference for remote
       refs stops being a trap and becomes the correct reading — the scratch-clone workaround is for
       **pre**-push runs only.
-- [ ] Read the nine release runs. 🔴 **Red is the NORMAL outcome of a `src/**` push without a bump** —
+- [x] Read the nine release runs. 🔴 **Red is the NORMAL outcome of a `src/**` push without a bump** —
       but this push HAS a bump, so a red run here is a real failure. **Read the failing STEP.**
+
+### ✅ 43.4 Outcome — the push, measured 2026-08-26
+
+**Every push was a FAST-FORWARD** (each remote sha proved an ancestor of its local tip before any
+command ran), so no history was rewritten and nothing on the remote was destroyed. `master` went
+first. Pre-push remote shas — the rollback record, unreconstructable afterwards:
+
+```
+master     bdc429115      mc/1.21.5    e9bd67a60
+mc/1.21.1  ce3f91c41      mc/1.21.8    b64088dcf
+mc/1.21.3  14206a5aa      mc/1.21.10   f90571abe
+mc/1.21.4  e0f9ab825      mc/1.21.11   ABSENT on origin -- created by this push
+mc/26.1.2  ABSENT on origin -- created by this push
+```
+
+| | |
+|---|---|
+| branches | 9 pushed: 7 fast-forwards, **2 created on the remote** (`mc/26.1.2`, `mc/1.21.11`) |
+| release runs | **9 fired, 9 green.** This push carried a bump, so a red run would have been a real failure rather than R-t's ordinary stale-version refusal |
+| releases | **9 published at `v1.3.0`**, `mc26.2` / `mc26.1.2` / `mc1.21.11` / `.10` / `.8` / `.5` / `.4` / `.3` / `.1` — the whole declared 16-version scope is now downloadable |
+| gate 8 | `ci-watch.sh --mutate` **9 cases, 5/5 mutations caught**, then `ci-watch.sh HEAD` → exit 0 |
+| gates 7/9/10/11 | re-run against **`origin`** post-push (where the remote preference is now the CORRECT reading, not the trap): `0 MISSING` · no collisions · **50 shared paths identical** · no violations |
+
+⚠️ **`mc/1.21.11` had never been pushed since it was cut** — it went out in this same push, which is
+why `BAND_COUNT` moved 6 → 8 in one step rather than 7 → 8.
+
+🔑 **Two carried-debt items were discharged by evidence rather than by argument**, both listed
+below as needing *"the next real run"*:
+* **`ci-watch.sh --mutate` on Windows** — M5 (*hand the raw bash path to a native child*) was caught,
+  and the case *"path bridge holds with MSYS conversion OFF"* passed. Demonstrated, not asserted.
+* **`gameplay-smoke.sh`'s path bridge** — all three call sites that needed a running server
+  (`--commands`, `--check <log>`, `--check --profile`) executed in the 26.1.2 run.
 
 ### What I am NOT doing
 
@@ -1690,10 +1722,12 @@ instead of grepping one hardcoded skill name (⚠️ the wording in `SkillAvaila
       🔑🔑 **That blob was a perfectly valid manifest, for the wrong branch.** No per-branch check,
       automated or human, can tell "correct manifest" from "correct manifest belonging to a different
       branch" — on the branch it came from, every record is true. Only this piece can.
-- [ ] ⬜ **`gameplay-smoke.sh`'s path bridge is only PARTIALLY demonstrated** — three call sites need a
-      running server and were fixed by inspection. Confirm on the next real smoke run.
-- [ ] ⬜ **`ci-watch.sh --mutate` on Windows.** Fixed by Phase 20's `cygpath -w` bridge; re-confirm on
-      the next ship gate that step 8's failure mode is *demonstrated* rather than asserted.
+- [x] ✅ **`gameplay-smoke.sh`'s path bridge — CLOSED 2026-08-26 (§43.1).** The three call sites that
+      needed a running server (`--commands`, `--check <log>`, `--check --profile`) all executed in the
+      `26.1.2` run, which scored 30/30 with the mod-less control failing as it must.
+- [x] ✅ **`ci-watch.sh --mutate` on Windows — CLOSED 2026-08-26 (§43.4).** Demonstrated, not
+      asserted: 9 cases pass including *"path bridge holds with MSYS conversion OFF"*, and mutation
+      **M5** (*hand the raw bash path to a native child*) is caught.
 
 ---
 
