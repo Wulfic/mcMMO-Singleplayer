@@ -229,7 +229,11 @@ def find_jar_naming(mc: str) -> tuple[Path, str]:
 
 
 def choose_lookup_jar(
-    mc: str, yarn_mappings: str | None, merged: list[str], deobf: list[str]
+    mc: str,
+    branch_mc: str,
+    yarn_mappings: str | None,
+    merged: list[str],
+    deobf: list[str],
 ) -> tuple[str, str, str | None]:
     """`choose_jar`, relaxed for a CROSS-VERSION signature lookup. Returns (jar, naming, note).
 
@@ -281,8 +285,28 @@ def choose_lookup_jar(
         )
 
     if any(n for _, n in known if n == branch):
-        # The branch's own naming is available: no relaxation, no note, same answer the gates get.
-        return choose_jar(mc, yarn_mappings, merged, deobf), branch, None
+        if mc == branch_mc:
+            # THIS BRANCH'S OWN VERSION. No relaxation at all, no note: exactly the answer the
+            # gates get, exact declared yarn build included.
+            return choose_jar(mc, yarn_mappings, merged, deobf), branch, None
+
+        # 🔴 A DIFFERENT VERSION, SAME NAMING. `yarn_mappings` names ONE build of ONE version --
+        # `1.21.11+build.6` -- so applying it to 1.21.10 asks for a jar that cannot exist. That is
+        # what it did on first run: probing mc/1.21.11's own 12-version band table refused 11 of
+        # the 12, because every jar but its own failed `yarn_mappings in name`. The coordinate is a
+        # fact about the BRANCH, not a rule about jars.
+        #
+        # So here the requirement is only "this naming, and exactly one" -- still no alphabet, and
+        # still a refusal when the cache cannot answer unambiguously.
+        same = sorted(n for n, k in known if k == branch)
+        if len(same) == 1:
+            return same[0], branch, None
+        raise JarSelectionError(
+            f"error: {len(same)} {branch}-named jars for Minecraft {mc}; cannot tell which:{nl}  "
+            + f"{nl}  ".join(same)
+            + f"{nl}  (this branch ships {branch_mc}, so its declared yarn_mappings does not"
+            f"{nl}   disambiguate another version -- refusing rather than sorting.)"
+        )
 
     other = {n for _, n in known}
     if len(other) != 1:
@@ -451,6 +475,23 @@ def selftest_lookup_selection() -> int:
         if got != want:
             failures.append(f"{label}: got {got!r}, wanted {want!r}")
 
+    def resolves(label: str, want, *args) -> None:
+        """Like `ok`, but a REFUSAL is a reported failure rather than an escaping exception.
+
+        🔑 `JarSelectionError` subclasses `SystemExit`, so an unexpected refusal inside a positive
+        case does not fail the case -- it kills the interpreter mid-run, and everything after it
+        never reports. Section 37's mutation lesson, one level down: a self-test that CRASHES
+        instead of reporting is a self-test whose output cannot be read, and the first mutation
+        run for this very function died exactly that way.
+        """
+        try:
+            got = choose_lookup_jar(*args)
+        except JarSelectionError as e:
+            failures.append(f"{label}: REFUSED where it should have resolved to {want!r} "
+                            f"-- {str(e).splitlines()[0]}")
+            return
+        ok(label, got, want)
+
     def refuses(label: str, *args) -> None:
         try:
             got = choose_lookup_jar(*args)
@@ -460,48 +501,69 @@ def selftest_lookup_selection() -> int:
 
     # 1. THE LIVE javap-mc.sh DEFECT. An OFFICIAL-named branch asking about a yarn version whose
     #    cache also holds an unprovenanced layered jar must get the YARN one, not the alphabet's.
-    jar, naming, note = choose_lookup_jar("1.21.11", None, [MOJ, YARN_JAR], [])
-    ok("official branch, yarn version: picks the yarn jar", jar, YARN_JAR)
-    ok("...and reports it as yarn", naming, YARN)
-    if not note:
-        failures.append("cross-naming lookup returned no note; the caller cannot warn the reader")
+    try:
+        jar, naming, note = choose_lookup_jar("1.21.11", "26.2", None, [MOJ, YARN_JAR], [])
+        ok("official branch, yarn version: picks the yarn jar", jar, YARN_JAR)
+        ok("...and reports it as yarn", naming, YARN)
+        if not note:
+            failures.append("cross-naming lookup returned no note; the caller cannot warn "
+                            "the reader")
+    except JarSelectionError as e:
+        failures.append(f"official branch, yarn version: REFUSED -- {str(e).splitlines()[0]}")
 
     # 2. The branch's OWN naming is present -> no relaxation at all, and no note.
-    ok("yarn branch on its own version",
-       choose_lookup_jar("1.21.11", "1.21.11+build.6", [MOJ, YARN_JAR], []),
-       (YARN_JAR, YARN, None))
+    resolves("yarn branch on its own version", (YARN_JAR, YARN, None),
+             "1.21.11", "1.21.11", "1.21.11+build.6", [MOJ, YARN_JAR], [])
 
     # 3. ...and the strictness is choose_jar's, not a looser one: a wrong yarn BUILD still refuses
     #    even though a yarn-named jar for that version is sitting right there.
-    refuses("yarn branch, wrong yarn build", "1.21.11", "1.21.11+build.9", [YARN_JAR], [])
+    refuses("yarn branch, wrong yarn build on ITS OWN version",
+            "1.21.11", "1.21.11", "1.21.11+build.9", [YARN_JAR], [])
 
     # 4. Only an unprovenanced jar cached -> REFUSE. Never answer about a Minecraft nobody named.
-    refuses("only a layered mojmap jar", "1.21.11", None, [MOJ], [])
+    refuses("only a layered mojmap jar", "1.21.11", "26.2", None, [MOJ], [])
 
     # 5. It relaxes ONLY when it has to. Both namings cached and one of them IS the branch's ->
     #    take the branch's, strictly, with no note, even though a foreign jar is sitting there.
     #    (The "neither naming is the branch's" case is unreachable while there are exactly two
     #    namings -- see the comment on that branch in choose_lookup_jar.)
-    ok("official branch ignores a foreign jar it does not need",
-       choose_lookup_jar("1.21.11", None, [YARN_JAR], [DEOBF.replace("26.2", "1.21.11")]),
-       (DEOBF.replace("26.2", "1.21.11"), OFFICIAL, None))
+    resolves("official branch ignores a foreign jar it does not need",
+             (DEOBF.replace("26.2", "1.21.11"), OFFICIAL, None),
+             "1.21.11", "26.2", None, [YARN_JAR], [DEOBF.replace("26.2", "1.21.11")])
 
     # 6. An official branch asking about another OFFICIAL version needs no note.
-    ok("official branch, official version",
-       choose_lookup_jar("26.2", None, [], [DEOBF]), (DEOBF, OFFICIAL, None))
+    resolves("official branch, official version", (DEOBF, OFFICIAL, None),
+             "26.2", "26.2", None, [], [DEOBF])
 
     # 7. A yarn branch asking about a version cached only as deobf gets it, WITH a note.
-    jar7, naming7, note7 = choose_lookup_jar("26.2", "1.21.11+build.6", [], [DEOBF])
-    ok("yarn branch, official-only version", (jar7, naming7), (DEOBF, OFFICIAL))
-    if not note7:
-        failures.append("yarn->official lookup returned no note")
+    try:
+        jar7, naming7, note7 = choose_lookup_jar("26.2", "1.21.11", "1.21.11+build.6", [], [DEOBF])
+        ok("yarn branch, official-only version", (jar7, naming7), (DEOBF, OFFICIAL))
+        if not note7:
+            failures.append("yarn->official lookup returned no note")
+    except JarSelectionError as e:
+        failures.append(f"yarn branch, official-only version: REFUSED -- "
+                        f"{str(e).splitlines()[0]}")
 
     # 8. Nothing cached -> refuse.
-    refuses("empty cache", "1.21.11", None, [], [])
+    refuses("empty cache", "1.21.11", "26.2", None, [], [])
 
     # 9. Two jars in the SAME foreign naming -> ambiguous, refuse rather than sort.
-    refuses("two foreign jars, one naming", "1.21.11", None,
+    refuses("two foreign jars, one naming", "1.21.11", "26.2", None,
             [YARN_JAR, YARN_JAR.replace("-v2.jar", "-v2.copy.jar")], [])
+
+    # 🔴 10. THE REGRESSION THIS `branch_mc` PARAMETER EXISTS FOR.
+    #     A yarn branch asking about ANOTHER yarn version. `yarn_mappings` names one build of ONE
+    #     version, so requiring it here asks for a jar that cannot exist -- and on first run this
+    #     refused 11 of the 12 versions in mc/1.21.11's own band table. The coordinate is a fact
+    #     about the BRANCH, not a rule about jars.
+    resolves("yarn branch, a DIFFERENT yarn version", (OTHER_YARN, YARN, None),
+             "1.21.8", "1.21.11", "1.21.11+build.6", [OTHER_YARN], [])
+
+    # 11. ...and it is still not the alphabet: two yarn jars for that other version is ambiguous,
+    #     because the branch's coordinate cannot disambiguate a version it does not describe.
+    refuses("yarn branch, a different yarn version cached twice", "1.21.8", "1.21.11",
+            "1.21.11+build.6", [OTHER_YARN, OTHER_YARN.replace("build.1", "build.2")], [])
 
     print("=== SELF-TEST: cross-version lookup selection ===")
     if failures:
@@ -509,7 +571,7 @@ def selftest_lookup_selection() -> int:
             print(f"  FAIL -- {f}")
         print(f"  {len(failures)} failure(s)")
         return 1
-    print("  PASS -- 9 cases: a foreign naming is used only when it is the ONLY one and is")
+    print("  PASS -- 11 cases: a foreign naming is used only when it is the ONLY one and is")
     print("          announced; the branch's own naming keeps choose_jar's full strictness.")
     return 0
 
@@ -545,7 +607,8 @@ def main() -> int:
     if args.lookup:
         merged, deobf = cached_jars(mc)
         name, naming, note = choose_lookup_jar(
-            mc, gradle_prop_opt("yarn_mappings"), list(merged), list(deobf)
+            mc, gradle_prop("minecraft_version"), gradle_prop_opt("yarn_mappings"),
+            list(merged), list(deobf)
         )
         print(f"{mc}\t{naming}\t{(merged | deobf)[name]}\t{note or ''}")
         return 0

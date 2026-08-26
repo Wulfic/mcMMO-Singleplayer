@@ -84,7 +84,8 @@ def jar_for(version: str) -> tuple[Path | None, str]:
         return None, ""
     try:
         name, naming, _ = choose_lookup_jar(
-            version, gradle_prop_opt("yarn_mappings"), list(merged), list(deobf)
+            version, gradle_prop("minecraft_version"), gradle_prop_opt("yarn_mappings"),
+            list(merged), list(deobf)
         )
     except JarSelectionError as e:
         print(str(e), file=sys.stderr)
