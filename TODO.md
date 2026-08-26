@@ -25,65 +25,72 @@ manifest — a lookup, not a judgment call.
 
 ## 🔴 WHERE THIS STANDS RIGHT NOW — read before touching anything
 
-✅ **Re-measured 2026-08-26 from `git branch`, `gradle.properties` and the suite runs of this
-session — not carried forward.** Three separate editions of this file described a status that had
-already changed: a status sentence is never updated by the commit that changes the status, because
-nothing reads it. **Re-measure before quoting this table.**
+✅ **Re-measured 2026-08-26 (session 25) from `git rev-list --count origin/<b>..<b>`, `gradle.properties`
+and this session's own build runs — not carried forward.** Four separate editions of this file have now
+described a status that had already changed, the most recent being this very block: it still said
+*"the push hold STANDS"* and *"`26.1.2` NOT boot-checked"* **after** §43 lifted the hold, smoked the
+band and pushed all nine. **A status sentence is never updated by the commit that changes the
+status, because nothing reads it.** Re-measure before quoting this table.
 
 | | state |
 |---|---|
-| branches | **NINE.** `master` (`26.2`) + `mc/26.1.2` + the seven `1.21.x` bands. ⚠️ **Re-measure with `git rev-list --count origin/master..master`** |
-| `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.0-SNAPSHOT`. **Unpushed commits ahead of `origin/master`** |
-| `mc/26.1.2` | **NEW, §42.** Covers `26.1`, `26.1.1`, `26.1.2`. **Local only, never pushed.** Closes the declared 16-version scope |
-| `mc/1.21.11` | **Local only, never pushed** |
-| six older bands | pushed, released at `v1.2.0`. Each now carries unpushed §40/§41/§42 commits |
-| build | green on `master` (`26.2`, Java 25) and on `mc/26.1.2` (`26.1.2`, Java 25) |
-| suite | ✅ **1,858 executed, 0 failures** on `master` **and** on `mc/26.1.2`. The docs row red since §33 is CLOSED |
-| gate 7 (drift) | ✅ **exit 0** — first time since §33. 11 commits `retro-waived` under R-ab; **0 MISSING** on all eight bands |
-| gate 9 (manifest) | ✅ exit 0 at eight bands. Tripped correctly on the fresh cut and was fixed by regeneration |
-| gate 10 (shared layer) | ✅ exit 0 — **50 shared paths** byte-identical on all nine branches |
-| gate 11 (per-key) | ✅ exit 0 — shared keys agree, distinct keys differ |
-| mixin gate | ✅ `--check` passes on `master` (`ZERO=0 OK=60 SLICE=1`) and on `mc/26.1.2` (same) |
-| boot | ✅ `26.2` (§35). 🔴 **`26.1.2` NOT boot-checked** |
-| gameplay | ✅ `26.2` 30/30 (§35). 🔴 **`26.1.2` NOT smoke-tested** |
+| branches | **NINE, all on the remote.** `master` (`26.2`) + `mc/26.1.2` + the seven `1.21.x` bands |
+| vs `origin` | **every branch is ahead by exactly 1** — §44's `-Xmaxerrs` commit, deliberately unpushed. Nothing is behind |
+| `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.0-SNAPSHOT` |
+| releases | **NINE published at `v1.3.0`** (§43.4) — the declared 16-version scope is downloadable |
+| build | ✅ **green on all nine**, each built on its own band this session (§44.3) |
+| suite | ✅ **0 failures on all nine.** `master` and `mc/26.1.2` 1,861; the `1.21.x` bands 1,855–1,863. ⚠️ The spread is per-band gating, not a master-vs-band split |
+| gates 7/9/10/11 | ✅ exit 0, measured post-push in §43.4. 🔴 **They have not seen §44** — all four prefer **remote** refs, and no branch's §44 commit is pushed |
+| mixin gate | ✅ `--check` passes on `master` and `mc/26.1.2` (`ZERO=0 OK=60 SLICE=1`) |
+| boot | ✅ `26.2` (§35) and ✅ `26.1.2` (§43.1, exit 0, 0 ERROR, 0 mixin failures) |
+| gameplay | ✅ `26.2` 30/30 (§35) and ✅ `26.1.2` 30/0/0 (§43.1), mod-less control failing as it must |
 
-📌 **The push hold STANDS** — owner decision, re-confirmed 2026-08-26 (R-ac), third session running.
-Nothing is pushed. **Re-ask before any push.** R14's ~24% suite flake is a second reason: a red
-release run is currently indistinguishable from a real regression.
+📌 **The R-ac push hold is LIFTED** (owner, 2026-08-26, §43) and all nine branches went out.
+🔴 **§44 is nonetheless unpushed, on a separate owner ruling:** `build.gradle` sits inside
+`release.yml`'s `paths:` filter, and every branch is at `1.3.0-SNAPSHOT` with `v1.3.0` already
+published — so pushing it alone fires nine release runs that **R-t's stale-version gate refuses**.
+It rides the next `mod_version` bump. See §44.4.
 
 ⚠️ **A clean compile and a green gate are STRUCTURAL.** §32 found a mixin bound to the *wrong live
 method* while every structural gate read green, `mc/1.21.1` shipped a `/summon` origin gap past
 67/67 injectors and a clean boot, and §42 found an injector on the new band that compiled perfectly
 and bound to **nothing**. Application is not coverage.
 
-**Push order, when the owner lifts the hold:** everything together, after gates 7/9/10/11 pass at
-eight bands in a local clone — carrying `BAND_COUNT` / `--require-bands` raised to the real pushed
-band count (x.9), which is deliberately NOT done while the hold stands.
+**When the next `mod_version` bump ships:** run gates 7/9/10/11 in a local clone first (they grade the
+remote otherwise), and expect §44 to ride out on all nine branches in that same push.
 
 ---
 
-## What ships today — 6 branches pushed, plus `master`
+## What ships today — **all nine branches pushed and released**
+
+✅ **Re-measured 2026-08-26 (session 25)** from `git ls-remote --tags`, each branch's
+`gradle.properties` and its own `fabric.mod.json`. The previous edition of this table predated
+§43's push: it was headed *"6 branches pushed"*, omitted `mc/26.1.2` entirely, said `master` had
+**nothing released**, and listed every tag at `v1.2.0`. All four were false.
 
 ⚠️ **There is no per-version jar and there never was. One jar covers a band**, via the range in its
 own `fabric.mod.json`.
 
 | Branch | MC versions covered | `depends.minecraft` | Released tag |
 |---|---|---|---|
-| `master` | `26.2` | `~26.2` | ⬜ **nothing released yet** — §9 in flight |
-| `mc/1.21.11` | `1.21.11` | `~1.21.11` | `mc1.21.11-v1.2.0`, tagged while `master` held the band ⚠️ **branch unpushed** |
-| `mc/1.21.10` | `1.21.9`, `1.21.10` | `>=1.21.9 <1.21.11` | `mc1.21.10-v1.2.0` |
-| `mc/1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | `>=1.21.6 <1.21.9` | `mc1.21.8-v1.2.0` |
-| `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v1.2.0` |
-| `mc/1.21.4` | `1.21.4` | `>=1.21.4 <1.21.5` | `mc1.21.4-v1.2.0` |
-| `mc/1.21.3` | `1.21.2`, `1.21.3` | `>=1.21.2 <1.21.4` | `mc1.21.3-v1.2.0` |
-| `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | `mc1.21.1-v1.2.0` |
+| `master` | `26.2` | `~26.2` | `mc26.2-v1.3.0` |
+| `mc/26.1.2` | `26.1`, `26.1.1`, `26.1.2` | `>=26.1 <26.2` | `mc26.1.2-v1.3.0` |
+| `mc/1.21.11` | `1.21.11` | `~1.21.11` | `mc1.21.11-v1.3.0` |
+| `mc/1.21.10` | `1.21.9`, `1.21.10` | `>=1.21.9 <1.21.11` | `mc1.21.10-v1.3.0` |
+| `mc/1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | `>=1.21.6 <1.21.9` | `mc1.21.8-v1.3.0` |
+| `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v1.3.0` |
+| `mc/1.21.4` | `1.21.4` | `>=1.21.4 <1.21.5` | `mc1.21.4-v1.3.0` |
+| `mc/1.21.3` | `1.21.2`, `1.21.3` | `>=1.21.2 <1.21.4` | `mc1.21.3-v1.3.0` |
+| `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | `mc1.21.1-v1.3.0` |
 
-**Shipped coverage is continuous `1.21` → `1.21.11` — the whole `1.21` line, 12 of 12.** `mod_version`
-is `1.2.0-SNAPSHOT` on every branch; **seven** releases at `v1.2.0`, 0 drafts, one per band.
+**Shipped coverage is continuous `1.21` → `1.21.11` plus `26.1` → `26.2` — the declared
+16-version scope, closed.** `mod_version` is `1.3.0-SNAPSHOT` on every branch; **nine** releases at
+`v1.3.0`, one per band.
 
 🔑 **Nothing in the eleven gates reads the remote TAG list.** Gates 9/10/11 compare branches; the
 release sweep enumerates `gh release list`, which a bare tag is invisible to. **Re-read
-`git ls-remote --tags` before repeating any statement about which tags exist.**
+`git ls-remote --tags` before repeating any statement about which tags exist.** ⚠️ One bare tag
+does exist and is not a release: `v1.21.11-baseline`.
 
 ---
 
@@ -1676,7 +1683,7 @@ below as needing *"the next real run"*:
 
 ---
 
-## §44 — lift javac's 100-error cap — 🔴 IN FLIGHT on `master`
+## §44 — lift javac's 100-error cap — ✅ DONE on `master` AND all eight bands, PUSHED NOWHERE
 
 ✅ **AUTHORISED (owner, 2026-08-26):** NEXT item 2. Scope is `master` **plus the sweep to all eight
 bands**, and **nothing is pushed** — see 44.4 for why that is the whole point rather than caution.
@@ -1695,9 +1702,9 @@ that is exactly as authoritative-looking as the true one, and every downstream e
 
 ### 44.1 — the change on `master`
 
-- [ ] `build.gradle`: `tasks.withType(JavaCompile)` gains `-Xmaxerrs <cap>`. One named local, so the
+- [x] `build.gradle`: `tasks.withType(JavaCompile)` gains `-Xmaxerrs <cap>`. One named local, so the
       value and the value handed to the guard cannot disagree.
-- [ ] **Not** `-Xmaxwarns`. Its 100-cap has never misled anything here, and lifting it turns
+- [x] **Not** `-Xmaxwarns`. Its 100-cap has never misled anything here, and lifting it turns
       `-Xlint:deprecation` into thousands of lines on every band. Out of scope, stated so.
 
 ### 44.2 — the guard: `CompilerErrorCapTest`
@@ -1709,24 +1716,24 @@ is not the fact; **what the `compileJava` task resolved** is.
 So the guard reads the **effective `compilerArgs` of the realized `compileJava` task**, handed over
 as a system property the way R-aa hands over `mcmmo.build.javaVersion`:
 
-- [ ] build.gradle exports `mcmmo.build.compilerArgs` — the joined args of `compileJava` **as
+- [x] build.gradle exports `mcmmo.build.compilerArgs` — the joined args of `compileJava` **as
       resolved**, not a separately-computed string.
-- [ ] `inputs.property` on it, or `:test` serves a **cached pass** after the args change. That exact
+- [x] `inputs.property` on it, or `:test` serves a **cached pass** after the args change. That exact
       failure was measured on 2026-08-18 and made three workflow mutations score *"not caught"*.
-- [ ] The test asserts `-Xmaxerrs` is present **and its value parses as an integer above 100** — the
+- [x] The test asserts `-Xmaxerrs` is present **and its value parses as an integer above 100** — the
       number 100 is the defect, so an assertion that does not name it cannot fail for the right
       reason.
-- [ ] **Watch it fail first**, with the flag removed, and read the message.
+- [x] **Watch it fail first**, with the flag removed, and read the message.
 
 🔑 This catches what a grep cannot: `compilerArgs` moved to a `withType` block that does not match
 `compileJava`, or overwritten later by an `= [...]` assignment. Both leave the string in the file.
 
 ### 44.3 — the sweep, per rule 1
 
-- [ ] `master` first, then cherry-pick to all **eight** bands, each carrying `Backport-of: <sha>`.
-- [ ] `mc/26.1.2` gets it too — it is where §42 hit the cap, and where the band-local fix was
+- [x] `master` first, then cherry-pick to all **eight** bands, each carrying `Backport-of: <sha>`.
+- [x] `mc/26.1.2` gets it too — it is where §42 hit the cap, and where the band-local fix was
       reverted rather than kept.
-- [ ] Gate 10 (`branch-file-identity-audit.py`) does **not** cover `build.gradle`, and gate 11
+- [x] Gate 10 (`branch-file-identity-audit.py`) does **not** cover `build.gradle`, and gate 11
       (`gradle-key-identity-audit.py`) covers `gradle.properties`, not this file. **Nothing
       cross-branch enforces this one**, which is exactly why the sweep is part of the same session
       rather than a follow-up.
@@ -1745,6 +1752,74 @@ cross-branch gate here prefers **remote** refs (`drift-audit.py`'s `band_branche
 `origin/master`), so re-running them now grades a remote that has never seen this commit and prints a
 confident, useless *"clean"*. **Do not read a green gate 7/10 this session as evidence the sweep
 landed** — `git log --grep` over the local branches is the only honest reading until the push.
+
+### ✅ 44 Outcome — measured 2026-08-26
+
+**44.1 — the cap, measured rather than quoted.** 150 deliberate errors in one throwaway file:
+
+| run | reported | exit |
+|---|---|---|
+| `javac` | **100** | 1 |
+| `javac -Xmaxerrs 10000` | **150** | 1 |
+
+🔑 **The exit code does not move.** A truncated count and a true one are the same shape, the same
+colour and the same exit status — which is exactly how §27 and §42 each read a number and believed
+it. Any error count taken off a build without this flag, at or near 100, is a **lower bound**.
+
+**44.2 — the guard, watched failing three ways before it was believed.** Each mutation produced a
+different message, and the third is the one that matters:
+
+| mutation | result |
+|---|---|
+| `-Xmaxerrs` removed from `build.gradle` | **2 failed** — *"compileJava resolved compilerArgs '-Xlint:deprecation', which pass no -Xmaxerrs"*. The message names the **actual resolved args**, which is the proof it is reading the task |
+| cap set to `100` | **1 failed** — *"runs with -Xmaxerrs 100, which is not above javac's own default of 100"*. The assertion names the number, so the defect written out explicitly still fails |
+| export re-derived from the local instead of read off the task | **1 failed, and ONLY the third assertion** — the args no longer carry `-Xlint:deprecation`, so the guard is reading some *other* task. **Nothing else in the class can see this**, which is why that third test is not redundant |
+
+**44.3 — the sweep. Nine branches, and each `build.gradle` variant BUILT, not argued about.**
+`build.gradle` was already two blobs (`master` + `mc/26.1.2` on one, the seven `1.21.x` bands on the
+other) and stayed exactly two after the cherry-pick. `TODO.md` and the guard are **one blob on all
+nine**.
+
+| branch | commit | build | suites | executed | failures | guard |
+|---|---|---|---|---|---|---|
+| `master` | `ee1340bd7` | exit 0 | 165 | **1,861** | 0 | 3/3 |
+| `mc/26.1.2` | `f42836322` | exit 0 | 165 | **1,861** | 0 | 3/3 |
+| `mc/1.21.11` | `40c4bda0c` | exit 0 | 164 | **1,855** | 0 | 3/3 |
+| `mc/1.21.10` | `dd24f7972` | exit 0 | 164 | **1,855** | 0 | 3/3 |
+| `mc/1.21.8` | `b05291468` | exit 0 | 164 | **1,855** | 0 | 3/3 |
+| `mc/1.21.5` | `e8d96fef9` | exit 0 | 164 | **1,856** | 0 | 3/3 |
+| `mc/1.21.4` | `6687fb3d4` | exit 0 | 166 | **1,863** | 0 | 3/3 |
+| `mc/1.21.3` | `37e320f4b` | exit 0 | 165 | **1,857** | 0 | 3/3 |
+| `mc/1.21.1` | `abe705873` | exit 0 | 164 | **1,859** | 0 | 3/3 |
+
+🔑 **All nine were BUILT, not argued about.** Six of them cost ~4 minutes each and bought the
+difference between *"the file is byte-identical to one that built"* and *"it built"*. `Backport-of:
+ee1340bd7` is present on **8 of 8** bands.
+
+⚠️ **Per-band totals differ from each other, not just from `master`** — 1,855 to 1,863 across the
+seven `1.21.x` bands, and 164 to 166 suites. That spread pre-dates this section (version-gated
+suites, per-band guards) and is **not** a `master`-vs-band split. The number that belongs to §44 is
+**+3 on every branch** and **0 failures on all nine**.
+
+**44.5 — the rollback record.** Pre-sweep band tips, unreconstructable once anything moves:
+
+```
+master     bfcecee29      mc/1.21.5    2c2a8e1b9
+mc/26.1.2  d707898af      mc/1.21.8    2767097bd
+mc/1.21.11 cba1f6fd3      mc/1.21.10   120964741
+mc/1.21.4  48a4b0160      mc/1.21.3    79090a0a7
+mc/1.21.1  d63f5cceb
+```
+
+🟢 **Blast radius: zero remote.** Nothing was pushed, no tag moved, no release was touched. While
+that holds, `git reset --hard <tip above>` is a complete undo on any branch; after a push it is a
+shared-branch rewrite and an owner call.
+
+🔴 **What this session CANNOT tell you: whether the sweep is visible to the cross-branch gates.**
+`drift-audit.py`'s `band_branches()` prefers **remote** refs and gate 10 audits **`origin/master`**,
+so every one of them is grading a remote that has never seen `ee1340bd7`. A green gate 7 today is a
+statement about last session's push, not about this work. Until the push, `git log --grep='Backport-of:
+ee1340bd7'` across the local branches is the only honest reading — it returns **8**.
 
 ### What I am NOT doing
 
@@ -1952,26 +2027,23 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
 
 ## Carried debt (open items only — closed rows are in the archives)
 
-- [ ] 🟡 **`-Xmaxerrs` is not lifted in `build.gradle`, and the 100-error cap has now misled a
-      sizing TWICE.** §27 recorded it (*"javac's 100-error cap made the first run look
-      `platform/`-only"*) and §42 hit it again immediately: `mc/26.1.2`'s test tree reported **30**
-      errors, and **61** with the cap lifted, across 8 files. The fix is one token
-      (`<< '-Xmaxerrs' << '10000'`) and it was **deliberately reverted** on the band rather than
-      kept, because rule 1 says it lands on `master` first. **Do that, then sweep** — `build.gradle`
-      is inside `release.yml`'s `paths:` filter, so it rides a `mod_version` bump like everything
-      else in that file.
-- [ ] 🔴 **`mc/26.1.2` has no boot check and no gameplay smoke.** `master` has both on `26.2` (§35).
-      Structural gates are green on the band, and §42 itself is the reminder that structural is not
-      coverage: an injector there compiled perfectly and bound to nothing.
+- [x] ✅ **`-Xmaxerrs` — CLOSED 2026-08-26 (§44).** Lifted to 10,000 on `master` (`ee1340bd7`) and
+      cherry-picked to all eight bands; all nine built green. Guarded by `CompilerErrorCapTest`,
+      which reads the **resolved `compileJava` args**, not `build.gradle`'s text. 🔴 **Committed, NOT
+      pushed** — it rides the next `mod_version` bump, see §44.4.
+- [x] ✅ **`mc/26.1.2`'s boot check and gameplay smoke — CLOSED 2026-08-26 (§43.1),** before the
+      band was ever pushed: boot-check **exit 0** (0 ERROR, 0 mixin failures) and gameplay smoke
+      **30 passed / 0 failed / 0 inconclusive**, with the mod-less control failing as it must.
 
 - [ ] 🔴 **Manifest debt piece 1** — see *Other open work*. Piece 2 shipped as
       `scripts/manifest-identity-audit.py` (Phase 18).
 - [ ] 🟡 **The `--require-bands` floors are hand-maintained** in `.github/workflows/drift-audit.yml`
-      and in ship-gate steps 9, 10 and 11. **Now 6** (8.3's x.9, raised one cycle late). ⚠️ **The next
-      raise is already earned and not yet made:** `mc/1.21.11` is cut and held, so the floor goes
-      **6 → 7 in the same push that publishes it**. R-x withdrew R-v's extra cuts, so `26.1.x` is the
-      only one after that. Nothing reminds you; a stale floor is under-strict and the audit still
-      passes.
+      and in ship-gate steps 9, 10 and 11. **Now 8**, raised in §43.3 in the same push that put
+      `mc/26.1.2` and `mc/1.21.11` on the remote. ⚠️ **8, not 9** — `--require-bands` counts
+      `mc/**` only, and `master` lives outside that namespace; one too many returns exit 2 while
+      the same run still prints *"No drift"*. R-x withdrew R-v's extra cuts, so the declared scope is
+      closed and **no further raise is owed**. It stays listed because nothing reminds you: a stale
+      floor is under-strict and the audit still passes.
 - [ ] 🟡 **R13 — the general overload-rebind shape**, and 🟡 **§31.5's 562 collision sites**. Both
       carried out of §33; detail under §9.
 
