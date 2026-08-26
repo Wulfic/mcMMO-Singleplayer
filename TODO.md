@@ -479,10 +479,16 @@ probed set is a **hard error**, never a relocation.
 - [x] ✅ **38.4** `probe-bands.py`: `cached_versions()` unions both caches; `jar_for()` → `loomjar`;
       cross-naming **refusal**; `--control` from `gradle.properties`, missing control = hard error;
       `nonmc_classpath()` two-glob fix.
-- [ ] **38.5** ⚠️ **Control first, on a band, before believing anything on `master`.**
+- [x] ✅ **38.5** ⚠️ **Control first, on a band, before believing anything on `master`.**
       `probe-bands.py --versions 1.21.8,1.21.11 --control 1.21.11` on `mc/1.21.11` must reproduce
       the band table it already produces. A rewritten probe that has only ever run on the new branch
       has no baseline.
+      ✅ **Ran 2026-08-26 on `mc/1.21.11`.** `control check: 1.21.11 resolves all 1406 records -
+      probe trusted`; `bands: 2 -> 1.21.8 | 1.21.11`; **varying 32 of 1406**. **32 is the exact
+      figure that band's committed `plans/BAND_TABLE.md` already carries for the `1.21.8` row**
+      (*"32 record(s)"* differs from newest), so the rewrite reproduces the published table rather
+      than a new answer. ⚠️ The record TOTAL moved (1377 → 1406 non-excluded) because the manifest
+      was regenerated in §36; **the total is not the baseline, the band collapse is**.
 - [x] ✅ **38.6** **The 9.4(b) probe.** `26.1` and `26.2` deobf jars are both already cached (verified:
       `minecraft-merged-deobf/{26.1,26.2}/`), so this needs no network. Probe `26.1,26.2` from
       `master`, control `26.2`. **`26.1.1` / `26.1.2` are NOT cached** and need a Loom resolve each —
@@ -492,7 +498,9 @@ probed set is a **hard error**, never a relocation.
       ⚠️ **A record-count match is not a fingerprint match.** Read the band collapse, not the total.
 - [x] ✅ **38.7** Regenerate `plans/BAND_TABLE.md` if 38.6 changes it; update 9.4(b)'s row from
       *"rests on ecosystem evidence"* to the measured answer.
-- [ ] **38.8** The seven-band gate-10 sweep, §37's recipe (below). Owner ruled: **now, not deferred.**
+- [x] ✅ **38.8** The seven-band gate-10 sweep, §37's recipe (below). Owner ruled: **now, not deferred.**
+      ✅ **Done 2026-08-26** — one commit per band, four `scripts/**` paths, no `gradle.properties`,
+      so **no release run fired**. Per-band results in the table below.
 
 ### ✅ Outcome on `master` — measured 2026-08-26
 
@@ -584,7 +592,7 @@ work to do**: §31 priced 54 seam redesigns and there were 0.
 - [ ] **`26.1.1` / `26.1.2` are unprobed.** Neither is in the Loom cache and each needs a resolve.
       §38 proves `26.1` is a different band from `26.2`; it says **nothing** about where the
       boundary inside the `26.1.x` line falls. Do not write one down from the ecosystem's answer.
-- [ ] **The gate-10 sweep for §38's four paths** — see below.
+- [x] ✅ **The gate-10 sweep for §38's four paths** — done 2026-08-26, see below.
 
 ### The sweep — §37's recipe, narrowed
 
@@ -599,6 +607,84 @@ That is the one way this sweep is cheaper than §37's.
 ⚠️ Still run per band: `mixin-allow-audit.py --self-test` **and** `--check`. The band's mixins are
 yarn and the chooser moved — a green `master` proves nothing about the yarn path.
 ⚠️ `--require-bands` is **7**, not 8. Exit 2 is not a pass.
+
+#### ✅ Swept 2026-08-26 — seven bands, seven commits, nothing pushed
+
+Every row measured **on that band**, not inherited from `master`'s green run. The four files are
+byte-identical to `master` on all seven (`git rev-parse master:<path>` vs the band's blob).
+
+| Band | commit | `mixin-allow-audit.py --check` |
+|---|---|---|
+| `mc/1.21.11` | `457fdd5ab` | `SLICE=1 OK=60` (total 61) |
+| `mc/1.21.10` | `2c9e23603` | `SLICE=1 OK=60` (total 61) |
+| `mc/1.21.8` | `6379634a9` | `SLICE=1 OK=60` (total 61) |
+| `mc/1.21.5` | `699d5c985` | `SLICE=1 OK=60` (total 61) |
+| `mc/1.21.4` | `ed36a9348` | `SLICE=1 OK=61` (total **62**) |
+| `mc/1.21.3` | `f0fe6df96` | `SLICE=1 OK=61` (total **62**) |
+| `mc/1.21.1` | `903db1125` | `SLICE=1 OK=67` (total **68**) |
+
+🔑 **Three different injector totals across the seven bands — 61, 62, 68.** That is the argument for
+running the gate per band rather than reading `master`'s 61 off this plan: a band-local count that
+matched `master`'s would have proved nothing, and one that did not would have looked like a defect.
+All four `--self-test`s pass on every band as well; the mixin gate's 8 selection cases are pure and
+cache-free, so they are the same 8 `master` runs, not a weaker band-local variant.
+
+Cross-branch gates after the sweep, all seven branches local:
+
+| gate | result |
+|---|---|
+| 9 — `manifest-identity-audit.py --local` | ✅ exit 0, every branch's manifest distinct |
+| 10 — `branch-file-identity-audit.py --local` | ✅ exit 0, **49 shared paths** byte-identical (was 45; `loomjar.py` + §37's three new files) |
+| 11 — `gradle-key-identity-audit.py --local` | ✅ exit 0, 12 keys watched — 10 SHARED, 2 DISTINCT |
+| 7 — `drift-audit.py --self-test` | ✅ exit 0 |
+| 7 — `drift-audit.py --master master --require-bands 7` | 🔴 exit 1 — **11 MISSING on every band, none of them §38's** |
+
+#### 🔴 Gate 7 has been permanently red since §33, and §38 is not why
+
+⚠️⚠️ **`drift-audit.py` prefers REMOTE refs** (`band_branches()` returns `origin/mc/**` when any
+exist), so a run in this working copy grades the STALE remote against local `master` and answers a
+question nobody asked. The honest pre-push run is a `git clone --local .` of this repo, where
+`origin/*` maps onto our local branches — that is how the row above was measured.
+
+The **same 11 commits** are MISSING on all seven bands, and every one of them is a `master`-only
+`26.x` commit that **cannot** be back-ported by construction:
+
+```
+fcb2d4bbf  build(26.x): pin master to the 26.2 toolchain -- RED, and deliberately so
+30b3eb3c2  fix(9.3): the sizer over-priced by 4 -- a descriptor can be HALF-renamed
+9b02b7b23  feat(9.3): the mixin selector writer -- 64 sites, dry-run default, 1 REBIND
+72cbdc867  feat(9.3): the 64 selector renames -- ZERO 54 -> 5, OK 6 -> 54
+07266070d  fix(9.3): the 4 signature changes + the class move -- ZERO is 0
+8abf23e65  fix(9.3): the FOURTH blind spot -- 4 of 8 @Shadow members were still yarn
+409e999a5  fix(9.3): the spawn-origin seam moved to the bottom of a chain that INVERTED
+1fc86d86c  fix(33.1): 186 red -> 9 -- 26.x binds components onto the registry HOLDER
+f688b91a0  fix(33.2): the version grammar was already fixed ON A BAND and never reached master
+b62c50917  fix(33.4): a narrow overload deleted while a wider one survives -- javac CANNOT see it
+d5fb36dbf  fix(33.5): 186 red -> 1 -- a yarn method name survived as a STRING LITERAL
+```
+
+They rename `master` from yarn to official names. Applying any of them to a yarn band would break
+it. **They should have carried `Backport-not-needed:` and they do not** — every one is a rule-3
+violation committed at the time, not a back-port anyone forgot.
+
+🔴 **AGENTS.md forbids the obvious repair**: the opt-out *"lives in the commit that made the decision
+and cannot be applied retroactively to one somebody merely forgot"*, and six of these are already on
+`origin/master`, so rewriting them is off the table regardless.
+
+🔴 **So gate 7 now fails on every run, for a reason that will never clear itself** — which is
+precisely the *"reports to a tab nobody opens"* shape of risk **R11**, and the mechanism by which a
+REAL forgotten back-port becomes invisible: the 12th missing commit will read exactly like the 11.
+**This needs an owner ruling; it is not a defect §38 can fix.** The two shapes available:
+
+* **A waiver file** — `scripts/drift-waivers.txt`, one sha + reason per line, read by the auditor,
+  under gate 10 so it is identical on every branch. Keeps the trailer rule intact for new commits
+  and makes the retroactive exception explicit, dated and reviewable in one place.
+* **Move the band base.** The `mc/**` branches all diverge BELOW the `26.x` rename, so a
+  `Backport-base:` marker (or re-cutting each band's merge-base record) would drop the 11 out of the
+  window entirely. Cheaper to read, but it hides any genuine pre-rename drift with them.
+
+⚠️ **Do not resolve it by lowering `--require-bands` or by not running the gate.** Both are the
+"make the symptom disappear" move AGENTS.md's attempt-budget section names outright.
 
 ### What I am NOT doing
 
