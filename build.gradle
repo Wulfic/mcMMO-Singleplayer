@@ -68,6 +68,17 @@ repositories {
     }
 }
 
+configurations {
+    // TODO.md 45.1. The mockito-core jar ON ITS OWN, so it can be named as a -javaagent on the test
+    // JVM's command line. `transitive = false` is what makes `singleFile` below unambiguous: with
+    // transitives this resolves byte-buddy and objenesis too, and picking one out of a multi-file
+    // set is the `find | head -1` shape brew-smoke.sh was already corrected for.
+    mockitoAgent {
+        transitive = false
+        canBeConsumed = false
+    }
+}
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     // NO `mappings` line. From 26.1 Minecraft ships unobfuscated, so Loom consumes it directly and
@@ -115,6 +126,11 @@ dependencies {
     // wrappers over net.minecraft types like ServerPlayerEntity, which can't be built without a
     // running server). Mockito 5's default inline mock maker mocks final classes directly.
     testImplementation "org.mockito:mockito-core:${project.mockito_version}"
+
+    // TODO.md 45.1. The same coordinate again, resolved into the agent configuration above. Same
+    // version by construction -- an agent jar of a different version than the one on the test
+    // classpath installs a PremainAttach the classpath copy does not read.
+    mockitoAgent "org.mockito:mockito-core:${project.mockito_version}"
 }
 
 // -----------------------------------------------------------------------------
@@ -236,6 +252,38 @@ test {
     // fabric.mod.json rides in on processResources' output, which is already a test input.
     inputs.file(rootProject.file('.github/workflows/release.yml'))
             .withPropertyName('releaseWorkflow')
+
+    // TODO.md 45.1 (risk R14). Install Mockito's agent AT VM START instead of letting it self-attach.
+    //
+    // Mockito's inline mock maker needs an Instrumentation. PremainAttachAccess.getInstrumentation()
+    // -- read out of mockito-core-5.23.0.jar with javap, not recalled -- resolves it in this order:
+    //
+    //   1. org.mockito.internal.PremainAttach.getInstrumentation(), loaded FROM THE SYSTEM
+    //      CLASSLOADER. That is this -javaagent. Non-null, return.
+    //   2. net.bytebuddy.agent.Installer.getInstrumentation(), for a byte-buddy agent.
+    //   3. If the VM is >= Java 21 AND the input arguments do not contain the literal string
+    //      "-XX:+EnableDynamicAgentLoading", print the "Mockito is currently self-attaching" warning.
+    //   4. ByteBuddyAgent.install() -- UNCONDITIONALLY, whatever step 3 decided.
+    //
+    // Step 4 attaches through an EXTERNAL HELPER PROCESS on Windows, once per fork, and four forks
+    // race that spawn. Measured on mc/1.21.10 (2026-08-25): 449 of 1846 tests red with
+    // "Could not self-attach to current VM using external process", then 1846/0 on a clean re-run of
+    // the same commit. A red that size reads exactly like a real regression, and release.yml runs
+    // this suite on every push -- so the real failure mode is a genuine regression being re-run away
+    // as "probably the flake".
+    //
+    // ⚠️⚠️ -XX:+EnableDynamicAgentLoading IS NOT THE FIX and is deliberately absent. It is tested
+    // against a warning string at step 3 and never consulted at step 4: it silences the only visible
+    // tell and leaves the racing call exactly where it was. Satisfying step 1 is what removes it.
+    //
+    // Resolved HERE, at configuration time, for the same reason as processResources above: reading a
+    // Gradle script object from a task's execution-time closure is what the configuration cache
+    // rejects.
+    def mockitoAgentJar = configurations.mockitoAgent.singleFile
+    jvmArgs "-javaagent:${mockitoAgentJar.absolutePath}"
+    // So a changed agent jar re-runs the guard rather than serving a cached pass -- the 2026-08-18
+    // defect, where three real mutations all scored "not caught" because :test never re-ran.
+    inputs.file(mockitoAgentJar).withPropertyName('mockitoAgent')
 
     // The fabric-loader-junit tests call McTestRegistries.bootstrap() -> Bootstrap.initialize(),
     // which builds the whole vanilla registry set. Measured 2026-08-05: that @BeforeAll costs ~53s
