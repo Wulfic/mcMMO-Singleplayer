@@ -850,10 +850,19 @@ add a duplicate of a row that exists. Deletion is the correction.
       `src/**` is in `release.yml`'s `paths:` filter and 50.3 edits `src/main/resources/config.yml`,
       so every branch fires a release run and R-t refuses a stale version. **PATCH**, because this
       changes shipped config rows and one test, not a skill's behaviour model.
-- [ ] **50.9** Propagate to all eight bands with `Backport-of:` trailers. **Verify 8/8 by reading
-      `mod_version` and the two fixed rows back out of each branch** — never inferred from a
-      cherry-pick exiting 0.
-- [ ] **50.10** Gates **7, 9, 10, 11** inside `git clone --local --no-hardlinks . <scratch>`,
+- [x] ✅ **50.9 — DONE. 8/8.** Four commits × eight bands, each with a `Backport-of:` trailer.
+      Verified by **reading content back out**, never inferred from a cherry-pick exiting 0: the
+      `config.yml`, `config-id-audit.py` and `ConfigYamlBonusDropsTest.java` blobs are **byte-identical
+      to `master`'s on all nine**, `mod_version` reads `1.3.2-SNAPSHOT` on all nine, and each band
+      carries 4 trailers while `master`'s own four carry none (rule 1).
+      🔑 **All eight bands held the identical pre-fix `config.yml` blob (`a0af9bbb3`)** — so both live
+      defects were present on every band, and the fix reaches every player on every version.
+- [x] ✅ **50.10 — DONE. All four exit 0, none exit 2.** Re-run on a **fresh** clone after 50.13,
+      because the first clone was stale the moment another commit landed. `--self-test` first on all
+      four, all exit 0. Gate 7: *"No drift"*, **0 MISSING on every band**. Gate 9: manifests distinct.
+      Gate 10: **50 shared paths byte-identical**. Gate 11: 12 keys watched, 10 SHARED / 2 DISTINCT,
+      `mod_version=1.3.2-SNAPSHOT` uniform and `minecraft_version` distinct across all nine.
+      Gates **7, 9, 10, 11** inside `git clone --local --no-hardlinks . <scratch>`,
       `--self-test` first on each. ⚠️ All four prefer **remote** refs, so a run in this working copy
       grades the stale remote. ⚠️ **Gate 11 is the only instrument that sees the `mod_version` bump**
       — gate 7 is blind to it by construction (`gradle.properties` sits in both
@@ -861,7 +870,27 @@ add a duplicate of a row that exists. Deletion is the correction.
 - [ ] **50.11** Push all nine. Expect nine green runs and nine `v1.3.2` releases; `v1.3.1` is reaped
       per line by design. Verify with `gh release list` and `git ls-remote --tags`, **not** the run
       list. Then gate **8** (`ci-watch.sh --mutate`, then `HEAD`) from the branch pushed.
-- [ ] **50.12** Record the outcome in a **separate** docs commit — a status row cannot count the
+- [x] ✅ **50.12 — the band verification §49 could skip and this one could not.** §49 declined to run
+      gates 1–6 per band because its held set touched **zero `src/main/` files**, so the jar was
+      unchanged. That argument does **not** transfer here: 50.3 edits `src/main/resources/config.yml`,
+      which ships inside the jar. Run on **`mc/1.21.1`**, the oldest band and the one where the
+      reasoning was most likely wrong: gate 4 **exit 0** (**91.8%** control resolve — the predicted
+      figure, 72 rows correctly classified as band drift, **0 dead-everywhere**), and the full suite
+      **1867 executed / 0 failed / 0 errors / 0 skipped**, with `ConfigYamlBonusDropsTest` **4/4**.
+      🔑 **That is the band-safety proof for both new properties.** On `1.21.1` the chain block is
+      `chain`, not `iron_chain`, so the both-names assertion resolves the *other* candidate and still
+      passes — exactly the behaviour a naive *"every id resolves"* test would have asserted into a
+      false pass.
+- [x] ✅ **50.13 — a defect the band run found, fixed and propagated.** The tag on an
+      unresolved-but-not-dead row read **`ok: live on an older band`**. True only on `master`, where
+      the control is the newest version; on a **band** the control is that band's own older version,
+      so such a row is normally live on a **NEWER** one. It now reads *"live on another supported
+      version"*, correct in both directions.
+      🔑 **This is why 50.12 was run rather than reasoned about.** Before §50 it was a one-row
+      footnote nobody read; `config.yml` makes it **72 rows on `mc/1.21.1`** — 72 lines telling a
+      reader to look the wrong way down the band list while deciding whether a row is drift or a
+      defect. **No gate could ever catch this: it is a log message, and every gate was green.**
+- [ ] **50.14** Record the outcome in a **separate** docs commit — a status row cannot count the
       commit that changes the status.
 
 ### What this section is NOT doing
