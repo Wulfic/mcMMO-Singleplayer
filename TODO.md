@@ -259,8 +259,8 @@ the branch does not.
 ## §9 — the `26.x` band — ✅ CLOSED (shipped on `master` and `mc/26.1.2`)
 
 🔴 **Its residue is NOT closed** — the open list at the foot of this section (R13, §31.5's
-collision sites, `config.yml`, the bare loom id, the `TODO.md` invariant) is live and is the
-reason this section is still here rather than in an archive.
+collision sites, the bare loom id, the `TODO.md` invariant) is live and is the reason this section is
+still here rather than in an archive. ✅ `config.yml` **left that list on 2026-08-27 (§50)**.
 
 **Its own mini-project (R-e). Do not absorb it into a sweep.**
 
@@ -367,8 +367,14 @@ The band cannot run its own gates until its tooling speaks official names.
       (b) read every survivor by hand, recording the count **reviewed**, not just fixed; (c) a
       mutation re-introducing one `BuiltInRegistries.*.getId(` that must survive the filter and be
       reported — **a filter never shown to catch anything is a filter that removes everything.**
-- [ ] 🟡 **`config.yml` is outside the config-id gate entirely**, and carries at least one dead id
-      (`Chain`). `config-id-audit.py` never reads it.
+- [x] ✅ **`config.yml` joins the config-id gate — CLOSED 2026-08-27 (§50).** It is now read by
+      **both** halves: `config-id-audit.py` (9 sections, +186 refs → **875 across 7 files**) and a new
+      `ConfigYamlBonusDropsTest` on the live registry, inside gate 1.
+      🔑 **This row understated the defect by 26×.** It named one dead id; measuring found **26 dead
+      on every supported version**, and the two that mattered were **not** the one that had been
+      noticed — `Block_Of_Amethyst` (not a registry id on any version, while `experience.yml` pays it
+      500 XP) and a `Chain` with no `Iron_Chain` beside it (chains lost their bonus roll on the four
+      newest bands). **A carried row naming a specific defect is a lower bound, never a count.**
 - [ ] ⬜ **`build.gradle:2`'s bare `fabric-loom` id.** Resolved on `master` (it is the explicit
       non-remap id); what the **bare** id does on the `1.21.x` branches is inferred, not measured. It
       matters the next time a band's toolchain is touched.
@@ -680,6 +686,209 @@ Pre-§49 tips are the §48 tips recorded in `.agent/memory/state.md`.
 
 ---
 
+## §50 — `config.yml` joins the config-id gate, and the two live defects it finds — ⬜ PLANNED
+
+### What forced it
+
+`config.yml` has been outside ship-gate **4** since gate 4 existed. The carried row said it *"carries
+at least one dead id (`Chain`)"* — measured 2026-08-27, that undercounts by a factor of twenty-six.
+
+🔴 **And the hole is wider than the script.** TODO 5.5 has two halves: `config-id-audit.py` (the
+cross-version half) and `ConfigItemIdResolutionTest` (the live-registry half, which runs unattended
+inside gate 1). **`config.yml` is in neither.** The test reads `treasures.yml`,
+`fishing_treasures.yml`, `repair.vanilla.yml` and `salvage.vanilla.yml` and stops. So the largest
+behavioural id table in the jar — 210 references across 9 sections — has **no** id check of any kind,
+automated or manual, and has had none for the whole life of the port.
+
+### What was measured, before any edit
+
+A throwaway probe extended the extractor and resolved `config.yml` against the committed
+`scripts/mc-ids.txt` for all 14 versions. **210 references, 9 sections, 26 dead on every supported
+version.** For comparison, the five files already in the gate contribute 689 references with
+**zero** dead. The dead 26 fall into three classes, and the class boundary is the whole point:
+
+| Class | n | Example | Live counterpart present? |
+|---|---|---|---|
+| A real id of the **wrong kind for the seam** — an **item** under a **block**-keyed section | 21 | `Bonus_Drops.Mining.Coal` | ✅ `Coal_Ore`, `Deepslate_Coal_Ore` |
+| **Not a registry id at all**, counterpart already present | 4 | `Eyeblossom`, `Lapis_Lazuli_Ore`, `Redstone_Dust`, `Nether_Quartz` | ✅ `Open_Eyeblossom`, `Lapis_Ore`, `Redstone_Ore`, `Quartz` |
+| 🔴 **Not a registry id, and NO counterpart** | 1 | `Bonus_Drops.Mining.Block_Of_Amethyst` | ❌ no `Amethyst_Block` row exists |
+
+⚠️ **The class split above is measured (50.2), not counted by eye — and the first count was wrong.**
+The plan as first written said *"22 + 2"*; resolving each dead token under the *opposite* kind says
+**21 + 5**. Nothing downstream changed, but the arithmetic is the evidence, so it is the measured
+figure that stands here.
+
+🔑 **A 27th issue is NOT in that table, because it is not a dead row.** `Bonus_Drops.Mining.Chain`
+is correctly classified *"live on an older band"* — the defect is the **absent successor**,
+`Iron_Chain`, which no dead-row scan can see. Two different failure shapes, two different fixes: 25
+deletions, 1 rename, 1 **addition**.
+
+🔑 **The kind per section is traced to the call site, never guessed** — the same discipline
+`experience.yml` needed, and for the same reason: the blunter rules are wrong in both directions.
+
+| Section | Kind | Seam |
+|---|---|---|
+| `Bonus_Drops.Mining` | BLOCK | `MiningManager#isBonusDropsEligible(blockRegistryId, …)` |
+| `Bonus_Drops.Herbalism` | BLOCK | `HerbalismManager:230` |
+| `Bonus_Drops.Woodcutting` | BLOCK | `WoodcuttingManager:87/102/122` |
+| `Bonus_Drops.Smelting` | ITEM | `SmeltingManager:97` — the **result**, not the input |
+| `Bonus_Drops.Cooking` | ITEM | `CookingManager:336` — the **result** |
+| `Green_Thumb_Replanting_Crops` | BLOCK | `GeneralConfig#isGreenThumbReplantableCrop` |
+| `Skills.Cooking.Power_Cook_Effects` | ITEM (**keys only**) | `GeneralConfig#getPowerCookEffect` — the *value* is a status effect |
+
+That is why the 22 are dead rather than merely redundant: `MiningManager` hands the seam a **broken
+block** id, so `Coal` — a real item — can never match, on any version, forever.
+
+### 🔴 The two live defects
+
+Neither is drift. Both are wrong on **every** supported version, or on the four newest bands:
+
+1. **Amethyst blocks pay XP and drop nothing extra.** `experience.yml` reads `Amethyst_Block: 500`;
+   `config.yml` reads `Block_Of_Amethyst: true` — **not a registry id on any version**, and there is
+   no `Amethyst_Block` row beside it. So mining an amethyst block has paid 500 Mining XP and been
+   ineligible for double drops on every band since the port. The two files disagree about the same
+   block, and only the one nothing audited is wrong.
+2. **Chains lose their double drops on the newest four bands.** `minecraft:chain` became
+   `minecraft:iron_chain` in the Copper Age drop. `experience.yml` already carries **both** names —
+   that is the both-names pattern this repo settled on, and the reason `Chain` is correctly reported
+   *"live on an older band"* rather than dead. `config.yml` carries **only** `Chain`, so on
+   `1.21.10`, `1.21.11`, `26.1.2` and `26.2` — master included — a mined chain gets no bonus roll.
+
+⚠️ **Both fixes are ADDITIONS of a leaf key, and additions reach existing installs.**
+`ConfigLoader#copyMissingDefaults` back-fills any leaf present in the shipped defaults and missing
+from the player's file, then saves. So this is **not** the `ConfigRetunes` shape where editing a
+shipped default reaches nobody — a player with a config from §1 gets `Amethyst_Block` and
+`Iron_Chain` on next boot. Deleting a dead key does **not** remove it from a player's file, which is
+harmless precisely because the key is dead there too.
+
+### The ruling — delete the 25, rename 1, add 1
+
+Owner-ruled 2026-08-27. The 25 inert rows are **deleted**, not excluded.
+
+🔑 **The alternative was to keep them and add a per-row exclusion list, and that is the move this
+repo has a standing rule against.** An exclusion widened to turn a gate green is how gate 7 spent
+weeks reporting nothing (R-ab), and a gate that cannot go green without one is not a gate. The rows
+have no defenders: **every one of the 25 has a verified live counterpart in the same section**, so
+deleting them is provably inert — that verification is step 50.2 and it happens before the deletion,
+not after. 50.2 ran green: *25 rows proven redundant, 1 live defect identified*, with each claimed
+counterpart checked twice — present in that same section, **and** resolving on the control.
+
+**Rejected: correcting the 25 in place instead of deleting.** `Coal` → what? The section is keyed on
+the broken block, and `Coal_Ore` and `Deepslate_Coal_Ore` are already listed. A "correction" would
+add a duplicate of a row that exists. Deletion is the correction.
+
+### Steps
+
+- [x] ✅ **50.1 — DONE.** Extend `extract()` in `scripts/config-id-audit.py` with the 9 `config.yml` sections
+      above, each scoped the way `_xp_rows` is scoped — **by parent section, never by key name**.
+      `config.yml` is 676 lines of `Name: true` rows that are *not* ids (`Particles.Bleed`,
+      `Skills.*.Level_Cap`, `Commands.Skills.URL_Links`), so an unscoped scan drowns the control.
+- [x] ✅ **50.2 — DONE.** ⚠️ **Prove the counterpart before deleting anything.** For each dead row,
+      the live row in the same section that covers the same object is named, then checked twice:
+      **present in that section**, and **resolving on the control**. A stale or unmapped entry fails
+      the script rather than being skipped. Result: **25 safe to delete, 1 not covered**
+      (`Block_Of_Amethyst`) — and it caught the plan's own hand-count error. **This is gate 2 of the
+      five; the deletion did not happen until it had run.**
+- [x] ✅ **50.3 — DONE.** `src/main/resources/config.yml` **676 → 652 lines**: 25 deleted,
+      `Block_Of_Amethyst` → `Amethyst_Block`, `Iron_Chain: true` added beside `Chain: true`.
+      Applied by a dry-run-default script that anchors on exact line text **inside the resolved
+      section** and refuses any anchor matching other than once. 🔑 **The section scoping earned
+      itself on this one edit:** `Quartz` is listed under **both** `Bonus_Drops.Mining` (dead — the
+      seam is keyed on the block) and `Bonus_Drops.Smelting` (live — the seam is keyed on the
+      result). A whole-file match would have deleted the live row and nothing would have gone red.
+- [x] ✅ **50.4 — DONE.** Extend `--self-test` in both directions. MUST-FIND: one row from each of the 9 new
+      sections. MUST-NOT-FIND: the decoys that make this file dangerous — a `Particles`-style
+      `Bleed: true`, a `Level_Cap: 0`, an `Item_Amount: 10` next to `Item_Material`, and a
+      `Bonus_Drops` subsection for a skill **not** in the kind map. 🔑 **A filter never shown to
+      catch anything is a filter that removes everything.**
+      **Measured, not asserted: 5 mutations, all 5 CAUGHT, control green** — drop the top-level
+      scoping (the `Skills.Mining.Enabled_For_PVP` decoy leaks), read the Power-Cook *value* instead
+      of the key, turn the fail-closed guard into a silent skip, stop reading one `Bonus_Drops`
+      section, read `Green_Thumb` at the wrong indent. Fixture: **27 refs / 24 sections**, 26 required
+      refs found, 24 non-id tokens correctly ignored.
+- [x] ✅ **50.5 — DONE.** Re-measure the control resolve rate **on the worst band (`1.21`)**, not on master, and
+      update `MIN_CONTROL_RESOLVE_RATE`'s comment table with the new numbers. ⚠️ The comment says in
+      its own words that a floor justified by a stale measurement is not justified; adding 187
+      references without re-measuring makes it stale. **Move the floor only if the measurement forces
+      it, and say so.**
+      **Result: the floor did NOT move, and the worst case went UP** — `1.21` reads **91.8%** against
+      the 91.3% recorded at 8.4, so `0.80` keeps ~12 points of headroom. 🔑 **The intuition was
+      backwards and the comment now says so:** config.yml carries the *newest* blocks, so adding it
+      "should" have hurt the oldest band most — it did add 12 absent rows there, but it added 186
+      references, most of them ids older than the support floor. **A rate is a ratio.**
+- [x] ✅ **50.6 — DONE.** 🔑 **Close the runtime half too.** Add the `config.yml` sections to
+      `ConfigItemIdResolutionTest` (or a sibling), asserting against the **live registry**. This is
+      the leg that matters: the script is a person running a command, this runs inside
+      `./gradlew build` — ship gate 1 — on every push, on every band, with nobody remembering to.
+      It must **fail if 50.3 is reverted**; a test that passes either way is the point of the
+      exercise missed.
+      Built as `src/test/java/com/gmail/nossr50/config/ConfigYamlBonusDropsTest.java`, **4 tests**,
+      beside `ConfigItemIdResolutionTest` because it *is* that class's missing half.
+      ⚠️ **The obvious assertion is wrong here and the class says why.** *"Every shipped id resolves"*
+      is vacuous on the newest band and **false by design** on `1.21`, where `Firefly_Bush` and
+      eleven others are correct rows for a newer band — and config.yml's tables are **not pruned at
+      all**, so there is no post-prune invariant to lean on either. Two band-independent properties
+      instead: **(1)** no row names the registry *opposite* to its seam (deliberately silent about a
+      row resolving as *neither* — that is legitimate drift), and **(2)** whatever this version calls
+      an object, the table knows *that* name — the both-names pattern asserted from the **live
+      registry** rather than from a spelling. Each has a companion test feeding the detector an input
+      it must flag.
+      ✅ **The revert proof was run, not asserted.** With `config.yml` restored to `HEAD`, both
+      load-bearing tests go **red for the right reasons**: *"21 bonus-drop row(s) under a section
+      keyed on the other registry"* and *"does not cover 2 object(s) under the name this Minecraft
+      version actually uses"*. 🔑 **21 is the same number the Python reached independently** — two
+      implementations, one answer. Working copy restored and md5-verified afterwards.
+- [x] ✅ **50.7 — DONE.** Gate 4 `--self-test` **PASS** then `--check` **exit 0**:
+      **875 refs / 26 sections / 7 files, 0 dead-everywhere**, the only two unresolved being the
+      correctly-classified `Chain` pair (`config.yml` + `experience.yml`), each *"live on an older
+      band"*. Full suite at the release command form
+      (`--no-build-cache cleanTest build -Pmod_version=1.3.1`): **1869 executed, 0 failed, 0 errors,
+      0 skipped** across 167 classes — counted from the JUnit XML, not from `BUILD SUCCESSFUL`.
+      ⚠️ `build/libs/` holds **42** jars from past runs; `build` never cleans it, so any local
+      `boot-check.sh` glob there is ambiguous. Noted, not addressed — out of §50's scope.
+- [ ] **50.8** `mod_version` → `1.3.2-SNAPSHOT` on all nine. ⚠️ **Not optional and not taste:**
+      `src/**` is in `release.yml`'s `paths:` filter and 50.3 edits `src/main/resources/config.yml`,
+      so every branch fires a release run and R-t refuses a stale version. **PATCH**, because this
+      changes shipped config rows and one test, not a skill's behaviour model.
+- [ ] **50.9** Propagate to all eight bands with `Backport-of:` trailers. **Verify 8/8 by reading
+      `mod_version` and the two fixed rows back out of each branch** — never inferred from a
+      cherry-pick exiting 0.
+- [ ] **50.10** Gates **7, 9, 10, 11** inside `git clone --local --no-hardlinks . <scratch>`,
+      `--self-test` first on each. ⚠️ All four prefer **remote** refs, so a run in this working copy
+      grades the stale remote. ⚠️ **Gate 11 is the only instrument that sees the `mod_version` bump**
+      — gate 7 is blind to it by construction (`gradle.properties` sits in both
+      `PROPAGATABLE_PREFIXES` and `BAND_LOCAL_PATHS`).
+- [ ] **50.11** Push all nine. Expect nine green runs and nine `v1.3.2` releases; `v1.3.1` is reaped
+      per line by design. Verify with `gh release list` and `git ls-remote --tags`, **not** the run
+      list. Then gate **8** (`ci-watch.sh --mutate`, then `HEAD`) from the branch pushed.
+- [ ] **50.12** Record the outcome in a **separate** docs commit — a status row cannot count the
+      commit that changes the status.
+
+### What this section is NOT doing
+
+- **Not touching R13, §31.5's 562 collision sites, or manifest debt piece 1.** All three stay open.
+- **Not adding an exclusion list to `config-id-audit.py`.** See the ruling.
+- **Not re-tuning any live value.** Every `true` that stays, stays `true`. This section deletes dead
+  keys and adds two live ones; it changes no number a player has ever felt.
+- **Not extending the gate to `advanced.yml`.** It is id-keyed in places too and was **not**
+  measured here. That is a separate finding and gets its own section rather than riding this one.
+- **Not moving the drift waiver `cutoff:` sha.**
+
+### Rollback
+
+🟢 **While unpushed:** `git reset --hard <tip>` per branch. Pre-§50 tips are recorded in
+`.agent/memory/state.md` before the first commit, not after.
+
+🔴 **After the push, the undo is FORWARD** — a further `mod_version` bump, never a re-point of
+`v1.3.2`. ⚠️ **Do not delete a published release to undo this:** deleting a tag DRAFTS its release
+rather than removing it, which is how six orphans accumulated on 2026-08-13.
+
+⚠️ **The one irreversible-shaped step is 50.3**, and its blast radius is bounded by 50.2: 25 deleted
+rows, each proven redundant *first*, in one tracked file that `git show HEAD:src/main/resources/config.yml`
+restores in full.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
@@ -772,10 +981,22 @@ inert on every band by construction. **The other six have no automation whatsoev
 3. `scripts/boot-check.sh <jar> <version>` — 0 ERROR, 0 mixin failures, canary rejected.
    ⚠️ **Read the exit code: `1` = the mod is bad, `2` = ENVIRONMENT and nothing was proven about the
    mod.** `--self-test` first, as with every gate.
-4. `python scripts/config-id-audit.py --check` — 0 dead-everywhere. Reads the committed
+4. `python scripts/config-id-audit.py --self-test` **then** `--check` — **0 dead-everywhere**,
+   over **875 references / 26 sections / 7 files** as of §50. Reads the committed
    `scripts/mc-ids.txt`, so it needs no local Loom cache.
    ⚠️ **Cherry-pick `extract-mc-ids.py` + `mc-ids.txt` together** — the audit imports the generator's
    parser and refuses to run without it.
+   ⚠️ **Two unresolved-on-control rows are CORRECT and must stay** — the `Chain`/`Iron_Chain` pair in
+   `config.yml` and `experience.yml`. Exactly one of each pair is live per version; that is the
+   both-names pattern working, and only DEAD-EVERYWHERE is a defect.
+   🔑 **Since §50 this gate has a second, unattended leg**: `ConfigYamlBonusDropsTest` asks the
+   **live registry** the same question inside gate 1, on every push, on every band. The script is
+   still the only half that can compare *across* versions, so neither replaces the other.
+   ⚠️ **It fails closed on an unclassified `Bonus_Drops` sub-section.** Adding one to `config.yml`
+   without a `BONUS_DROP_KIND` entry refuses the run rather than skipping the section — trace the
+   skill's bonus-drop seam and record BLOCK or ITEM. Note the kinds do **not** match
+   `experience.yml`'s: both call Smelting an ITEM, but this file keys it on the furnace **result**
+   and that one on the **input**.
 5. `scripts/brew-smoke.sh` — passes **with** its vanilla control failing.
 6. `scripts/gameplay-smoke.sh` — **36 passed / 0 failed / 0 inconclusive** on `master`, and
    `GAMEPLAY_SMOKE_CONTROL=1` must **fail**.
