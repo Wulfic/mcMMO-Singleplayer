@@ -35,7 +35,7 @@ status, because nothing reads it.** Re-measure before quoting this table.
 | | state |
 |---|---|
 | branches | **NINE, all on the remote.** `master` (`26.2`) + `mc/26.1.2` + the seven `1.21.x` bands |
-| vs `origin` | **every branch is ahead by six** once this commit lands — §44's two, §45's three, §46's one. Nothing is behind. Measured `0 6` on all nine. Nothing is behind. 🔴 **Do not quote this number; run `git rev-list --left-right --count origin/<b>...<b>`.** This row has now been wrong **twice in two commits**: it said `1` when the truth was `2`, was corrected to `3`, and was stale again one commit later because the docs commit that corrected it also incremented it. **A status row cannot count the commit it is written in** |
+| vs `origin` | 🔴 **THIS ROW NO LONGER CARRIES A NUMBER, AND THAT IS THE FIX.** It was wrong **three times in three commits** — `1` when the truth was `2`, corrected to `3` and stale one commit later, then `six` written into the commit that made it seven. **A status row cannot count the commit it is written in**, so it stops trying. The measurement is one command and it is never stale: `git rev-list --left-right --count origin/<b>...<b>` per branch, or the loop over all nine in `.agent/memory/state.md`. What is *structurally* true: nothing is behind, every branch carries the same unpushed set (§44, §45, §46, §47), and that set only grows until the next `mod_version` bump |
 | `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.0-SNAPSHOT` |
 | releases | **NINE published at `v1.3.0`** (§43.4) — the declared 16-version scope is downloadable |
 | build | ✅ **green on all nine**, each built on its own band this session (§44.3) |
@@ -43,7 +43,7 @@ status, because nothing reads it.** Re-measure before quoting this table.
 | gates 7/9/10/11 | ✅ exit 0, measured post-push in §43.4. 🔴 **They have not seen §44** — all four prefer **remote** refs, and no branch's §44 commit is pushed |
 | mixin gate | ✅ `--check` passes on `master` and `mc/26.1.2` (`ZERO=0 OK=60 SLICE=1`) |
 | boot | ✅ `26.2` (§35) and ✅ `26.1.2` (§43.1, exit 0, 0 ERROR, 0 mixin failures) |
-| gameplay | ✅ `26.2` 30/30 (§35) and ✅ `26.1.2` 30/0/0 (§43.1), mod-less control failing as it must |
+| gameplay | ✅ `26.2` **36 / 0 / 0**, re-measured 2026-08-27 against a jar rebuilt from HEAD (§47; was 30/30 at §35, +3 from §46 and +3 from §47). ✅ `26.1.2` 30/0/0 (§43.1) — that figure predates both phases and will read 36 on its next run. Mod-less control failing as it must |
 
 📌 **The R-ac push hold is LIFTED** (owner, 2026-08-26, §43) and all nine branches went out.
 🔴 **§44 is nonetheless unpushed, on a separate owner ruling:** `build.gradle` sits inside
@@ -2123,9 +2123,10 @@ mob mastery — the gate holding, observed without reference to the marker.
 ⚠️ `MobOrigins.announceFirstMark` fires **once per session** (`compareAndSet`), so the egg mob emits
 no log line of its own; the `execute if data` marker is the only *direct* evidence and had to be.
 
-⚠️ **Still NOT covered: `DISPENSER`.** Of the three constants mapping to `PLAYER_PLACED`, the harness
-now drives `COMMAND` and `SPAWN_ITEM_USE`. `DISPENSER` remains unit-tested only. That is a smaller
-gap than the one just closed and is recorded rather than fixed.
+✅ **`DISPENSER` was the last one, and §47 (2026-08-27) closed it** — `combat-dispenser-control`,
+green on `26.2` with three mutations red at exit 1. At the time this section was written the harness
+drove `COMMAND` and `SPAWN_ITEM_USE` only, and the remaining gap was recorded rather than fixed.
+**All three `PLAYER_PLACED` constants now have live coverage.**
 
 ### What I am NOT doing
 
@@ -2146,6 +2147,190 @@ therefore waits for the same `mod_version` bump.
 
 ---
 
+## §47 — `DISPENSER` gets harness coverage — ✅ DONE on `master`, PUSHED NOWHERE
+
+**The gap, and it is the last one of its kind.** `MobOrigins.classify` maps three constants onto
+`MobOrigin.PLAYER_PLACED` — `SPAWN_ITEM_USE`, `COMMAND`, `DISPENSER`. §46 closed `SPAWN_ITEM_USE`
+(`combat-spawn-egg-control`) and §22 closed `COMMAND` (`combat-summon-control`). **`DISPENSER` is
+unit-tested only**, and §46 recorded it as the last uncovered one rather than fixing it.
+
+🔑 **Why a third phase and not a third assertion in an existing one.** `mc/1.21.1` is the standing
+proof that these paths regress **independently**: `loadEntityWithPassengers` lost its `SpawnReason`
+parameter there, so `/summon`-ed mobs went unstamped while spawn eggs stayed correct, and every
+structural gate read green through it — 67/67 injectors, 4 seams applying, clean boot. Only a live
+kill found it. Three constants that can come apart get three phases.
+
+### 47.1 — the chain, read from 26.2 bytecode before a line was written
+
+Not recalled, not inferred from a wiki. `javap -c` over the Loom-cached merged jar:
+
+| Step | Evidence |
+|---|---|
+| `SpawnEggItemBehavior.execute` | offset **43** `getstatic EntitySpawnReason.DISPENSER`, spawning at `BlockSource.pos().relative(FACING)` (offsets 36–40) |
+| → `EntityType.spawn(ServerLevel, ItemStack, LivingEntity, BlockPos, reason, ZZ)` | offset **59** |
+| → `spawn(ServerLevel, PostSpawnProcessor, BlockPos, reason, ZZ)` | offset 32 |
+| → `create(ServerLevel, PostSpawnProcessor, BlockPos, reason, ZZ)` | offset 10 |
+| → `create(Level, EntitySpawnReason)` | offset 4 |
+| → **`create(Level, EntitySpawnRequest)`** | offset 11 — **`EntityTypeSpawnOriginMixin`'s exact target**, and its two returns (offsets 16 and 28) are why that injector carries `allow = 2` |
+
+So the stamp **should** already be correct on `master`; this phase is a regression guard, not a fix.
+🔑 That is the point. `SPAWN_ITEM_USE` was also "obviously fine" until a band proved otherwise.
+
+### 47.2 — 🔴 the trap this nearly walked into, found in `getDefaultDispenseMethod`
+
+On 26.2 a spawn egg carries **no dedicated `DISPENSER_REGISTRY` entry**. `DispenserBlock.getDispenseMethod`
+misses the map and falls through to `getDefaultDispenseMethod`, which reaches `SpawnEggItemBehavior.INSTANCE`
+**only when the stack has `DataComponents.ENTITY_DATA`** (offsets 28–48) — otherwise `DEFAULT_BEHAVIOR`,
+which merely *throws the item on the floor*. In 26.x the egg's species lives entirely in that component:
+`SpawnEggItem.getType(ItemStack)` reads `ENTITY_DATA` and returns **null** without it.
+
+A vanilla `minecraft:<mob>_spawn_egg` has it as a default component — established empirically, not
+argued: §46's `use once` phase spawns a mob through `SpawnEggItem.useOn`, which bottoms out in that same
+`getType`. Had this phase been built on an egg assembled by hand (`give` with components stripped, or a
+generic egg handed a species by NBT), the dispenser would have **fired, logged nothing, dropped an item,
+and the phase would have reported INCONCLUSIVE forever** — with the mod entirely innocent.
+
+### 47.3 — 🔴 the species is load-bearing, and it must NOT be the mooshroom
+
+§46's warning generalises: a probe that can tag a mob this phase did not create is a **false PASS**,
+strictly worse than a false fail. §46 chose `mooshroom` because superflat plains cannot generate one.
+That argument does not survive a **second** `PLAYER_PLACED` phase — `combat-spawn-egg-control` runs
+immediately above and creates a mooshroom of its own. Its survival is reported by *its* markers, not by
+this phase's, so this phase could pass on the previous phase's mob.
+
+**Ruling: `minecraft:sniffer`.** Each line from a jar or a committed manifest:
+
+- **Worldgen cannot produce one anywhere.** Sniffers have no natural spawn in any biome in vanilla — a
+  stronger guarantee than mooshroom's biome argument, and one that survives a change of world preset.
+- **Distinct from the sibling phase**, so the two `PLAYER_PLACED` phases cannot contaminate each other.
+- `sniffer_spawn_egg` is present in **all 14** versions in `scripts/mc-ids.txt`, so it back-ports.
+- **`difficulty peaceful` cannot silently refuse it.** `create(Level, EntitySpawnRequest)` returns null
+  when `!ignoreChecks() && !canSpawn(level)`, and `canSpawn` refuses only a disabled feature flag or
+  `!isAllowedInPeaceful() && difficulty == PEACEFUL`. SNIFFER's builder chain in `EntityTypes`
+  (offsets 5475–5530) is `of(…, CREATURE).sized().eyeHeight().passengerAttachments().nameTagOffset()
+  .clientTrackingRange()` — **no `notInPeaceful()`, no `requiredFeatures()`**.
+- Nothing on the spawn path rejects it for **size**: `create(ServerLevel, PostSpawnProcessor, …)` calls
+  `getYOffset` to nudge Y and has no free-space refusal.
+
+### 47.4 — 🔴 the rising edge, and why the command ORDER is the phase
+
+`DispenserBlock.neighborChanged` schedules a dispense **only** on `powered && !TRIGGERED`
+(offsets 41–55, `scheduleTick(pos, this, 4)`). Three consequences, all mandatory:
+
+1. **Clear the power slot BEFORE placing the dispenser.** A redstone block left at that position by an
+   earlier run means the dispenser is placed already-powered, no `neighborChanged` fires for it, and
+   re-placing the redstone is a no-op state change — a phase that does nothing and says nothing.
+2. **Load the egg BEFORE powering.** Powering first dispenses an empty slot.
+3. **`triggered=false` is stated explicitly** in the `setblock`, because it is the precondition rather
+   than a default worth relying on.
+
+Power is a `redstone_block` at the side; `hasNeighborSignal(pos) || hasNeighborSignal(pos.above())`
+accepts it. The dispenser **faces up**, so the mob lands at `pos.above()` — which `_CLEAR_EAST`
+guarantees is air — and `randomizeVelocity` is false (`direction != UP`, offset 46). The 4-tick delay
+is covered many times over by `SLEEP 2`.
+
+### 47.5 — the phase
+
+- [x] ✅ `combat-dispenser-control` in `scripts/gameplay_smoke_scenario.py`, placed immediately after
+      `combat-spawn-egg-control`, asserting the **origin stamp directly** — the §22 ruling.
+- [x] ✅ Marker `disptarget-spawned` proves the dispense actually placed a mob (unconfirmed action →
+      INCONCLUSIVE, never PASS).
+- [x] ✅ Marker `disptarget-stamped` is the subject:
+      `execute if data entity … "fabric:attachments"."mcmmo:mob_origin"`. **`if`, not `unless`** — a
+      player-placed mob must HAVE the path.
+- [x] ✅ Marker `disptarget-killed`, and `flat=["UNARMED","SWORDS","AXES"]`: a mob a dispenser placed pays
+      nothing.
+- [x] ✅ ⚠️ **Both blocks are removed before the strike.** Every later combat phase tps its own target to
+      `2.5 -60 0.5`, which is inside the dispenser's cell — the same mandatory cleanup the egg phase
+      carries, for the same reason.
+- [x] ✅ The anti-vacuity floor is `3 + len(gates) + sum(len(p.up) + len(p.flat) for p in PHASES)` —
+      **derived**, so the phase moves it by itself. Verify it moved 28 → 31; a floor that did not move
+      is the next vacuous guard.
+
+### 47.6 — what proves it
+
+- [x] ✅ The scorer's `--self-test` first (it gates every run, and it checks that every required marker is
+      actually emitted by a command in its own phase).
+- [x] ✅ A live `scripts/gameplay-smoke.sh` run on `26.2`, against a jar rebuilt from this HEAD, expecting
+      the phase count to rise **33 → 36**.
+- [x] ✅ 🔑 **Mutations, not a green run.** Green proves nothing:
+      **M1** — empty the dispenser (no mob → INCONCLUSIVE, not PASS), confirmed at the cause, i.e. zero
+      occurrences of "sniffer" in the log.
+      **M2** — `if data` → `unless data`, which can only fail *because the attachment path exists*, so
+      it is the mutation that proves the probe is non-vacuous.
+      **M3** — power the dispenser BEFORE loading the egg, which is 47.4's ordering rule. It fails only
+      if that ordering is genuinely load-bearing; if M3 stays green the rising-edge reasoning is wrong
+      and this section is wrong with it.
+- [x] ✅ Every mutation must reach **exit 1**. A run that only looks red on a console never stops the ship
+      gate.
+
+### ✅ 47.7 Outcome — MEASURED on `26.2`, 2026-08-27
+
+✅ **DONE on `master`. The stamp was already correct on this band, which is exactly what a regression
+guard is for.** Live evidence, `build/gameplay-smoke/26.2`, in order:
+`Replaced a slot at 2, -60, 0 with [Sniffer Spawn Egg]` → `Added tag 'disptarget' to Sniffer` →
+`===MARK disptarget-spawned===` → `===MARK disptarget-stamped===` → `===MARK disptarget-killed===`.
+🔑 Note the slot line reads **`at 2, -60, 0`**, not *"on Tester"* — the egg went into the dispenser,
+never into a hand. That one word is the whole difference between this phase and §46's.
+
+| run | phase verdict | total | exit |
+|---|---|---|---|
+| **baseline** | 3 × `[PASS]` (UNARMED/SWORDS/AXES correctly stayed) | **36 passed, 0 failed, 0 inconclusive** | **0** |
+| **M1** — dispenser left empty | `[INCONCLUSIVE]` missing **`disptarget-spawned`, `disptarget-stamped`** | 33 / 0 / 1 | **1** |
+| **M2** — `if data` → `unless data` | `[INCONCLUSIVE]` missing **`disptarget-stamped`** only | 33 / 0 / 1 | **1** |
+| **M3** — power BEFORE loading the egg | `[INCONCLUSIVE]` missing **`disptarget-spawned`, `disptarget-stamped`** | 33 / 0 / 1 | **1** |
+
+🔑 **M2 is the one that proves non-vacuity.** Under `unless` the marker cannot fire *precisely because
+the attachment path exists*, so the probe reads a real `fabric:attachments`.`mcmmo:mob_origin` path
+rather than a condition true either way. And `disptarget-spawned` still fired under M2 while
+`disptarget-stamped` did not — the two markers are **independent**: M2 isolates the stamp, M1 takes
+out both.
+🔑 **M1 is confirmed at the cause, not the symptom.** The M1 log contains **zero** occurrences of
+"sniffer", case-insensitive, across the whole file — no mob ever existed to tag. The egg is the
+operative ingredient, and the species probe cannot be satisfied by anything else in the world.
+🔑🔑 **M3 turned 47.4's reasoning from an argument into a measurement.** The rising-edge rule was
+derived from `neighborChanged` bytecode; M3 moves the load one line later and the phase goes red, so
+the ordering is genuinely load-bearing rather than defensive ceremony. Commands are issued ~1 s
+apart in this harness and the scheduled tick is 4 ticks (0.2 s) out, so the dispenser fires empty
+well before the egg lands. **Had M3 stayed green, 47.4 would have been wrong.**
+🔑 **All three mutations exit 1**, so each reaches the ship gate rather than only looking red on a
+console. Baseline exits 0.
+
+✅ **The anti-vacuity floor moved BY ITSELF**, `sum(up+flat)` **28 → 31** and phases **11 → 12**,
+measured by importing both this working copy and `HEAD`'s blob rather than by reading the expression.
+The floor is `3 + len(gates) + sum(...)`; this band declares **two** version gates, so it stands at
+**36** and the run passed **exactly 36** — the total is pinned to the floor with no slack.
+
+⚠️ **`26.2` is the only band this ran on.** The phase is back-ported unrun, exactly as §46 was; the
+first band run of it is whatever runs the ship gate next. That is the design — a guard that has never
+been executed on a band is a guard that has not yet reported on that band.
+
+✅ **All three `PLAYER_PLACED` constants now have live harness coverage** — `COMMAND` (§22),
+`SPAWN_ITEM_USE` (§46) and `DISPENSER` (§47). There is no fourth; `MobOrigins.classify`'s switch is
+exhaustive with no `default` arm, so a Minecraft version adding a reason fails the compile.
+
+### What I am NOT doing
+
+- **Not touching `MobOrigins`, any mixin, or anything under `src/main`.** Harness only. The chain is
+  verified correct on `26.2`; if a band is broken this phase is what will say so, and the fix is that
+  band's own work.
+- **Not adding a fourth origin.** `BUCKET` is deliberately NOT `PLAYER_PLACED` (releasing a caught
+  axolotl is not free mob generation), and the counting origins — `EVENT`, `PATROL`, `MOB_SUMMONED`,
+  `REINFORCEMENT`, `JOCKEY` — are settled rulings, not gaps.
+- **Not R13, §31.5, or manifest debt piece 1.** Unchanged.
+- **Not pushing.** Owner ruling re-affirmed 2026-08-27: §44/§45/§46 ride the next `mod_version` bump and
+  this rides with them. Nothing goes to `origin` this session.
+
+### Blast radius and rollback
+
+🟢 **No `src/main` change, nothing generated, nothing published.** One file,
+`scripts/gameplay_smoke_scenario.py`, plus this plan.
+🔴 It is under **gate 10's byte-identity set** (`scripts/**`), so the commit must reach every band or
+gate 10 goes red — the only cross-branch obligation it creates, and the same one §46 carried.
+Undo is `git revert <sha>`, or `git reset --hard <recorded tip>` while unpushed.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
@@ -2155,7 +2340,8 @@ closes R-w′) · `brew-smoke.sh` refuses an ambiguous jar glob instead of takin
 `combat-egg-control` → `combat-summon-control`, now asserting the **origin stamp** directly rather
 than inferring it from XP staying flat · the smoke scorer discovers gated skills from the boot log
 instead of grepping one hardcoded skill name (⚠️ the wording in `SkillAvailability#probe` is now an
-**interface**, not prose) · the anti-vacuity floor is derived and exact at **30**, not `3 + sum(...)`
+**interface**, not prose) · the anti-vacuity floor is **derived**, not the constant `3 + sum(...)` it
+used to be — exact at 30 when that closed, 36 as of §47, and it moves by itself with every phase
 · R-y ruled `README.md`/`wiki/` **into** the identity guard (§24).
 
 - [x] ✅ **THE SPAWN-EGG HALF IS DONE (§46, 2026-08-26) — and the 08-19 verdict was WRONG.**
@@ -2165,7 +2351,16 @@ instead of grepping one hardcoded skill name (⚠️ the wording in `SkillAvaila
       refutations, and the recorded fallback was worse than useless — a **dispenser** yields
       `SpawnReason.DISPENSER`, a DIFFERENT constant, so it would have covered a third origin while
       reporting this gap closed. Full reasoning and the five refuted hypotheses in §46.
-      ⚠️ **`DISPENSER` is now the only `PLAYER_PLACED` constant with no harness coverage.**
+      ⚠️ `DISPENSER` was left as the only `PLAYER_PLACED` constant with no harness coverage.
+
+- [x] ✅ **AND SO IS THE DISPENSER HALF (§47, 2026-08-27) — the set is CLOSED.**
+      `combat-dispenser-control` loads a real `sniffer_spawn_egg` into a real dispenser and fires it
+      with a redstone rising edge, green on `26.2` at **36 passed / 0 / 0**, with **three** mutations
+      red at exit 1. The species is `sniffer` and not the mooshroom deliberately: the phase above
+      creates a mooshroom of its own, and a probe that can tag the previous phase's mob is a **false
+      PASS**. 🔑 M3 (power before loading) turned the rising-edge reasoning from an argument into a
+      measurement. **All three constants mapping to `PLAYER_PLACED` — `COMMAND`, `SPAWN_ITEM_USE`,
+      `DISPENSER` — now have live harness coverage, and there is no fourth.**
 
 - [ ] 🔴 **THE LIVE PLAY-TEST — owner only. Oldest debt in the queue.**
       **Taming:** shoot a zombie at ~25 blocks with a wolf at your heels in **passive** mode and watch
@@ -2233,7 +2428,15 @@ inert on every band by construction. **The other six have no automation whatsoev
    ⚠️ **Cherry-pick `extract-mc-ids.py` + `mc-ids.txt` together** — the audit imports the generator's
    parser and refuses to run without it.
 5. `scripts/brew-smoke.sh` — passes **with** its vanilla control failing.
-6. `scripts/gameplay-smoke.sh` — 29/29, and `GAMEPLAY_SMOKE_CONTROL=1` must **fail**.
+6. `scripts/gameplay-smoke.sh` — **36 passed / 0 failed / 0 inconclusive** on `master`, and
+   `GAMEPLAY_SMOKE_CONTROL=1` must **fail**.
+   ⚠️ **This number moves whenever a phase is added, and it went stale unnoticed once already** — it
+   read `29/29` through both §46 (+3) and up to §47 (+3), i.e. the caveat-expiry pass missed it twice
+   because the phase commits touched the scenario file and not this line. The total is
+   `3 + <version gates the boot log declares> + sum(len(up) + len(flat))` over the phase table, so a
+   band declaring a different number of gates legitimately differs by that much. **Read the count out
+   of `PHASES` rather than trusting this line**, and a total *below* the floor is the scorer's own
+   anti-vacuity failure, not a phase failure.
 7. `python scripts/drift-audit.py --self-test` **then** `--master master` — **0 MISSING on every
    band**. ⚠️ It audits `origin/master`, so **push first, then audit**.
    ⚠️⚠️ **It cannot see a docs-only commit** (Phase 21, defect B): docs are excluded from
