@@ -361,6 +361,92 @@ PHASES: list[Phase] = [
         requires_markers=["eggtarget-spawned", "eggtarget-stamped", "eggtarget-killed"],
     ),
     Phase(
+        name="combat-dispenser-control",
+        note="The DISPENSER twin, and the third of three. MobOrigins maps SPAWN_ITEM_USE, COMMAND "
+        "and DISPENSER onto PLAYER_PLACED; the two phases above cover the first two, and this one "
+        "closes the set. They are three phases rather than three assertions in one because "
+        "mc/1.21.1 is standing proof the paths regress INDEPENDENTLY -- "
+        "loadEntityWithPassengers lost its SpawnReason parameter there, so /summon-ed mobs went "
+        "unstamped while spawn eggs stayed correct, and 67/67 injectors plus a clean boot said "
+        "nothing. The subject is the STAMP, asserted directly.\n"
+        "\n"
+        "The vanilla chain, read from 26.2 bytecode rather than recalled: "
+        "SpawnEggItemBehavior.execute (offset 43, `getstatic EntitySpawnReason.DISPENSER`) -> "
+        "EntityType.spawn(ServerLevel, ItemStack, LivingEntity, BlockPos, reason, ZZ) -> "
+        "spawn(.., PostSpawnProcessor, ..) -> create(.., PostSpawnProcessor, ..) -> "
+        "create(Level, EntitySpawnReason) -> create(Level, EntitySpawnRequest), which is "
+        "EntityTypeSpawnOriginMixin's exact target.\n"
+        "\n"
+        "⚠️⚠️ THE COMMAND ORDER IS THE PHASE, not tidiness. DispenserBlock.neighborChanged "
+        "schedules a dispense ONLY on `powered && !TRIGGERED`. So: clear the power slot BEFORE "
+        "placing the dispenser (a redstone block left by an earlier run means the dispenser is "
+        "placed already-powered, nothing fires for it, and re-placing the redstone is a no-op "
+        "state change -- a phase that does nothing and says nothing); load the egg BEFORE powering "
+        "(or an empty slot is dispensed); and state `triggered=false` explicitly, because it is "
+        "the precondition rather than a default worth relying on.\n"
+        "\n"
+        "⚠️⚠️ THE SPECIES IS LOAD-BEARING AND IT IS NOT THE MOOSHROOM. The phase above creates one "
+        "of those, and its survival would be reported by ITS markers, not by these -- so a "
+        "mooshroom probe here could pass on the previous phase's mob, which is a false PASS. "
+        "`sniffer` has no natural spawn in ANY biome in vanilla, a stronger guarantee than "
+        "mooshroom's biome argument and one that survives a change of world preset. "
+        "`sniffer_spawn_egg` is in all 14 versions of scripts/mc-ids.txt, and SNIFFER's builder "
+        "chain in EntityTypes calls neither notInPeaceful() nor requiredFeatures(), so "
+        "`difficulty peaceful` in SETUP cannot silently refuse it -- EntityType.canSpawn is the "
+        "only null return on the whole spawn path.\n"
+        "\n"
+        "⚠️ A VANILLA EGG, NEVER ONE ASSEMBLED BY HAND. On 26.x a spawn egg has no "
+        "DISPENSER_REGISTRY entry: getDefaultDispenseMethod reaches SpawnEggItemBehavior only when "
+        "the stack has DataComponents.ENTITY_DATA, which is where the species now lives. An egg "
+        "given its species any other way falls to DEFAULT_BEHAVIOR, which just throws the item on "
+        "the floor -- the dispenser fires, logs nothing, and the phase is INCONCLUSIVE forever "
+        "with the mod entirely innocent.",
+        commands=[
+            _CLEAR_EAST,
+            # Leftovers from an earlier run of this phase would be tagged by the probe below.
+            "kill @e[type=minecraft:sniffer]",
+            # ⚠️ THE POWER SLOT IS CLEARED FIRST. See the note above: this ordering is the phase.
+            "setblock 3 -60 0 minecraft:air",
+            "setblock 2 -60 0 minecraft:dispenser[facing=up,triggered=false]",
+            "item replace block 2 -60 0 container.0 with minecraft:sniffer_spawn_egg",
+            # THE RISING EDGE. hasNeighborSignal(pos) accepts a redstone block at the side; the
+            # scheduled tick is 4 ticks out, which SLEEP 2 covers many times over.
+            "setblock 3 -60 0 minecraft:redstone_block",
+            "SLEEP 2",
+            # Facing UP, so the mob lands at pos.above() -- 2,-59,0, which _CLEAR_EAST has just
+            # guaranteed is air -- and randomizeVelocity is false for that direction.
+            "execute positioned 2.5 -59 0.5 run "
+            "tag @e[type=minecraft:sniffer,sort=nearest,limit=1] add disptarget",
+            # An action that did not happen must report INCONCLUSIVE, never PASS.
+            "execute if entity @e[tag=disptarget] run say ===MARK disptarget-spawned===",
+            # THE SUBJECT. mcMMO writes `mcmmo:mob_origin` ONLY for an origin that does not count,
+            # so a player-placed mob must HAVE the path -- `if`, the converse of the natural-target
+            # probe. Path-existence form: no value match, no version-specific predicate grammar.
+            'execute if data entity @e[tag=disptarget,limit=1] '
+            '"fabric:attachments"."mcmmo:mob_origin" run say ===MARK disptarget-stamped===',
+            "data merge entity @e[tag=disptarget,limit=1] {NoAI:1b,PersistenceRequired:1b}",
+            # ⚠️ MANDATORY, not tidiness: the strike position below is INSIDE the dispenser's cell,
+            # and every later combat phase tps its own target to 2.5 -60 0.5 too. The redstone goes
+            # with it -- a live power source left behind re-arms nothing here, but the next run of
+            # this phase would find the slot occupied.
+            "setblock 3 -60 0 minecraft:air",
+            "setblock 2 -60 0 minecraft:air",
+            "tp @e[tag=disptarget,limit=1] 2.5 -60 0.5",
+            _give("weapon.mainhand", "minecraft:air"),
+            *_look(2.5, -59.3, 0.5),
+            STRIKE,
+            # 14 HP (Sniffer.createAttributes, MAX_HEALTH 14.0) against ~38 full-strength bare-hand
+            # swings in this window -- 13 ticks clears both the 5-tick attack cooldown and the mob's
+            # 10-tick invulnerability, so every swing lands for 1.
+            "SLEEP 25",
+            HALT,
+            "execute unless entity @e[tag=disptarget] run say ===MARK disptarget-killed===",
+        ],
+        up=[],
+        flat=["UNARMED", "SWORDS", "AXES"],
+        requires_markers=["disptarget-spawned", "disptarget-stamped", "disptarget-killed"],
+    ),
+    Phase(
         name="combat-fist",
         note="A bare-handed kill of a NATURAL mob pays Unarmed and not Swords. Combat XP is per "
         "HIT, so this does not depend on the kill landing inside the window -- but the kill is "
