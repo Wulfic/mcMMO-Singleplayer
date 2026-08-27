@@ -38,8 +38,8 @@ status, because nothing reads it.** Re-measure before quoting this table.
 |---|---|
 | branches | **NINE, all on the remote.** `master` (`26.2`) + `mc/26.1.2` + the seven `1.21.x` bands |
 | vs `origin` | 🔴 **THIS ROW NO LONGER CARRIES A NUMBER, AND THAT IS THE FIX.** It was wrong **three times in three commits** — `1` when the truth was `2`, corrected to `3` and stale one commit later, then `six` written into the commit that made it seven. **A status row cannot count the commit it is written in**, so it stops trying. The measurement is one command and it is never stale: `git rev-list --left-right --count origin/<b>...<b>` per branch, or the loop over all nine in `.agent/memory/state.md`. What is *structurally* true: nothing is behind. 🔴 **The branches NO LONGER carry the same unpushed set** — `master` was pushed on 2026-08-27 and the eight bands were not, so `master` is briefly five sections ahead of every band **on the remote**, which is what gates 7/9/10/11 grade. §49 closes that skew; until it does, a gate sweep reports drift that exists only because the bands have not gone out. ⚠️ **The band-side set only grows until the next `mod_version` bump** |
-| `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.0-SNAPSHOT` |
-| releases | **NINE published at `v1.3.0`** (§43.4) — the declared 16-version scope is downloadable |
+| `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.1-SNAPSHOT` |
+| releases | **NINE published at `v1.3.1`** (§49) — the declared 16-version scope is downloadable. §43.4's nine `v1.3.0` releases were **reaped by the success sweep**, one per Minecraft line, exactly as designed |
 | build | ✅ **green on all nine**, each built on its own band this session (§44.3) |
 | suite | ✅ **0 failures on all nine.** `master` and `mc/26.1.2` 1,861; the `1.21.x` bands 1,855–1,863. ⚠️ The spread is per-band gating, not a master-vs-band split |
 | gates 7/9/10/11 | ✅ exit 0, measured post-push in §43.4. 🔴 **They have not seen §44 on any BAND** — all four prefer **remote** refs; `master`'s §44 commit is now pushed and the bands' are not, so a sweep run before §49's push measures that skew rather than the code |
@@ -53,7 +53,9 @@ step *"Refuse a stale mod_version"*) — **the push succeeded, only the release 
 already written down here, one owner ruling earlier: `build.gradle` sits inside
 `release.yml`'s `paths:` filter, and every branch is at `1.3.0-SNAPSHOT` with `v1.3.0` already
 published — so pushing it alone fires nine release runs that **R-t's stale-version gate refuses**.
-It rides the next `mod_version` bump. See §44.4.
+✅ **CLOSED by §49** (2026-08-27): `mod_version` went to `1.3.1-SNAPSHOT` on all nine branches,
+all nine were pushed, and all nine release runs went **green** at `v1.3.1`. See §44.4 for why the
+hold existed and §49 for how it was lifted.
 
 ⚠️ **A clean compile and a green gate are STRUCTURAL.** §32 found a mixin bound to the *wrong live
 method* while every structural gate read green, `mc/1.21.1` shipped a `/summon` origin gap past
@@ -77,19 +79,19 @@ own `fabric.mod.json`.
 
 | Branch | MC versions covered | `depends.minecraft` | Released tag |
 |---|---|---|---|
-| `master` | `26.2` | `~26.2` | `mc26.2-v1.3.0` |
-| `mc/26.1.2` | `26.1`, `26.1.1`, `26.1.2` | `>=26.1 <26.2` | `mc26.1.2-v1.3.0` |
-| `mc/1.21.11` | `1.21.11` | `~1.21.11` | `mc1.21.11-v1.3.0` |
-| `mc/1.21.10` | `1.21.9`, `1.21.10` | `>=1.21.9 <1.21.11` | `mc1.21.10-v1.3.0` |
-| `mc/1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | `>=1.21.6 <1.21.9` | `mc1.21.8-v1.3.0` |
-| `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v1.3.0` |
-| `mc/1.21.4` | `1.21.4` | `>=1.21.4 <1.21.5` | `mc1.21.4-v1.3.0` |
-| `mc/1.21.3` | `1.21.2`, `1.21.3` | `>=1.21.2 <1.21.4` | `mc1.21.3-v1.3.0` |
-| `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | `mc1.21.1-v1.3.0` |
+| `master` | `26.2` | `~26.2` | `mc26.2-v1.3.1` |
+| `mc/26.1.2` | `26.1`, `26.1.1`, `26.1.2` | `>=26.1 <26.2` | `mc26.1.2-v1.3.1` |
+| `mc/1.21.11` | `1.21.11` | `~1.21.11` | `mc1.21.11-v1.3.1` |
+| `mc/1.21.10` | `1.21.9`, `1.21.10` | `>=1.21.9 <1.21.11` | `mc1.21.10-v1.3.1` |
+| `mc/1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | `>=1.21.6 <1.21.9` | `mc1.21.8-v1.3.1` |
+| `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v1.3.1` |
+| `mc/1.21.4` | `1.21.4` | `>=1.21.4 <1.21.5` | `mc1.21.4-v1.3.1` |
+| `mc/1.21.3` | `1.21.2`, `1.21.3` | `>=1.21.2 <1.21.4` | `mc1.21.3-v1.3.1` |
+| `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | `mc1.21.1-v1.3.1` |
 
 **Shipped coverage is continuous `1.21` → `1.21.11` plus `26.1` → `26.2` — the declared
-16-version scope, closed.** `mod_version` is `1.3.0-SNAPSHOT` on every branch; **nine** releases at
-`v1.3.0`, one per band.
+16-version scope, closed.** `mod_version` is `1.3.1-SNAPSHOT` on every branch; **nine** releases at
+`v1.3.1`, one per band.
 
 🔑 **Nothing in the eleven gates reads the remote TAG list.** Gates 9/10/11 compare branches; the
 release sweep enumerates `gh release list`, which a bare tag is invisible to. **Re-read
@@ -136,9 +138,9 @@ Identical source still proves only that the roster is uniform.
 
 | Band | MC versions | Status |
 |---|---|---|
-| `1.21` … `1.21.11` | 12 versions, 7 bands | ✅ **SHIPPED**, all at **`v1.3.0`** (§43.4). This row read `v1.2.0` for the three sections after the bump landed |
-| `26.2` | `26.2` | ✅ **SHIPPED — `master`.** Booted (§35), smoke **36/0/0** (§47), released `mc26.2-v1.3.0` |
-| `26.1.x` | `26.1`, `26.1.1`, `26.1.2` | ✅ **CUT AND SHIPPED** as `mc/26.1.2` (§42, §43) — the three differ on **zero of 1424** records (§39), so one branch serves all three. Released `mc26.1.2-v1.3.0` |
+| `1.21` … `1.21.11` | 12 versions, 7 bands | ✅ **SHIPPED**, all at **`v1.3.1`** (§49). This row read `v1.2.0` for the three sections after the bump landed |
+| `26.2` | `26.2` | ✅ **SHIPPED — `master`.** Booted (§35), smoke **36/0/0** (§47), released `mc26.2-v1.3.1` |
+| `26.1.x` | `26.1`, `26.1.1`, `26.1.2` | ✅ **CUT AND SHIPPED** as `mc/26.1.2` (§42, §43) — the three differ on **zero of 1424** records (§39), so one branch serves all three. Released `mc26.1.2-v1.3.1` |
 | `1.20.x` | `1.20` … `1.20.6` | 🚫 **OUT OF SCOPE (R-x)** — withdrawn on scope, **never priced** |
 
 ⚠️⚠️ **Read a probe-row count as *rows to look at*, never as work to do.** The completed bands are the
@@ -446,8 +448,8 @@ this file** — the reference is in Java source that no doc pass reads.
 | **41** | the R-aa bundle | ✅ one change per branch, all eight: the per-band `java_version` key (`release.yml` no longer pins `'21'`), the `mod_version` bump, §37's commit B (`mockito_version=5.23.0`) and the docs pass — bundled because each alone touches `gradle.properties` and fires a release run R-t refuses |
 | **42** | cut `mc/26.1.2` | ✅ **the declared 16-version scope closed at nine branches.** 🔑 The cut tripped gate 9 immediately — the guard earning its keep — and an injector on the new band **compiled perfectly and bound to nothing** |
 | **43** | the live harness on the new band, then THE PUSH | ✅ nine branches pushed, nine green runs, **nine releases at `v1.3.0`**. 🔑 Live evidence goes **before** a push, not after it. ⚠️ `BAND_COUNT` is **8, not 9** — `--require-bands` counts `mc/**` only and `master` lives outside that namespace |
-| **44** | lift javac's 100-error cap | ✅ `-Xmaxerrs=10000` on all nine; the cap had reported **100 of 150 real errors under the same exit code**, which turned two sizings into guesses. Guarded by `CompilerErrorCapTest`, which reads the **resolved `compileJava` args**, not `build.gradle`'s text. 🔴 committed, **not pushed** |
-| **45** | R14 — stop Mockito self-attaching | ✅ the agent is installed at VM start via `-javaagent` on all nine, and the self-attach warning is absent from all 166 result files. 🔑 The remedy recorded in the risk register was **wrong**: `-XX:+EnableDynamicAgentLoading` is compared against a warning string and never reaches the self-attaching call — it silences the tell and leaves the race running. 🔴 committed, **not pushed** |
+| **44** | lift javac's 100-error cap | ✅ `-Xmaxerrs=10000` on all nine; the cap had reported **100 of 150 real errors under the same exit code**, which turned two sizings into guesses. Guarded by `CompilerErrorCapTest`, which reads the **resolved `compileJava` args**, not `build.gradle`'s text. ✅ **pushed and released at `v1.3.1`** (§49) |
+| **45** | R14 — stop Mockito self-attaching | ✅ the agent is installed at VM start via `-javaagent` on all nine, and the self-attach warning is absent from all 166 result files. 🔑 The remedy recorded in the risk register was **wrong**: `-XX:+EnableDynamicAgentLoading` is compared against a warning string and never reaches the self-attaching call — it silences the tell and leaves the race running. ✅ **pushed and released at `v1.3.1`** (§49) |
 | **46** | `SPAWN_ITEM_USE` gets harness coverage | ✅ `combat-spawn-egg-control` drives a real `mooshroom_spawn_egg` through carpet's `use once`, green on `26.2`, both mutations red. The recorded 08-19 verdict — *"carpet's `use once` will not place a spawn egg"* — was **false**, and its recorded fallback would have covered a **different** origin constant while reporting this gap closed |
 | **47** | `DISPENSER` gets harness coverage | ✅ `combat-dispenser-control` fires a real `sniffer_spawn_egg` from a real dispenser on a redstone rising edge: **36 passed / 0 / 0** on `26.2`, three mutations red. **All three `PLAYER_PLACED` origins now have live coverage — `COMMAND`, `SPAWN_ITEM_USE`, `DISPENSER` — and there is no fourth** |
 
@@ -522,7 +524,7 @@ recorded in `.agent/memory/state.md`; the archive is a new file, so a revert als
 
 ---
 
-## §49 — the `mod_version` bump that releases §44 – §48 — ⬜ IN PROGRESS
+## §49 — the `mod_version` bump that releases §44 – §48 — ✅ DONE
 
 ### What forced it
 
@@ -570,22 +572,88 @@ mechanical check that the bump reached all nine**, so it is not optional this se
 
 ### Steps
 
-- [ ] **49.1** Bump `mod_version` on `master`, commit `gradle.properties` + this section together.
-- [ ] **49.2** Propagate to all eight bands, one commit each, **with a `Backport-of:` trailer** —
+- [x] **49.1** Bump `mod_version` on `master`, commit `gradle.properties` + this section together.
+- [x] **49.2** Propagate to all eight bands, one commit each, **with a `Backport-of:` trailer** —
       required by rule 2 even though gate 7 cannot see the commit. ⚠️ **Do NOT cherry-pick the
       `gradle.properties` hunk blind**: each band's copy differs on `minecraft_version` and
       `supported_minecraft_versions` by construction (R-a), so the bump is applied per branch and the
       result is verified by reading `mod_version` back out of all nine, never inferred from a
       cherry-pick exiting 0.
-- [ ] **49.3** Run gates **7, 9, 10, 11** inside `git clone --local --no-hardlinks . <scratch>`, where
+- [x] **49.3** Run gates **7, 9, 10, 11** inside `git clone --local --no-hardlinks . <scratch>`, where
       `origin/*` maps onto the local branches. ⚠️ **A run in this working copy grades the STALE
       remote and answers a question nobody asked.** `--self-test` first on every one of them; **exit
       2 is not a pass** on 9, 10 and 11.
-- [ ] **49.4** Push all nine. Expect **nine green release runs** and nine `v1.3.1` releases.
-- [ ] **49.5** Verify by `gh release list` and `git ls-remote --tags`, **not** by the run list —
+- [x] **49.4** Push all nine. Expect **nine green release runs** and nine `v1.3.1` releases.
+- [x] **49.5** Verify by `gh release list` and `git ls-remote --tags`, **not** by the run list —
       🔑 nothing in the eleven gates reads the remote tag list, and a green run is not a release.
-- [ ] **49.6** Record the outcome in a separate docs commit. **A status row cannot count the commit
+- [x] **49.6** Record the outcome in a separate docs commit. **A status row cannot count the commit
       it is written in** — that error has already been made three times in three commits here.
+
+### The outcome — nine green runs, nine releases at `v1.3.1`
+
+✅ **All nine release runs completed `success`**, and — the check that actually matters — **nine
+releases are published**, verified from `gh release list` and `git ls-remote --tags`, **not** from
+the run list. 🔑 **A green run is not a release**: nothing in the eleven gates reads the remote tag
+list, so the run conclusion and the release set are two separate measurements and both were taken.
+
+| Branch | run | tag now published |
+|---|---|---|
+| `master` | `33049929276` ✅ | `mc26.2-v1.3.1` |
+| `mc/26.1.2` | `33049935170` ✅ | `mc26.1.2-v1.3.1` |
+| `mc/1.21.11` | `33049937914` ✅ | `mc1.21.11-v1.3.1` |
+| `mc/1.21.10` | `33049940328` ✅ | `mc1.21.10-v1.3.1` |
+| `mc/1.21.8` | `33049943300` ✅ | `mc1.21.8-v1.3.1` |
+| `mc/1.21.5` | `33049946991` ✅ | `mc1.21.5-v1.3.1` |
+| `mc/1.21.4` | `33049949732` ✅ | `mc1.21.4-v1.3.1` |
+| `mc/1.21.3` | `33049951994` ✅ | `mc1.21.3-v1.3.1` |
+| `mc/1.21.1` | `33049955125` ✅ | `mc1.21.1-v1.3.1` |
+
+**The sweep reaped the nine `v1.3.0` releases and tags, one per Minecraft line, exactly as designed.**
+`git ls-remote --tags` now returns exactly those nine `mc*` tags plus the known bare
+`v1.21.11-baseline`. ✅ **Zero drafts and zero prereleases** — checked explicitly with
+`gh release list --json isDraft,isPrerelease`, because the *"deleting a tag DRAFTS its release"*
+failure mode is what accumulated six orphans on 2026-08-13 and a name-keyed sweep skips them.
+
+⚠️ **`master`'s run was read step-by-step, not just by conclusion.** *"Refuse a stale mod_version"*
+**✓** — the same step that refused run `33049164237` — then *"Create and push tag"*, *"Build"*,
+*"Publish release"*. And the suite genuinely ran: the log shows a bare **`> Task :test`** with
+`8 actionable tasks: 8 executed`, not `FROM-CACHE` and not `UP-TO-DATE`.
+
+### The gate evidence behind the push
+
+| gate | result |
+|---|---|
+| **7** `drift-audit.py` | ✅ exit 0 — **0 MISSING on all eight bands**, no waiver reported STALE |
+| **9** `manifest-identity-audit.py` | ✅ exit 0 — nine distinct `mc-surface.txt` |
+| **10** `branch-file-identity-audit.py` | ✅ exit 0 — **50 shared paths byte-identical on nine** |
+| **11** `gradle-key-identity-audit.py` | ✅ exit 0 — `mod_version` identical on nine, `minecraft_version` distinct on nine |
+| **8** `ci-watch.sh` | ✅ exit 0 on `master` `fe0ebb32f`, run `33049929276` — self-test **9 passed / 0 failed** with **all 5 mutations caught** |
+
+⚠️ **7, 9, 10 and 11 were run inside `git clone --local --no-hardlinks . <scratch>`**, where
+`origin/*` maps onto the local branches. A run in the working copy would have graded the **stale
+remote** — which at that moment held `master` five sections ahead of eight bands, i.e. it would have
+reported drift that existed only because the bands had not gone out yet. `--self-test` passed on all
+four **before** each real run; none returned exit 2.
+
+✅ **`BandVersionLabelTest` + `BandToolchainLevelTest` were run locally against
+`-Pmod_version=1.3.1`** before the push — **20 tests executed, 0 failures, 0 skipped**, counted out
+of the JUnit XML rather than read off the `BUILD SUCCESSFUL` line. `1.3.1-SNAPSHOT` survives Fabric's
+own parser and the resolved-version check.
+
+### 🔑 What this section is worth remembering for
+
+**A red run is not a failed push.** The report that opened this section was *"I pushed and forgot to
+version bump so it failed"* — and `git rev-list --left-right --count origin/master...master`
+returned `0 0`. **The push had succeeded; only the release refused.** The two need *opposite*
+repairs, and the wrong reading (*"push again"*) was already true and would have changed nothing while
+leaving the real condition — `master` alone on the remote, five sections ahead of every band —
+undiagnosed. **Measure before believing any sentence about what a red run means.**
+
+⚠️ **A `Backport-of:` trailer with no blank line before it is invisible to `%(trailers:key=...)` but
+still found by `git log --grep`.** `mc/1.21.1`'s §47 commit is shaped that way and was nearly written
+up here as a rule-2 violation. It is not one: `drift-audit.py:72` matches with a **multiline regex**,
+not git's trailer parser, so gate 7 is unaffected — and it read 0 MISSING. **Do not "fix" it by
+rewriting published history.**
 
 ### What this section is NOT doing
 
@@ -776,8 +844,8 @@ test run in the shell that hides the bug proves nothing.**
 
 ## Risk register
 
-✅ **R14 — CLOSED on `master` 2026-08-26 by §45** (committed, **not pushed** — it rides the next
-`mod_version` bump with §44). Mockito's agent is now installed at VM start via `-javaagent`, so
+✅ **R14 — CLOSED on `master` 2026-08-26 by §45**, and **pushed + released at `v1.3.1`** on all
+nine branches by §49. Mockito's agent is now installed at VM start via `-javaagent`, so
 `PremainAttachAccess` returns at **step 1** and never reaches `ByteBuddyAgent.install()`. Proved by
 mechanism, not by one green run: the *"Mockito is currently self-attaching"* line and the dynamic
 agent-load warning are **absent from all 166 files** in `build/test-results/test/`, where they were
@@ -819,8 +887,8 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
 
 - [x] ✅ **`-Xmaxerrs` — CLOSED 2026-08-26 (§44).** Lifted to 10,000 on `master` (`ee1340bd7`) and
       cherry-picked to all eight bands; all nine built green. Guarded by `CompilerErrorCapTest`,
-      which reads the **resolved `compileJava` args**, not `build.gradle`'s text. 🔴 **Committed, NOT
-      pushed** — it rides the next `mod_version` bump, see §44.4.
+      which reads the **resolved `compileJava` args**, not `build.gradle`'s text. ✅ **Pushed and
+      released at `v1.3.1`** on all nine branches (§49).
 - [x] ✅ **`mc/26.1.2`'s boot check and gameplay smoke — CLOSED 2026-08-26 (§43.1),** before the
       band was ever pushed: boot-check **exit 0** (0 ERROR, 0 mixin failures) and gameplay smoke
       **30 passed / 0 failed / 0 inconclusive**, with the mod-less control failing as it must.
@@ -828,8 +896,8 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
 - [x] ✅ **R14's suite flake — CLOSED 2026-08-26 (§45).** Mockito's agent is installed at VM start
       via `-javaagent` on `master` (`b92be8721`) and cherry-picked to all eight bands; all nine built
       green with the self-attach warning gone from every result file. Guarded by
-      `MockitoAgentPreinstalledTest`, which reads **this JVM**, not `build.gradle`'s text. 🔴
-      **Committed, NOT pushed** — it rides the next `mod_version` bump with §44, see §45.6.
+      `MockitoAgentPreinstalledTest`, which reads **this JVM**, not `build.gradle`'s text. ✅
+      **Pushed and released at `v1.3.1`** on all nine branches (§49).
       ⚠️ R14's originally-recorded remedy (`-XX:+EnableDynamicAgentLoading`) was **wrong**: it is
       compared against a warning string and never reaches the self-attaching call. Do not re-add it.
 
