@@ -572,13 +572,19 @@ def run(versions: list[str], control: str, check: bool) -> int:
         print("  PASS -- every extracted id resolves.\n")
     else:
         # ⚠️ Unresolved-on-pinned is NOT automatically a defect, and treating it as one was the
-        # first draft's bug. A row can be deliberately absent here and live on an older band --
-        # `Mining.Chain` is exactly that, and failing on it would punish the both-names pattern
-        # that makes one config correct on every band. Only DEAD-EVERYWHERE is a defect.
+        # first draft's bug. A row can be deliberately absent here and live on ANOTHER supported
+        # version -- `Mining.Chain` is exactly that, and failing on it would punish the both-names
+        # pattern that makes one config correct on every band. Only DEAD-EVERYWHERE is a defect.
+        #
+        # ⚠️ The direction is "another", not "older", and the wording used to say older. That is
+        # true only when this runs on master: on a BAND branch the control is that band's own older
+        # version, so an unresolved row is normally live on a NEWER one. §50 turned that from a
+        # 1-row footnote into 72 rows on mc/1.21.1 -- 72 lines telling a reader to look the wrong
+        # way down the band list while triaging.
         print(f"  {len(ctl_bad)} unresolved here, each classified below:\n")
         for src, kind, tok in ctl_bad:
             tag = ("DEAD-EVERYWHERE -- defect" if (src, kind, tok) in dead
-                   else "ok: live on an older band")
+                   else "ok: live on another supported version")
             print(f"      {src:38} {kind:5} {tok:28} [{tag}]")
         print()
 
