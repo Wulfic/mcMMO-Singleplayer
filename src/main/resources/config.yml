@@ -419,13 +419,11 @@ Bonus_Drops:
         Short_Dry_Grass: true
         Tall_Dry_Grass: true
         Wildflowers: true
-        Eyeblossom: true
         Open_Eyeblossom: true
         Closed_Eyeblossom: true
         Pitcher_Plant: true
         Torchflower: true
         Pink_Petals: true
-        Glow_Berries: true
         Cave_Vines: true
         Cave_Vines_Plant: true
         Moss_Block: true
@@ -442,22 +440,16 @@ Bonus_Drops:
         Bamboo_Sapling: true
         Crimson_Fungus: true
         Warped_Fungus: true
-        Chorus_Fruit: true
         Chorus_Plant: true
         Beetroots: true
-        Beetroot: true
         Brown_Mushroom: true
         Cactus: true
         Carrots: true
-        Carrot: true
         Cocoa: true
-        Cocoa_Beans: true
         Wheat: true
         Melon: true
-        Melon_Slice: true
         Nether_Wart: true
         Potatoes: true
-        Potato: true
         Pumpkin: true
         Red_Mushroom: true
         Sugar_Cane: true
@@ -488,17 +480,15 @@ Bonus_Drops:
         Deepslate_Iron_Ore: true
         Deepslate_Gold_Ore: true
         Deepslate_Lapis_Ore: true
-        Lapis_Lazuli_Ore: true
         Copper_Ore: true
         Calcite: true
         Smooth_Basalt: true
-        Block_Of_Amethyst: true
+        Amethyst_Block: true
         Budding_Amethyst: true
         Small_Amethyst_Bud: true
         Medium_Amethyst_Bud: true
         Large_Amethyst_Bud: true
         Amethyst_Cluster: true
-        Amethyst_Shard: true
         Deepslate: true
         Cobbled_Deepslate: true
         Gilded_Blackstone: true
@@ -508,6 +498,7 @@ Bonus_Drops:
         Cracked_Nether_Bricks: true
         Chiseled_Nether_Bricks: true
         Chain: true
+        Iron_Chain: true
         Blackstone: true
         Basalt: true
         Polished_Basalt: true
@@ -515,39 +506,25 @@ Bonus_Drops:
         Warped_Nylium: true
         Crimson_Nylium: true
         Ancient_Debris: true
-        Netherite_Scrap: true
         Andesite: true
         Diorite: true
         Granite: true
         Coal_Ore: true
-        Coal: true
         Diamond_Ore: true
-        Diamond: true
         Emerald_Ore: true
-        Emerald: true
         End_Stone: true
         Glowstone: true
-        Glowstone_Dust: true
         Gold_Ore: true
-        Gold_Nugget: true
         Iron_Ore: true
-        Iron_Ingot: true
         Lapis_Ore: true
-        Lapis_Lazuli: true
         Mossy_Cobblestone: true
         Netherrack: true
         Obsidian: true
         Nether_Quartz_Ore: true
-        Quartz: true
         Redstone_Ore: true
-        Redstone: true
-        Redstone_Dust: true
         Sandstone: true
         Stone: true
         Cobblestone: true
-        Raw_Copper: true
-        Raw_Iron: true
-        Raw_Gold: true
     Woodcutting:
         Crimson_Hyphae: true
         Warped_Hyphae: true
@@ -583,7 +560,6 @@ Bonus_Drops:
         Diamond: true
         Lapis_Lazuli: true
         Coal: true
-        Nether_Quartz: true
         Quartz: true
         Redstone: true
         Deepslate: true
