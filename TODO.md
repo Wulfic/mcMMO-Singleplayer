@@ -686,7 +686,7 @@ Pre-§49 tips are the §48 tips recorded in `.agent/memory/state.md`.
 
 ---
 
-## §50 — `config.yml` joins the config-id gate, and the two live defects it finds — ⬜ PLANNED
+## §50 — `config.yml` joins the config-id gate, and the two live defects it finds — 🟡 IN FLIGHT
 
 ### What forced it
 
@@ -846,7 +846,7 @@ add a duplicate of a row that exists. Deletion is the correction.
       0 skipped** across 167 classes — counted from the JUnit XML, not from `BUILD SUCCESSFUL`.
       ⚠️ `build/libs/` holds **42** jars from past runs; `build` never cleans it, so any local
       `boot-check.sh` glob there is ambiguous. Noted, not addressed — out of §50's scope.
-- [ ] **50.8** `mod_version` → `1.3.2-SNAPSHOT` on all nine. ⚠️ **Not optional and not taste:**
+- [x] ✅ **50.8 — DONE on `master`.** `mod_version` → `1.3.2-SNAPSHOT`. ⚠️ **Not optional and not taste:**
       `src/**` is in `release.yml`'s `paths:` filter and 50.3 edits `src/main/resources/config.yml`,
       so every branch fires a release run and R-t refuses a stale version. **PATCH**, because this
       changes shipped config rows and one test, not a skill's behaviour model.
