@@ -37,12 +37,12 @@ status, because nothing reads it.** Re-measure before quoting this table.
 | | state |
 |---|---|
 | branches | **NINE, all on the remote.** `master` (`26.2`) + `mc/26.1.2` + the seven `1.21.x` bands |
-| vs `origin` | 🔴 **THIS ROW NO LONGER CARRIES A NUMBER, AND THAT IS THE FIX.** It was wrong **three times in three commits** — `1` when the truth was `2`, corrected to `3` and stale one commit later, then `six` written into the commit that made it seven. **A status row cannot count the commit it is written in**, so it stops trying. The measurement is one command and it is never stale: `git rev-list --left-right --count origin/<b>...<b>` per branch, or the loop over all nine in `.agent/memory/state.md`. What is *structurally* true: nothing is behind. 🔴 **The branches NO LONGER carry the same unpushed set** — `master` was pushed on 2026-08-27 and the eight bands were not, so `master` is briefly five sections ahead of every band **on the remote**, which is what gates 7/9/10/11 grade. §49 closes that skew; until it does, a gate sweep reports drift that exists only because the bands have not gone out. ⚠️ **The band-side set only grows until the next `mod_version` bump** |
-| `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.1-SNAPSHOT` |
-| releases | **NINE published at `v1.3.1`** (§49) — the declared 16-version scope is downloadable. §43.4's nine `v1.3.0` releases were **reaped by the success sweep**, one per Minecraft line, exactly as designed |
+| vs `origin` | 🔴 **THIS ROW NO LONGER CARRIES A NUMBER, AND THAT IS THE FIX.** It was wrong **three times in three commits** — `1` when the truth was `2`, corrected to `3` and stale one commit later, then `six` written into the commit that made it seven. **A status row cannot count the commit it is written in**, so it stops trying. The measurement is one command and it is never stale: `git rev-list --left-right --count origin/<b>...<b>` per branch, or the loop over all nine in `.agent/memory/state.md`. What is *structurally* true: nothing is behind. ✅ **The skew that stood here is GONE** — §49 closed it and §50 pushed all nine again; every branch measured `0 behind / 5 ahead` immediately before the §50 push and `0 / 0` after. Re-measure rather than trusting this sentence |
+| `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.2-SNAPSHOT` |
+| releases | **NINE published at `v1.3.2`** (§50) — the declared 16-version scope is downloadable, and the amethyst/chain bonus-drop fix is in every one. Verified by `gh release list` + `git ls-remote --tags`, **zero drafts, zero prereleases**; §49's nine `v1.3.1` releases were **reaped by the success sweep**, one per Minecraft line, exactly as designed |
 | build | ✅ **green on all nine**, each built on its own band this session (§44.3) |
-| suite | ✅ **0 failures on all nine.** `master` and `mc/26.1.2` 1,861; the `1.21.x` bands 1,855–1,863. ⚠️ The spread is per-band gating, not a master-vs-band split |
-| gates 7/9/10/11 | ✅ exit 0, measured post-push in §43.4. 🔴 **They have not seen §44 on any BAND** — all four prefer **remote** refs; `master`'s §44 commit is now pushed and the bands' are not, so a sweep run before §49's push measures that skew rather than the code |
+| suite | ✅ **0 failures on all nine.** `master` **1,869** and `mc/1.21.1` **1,867** re-measured locally in §50 (+4 from `ConfigYamlBonusDropsTest`); the other seven last measured 1,855–1,863 and each went green again in its own §50 release run. ⚠️ The spread is per-band gating, not a master-vs-band split |
+| gates 7/9/10/11 | ✅ **exit 0, none exit 2**, re-measured in §50 on a fresh `git clone --local --no-hardlinks` carrying all nine §50 tips. Gate 8 (`ci-watch.sh`) also exit 0 post-push, with all 5 mutations caught. ⚠️ All four prefer **remote** refs, so push first or clone locally |
 | mixin gate | ✅ `--check` passes on `master` and `mc/26.1.2` (`ZERO=0 OK=60 SLICE=1`) |
 | boot | ✅ `26.2` (§35) and ✅ `26.1.2` (§43.1, exit 0, 0 ERROR, 0 mixin failures) |
 | gameplay | ✅ `26.2` **36 / 0 / 0**, re-measured 2026-08-27 against a jar rebuilt from HEAD (§47; was 30/30 at §35, +3 from §46 and +3 from §47). ✅ `26.1.2` 30/0/0 (§43.1) — that figure predates both phases and will read 36 on its next run. Mod-less control failing as it must |
@@ -686,7 +686,7 @@ Pre-§49 tips are the §48 tips recorded in `.agent/memory/state.md`.
 
 ---
 
-## §50 — `config.yml` joins the config-id gate, and the two live defects it finds — 🟡 IN FLIGHT
+## §50 — `config.yml` joins the config-id gate, and the two live defects it finds — ✅ DONE
 
 ### What forced it
 
@@ -867,9 +867,12 @@ add a duplicate of a row that exists. Deletion is the correction.
       grades the stale remote. ⚠️ **Gate 11 is the only instrument that sees the `mod_version` bump**
       — gate 7 is blind to it by construction (`gradle.properties` sits in both
       `PROPAGATABLE_PREFIXES` and `BAND_LOCAL_PATHS`).
-- [ ] **50.11** Push all nine. Expect nine green runs and nine `v1.3.2` releases; `v1.3.1` is reaped
-      per line by design. Verify with `gh release list` and `git ls-remote --tags`, **not** the run
-      list. Then gate **8** (`ci-watch.sh --mutate`, then `HEAD`) from the branch pushed.
+- [x] ✅ **50.11 — DONE. Nine green runs, nine releases at `v1.3.2`, zero drafts.** Verified the way
+      the step demanded — by `gh release list` and `git ls-remote --tags`, **not** by the run list:
+      exactly nine `mc<VER>-v1.3.2` tags plus the known bare `v1.21.11-baseline`, and
+      `--json isDraft,isPrerelease` returns **0**. `v1.3.1` reaped per Minecraft line by design.
+      Gate **8** from `master`: `--mutate` **9 passed / 0 failed with all 5 mutations caught**, then
+      `ci-watch.sh HEAD` **exit 0** on run `33115787967`.
 - [x] ✅ **50.12 — the band verification §49 could skip and this one could not.** §49 declined to run
       gates 1–6 per band because its held set touched **zero `src/main/` files**, so the jar was
       unchanged. That argument does **not** transfer here: 50.3 edits `src/main/resources/config.yml`,
@@ -890,8 +893,29 @@ add a duplicate of a row that exists. Deletion is the correction.
       footnote nobody read; `config.yml` makes it **72 rows on `mc/1.21.1`** — 72 lines telling a
       reader to look the wrong way down the band list while deciding whether a row is drift or a
       defect. **No gate could ever catch this: it is a log message, and every gate was green.**
-- [ ] **50.14** Record the outcome in a **separate** docs commit — a status row cannot count the
-      commit that changes the status.
+- [x] ✅ **50.14 — this commit.** Recorded **separately**, because a status row cannot count the
+      commit that changes the status — the same reason §49 split its outcome out. ✅ It fires **no**
+      release run: `TODO.md` is outside `release.yml`'s `paths:` filter.
+
+### The outcome — 26 dead rows, 2 live defects, nine releases at `v1.3.2`
+
+**Gate 4 went from 689 references over 6 files to 875 over 7, and from "config.yml is not read" to
+0 dead-everywhere.** The two defects it found were shipped-and-broken on **all nine bands** — every
+band carried the identical pre-fix `config.yml` blob `a0af9bbb3` — and both fixes reach existing
+installs, because `ConfigLoader#copyMissingDefaults` back-fills a missing default leaf.
+
+| | before §50 | after |
+|---|---|---|
+| files read by gate 4 | 6 | **7** |
+| id references | 689 | **875** |
+| dead-everywhere | 0 *(config.yml unread)* | **0 *(config.yml read)*** |
+| `config.yml` rows | 676 lines | **652** |
+| unattended leg | none for this file | `ConfigYamlBonusDropsTest`, inside gate 1 |
+
+🔑 **The headline is not the 26 rows. It is that a file can be "outside the gate" in two places at
+once.** TODO 5.5 always had two legs, and `config.yml` was missing from both — so the largest
+behavioural id table in the jar was never checked by anything, and the carried row that named the
+problem still understated it by 26×.
 
 ### What this section is NOT doing
 
