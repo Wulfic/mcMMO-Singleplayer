@@ -37,18 +37,20 @@ status, because nothing reads it.** Re-measure before quoting this table.
 | | state |
 |---|---|
 | branches | **NINE, all on the remote.** `master` (`26.2`) + `mc/26.1.2` + the seven `1.21.x` bands |
-| vs `origin` | 🔴 **THIS ROW NO LONGER CARRIES A NUMBER, AND THAT IS THE FIX.** It was wrong **three times in three commits** — `1` when the truth was `2`, corrected to `3` and stale one commit later, then `six` written into the commit that made it seven. **A status row cannot count the commit it is written in**, so it stops trying. The measurement is one command and it is never stale: `git rev-list --left-right --count origin/<b>...<b>` per branch, or the loop over all nine in `.agent/memory/state.md`. What is *structurally* true: nothing is behind, every branch carries the same unpushed set (§44 – §48), and that set only grows until the next `mod_version` bump. ⚠️ **§48 added itself to that list**, which is the one status claim a commit CAN safely make about itself |
+| vs `origin` | 🔴 **THIS ROW NO LONGER CARRIES A NUMBER, AND THAT IS THE FIX.** It was wrong **three times in three commits** — `1` when the truth was `2`, corrected to `3` and stale one commit later, then `six` written into the commit that made it seven. **A status row cannot count the commit it is written in**, so it stops trying. The measurement is one command and it is never stale: `git rev-list --left-right --count origin/<b>...<b>` per branch, or the loop over all nine in `.agent/memory/state.md`. What is *structurally* true: nothing is behind. 🔴 **The branches NO LONGER carry the same unpushed set** — `master` was pushed on 2026-08-27 and the eight bands were not, so `master` is briefly five sections ahead of every band **on the remote**, which is what gates 7/9/10/11 grade. §49 closes that skew; until it does, a gate sweep reports drift that exists only because the bands have not gone out. ⚠️ **The band-side set only grows until the next `mod_version` bump** |
 | `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.0-SNAPSHOT` |
 | releases | **NINE published at `v1.3.0`** (§43.4) — the declared 16-version scope is downloadable |
 | build | ✅ **green on all nine**, each built on its own band this session (§44.3) |
 | suite | ✅ **0 failures on all nine.** `master` and `mc/26.1.2` 1,861; the `1.21.x` bands 1,855–1,863. ⚠️ The spread is per-band gating, not a master-vs-band split |
-| gates 7/9/10/11 | ✅ exit 0, measured post-push in §43.4. 🔴 **They have not seen §44** — all four prefer **remote** refs, and no branch's §44 commit is pushed |
+| gates 7/9/10/11 | ✅ exit 0, measured post-push in §43.4. 🔴 **They have not seen §44 on any BAND** — all four prefer **remote** refs; `master`'s §44 commit is now pushed and the bands' are not, so a sweep run before §49's push measures that skew rather than the code |
 | mixin gate | ✅ `--check` passes on `master` and `mc/26.1.2` (`ZERO=0 OK=60 SLICE=1`) |
 | boot | ✅ `26.2` (§35) and ✅ `26.1.2` (§43.1, exit 0, 0 ERROR, 0 mixin failures) |
 | gameplay | ✅ `26.2` **36 / 0 / 0**, re-measured 2026-08-27 against a jar rebuilt from HEAD (§47; was 30/30 at §35, +3 from §46 and +3 from §47). ✅ `26.1.2` 30/0/0 (§43.1) — that figure predates both phases and will read 36 on its next run. Mod-less control failing as it must |
 
 📌 **The R-ac push hold is LIFTED** (owner, 2026-08-26, §43) and all nine branches went out.
-🔴 **§44 is nonetheless unpushed, on a separate owner ruling:** `build.gradle` sits inside
+🔴 **§44 reached `origin/master` on 2026-08-27 and its release run was REFUSED** (run `33049164237`,
+step *"Refuse a stale mod_version"*) — **the push succeeded, only the release did not.** The reason was
+already written down here, one owner ruling earlier: `build.gradle` sits inside
 `release.yml`'s `paths:` filter, and every branch is at `1.3.0-SNAPSHOT` with `v1.3.0` already
 published — so pushing it alone fires nine release runs that **R-t's stale-version gate refuses**.
 It rides the next `mod_version` bump. See §44.4.
@@ -517,6 +519,96 @@ on its own (Phase 21), and `drift-audit.py` prints *"No drift"* either way.
 🟢 **Blast radius: two files, no `src/` change, nothing published, nothing pushed.** Undo is
 `git revert <sha>` per branch, or `git reset --hard <tip>` while unpushed. The pre-§48 tips are
 recorded in `.agent/memory/state.md`; the archive is a new file, so a revert also removes it.
+
+---
+
+## §49 — the `mod_version` bump that releases §44 – §48 — ⬜ IN PROGRESS
+
+### What forced it
+
+**`master` was pushed on 2026-08-27 and its release run was REFUSED** — run `33049164237`, failing
+step *"Refuse a stale mod_version"*. `mc26.2-v1.3.0` already pointed at §43's commit, this run was
+`284c129b`, and re-pointing a tag every clone has fetched would have orphaned the published release
+as a same-tag draft. **R-t's gate did precisely its job**; the run is red because the guard worked,
+not because anything is broken.
+
+🔑 **The push SUCCEEDED. Only the release refused.** Those are different events and the distinction
+is the whole shape of this section: all eight held commits (§44 – §48) are on `origin/master`, while
+the eight bands are still `behind=0 ahead=8`. So the remote briefly carries **`master` five sections
+ahead of every band** — and gates 7, 9, 10 and 11 all prefer **remote** refs, so a sweep run right
+now would grade that skew and report drift that only exists because the bands have not gone out yet.
+
+### The ruling
+
+`mod_version` `1.3.0-SNAPSHOT` → **`1.3.1-SNAPSHOT`**, on all nine branches, in one commit each.
+
+**PATCH, not minor, and the reason is measurable rather than a matter of taste:** the entire held set
+touches **zero `src/main/` files**. It is `build.gradle` (§44's `-Xmaxerrs`, §45's `-javaagent`), two
+guard tests, `scripts/gameplay_smoke_scenario.py` (§46 – §47), and docs. **The jar a player downloads
+behaves identically to `v1.3.0`.** A minor bump would advertise a gameplay change that does not exist
+and would spend the number the next real feature needs.
+
+⚠️ **Nine releases whose only delta is build and test infrastructure is the honest outcome here, not
+a wasteful one.** The bump is not optional: `build.gradle` and `gradle.properties` are both inside
+`release.yml`'s `paths:` filter, and **a `paths:` filter matches the WHOLE PUSH** — so there is no
+way to land §44 without firing a release run, and no way to make that run pass without a new version.
+The alternative is leaving five sections held indefinitely.
+
+### Why gate 11 is the instrument, and gate 7 is deliberately blind here
+
+`gradle.properties` sits in `PROPAGATABLE_PREFIXES` **and** in `BAND_LOCAL_PATHS`
+(`scripts/drift-audit.py:97-109`), so a commit touching only that file is excluded from gate 7 **by
+construction** — a band pins its own `minecraft_version` there, and master's toolchain bumps must
+never be reported missing. A `gradle.properties`-only commit therefore produces **no gate-7 row at
+all**, in either direction.
+
+🔴 **That is exactly the gap R-w′ was built for, and it is the failure this change could cause.** A
+band left behind on `mod_version` does not go red anywhere obvious — it trips R-t's stale-version
+gate and simply **stops releasing**, in a repo where a red release run is already the ordinary
+outcome of a push. §23 found that by hand. **Gate 11 (`gradle-key-identity-audit.py`) is the only
+mechanical check that the bump reached all nine**, so it is not optional this session.
+
+### Steps
+
+- [ ] **49.1** Bump `mod_version` on `master`, commit `gradle.properties` + this section together.
+- [ ] **49.2** Propagate to all eight bands, one commit each, **with a `Backport-of:` trailer** —
+      required by rule 2 even though gate 7 cannot see the commit. ⚠️ **Do NOT cherry-pick the
+      `gradle.properties` hunk blind**: each band's copy differs on `minecraft_version` and
+      `supported_minecraft_versions` by construction (R-a), so the bump is applied per branch and the
+      result is verified by reading `mod_version` back out of all nine, never inferred from a
+      cherry-pick exiting 0.
+- [ ] **49.3** Run gates **7, 9, 10, 11** inside `git clone --local --no-hardlinks . <scratch>`, where
+      `origin/*` maps onto the local branches. ⚠️ **A run in this working copy grades the STALE
+      remote and answers a question nobody asked.** `--self-test` first on every one of them; **exit
+      2 is not a pass** on 9, 10 and 11.
+- [ ] **49.4** Push all nine. Expect **nine green release runs** and nine `v1.3.1` releases.
+- [ ] **49.5** Verify by `gh release list` and `git ls-remote --tags`, **not** by the run list —
+      🔑 nothing in the eleven gates reads the remote tag list, and a green run is not a release.
+- [ ] **49.6** Record the outcome in a separate docs commit. **A status row cannot count the commit
+      it is written in** — that error has already been made three times in three commits here.
+
+### What this section is NOT doing
+
+- **Not running gates 1 – 6 per band.** All nine were built green on their own band in §44.3, the
+  suite was 0-failures on all nine, and the held set adds no `src/main/` change — so the jar's
+  content is unchanged and a nine-band rebuild would re-measure what §44.3 already measured. **Gate 1
+  still runs per branch via `release.yml` on the push**, which is what actually certifies these jars.
+- **Not touching R13, §31.5's 562 collision sites, manifest debt piece 1, or `config.yml`.** All four
+  stay open and owner-sequenced.
+- **Not moving the drift waiver `cutoff:` sha.** Nothing here needs waiving.
+
+### Rollback
+
+🟢 **Blast radius before the push: one line in one file per branch, plus this section.** Undo is
+`git reset --hard <tip>` per branch while unpushed.
+
+🔴 **After the push it is not free, and this is the honest statement of it:** nine tags
+`mc<VER>-v1.3.1` exist and nine releases are published, and the success path's own sweep **deletes
+the previous release and tag on the same Minecraft line** — so `v1.3.0` is reaped by design. The undo
+is therefore *forward*: a further bump, never a re-point of `v1.3.1`. ⚠️ **Do not delete a published
+release to "undo" this** — deleting a tag DRAFTS its release rather than removing it, which is how
+six orphaned drafts accumulated on 2026-08-13.
+Pre-§49 tips are the §48 tips recorded in `.agent/memory/state.md`.
 
 ---
 
