@@ -91,27 +91,37 @@ LEGACY_NAME_ALIASES = {"water_lily": "lily_pad"}
 # See the anti-vacuity floor in run(). It exists to catch a BROKEN EXTRACTOR or a moved id source,
 # which fail wholesale (~0% resolve) — not to bound legitimate band drift.
 #
-# ⚠️⚠️ Sized from the WORST supported band, not from master. On master exactly 1 of 689 ids is
-# deliberately absent (99.9%), and a floor picked from that number is a trap: run this on a band
-# branch, where `control` is that band's own pinned version, and legitimate absence is the norm.
-# A 0.95 floor was the first value here and it would have failed the mc/1.21.5 cut for rows that
-# are all correct — at exactly the moment the script is most useful.
+# ⚠️⚠️ Sized from the WORST supported band, not from master. On master exactly 2 of 875 ids are
+# deliberately absent (99.8% — the `Chain`/`Iron_Chain` pair, one live per version), and a floor
+# picked from that number is a trap: run this on a band branch, where `control` is that band's own
+# pinned version, and legitimate absence is the norm. A 0.95 floor was the first value here and it
+# would have failed the mc/1.21.5 cut for rows that are all correct — at exactly the moment the
+# script is most useful.
 #
-# Re-measured 2026-08-13 after TODO 8.4 moved the floor to 1.21 and the id source to the registry
-# manifest, because a floor justified by a version that is no longer the worst case is not
-# justified at all:
+# Re-measured 2026-08-27 (§50) when config.yml joined the gate, +186 references over 9 new sections,
+# because a floor justified by a measurement that predates a 27% growth in the reference set is not
+# justified at all. First measured 2026-08-13 (TODO 8.4, 689 refs); both columns shown:
 #
-#     1.21 / 1.21.1   91.3%   <- the new worst case, and the support floor under R-l
-#     1.21.2 / .3     92.3%
-#     1.21.4          92.6%
-#     1.21.5 - .8     93.6%
-#     1.21.9 / .10    97.8%
-#     1.21.11         99.9%   <- master
+#                     8.4 (689)   §50 (875)
+#     1.21 / 1.21.1     91.3%       91.8%   <- the worst case, and the support floor under R-l
+#     1.21.2 / .3       92.3%       92.8%
+#     1.21.4            92.6%       93.3%
+#     1.21.5 - .8       93.6%       94.9%
+#     1.21.9 / .10      97.8%       98.2%
+#     1.21.11 / 26.x    99.9%       99.8%   <- master
 #
-# 0.80 still leaves ~11 points of headroom over the worst real band while catching any wholesale
-# failure, which is the only thing this can honestly detect. Left unchanged, deliberately.
+# 🔑 The worst case moved UP, not down, and that is the useful half of this re-measurement. The
+# intuition was the opposite — config.yml is the file carrying the newest blocks (Firefly_Bush,
+# Leaf_Litter, the Eyeblossom pair), so adding it "should" have hurt 1.21 most. It did add 12 absent
+# rows there, but it added 186 references, and the great majority are ids that have existed since
+# well before the support floor. **A rate is a ratio; adding rows that resolve everywhere raises it.**
+# Do not reason about this floor from which VERSIONS a new file mentions without dividing.
 #
-# ⚠️ 1.21.5 reads 93.6% here against the 93.8% recorded when this comment was first written. That
+# 0.80 still leaves ~12 points of headroom over the worst real band while catching any wholesale
+# failure, which is the only thing this can honestly detect. Left unchanged, deliberately — the
+# measurement is what changed, not the value, and re-justifying an unchanged number is the point.
+#
+# ⚠️ 1.21.5 read 93.6% at 8.4 against the 93.8% recorded when this comment was first written. That
 # is CONFIG drift, not source drift: `extract-mc-ids.py` cross-checks the manifest against the same
 # jar assets the old source read and they agree exactly on items, differing only by the two
 # blockstate-only ids (`item_frame`, `glow_item_frame`) that no shipped config names.
@@ -137,6 +147,30 @@ XP_SECTION_KIND = {
     "Herbalism": BLOCK,
     "Excavation": BLOCK,
     "Smelting": ITEM,
+}
+
+# config.yml's Bonus_Drops sub-sections. Same shape as XP_SECTION_KIND and the same argument for
+# why a per-section map is the only correct rule -- but the kinds do NOT match it row for row, and
+# assuming they did is the trap. Traced to the call sites, 2026-08-27:
+#
+#   Bonus_Drops.Mining       BLOCK  MiningManager#isBonusDropsEligible(blockRegistryId, silkTouch)
+#   Bonus_Drops.Herbalism    BLOCK  HerbalismManager:230
+#   Bonus_Drops.Woodcutting  BLOCK  WoodcuttingManager:87 / :102 / :122
+#   Bonus_Drops.Smelting     ITEM   SmeltingManager:97   -- the furnace RESULT
+#   Bonus_Drops.Cooking      ITEM   CookingManager:336   -- the cooked RESULT
+#
+# ⚠️ Note Smelting is ITEM here and ITEM in XP_SECTION_KIND for the opposite reason: experience.yml
+# keys Smelting on the furnace INPUT (SmeltingManager#awardSmeltingXP) and this file keys it on the
+# RESULT. Same kind, different object -- so neither map can be derived from the other.
+#
+# 🔑 That BLOCK/ITEM split is what makes 22 legacy rows dead rather than redundant. `Coal` is a real
+# item, but Mining hands the seam a broken BLOCK id, so the row can never match on any version.
+BONUS_DROP_KIND = {
+    "Herbalism": BLOCK,
+    "Mining": BLOCK,
+    "Woodcutting": BLOCK,
+    "Smelting": ITEM,
+    "Cooking": ITEM,
 }
 
 
@@ -252,35 +286,142 @@ def extract(root: Path = RESOURCES) -> dict[str, set[tuple[str, str]]]:
     for sec, kind in XP_SECTION_KIND.items():
         for row in _xp_rows(t, sec):
             add(f"experience.yml:{sec}", kind, row)
+
+    # --- config.yml (TODO §50). The LAST id-keyed file to join this gate and the largest one that
+    #     was ever outside it: 9 sections, ~187 references. It was in neither half of TODO 5.5 --
+    #     not here, and not in ConfigItemIdResolutionTest either -- so nothing had ever resolved a
+    #     single row of it. The first run found 26 dead-everywhere ids, two of them live defects
+    #     (Block_Of_Amethyst, which is not a registry id at all, and a `Chain` with no `Iron_Chain`
+    #     beside it). See TODO.md §50.
+    #
+    #     ⚠️ Everything here is scoped by PARENT SECTION, never by key name. Most of this file is
+    #     `Name: true` rows that are not ids -- Particles.Bleed, Skills.*.Level_Cap,
+    #     Commands.Skills.URL_Links -- and an unscoped scan fills the control with false positives
+    #     until it stops being a signal. The allow-lists are the load-bearing part; --self-test
+    #     asserts both directions.
+    t = _read("config.yml", root)
+
+    # Fail CLOSED on a Bonus_Drops sub-section nobody has classified. Silently skipping one is how a
+    # future `Bonus_Drops.Excavation` would ship entirely unaudited while this gate printed a clean
+    # run -- the same "a guard that cannot fail detects nothing" shape as a permanently-red gate 7.
+    seen_sections, in_bonus = [], False
+    for line in t.splitlines():
+        m_top = re.match(r"^([A-Za-z_]+):", line)
+        if m_top:
+            in_bonus = m_top.group(1) == "Bonus_Drops"
+            continue
+        if in_bonus:
+            m_sec = re.match(r"^ {4}([A-Za-z_]+):\s*$", line)
+            if m_sec:
+                seen_sections.append(m_sec.group(1))
+    unclassified = [s for s in seen_sections if s not in BONUS_DROP_KIND]
+    if unclassified:
+        raise SystemExit(
+            f"config.yml has Bonus_Drops section(s) with no entry in BONUS_DROP_KIND: "
+            f"{', '.join(unclassified)}. Trace the skill's bonus-drop seam and add BLOCK or ITEM -- "
+            f"refusing to audit the file with a section silently unread.")
+
+    for sec, kind in BONUS_DROP_KIND.items():
+        for row in _flag_rows(t, "Bonus_Drops", sec):
+            add(f"config.yml:Bonus_Drops.{sec}", kind, row)
+
+    # GeneralConfig#isGreenThumbReplantableCrop -- the BROKEN CROP block, at 4 spaces off the root.
+    for row in _flag_rows(t, "Green_Thumb_Replanting_Crops", None, indent=4):
+        add("config.yml:Green_Thumb_Replanting_Crops", BLOCK, row)
+
+    # Power Cook: the KEY is the eaten food item; the VALUE is a status-effect registry name and is
+    # NOT an id (PowerCookEffectTableTest owns that half). Reading the value adds ~15 false positives.
+    for k in _keys_under_heading(t, "Power_Cook_Effects"):
+        add("config.yml:Power_Cook_Effects", ITEM, k)
+
+    # RepairSalvageListener#anvilKindAt compares against world.getBlockState(pos).getBlock(), so the
+    # anvil material is a BLOCK; CallOfTheWild#summonForItem matches a HELD item, so Item_Material is
+    # an ITEM. Both key names are unique in the file, so a plain scan is unambiguous.
+    for m in re.finditer(r"^\s*Anvil_Material:\s*([A-Za-z0-9_:]+)", t, re.M):
+        add("config.yml:Anvil_Material", BLOCK, m.group(1))
+    for m in re.finditer(r"^\s*Item_Material:\s*([A-Za-z0-9_:]+)", t, re.M):
+        add("config.yml:Item_Material", ITEM, m.group(1))
+
     return found
 
 
-def _xp_rows(text: str, section: str) -> list[str]:
-    """`Name: <number>` rows at 8 spaces inside `Experience_Values.<section>`.
+def _rows_under(text: str, top: str, section: str | None, value_re: str,
+                indent: int = 8) -> list[str]:
+    """`Name: <value_re>` rows at `indent` spaces inside top-level `top`.
 
-    ⚠️ The `Experience_Values` scoping is load-bearing, not decoration. experience.yml carries a
-    SECOND block of sections with these exact names -- the XP-bar config at ~line 249, where
-    `Mining:` holds `Enable/Color/BarStyle`. Matching `Mining:` anywhere in the file merges the two.
-    Requiring a numeric value happens to exclude `Color: YELLOW` today, but that is an accident of
-    the current values, not a rule anything enforces; the parent check is the rule.
+    With `section`, the row must also sit under a bare `    <section>:` heading inside `top`; with
+    `section=None` the rows hang directly off `top` (the Green_Thumb_Replanting_Crops shape).
+
+    ⚠️ The top-level scoping is load-bearing, not decoration, and BOTH callers need it.
+    experience.yml carries a SECOND block of sections with the Experience_Values names -- the XP-bar
+    config at ~line 249, where `Mining:` holds `Enable/Color/BarStyle` -- and config.yml carries
+    `Skills.Mining` alongside `Bonus_Drops.Mining`. Matching `Mining:` anywhere in either file merges
+    two unrelated tables. Requiring a typed value happens to exclude `Color: YELLOW` today, but that
+    is an accident of the current values, not a rule anything enforces; the parent check is the rule.
+
+    🔑 ONE parser, two callers, deliberately. Two parsers that disagree about one file format is the
+    silent-divergence shape this repo keeps getting bitten by -- see the note on _ids_module().
     """
-    out, cur, in_values = [], None, False
+    out, cur, in_top = [], None, False
+    row = re.compile(r"^ {%d}([A-Za-z][A-Za-z0-9_]*):\s*%s" % (indent, value_re))
     for line in text.splitlines():
-        top = re.match(r"^([A-Za-z_]+):", line)
-        if top:
-            in_values = top.group(1) == "Experience_Values"
+        m_top = re.match(r"^([A-Za-z_]+):", line)
+        if m_top:
+            in_top = m_top.group(1) == top
             cur = None
             continue
-        if not in_values:
+        if not in_top:
             continue
-        m = re.match(r"^ {4}([A-Za-z_]+):\s*$", line)
+        m_sec = re.match(r"^ {4}([A-Za-z_]+):\s*$", line)
+        if m_sec:
+            cur = m_sec.group(1)
+            continue
+        if section is not None and cur != section:
+            continue
+        m = row.match(line)
         if m:
-            cur = m.group(1)
+            out.append(m.group(1))
+    return out
+
+
+def _xp_rows(text: str, section: str) -> list[str]:
+    """`Name: <number>` rows at 8 spaces inside `Experience_Values.<section>`."""
+    return _rows_under(text, "Experience_Values", section, r"-?\d")
+
+
+def _flag_rows(text: str, top: str, section: str | None, indent: int = 8) -> list[str]:
+    """`Name: true|false` rows -- config.yml's shape for every id-keyed toggle table.
+
+    ⚠️ Requiring the boolean is NOT cosmetic here, and this is the one place it is doing real work.
+    config.yml is 676 lines of `Name: <something>` and only a handful of those are ids. Under
+    `Bonus_Drops` every id row is a flag, so demanding one costs nothing and excludes a future
+    `Threshold: 3`-shaped knob from being read as a block.
+    """
+    return _rows_under(text, top, section, r"(?:true|false)\s*$", indent)
+
+
+def _keys_under_heading(text: str, heading: str) -> list[str]:
+    """Mapping keys directly beneath a `<heading>:` line, wherever in the tree it sits.
+
+    For `Power_Cook_Effects`, whose KEYS are food items and whose VALUES are status-effect names --
+    so only one side of each row may be read. Same shape as the potions.yml `Children` scan above;
+    blank and comment lines are skipped, and the first line that is neither a comment nor a key at
+    the expected depth ends the block.
+    """
+    out: list[str] = []
+    indent = None
+    for line in text.splitlines():
+        if indent is None:
+            m = re.match(r"^(\s*)%s:\s*$" % re.escape(heading), line)
+            if m:
+                indent = len(m.group(1)) + 4
             continue
-        if cur == section:
-            m2 = re.match(r"^ {8}([A-Za-z][A-Za-z0-9_]*):\s*-?\d", line)
-            if m2:
-                out.append(m2.group(1))
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        m = re.match(r"^ {%d}([A-Za-z][A-Za-z0-9_]*):\s*\S" % indent, line)
+        if not m:
+            break
+        out.append(m.group(1))
     return out
 
 
@@ -541,7 +682,62 @@ SELF_TEST_FILES = {
         "    Skill_Multiplier:\n"
         "        mining: 1.0\n"                   # a skill name -- section is not scanned
     ),
+    # config.yml is the file where the NEGATIVE cases carry the weight. It is 650 lines of
+    # `Name: <value>` and only ~187 of those rows are ids, so an extractor scoped by key name
+    # instead of by parent section reports a few hundred false positives and the control stops
+    # meaning anything. Every decoy below is modelled on a real row of the shipped file.
+    "config.yml": (
+        "General:\n"
+        "    Locale: en_US\n"
+        "Skills:\n"
+        "    Mining:\n"
+        "        Level_Cap: 0\n"
+        # ⚠️ THE decoy that matters: a BOOLEAN row at 8 spaces under a section literally named
+        # `Mining`, which is also a Bonus_Drops section name. Only the top-level scoping in
+        # _rows_under excludes it -- the value check cannot, because it is a real boolean.
+        "        Enabled_For_PVP: true\n"
+        "    Cooking:\n"
+        "        Level_Cap: 0\n"
+        "        Power_Cook_Effects:\n"
+        "            Cooked_Beef: STRENGTH\n"   # KEY is an item; VALUE is a status effect
+        "    Repair:\n"
+        "        Anvil_Material: IRON_BLOCK\n"
+        "    Taming:\n"
+        "        Call_Of_The_Wild:\n"
+        "            Wolf:\n"
+        "                Item_Material: BONE\n"
+        "                Item_Amount: 10\n"     # the neighbouring knob -- must not be read
+        "Green_Thumb_Replanting_Crops:\n"
+        "    Carrots: true\n"
+        "Bonus_Drops:\n"
+        "    Herbalism:\n"
+        "        Wheat: true\n"
+        "    Mining:\n"
+        "        Iron_Ore: true\n"
+        "    Woodcutting:\n"
+        "        Oak_Log: true\n"
+        "    Smelting:\n"
+        "        Iron_Ingot: true\n"
+        "    Cooking:\n"
+        "        Cooked_Beef: true\n"
+        "Particles:\n"
+        "    Bleed: true\n"                     # a particle toggle shaped exactly like an id row
+        "    LargeFireworks: true\n"
+        "Commands:\n"
+        "    Skills:\n"
+        "        URL_Links: true\n"
+    ),
 }
+
+# A SECOND fixture, used only by the fail-closed check below: a Bonus_Drops sub-section that no
+# entry of BONUS_DROP_KIND classifies. extract() must REFUSE rather than skip it silently.
+SELF_TEST_UNCLASSIFIED = (
+    "Bonus_Drops:\n"
+    "    Mining:\n"
+    "        Iron_Ore: true\n"
+    "    Excavation:\n"
+    "        Dirt: true\n"
+)
 
 SELF_TEST_MUST_FIND = {
     ("treasures.yml:Excavation", ITEM, "DIAMOND"),
@@ -561,6 +757,17 @@ SELF_TEST_MUST_FIND = {
     ("experience.yml:Mining", BLOCK, "Stone"),
     ("experience.yml:Mining", BLOCK, "Iron_Ore"),
     ("experience.yml:Excavation", BLOCK, "Dirt"),
+    # config.yml -- one row from each of the nine sections, so a section that stops being read
+    # fails here rather than quietly shrinking the reference count.
+    ("config.yml:Bonus_Drops.Herbalism", BLOCK, "Wheat"),
+    ("config.yml:Bonus_Drops.Mining", BLOCK, "Iron_Ore"),
+    ("config.yml:Bonus_Drops.Woodcutting", BLOCK, "Oak_Log"),
+    ("config.yml:Bonus_Drops.Smelting", ITEM, "Iron_Ingot"),
+    ("config.yml:Bonus_Drops.Cooking", ITEM, "Cooked_Beef"),
+    ("config.yml:Green_Thumb_Replanting_Crops", BLOCK, "Carrots"),
+    ("config.yml:Power_Cook_Effects", ITEM, "Cooked_Beef"),
+    ("config.yml:Anvil_Material", BLOCK, "IRON_BLOCK"),
+    ("config.yml:Item_Material", ITEM, "BONE"),
 }
 
 # Tokens that appear in the fixture but are NOT ids. If any shows up, the control on the real
@@ -569,6 +776,12 @@ SELF_TEST_MUST_NOT_FIND = {
     "Bushes", "Shear", "INVENTORY", "TOOL", "GOLD", "POTION_OF_SWIFTNESS",
     "POTION_OF_SWIFTNESS_EXTENDED", "Base", "mining", "COMMON",
     "Decoy_Row", "BarStyle", "Color", "Enable",  # the Experience_Bars decoy block
+    # config.yml decoys. `Enabled_For_PVP` is the one with teeth: a real boolean at the right
+    # indent under a section named `Mining`, excluded ONLY by the top-level scoping. `STRENGTH` is
+    # the Power_Cook VALUE -- reading it instead of the key turns 15 status effects into 15 dead
+    # "items". The rest are ordinary toggles that an unscoped scan swallows by the hundred.
+    "Enabled_For_PVP", "STRENGTH", "Level_Cap", "Item_Amount", "Locale",
+    "Bleed", "LargeFireworks", "URL_Links", "Call_Of_The_Wild", "Wolf",
 }
 
 
@@ -600,6 +813,24 @@ def self_test() -> int:
         got = normalise(raw)
         if got != want:
             failures.append(f"NORM    normalise({raw!r}) = {got!r}, want {want!r}")
+
+    # FAIL-CLOSED: an unclassified Bonus_Drops sub-section must REFUSE, not be skipped. Silently
+    # skipping is how a future `Bonus_Drops.Excavation` would ship entirely unaudited while this
+    # gate printed a clean run -- and a guard that cannot fail detects nothing. Asserting the raise
+    # is the only way to know the branch is reachable; without this the whole block is dead code
+    # that a later refactor deletes with nothing going red.
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        for name, body in SELF_TEST_FILES.items():
+            (root / name).write_text(body, encoding="utf-8")
+        (root / "config.yml").write_text(SELF_TEST_UNCLASSIFIED, encoding="utf-8")
+        try:
+            extract(root)
+            failures.append("CLOSED  an unclassified Bonus_Drops section did NOT raise")
+        except SystemExit as e:
+            if "Excavation" not in str(e) or "BONUS_DROP_KIND" not in str(e):
+                failures.append(f"CLOSED  refused, but the message names neither the section nor "
+                                f"the map to fix: {e}")
 
     print("=== SELF-TEST ===")
     print(f"  fixture produced {len(flat)} references across {len(found)} sections")
