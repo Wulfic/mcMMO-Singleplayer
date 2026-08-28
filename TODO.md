@@ -384,6 +384,13 @@ The band cannot run its own gates until its tooling speaks official names.
       noticed — `Block_Of_Amethyst` (not a registry id on any version, while `experience.yml` pays it
       500 XP) and a `Chain` with no `Iron_Chain` beside it (chains lost their bonus roll on the four
       newest bands). **A carried row naming a specific defect is a lower bound, never a count.**
+- [x] ✅ **`advanced.yml` joins the config-id gate — CLOSED 2026-08-27 (§52), and the row was
+      pointing at the wrong file.** `advanced.yml` has ONE id-keyed table (`Hunter.Tiers.Overrides`,
+      two keys) and **both are live on every supported version** — the work as specified finds
+      nothing. The real gap was a whole KIND: `mc-ids.txt` carried `block` and `item` only, so all
+      138 entity-keyed rows had never been audited on any branch. 🔴 **Six defects, two of them
+      severe**: `Vex` and `Creaking` paid **zero** combat XP (an ABSENT row, which no id audit can
+      see), and `Snow_Golem`'s deliberate `0.0` was inert under the Bukkit spelling. See §52.
 - [ ] ⬜ **`build.gradle:2`'s bare `fabric-loom` id.** Resolved on `master` (it is the explicit
       non-remap id); what the **bare** id does on the `1.21.x` branches is inferred, not measured. It
       matters the next time a band's toolchain is touched.
@@ -1158,6 +1165,315 @@ Nothing else in this section writes to `src/` unless 51.5 finds a real defect.
 
 ---
 
+
+## §52 — entity ids join the config-id gate — the KIND that was never in it
+
+### What forced it
+
+§50 closed with one owed row: *"extend gate 4 to `advanced.yml` — it is id-keyed in places too."*
+Measured 2026-08-27, before any edit, that row is **wrong about where the rot is**.
+
+`advanced.yml` has exactly **one** id-keyed table — `Skills.Hunter.Tiers.Overrides`, two keys
+(`Ghast`, `Wither_Skeleton`) — and **both are live on every supported version**. Extending the gate
+to that file finds nothing, and a section that stopped there would have shipped a green gate and a
+correct-sounding closure.
+
+The actual gap is one level up, and it is a whole **kind**. `scripts/mc-ids.txt` carries
+`### block` and `### item` and nothing else. Every entity-keyed config row in this repo — and there
+are **138 of them across four tables** — has therefore never been checked by either half of gate 4,
+on any branch, ever. The file that carries them is `experience.yml`, which has been *inside* the
+gate since before §50 — its **material** sections were audited while its **entity** sections were
+invisible in the same file, on the same run, in the same green line of output.
+
+🔑 **This is the §50 lesson landing a second time and the carried row is again a LOWER BOUND.** §50's
+row named one dead id and measuring found 26. This row named a file and measuring found the file
+clean and the defect next door. **A carried row records where somebody last looked, not where the
+defect is.**
+
+### What was measured, before any edit
+
+Entity ids dumped from the vanilla data generator's `reports/registries.json` for `1.21` (130 types)
+and `26.2` (158 types), the two ends of the supported range. Config keys read with a real YAML
+parse and put through `ConfigStringUtils`'s exact formatter, because that is what the runtime uses.
+
+| Table | Keys | Dead on **every** supported version |
+|---|---|---|
+| `experience.yml:Experience_Values.Combat.Multiplier` | 86 | **7** |
+| `experience.yml:Experience_Values.Taming.Animal_Taming` | 22 | **1** (`Snifflet`) |
+| `experience.yml:Experience_Values.Husbandry.Animal_Breeding` | 28 | 0 |
+| `advanced.yml:Skills.Hunter.Tiers.Overrides` | 2 | 0 |
+
+The seven dead `Combat.Multiplier` keys, and **why each is dead — they are not one defect**:
+
+- `Pig_Zombie`, `Zombie_Pigman` — two spellings of the mob Bukkit renamed in 1.16. ⚠️ **Both are
+  harmless**: `Zombified_Piglin: 3.0` already sits three lines below them, so piglins are paid
+  correctly and these are redundant rows. **This is the one I got wrong first** and it is the reason
+  the table above is per-key: "dead key" and "unpaid mob" are different questions, and only the
+  second one is a defect.
+- `Mushroom_Cow` — renamed to `mooshroom`. **No `Mooshroom` row exists in this table.** 🔴 Live.
+- `Snowman` — renamed to `snow_golem`. **No `Snow_Golem` row exists.** 🔴 Live.
+- `Wandering_trader` — a **casing typo**; the formatter produces `Wandering_Trader`. The configured
+  value is `1.0` and the fallback is also `1.0`, so nothing is mispaid. Dead, cosmetic.
+- `Ghastling`, `Snifflet` — **not entity types on any version.** A ghastling is a happy ghast with
+  `baby=true` and a snifflet is a baby sniffer; neither has a registry entry. Verified against both
+  dumps directly rather than inferred from the rename pattern that explains the other five.
+
+### 🔴 The live defects — and the bigger half is what is ABSENT, not what is dead
+
+The runtime fallback in `CombatXp#baseXp` is **not uniform**, and that is what decides impact:
+
+| category | unlisted mob gets | so a dead/absent key means |
+|---|---|---|
+| `MONSTER` | `getDouble` with **no default** → **0.0** | 🔴 **pays nothing, forever** |
+| `ANIMAL` | `Combat.Multiplier.Animals` → 1.0 | mispaid only if configured ≠ 1.0 |
+| `OTHER` | the legacy 1.0 floor | mispaid only if configured ≠ 1.0 |
+
+Category comes from `CombatUtils#categoryOf` — `instanceof Monster` / `instanceof Animal` / else.
+Resolved against the merged jar with `javap-mc.sh`, never from memory:
+
+1. 🔴🔴 **`Vex` pays ZERO combat XP, and has on every band since the port began.** `Vex extends
+   net.minecraft.world.entity.monster.Monster`, and `Combat.Multiplier` has **no Vex row at all** —
+   not a dead one, an absent one. Evokers and raids spawn them; killing them pays nothing.
+2. 🔴 **`Creaking` pays ZERO** — `extends monster.Monster`, no row. Affects every band from `1.21.4`.
+3. 🔴 **`Snow_Golem` pays 1.0 where the config says 0.0.** `SnowGolem extends AbstractGolem`, which
+   is **not** `Animal` → `OTHER` → the 1.0 floor. The `Snowman: 0.0` row was a deliberate zero — snow
+   golems are trivially farmable — and it has been inert since the rename.
+4. 🟡 **`Mooshroom` pays 1.0 where the config says 1.2.** `MushroomCow extends AbstractCow` → `ANIMAL`
+   → the `Animals` fallback.
+5. 🔴 **26.x adds more:** `sulfur_cube` and `zombie_nautilus` have no row. Their category must be
+   resolved from the jar in 52.1, not assumed from the name.
+
+🔑 **The absent-row half could never have been found by auditing the config file.** Every key in
+`Combat.Multiplier` could be live and Vex would still pay zero, because the defect is a row that is
+**not there**. An id audit reads what is written down; only the **live registry** can enumerate what
+should have been. That is why this section has two halves and why neither is optional.
+
+### The ruling — `entity` becomes a third kind, and the live half enumerates Monsters
+
+**(a) Offline.** `extract-mc-ids.py` grows `entity` alongside `block` and `item`; `mc-ids.txt` is
+regenerated for all 14 versions and **cherry-picked**, never regenerated per band (the standing rule
+— it is a fact about Minecraft, not about a branch). `config-id-audit.py` grows an `ENTITY` kind and
+reads the four entity-keyed tables above. This catches **dead keys**.
+
+⚠️ `cross_validate` compares the registry dump against jar assets and there is **no asset
+counterpart for entities** — it must skip `entity` explicitly rather than silently comparing against
+an empty set, which is the shape that reports a clean pass for a scan that never ran.
+
+**(b) Live.** A new test walks the live entity registry, and for every type whose class is a
+`Monster` asserts a `Combat.Multiplier` row exists. This catches **absent rows**, and it is the only
+instrument that can. It goes in gate 1 beside `ConfigYamlBonusDropsTest`.
+
+**(c) The fixes.** Rename the three rotted keys to their registry spellings, keeping their configured
+values; delete the four that name nothing (`Pig_Zombie`, `Zombie_Pigman`, `Ghastling`, `Snifflet` ×2);
+add rows for the monsters that have none. **Every value a player has felt stays what it was** — this
+section makes rows *reachable*, it does not re-tune. The one exception is deliberate and is the
+defect: `Snow_Golem` starts paying the `0.0` it was always configured to pay.
+
+### The two ways this can be wrong — both to be measured, not reasoned about
+
+1. **The formatter is not what I think it is.** `title()` in the measurement is a re-implementation
+   of `ConfigStringUtils`. If they disagree, every count above is wrong in a way that looks fine.
+   → 52.1 drives the **shipped** formatter, not a copy. (The §51 lesson: a fixture that drives its
+   own lambda never executes the shipped code, and 2 of 8 mutations stayed green.)
+2. **A filter that drops everything looks exactly like a clean sweep.** If the entity kind fails to
+   load, every key reads "absent" or every key reads "present" depending on the direction, and both
+   render as a confident number. → the self-test asserts a known-dead key is **reported** and a
+   known-live key is **not**, and the audit warns on a 0% or 100% hit rate.
+
+### Steps
+
+- [x] ✅ **52.1** — a control first: assert the measurement's formatter matches the shipped
+      `ConfigStringUtils` over every entity id in both dumps. If it does not, everything above is
+      re-measured before anything else happens.
+- [x] ✅ **52.2** — `extract-mc-ids.py`: add `entity`; skip it in `cross_validate` with a stated reason;
+      extend `--self-test`. Regenerate `mc-ids.txt` (dry run, read the diff, then `--write`).
+- [x] ✅ **52.3** — `config-id-audit.py`: `ENTITY` kind, the four tables, self-test + control floor.
+- [x] ✅ **52.4** — the live-registry Monster test (gate 1). Found `Vex` + `Creaking` at zero.
+- [x] ✅ **52.5** — the config fixes, one commit, each row justified by 52.3/52.4 output.
+- [x] ✅ **52.6** — full suite (1,872/0), gates, docs caveat-expiry pass (grep the **symptom**: any wiki claim
+      about which mobs pay combat XP).
+
+### What this section is NOT doing
+
+- **Not re-tuning any multiplier.** Values move only where a rename carries one across, and where a
+  monster has no row at all it gets the value its nearest sibling already has, stated per row.
+- **Not adding an alias table.** `FishingTreasureConfig` has one for the same three Bukkit renames;
+  that was right there (it must read sections written by users) and wrong here (this is *our* shipped
+  default, which we can simply spell correctly). Aliasing would preserve the dead spelling forever.
+- **Not extending the gate to `coreskills.yml`, `hidden.yml`, `skillranks.yml`, `sounds.yml`.**
+  Unmeasured. Whether they are id-keyed is a separate question and gets its own row, not a guess.
+- **Not touching `mc-ids.txt`'s missing `26.1`/`26.1.1` rows** — the manifest covers 14 versions
+  against a declared scope of 16. Noticed here, measured nowhere; it gets its own row rather than
+  riding this section.
+
+### Rollback
+
+🟢 While unpushed: `git reset --hard <tip>` per branch, tips recorded in `.agent/memory/state.md`
+**before** the first commit. Every file touched is tracked; `git show HEAD:<path>` restores each in
+full. The `mc-ids.txt` regeneration is the one bulk rewrite — it is a dry run by default, the diff
+is read before `--write`, and the manifest's own declared-count parser refuses a truncated file.
+
+---
+
+### The outcome — 8 dead keys, 2 unpaid monsters, and the two sets do not intersect
+
+✅ **DONE 2026-08-27.** Four commits on `master`:
+
+| commit | what |
+|---|---|
+| `6b014029e` | `entity_type` becomes a third id kind; the default stops widening scope |
+| `c42c55e53` | the entity kind joins `config-id-audit.py`, matched **exactly** |
+| `5639036c0` | the live half + the six config fixes + the docs half |
+
+**The gate grew from 875 references over 26 sections in 7 files to 1,013 over 30 in 8.**
+Suite **1,872 executed, 0 failed, 168 classes** (was 1,869 — `CombatMultiplierCoverageTest` ×2 and
+one new manifest test). `config-id-audit.py --check` exits 0; it exited 1 on 8 rows before the fix.
+
+**What was actually wrong, by severity:**
+
+1. 🔴🔴 **`Vex` and `Creaking` paid ZERO combat XP** — absent rows, not dead ones. Vex for the whole
+   life of the port, Creaking since `1.21.4`.
+2. 🔴 **`Snow_Golem`**: the deliberate `0.0` (farmable, same reasoning as `Armor_Stand`/`Mannequin`)
+   was inert under the Bukkit spelling `Snowman`, so snow golems paid the 1.0 `OTHER` floor.
+3. 🟡 **`Mooshroom`**: `1.2` inert under `Mushroom_Cow`, so they fell back to `Animals: 1.0`.
+4. ⬜ `Wandering_trader` — dead on **case alone**. Configured value equalled the fallback, so nothing
+   was mispaid. It is the reason entities are matched exactly rather than through `normalise()`.
+5. ⬜ `Pig_Zombie`, `Zombie_Pigman`, `Ghastling`, `Snifflet` ×2 — dead and harmless.
+
+### 🔑 What this section is worth remembering for
+
+🔑🔑 **The two halves found DISJOINT defect sets.** The script found 8 dead keys; the live test found
+2 absent monsters; **the intersection is empty.** That is not a coincidence, it is the argument for
+having both — one grades what is written down, the other enumerates what should have been. Either
+alone would have closed this section while leaving the other five defects shipping.
+
+🔑🔑 **The carried row named the wrong file, and following it would have produced a green closure.**
+§50 left *"extend gate 4 to `advanced.yml`"*. `advanced.yml` has one id-keyed table, two keys, **both
+live** — the work as specified finds nothing. The rot was in `experience.yml`, which had been *inside*
+the gate all along: its material sections were audited while its entity sections were invisible in the
+same file, on the same run, in the same green line of output. **Second sighting of "a carried row is a
+lower bound"; §50 was the first.**
+
+🔑🔑 **`fishing_treasures.yml` has aliased these exact three renames since §F.** The fix was known,
+written down, tested, applied to one file — and nothing asked whether any other file had the same
+rot. A defect class fixed in one place is not a defect class closed.
+
+🔑🔑 **Both obvious APIs for "is this a monster" were wrong, one of them silently.**
+`EntityType#getBaseClass()` returns `Entity` for **every** registered type under this bootstrap,
+`zombie` included: it compiles, needs no `Level`, and reports **0 monsters out of 158**. As the sole
+input to *"every monster has a row"* that is a permanently green test examining nothing — caught only
+by the anti-vacuity guard, which is the entire reason to write one before trusting a number.
+`getCategory()` is a *different question*: 45 vs 34, and the 11-way gap is real (`slime`, `ghast`,
+`phantom`, `shulker`, `hoglin`, `ender_dragon` extend `Mob`, not `Monster`).
+
+⚠️ **A prediction in the plan above was WRONG and is corrected here rather than quietly dropped.**
+It said `sulfur_cube` and `zombie_nautilus` "have no row — their category must be resolved from the
+jar in 52.1, not assumed from the name." Resolved: **neither is a `Monster` subclass**, so both fall
+to the safe 1.0 `OTHER` floor and neither is a defect. The plan reasoned from the name after saying
+not to. The measurement is what settled it.
+
+⚠️ **A third manifest parser existed, in Java** (`ConfigIdManifestTest`), unknown until it rejected
+`### entity` and failed the suite. `config-id-audit.py` imports the Python parser rather than
+reimplementing it, with a comment about how two parsers that disagree is a silent-divergence shape —
+and there was a third the whole time. It now gives entities the **same live-registry treatment** as
+items and blocks, which matters more for this kind: entities have no jar-asset counterpart, so the
+generator's cross-check skips them and this is their **only** independent check.
+
+⚠️ **The generator's default silently widened scope.** A plain `extract-mc-ids.py` run wanted to add
+**nine** versions the manifest excludes — the whole `1.20` line R-x withdrew, plus `26.1`/`26.1.1`.
+`--write` would have carried a scope change behind a diff that looks routine, and `--check` could
+never pass on a machine with one extra cached version. The default is now the manifest's own list;
+`--all-cached` is the opt-in. Found by **reading the dry run**, which is the only reason the gate
+exists.
+
+⚠️ **The 52.1 control passed and one of its mutations stayed GREEN.** Every registry id is already
+lowercase, so a formatter that omits the tail-lowercasing is observationally identical over the whole
+real input domain. Recorded in `gotchas.md`: *"I ran the shipped code" is not the same claim as
+"I distinguished it from a wrong one."*
+
+### Still open, noticed here and deliberately not ridden on this section
+
+- ⬜ **`mc-ids.txt` covers 14 versions against a declared scope of 16** — `26.1` and `26.1.1` are
+  cached and absent. Adding them is a scope act with a ruling behind it, not a side effect.
+- ⬜ **`coreskills.yml`, `hidden.yml`, `skillranks.yml`, `sounds.yml`** are still outside the gate.
+  Whether they are id-keyed is unmeasured — a question, not a guess.
+- ⬜ **`Vex: 2.0` and `Creaking: 1.0` are judgement calls**, reasoned per row in the config comment.
+  They stop a zero; they are not a measured balance figure and are cheap to retune.
+
+## §53 — the TYPE-AGNOSTIC call site — the shape that let the one real defect through
+
+### What forced it
+
+§51's finding, not §51's list. The collision residue is safe **because javac rejects a mis-bind
+whenever arity or return type differs** — for all 8 surviving names it does. The single defect that
+ever got through did so because `MANNEQUIN_ID.equals(BuiltInRegistries.ENTITY_TYPE.getId(…))`
+consumed its argument as `Object`: the `int` autoboxed, it compiled clean, and it returned `false`
+forever.
+
+**So the risk is not the collision count. It is the set of call sites whose result is consumed
+type-agnostically** — `equals(Object)`, string concatenation, `var`, a raw generic, a varargs
+`Object...`. At those sites the compiler is not checking anything, and every guard in this repo is
+downstream of the compiler.
+
+### The ruling
+
+A new mode on the collision tooling — **not** a new script, because it needs the same bytecode
+receiver resolution `--receivers` already does, and a second copy of that would drift.
+
+It reports, per site: the receiver type, the member, and **which type-agnostic sink** consumes it.
+It is a **review list with a reason attached**, not a pass/fail gate — the shape is legal Java and
+usually correct, so a gate that failed on it would be turned off within a week.
+
+### Steps
+
+- [ ] **53.1** — enumerate the sinks from bytecode: `equals(Ljava/lang/Object;)Z`, `StringBuilder#append`
+      / `invokedynamic makeConcat*`, `Objects.equals`, `Object...` varargs, `Map#get`/`#containsKey`.
+- [ ] **53.2** — cross the sink set with the MC-typed receivers `--receivers` already resolves.
+- [ ] **53.3** — the mutation that proves it: re-introduce the `MANNEQUIN_ID.equals(...)` defect and
+      require it to be **reported**. A finder never shown to catch the one known instance is a finder
+      that reports nothing. Same discipline as 51.3.
+- [ ] **53.4** — read every survivor by hand; record the count **reviewed**, not just fixed.
+
+### What this section is NOT doing
+
+- **Not making it a ship gate.** It is a review instrument. Wiring it into the gate list would make
+  every legitimate `equals` a release blocker.
+
+---
+
+## §54 — R13, the general overload-rebind shape
+
+### What forced it
+
+Carried since §33, which closed the `equals` family **only**. Any method whose narrow overload is
+deleted while a wider one survives rebinds **silently** — javac must accept it by the language rules,
+so there is no diagnostic to catch. No gate covers the general case.
+
+### The ruling
+
+Compare, per band, the **resolved target descriptor** of every call site against the previous band's,
+from bytecode on both sides. A call site whose descriptor changed while its source text did not is
+the signal. This is mechanically the same question `--receivers` answers, asked across two versions
+instead of one.
+
+### Steps
+
+- [ ] **54.1** — resolve every call-site descriptor per band from `build/classes` (compile first —
+      the 51.7 lesson: never infer freshness from mtimes).
+- [ ] **54.2** — diff descriptors across two bands; report sites whose source is identical and whose
+      resolved descriptor is not.
+- [ ] **54.3** — the mutation: delete a narrow overload in a fixture, confirm the diff **reports** it
+      and that javac stays silent — proving the instrument sees what the compiler cannot.
+
+### What this section is NOT doing
+
+- **Not fixing what it finds in the same section.** Finding the set is the deliverable; each hit is
+  judged on its own.
+
+⚠️ **Order matters:** §54 depends on §53's descriptor plumbing. If §52 and §53 consume the session,
+§54 stays open rather than shipping half-built — a partial gate that exits 0 is worse than none.
+
+---
 
 ## Other open work — harness and playtest
 
