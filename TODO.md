@@ -356,7 +356,14 @@ The band cannot run its own gates until its tooling speaks official names.
       `java-version: ${{ steps.jdk.outputs.java_version }}` at line 142. Verified against the file
       2026-08-26. ⚠️ This row still read *"Ruled, not built. `release.yml:117` still pins `'21'`"*
       four sections after §41 marked all five of its sub-boxes done — third instance in one pass.
-- [ ] 🟡 **R13 — the general overload-rebind shape.** §33.4 closed the `equals` family only. *Any*
+- [x] ✅ **R13 — CLOSED 2026-08-27 (§54).** `--overload-rebind` reports the sites ARMED for a
+      silent rebind, from ONE branch and BEFORE a version moves: **2,251 MC call sites, 129 owner
+      types resolved against the jar, ZERO armed.** 🔑 The planned cross-band descriptor diff
+      **could not work** — master is official-named and the bands are yarn, so every descriptor
+      differs by construction. 🔴 The load-bearing half is the **return-type** condition: without
+      it all four `Mth.clamp` sites report and javac rejects every one at the use site.
+      ⚠️ Composes with `--type-agnostic`; neither is complete alone. Original text: §33.4 closed
+      the `equals` family only. *Any*
       method whose narrow overload is deleted while a wider one survives rebinds **silently**, because
       javac must accept it by the language rules. No gate covers the general case.
 - [x] ✅ **§31.5 — the collision review list — CLOSED 2026-08-27 (§51).** `--receivers` resolves
@@ -1426,18 +1433,46 @@ usually correct, so a gate that failed on it would be turned off within a week.
 
 ### Steps
 
-- [ ] **53.1** — enumerate the sinks from bytecode: `equals(Ljava/lang/Object;)Z`, `StringBuilder#append`
+- [x] ✅ **53.1** — enumerate the sinks from bytecode: `equals(Ljava/lang/Object;)Z`, `StringBuilder#append`
       / `invokedynamic makeConcat*`, `Objects.equals`, `Object...` varargs, `Map#get`/`#containsKey`.
-- [ ] **53.2** — cross the sink set with the MC-typed receivers `--receivers` already resolves.
-- [ ] **53.3** — the mutation that proves it: re-introduce the `MANNEQUIN_ID.equals(...)` defect and
+- [x] ✅ **53.2** — cross the sink set with the MC-typed receivers `--receivers` already resolves.
+- [x] ✅ **53.3** — better than planned: the live run lands on the REAL line. The mutation that proves it: re-introduce the `MANNEQUIN_ID.equals(...)` defect and
       require it to be **reported**. A finder never shown to catch the one known instance is a finder
       that reports nothing. Same discipline as 51.3.
-- [ ] **53.4** — read every survivor by hand; record the count **reviewed**, not just fixed.
+- [x] ✅ **53.4** — 18 read, zero defects. Read every survivor by hand; record the count **reviewed**, not just fixed.
 
 ### What this section is NOT doing
 
 - **Not making it a ship gate.** It is a review instrument. Wiring it into the gate list would make
   every legitimate `equals` a release blocker.
+
+---
+
+### The outcome — 18 sites, all read, zero defects, and the instrument lands on the historical line
+
+✅ **DONE 2026-08-27**, `46b4c726b`. `--type-agnostic` on `rename-to-official.py`.
+
+**18 sites over 465 source files, all 18 read by hand, zero defects.** Every one is a correctly
+typed use: `UUID` and `Long` map keys, `String.equals`, `Set<Item>.contains`.
+
+🔑🔑 **Site `EntityDamageListener:857` is the `MANNEQUIN_ID` line itself** — now correct, since §30
+fixed it — so the instrument points at the exact line the one real defect lived on **without needing
+a mutation to prove it fires**. That is the strongest form of 53.3 available: not a synthetic
+re-introduction, the real coordinates.
+
+⚠️ **`HunterListener:305` is a genuine false positive**, and it is the documented limit: it pairs a
+producer with a sink across a `return`, because **adjacency is not dataflow and ignores basic-block
+boundaries.** Fail-open is deliberate — an over-long list gets read; a short one that quietly dropped
+the real instance does not.
+
+⚠️ **Not a gate, and always exits 0.** The shape is legal Java and usually correct. A gate that
+failed on `Objects.equals` would be switched off within a week, and this repo has already recorded
+what a permanently red gate detects.
+
+🔑 **A mutation caught a vacuity in a check written minutes earlier.** `_returns_a_value` was
+asserted directly, while nothing proved the pairing logic consulted it — deleting that branch left
+the self-test green. **Testing a helper is not testing its caller.** Fixed by adding the void-producer
+fixture; all 5 mutations now red. Self-test 139 → 147.
 
 ---
 
@@ -1458,11 +1493,11 @@ instead of one.
 
 ### Steps
 
-- [ ] **54.1** — resolve every call-site descriptor per band from `build/classes` (compile first —
+- [x] ✅ **54.1** — REPLACED (see the outcome): resolve every call-site descriptor per band from `build/classes` (compile first —
       the 51.7 lesson: never infer freshness from mtimes).
-- [ ] **54.2** — diff descriptors across two bands; report sites whose source is identical and whose
+- [x] ✅ **54.2** — REPLACED by the one-branch armed-site test. Diff descriptors across two bands; report sites whose source is identical and whose
       resolved descriptor is not.
-- [ ] **54.3** — the mutation: delete a narrow overload in a fixture, confirm the diff **reports** it
+- [x] ✅ **54.3** — done as self-test fixtures (165 checks). The mutation: delete a narrow overload in a fixture, confirm the diff **reports** it
       and that javac stays silent — proving the instrument sees what the compiler cannot.
 
 ### What this section is NOT doing
@@ -1474,6 +1509,47 @@ instead of one.
 §54 stays open rather than shipping half-built — a partial gate that exits 0 is worse than none.
 
 ---
+
+### The outcome — the planned instrument could not work, and the replacement answers R13 at ZERO
+
+✅ **DONE 2026-08-27**, `9d239bcf4`. `--overload-rebind`.
+
+🔴 **The design in the plan above is wrong, and it is left there rather than rewritten** so the
+reason survives. *"Diff each call site's resolved descriptor between two bands"* cannot work here:
+`master` is official-named and every `mc/**` band is yarn-mapped, so **essentially every MC
+descriptor differs between them by construction** — thousands of rows, none of them findings.
+Diffing two yarn bands needs two checkouts both built, and still only reports a rebind **after** a
+version bump has already shipped it.
+
+🔑🔑 **The question is answerable from ONE branch, and earlier.** A deletion can only rebind silently
+if a **wider sibling overload already exists** — a property of the jar we compile against *today*.
+So the instrument reports the sites that are **armed**, before anything moves.
+
+**Two conditions, and the second is the whole finding:**
+
+1. the arguments still bind — same arity, every parameter same-or-wider, at least one strictly wider;
+2. **the sibling's return type still fits.**
+
+🔴 **Dropping condition 2 is not conservative, it is wrong.** Without it, all four `Mth.clamp` sites
+in this tree report — and every one is rejected by javac at the **use** site, because a `long` does
+not fit an `int`. **Four rows that cannot fail is how a review list gets abandoned.** Condition 2 is
+§51's finding applied here.
+
+**Result: 2,251 MC call sites over 131 owner types, 129 resolved against the `26.2` jar, ZERO armed.**
+Zero is a **result**, not an absence of scanning, and the report says which claim it is making and
+what backs it. The 7 unjudged sites are **named, not counted** — both owners are our own `@Mixin`
+accessors, legitimately absent from the jar.
+
+⚠️ **The two instruments compose, and neither is complete alone.** The one way past a return-type
+difference is a result consumed **type-agnostically**, which has no use site to reject it — and the
+real defect this repo shipped was in the **intersection**: `getId`'s `int` into `equals(Object)`.
+
+⚠️ **Known hole, written into the code rather than left to be discovered:** "wider" is decided only
+where it needs no class hierarchy — reference-vs-`Object`, primitive widening, autoboxing. A sibling
+wider by an **intermediate supertype** (`ServerPlayer` → `Player`) is **not** reported. Closing that
+needs the hierarchy walk and is its own piece of work.
+
+Self-test 147 → **165** checks, all driving the shipped functions.
 
 ## Other open work — harness and playtest
 
@@ -1717,9 +1793,12 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
       the same run still prints *"No drift"*. R-x withdrew R-v's extra cuts, so the declared scope is
       closed and **no further raise is owed**. It stays listed because nothing reminds you: a stale
       floor is under-strict and the audit still passes.
-- [ ] 🟡 **R13 — the general overload-rebind shape.** Carried out of §33; detail under §9.
+- [x] ✅ **R13 — CLOSED 2026-08-27 (§54)**, `--overload-rebind`: 2,251 sites, ZERO armed.
+      Carried out of §33; detail under §9 and §54.
       ✅ §31.5 is CLOSED (§51) — 39 sites reviewed, zero defects.
-- [ ] 🟡 **The TYPE-AGNOSTIC call site — new, out of §51 (2026-08-27).** §51 proved the collision
+- [x] ✅ **The TYPE-AGNOSTIC call site — CLOSED 2026-08-27 (§53)**, `--type-agnostic`: 18 sites,
+      all read, zero defects; it lands on the historical defect's own line.
+      Originally raised out of §51 (2026-08-27).** §51 proved the collision
       residue is safe *because javac rejects a mis-bind whenever arity or return type differs*. The
       one defect that ever got through — `MANNEQUIN_ID.equals(BuiltInRegistries.ENTITY_TYPE.getId(…))`
       — got through because **`equals(Object)` erased the difference**: the `int` autoboxed, it
