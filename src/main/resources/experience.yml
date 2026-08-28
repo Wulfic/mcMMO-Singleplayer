@@ -1231,5 +1231,14 @@ Experience_Values:
             # target), so per-hit XP is close to academic and the value is deliberately unexciting.
             # The row exists so the mob is not resolved through the zero-paying MONSTER path.
             Creaking: 1.0
+            # Creaking_Transient exists on 1.21.2 and 1.21.3 ONLY -- the short-lived entity the
+            # creaking heart spawned before the 1.21.4 rework folded it into `creaking`. It is not
+            # a registry id on this branch, and the row is inert here.
+            #
+            # ⚠️ It is here anyway because a fix lands on master FIRST (AGENTS.md rule 1), and
+            # because this is the shape the live gate exists to catch: the mob is a Monster on the
+            # two bands that ship it, so it paid ZERO combat XP there, and NO run on master could
+            # ever have seen it. CombatMultiplierCoverageTest on mc/1.21.3 is what reported it.
+            Creaking_Transient: 1.0
             Armor_Stand: 0.0
             Mannequin: 0.0
