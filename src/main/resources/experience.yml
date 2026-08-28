@@ -1091,7 +1091,6 @@ Experience_Values:
             Camel: 1300
             Camel_Husk: 1300
             Sniffer: 1500
-            Snifflet: 900
             Llama: 1200
             Wolf: 250
             Ocelot: 500
@@ -1147,8 +1146,6 @@ Experience_Values:
             Slime: 2.0
             Ghast: 3.0
             Happy_Ghast: 1.0
-            Ghastling: 0.5
-            Pig_Zombie: 3.0
             Enderman: 1.0
             Cave_Spider: 3.0
             Silverfish: 3.0
@@ -1179,7 +1176,7 @@ Experience_Values:
             Rabbit: 1.0
             Chicken: 1.0
             Bat: 1.0
-            Mushroom_Cow: 1.2
+            Mooshroom: 1.2
             Cow: 1.0
             Turtle: 1.1
             Sheep: 1.0
@@ -1187,7 +1184,10 @@ Experience_Values:
             Squid: 1.0
             Ocelot: 1.0
             Villager: 1.0
-            Snowman: 0.0
+            # A deliberate zero, like Armor_Stand and Mannequin below: snow golems are trivially
+            # farmable. The key was `Snowman` (Bukkit's name) until §52, which never matched the
+            # `snow_golem` registry path -- so this zero was inert and they paid the 1.0 floor.
+            Snow_Golem: 0.0
             Parrot: 1.0
             Illusioner: 3.0
             Drowned: 1.0
@@ -1199,12 +1199,11 @@ Experience_Values:
             Pillager: 2.0
             Ravager: 4.0
             Trader_Llama: 1.0
-            Wandering_trader: 1.0
+            Wandering_Trader: 1.0
             Bee: 1.5
             Piglin: 2.0
             Piglin_Brute: 4.5
             Hoglin: 4.0
-            Zombie_Pigman: 3.0
             Zombified_Piglin: 3.0
             Strider: 1.2
             Zoglin: 2.5
@@ -1216,10 +1215,21 @@ Experience_Values:
             Warden: 6.0
             Tadpole: 0.2
             Sniffer: 1.1
-            Snifflet: 1.1
             Camel: 1.2
             Camel_Husk: 1.25
             Bogged: 2.0
             Breeze: 4.0
+            # §52 -- the two mobs that had NO row at all. This is a different defect from a dead
+            # key and a worse one: CombatXp#baseXp resolves an unlisted MONSTER through getDouble
+            # with no default, so both paid ZERO combat XP on every hit, on every band, silently.
+            # An id audit cannot see an absent row; CombatMultiplierCoverageTest is what found them.
+            #
+            # Vex: an ordinary hostile by threat, so it matches Spider/Zombie rather than the 3.0
+            # of the evokers that summon it -- 14 health means it dies before paying much anyway.
+            Vex: 2.0
+            # Creaking: conventional damage does not stick to it (the creaking heart is the real
+            # target), so per-hit XP is close to academic and the value is deliberately unexciting.
+            # The row exists so the mob is not resolved through the zero-paying MONSTER path.
+            Creaking: 1.0
             Armor_Stand: 0.0
             Mannequin: 0.0
