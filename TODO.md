@@ -359,7 +359,16 @@ The band cannot run its own gates until its tooling speaks official names.
 - [ ] 🟡 **R13 — the general overload-rebind shape.** §33.4 closed the `equals` family only. *Any*
       method whose narrow overload is deleted while a wider one survives rebinds **silently**, because
       javac must accept it by the language rules. No gate covers the general case.
-- [ ] 🟡 **§31.5 — the 562 unreviewed collision sites over 38 names.** Owner-sequenced after §32.
+- [x] ✅ **§31.5 — the collision review list — CLOSED 2026-08-27 (§51).** `--receivers` resolves
+      every site's receiver from bytecode in two stages — is it an MC type (542 → 200), and does
+      that type actually carry the collision (200 → **39**). **All 39 read by hand, zero defects.**
+      ⚠️ **The carried "562 over 38" was stale**; it measured **542 over 35**, closed incidentally in
+      §31 – §33 with no commit updating the row.
+      🔑 Zero is credible only because 51.3 re-introduced the real `Registry#getId` defect and
+      **watched it survive the filter and get reported** — on the exact line it originally lived on.
+      🔑🔑 **The finding is where the risk actually sits:** for all 8 surviving names the yarn and
+      mojmap members differ in arity or return type, so javac catches a mis-bind. The one that got
+      through did so because `equals(Object)` **erased** the type difference. See the new row below.
       Sampling says they are dominated by false positives (`Map.get`, `List.add` on plain Java
       collections sharing a name with a colliding MC member) — but `Registry#getId` was 42 sites,
       **12 of which javac never mentioned**, and one was a live `equals()` in main source returning
@@ -942,6 +951,180 @@ restores in full.
 
 ---
 
+## §51 — the collision review list, filtered on the RECEIVER TYPE — ✅ DONE
+
+### What forced it
+
+Carried out of §30 as **30.5c** and re-scoped as **§31.5**, owner-sequenced *after* §32 — which
+closed at §39. The owner picked it off the open list on 2026-08-27.
+
+The row has always been defended the same way: *sampling says it is dominated by false positives.*
+That is true and it is not the point. `Registry#getId` was **42 sites**, **12 of which javac never
+mentioned**, and one of those twelve was a live `equals()` in **main** source that returned `false`
+forever. Sampling is exactly the instrument that misses one row in forty.
+
+### What was measured, before any edit
+
+* `rename-to-official.py --self-test` — **104 checks, 0 failed**, exit 0. Run first, because
+  *"no collisions"* is also what a broken auditor prints.
+* `--collisions` on `master` today — **542 sites over 35 names**, *not* the carried **562 over 38**.
+  🔑 **The carried row is stale in the SAFE direction, which is why nothing caught it**: 20 sites and
+  3 names were closed incidentally somewhere in §31 – §33 and no commit updated the row. Same
+  *"a status row is never updated by the commit that changes the status"* shape that turned up three
+  times in one pass across §37 – §41. **Re-measure before believing the size of anything carried.**
+* ⚠️ **`build/classes` was STALE before the run** — 546 class files against 464 sources. That is the
+  exact trap `extract-mc-surface.py` warns about, and this section depends on the bytecode being
+  current. `./gradlew classes testClasses` → exit 0, **543 classes** (355 main + 188 test) for
+  **464** sources. The inflation is inner and anonymous classes; the counts are consistent.
+
+### The ruling — resolve the receiver from BYTECODE, not from source text
+
+**31.5a proposed a heuristic** — parse declared field/local/parameter types out of the source and
+guess what the receiver is. **Rejected.** javac already resolved every receiver *exactly* and wrote
+it into the constant pool, and this repo already reads it: `extract-mc-surface.py`'s
+`pool_refs_detailed()`. A second, weaker resolver is one more thing that has to agree with the
+compiler, with nothing checking that it does.
+
+Two granularities were built and measured, not argued:
+
+| filter | sites | names |
+|---|---|---|
+| none — the review list as it stands | 542 | 35 |
+| per **FILE** — does this file call this name on an MC owner at all? | 234 | 25 |
+| per **SOURCE LINE** — `LineNumberTable` places every invoke | **200** | **25** |
+
+Line attribution turned out to be stable: a window of ±0, ±1, ±2 and ±3 all return exactly **200**;
+±5 returns 202. **The window is kept at ±2 anyway** — it costs zero sites here, and the thing it
+guards against (a chained call `foo.bar()\n  .get(x)`, which javac attributes to the line the
+expression *starts* on) is a **fail-CLOSED** miss, the direction that loses real findings.
+
+Where the filter cannot judge, it **keeps** the site: a source file with no bytecode is reported,
+never dropped.
+
+### The two ways this filter can be wrong — both measured, not reasoned about
+
+1. 🔑🔑 **Splitting the pool record on the wrong character, and calling it a clean sweep.**
+   `pool_refs_detailed()` returns `<dotted.owner>#<name>` — the separator is `#`, not `.`. The first
+   prototype split on the last dot, so every bucket held `Registry#getKey` instead of `getKey`, and
+   the filter matched nothing: **0 kept, 542 dropped.** It reported a *perfect* result. **A filter
+   that removes everything and a filter that correctly finds nothing print the same thing**, and the
+   only reason it was caught is that 100% is not a credible drop rate. This is precisely why 31.5c
+   is in the plan, and it fired before a line of the deliverable was written.
+2. **`@Shadow` methods — blind spot #4.** A call to a shadowed member compiles to an invoke on the
+   **mixin** class, not on `net/minecraft/**`, so a naive owner test drops it silently.
+   ✅ **Measured empty:** all **8** `@Shadow` in the tree are **fields**, and a field access carries no
+   `(`, so it is outside this audit's regex entirely. There are **zero** `@Shadow` methods.
+   The rule still treats a `@Mixin`-annotated owner as MC-owned, so the hole stays shut if one is
+   added later — a guard for a case that does not exist yet is cheap here and unrecoverable later.
+
+⚠️ **A filename is not a receiver.** 39 of the 542 sites sit in paths matching `*mixin*`; **34** of
+them are in `MixinApplicationTest.java` and are `Class.getName()` and `Field.getName()` — reflection
+on `java.lang`, correctly dropped. The path matched and the receiver did not, which is the whole
+argument for resolving the receiver instead of the file.
+
+### Steps
+
+- [x] ✅ **51.1** `--receivers`, on top of `--collisions`, in `scripts/rename-to-official.py`. Reads
+      `build/classes` via `javap -p -v`, places every MC-owner invoke on a source line through
+      `LineNumberTable`, and keeps a site only when that name is invoked on an MC owner within ±2
+      lines. **Refuses** — exit 2, not a pass — when `build/classes` is absent or older than `src/`,
+      because a stale tree yields a confidently wrong answer in the *reassuring* direction.
+- [x] ✅ **51.2** Self-test extensions, each **watched fail before being trusted**:
+      the `#`-vs-`.` split (M1, the defect above); a `@Mixin` owner counted as MC (M2); a stale
+      `build/classes` refused rather than reported clean (M3); the fail-open path when a file has no
+      bytecode (M4).
+- [x] ✅ **51.3** 🔑 **31.5c's mutation** — re-introduce one `BuiltInRegistries.*.getId(` into main
+      source, rebuild, and watch it **survive the filter and get reported**. *A filter never shown to
+      catch anything is a filter that removes everything*, and this section has already produced one
+      of those. Reverted immediately after; it is a mutation, not a change.
+- [x] ✅ **51.4** Read **every** survivor by hand. Record the count **reviewed**, not just the count
+      fixed — a sweep that reports only its fixes cannot be distinguished from one that stopped early.
+- [x] ✅ **51.5** Fix what is genuinely wrong. Size unknown going in, and that is accepted: the honest
+      outcome of 51.4 may be zero defects, and zero-after-200-reviewed is a result, not a failure.
+- [x] ✅ **51.6** Propagate, ship. `scripts/**` is in the identity set (gate 10), so 51.1 reaches all
+      eight bands regardless. **If 51.5 touches `src/`, it ships in the jar** and takes a
+      `mod_version` bump with it; if it does not, it does not.
+
+### The outcome — 542 → 39, all 39 reviewed, **zero defects**
+
+**The filter went in, the review happened, and it found nothing wrong. That is the result, not a
+failure to find one** — but it is only worth anything because the instrument was shown to catch the
+real thing first (51.3), on the very line the defect originally lived on.
+
+| stage | sites | names |
+|---|---|---|
+| the review list as carried | 542 *(not the recorded 562)* | 35 *(not 38)* |
+| stage 1 — is the receiver an MC type? | 200 | 25 |
+| **stage 2 — does that type carry the collision?** | **39** | **8** |
+| reviewed by hand | **39 of 39** | 8 of 8 |
+| defects found | **0** | |
+
+Reviewed: `getKey` 12 · `getBoundingBox` 10 · `teleportTo` 6 · `get` 5 · `knockback` 2 · `update` 2 ·
+`drop` 1 · `offset` 1.
+
+🔑 **Why zero is credible here, and not just "we looked".** For every one of the eight names, the
+yarn member and the mojmap member that share the spelling differ in **arity or return type**, so a
+leftover yarn call cannot bind silently — javac rejects it:
+
+| name | yarn member renamed to | the mojmap member of that name is really yarn's | why a mis-bind cannot be silent |
+|---|---|---|---|
+| `getKey` | `getResourceKey` | `getId` | 0-arg vs 1-arg |
+| `getBoundingBox` | `getLocalBoundsForPose` | `getBoundingBox` | 1-arg (pose) vs 0-arg |
+| `teleportTo` | `teleport` | `requestTeleport` / `teleport` | 3-arg vs the 8-arg overload used |
+| `get` | `getValue` | `getEntry` | returns `T` vs `Optional<Holder.Reference<T>>` |
+| `knockback` | `blockedByItem` | `takeKnockback` | predicate vs void 5-arg |
+| `update` | `tickServer` | `upgrade` | different parameters entirely |
+| `drop` | `dropAllDeathLoot` | `dropItem` | `(DamageSource)` vs `(ItemStack, boolean)` |
+| `offset` | `relative` | `add` | `(Direction[, int])` vs `(int, int, int)` |
+
+🔑🔑 **So the residual risk is not spread over 39 sites — it is concentrated in the shape §30 already
+found.** `Registry#getId` was dangerous *because the type difference was erased at the call site*:
+`MANNEQUIN_ID.equals(<int>)` autoboxes, compiles, and returns `false` forever. The dangerous site is
+one whose result is consumed **type-agnostically** — `equals(Object)`, string concatenation, `var`,
+a raw generic. **That, not the collision count, is where the next one will be**, and no guard in this
+repo looks for it. Logged as a new open row rather than built here.
+
+⚠️ **The carried row was stale, and in the direction nothing catches.** It read *562 sites over 38
+names*; measurement says **542 over 35**. Twenty sites and three names were closed incidentally in
+§31 – §33 and no commit updated the row. A row that overstates its own size is never questioned.
+
+⚠️ **This changes no shipped behaviour.** `scripts/**` is outside `release.yml`'s `paths:` filter,
+so no branch fires a release run and **no `mod_version` bump is owed**. 51.5 found nothing to fix, so
+nothing enters the jar. Gate 10 still requires the script to be byte-identical on all nine branches,
+which is why it is propagated anyway.
+
+### What this section is NOT doing
+
+- **Not making this a ship gate with a reviewed baseline.** 🔑 The survivor set is derived from
+  **this band's** bytecode, so a committed baseline is a *per-band generated fact* — the exact
+  `mc-surface.txt` trap, where a file that is valid for another branch is true on every line and no
+  per-branch check can see it. Turning this into a ratchet needs the `manifest-identity-audit.py`
+  treatment, and that is its own section with its own reasoning.
+- **Not touching R13** (the general overload-rebind shape) or **manifest debt piece 1**. Both stay open.
+- **Not extending the audit to FIELD accesses.** The regex requires a `(`. Four `@Shadow` fields and
+  the `age`/`x`/`y`/`name` rows say there is something there, but it is a different instrument and a
+  different failure shape, and bolting it on would make this section's before/after number
+  uninterpretable.
+- **Not re-running the rename.** `--write` is never passed; `--collisions` is a review path.
+- **Not extending gate 4 to `advanced.yml`** — still owed from §50, still its own section.
+
+### Rollback
+
+🟢 **While unpushed:** `git reset --hard <tip>` per branch; pre-§51 tips are recorded in
+`.agent/memory/state.md` **before** the first commit, not after.
+
+🔴 **After the push the undo is FORWARD** — a further `mod_version` bump, never a re-point of a
+published tag. ⚠️ Deleting a tag **DRAFTS** its release rather than removing it; that is how six
+orphans accumulated on 2026-08-13.
+
+⚠️ **51.3 writes to main source deliberately.** It is a mutation and its undo is
+`git checkout -- <the one file>` — which is itself destructive, so the file is named and its clean
+state confirmed with `git status --short <path>` **before** the mutation is applied, never after.
+Nothing else in this section writes to `src/` unless 51.5 finds a real defect.
+
+---
+
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
@@ -1184,8 +1367,16 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
       the same run still prints *"No drift"*. R-x withdrew R-v's extra cuts, so the declared scope is
       closed and **no further raise is owed**. It stays listed because nothing reminds you: a stale
       floor is under-strict and the audit still passes.
-- [ ] 🟡 **R13 — the general overload-rebind shape**, and 🟡 **§31.5's 562 collision sites**. Both
-      carried out of §33; detail under §9.
+- [ ] 🟡 **R13 — the general overload-rebind shape.** Carried out of §33; detail under §9.
+      ✅ §31.5 is CLOSED (§51) — 39 sites reviewed, zero defects.
+- [ ] 🟡 **The TYPE-AGNOSTIC call site — new, out of §51 (2026-08-27).** §51 proved the collision
+      residue is safe *because javac rejects a mis-bind whenever arity or return type differs*. The
+      one defect that ever got through — `MANNEQUIN_ID.equals(BuiltInRegistries.ENTITY_TYPE.getId(…))`
+      — got through because **`equals(Object)` erased the difference**: the `int` autoboxed, it
+      compiled, and it returned `false` forever. **The risk is not the collision count; it is the
+      set of call sites whose result is consumed type-agnostically** — `equals(Object)`, string
+      concatenation, `var`, a raw generic. Nothing in this repo looks for that shape. It is a
+      different instrument from `--receivers` and gets its own section.
 
 ---
 
