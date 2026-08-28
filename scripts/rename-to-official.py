@@ -1301,6 +1301,177 @@ def mixin_owner_names(root: Path) -> set[str]:
     return out
 
 
+# --------------------------------------------------------------------------------------------
+# TYPE-AGNOSTIC CALL SITES -- TODO section 53
+# --------------------------------------------------------------------------------------------
+#
+# §51 measured that the collision residue is SAFE, and the reason it is safe is the finding: javac
+# rejects a mis-bind whenever the yarn and mojmap members differ in arity or return type, and for
+# all 8 surviving names they do. The single defect that ever got through this repo's whole gate
+# stack did so because the difference was ERASED at the call site:
+#
+#     MANNEQUIN_ID.equals(BuiltInRegistries.ENTITY_TYPE.getId(type))
+#
+# `getId` returns `int`; `equals` takes `Object`; the int autoboxed, it compiled clean, and the
+# expression returned `false` forever. No type error, no warning, no diagnostic anywhere.
+#
+# 🔑 SO THE RISK IS NOT THE COLLISION COUNT. It is the set of call sites where an MC-typed result is
+# consumed with NO type check -- `equals(Object)`, string concatenation, a raw/generic `Object`
+# parameter. At those sites the compiler is not checking anything, and every guard in this repo
+# lives downstream of the compiler.
+#
+# ⚠️⚠️ THIS IS A REVIEW LIST, NOT A GATE, and it is deliberately never wired into the ship gates.
+# The shape is legal Java and usually correct -- `Objects.equals`, a map keyed on an MC id, logging
+# a block id into a message. A gate that failed on it would be switched off in a week, and this
+# repo has already recorded what a permanently-red gate detects (nothing).
+#
+# ⚠️ IT OVER-APPROXIMATES, ON PURPOSE, and here is exactly how. The rule is "the next invoke after
+# an MC-typed producer, skipping autoboxing, is a type-agnostic sink". That is adjacency, not
+# dataflow: two unrelated adjacent statements can pair up, and the reported site is then a false
+# positive. Fail-OPEN is the deliberate direction -- an over-long list gets read, a short one that
+# quietly dropped the one real instance does not.
+_AGNOSTIC_BOX = {f"java/lang/{t}" for t in
+                 ("Integer", "Long", "Double", "Float", "Short", "Byte", "Character", "Boolean")}
+
+# (owner-or-None, member, descriptor) -> why it erases the type. None owner means "any owner".
+_AGNOSTIC_SINKS = {
+    (None, "equals", "(Ljava/lang/Object;)Z"):
+        "equals(Object) -- accepts anything, returns false forever on a type mismatch",
+    ("java/util/Objects", "equals", "(Ljava/lang/Object;Ljava/lang/Object;)Z"):
+        "Objects.equals -- same erasure, one level of indirection",
+    ("java/lang/StringBuilder", "append", "(Ljava/lang/Object;)Ljava/lang/StringBuilder;"):
+        "string concatenation -- calls toString() on anything",
+    (None, "get", "(Ljava/lang/Object;)Ljava/lang/Object;"):
+        "Map.get(Object) -- generics do not constrain the KEY argument",
+    (None, "containsKey", "(Ljava/lang/Object;)Z"):
+        "Map.containsKey(Object) -- generics do not constrain the argument",
+    (None, "contains", "(Ljava/lang/Object;)Z"):
+        "Collection.contains(Object) -- generics do not constrain the argument",
+    (None, "remove", "(Ljava/lang/Object;)Z"):
+        "Collection.remove(Object) -- generics do not constrain the argument",
+    (None, "indexOf", "(Ljava/lang/Object;)I"):
+        "List.indexOf(Object) -- generics do not constrain the argument",
+}
+
+# "  20: invokevirtual #55  // Method net/mc/Level.getBlockEntity:(Lnet/mc/BlockPos;)Lnet/mc/BE;"
+_INSN_FULL_RE = re.compile(
+    r"^\s*(\d+):\s+(invoke\w+)\s+#[\d,\s]+//\s*(?:Interface)?Method\s+([\w/$]+)\.([^:\s]+):(\S+)")
+# "  24: invokedynamic #61,  0  // InvokeDynamic #0:makeConcatWithConstants:(...)Ljava/lang/String;"
+_INDY_RE = re.compile(r"^\s*(\d+):\s+invokedynamic\s+#[\d,\s]+//\s*InvokeDynamic\s+#\d+:(\w+):")
+
+
+def _returns_a_value(descriptor: str) -> bool:
+    """Does this method descriptor return something? `(...)V` does not."""
+    close = descriptor.rfind(")")
+    return close >= 0 and descriptor[close + 1:] not in ("", "V")
+
+
+def _sink_reason(owner: str, name: str, descriptor: str) -> str | None:
+    """Why this invoke erases its argument's type, or None if it does not."""
+    hit = _AGNOSTIC_SINKS.get((owner, name, descriptor))
+    return hit if hit is not None else _AGNOSTIC_SINKS.get((None, name, descriptor))
+
+
+def parse_javap_agnostic(javap_text: str, is_mc) -> tuple[dict, dict]:
+    """`javap -p -v` output -> (placed, unplaced) type-agnostic consumption sites.
+
+    placed:   {source relpath: {source line: {(mc_owner, mc_member, why)}}}
+    unplaced: {source relpath: {(mc_owner, mc_member, why)}}  -- no LineNumberTable
+
+    Split from the javap CALL so the self-test drives the SHIPPED function with fabricated output.
+    ⚠️ §51 learned that the hard way: while the classifier was an inline lambda the fixtures drove
+    their own copy, and two mutations of the real code stayed green.
+    """
+    placed: dict[str, dict[int, set[tuple[str, str, str]]]] = {}
+    unplaced: dict[str, set[tuple[str, str, str]]] = {}
+    cur_src: str | None = None
+    insns: list[tuple[int, str, str, str]] = []      # (offset, owner, name, descriptor)
+    lnt: list[tuple[int, int]] = []
+    in_lnt = False
+
+    def flush() -> None:
+        nonlocal insns, lnt
+        if cur_src is not None and insns:
+            for off, owner, name, why in _pair_producers_with_sinks(insns, is_mc):
+                line = _line_for_offset(lnt, off)
+                if line is None:
+                    unplaced.setdefault(cur_src, set()).add((owner, name, why))
+                else:
+                    placed.setdefault(cur_src, {}).setdefault(line, set()).add((owner, name, why))
+        insns, lnt = [], []
+
+    for line in javap_text.splitlines():
+        if line.startswith("Classfile "):
+            flush()
+            in_lnt = False
+            cur_src = source_of_classfile(line[len("Classfile "):].strip())
+            continue
+        if line.strip() == "Code:":
+            flush()
+            in_lnt = False
+            continue
+        if line.strip() == "LineNumberTable:":
+            in_lnt = True
+            continue
+        if in_lnt:
+            m = _LNT_RE.match(line)
+            if m:
+                lnt.append((int(m.group(1)), int(m.group(2))))
+                continue
+            in_lnt = False
+        m = _INSN_FULL_RE.match(line)
+        if m and cur_src is not None:
+            insns.append((int(m.group(1)), m.group(3), m.group(4), m.group(5)))
+            continue
+        m = _INDY_RE.match(line)
+        if m and cur_src is not None and m.group(2).startswith("makeConcat"):
+            # String concatenation compiles to an invokedynamic with no owner of its own. It is a
+            # sink like any other, so it is given a synthetic owner rather than a separate branch.
+            insns.append((int(m.group(1)), "java/lang/invoke/StringConcatFactory",
+                          "makeConcat", "(Ljava/lang/Object;)Ljava/lang/String;"))
+    flush()
+    return placed, unplaced
+
+
+def _line_for_offset(lnt: list[tuple[int, int]], off: int) -> int | None:
+    """The source line covering a bytecode offset, from the LineNumberTable."""
+    line = None
+    for src_line, start in sorted(lnt, key=lambda t: t[1]):
+        if start <= off:
+            line = src_line
+        else:
+            break
+    return line
+
+
+def _pair_producers_with_sinks(insns, is_mc) -> list[tuple[int, str, str, str]]:
+    """An MC-typed producer immediately consumed by a type-erasing sink.
+
+    Autoboxing is transparent between the two -- and it is not an edge case, it is the ONLY reason
+    the one real defect ever compiled: `getId` returns `int`, `Integer.valueOf` boxed it, and
+    `equals(Object)` swallowed it.
+    """
+    out = []
+    for i, (off, owner, name, desc) in enumerate(insns):
+        if not is_mc(owner) or not _returns_a_value(desc):
+            continue
+        for nxt_owner, nxt_name, nxt_desc in _following_invokes(insns, i):
+            if nxt_owner in _AGNOSTIC_BOX and nxt_name == "valueOf":
+                continue                                   # boxing -- keep looking
+            why = _sink_reason(nxt_owner, nxt_name, nxt_desc)
+            if why:
+                # The synthetic concat sink reads oddly in a report as an owner, so name the shape.
+                out.append((off, owner, name, why))
+            break                                          # only the FIRST real consumer counts
+    return out
+
+
+def _following_invokes(insns, i):
+    """The invokes after position `i`, in order. Separate so the self-test can reason about it."""
+    for off, owner, name, desc in insns[i + 1:]:
+        yield owner, name, desc
+
+
 def parse_javap_invokes(javap_text: str, is_mc) -> tuple[dict, dict]:
     """`javap -p -v` output -> (placed, unplaced).
 
@@ -1457,6 +1628,76 @@ def mc_invokes_by_line(root: Path) -> tuple[dict, dict, set[str]]:
         for src, recs in u.items():
             unplaced.setdefault(src, set()).update(recs)
     return placed, unplaced, seen
+
+
+def agnostic_sites_by_line(root: Path) -> tuple[dict, dict, set[str]]:
+    """Run javap over build/classes for §53. -> (placed, unplaced, sources that HAVE bytecode).
+
+    Mirrors mc_invokes_by_line, including COMPILING FIRST via assert_classes_current -- 51.7's
+    lesson is that a stale build/classes shortens the list, which is the direction nobody questions.
+    """
+    class_files = assert_classes_current(root)
+    mixins = mixin_owner_names(root)
+    placed: dict[str, dict[int, set[tuple[str, str, str]]]] = {}
+    unplaced: dict[str, set[tuple[str, str, str]]] = {}
+    seen: set[str] = set()
+    for i in range(0, len(class_files), JAVAP_CHUNK):
+        batch = [str(f) for f in class_files[i:i + JAVAP_CHUNK]]
+        proc = subprocess.run(["javap", "-p", "-v", *batch], capture_output=True, text=True)
+        if proc.returncode != 0:
+            print(f"FATAL: javap failed on chunk {i // JAVAP_CHUNK}: "
+                  f"{(proc.stderr or '').strip()[:400]}", file=sys.stderr)
+            raise SystemExit(2)
+        for cf in batch:
+            s = source_of_classfile(cf)
+            if s:
+                seen.add(s)
+        p, u = parse_javap_agnostic(proc.stdout, lambda o: is_mc_owner(o, mixins))
+        for src, per_line in p.items():
+            dst = placed.setdefault(src, {})
+            for line, recs in per_line.items():
+                dst.setdefault(line, set()).update(recs)
+        for src, recs in u.items():
+            unplaced.setdefault(src, set()).update(recs)
+    return placed, unplaced, seen
+
+
+def report_agnostic(placed: dict, unplaced: dict, seen: set[str]) -> int:
+    """Print the §53 review list. Always exit 0 -- this is an instrument, not a gate."""
+    total = sum(len(recs) for per_line in placed.values() for recs in per_line.values())
+    n_unplaced = sum(len(v) for v in unplaced.values())
+    print(f"\n=== TYPE-AGNOSTIC CALL SITES (TODO 53) ===", file=sys.stderr)
+    print(f"  {len(seen):,} source file(s) had bytecode to read.", file=sys.stderr)
+
+    if not total:
+        # "Found nothing" and "the scan never ran" render identically, and this repo has been
+        # caught by that difference thirteen times. Say which one this is.
+        print("  ZERO sites. For this repo that is IMPLAUSIBLE -- an MC id compared with equals()"
+              " or logged into a message is ordinary code. Suspect the scan, not the source.",
+              file=sys.stderr)
+        return 0
+
+    by_reason: dict[str, list[str]] = {}
+    for src in sorted(placed):
+        for line in sorted(placed[src]):
+            for owner, member, why in sorted(placed[src][line]):
+                by_reason.setdefault(why, []).append(
+                    f"{src}:{line}  {owner.rsplit('/', 1)[-1]}.{member}()")
+
+    # ASCII only: this console is cp1252 and an emoji here raises UnicodeEncodeError, which turns
+    # a report into a crash. Comments and docstrings are read as UTF-8 and may keep theirs.
+    print(f"  {total:,} site(s) over {len(by_reason)} sink shape(s). "
+          f"WARNING: this OVER-approximates (adjacency, not dataflow). "
+          f"A review list, not a gate.", file=sys.stderr)
+    for why in sorted(by_reason, key=lambda k: -len(by_reason[k])):
+        print(f"\n  {len(by_reason[why]):>4}  {why}", file=sys.stderr)
+        for site in sorted(by_reason[why]):
+            print(f"          {site}", file=sys.stderr)
+    if n_unplaced:
+        print(f"\n  {n_unplaced} site(s) had no LineNumberTable and could not be placed on a "
+              f"source line. Reported rather than dropped -- unjudgeable is not clean.",
+              file=sys.stderr)
+    return 0
 
 
 class CollisionOwners:
@@ -1866,6 +2107,83 @@ def self_test() -> int:
     check("receiver: but NOT one far outside it",
           receiver_survivors([("getId", "src/main/java/com/x/Foo.java", 90)],
                              placed, unplaced, seen)[0], [])
+
+    # ---- TODO 53: the TYPE-AGNOSTIC call site --------------------------------------------
+    #
+    # The required find is THE ONE REAL DEFECT, reproduced as bytecode exactly as javac emitted it:
+    #
+    #     MANNEQUIN_ID.equals(BuiltInRegistries.ENTITY_TYPE.getId(type))
+    #
+    # `getId` returns int -> Integer.valueOf boxes it -> equals(Object) swallows it. A detector that
+    # cannot report this shape reports nothing that matters, however many other sites it lists.
+    _agnostic_fixture = (
+        "Classfile /C:/r/build/classes/java/main/com/x/Foo.class\n"
+        "  Code:\n"
+        "     0: getstatic     #2   // Field MANNEQUIN_ID:Lnet/minecraft/resources/Identifier;\n"
+        "     3: getstatic     #3   // Field ENTITY_TYPE:Lnet/minecraft/core/Registry;\n"
+        "     6: aload_1\n"
+        "     7: invokeinterface #4 // InterfaceMethod net/minecraft/core/Registry.getId:"
+        "(Ljava/lang/Object;)I\n"
+        "    12: invokestatic  #5   // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;\n"
+        "    15: invokevirtual #6   // Method net/minecraft/resources/Identifier.equals:"
+        "(Ljava/lang/Object;)Z\n"
+        "    18: areturn\n"
+        "    LineNumberTable:\n"
+        "      line 60: 0\n"
+        "Classfile /C:/r/build/classes/java/main/com/x/Safe.class\n"
+        "  Code:\n"
+        "     0: aload_0\n"
+        "     1: invokevirtual #7   // Method net/minecraft/world/level/Level.getBlockEntity:"
+        "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/entity/BlockEntity;\n"
+        "     4: invokevirtual #8   // Method net/minecraft/world/level/block/entity/BlockEntity"
+        ".getLevel:()Lnet/minecraft/world/level/Level;\n"
+        "     7: areturn\n"
+        "    LineNumberTable:\n"
+        "      line 12: 0\n"
+        # A VOID MC call sitting immediately before a sink. There is no value to erase, so this
+        # must not be reported. ⚠️ Added after a mutation harness caught the gap: `_returns_a_value`
+        # was asserted directly but NOTHING proved the pairing logic consulted it, so deleting that
+        # branch left the self-test green. Testing a helper is not testing its caller.
+        "Classfile /C:/r/build/classes/java/main/com/x/Void.class\n"
+        "  Code:\n"
+        "     0: aload_0\n"
+        "     1: invokevirtual #9   // Method net/minecraft/world/level/Level.setBlock:"
+        "(Lnet/minecraft/core/BlockPos;)V\n"
+        "     4: aload_1\n"
+        "     5: invokevirtual #10  // Method java/lang/Object.equals:(Ljava/lang/Object;)Z\n"
+        "     8: ireturn\n"
+        "    LineNumberTable:\n"
+        "      line 30: 0\n"
+    )
+    _ag_placed, _ag_unplaced = parse_javap_agnostic(
+        _agnostic_fixture, lambda o: is_mc_owner(o, set()))
+    check("53: the MANNEQUIN_ID equals(Object) shape is REPORTED, boxing and all",
+          sorted((src, line, rec[0].rsplit("/", 1)[-1], rec[1])
+                 for src, per in _ag_placed.items()
+                 for line, recs in per.items() for rec in recs),
+          [("src/main/java/com/x/Foo.java", 60, "Registry", "getId")])
+    check("53: an MC call consumed by another MC call is NOT reported (that IS type-checked)",
+          "src/main/java/com/x/Safe.java" in _ag_placed, False)
+    check("53: a VOID MC call before a sink is NOT reported -- nothing was produced to erase",
+          "src/main/java/com/x/Void.java" in _ag_placed, False)
+
+    # The sink table is data, so it is the easiest thing in this file to break by editing. Each of
+    # these is a claim about the JVM, not about our code.
+    check("53: equals(Object) is a sink on ANY owner",
+          _sink_reason("com/whatever/Thing", "equals", "(Ljava/lang/Object;)Z") is not None, True)
+    check("53: a TYPED equals overload is NOT a sink -- javac checks that one",
+          _sink_reason("com/x/T", "equals", "(Lcom/x/T;)Z"), None)
+    check("53: void-returning MC calls produce nothing to erase",
+          _returns_a_value("(Lnet/minecraft/core/BlockPos;)V"), False)
+    check("53: ...but a value-returning one does", _returns_a_value("()I"), True)
+    # MUTATION: if boxing stopped being transparent, the ONE defect this exists for goes silent
+    # while every other site still reports -- a detector that looks healthy and misses the target.
+    _no_box = _agnostic_fixture.replace(
+        "    12: invokestatic  #5   // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;\n",
+        "    12: invokestatic  #5   // Method com/x/NotBoxing.wrap:(I)Ljava/lang/Integer;\n")
+    _mut_placed, _ = parse_javap_agnostic(_no_box, lambda o: is_mc_owner(o, set()))
+    check("53: MUTATION -- a non-boxing call between producer and sink BREAKS the chain",
+          _mut_placed, {})
 
     # ---- stage 2: does that OWNER actually carry the collision? ---------------------------
     #
@@ -2313,6 +2631,12 @@ def main() -> int:
                          "(`gradlew classes testClasses`), because a stale build/classes shortens "
                          "the review list -- the direction nobody questions -- and mtime cannot "
                          "tell you whether it is stale. Exit 2 if that compile fails.")
+    ap.add_argument("--type-agnostic", action="store_true",
+                    help="TODO 53: report call sites where an MC-typed result is consumed with NO "
+                         "type check -- equals(Object), string concat, Map.get(Object). That is "
+                         "the shape the one real mis-bind used: the int autoboxed, javac was "
+                         "happy, and the expression returned false forever. COMPILES FIRST. "
+                         "A REVIEW LIST, not a gate -- always exits 0.")
     ap.add_argument("--rounds", type=int, default=6, help="max compiler rounds (default 6)")
     ap.add_argument("--maxerrs", type=int, default=100000,
                     help="javac -Xmaxerrs; the default 100 CAP MAKES EVERY MEASUREMENT A LIE")
@@ -2336,6 +2660,13 @@ def main() -> int:
         if not args.table or not args.jar_mc:
             raise SystemExit("FATAL: --mixin-selectors needs --table and --jar-mc.")
         return mixin_selector_pass(root, args.table, args.jar_mc, args.write, args.allow_dirty)
+
+    if args.type_agnostic:
+        # TODO 53. Independent of --collisions on purpose: §51 proved the collision residue is safe
+        # BECAUSE javac catches a mis-bind whenever arity or return type differs, so the remaining
+        # risk is not scoped to a collision name -- it is every site where the type check is erased.
+        placed, unplaced, seen = agnostic_sites_by_line(root)
+        return report_agnostic(placed, unplaced, seen)
 
     if args.baseline:
         log, n = compile_once(root, args.maxerrs, tasks)
