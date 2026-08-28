@@ -1373,15 +1373,49 @@ def parse_javap_invokes(javap_text: str, is_mc) -> tuple[dict, dict]:
     return placed, unplaced
 
 
-def assert_classes_current(root: Path) -> list[Path]:
-    """Every compiled class, or exit 2 if the tree is missing, empty or older than the source.
+def build_classes(root: Path) -> None:
+    """Compile, rather than GUESS whether build/classes matches src/.
+
+    🔑 THE VERSION OF THIS GUARD THAT COMPARED MTIMES WAS WORSE THAN NO GUARD, and it shipped.
+    `git checkout` rewrites every source file's mtime without changing its content, so switching
+    branches makes an up-to-date tree look stale -- and NO REBUILD CLEARS IT, because Gradle is
+    content-based and correctly does nothing. Measured 2026-08-27, minutes after this was pushed to
+    nine branches: 148 files reported "newer than the newest .class", `./gradlew classes
+    testClasses` exit 0, guard still exit 2, forever.
+
+    A refusal that a rebuild cannot clear teaches people to bypass the guard, which is strictly
+    worse than the short review list it was protecting against. Running the build deletes the proxy:
+    afterwards build/classes matches src/ by construction, and there is nothing left to infer.
+    """
+    gradlew = root / ("gradlew.bat" if os.name == "nt" else "gradlew")
+    if not gradlew.is_file():
+        print(f"FATAL: {gradlew} missing -- cannot guarantee build/classes matches src/.\n"
+              f"       Refusing rather than auditing bytecode of unknown age.", file=sys.stderr)
+        raise SystemExit(2)
+    print("  compiling first -- build/classes must match src/, and mtime cannot prove that...",
+          file=sys.stderr)
+    # stdin=DEVNULL is NOT tidiness: launched from Python with an inherited stdin handle,
+    # gradlew.bat blocks before it ever starts a JVM. See compile_once() for the measurement.
+    proc = subprocess.run([str(gradlew), "-q", "classes", "testClasses"], cwd=root,
+                          capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          stdin=subprocess.DEVNULL)
+    if proc.returncode != 0:
+        print("FATAL: `gradlew classes testClasses` FAILED -- refusing to audit a tree that does "
+              "not compile.\n" + (proc.stdout + proc.stderr)[-1500:], file=sys.stderr)
+        raise SystemExit(2)
+
+
+def assert_classes_current(root: Path, build: bool = True) -> list[Path]:
+    """Every compiled class, or exit 2. Compiles first unless `build` is turned off for a test.
 
     ⚠️ EXIT 2 IS NOT A PASS. A stale build/classes yields a confidently wrong answer in the
     REASSURING direction -- names the source calls today are absent from yesterday's bytecode, so
     real sites get dropped and the report shrinks. extract-mc-surface.py carries the same warning;
-    this one refuses rather than warning, because the output here is a review list somebody is going
-    to stop reading when it looks short.
+    this one removes the possibility rather than warning about it, because the output here is a
+    review list somebody is going to stop reading when it looks short.
     """
+    if build:
+        build_classes(root)
     classes = root / "build" / "classes"
     if not classes.is_dir():
         print(f"FATAL: {classes} missing -- run `./gradlew classes testClasses` first.\n"
@@ -1393,18 +1427,6 @@ def assert_classes_current(root: Path) -> list[Path]:
         print(f"FATAL: no .class files under {classes} -- refusing.\n"
               f"       An empty tree drops every site and reports a clean review list.",
               file=sys.stderr)
-        raise SystemExit(2)
-    newest_class = max(f.stat().st_mtime for f in class_files)
-    sources = [p for tree in ("main", "test")
-               if (root / "src" / tree / "java").is_dir()
-               for p in (root / "src" / tree / "java").rglob("*.java")]
-    stale = [p for p in sources if p.stat().st_mtime > newest_class]
-    if stale:
-        print(f"FATAL: build/classes is STALE -- {len(stale):,} source file(s) are newer than the "
-              f"newest .class.\n"
-              f"       e.g. {stale[0].relative_to(root).as_posix()}\n"
-              f"       Run `./gradlew classes testClasses` and re-run. A stale tree drops real "
-              f"sites and shortens the report.", file=sys.stderr)
         raise SystemExit(2)
     return class_files
 
@@ -1941,14 +1963,14 @@ def self_test() -> int:
     # a MISSING or EMPTY build/classes must REFUSE (exit 2), never report a clean review list
     with tempfile.TemporaryDirectory() as td:
         try:
-            assert_classes_current(Path(td))
+            assert_classes_current(Path(td), build=False)
             got = "no raise"
         except SystemExit as e:
             got = e.code
         check("receiver: a MISSING build/classes exits 2, and 2 is not a pass", got, 2)
         (Path(td) / "build" / "classes").mkdir(parents=True)
         try:
-            assert_classes_current(Path(td))
+            assert_classes_current(Path(td), build=False)
             got = "no raise"
         except SystemExit as e:
             got = e.code
@@ -2082,32 +2104,31 @@ def self_test() -> int:
     check("M-R2 ...and VISIBLE once @Mixin owners count as MC",
           withmix["src/main/java/com/x/FooMixin.java"], {12: {("com/x/FooMixin", "getId")}})
 
-    # M-R3: a STALE build/classes must refuse. A source file newer than the newest .class means
-    # names the source calls today are absent from yesterday's bytecode, so real sites get
-    # dropped and the review list SHRINKS -- the direction nobody questions.
+    # M-R3: the compile step must be ARMED BY DEFAULT and must refuse when it cannot run.
+    #
+    # This replaces an mtime comparison that SHIPPED AND WAS WRONG: `git checkout` rewrites
+    # every source mtime without changing content, so a branch switch made an up-to-date tree
+    # look stale and no rebuild could clear it. Measured on nine branches, exit 2 forever.
+    # The guard is now "compile, then read", so the thing worth asserting is that the compile
+    # is not silently skippable.
+    import inspect
+    check("M-R3 the compile step is ARMED BY DEFAULT",
+          inspect.signature(assert_classes_current).parameters["build"].default, True)
     with tempfile.TemporaryDirectory() as td:
         troot = Path(td)
         (troot / "build" / "classes").mkdir(parents=True)
-        cf = troot / "build" / "classes" / "A.class"
-        cf.write_bytes(b"\xca\xfe\xba\xbe")
-        srcdir = troot / "src" / "main" / "java"
-        srcdir.mkdir(parents=True)
-        sf = srcdir / "A.java"
-        sf.write_text("class A {}\n", encoding="utf-8")
-        os.utime(cf, (1_600_000_000, 1_600_000_000))
-        os.utime(sf, (1_600_000_000 - 60, 1_600_000_000 - 60))
+        (troot / "build" / "classes" / "A.class").write_bytes(b"\xca\xfe\xba\xbe")
         try:
-            n_cf = len(assert_classes_current(troot))
-        except SystemExit as e:
-            n_cf = f"<exit {e.code}>"
-        check("M-R3 a CURRENT build/classes is accepted", n_cf, 1)
-        os.utime(sf, (1_600_000_060, 1_600_000_060))     # source now newer than the class
-        try:
-            assert_classes_current(troot)
+            build_classes(troot)          # no gradlew here
             got = "no raise"
         except SystemExit as e:
             got = e.code
-        check("M-R3 a STALE build/classes exits 2 instead of reporting clean", got, 2)
+        check("M-R3 no gradlew -> exit 2, rather than auditing bytecode of unknown age",
+              got, 2)
+        # ...and with the build disabled, a populated tree is accepted -- so the checks above
+        # are testing the build step, not a tree that happens to be empty
+        check("M-R3 build=False still validates the tree itself",
+              len(assert_classes_current(troot, build=False)), 1)
 
     # M1: disable the collision guard -> the capture goes through
     orig = Renamer.rewrite_simple_names
@@ -2288,10 +2309,10 @@ def main() -> int:
                          "binds to the wrong member. Exits 1 if any survive.")
     ap.add_argument("--receivers", action="store_true",
                     help="with --collisions: resolve each site's RECEIVER TYPE from bytecode "
-                         "and drop the ones whose receiver is not an MC type. Needs a current "
-                         "build/classes (`./gradlew classes testClasses`) and REFUSES a stale "
-                         "one with exit 2 -- a stale tree shortens the review list, which is "
-                         "the direction nobody questions.")
+                         "and drop the ones whose receiver is not an MC type. COMPILES FIRST "
+                         "(`gradlew classes testClasses`), because a stale build/classes shortens "
+                         "the review list -- the direction nobody questions -- and mtime cannot "
+                         "tell you whether it is stale. Exit 2 if that compile fails.")
     ap.add_argument("--rounds", type=int, default=6, help="max compiler rounds (default 6)")
     ap.add_argument("--maxerrs", type=int, default=100000,
                     help="javac -Xmaxerrs; the default 100 CAP MAKES EVERY MEASUREMENT A LIE")
