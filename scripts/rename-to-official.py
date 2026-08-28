@@ -1199,6 +1199,314 @@ def mixin_selector_pass(root: Path, table_path: str, jar_mc: str, write: bool,
 # self-test
 # --------------------------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------------------------
+# Receiver resolution from BYTECODE -- TODO section 51 (carried in as 31.5a)
+# --------------------------------------------------------------------------------------------
+#
+# WHY THIS IS NOT A SOURCE-TEXT HEURISTIC. The collision audit reports every `.name(` whose name is
+# reachable on some MC type the file IMPORTS. That is a FILE-level scope, and on this repo it means
+# `get` matches every Map.get() and `getName` every Class.getName(): 542 sites, of which 298 are
+# `get`/`getName`/`of`/`contains`/`set` on plain Java receivers. Unreadable, so never read.
+#
+# javac already resolved every receiver EXACTLY and wrote it into the class file. Reading that back
+# is not an approximation of the compiler's answer, it IS the compiler's answer -- the same argument
+# extract-mc-surface.py makes for scanning bytecode rather than source text.
+#
+# ⚠️ THE CONSTANT POOL IS NOT ENOUGH, and this deliberately does not reuse pool_refs_detailed().
+# That function reads javap's constant-pool entries and yields (owner, name, descriptor) with NO
+# location, which can only support a per-FILE verdict -- measured 234 sites here. The LineNumberTable
+# inside each method's Code attribute is what places an invoke on a SOURCE LINE, giving a per-SITE
+# verdict -- measured 200. The two read different halves of the same `javap -v` output.
+#
+# THERE ARE TWO STAGES, and the second is the one that makes the list readable:
+#
+#   stage 1  is the receiver an MC type at all?         542 -> 200
+#   stage 2  does THAT owner actually carry the collision?  200 -> 39
+#
+# 🔑 Stage 2 exists because a collision is a (yarn owner, yarn name) PAIR, never a bare name.
+# `getType` collides on yarn `NbtElement` -- mojmap `Tag` -- and matching the name alone keeps every
+# `Entity.getType()` and `HitResult.getType()` in the repo: 37 sites that have nothing to do with
+# NbtElement and never could have. Stage 2 asks whether the owner javac recorded, or any of its
+# supertypes, is one of the owners the collision is actually on.
+
+# "        20: invokevirtual #55   // Method net/minecraft/world/level/Level.getBlockEntity:(...)"
+_INSN_RE = re.compile(
+    r"^\s*(\d+):\s+invoke\w+\s+#[\d,\s]+//\s*(?:Interface)?Method\s+([\w/$]+)\.([^:\s]+):")
+# "        line 60: 0"   (source line -> bytecode offset)
+_LNT_RE = re.compile(r"^\s*line (\d+): (\d+)$")
+_CLASS_TAIL_RE = re.compile(r"build/classes/java/(main|test)/(.+)\.class$")
+
+JAVAP_CHUNK = 60
+# A chained call `foo.bar()\n    .get(x)` is attributed by javac to the line the EXPRESSION STARTS
+# on, so an exact-line match would drop it -- a fail-CLOSED miss, the direction that loses findings.
+# Measured on master 2026-08-27: a window of 0, 1, 2 and 3 all return exactly 200 sites and 5
+# returns 202, so this costs nothing today and covers the shape that would otherwise be silent.
+RECEIVER_WINDOW = 2
+
+
+def is_mc_owner(owner: str, mixins: set[str]) -> bool:
+    """Is this invoke owner an MC type -- counting our own @Mixin classes, which become MC?
+
+    ⚠️ A NAMED function, deliberately, and not the closure it started as. While it was inline the
+    self-test drove parse_javap_invokes() with its own lambda, so the shipped classifier was never
+    executed by a single check: mutating it to accept EVERYTHING (nothing is ever dropped) and to
+    reject @Mixin owners (a @Shadow call goes invisible) both left the suite GREEN. A classifier
+    swapped out by its own tests has laundered its misses out of the denominator.
+    """
+    return owner.startswith("net/minecraft/") or owner in mixins
+
+
+def source_of_classfile(cf_path: str) -> str | None:
+    """`build/classes/java/main/a/b/C$1.class` -> `src/main/java/a/b/C.java`, or None.
+
+    ⚠️ javap prints the path as `/C:/Users/...` on Windows -- a leading slash BEFORE the drive
+    letter -- so this anchors on the `build/classes` tail rather than trying to make it relative to
+    the repo root. The first version used Path.relative_to() and matched zero of 543 class files,
+    which the filter then reported as "no bytecode" for every site.
+    """
+    m = _CLASS_TAIL_RE.search(cf_path.replace("\\", "/"))
+    if not m:
+        return None
+    tree, rest = m.group(1), m.group(2)
+    parts = rest.split("/")
+    parts[-1] = parts[-1].split("$")[0]        # C$1, C$Inner -> C
+    return f"src/{tree}/java/" + "/".join(parts) + ".java"
+
+
+def mixin_owner_names(root: Path) -> set[str]:
+    """Binary names of our own @Mixin classes, which are MC classes at runtime.
+
+    A call to a @Shadow member compiles to an invoke on the MIXIN, not on net/minecraft/**, so an
+    owner test of startswith("net/minecraft/") drops it SILENTLY -- blind spot #4 from sections
+    29-33, the class of defect every gate in this repo reports as passing.
+
+    ⚠️ Measured 2026-08-27: the hole is currently EMPTY. All 8 @Shadow members in this tree are
+    FIELDS, and a field access carries no `(`, so it never matches the collision regex at all. This
+    exists for the @Shadow METHOD somebody adds later, when nothing will re-run that analysis.
+
+    ⚠️ Matching on the PATH instead (`*mixin*` -> always keep) was rejected: 34 of the 39 sites in
+    mixin-shaped paths are Class.getName() and Field.getName() in MixinApplicationTest.java. The
+    filename matched and the receiver did not.
+    """
+    out: set[str] = set()
+    for tree in ("main", "test"):
+        base = root / "src" / tree / "java"
+        if not base.is_dir():
+            continue
+        for path in base.rglob("*.java"):
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if "@Mixin(" not in mask_java(text):
+                continue
+            out.add(path.relative_to(base).with_suffix("").as_posix())
+    return out
+
+
+def parse_javap_invokes(javap_text: str, is_mc) -> tuple[dict, dict]:
+    """`javap -p -v` output -> (placed, unplaced).
+
+    placed:   {source relpath: {source line: {(owner, member name)}}}
+    unplaced: {source relpath: {(owner, member name)}}  -- a method with NO LineNumberTable
+
+    Split out from the javap CALL so the self-test can drive it with fabricated output, the same
+    treatment extract-mc-surface.py gives its bytecode detector.
+
+    ⚠️ The OWNER travels with the name. Stage 2 needs to know which type the call resolved on, and
+    a version of this that returned bare names could not answer that -- it kept 37 Entity.getType()
+    sites against a collision that only ever existed on NbtElement.
+
+    ⚠️ Offsets restart in every method's Code attribute, and javap prints the LineNumberTable AFTER
+    the instructions it describes -- so invokes are buffered and resolved when the method ends, not
+    as they are read. A method compiled without line numbers yields `unplaced`, which the filter
+    treats as FAIL-OPEN: unjudgeable is reported, never discarded.
+    """
+    placed: dict[str, dict[int, set[tuple[str, str]]]] = {}
+    unplaced: dict[str, set[tuple[str, str]]] = {}
+    cur_src: str | None = None
+    pending: list[tuple[int, str, str]] = []
+    lnt: list[tuple[int, int]] = []
+    in_lnt = False
+
+    def flush() -> None:
+        nonlocal pending, lnt
+        if cur_src is not None and pending:
+            if lnt:
+                table = sorted(lnt, key=lambda t: t[1])          # by bytecode offset
+                per_line = placed.setdefault(cur_src, {})
+                for off, owner, name in pending:
+                    line = None
+                    for src_line, start in table:
+                        if start <= off:
+                            line = src_line
+                        else:
+                            break
+                    if line is not None:
+                        per_line.setdefault(line, set()).add((owner, name))
+                    else:
+                        unplaced.setdefault(cur_src, set()).add((owner, name))
+            else:
+                unplaced.setdefault(cur_src, set()).update((o, n) for _, o, n in pending)
+        pending, lnt = [], []
+
+    for line in javap_text.splitlines():
+        if line.startswith("Classfile "):
+            flush()
+            in_lnt = False
+            cur_src = source_of_classfile(line[len("Classfile "):].strip())
+            continue
+        if line.strip() == "Code:":
+            flush()
+            in_lnt = False
+            continue
+        if line.strip() == "LineNumberTable:":
+            in_lnt = True
+            continue
+        if in_lnt:
+            m = _LNT_RE.match(line)
+            if m:
+                lnt.append((int(m.group(1)), int(m.group(2))))
+                continue
+            in_lnt = False
+        m = _INSN_RE.match(line)
+        if m and cur_src is not None and is_mc(m.group(2)):
+            pending.append((int(m.group(1)), m.group(2), m.group(3)))
+    flush()
+    return placed, unplaced
+
+
+def assert_classes_current(root: Path) -> list[Path]:
+    """Every compiled class, or exit 2 if the tree is missing, empty or older than the source.
+
+    ⚠️ EXIT 2 IS NOT A PASS. A stale build/classes yields a confidently wrong answer in the
+    REASSURING direction -- names the source calls today are absent from yesterday's bytecode, so
+    real sites get dropped and the report shrinks. extract-mc-surface.py carries the same warning;
+    this one refuses rather than warning, because the output here is a review list somebody is going
+    to stop reading when it looks short.
+    """
+    classes = root / "build" / "classes"
+    if not classes.is_dir():
+        print(f"FATAL: {classes} missing -- run `./gradlew classes testClasses` first.\n"
+              f"       Without it every receiver is unresolvable and the filter cannot judge.",
+              file=sys.stderr)
+        raise SystemExit(2)
+    class_files = sorted(classes.rglob("*.class"))
+    if not class_files:
+        print(f"FATAL: no .class files under {classes} -- refusing.\n"
+              f"       An empty tree drops every site and reports a clean review list.",
+              file=sys.stderr)
+        raise SystemExit(2)
+    newest_class = max(f.stat().st_mtime for f in class_files)
+    sources = [p for tree in ("main", "test")
+               if (root / "src" / tree / "java").is_dir()
+               for p in (root / "src" / tree / "java").rglob("*.java")]
+    stale = [p for p in sources if p.stat().st_mtime > newest_class]
+    if stale:
+        print(f"FATAL: build/classes is STALE -- {len(stale):,} source file(s) are newer than the "
+              f"newest .class.\n"
+              f"       e.g. {stale[0].relative_to(root).as_posix()}\n"
+              f"       Run `./gradlew classes testClasses` and re-run. A stale tree drops real "
+              f"sites and shortens the report.", file=sys.stderr)
+        raise SystemExit(2)
+    return class_files
+
+
+def mc_invokes_by_line(root: Path) -> tuple[dict, dict, set[str]]:
+    """Run javap over build/classes. -> (placed, unplaced, source files that HAVE bytecode)."""
+    class_files = assert_classes_current(root)
+    mixins = mixin_owner_names(root)
+    placed: dict[str, dict[int, set[tuple[str, str]]]] = {}
+    unplaced: dict[str, set[tuple[str, str]]] = {}
+    seen: set[str] = set()
+    for i in range(0, len(class_files), JAVAP_CHUNK):
+        batch = [str(f) for f in class_files[i:i + JAVAP_CHUNK]]
+        proc = subprocess.run(["javap", "-p", "-v", *batch], capture_output=True, text=True)
+        if proc.returncode != 0:
+            print(f"FATAL: javap failed on chunk {i // JAVAP_CHUNK}: "
+                  f"{(proc.stderr or '').strip()[:400]}", file=sys.stderr)
+            raise SystemExit(2)
+        for cf in batch:
+            s = source_of_classfile(cf)
+            if s:
+                seen.add(s)
+        p, u = parse_javap_invokes(proc.stdout, lambda o: is_mc_owner(o, mixins))
+        for src, per_line in p.items():
+            dst = placed.setdefault(src, {})
+            for line, recs in per_line.items():
+                dst.setdefault(line, set()).update(recs)
+        for src, recs in u.items():
+            unplaced.setdefault(src, set()).update(recs)
+    return placed, unplaced, seen
+
+
+class CollisionOwners:
+    """Stage 2: does the owner javac recorded actually carry this collision?
+
+    🔑 A collision is a (yarn owner, yarn name) PAIR. `getType` collides on yarn `NbtElement` only,
+    so `Entity.getType()` and `HitResult.getType()` can never be instances of it -- but a name-only
+    filter keeps all 37 of them, and a review list nobody can finish is a review list nobody starts.
+
+    The supertype walk is not optional: javac records the COMPILE-TIME RECEIVER TYPE, not the
+    declaring class, so a call to an inherited member names the subtype. `Registry#getId` is
+    inherited from `IdMap`, which is the whole reason that row was invisible in the first place.
+
+    ⚠️ Unresolvable owners answer None and are KEPT by the caller. Fail open.
+    """
+
+    def __init__(self, tab, hierarchy, coll: dict[str, set[str]]):
+        self.hierarchy = hierarchy
+        self.moj2obf = {v.replace(".", "/"): k for k, v in tab.obf2moj.items()}
+        self.by_name: dict[str, set[str]] = {}
+        for name, yarn_owners in coll.items():
+            obfs = {tab.yarn2obf.get(yo.replace(".", "/")) for yo in yarn_owners}
+            self.by_name[name] = {o for o in obfs if o}
+
+    def carries(self, moj_owner_binary: str, name: str) -> bool | None:
+        obf = self.moj2obf.get(moj_owner_binary)
+        if obf is None:
+            return None                      # not in the table -> cannot judge -> fail open
+        chain = self.hierarchy.walk(obf) if self.hierarchy else [obf]
+        return bool(set(chain) & self.by_name.get(name, set()))
+
+
+def receiver_survivors(sites: list[tuple[str, str, int]], placed: dict, unplaced: dict,
+                       seen: set[str], owners: "CollisionOwners | None" = None,
+                       window: int = RECEIVER_WINDOW) -> tuple[list, list]:
+    """Split collision sites into (survivors, dropped) on the resolved receiver type.
+
+    Stage 1 keeps a site when its member name is invoked on an MC owner within `window` source
+    lines. Stage 2, when `owners` is supplied, additionally requires that owner to carry the
+    collision.
+
+    Every "cannot judge" outcome KEEPS the site: no bytecode for the file, an invoke that could not
+    be placed on a line, or an owner missing from the table. An unjudgeable site that is silently
+    discarded is exactly how a real finding disappears.
+    """
+    kept, dropped = [], []
+    for name, rel, line in sites:
+        if rel not in seen:
+            kept.append((name, rel, line, "no bytecode"))
+            continue
+        if any(n == name for _o, n in unplaced.get(rel, ())):
+            kept.append((name, rel, line, "unplaced"))
+            continue
+        per_line = placed.get(rel, {})
+        found = {o for d in range(-window, window + 1)
+                 for o, n in per_line.get(line + d, ()) if n == name}
+        if not found:
+            dropped.append((name, rel, line, "non-MC receiver"))
+            continue
+        if owners is None:
+            kept.append((name, rel, line, "MC receiver"))
+            continue
+        verdicts = [owners.carries(o, name) for o in sorted(found)]
+        if any(v is None for v in verdicts):
+            kept.append((name, rel, line, f"owner not in table: {sorted(found)[0]}"))
+        elif any(verdicts):
+            kept.append((name, rel, line, f"owner carries it: {sorted(found)[0]}"))
+        else:
+            dropped.append((name, rel, line, f"owner lacks it: {sorted(found)[0]}"))
+    return kept, dropped
+
+
 def _fixture_table(mod):
     tab = mod.Table()
     pairs = {
@@ -1466,6 +1774,186 @@ def self_test() -> int:
     check("collision: pass 3 sees nothing wrong with it",
           ren.resolve_member("net.minecraft.core.Registry", "getId", 1)[0], "getKey")
 
+    # ---- the receiver filter (TODO 51.1) --------------------------------------------------
+    #
+    # The collision audit above scopes a file to the MC types it IMPORTS, which cannot tell
+    # `registry.getId(k)` from `someMap.get(k)`. javac resolved the receiver exactly and wrote
+    # it into the class file, and these fixtures drive that reader over FABRICATED javap output
+    # -- the same treatment extract-mc-surface.py gives its bytecode detector.
+    javap_fixture = "\n".join([
+        'Classfile /C:/repo/build/classes/java/main/com/x/Foo.class',
+        '  public void f();',
+        '    Code:',
+        '         0: aload_0',
+        '         1: invokevirtual #55  // Method net/minecraft/core/Registry.getId:(Ljava/lang/Object;)I',
+        '         4: aload_1',
+        '         5: invokeinterface #29,  1  // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;',
+        '        10: return',
+        '      LineNumberTable:',
+        '        line 40: 0',
+        '        line 41: 4',
+    ])
+    # The SHIPPED classifier, not a stand-in. Driving the parser with a hand-rolled lambda is
+    # what let two owner-test mutations pass green; these five checks are what closed that.
+    check("receiver: an MC owner is MC", is_mc_owner("net/minecraft/core/Registry", set()), True)
+    check("receiver: java/util is NOT MC", is_mc_owner("java/util/Map", set()), False)
+    check("receiver: our own non-mixin class is NOT MC",
+          is_mc_owner("com/gmail/nossr50/util/Misc", set()), False)
+    check("receiver: a @Mixin owner IS MC (a @Shadow call, blind spot #4)",
+          is_mc_owner("com/x/FooMixin", {"com/x/FooMixin"}), True)
+    check("receiver: a look-alike prefix is not MC",
+          is_mc_owner("net/minecraftforge/Foo", set()), False)
+    is_mc = lambda o: is_mc_owner(o, set())
+    placed, unplaced = parse_javap_invokes(javap_fixture, is_mc)
+    check("receiver: the class file maps back to its source",
+          sorted(placed), ["src/main/java/com/x/Foo.java"])
+    check("receiver: the MC invoke lands on its source line, WITH its owner",
+          placed["src/main/java/com/x/Foo.java"].get(40),
+          {("net/minecraft/core/Registry", "getId")})
+    check("receiver: a java/util/Map invoke is NOT recorded",
+          placed["src/main/java/com/x/Foo.java"].get(41), None)
+    check("receiver: nothing is left unplaced when a LineNumberTable exists", unplaced, {})
+
+    # an inner class resolves to its OUTER source file, or every lambda body reads as "no
+    # bytecode" and the filter fails open on half the repo
+    check("receiver: inner class -> outer source file",
+          source_of_classfile("/C:/r/build/classes/java/test/a/b/C$1.class"),
+          "src/test/java/a/b/C.java")
+    check("receiver: a non-project class file is ignored",
+          source_of_classfile("/C:/r/build/tmp/x/Other.class"), None)
+
+    # the survivor split, over the fixture above
+    seen = {"src/main/java/com/x/Foo.java"}
+    sites = [("getId", "src/main/java/com/x/Foo.java", 40),
+             ("get", "src/main/java/com/x/Foo.java", 41),
+             ("getId", "src/other/Unbuilt.java", 7)]
+    kept, dropped = receiver_survivors(sites, placed, unplaced, seen)
+    check("receiver: the MC-receiver site SURVIVES",
+          ("getId", "src/main/java/com/x/Foo.java", 40, "MC receiver") in kept, True)
+    check("receiver: the Map-receiver site is DROPPED",
+          [d[:3] for d in dropped], [("get", "src/main/java/com/x/Foo.java", 41)])
+    # FAIL-OPEN. A file with no bytecode cannot be judged, and an unjudgeable site that is
+    # silently discarded is exactly how a real finding disappears.
+    check("receiver: a file with NO bytecode is kept, not dropped",
+          ("getId", "src/other/Unbuilt.java", 7, "no bytecode") in kept, True)
+    # a chained call is attributed to the line the EXPRESSION starts on, so the window matters
+    check("receiver: the +/-2 window catches a chained call two lines down",
+          [k[:3] for k in receiver_survivors(
+              [("getId", "src/main/java/com/x/Foo.java", 42)], placed, unplaced, seen)[0]],
+          [("getId", "src/main/java/com/x/Foo.java", 42)])
+    check("receiver: but NOT one far outside it",
+          receiver_survivors([("getId", "src/main/java/com/x/Foo.java", 90)],
+                             placed, unplaced, seen)[0], [])
+
+    # ---- stage 2: does that OWNER actually carry the collision? ---------------------------
+    #
+    # A collision is a (yarn owner, yarn name) PAIR. Matching the bare name keeps every
+    # Entity.getType() against a collision that only ever existed on NbtElement -- 37 sites
+    # here, and a review list nobody can finish is a review list nobody starts.
+    class _Hier:
+        def __init__(self, parents):
+            self.parents = parents
+
+        def walk(self, cls):
+            out, cur = [], cls
+            while cur:
+                out.append(cur)
+                cur = self.parents.get(cur)
+            return out
+
+    class _Tab:
+        obf2moj = {"a": "net.minecraft.core.Registry", "b": "net.minecraft.nbt.Tag",
+                   "c": "net.minecraft.world.entity.Entity", "d": "net.minecraft.core.IdMap"}
+        yarn2obf = {"net/minecraft/registry/Registry": "a", "net/minecraft/nbt/NbtElement": "b",
+                    "net/minecraft/entity/Entity": "c"}
+
+    owners = CollisionOwners(
+        _Tab(), _Hier({"a": "d"}),
+        {"getId": {"net.minecraft.registry.Registry"},
+         "getType": {"net.minecraft.nbt.NbtElement"}})
+    check("stage 2: the colliding owner carries it",
+          owners.carries("net/minecraft/core/Registry", "getId"), True)
+    check("stage 2: an unrelated owner does NOT",
+          owners.carries("net/minecraft/world/entity/Entity", "getType"), False)
+    # javac records the COMPILE-TIME RECEIVER, not the declaring class, so an inherited member
+    # names the subtype -- which is exactly why Registry#getId (inherited from IdMap) was
+    # invisible in the first place. Without the supertype walk stage 2 re-hides it.
+    check("stage 2: the supertype walk reaches an INHERITED collision",
+          owners.carries("net/minecraft/core/IdMap", "getId") is not None, True)
+    check("stage 2: an owner absent from the table answers None (fail open)",
+          owners.carries("net/minecraft/does/Not/Exist", "getId"), None)
+
+    s2_placed = {"src/main/java/com/x/Foo.java": {
+        10: {("net/minecraft/core/Registry", "getId")},
+        20: {("net/minecraft/world/entity/Entity", "getType")},
+        30: {("net/minecraft/does/Not/Exist", "getId")}}}
+    s2_sites = [("getId", "src/main/java/com/x/Foo.java", 10),
+                ("getType", "src/main/java/com/x/Foo.java", 20),
+                ("getId", "src/main/java/com/x/Foo.java", 30)]
+    s2_kept, s2_drop = receiver_survivors(s2_sites, s2_placed, {},
+                                          {"src/main/java/com/x/Foo.java"}, owners)
+    check("stage 2: the real collision SURVIVES", [k[:3] for k in s2_kept if k[0] == "getId"],
+          [("getId", "src/main/java/com/x/Foo.java", 10),
+           ("getId", "src/main/java/com/x/Foo.java", 30)])
+    check("stage 2: Entity.getType is DROPPED against an NbtElement collision",
+          [d[:3] for d in s2_drop],
+          [("getType", "src/main/java/com/x/Foo.java", 20)])
+    check("stage 2: an unresolvable owner is KEPT, not dropped",
+          any(k[2] == 30 and "not in table" in k[3] for k in s2_kept), True)
+    # stage 2 must be OPT-IN: without it, behaviour is unchanged
+    check("stage 2: omitted -> stage 1 behaviour is unchanged",
+          len(receiver_survivors(s2_sites, s2_placed, {},
+                                 {"src/main/java/com/x/Foo.java"})[0]), 3)
+
+    # a method with NO LineNumberTable cannot be placed -- it must fail OPEN, not vanish
+    no_lnt = "\n".join([
+        "Classfile /C:/repo/build/classes/java/main/com/x/Bar.class",
+        "    Code:",
+        "         1: invokevirtual #55  // Method net/minecraft/core/Registry.getId:()I",
+    ])
+    p2, u2 = parse_javap_invokes(no_lnt, is_mc)
+    check("receiver: an unplaceable invoke is recorded as UNPLACED",
+          u2, {"src/main/java/com/x/Bar.java": {("net/minecraft/core/Registry", "getId")}})
+    check("receiver: and its site is KEPT",
+          [k[3] for k in receiver_survivors(
+              [("getId", "src/main/java/com/x/Bar.java", 3)], p2, u2,
+              {"src/main/java/com/x/Bar.java"})[0]], ["unplaced"]),
+
+    # offsets restart per method: a second Code block must not be read against the first
+    # method's LineNumberTable
+    two = "\n".join([
+        "Classfile /C:/repo/build/classes/java/main/com/x/Baz.class",
+        "    Code:",
+        "         0: invokevirtual #1  // Method net/minecraft/core/Registry.getId:()I",
+        "      LineNumberTable:",
+        "        line 10: 0",
+        "    Code:",
+        "         0: invokevirtual #2  // Method net/minecraft/core/Registry.getKey:()I",
+        "      LineNumberTable:",
+        "        line 99: 0",
+    ])
+    p3, _ = parse_javap_invokes(two, is_mc)
+    check("receiver: per-method offsets do not bleed across Code blocks",
+          p3["src/main/java/com/x/Baz.java"],
+          {10: {("net/minecraft/core/Registry", "getId")},
+           99: {("net/minecraft/core/Registry", "getKey")}})
+
+    # a MISSING or EMPTY build/classes must REFUSE (exit 2), never report a clean review list
+    with tempfile.TemporaryDirectory() as td:
+        try:
+            assert_classes_current(Path(td))
+            got = "no raise"
+        except SystemExit as e:
+            got = e.code
+        check("receiver: a MISSING build/classes exits 2, and 2 is not a pass", got, 2)
+        (Path(td) / "build" / "classes").mkdir(parents=True)
+        try:
+            assert_classes_current(Path(td))
+            got = "no raise"
+        except SystemExit as e:
+            got = e.code
+        check("receiver: an EMPTY build/classes exits 2 too", got, 2)
+
     # ---- edit application ----------------------------------------------------------------
     with tempfile.TemporaryDirectory() as td:
         p = Path(td) / "T.java"
@@ -1564,6 +2052,62 @@ def self_test() -> int:
 
     # ---- MUTATIONS: each must be DETECTED, i.e. the guard must change the answer ----------
     print("\n  mutations (each must change the result -- a guard that cannot fail is decoration):")
+
+    # M-R1: split the javap record on "." instead of "#".
+    #
+    # THIS IS NOT A HYPOTHETICAL. The first build of the receiver filter reused
+    # pool_refs_detailed(), whose records are "<dotted.owner>#<name>", and split them on the
+    # last dot -- so every bucket held "Registry#getKey" instead of "getKey", nothing matched,
+    # and the run reported 0 kept / 542 dropped. A PERFECT-looking sweep. A filter that removes
+    # everything and a filter that correctly finds nothing print the same thing, and only the
+    # implausibility of a 100% drop rate caught it.
+    mr1_placed = {"src/main/java/com/x/Foo.java":
+                  {40: {("net/minecraft/core/Registry", "Registry#getId")}}}
+    mr1_kept, _ = receiver_survivors([("getId", "src/main/java/com/x/Foo.java", 40)],
+                                     mr1_placed, {}, {"src/main/java/com/x/Foo.java"})
+    check("M-R1 a mis-split owner/name drops the real site (0 kept)", len(mr1_kept), 0)
+
+    # M-R2: a @Shadow call compiles to an invoke on the MIXIN, not on net/minecraft/**.
+    # With the plain owner test it vanishes; with @Mixin owners counted as MC it survives.
+    shadow = "\n".join([
+        "Classfile /C:/repo/build/classes/java/main/com/x/FooMixin.class",
+        "    Code:",
+        "         0: invokevirtual #1  // Method com/x/FooMixin.getId:()I",
+        "      LineNumberTable:",
+        "        line 12: 0",
+    ])
+    plain, _ = parse_javap_invokes(shadow, lambda o: is_mc_owner(o, set()))
+    withmix, _ = parse_javap_invokes(shadow, lambda o: is_mc_owner(o, {"com/x/FooMixin"}))
+    check("M-R2 a @Shadow-shaped call is INVISIBLE to the plain owner test", plain, {})
+    check("M-R2 ...and VISIBLE once @Mixin owners count as MC",
+          withmix["src/main/java/com/x/FooMixin.java"], {12: {("com/x/FooMixin", "getId")}})
+
+    # M-R3: a STALE build/classes must refuse. A source file newer than the newest .class means
+    # names the source calls today are absent from yesterday's bytecode, so real sites get
+    # dropped and the review list SHRINKS -- the direction nobody questions.
+    with tempfile.TemporaryDirectory() as td:
+        troot = Path(td)
+        (troot / "build" / "classes").mkdir(parents=True)
+        cf = troot / "build" / "classes" / "A.class"
+        cf.write_bytes(b"\xca\xfe\xba\xbe")
+        srcdir = troot / "src" / "main" / "java"
+        srcdir.mkdir(parents=True)
+        sf = srcdir / "A.java"
+        sf.write_text("class A {}\n", encoding="utf-8")
+        os.utime(cf, (1_600_000_000, 1_600_000_000))
+        os.utime(sf, (1_600_000_000 - 60, 1_600_000_000 - 60))
+        try:
+            n_cf = len(assert_classes_current(troot))
+        except SystemExit as e:
+            n_cf = f"<exit {e.code}>"
+        check("M-R3 a CURRENT build/classes is accepted", n_cf, 1)
+        os.utime(sf, (1_600_000_060, 1_600_000_060))     # source now newer than the class
+        try:
+            assert_classes_current(troot)
+            got = "no raise"
+        except SystemExit as e:
+            got = e.code
+        check("M-R3 a STALE build/classes exits 2 instead of reporting clean", got, 2)
 
     # M1: disable the collision guard -> the capture goes through
     orig = Renamer.rewrite_simple_names
@@ -1742,6 +2286,12 @@ def main() -> int:
                     help="report yarn member names that ALSO exist on the mojmap owner. The "
                          "compiler loop is blind to these -- javac reports nothing and the call "
                          "binds to the wrong member. Exits 1 if any survive.")
+    ap.add_argument("--receivers", action="store_true",
+                    help="with --collisions: resolve each site's RECEIVER TYPE from bytecode "
+                         "and drop the ones whose receiver is not an MC type. Needs a current "
+                         "build/classes (`./gradlew classes testClasses`) and REFUSES a stale "
+                         "one with exit 2 -- a stale tree shortens the review list, which is "
+                         "the direction nobody questions.")
     ap.add_argument("--rounds", type=int, default=6, help="max compiler rounds (default 6)")
     ap.add_argument("--maxerrs", type=int, default=100000,
                     help="javac -Xmaxerrs; the default 100 CAP MAKES EVERY MEASUREMENT A LIE")
@@ -1868,6 +2418,41 @@ def main() -> int:
         total = sum(len(v) for v in found.values())
         print(f"  {total:,} surviving call sites over {len(found):,} names IN THIS SOURCE:",
               file=sys.stderr)
+        if args.receivers:
+            # TODO 51.1. Everything above scopes a file to the MC types it IMPORTS, which
+            # cannot tell `registry.get(k)` from `someMap.get(k)`. javac resolved that exactly
+            # and wrote it into the class file; this reads the answer back.
+            sites = [(name, loc.rsplit(":", 1)[0], int(loc.rsplit(":", 1)[1]))
+                     for name, locs in found.items() for loc in locs]
+            placed, unplaced, seen = mc_invokes_by_line(root)
+            # Stage 2 needs the hierarchy to walk supertypes: javac records the compile-time
+            # receiver, so an INHERITED collision (Registry#getId, declared on IdMap) names the
+            # subtype. Without the walk the row that started all of this would be dropped.
+            owners = CollisionOwners(tab, hier, coll)
+            kept, dropped = receiver_survivors(sites, placed, unplaced, seen, owners)
+            print(f"\n  receiver filter: {len(sites):,} -> {len(kept):,} sites "
+                  f"({len(dropped):,} dropped -- receiver is not an MC type, or that type does "
+                  f"not carry the collision)", file=sys.stderr)
+            # A filter that removes EVERYTHING and a filter that correctly finds nothing print
+            # the same thing. The first build of this one split the javap record on the wrong
+            # character and reported 0 kept / 542 dropped as a clean sweep, so the implausible
+            # case is called out rather than celebrated.
+            if sites and not kept:
+                print("  WARNING: EVERY site was dropped -- a 100% drop rate. Suspect the "
+                      "filter before the code.", file=sys.stderr)
+            by_name: dict[str, list[str]] = {}
+            for name, rel, line, why in kept:
+                by_name.setdefault(name, []).append(f"{rel}:{line}  ({why})")
+            print(f"  {len(kept):,} sites over {len(by_name):,} names survive:",
+                  file=sys.stderr)
+            for name in sorted(by_name, key=lambda k: -len(by_name[k])):
+                owners = ", ".join(sorted(coll[name])[:3])
+                print(f"    {name:<28} {len(by_name[name]):>4} sites   (on {owners})",
+                      file=sys.stderr)
+                for site in sorted(by_name[name]):
+                    print(f"        {site}", file=sys.stderr)
+            return 1 if kept else 0
+
         for name in sorted(found, key=lambda k: -len(found[k])):
             owners = ", ".join(sorted(coll[name])[:3])
             print(f"    {name:<28} {len(found[name]):>4} sites   (on {owners})", file=sys.stderr)
