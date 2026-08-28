@@ -1027,8 +1027,10 @@ argument for resolving the receiver instead of the file.
 - [x] ✅ **51.1** `--receivers`, on top of `--collisions`, in `scripts/rename-to-official.py`. Reads
       `build/classes` via `javap -p -v`, places every MC-owner invoke on a source line through
       `LineNumberTable`, and keeps a site only when that name is invoked on an MC owner within ±2
-      lines. **Refuses** — exit 2, not a pass — when `build/classes` is absent or older than `src/`,
-      because a stale tree yields a confidently wrong answer in the *reassuring* direction.
+      lines. **Compiles first** (`gradlew classes testClasses`), so `build/classes` matches `src/`
+      by construction; exit 2 — not a pass — if that compile fails. A stale tree yields a
+      confidently wrong answer in the *reassuring* direction.
+      🔴 **The first version compared MTIMES, and it shipped broken — see 51.7.**
 - [x] ✅ **51.2** Self-test extensions, each **watched fail before being trusted**:
       the `#`-vs-`.` split (M1, the defect above); a `@Mixin` owner counted as MC (M2); a stale
       `build/classes` refused rather than reported clean (M3); the fail-open path when a file has no
@@ -1091,6 +1093,38 @@ names*; measurement says **542 over 35**. Twenty sites and three names were clos
 ⚠️ **This changes no shipped behaviour.** `scripts/**` is outside `release.yml`'s `paths:` filter,
 so no branch fires a release run and **no `mod_version` bump is owed**. 51.5 found nothing to fix, so
 nothing enters the jar. Gate 10 still requires the script to be byte-identical on all nine branches,
+### 🔴 51.7 — the staleness guard shipped WRONG, and was caught by using it
+
+**Found minutes after pushing to all nine branches**, by running the tool on the working copy the
+propagation had just left behind.
+
+`assert_classes_current()` refused when any source file's **mtime** was newer than the newest
+`.class`. `git checkout` rewrites every source file's mtime **without changing its content**, so
+checking out eight band branches made an up-to-date tree look stale — and **no rebuild could clear
+it**, because Gradle is content-based and correctly did nothing:
+
+```
+FATAL: build/classes is STALE -- 148 source file(s) are newer than the newest .class.
+$ ./gradlew classes testClasses   ->  exit 0
+FATAL: build/classes is STALE -- 148 source file(s) are newer than the newest .class.   (forever)
+```
+
+🔑🔑 **A refusal a rebuild cannot clear is worse than the defect it guards against.** The short
+review list it was protecting from is a one-time wrong answer; a guard that cannot be satisfied
+teaches people to delete it. And it was **fail-closed**, the direction usually assumed safe — which
+is exactly why it read as conservative rather than broken.
+
+**The fix removes the proxy instead of tuning it:** `--receivers` now *runs* `gradlew classes
+testClasses` before reading bytecode, so `build/classes` matches `src/` by construction and there is
+nothing left to infer. mtime is not a staleness signal in a git working copy, and no threshold makes
+it one.
+
+⚠️ **The self-test could not have caught this**, and its replacement still cannot: the fixture built
+a temp tree and set mtimes with `os.utime`, so it tested the comparison faithfully and the
+comparison was answering the wrong question. **It took running the tool on a real checkout.** The
+mutation now asserts the compile step is *armed by default* and refuses without a `gradlew` —
+the properties that survive the proxy being gone.
+
 which is why it is propagated anyway.
 
 ### What this section is NOT doing
