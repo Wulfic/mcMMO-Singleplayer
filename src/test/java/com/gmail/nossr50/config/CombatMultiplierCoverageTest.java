@@ -18,7 +18,9 @@ import java.util.Set;
 import java.util.TreeSet;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.EntityTypes;
+// The static EntityType<T> constants live on EntityType itself on this band; 26.2 split them out
+// into a separate EntityTypes holder. Same official mapping, different class -- so this import is
+// a per-band difference even between two OFFICIAL-named versions, not an official-vs-yarn one.
 import net.minecraft.world.entity.monster.Monster;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -181,7 +183,7 @@ class CombatMultiplierCoverageTest {
      */
     private static Map<String, String> monsterKeys() {
         final Map<String, String> out = new LinkedHashMap<>();
-        for (Field f : EntityTypes.class.getDeclaredFields()) {
+        for (Field f : EntityType.class.getDeclaredFields()) {
             if (!Modifier.isStatic(f.getModifiers())
                     || !EntityType.class.isAssignableFrom(f.getType())) {
                 continue;
