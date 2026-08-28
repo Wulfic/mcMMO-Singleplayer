@@ -1472,6 +1472,164 @@ def _following_invokes(insns, i):
         yield owner, name, desc
 
 
+# --------------------------------------------------------------------------------------------
+# THE OVERLOAD-REBIND SHAPE (R13) -- TODO section 54
+# --------------------------------------------------------------------------------------------
+#
+# §33.4 closed the `equals` family only. The general shape is: a method whose NARROW overload is
+# deleted while a WIDER one survives rebinds SILENTLY, because javac must accept it by the language
+# rules. There is no diagnostic to catch, so no compiler loop and no gate in this repo can see it.
+#
+# ⚠️⚠️ THIS IS NOT THE INSTRUMENT THE PLAN DESCRIBED, AND THE PLAN'S ONE CANNOT WORK.
+# §54 was written as "diff each call site's resolved descriptor between two bands". `master` is
+# official-named and every `mc/**` band is yarn-mapped, so essentially EVERY MC descriptor differs
+# between them by construction -- the diff would report thousands of rows, none of them findings.
+# Diffing two yarn bands would need two checkouts both built, and still only reports a rebind AFTER
+# a version bump has already shipped it.
+#
+# 🔑 The question is answerable from ONE branch, and earlier: a deletion can only rebind silently
+# if a WIDER SIBLING OVERLOAD ALREADY EXISTS. That is a property of the Minecraft jar we are
+# compiled against right now, so this reports the sites that are ARMED, before anything moves.
+#
+# ⚠️ WHAT IT CANNOT SEE, stated rather than left to be discovered. Deciding "wider" in general needs
+# the full class hierarchy of every parameter type. This decides only the cases that need no
+# hierarchy:
+#   * a reference parameter against `Object`  -- the dominant real case, and the exact shape of the
+#     one defect this repo actually shipped (`equals(Object)`);
+#   * a primitive against a wider primitive (int -> long -> float -> double, etc.);
+#   * a primitive against its box or against `Object` (autoboxing).
+# A sibling that is wider by an INTERMEDIATE supertype (`ServerPlayer` -> `Player`) is NOT reported.
+# That is a known hole, not an argument that the shape is rare -- closing it needs the hierarchy
+# walk and is its own piece of work.
+_WIDENING = {"B": "SIJFD", "S": "IJFD", "C": "IJFD", "I": "JFD", "J": "FD", "F": "D"}
+_BOXES = {"B": "Ljava/lang/Byte;", "S": "Ljava/lang/Short;", "C": "Ljava/lang/Character;",
+          "I": "Ljava/lang/Integer;", "J": "Ljava/lang/Long;", "F": "Ljava/lang/Float;",
+          "D": "Ljava/lang/Double;", "Z": "Ljava/lang/Boolean;"}
+_OBJECT = "Ljava/lang/Object;"
+
+
+def split_params(descriptor: str) -> list[str] | None:
+    """`(ILjava/lang/String;[B)V` -> ['I', 'Ljava/lang/String;', '[B']. None if malformed."""
+    if not descriptor.startswith("("):
+        return None
+    close = descriptor.find(")")
+    if close < 0:
+        return None
+    body, out, i = descriptor[1:close], [], 0
+    while i < len(body):
+        start = i
+        while i < len(body) and body[i] == "[":
+            i += 1
+        if i >= len(body):
+            return None
+        if body[i] == "L":
+            end = body.find(";", i)
+            if end < 0:
+                return None
+            i = end + 1
+        else:
+            i += 1
+        out.append(body[start:i])
+    return out
+
+
+def is_wider(ours: str, theirs: str) -> bool:
+    """Would a value of type `ours` bind to a parameter of type `theirs` without a cast?
+
+    Only the hierarchy-free cases -- see the section comment for what is deliberately not decided.
+    """
+    if ours == theirs:
+        return False
+    if theirs == _OBJECT:
+        return not ours.startswith("(") and ours != "V"     # anything boxes or upcasts to Object
+    if ours in _WIDENING and theirs in {c for c in _WIDENING[ours]}:
+        return True
+    return _BOXES.get(ours) == theirs                       # autoboxing
+
+
+def return_of(descriptor: str) -> str:
+    """The return descriptor. `(I)Z` -> `Z`."""
+    return descriptor[descriptor.rfind(")") + 1:]
+
+
+def shadowing_overloads(owner_methods: dict[str, set[str]], name: str,
+                        resolved: str) -> list[str]:
+    """Sibling overloads of `name` that would SILENTLY absorb this call if `resolved` were deleted.
+
+    Two conditions, and the second is the one that makes this a finding rather than a list of
+    every overloaded method in Minecraft:
+
+    1. **The arguments still bind** -- same arity, every parameter same-or-wider, at least one
+       strictly wider. That is when javac accepts the rebind at the call itself.
+    2. **The result still fits** -- the sibling's return type is usable where ours was. If it is
+       not, javac rejects the rebind at the USE site and the change is loud.
+
+    🔑 Condition 2 is §51's finding applied here, and dropping it is not conservative, it is wrong.
+    Without it this reports all four `Mth.clamp` sites in this tree: deleting `clamp(int,int,int)`
+    does let `clamp(long,long,long)` take the arguments -- and then returns a `long` into an `int`,
+    which does not compile. Four rows that cannot fail is how a review list gets abandoned.
+
+    ⚠️ There is exactly one way past condition 2, and it is the OTHER instrument: a result consumed
+    type-agnostically has no use site to reject it. `--type-agnostic` reports those, and the real
+    defect this repo shipped was in the intersection -- `getId`'s `int` into `equals(Object)`.
+    Read the two lists together; neither is complete alone.
+    """
+    ours = split_params(resolved)
+    if ours is None:
+        return []
+    our_ret = return_of(resolved)
+    out = []
+    for cand in owner_methods.get(name, ()):
+        if cand == resolved:
+            continue
+        theirs = split_params(cand)
+        if theirs is None or len(theirs) != len(ours):
+            continue
+        if not (all(a == b or is_wider(a, b) for a, b in zip(ours, theirs))
+                and any(is_wider(a, b) for a, b in zip(ours, theirs))):
+            continue
+        their_ret = return_of(cand)
+        if their_ret == our_ret or is_wider(their_ret, our_ret):
+            out.append(cand)
+    return out
+
+
+# "  public net.minecraft.world.item.ItemStack getItem();"  ->  we need the DESCRIPTOR, so javap is
+# run with -s, which prints "    descriptor: ()Lnet/minecraft/world/item/ItemStack;" on the next line.
+_JAVAP_CLASS_RE = re.compile(r"^(?:public |final |abstract |static |\s)*(?:class|interface|enum)\s+"
+                             r"([\w.$]+)")
+_JAVAP_MEMBER_RE = re.compile(r"^\s{2}\S.*?([\w$<>]+)\(.*\);\s*$")
+_JAVAP_DESC_RE = re.compile(r"^\s*descriptor:\s*(\S+)\s*$")
+
+
+def parse_javap_signatures(javap_text: str) -> dict[str, dict[str, set[str]]]:
+    """`javap -p -s` output -> {owner binary name: {member name: {descriptor, ...}}}.
+
+    Split from the javap CALL so the self-test drives the SHIPPED parser -- the §51 lesson, and the
+    one §53's M3 mutation caught again: a helper asserted directly is not a caller tested.
+    """
+    out: dict[str, dict[str, set[str]]] = {}
+    cur: str | None = None
+    pending: str | None = None
+    for line in javap_text.splitlines():
+        m = _JAVAP_CLASS_RE.match(line)
+        if m and line.rstrip().endswith("{"):
+            cur = m.group(1).replace(".", "/")
+            out.setdefault(cur, {})
+            pending = None
+            continue
+        m = _JAVAP_MEMBER_RE.match(line)
+        if m and cur is not None:
+            pending = m.group(1)
+            continue
+        m = _JAVAP_DESC_RE.match(line)
+        if m and cur is not None and pending is not None:
+            if m.group(1).startswith("("):                  # methods only; fields have no ()
+                out[cur].setdefault(pending, set()).add(m.group(1))
+            pending = None
+    return out
+
+
 def parse_javap_invokes(javap_text: str, is_mc) -> tuple[dict, dict]:
     """`javap -p -v` output -> (placed, unplaced).
 
@@ -1660,6 +1818,155 @@ def agnostic_sites_by_line(root: Path) -> tuple[dict, dict, set[str]]:
         for src, recs in u.items():
             unplaced.setdefault(src, set()).update(recs)
     return placed, unplaced, seen
+
+
+def mc_call_sites(root: Path) -> tuple[list[tuple[str, int, str, str, str]], set[str]]:
+    """Every MC-owned invoke in our bytecode. -> ([(src, line, owner, name, desc)], owners)."""
+    class_files = assert_classes_current(root)
+    mixins = mixin_owner_names(root)
+    sites: list[tuple[str, int, str, str, str]] = []
+    owners: set[str] = set()
+    for i in range(0, len(class_files), JAVAP_CHUNK):
+        batch = [str(f) for f in class_files[i:i + JAVAP_CHUNK]]
+        proc = subprocess.run(["javap", "-p", "-v", *batch], capture_output=True, text=True)
+        if proc.returncode != 0:
+            print(f"FATAL: javap failed on chunk {i // JAVAP_CHUNK}: "
+                  f"{(proc.stderr or '').strip()[:400]}", file=sys.stderr)
+            raise SystemExit(2)
+        cur_src, insns, lnt, in_lnt = None, [], [], False
+
+        def flush():
+            nonlocal insns, lnt
+            if cur_src is not None:
+                for off, owner, name, desc in insns:
+                    line = _line_for_offset(lnt, off)
+                    if line is not None:
+                        sites.append((cur_src, line, owner, name, desc))
+                        owners.add(owner)
+            insns, lnt = [], []
+
+        for line in proc.stdout.splitlines():
+            if line.startswith("Classfile "):
+                flush()
+                in_lnt = False
+                cur_src = source_of_classfile(line[len("Classfile "):].strip())
+                continue
+            if line.strip() == "Code:":
+                flush()
+                in_lnt = False
+                continue
+            if line.strip() == "LineNumberTable:":
+                in_lnt = True
+                continue
+            if in_lnt:
+                m = _LNT_RE.match(line)
+                if m:
+                    lnt.append((int(m.group(1)), int(m.group(2))))
+                    continue
+                in_lnt = False
+            m = _INSN_FULL_RE.match(line)
+            if m and cur_src is not None and is_mc_owner(m.group(3), mixins):
+                insns.append((int(m.group(1)), m.group(3), m.group(4), m.group(5)))
+        flush()
+    return sites, owners
+
+
+def mc_signatures(owners: set[str], mc: str) -> dict[str, dict[str, set[str]]]:
+    """Every method signature on the MC types we call, read from the merged jar."""
+    jar = _load_loomjar().find_jar(mc)
+    names = sorted(o.replace("/", ".") for o in owners if o.startswith("net/minecraft/"))
+    out: dict[str, dict[str, set[str]]] = {}
+    for i in range(0, len(names), JAVAP_CHUNK):
+        batch = names[i:i + JAVAP_CHUNK]
+        proc = subprocess.run(["javap", "-p", "-s", "-cp", str(jar), *batch],
+                              capture_output=True, text=True)
+        # javap exits non-zero when ANY class in the batch is missing while still printing the
+        # rest, so its output is used regardless -- refusing here would lose every real signature
+        # over one inner class the jar spells differently.
+        out.update(parse_javap_signatures(proc.stdout))
+    return out
+
+
+def gradle_prop_mc(root: Path) -> str:
+    """This branch's minecraft_version. Read, never hardcoded -- a pinned default is how the old
+    copy of javap-mc.sh went stale and stayed stale."""
+    for line in (root / "gradle.properties").read_text(encoding="utf-8").splitlines():
+        if line.strip().startswith("minecraft_version"):
+            return line.split("=", 1)[1].strip()
+    raise SystemExit("FATAL: no minecraft_version in gradle.properties")
+
+
+def _load_loomjar():
+    import importlib.util
+    path = REPO / "scripts" / "loomjar.py"
+    if not path.is_file():
+        raise SystemExit(f"FATAL: {path} missing -- it owns the jar search. §37 moved that search "
+                         f"here precisely so it stopped being `sorted(...)[0]` in three places.")
+    spec = importlib.util.spec_from_file_location("_loomjar", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def report_overload_rebind(root: Path, mc: str) -> int:
+    """TODO 54 / R13. Report call sites ARMED for a silent rebind. A review list, exit 0."""
+    sites, owners = mc_call_sites(root)
+    print(f"\n=== OVERLOAD-REBIND SHAPE, R13 (TODO 54) ===", file=sys.stderr)
+    print(f"  {len(sites):,} MC call site(s) over {len(owners):,} owner type(s).", file=sys.stderr)
+    if not sites:
+        print("  ZERO MC call sites. That is IMPLAUSIBLE for this repo -- suspect the scan.",
+              file=sys.stderr)
+        return 0
+
+    sigs = mc_signatures(owners, mc)
+    print(f"  {len(sigs):,} owner type(s) resolved in the {mc} jar.", file=sys.stderr)
+    if not sigs:
+        print("  ZERO types resolved from the jar -- every site would report as safe. "
+              "Suspect the jar lookup, not the source.", file=sys.stderr)
+        return 0
+
+    armed: dict[str, list[str]] = {}
+    unresolved: dict[str, int] = {}
+    for src, line, owner, name, desc in sorted(set(sites)):
+        methods = sigs.get(owner)
+        if methods is None:
+            unresolved[owner] = unresolved.get(owner, 0) + 1
+            continue
+        shadows = shadowing_overloads(methods, name, desc)
+        for s in shadows:
+            key = f"{owner.rsplit('/', 1)[-1]}.{name}{desc}  would rebind to  {name}{s}"
+            armed.setdefault(key, []).append(f"{src}:{line}")
+
+    total = sum(len(v) for v in armed.values())
+    print(f"  {total:,} site(s) ARMED: a wider sibling overload already exists AND its return type "
+          f"still fits, so deleting the one they bind to today rebinds them SILENTLY.",
+          file=sys.stderr)
+    if not total:
+        # A zero here is a real answer, but "found nothing" and "the scan is broken" print the same
+        # thing -- so say which claim is being made and what backs it.
+        print(f"  Zero is a RESULT, not an absence of scanning: {len(sites):,} sites were resolved "
+              f"against {len(sigs):,} jar types, and `--self-test` proves this detector reports the "
+              f"shape when it is present. It means every overloaded MC method this repo calls is "
+              f"distinguished by arity or by return type -- the same structural reason section 51 "
+              f"gave for the collision residue being safe.\n"
+              f"  WARNING: that is NOT a clean bill of health. The one way past a return-type "
+              f"difference is a result consumed type-agnostically, which has no use site to reject "
+              f"it. Run --type-agnostic for that half; the real defect was in the intersection.",
+              file=sys.stderr)
+    if unresolved:
+        # NAMED, not just counted. An owner the jar lookup cannot resolve is a hole in the scan,
+        # and a bare count gives nobody enough to decide whether it matters -- our own @Mixin
+        # classes land here legitimately, a misspelled MC type would not.
+        n = sum(unresolved.values())
+        print(f"\n  {n:,} site(s) over {len(unresolved)} owner(s) NOT in the jar -- not judged, "
+              f"and not claimed safe:", file=sys.stderr)
+        for owner in sorted(unresolved, key=lambda o: -unresolved[o]):
+            print(f"          {owner}  ({unresolved[owner]} site(s))", file=sys.stderr)
+    for key in sorted(armed, key=lambda k: -len(armed[k])):
+        print(f"\n  {len(armed[key]):>4}  {key}", file=sys.stderr)
+        for site in sorted(set(armed[key])):
+            print(f"          {site}", file=sys.stderr)
+    return 0
 
 
 def report_agnostic(placed: dict, unplaced: dict, seen: set[str]) -> int:
@@ -2185,6 +2492,66 @@ def self_test() -> int:
     check("53: MUTATION -- a non-boxing call between producer and sink BREAKS the chain",
           _mut_placed, {})
 
+    # ---- TODO 54 / R13: the overload-rebind shape ----------------------------------------
+    #
+    # The whole instrument rests on split_params and is_wider, so both are driven directly, and the
+    # pairing is then driven THROUGH shadowing_overloads rather than by re-deriving the answer.
+    check("54: split_params handles primitives, objects and arrays",
+          split_params("(ILjava/lang/String;[BJ)V"), ["I", "Ljava/lang/String;", "[B", "J"])
+    check("54: split_params on a no-arg descriptor", split_params("()I"), [])
+    check("54: split_params refuses a malformed descriptor", split_params("Ljava/lang/String;"), None)
+    check("54: a reference parameter is wider as Object", is_wider("Lnet/mc/Foo;", _OBJECT), True)
+    check("54: int is wider as long", is_wider("I", "J"), True)
+    check("54: long is NOT wider as int -- that direction does not compile",
+          is_wider("J", "I"), False)
+    check("54: int is wider as Integer (autoboxing -- how the real defect got through)",
+          is_wider("I", "Ljava/lang/Integer;"), True)
+    check("54: identical types are not 'wider' -- a method never shadows itself",
+          is_wider("I", "I"), False)
+
+    # The shape R13 names: a narrow overload with a wider sibling. Deleting the narrow one rebinds.
+    _ovl = {"getId": {"(Lnet/mc/Entity;)I", "(Ljava/lang/Object;)I"},
+            "getName": {"()Ljava/lang/String;"},
+            "setPos": {"(DDD)V", "(FFF)V"}}
+    check("54: a narrow overload with an Object sibling is ARMED",
+          shadowing_overloads(_ovl, "getId", "(Lnet/mc/Entity;)I"), ["(Ljava/lang/Object;)I"])
+    check("54: the WIDE one is not armed -- nothing wider exists to absorb it",
+          shadowing_overloads(_ovl, "getId", "(Ljava/lang/Object;)I"), [])
+    check("54: a method with ONE overload is never armed",
+          shadowing_overloads(_ovl, "getName", "()Ljava/lang/String;"), [])
+    check("54: float args are armed by a double sibling -- both return void, so nothing rejects it",
+          shadowing_overloads(_ovl, "setPos", "(FFF)V"), ["(DDD)V"])
+    check("54: ...but not the reverse", shadowing_overloads(_ovl, "setPos", "(DDD)V"), [])
+    # Condition 2, and it is load-bearing: without it every Mth.clamp site in this tree reports,
+    # and all four are rejected by javac at the USE site because a long does not fit an int.
+    check("54: a wider sibling with an INCOMPATIBLE return type is NOT armed -- javac catches it",
+          shadowing_overloads({"clamp": {"(III)I", "(JJJ)J"}}, "clamp", "(III)I"), [])
+    check("54: ...and a wider sibling returning a NARROWER type still is armed",
+          shadowing_overloads({"f": {"(Lnet/mc/E;)Ljava/lang/Object;",
+                                     "(Ljava/lang/Object;)Ljava/lang/String;"}},
+                              "f", "(Lnet/mc/E;)Ljava/lang/Object;"),
+          ["(Ljava/lang/Object;)Ljava/lang/String;"])
+    check("54: a different ARITY is not a rebind candidate",
+          shadowing_overloads({"f": {"(I)V", "(II)V"}}, "f", "(I)V"), [])
+
+    # The jar-signature parser, on real javap -p -s shape.
+    _sig_fixture = (
+        "Compiled from \"Registry.java\"\n"
+        "public interface net.minecraft.core.Registry<T> {\n"
+        "  public int getId(T);\n"
+        "    descriptor: (Ljava/lang/Object;)I\n"
+        "  public net.minecraft.resources.Identifier getKey(T);\n"
+        "    descriptor: (Ljava/lang/Object;)Lnet/minecraft/resources/Identifier;\n"
+        "  public int size;\n"
+        "    descriptor: I\n"
+        "}\n"
+    )
+    _sigs = parse_javap_signatures(_sig_fixture)
+    check("54: the jar parser reads methods with their descriptors",
+          _sigs.get("net/minecraft/core/Registry", {}).get("getId"), {"(Ljava/lang/Object;)I"})
+    check("54: a FIELD is not read as a method -- its descriptor has no parameter list",
+          "size" in _sigs.get("net/minecraft/core/Registry", {}), False)
+
     # ---- stage 2: does that OWNER actually carry the collision? ---------------------------
     #
     # A collision is a (yarn owner, yarn name) PAIR. Matching the bare name keeps every
@@ -2637,6 +3004,11 @@ def main() -> int:
                          "the shape the one real mis-bind used: the int autoboxed, javac was "
                          "happy, and the expression returned false forever. COMPILES FIRST. "
                          "A REVIEW LIST, not a gate -- always exits 0.")
+    ap.add_argument("--overload-rebind", action="store_true",
+                    help="TODO 54 / R13: report MC call sites ARMED for a silent overload rebind "
+                         "-- a wider sibling overload already exists, so deleting the one they "
+                         "bind to today would rebind them with NO diagnostic. Needs --jar-mc "
+                         "(this branch's Minecraft version). COMPILES FIRST. Review list, exit 0.")
     ap.add_argument("--rounds", type=int, default=6, help="max compiler rounds (default 6)")
     ap.add_argument("--maxerrs", type=int, default=100000,
                     help="javac -Xmaxerrs; the default 100 CAP MAKES EVERY MEASUREMENT A LIE")
@@ -2660,6 +3032,10 @@ def main() -> int:
         if not args.table or not args.jar_mc:
             raise SystemExit("FATAL: --mixin-selectors needs --table and --jar-mc.")
         return mixin_selector_pass(root, args.table, args.jar_mc, args.write, args.allow_dirty)
+
+    if args.overload_rebind:
+        mc = args.jar_mc or gradle_prop_mc(root)
+        return report_overload_rebind(root, mc)
 
     if args.type_agnostic:
         # TODO 53. Independent of --collisions on purpose: §51 proved the collision residue is safe
