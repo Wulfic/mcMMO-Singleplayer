@@ -25,8 +25,10 @@ import org.junit.jupiter.api.Test;
 /**
  * TODO 8.4 — the per-band guard on {@code scripts/mc-ids.txt}.
  *
- * <p>That manifest lists every vanilla item and block registry id for all 12 supported Minecraft
- * versions, and {@code scripts/config-id-audit.py} resolves ~689 shipped config ids against it. It
+ * <p>That manifest lists every vanilla item, block and entity-type registry id for all 14 supported
+ * Minecraft versions, and {@code scripts/config-id-audit.py} resolves ~1,013 shipped config ids
+ * against it. (Entity types and the four entity-keyed config tables joined in §52; the version and
+ * reference counts here were both stale before that — they said 12 and ~689.) It
  * replaced a scan of {@code assets/minecraft/items/} inside the merged jar, which does not exist
  * below {@code 1.21.4} and therefore left bands {@code 1.21.3} and {@code 1.21.1} unable to run one
  * of the seven ship gates at all.
@@ -69,6 +71,7 @@ class ConfigIdManifestTest {
 
     private static final String BLOCK = "block";
     private static final String ITEM = "item";
+    private static final String ENTITY = "entity";
 
     /**
      * Floor for the anti-vacuity check. The oldest supported version, {@code 1.21}, carries 1060
@@ -77,6 +80,17 @@ class ConfigIdManifestTest {
      * pass by comparing two empty sets.
      */
     private static final int PLAUSIBLE_MINIMUM_IDS = 900;
+
+    /**
+     * The same floor for entity types (§52), which are an order of magnitude fewer — {@code 1.21}
+     * has 130 and {@code 26.2} has 158.
+     *
+     * <p>⚠️ It is a separate constant rather than a reuse of {@link #PLAUSIBLE_MINIMUM_IDS} because
+     * reusing that one would make the entity assertion fail permanently, and the tempting repair is
+     * to lower the shared floor — which would silently weaken the item and block checks from "900"
+     * to "100" and leave a registry that bootstrapped 150 items reading as healthy.
+     */
+    private static final int PLAUSIBLE_MINIMUM_ENTITY_IDS = 100;
 
     @BeforeAll
     static void bootstrap() {
@@ -89,15 +103,34 @@ class ConfigIdManifestTest {
 
     @Test
     void theManifestListsExactlyTheItemsThisMinecraftVersionHas() throws IOException {
-        assertRegistryMatchesManifest(ITEM, vanillaIds(Registries.ITEM.getIds()));
+        assertRegistryMatchesManifest(ITEM, vanillaIds(Registries.ITEM.getIds()),
+                PLAUSIBLE_MINIMUM_IDS);
     }
 
     @Test
     void theManifestListsExactlyTheBlocksThisMinecraftVersionHas() throws IOException {
-        assertRegistryMatchesManifest(BLOCK, vanillaIds(Registries.BLOCK.getIds()));
+        assertRegistryMatchesManifest(BLOCK, vanillaIds(Registries.BLOCK.getIds()),
+                PLAUSIBLE_MINIMUM_IDS);
     }
 
-    private void assertRegistryMatchesManifest(String kind, Set<String> live) throws IOException {
+    /**
+     * §52. Entity types joined the manifest so the entity-keyed config tables could enter gate 4,
+     * and they get the same third-authority treatment as items and blocks: whatever the generator
+     * wrote and whatever the jar assets say, this is the registry the mod will actually call.
+     *
+     * <p>⚠️ Entities have <b>no jar-asset counterpart</b>, so {@code extract-mc-ids.py}'s
+     * cross-validation deliberately skips them. That removes one of the three authorities for this
+     * kind alone — which makes this assertion the only independent check the entity sections get,
+     * rather than a third opinion on an already-agreed answer.
+     */
+    @Test
+    void theManifestListsExactlyTheEntityTypesThisMinecraftVersionHas() throws IOException {
+        assertRegistryMatchesManifest(ENTITY, vanillaIds(Registries.ENTITY_TYPE.getIds()),
+                PLAUSIBLE_MINIMUM_ENTITY_IDS);
+    }
+
+    private void assertRegistryMatchesManifest(String kind, Set<String> live, int floor)
+            throws IOException {
         final String version = pinnedMinecraftVersion();
         final Map<String, Map<String, Set<String>>> parsed = parseManifest(readManifest());
 
@@ -117,14 +150,14 @@ class ConfigIdManifestTest {
                 "the item registry did not populate — the bootstrap failed, so nothing below this "
                         + "line means anything, including a pass");
         assertTrue(
-                live.size() >= PLAUSIBLE_MINIMUM_IDS,
+                live.size() >= floor,
                 "only " + live.size() + " vanilla " + kind + " ids in the live registry; expected "
-                        + "at least " + PLAUSIBLE_MINIMUM_IDS + ". That is a bootstrap failure, "
+                        + "at least " + floor + ". That is a bootstrap failure, "
                         + "not a fact about Minecraft " + version + ".");
         assertTrue(
-                manifest.size() >= PLAUSIBLE_MINIMUM_IDS,
+                manifest.size() >= floor,
                 "only " + manifest.size() + " " + kind + " ids in " + MANIFEST + " for " + version
-                        + "; expected at least " + PLAUSIBLE_MINIMUM_IDS + ". The section is "
+                        + "; expected at least " + floor + ". The section is "
                         + "truncated or the format changed.");
 
         final Difference diff = difference(manifest, live);
@@ -175,8 +208,13 @@ class ConfigIdManifestTest {
      */
     @Test
     void aTruncatedSectionIsRejectedRatherThanReadAsDrift() {
-        final String good = "## 1.21\n### block 2\nstone\ndirt\n### item 1\nstick\n";
+        // The entity section is here so the round-trip covers all three kinds: a parser that
+        // rejects `### entity` fails the whole suite rather than only the band-specific assertion,
+        // which is how §52's addition was caught in the first place.
+        final String good = "## 1.21\n### block 2\nstone\ndirt\n### entity 1\nzombie\n"
+                + "### item 1\nstick\n";
         assertEquals(Set.of("stone", "dirt"), parseManifest(good).get("1.21").get(BLOCK));
+        assertEquals(Set.of("zombie"), parseManifest(good).get("1.21").get(ENTITY));
 
         final String truncated = "## 1.21\n### block 2\nstone\n### item 1\nstick\n";
         final IllegalStateException thrown = org.junit.jupiter.api.Assertions.assertThrows(
@@ -262,7 +300,9 @@ class ConfigIdManifestTest {
             if (line.startsWith("### ")) {
                 flush(out, version, kind, declared, pending);
                 final String[] parts = line.substring(4).trim().split("\\s+");
-                if (parts.length != 2 || !(BLOCK.equals(parts[0]) || ITEM.equals(parts[0]))) {
+                if (parts.length != 2
+                        || !(BLOCK.equals(parts[0]) || ITEM.equals(parts[0])
+                                || ENTITY.equals(parts[0]))) {
                     throw new IllegalStateException("bad kind header: " + line);
                 }
                 kind = parts[0];
