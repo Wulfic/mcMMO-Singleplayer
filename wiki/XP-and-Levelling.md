@@ -75,6 +75,16 @@ Both are **0 by default** — mobs that weren't naturally spawned pay no combat 
 
 Per-mob multipliers live in `experience.yml` → `Experience_Values.Combat.Multiplier`, e.g. Creeper 4.0, Skeleton 3.0, Spider 2.0, Zombie 2.0, animals 1.0.
 
+**A row is keyed by the mob's registry id, capitalised word by word** — `zombified_piglin` is `Zombified_Piglin`. The spelling has to match exactly, case included, and a key that matches nothing is not reported to you: it simply never applies. Watch the fallback if you remove or misspell a row, because it is **not** the same for every creature:
+
+| the mob is | an unlisted one gets |
+|---|---|
+| a monster | **nothing — 0 XP per hit** |
+| an animal | the `Animals` multiplier |
+| anything else | 1.0 |
+
+So a missing or misspelled row on a **monster** silently turns that mob's combat XP off entirely. Setting a row to `0.0` is a legitimate way to say "this shouldn't be farmable" — snow golems, armour stands and mannequins ship that way — but you only get the zero you asked for if the key is spelled the way the game spells it.
+
 ### Hunter is the one exception
 
 **[Hunter](Hunter) pays per kill**, priced by the victim's danger tier — 100 / 300 / 800 / 1,500 for T1–T4.
