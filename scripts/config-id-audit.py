@@ -127,7 +127,38 @@ LEGACY_NAME_ALIASES = {"water_lily": "lily_pad"}
 # blockstate-only ids (`item_frame`, `glow_item_frame`) that no shipped config names.
 MIN_CONTROL_RESOLVE_RATE = 0.80
 
-ITEM, BLOCK = "item", "block"
+ITEM, BLOCK, ENTITY = "item", "block", "entity"
+
+# --------------------------------------------------------------------------- the entity kind (§52)
+#
+# The entity-keyed tables. Every one is looked up at runtime as
+# `ConfigStringUtils.getConfigEntityTypeString(<registry path>)` -- traced to the call site, not
+# assumed from the file:
+#
+#   Combat.Multiplier         CombatXp#baseXp            <- EntityDamageListener / CombatUtils
+#   Husbandry.Animal_Breeding HusbandryListener:192
+#   Taming.Animal_Taming      TamingListener:53
+#   Hunter.Tiers.Overrides    MobTiers#configKeyOf
+#
+# 🔴 THESE ARE MATCHED EXACTLY, NOT CASE-INSENSITIVELY, AND THAT IS THE WHOLE POINT.
+# `normalise()` lowercases a token before comparing it, which is right for the material sections --
+# their key conventions differ per file (`IRON_SWORD` in repair.vanilla.yml, `Diamond_Ore` in
+# experience.yml) and the question there is only "does this name a real vanilla object".
+#
+# For these four tables the runtime key is a single unambiguous string, so case IS the identity.
+# Lowercasing would report `Wandering_trader` as perfectly valid -- it lowercases to a real entity
+# id -- while the runtime builds `Wandering_Trader` and never matches it. That exact typo is live in
+# the shipped `experience.yml`, which is how this hole was found rather than reasoned about.
+ENTITY_SECTIONS = {
+    "experience.yml": {
+        "Experience_Values.Combat.Multiplier": {"Animals"},   # a sentinel fallback, not an entity
+        "Experience_Values.Husbandry.Animal_Breeding": set(),
+        "Experience_Values.Taming.Animal_Taming": set(),
+    },
+    "advanced.yml": {
+        "Skills.Hunter.Tiers.Overrides": set(),
+    },
+}
 
 # experience.yml's XP tables all share one map keyed on "the config-material-string a caller derived
 # from a vanilla registry path" (ExperienceConfig#getXp) -- but WHICH registry that path came from
@@ -206,6 +237,41 @@ def _list_items(text: str, section: str) -> list[str]:
             m = re.match(r"^\s*-\s*([A-Za-z0-9_:]+)\s*$", line)
             if m:
                 out.append(m.group(1))
+    return out
+
+
+def _keys_at_path(text: str, dotted: str) -> list[str]:
+    """Immediate child keys of a nested section, addressed by dotted path (§52).
+
+    Stdlib only, like the rest of this file -- no YAML dependency is pulled in for four sections.
+    Tracks a path stack by indentation rather than assuming a depth, because the four entity tables
+    sit at three different depths (`Experience_Values.Combat.Multiplier` is 3 deep,
+    `Skills.Hunter.Tiers.Overrides` is 4).
+
+    Returns [] when the path is absent. ⚠️ The CALLER must treat an empty result as a failure --
+    a mistyped path and a genuinely empty section are indistinguishable here, and "found no dead
+    ids" is exactly what a scan that never ran also prints.
+    """
+    want = dotted.split(".")
+    stack: list[tuple[int, str]] = []
+    out: list[str] = []
+    for raw in text.splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        m = re.match(r"^(\s*)([A-Za-z0-9_|]+):(.*)$", raw)
+        if not m:
+            continue
+        indent, key, rest = len(m.group(1)), m.group(2), m.group(3)
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        path = [k for _, k in stack] + [key]
+        if path == want:
+            stack.append((indent, key))
+            continue
+        # A direct child of the wanted section: one level deeper, same parent path.
+        if len(path) == len(want) + 1 and path[:len(want)] == want:
+            out.append(key)
+        stack.append((indent, key))
     return out
 
 
@@ -341,6 +407,24 @@ def extract(root: Path = RESOURCES) -> dict[str, set[tuple[str, str]]]:
         add("config.yml:Anvil_Material", BLOCK, m.group(1))
     for m in re.finditer(r"^\s*Item_Material:\s*([A-Za-z0-9_:]+)", t, re.M):
         add("config.yml:Item_Material", ITEM, m.group(1))
+
+    # --- the entity-keyed tables (§52). The kind `mc-ids.txt` did not carry until this section, so
+    #     every row below had never been audited on any branch.
+    for fname, sections in ENTITY_SECTIONS.items():
+        text = _read(fname, root)
+        for path, skip in sections.items():
+            keys = _keys_at_path(text, path)
+            if not keys:
+                # Fail closed. A mistyped path returns [] and would otherwise be reported as a
+                # clean sweep -- the exact shape that made the 51.1 prototype print "0 kept /
+                # 542 dropped" and look flawless.
+                raise SystemExit(
+                    f"{fname}: section '{path}' produced ZERO keys. Either the path is wrong or "
+                    f"the table was emptied; both are defects and neither may be reported as a "
+                    f"clean audit. Refusing to continue.")
+            for k in keys:
+                if k not in skip:
+                    add(f"{fname}:{path}", ENTITY, k)
 
     return found
 
@@ -519,11 +603,35 @@ def pinned_version() -> str:
 
 # --------------------------------------------------------------------------- reporting
 
+def config_entity_key(registry_path: str) -> str:
+    """A registry path as `ConfigStringUtils.getConfigEntityTypeString` renders it.
+
+    Split on `_`, capitalize each word, rejoin with `_` -- `zombie_villager` -> `Zombie_Villager`.
+
+    ⚠️ This mirrors shipped Java, so it was CONTROLLED against it rather than assumed equal (52.1):
+    the real `ConfigStringUtils` was run over all 161 entity ids in the 1.21 and 26.2 dumps and
+    compared -- 161 ids, 0 mismatches. ⚠️ That control has a known limit, recorded in gotchas.md:
+    a mutation dropping the tail-lowercasing stayed GREEN, because every vanilla registry id is
+    already lowercase, so the two rules are observationally identical over the whole real input
+    domain. Fine here -- the formatted key set is fully capitalized either way -- but do not read
+    the control as proving more than the forward direction.
+    """
+    return "_".join(w[:1].upper() + w[1:].lower() for w in registry_path.split("_"))
+
+
 def resolve_all(found, sets):
     """-> {(src, kind, token): bool resolved}"""
+    # Built once per version rather than per token: the entity tables are ~140 rows against ~158 ids.
+    entity_keys = {config_entity_key(i) for i in sets.get(ENTITY, ())}
     out = {}
     for src, entries in found.items():
         for kind, tok in entries:
+            if kind == ENTITY:
+                # EXACT match, not normalise(). See ENTITY_SECTIONS: for these tables the runtime
+                # key IS the string, so `Wandering_trader` is dead even though it lowercases to a
+                # real entity id.
+                out[(src, kind, tok)] = tok in entity_keys
+                continue
             n = normalise(tok)
             out[(src, kind, tok)] = bool(n) and n in sets[kind]
     return out
@@ -687,6 +795,33 @@ SELF_TEST_FILES = {
         "        Copper: 2.0\n"                   # a material CATEGORY -- section is not scanned
         "    Skill_Multiplier:\n"
         "        mining: 1.0\n"                   # a skill name -- section is not scanned
+        # --- the entity tables (§52). Nested one level deeper than the XP rows, which is the
+        #     reason _keys_at_path tracks a stack instead of assuming a depth.
+        "    Combat:\n"
+        "        Multiplier:\n"
+        "            Animals: 1.0\n"              # the sentinel -- skipped, never audited as a mob
+        "            Zombie: 2.0\n"               # live
+        "            Snowman: 0.0\n"              # DEAD: renamed to snow_golem
+        "            Wandering_trader: 1.0\n"     # DEAD by CASE alone -- the case-blindness probe
+        "    Husbandry:\n"
+        "        Animal_Breeding:\n"
+        "            Cow: 20\n"
+        "    Taming:\n"
+        "        Animal_Taming:\n"
+        # Deliberately NOT Wolf: `Wolf` is in SELF_TEST_MUST_NOT_FIND for config.yml's
+        # Call_Of_The_Wild summon section, and reusing it here would silently defuse that check.
+        "            Ocelot: 250\n"
+    ),
+    # advanced.yml joins the gate here (§52) -- for one two-key table, both of whose keys are live.
+    "advanced.yml": (
+        "Skills:\n"
+        "    Hunter:\n"
+        "        MobMastery:\n"
+        "            Ranged_Damage_Multiplier: 1.0\n"   # a knob, not an id -- must not be scanned
+        "        Tiers:\n"
+        "            Overrides:\n"
+        "                Ghast: 3\n"
+        "                Wither_Skeleton: 3\n"
     ),
     # config.yml is the file where the NEGATIVE cases carry the weight. It is 650 lines of
     # `Name: <value>` and only ~187 of those rows are ids, so an extractor scoped by key name
@@ -774,6 +909,16 @@ SELF_TEST_MUST_FIND = {
     ("config.yml:Power_Cook_Effects", ITEM, "Cooked_Beef"),
     ("config.yml:Anvil_Material", BLOCK, "IRON_BLOCK"),
     ("config.yml:Item_Material", ITEM, "BONE"),
+    # --- the entity tables (§52). One row per table, so a table that stops being read fails here
+    #     rather than quietly shrinking the reference count. Both DEAD rows are required finds too:
+    #     the audit's job is to REPORT them, so a scan that drops them is the failure being guarded.
+    ("experience.yml:Experience_Values.Combat.Multiplier", ENTITY, "Zombie"),
+    ("experience.yml:Experience_Values.Combat.Multiplier", ENTITY, "Snowman"),
+    ("experience.yml:Experience_Values.Combat.Multiplier", ENTITY, "Wandering_trader"),
+    ("experience.yml:Experience_Values.Husbandry.Animal_Breeding", ENTITY, "Cow"),
+    ("experience.yml:Experience_Values.Taming.Animal_Taming", ENTITY, "Ocelot"),
+    ("advanced.yml:Skills.Hunter.Tiers.Overrides", ENTITY, "Ghast"),
+    ("advanced.yml:Skills.Hunter.Tiers.Overrides", ENTITY, "Wither_Skeleton"),
 }
 
 # Tokens that appear in the fixture but are NOT ids. If any shows up, the control on the real
@@ -788,6 +933,11 @@ SELF_TEST_MUST_NOT_FIND = {
     # "items". The rest are ordinary toggles that an unscoped scan swallows by the hundred.
     "Enabled_For_PVP", "STRENGTH", "Level_Cap", "Item_Amount", "Locale",
     "Bleed", "LargeFireworks", "URL_Links", "Call_Of_The_Wild", "Wolf",
+    # §52 entity-table decoys. `Animals` is the sentinel the Combat table falls back to and is NOT
+    # a mob -- auditing it would report a permanent dead id on every version. The other two are
+    # advanced.yml knobs sitting beside the one table in that file that IS id-keyed; they are what
+    # a scan that walked the whole Hunter subtree instead of one path would swallow.
+    "Animals", "Ranged_Damage_Multiplier", "MobMastery",
 }
 
 
@@ -820,6 +970,30 @@ def self_test() -> int:
         if got != want:
             failures.append(f"NORM    normalise({raw!r}) = {got!r}, want {want!r}")
 
+    # §52 ENTITY RESOLUTION. Extraction being right is not the claim that matters here -- the claim
+    # is that entities are matched EXACTLY while materials stay case-insensitive. Both halves are
+    # asserted, because either one alone passes for the wrong reason: an exact-match rule applied to
+    # everything would redden dozens of legitimate material rows, and a lowercasing rule applied to
+    # entities reports `Wandering_trader` as perfectly healthy.
+    entity_sets = {ENTITY: {"zombie", "snow_golem", "wandering_trader", "cave_spider"},
+                   ITEM: {"iron_ore"}, BLOCK: {"iron_ore"}}
+    entity_cases = [
+        ("Zombie", True, "an exact key must resolve"),
+        ("Cave_Spider", True, "multi-word keys join with _ and capitalize every word"),
+        ("Wandering_trader", False, "CASE-ONLY typo: lowercases to a real id, but the runtime "
+                                    "builds Wandering_Trader and never matches this"),
+        ("Snowman", False, "renamed to snow_golem -- names nothing on any version"),
+        ("Snow_Golem", True, "...and the corrected spelling must resolve"),
+    ]
+    for tok, want, why in entity_cases:
+        got = resolve_all({"t.yml:S": {(ENTITY, tok)}}, entity_sets)[("t.yml:S", ENTITY, tok)]
+        if got != want:
+            failures.append(f"ENTITY  {tok!r} resolved={got}, want {want} -- {why}")
+
+    # ...and the material side must STILL be case-insensitive, or this change broke the old kinds.
+    if not resolve_all({"t.yml:S": {(BLOCK, "IRON_ORE")}}, entity_sets)[("t.yml:S", BLOCK, "IRON_ORE")]:
+        failures.append("ENTITY  the entity rule leaked into BLOCK: 'IRON_ORE' stopped resolving")
+
     # FAIL-CLOSED: an unclassified Bonus_Drops sub-section must REFUSE, not be skipped. Silently
     # skipping is how a future `Bonus_Drops.Excavation` would ship entirely unaudited while this
     # gate printed a clean run -- and a guard that cannot fail detects nothing. Asserting the raise
@@ -847,7 +1021,8 @@ def self_test() -> int:
         return 1
     print(f"  PASS -- {len(SELF_TEST_MUST_FIND)} required refs found, "
           f"{len(SELF_TEST_MUST_NOT_FIND)} non-id tokens correctly ignored, "
-          f"{len(checks)} normalisation cases correct.")
+          f"{len(checks)} normalisation cases correct, "
+          f"{len(entity_cases)} entity-resolution cases correct (+1 material case-insensitivity).")
     return 0
 
 
