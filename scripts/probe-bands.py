@@ -510,7 +510,58 @@ def selftest_decl_parsing() -> int:
     return 0
 
 
+def control_versions(explicit: str) -> list[str]:
+    """Every version this branch must resolve 100% of its manifest on, PRIMARY FIRST.
+
+    🔑🔑 SECTION 56.4 -- WHY THIS IS A LIST AND NOT `minecraft_version`.
+    The control used to be ONE version, and a band SHIPS A RANGE. `mc/26.1.2` declares
+    `supported_minecraft_versions=26.1,26.1.1,26.1.2`; the control validated `26.1.2` alone, so a
+    manifest record naming a symbol that does not exist on `26.1` resolved clean, and the band
+    shipped a jar advertised for three versions and validated on one.
+
+    That is the SAME SHAPE as 56.3 in a different file, and the fifth instance after 50, 52, 55
+    and 56.3: two internally consistent facts -- what the manifest names, and what the branch says
+    it ships to -- with nothing joining them. Neither side was wrong on its own. THE JOIN IS THE
+    FIX, which is why this widens the existing resolver rather than adding a second checker.
+
+    The primary comes first and this list is deliberately NOT sorted: an ABSENT on the primary
+    means something different from an ABSENT on the rest. See the two control checks in main().
+    """
+    if explicit:
+        return [v.strip() for v in explicit.split(",") if v.strip()]
+    primary = gradle_prop("minecraft_version")
+    declared = [v.strip()
+                for v in (gradle_prop_opt("supported_minecraft_versions") or "").split(",")
+                if v.strip()]
+    if not declared:
+        return [primary]
+    # 🔴 A primary outside the declared range is a defect in gradle.properties, not something to
+    # route around. It would mean the branch compiles against a version it does not claim to ship
+    # to -- so every secondary below would be grading a manifest generated for a version nobody
+    # validates. Refuse rather than silently prepending it; a repaired input is an unreported one.
+    if primary not in declared:
+        raise SystemExit(
+            f"error: minecraft_version={primary} is not in "
+            f"supported_minecraft_versions={','.join(declared)}.\n"
+            f"       The branch compiles against a version it does not claim to ship to. Fix\n"
+            f"       gradle.properties -- this script will not paper over the disagreement."
+        )
+    return [primary] + [v for v in declared if v != primary]
+
+
 def main() -> int:
+    # ⚠️⚠️ Windows consoles default to cp1252, which cannot encode this script's report
+    # glyphs -- and every one of them is on a FAILURE path. The control check's "probe trusted"
+    # line is pure ASCII and printed fine for months; the ❌ that reports a real ABSENT dies with
+    # UnicodeEncodeError, turning a specific finding into a traceback and exit 1 instead of the
+    # exit 3 a caller greps for. Measured, not assumed: 56.4's --check verdict crashed here on its
+    # first piped run. Same fix drift-audit.py, the three identity audits and this file now share.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass  # already-wrapped or non-reconfigurable stream; ASCII output still works
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--versions", default="")
     ap.add_argument("--out", default=str(REPO / "plans" / "BAND_TABLE.md"))
@@ -518,9 +569,13 @@ def main() -> int:
     # a hardcoded control is the exact staleness shape javap-mc.sh had already fixed for itself --
     # a value that is right on the branch it was written on and silently wrong on every other.
     # gradle.properties is the one place that always describes THIS branch.
-    ap.add_argument("--control", default=gradle_prop("minecraft_version"),
-                    help="version the mod is known to compile against; must resolve 100%% of "
-                         "records. Defaults to this branch's minecraft_version.")
+    ap.add_argument("--control", default="",
+                    help="comma-separated versions the manifest must resolve 100%% of records on, "
+                         "primary first. Defaults to this branch's supported_minecraft_versions "
+                         "with minecraft_version leading -- i.e. the whole range it ships to.")
+    ap.add_argument("--check", action="store_true",
+                    help="gate mode: probe the control versions only, assert every record "
+                         "resolves on each, write NOTHING, and exit non-zero if any is ABSENT.")
     ap.add_argument("--allow-control-failures", action="store_true",
                     help="continue despite a failed control check (for debugging the probe only)")
     ap.add_argument("--self-test", action="store_true",
@@ -533,6 +588,15 @@ def main() -> int:
     if args.self_test:
         return selftest_decl_parsing()
 
+    # 🔴 A gate that can be told to pass is not a gate. `--allow-control-failures` exists to debug
+    # the probe, and the debugging flag silently disarming the ship gate is exactly how a guard
+    # gets refactored into decoration.
+    if args.check and args.allow_control_failures:
+        print("error: --check and --allow-control-failures are contradictory. --check IS the "
+              "assertion; there is nothing left of it once failures are allowed.", file=sys.stderr)
+        return 2
+
+    controls = control_versions(args.control)
     explicit = [v.strip() for v in args.versions.split(",") if v.strip()]
 
     recs = load_surface()
@@ -540,7 +604,11 @@ def main() -> int:
     print(f"{len(recs)} records over {len(classes)} distinct classes; "
           f"this branch is {branch_naming()}-named")
 
-    versions = explicit or probeable_versions(len(recs))
+    # In --check the question is only "does the declared range hold", so probe the controls and
+    # nothing else -- on master the default set is 19 cached versions and ~20 minutes of javap for
+    # an answer the gate does not read. An explicit --versions still wins, and a control missing
+    # from it is refused below rather than skipped.
+    versions = explicit or (list(controls) if args.check else probeable_versions(len(recs)))
     if not versions:
         print("error: no cached versions this branch can probe. Resolve them through Loom first.",
               file=sys.stderr)
@@ -603,16 +671,20 @@ def main() -> int:
     # requested control had never validated. The endorsement is the damage: the whole reason the
     # control exists is that the first draft of this probe reported 6 false ABSENTs, and a guard
     # that quietly re-points at a different subject cannot catch its successor.
-    if args.control not in result:
+    unprobed = [c for c in controls if c not in result]
+    if unprobed:
         print(
-            f"\n❌ CONTROL {args.control} WAS NOT PROBED, so nothing here is trusted.\n"
-            f"   probed: {', '.join(live)}\n"
-            f"   The control is the only thing separating a real ABSENT from a defect in this\n"
-            f"   script. Add it to --versions, or name a probed version with --control.",
+            f"\n❌ CONTROL(S) {', '.join(unprobed)} WERE NOT PROBED, so nothing here is trusted.\n"
+            f"   controls: {', '.join(controls)}\n"
+            f"   probed:   {', '.join(live)}\n"
+            f"   The controls are the only thing separating a real ABSENT from a defect in this\n"
+            f"   script. Add them to --versions, or name probed versions with --control.\n"
+            f"   ⚠️ A declared version whose jar is not cached is REFUSED, never skipped -- a\n"
+            f"      skipped control reads as a clean run. Resolve it through Loom first.",
             file=sys.stderr,
         )
         return 3
-    control = args.control
+    control = controls[0]
     control_absent = [r for r in recs if result[control][r][0] == "ABSENT"]
 
     # --- classify the control's ABSENT rows: which of them are not Minecraft's at all? ---------
@@ -661,6 +733,52 @@ def main() -> int:
             return 3
     else:
         print(f"control check: {control} resolves all {len(recs)} records - probe trusted")
+
+    # --- 56.4: THE SECONDARY CONTROLS -- every OTHER version this branch declares it ships to ---
+    #
+    # 🔑🔑 AN ABSENT HERE MEANS SOMETHING DIFFERENT FROM AN ABSENT ON THE PRIMARY, and one shared
+    # message would misreport whichever fired. On the primary the mod demonstrably compiles, so an
+    # ABSENT is a defect in THIS SCRIPT. On a secondary NOTHING compiles anything -- the branch
+    # merely CLAIMS to ship there -- so an ABSENT is a real shipping defect that reaches a player
+    # as a NoSuchMethodError at runtime rather than a build failure here.
+    #
+    # This runs AFTER the non-Minecraft classification deliberately: that block drops the
+    # fabric-api interface-injected records out of `recs` entirely, and they are absent from every
+    # Minecraft jar by construction, so reading `recs` before it would report a fixed set of false
+    # positives on every secondary forever.
+    secondary_absent = {v: [r for r in recs if result[v][r][0] == "ABSENT"] for v in controls[1:]}
+    secondary_absent = {v: rs for v, rs in secondary_absent.items() if rs}
+    if secondary_absent:
+        total = sum(len(rs) for rs in secondary_absent.values())
+        print(f"\n❌ SHIPPING DEFECT: {total} record(s) in {SURFACE.name} do not exist on "
+              f"{len(secondary_absent)} version(s) this branch DECLARES IT SHIPS TO:",
+              file=sys.stderr)
+        for v, rs in secondary_absent.items():
+            print(f"   {v} — {len(rs)} absent of {len(recs)}:", file=sys.stderr)
+            for kind, val in rs[:20]:
+                print(f"     {kind:<12} {val}", file=sys.stderr)
+            if len(rs) > 20:
+                print(f"     ... and {len(rs) - 20} more", file=sys.stderr)
+        print(f"   supported_minecraft_versions={','.join(sorted(controls, key=version_key))}; "
+              f"the primary {controls[0]} is CLEAN,\n"
+              f"   which is why the build, the suite and every other gate stayed green. Either the\n"
+              f"   code using those symbols needs a version guard, or that version does not belong\n"
+              f"   in the declared range.", file=sys.stderr)
+        if not args.allow_control_failures:
+            return 3
+    elif len(controls) > 1:
+        print(f"shipping check: all {len(recs)} records also resolve on "
+              f"{', '.join(controls[1:])} - the declared range holds")
+
+    if args.check:
+        # 🔴 READ-ONLY BY CONSTRUCTION, and that is the entire reason the mode exists. `--out`
+        # defaults to the TRACKED plans/BAND_TABLE.md, so a gate that fell through to the writer
+        # below would rewrite a committed file as a side effect of being run -- the P16-1 defect,
+        # where a --check regenerated its own subject and then graded the regeneration. NOTHING
+        # BELOW THIS LINE RUNS IN --check.
+        print(f"\n✅ --check: all {len(recs)} records resolve on every declared version "
+              f"({', '.join(controls)}). Nothing written.")
+        return 0
 
     # --- band collapse: versions whose ENTIRE resolution is identical are one band ----------
     fingerprint = {v: tuple(result[v][r] for r in recs) for v in live}
