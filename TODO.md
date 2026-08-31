@@ -1644,7 +1644,7 @@ existing installs.
       add a bogus yml key; delete a real one; and for 55.3, confirm `EnchantmentBuffs` still reaches
       `SkillUtils`. A guard that has never failed is not known to work — thirteen vacuous sightings.
 - [x] **55.5** — build, full suite, read the `N executed` line.
-- [ ] **55.6** — propagate to all eight bands with `Backport-of:`, then gate 7.
+- [x] **55.6** — propagate to all eight bands with `Backport-of:`, then gate 7.
 
 ### The outcome — 2 dead knobs deleted, 5 guards added, and a 14th vacuous test
 
@@ -1715,6 +1715,53 @@ no `Chunklets`/`Woodcuting`/`CHIMERA_WING` string anywhere in `src/main/resource
   you update mcMMO"***, which is false — the file is bundled-only and has no user copy to reset.
   Left alone to keep this diff to the ruling.
 
+
+### 55.6 — propagation, and the pre-check that ran BEFORE it
+
+**All eight bands cherry-picked clean, gate 7 green: 0 MISSING on every band**, self-test passed
+first (a broken auditor prints *"No drift"* too), run inside `git clone --local --no-hardlinks`
+because `band_branches()` prefers REMOTE refs and an in-place run would have graded the stale
+remote.
+
+🔑 **A static cross-band pre-check ran before the first cherry-pick**, reading each branch's
+rosters straight out of git: a band whose enum disagreed would be a defect to fix on `master`
+FIRST, not something to discover after eight picks. All nine branches: **26/26 skills, 17/17
+sounds, both directions**. No surprise, which is the answer that made the propagation safe rather
+than lucky.
+
+⚠️ **That pre-check's FIRST run reported a `Woodcutting` orphan on all nine branches — including
+`master`, whose real suite was green.** The enum regex required a trailing `,` or `;` and
+`WOODCUTTING` is the last constant, terminated by the closing brace alone. **The probe was wrong,
+not the branches.** It now runs a control against master's known 26/17 and refuses to report a
+band verdict if it cannot reproduce it.
+
+⚠️ **`git cherry-pick` has no `-q`.** The first propagation pass printed CONFLICT on all eight
+bands and had touched nothing — the unknown flag failed the command, and `--abort` then said
+*"no cherry-pick in progress"*, which is the tell. Every band was re-verified at 0/0 against its
+origin tip before the retry.
+
+⚠️ **The `Backport-of:` trailers landed with NO blank line before them**, so `git log`'s
+`%(trailers)` does not see them. Harmless HERE and deliberately not rewritten: `drift-audit.py`
+matches `TRAILER` as a **multiline regex over the message text** (line 72), not through git's
+trailer parser, and gate 7 reads them correctly. Worth knowing before anything else is built on
+`%(trailers)`.
+
+| branch | tip | suite |
+|---|---|---|
+| `master` | `2aed0305e` | 168 classes, 1,876 executed, 0 failed |
+| `mc/26.1.2` | `f37b54da9` | 168 / 1,876 / 0 |
+| `mc/1.21.1` | `03ccb632f` | 167 / 1,874 / 0 |
+| `mc/1.21.11` | `60e070735` | not built |
+| `mc/1.21.10` | `db64de5bd` | not built |
+| `mc/1.21.8` | `f34b5070e` | not built |
+| `mc/1.21.5` | `797ec7542` | not built |
+| `mc/1.21.4` | `ae2faef55` | not built |
+| `mc/1.21.3` | `5233844e0` | not built |
+
+🔴 **Six bands are propagated but NOT BUILT.** `mc/26.1.2` (official names) and `mc/1.21.1`
+(yarn) were built to cover both naming schemes, and the changed files touch no Minecraft type at
+all — our own enums, snakeyaml and a bundled resource — so the risk is low. **Low is not zero,
+and this is the honest state: the remaining six are verified statically, not built.**
 ### What this section is NOT doing
 
 - **Not extending gate 4** (`config-id-audit.py`). Measured: no registry ids in any of the four. The
