@@ -1983,7 +1983,7 @@ going to cost.
     `-SNAPSHOT` ones exist nowhere but here, and rebuilding an old one means checking out its
     commit. **That is the blast radius, and it is why this is not being done unasked.**
 
-### 56.4 — manifest debt, piece 1 — 📋 **PLAN WRITTEN, NOT IMPLEMENTED** (Tier 2)
+### 56.4 — manifest debt, piece 1 — ✅ **DONE** (Tier 2) — B and A both shipped, ship gate **12**
 
 🔴 **First finding: the row overstates what is missing. The assertion ALREADY EXISTS.**
 `scripts/probe-bands.py` resolves every `mc-surface.txt` record against a cached jar and **returns 3**
@@ -2028,7 +2028,40 @@ piece can" is WRONG** and is corrected here.
 non-zero on an injected ABSENT (a mutation scored on the failing message, never the exit code) ·
 the ship-gate list's gate count updated, since nothing else counts it.
 
-- [ ] ⬜ implement B · [ ] ⬜ implement A · [ ] ⬜ mutation-prove · [ ] ⬜ run on all nine · [ ] ⬜ propagate
+**Outcome — what the implementation measured that the plan did not predict.**
+
+- ✅ **B and A both landed in `scripts/probe-bands.py`**, and A probes only the control versions, so
+  the gate costs three jars rather than the default set's nineteen.
+- 🔑🔑 **The negative control failed, and the tool was right.** The first draft asserted that
+  master's manifest resolves on `26.1` as well as `26.2`. It does not: **51 records go ABSENT**,
+  because `net.minecraft.world.entity.EntityTypes` **exists only on 26.2** — `26.1` and `26.1.1`
+  carry `EntityType`, both spellings official, exactly the three-spellings trap already recorded.
+  Master declares `supported_minecraft_versions=26.2` **alone**, so master is CORRECT and the
+  control asked a question master never claims to answer. **A guard reporting a defect is not
+  automatically the thing that is broken** — resolve which side is wrong before editing either.
+- 🔑 **The mode crashed printing its own verdict.** `✅` is not encodable in cp1252, so the first
+  piped `--check` died with `UnicodeEncodeError` and **exit 1** where a caller greps for 0 or 3.
+  Every emoji in this script was already on a failure path, so the hazard was pre-existing and
+  latent — the happy path is ASCII. Fixed with the `reconfigure(errors="replace")` block
+  `drift-audit.py` and the three identity audits have carried for months. **A finding that cannot
+  be printed has not been reported.**
+- ⚠️ **`--out` defaulting to a tracked file is why `--check` returns before the writer.** Verified
+  by mtime across a *failing* run, not merely a passing one.
+
+**Mutations — 7 of 7 scored on the failing MESSAGE, never the exit code** (§56.3's lesson: a parser
+refusal and a build failure both exit non-zero for reasons unrelated to the assertion):
+
+| | mutation | result |
+|---|---|---|
+| M0 | unmutated, master asked about an **undeclared** `26.1` | `SHIPPING DEFECT`, 51 records — **the secondary path is non-vacuous before any mutation** |
+| M1 | a record absent on **both** versions | `PROBE IS UNTRUSTWORTHY` — the inherited primary assertion still fires |
+| M2 | `net.minecraft.ExitCodes`: **present on 26.2, absent on 26.1** | `SHIPPING DEFECT` — **the assertion §56.4 adds** |
+| M2b | the same manifest, **single control** | **GREEN** — the old behaviour, blind to M2. *This is the gap, measured rather than argued* |
+| M3 | `plans/BAND_TABLE.md` mtime across M1+M2 | unchanged — read-only **under failure** |
+| M4 | a declared version with no cached jar | refused, exit 3 — never skipped |
+| M5 | `minecraft_version` outside the declared range | refused, exit 1 |
+
+- [x] ✅ implement B · [x] ✅ implement A · [x] ✅ mutation-prove (7/7) · [ ] ⬜ run on all nine · [ ] ⬜ propagate
 
 ### 56.5 — NOT doing this section: `SoundType`'s unvalidated registry ids
 
@@ -2075,13 +2108,15 @@ used to be — exact at 30 when that closed, 36 as of §47, and it moves by itse
       it close; then sneak-right-click it with a bone. **Skills tab:** neither the tab, nor a locked
       row, nor the greyed state has ever been seen rendered. Next suspect if a boosted wolf still will
       not close: `FollowOwnerGoal` outranking `MeleeAttackGoal`. **Budget: 3 attempts.**
-- [ ] ⬜ **Manifest debt, piece 1 — the last red row.** Validate manifest symbols against the band's
-      merged jar; refuse a manifest naming a symbol the band does not have. Needs a Loom-cached jar
-      and `probe-bands.py`'s resolver.
-      ⚠️ It would **not** have caught the `1c480efc4` incident — every symbol in that blob was real.
-      🔑🔑 **That blob was a perfectly valid manifest, for the wrong branch.** No per-branch check,
-      automated or human, can tell "correct manifest" from "correct manifest belonging to a different
-      branch" — on the branch it came from, every record is true. Only this piece can.
+- [x] ✅ **Manifest debt, piece 1 — CLOSED by §56.4 (2026-08-31).** Shipped as ship gate **12**:
+      `probe-bands.py --check`, read-only, validating every record against **every version in
+      `supported_minecraft_versions`** rather than `minecraft_version` alone. 7/7 mutations.
+      ⚠️ The old wording of this row is corrected in §56.4 and repeated here because this is the copy
+      people find: *"only this piece can"* tell a correct manifest from a correct manifest belonging
+      to another branch was **FALSE**. §39 measured the `26.x` bands as differing on **zero of 1,424**
+      records, so a manifest swapped between them resolves clean on both and this instrument is blind
+      there **by construction**. That case is gate **10**'s (`manifest-identity-audit.py`, byte
+      identity), and it is already green.
 - [x] ✅ **`gameplay-smoke.sh`'s path bridge — CLOSED 2026-08-26 (§43.1).** The three call sites that
       needed a running server (`--commands`, `--check <log>`, `--check --profile`) all executed in the
       `26.1.2` run, which scored 30/30 with the mod-less control failing as it must.
@@ -2101,8 +2136,8 @@ watches (**R11**). Run the list first; the workflow is a backstop, never the che
 ⚠️ **Only gates 1, 7, 9, 10 and 11 have any unattended leg at all, and four of those are weekly.**
 Gate 1 fires per push via `release.yml`; gates **7**, **9**, **10** and **11** run from
 `.github/workflows/drift-audit.yml`, which GitHub fires **weekly and only from the default branch** —
-inert on every band by construction. **The other six have no automation whatsoever.**
-⚠️ **Eleven gates are listed. Update this sentence when you add one; nothing else counts them.**
+inert on every band by construction. **The other seven have no automation whatsoever.**
+⚠️ **Twelve gates are listed. Update this sentence when you add one; nothing else counts them.**
 
 1. `./gradlew --no-daemon --stacktrace build -Pmod_version=$(grep -E '^mod_version=' gradle.properties | cut -d= -f2 | sed 's/-SNAPSHOT$//')`
    — exit 0, suite green, count matching `master` (~1719). A lower count means something was disabled
@@ -2206,6 +2241,28 @@ inert on every band by construction. **The other six have no automation whatsoev
     🔑 **Agreement is not correctness.** Seven branches agreeing on `mod_version` proves they agree —
     not that the number is right, and not that anything released. `gh release list` is still the only
     thing that answers that.
+
+12. `python scripts/probe-bands.py --self-test` **then** `python scripts/probe-bands.py --check` —
+    **exit 0**. Every record in this branch's `mc-surface.txt` must resolve against the merged jar of
+    **every version in `supported_minecraft_versions`**, not just `minecraft_version` (§56.4).
+    🔑🔑 **The old single-version control is the defect this replaces.** `mc/26.1.2` ships to `26.1`,
+    `26.1.1` and `26.1.2` and validated **only the last** — so a manifest naming a symbol that does
+    not exist on `26.1` passed the probe, passed the build, passed the suite, and reached players as
+    a `NoSuchMethodError`. **Two internally consistent facts with nothing joining them**, the fifth
+    instance after §50, §52, §55 and §56.3.
+    ⚠️ **An ABSENT on the primary and an ABSENT on a secondary are DIFFERENT findings** and the
+    script says which: on `minecraft_version` the mod demonstrably compiles, so an ABSENT is a bug in
+    the probe (`PROBE IS UNTRUSTWORTHY`); on any other declared version nothing compiles anything, so
+    an ABSENT is a real shipping defect (`SHIPPING DEFECT`). Do not collapse the two.
+    ⚠️ **`--check` is READ-ONLY, and that is load-bearing.** A bare run writes the tracked
+    `plans/BAND_TABLE.md`, so a gate falling through to the writer would regenerate its own subject —
+    the P16-1 defect. Proved read-only across a *failing* run, not just a passing one.
+    ⚠️ **`--check` refuses `--allow-control-failures`** (exit 2). A gate that can be told to pass is
+    not a gate.
+    ⚠️ **A declared version whose jar is not Loom-cached is REFUSED (exit 3), never skipped** — a
+    skipped control reads as a clean run, which is how §37 printed *"No drift"* over an exit of 2.
+    ⚠️ **Exit 1 means `minecraft_version` is not in `supported_minecraft_versions`** — the branch
+    compiling against a version it does not claim to ship to. Fix `gradle.properties`, not the script.
 
 ⚠️⚠️ **Nothing checks that these REMEDIES compose.** Phase 20: `MSYS2_ARG_CONV_EXCL='*'` — prescribed
 by this repo's own gotchas for the Phase-18 `rev-parse` trap — silently turned two gate steps off. **A
