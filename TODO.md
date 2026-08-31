@@ -1965,8 +1965,11 @@ going to cost.
   ⬜ **Not owner-only after all** — no player is needed, so this is automatable per band. The eight
   bands still have no recorded run.
 
-- ⬜ **`build/libs/` holds 61 jars / 76 MB and `build` never cleans it.** 🔴 **Destructive — needs an
-  explicit owner go-ahead, not a judgement call.** Measured 2026-08-31:
+- [x] ✅ **`build/libs/` — MEASURED, and deliberately LEFT ALONE (owner call, 2026-08-31).**
+  🔑 **Not deleted, and that is the decision, not an omission.** 43 of 61 files are stale (76 MB), but
+  recovery is a **rebuild, not a checkout** and the `-SNAPSHOT` jars exist nowhere else — so the cost
+  of being wrong outweighs the disk it saves. It is **not** a correctness hazard either (see below),
+  which was the assumption that put it on this list. Measured 2026-08-31:
   - **18 files are current** (`1.3.3-SNAPSHOT`, one jar + one `-sources` for each of the nine
     branches). **43 are stale** — `1.1.0`, `1.2.0`, `1.3.0`, `1.3.0-SNAPSHOT`, `1.3.1`,
     `1.3.2-SNAPSHOT`.
@@ -1980,15 +1983,52 @@ going to cost.
     `-SNAPSHOT` ones exist nowhere but here, and rebuilding an old one means checking out its
     commit. **That is the blast radius, and it is why this is not being done unasked.**
 
-### 56.4 — manifest debt, piece 1 (Tier 2 — plan before code)
+### 56.4 — manifest debt, piece 1 — 📋 **PLAN WRITTEN, NOT IMPLEMENTED** (Tier 2)
 
-Validate manifest symbols against the band's merged jar; refuse a manifest naming a symbol the band
-does not have. Needs a Loom-cached jar and `probe-bands.py`'s resolver.
-⚠️ **It would not have caught the `1c480efc4` incident** — every symbol in that blob was real.
-🔑🔑 That blob was a **perfectly valid manifest for the wrong branch**, and no per-branch check can
-tell that from a correct one, because on the branch it came from every record is true. This piece is
-the only instrument that can, and it is the reason the row is still open.
-**This is the one piece that gets its own written plan and a decision record before any code.**
+🔴 **First finding: the row overstates what is missing. The assertion ALREADY EXISTS.**
+`scripts/probe-bands.py` resolves every `mc-surface.txt` record against a cached jar and **returns 3**
+when any record is ABSENT on the *control* version, which defaults to this branch's
+`minecraft_version`. Measured on `master` 2026-08-31: **1,424 records resolve on `26.2`, exit 0**,
+with 9 records correctly excluded as fabric-api interface injection rather than Minecraft's surface.
+
+So *"validate manifest symbols against the band's merged jar; refuse a manifest naming a symbol the
+band does not have"* is **implemented and passing**. The debt is two other things:
+
+1. 🔴 **The control is ONE version; a band ships a RANGE.** `mc/26.1.2` declares
+   `supported_minecraft_versions=26.1,26.1.1,26.1.2` and the control validates **`26.1.2` only**.
+   🔑🔑 **This is EXACTLY the §56.3 defect, in a second file** — the manifest and the shipped range
+   are two facts nobody joins. Finding the same shape twice in one session is the argument for
+   fixing the shape rather than the instance.
+2. **Nothing triggers it.** Per the ship-gate section this has *no automation whatsoever*: it is a
+   person remembering to run a script, which is the condition that made R8 a risk.
+
+**Design — B then A. Explicitly NOT C.**
+
+| | option | verdict |
+|---|---|---|
+| **B** | **Widen the control to every version in `supported_minecraft_versions`**, not just `minecraft_version`. Reuses the resolver untouched; the extra jars are already Loom-cached (`26.1` and `26.1.1` verified present this session) | ✅ **do first** — it is the real defect, and it is the §56.3 join |
+| **A** | **A `--check` mode**: control only, no band table, no `--out` write, non-zero on any ABSENT. Then add it to the ship-gate list as a numbered gate | ✅ **do second** — ⚠️ `--out` currently defaults to the **tracked** `plans/BAND_TABLE.md`, so a bare gate run would rewrite a committed file as a side effect. `--check` must be **read-only** — the P16-1 lesson, where a `--check` that regenerated and then graded its own output passed every time |
+| **C** | a JUnit guard inside `./gradlew build`, the only unattended leg | ❌ **rejected — needs `javap` and the Loom cache**, which the Gradle test JVM cannot assume. `ConfigIdManifestTest` works because the live registry is already on the test classpath; there is no equivalent for a manifest of *other* versions. Recorded so this is not re-proposed |
+
+**⚠️ What piece 1 CANNOT do, stated so the row stops implying otherwise.**
+It cannot catch a **valid manifest belonging to a different branch** when the two bands' surfaces are
+identical — and §39 measured the `26.x` bands as differing on **zero of 1,424 records**, so within
+`26.x` this instrument is blind *by construction*. That case belongs to gate 10
+(`manifest-identity-audit.py`, byte-identity between branches) and it is already green. The old
+`1c480efc4` note was right that piece 1 would not have caught it; the sentence claiming **"only this
+piece can" is WRONG** and is corrected here.
+
+**What I am NOT doing** — scope fence, per Tier 2:
+- not touching the resolver itself (`find_member`, the supertype walk, the non-MC classifier);
+- not regenerating `mc-surface.txt` — that is a per-band generated fact and a separate act;
+- not adding a version to any band's `supported_minecraft_versions`;
+- not attempting option C.
+
+**Acceptance:** widened control passes on all nine bands · `--check` is read-only and provably
+non-zero on an injected ABSENT (a mutation scored on the failing message, never the exit code) ·
+the ship-gate list's gate count updated, since nothing else counts it.
+
+- [ ] ⬜ implement B · [ ] ⬜ implement A · [ ] ⬜ mutation-prove · [ ] ⬜ run on all nine · [ ] ⬜ propagate
 
 ### 56.5 — NOT doing this section: `SoundType`'s unvalidated registry ids
 
