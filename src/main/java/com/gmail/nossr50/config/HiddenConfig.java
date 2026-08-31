@@ -19,7 +19,6 @@ public class HiddenConfig {
 
     private static HiddenConfig instance;
     private final String fileName;
-    private int conversionRate = 1;
     private boolean useEnchantmentBuffs = true;
 
     public HiddenConfig(String fileName) {
@@ -43,15 +42,10 @@ public class HiddenConfig {
         }
         try {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(in);
-            conversionRate = config.getInt("Options.ConversionRate", 1);
             useEnchantmentBuffs = config.getBoolean("Options.EnchantmentBuffs", true);
         } catch (IOException e) {
             LOGGER.error("Failed to read bundled config: {}", fileName, e);
         }
-    }
-
-    public int getConversionRate() {
-        return conversionRate;
     }
 
     public boolean useEnchantmentBuffs() {
