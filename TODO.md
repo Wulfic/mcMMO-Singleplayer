@@ -1947,12 +1947,38 @@ going to cost.
   never regenerate it per band.** That is the exact inverse of the `mc-surface.txt` rule; do not
   carry that one over. It also sits under `scripts/**`, so `branch-file-identity-audit.py` requires
   every branch to hold byte-identical bytes.
-- ⬜ **Gate 5 (`brew-smoke.sh`) has no recorded `26.2` run.** Run it and record the number. If it
-  needs a live server this is owner-only work and says so here rather than being quietly skipped.
-- ⬜ **`build/libs/` holds 61 jars / 76 MB and `build` never cleans it.** 🔴 **Destructive — five
-  gates before a single file is removed.** Resolve the target by listing it, prove recoverability
-  (every jar is rebuildable from a committed tag, which is the recovery path — name it), dry-run the
-  deletion, narrow to the jars that are actually stale, and write the undo. Not a `rm -rf build/libs`.
+- [x] ✅ **Gate 5 (`brew-smoke.sh`) — FIRST RECORDED `26.2` RUN, PASSED (2026-08-31).**
+  Self-test **6/6** first (jar resolution: one, sources ignored, none, two→refuse, override wins,
+  bad override→exit 2). Then the real run at `f56d06726`, `BREW_SMOKE_JAR` pinned to
+  `mcmmo-1.3.3-SNAPSHOT+mc26.2.jar` rebuilt from HEAD:
+
+  | | result |
+  |---|---|
+  | **vanilla control** | golden apple **still in slot 3**, potion still `awkward`, `Fuel: 20` — nothing happened |
+  | **mcMMO** | ingredient **consumed**, bottle became `mundane` + `custom_effects:[{id: minecraft:resistance, duration: 450}]`, `Fuel: 19` |
+
+  🔑 **The control is the whole point.** `AWKWARD + GOLDEN_APPLE` was chosen because vanilla has no
+  recipe for it — the first two candidate scenarios were both vanilla recipes and passed with the
+  mod removed. An assertion vanilla also satisfies is indistinguishable from an uninstalled mod.
+  ⚠️ It does **not** reach the XP award; an unattended brew earns none by design. That stays with
+  the live play-test.
+  ⬜ **Not owner-only after all** — no player is needed, so this is automatable per band. The eight
+  bands still have no recorded run.
+
+- ⬜ **`build/libs/` holds 61 jars / 76 MB and `build` never cleans it.** 🔴 **Destructive — needs an
+  explicit owner go-ahead, not a judgement call.** Measured 2026-08-31:
+  - **18 files are current** (`1.3.3-SNAPSHOT`, one jar + one `-sources` for each of the nine
+    branches). **43 are stale** — `1.1.0`, `1.2.0`, `1.3.0`, `1.3.0-SNAPSHOT`, `1.3.1`,
+    `1.3.2-SNAPSHOT`.
+  - 🔑 **It is NOT a correctness hazard, which is the opposite of what was assumed.** The one script
+    that resolves a jar out of this directory — `brew-smoke.sh` — **refuses when ambiguous** and its
+    self-test proves it. `boot-check.sh` and `gameplay-smoke.sh` take the jar as `$1`. So the cost is
+    76 MB of disk, and the `BREW_SMOKE_JAR` override is the safe way past it. **Nothing was deleted
+    to run gate 5.**
+  - ⚠️ **Recovery is a REBUILD, not a checkout** — build outputs are gitignored, so `git` restores
+    none of them. Released versions are also downloadable from their GitHub release; the
+    `-SNAPSHOT` ones exist nowhere but here, and rebuilding an old one means checking out its
+    commit. **That is the blast radius, and it is why this is not being done unasked.**
 
 ### 56.4 — manifest debt, piece 1 (Tier 2 — plan before code)
 
