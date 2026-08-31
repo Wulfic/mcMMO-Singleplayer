@@ -47,7 +47,7 @@ Only files that have actually been retuned carry a `Config_Version`. Today that 
 | `salvage.vanilla.yml` | Salvageable items and their yields. |
 | `potions.yml` | Alchemy brewing tree and custom concoctions. |
 | `sounds.yml` | Per-event sound enable + volume/pitch tuning. |
-| `hidden.yml` | Rarely-touched internals. |
+| `hidden.yml` | Rarely-touched internals. ⚠️ **The only config that is never written to disk** — mcMMO reads it from inside the jar, so it will not appear in `.minecraft/config/mcmmo/` and cannot be changed without rebuilding the mod. |
 
 ---
 

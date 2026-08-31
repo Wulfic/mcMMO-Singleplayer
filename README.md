@@ -316,7 +316,7 @@ Configs are plain YAML, written on first load to:
 | `repair.vanilla.yml` / `salvage.vanilla.yml` | Repairable/salvageable items and their materials. |
 | `potions.yml` | Alchemy brewing tree and custom potion concoctions. |
 | `sounds.yml` | Per‑event sound and volume/pitch tuning. |
-| `hidden.yml` | Rarely‑touched internals. |
+| `hidden.yml` | Rarely‑touched internals. ⚠️ **The only config that is never written to disk** — mcMMO reads it from inside the jar, so it will not appear in the folder above and cannot be changed without rebuilding the mod. |
 
 > ⚠️ **Editing defaults in the jar does not update an existing config.** New keys are back‑filled on
 > load, but keys already present on disk are left alone. To pick up a changed default, delete the key
