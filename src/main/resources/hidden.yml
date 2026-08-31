@@ -1,6 +1,13 @@
 #
-# WARNING: THIS CONFIG IS FOR ADVANCED USERS ONLY.
-# You will need to reset any values in this config every time you update mcMMO
+# Bundled read-only config -- NOT player-editable, and nothing here ever needs resetting.
+# mcMMO reads this file straight off the jar classpath (HiddenConfig#load ->
+# getResourceAsStream), so there is no copy on disk to edit and no ConfigLoader
+# back-fill. Changing a value means rebuilding the mod.
+#
+# Every key under Options MUST be read by HiddenConfig#load. A key with no consumer is
+# dead weight that reads as a working switch to anyone who opens the jar -- two of the
+# three shipped here were exactly that until 2026-08-31. HiddenConfigTest's
+# everyHiddenOptionIsRead fails closed if this drifts again.
 ###
 Options:
     # true to use enchantment buffs for Super Breaker & Giga Drill Breaker, false to use potion buffs
