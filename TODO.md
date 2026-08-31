@@ -2061,7 +2061,38 @@ refusal and a build failure both exit non-zero for reasons unrelated to the asse
 | M4 | a declared version with no cached jar | refused, exit 3 — never skipped |
 | M5 | `minecraft_version` outside the declared range | refused, exit 1 |
 
-- [x] ✅ implement B · [x] ✅ implement A · [x] ✅ mutation-prove (7/7) · [ ] ⬜ run on all nine · [ ] ⬜ propagate
+**The acceptance run — and the number that makes this section worth its cost.**
+
+Gate 12 is **green on all nine**, self-test first on each. Record counts differ per band — 1,424 ·
+1,418 · 1,406 · 1,404 · 1,401 · 1,401 · 1,400 · 1,401 · 1,407 — which is the evidence each branch
+read **its own** manifest rather than a cached or copied one.
+
+🔑🔑 **Five bands declare a range, and the widened control asked about SEVEN shipped versions that
+had never been validated against the manifest at all**: `26.1`, `26.1.1` (`mc/26.1.2`) · `1.21.9`
+(`mc/1.21.10`) · `1.21.6`, `1.21.7` (`mc/1.21.8`) · `1.21.2` (`mc/1.21.3`) · `1.21` (`mc/1.21.1`).
+**All seven resolve clean.** That is a negative result and it is worth stating plainly: the gap was
+real and unmeasured, and what it was hiding turned out to be nothing. The four remaining branches
+(`master`, `mc/1.21.11`, `mc/1.21.5`, `mc/1.21.4`) declare a single version, so gate 12 is exactly
+the old control there.
+
+✅ `mc/26.1.2` is also the **valid negative control** the master-only mutation harness could not
+produce: *"all 1418 records also resolve on 26.1, 26.1.1 — the declared range holds"* is the
+secondary path printing a PASS, so M2's red is the injected record and not the mere presence of a
+second control.
+
+| band | declared range | records | gate 12 |
+|---|---|---|---|
+| `master` | `26.2` | 1,424 | ✅ exit 0 |
+| `mc/26.1.2` | `26.1, 26.1.1, 26.1.2` | 1,418 | ✅ exit 0 — **2 versions newly covered** |
+| `mc/1.21.11` | `1.21.11` | 1,406 | ✅ exit 0 |
+| `mc/1.21.10` | `1.21.9, 1.21.10` | 1,404 | ✅ exit 0 — **1 newly covered** |
+| `mc/1.21.8` | `1.21.6, 1.21.7, 1.21.8` | 1,401 | ✅ exit 0 — **2 newly covered** |
+| `mc/1.21.5` | `1.21.5` | 1,401 | ✅ exit 0 |
+| `mc/1.21.4` | `1.21.4` | 1,400 | ✅ exit 0 |
+| `mc/1.21.3` | `1.21.2, 1.21.3` | 1,401 | ✅ exit 0 — **1 newly covered** |
+| `mc/1.21.1` | `1.21, 1.21.1` | 1,407 | ✅ exit 0 — **1 newly covered** |
+
+- [x] ✅ implement B · [x] ✅ implement A · [x] ✅ mutation-prove (7/7) · [x] ✅ run on all nine · [x] ✅ propagate
 
 ### 56.5 — NOT doing this section: `SoundType`'s unvalidated registry ids
 
