@@ -1853,24 +1853,96 @@ header is honest.
 - [ ] ⬜ **propagate to all eight bands** — both commits touch `src/`, so `drift-audit.py` tracks
       them and §55's hand-propagation dance is not needed here
 
-### 56.2 — the six bands that are propagated but NEVER BUILT
+### 56.2 — the six bands never built — ✅ DONE, and all EIGHT were built
 
-`mc/1.21.11`, `mc/1.21.10`, `mc/1.21.8`, `mc/1.21.5`, `mc/1.21.4`, `mc/1.21.3` carry §55 and were
-verified **statically only** — identical rosters, and the changed files touch no MC type. That is a
-good argument and it is not a build.
+The six carried out of §55 (`1.21.11`, `1.21.10`, `1.21.8`, `1.21.5`, `1.21.4`, `1.21.3`) had been
+verified **statically only**. §56.1 then landed on all eight bands, so the two §55 *had* built were
+carrying new commits too — the honest scope was eight, not six, and all eight were built.
 
-🔑 **56.1 lands FIRST and propagates FIRST.** Building six bands against a tree that is about to
-change once more is six builds spent on a state that will not ship. Order is: fix, propagate,
-then build.
+🔑 **56.1 landed and propagated FIRST, deliberately.** Building against a tree about to change once
+more spends the builds on a state that will not ship.
 
-Per band: `./gradlew build` green, and the **`N executed` line** read off the test result, never
-`BUILD SUCCESSFUL` — ⚠️ a `:test` that is UP-TO-DATE prints success having run nothing, which is how
-§55 nearly recorded a 9-second suite. `--rerun-tasks` when in doubt.
+| band | classes | executed | failures | the two new guards |
+|---|---|---|---|---|
+| `mc/1.21.11` | 168 | 1,873 | 0 | ✅ ran 3+2 |
+| `mc/1.21.10` | 168 | 1,873 | 0 | ✅ ran 3+2 |
+| `mc/1.21.8` | 168 | 1,873 | 0 | ✅ ran 3+2 |
+| `mc/1.21.5` | 168 | 1,874 | 0 | ✅ ran 3+2 |
+| `mc/1.21.4` | 170 | 1,881 | 0 | ✅ ran 3+2 |
+| `mc/1.21.3` | 169 | 1,875 | 0 | ✅ ran 3+2 |
+| `mc/26.1.2` | 169 | 1,879 | 0 | ✅ ran 3+2 |
+| `mc/1.21.1` | 168 | 1,877 | 0 | ✅ ran 3+2 |
+
+⚠️ **The tally is read off the JUnit XML, and it asserts the two new guards RAN**, not merely that
+the build was green. `BUILD SUCCESSFUL` with a skipped `:test` is the §55 trap, and "the band built"
+is a weaker claim than "the band ran the assertion this section added". The spread is per-band
+gating, not a master-vs-band split.
+
+### 56.3 — the manifest gap was a GATE BLIND SPOT on a shipped band — ✅ DONE on `master`
+
+The carried row read *"`mc-ids.txt` covers 14 versions against a declared scope of 16 — `26.1` and
+`26.1.1` are cached and absent. Adding them is a scope act with a ruling behind it."*
+🔑🔑 **Both halves were wrong, and the row understated it.** It is not a scope act — those two
+versions are *already* in the declared scope — and it is not bookkeeping:
+
+🔴 **`mc/26.1.2` declares `supported_minecraft_versions=26.1,26.1.1,26.1.2` and ships to all three.
+The manifest carried only the last one.** And `config-id-audit.py`'s `supported_versions()` takes
+its comparison set **from the manifest itself**, so the two missing versions were never refused and
+never reported — they were **silently absent from the question**. Gate 4, the gate that found three
+live XP holes on `master` that no compiler, test or boot log could see, **had never once run against
+two versions that band puts in players' hands**.
+
+🔑🔑 **Two sources of truth, both internally consistent, and nothing compared them.**
+`supported_minecraft_versions` is read by `BandDocsMatchRealityTest`, `BandVersionLabelTest` and
+`gradle-key-identity-audit.py`. The manifest's version list is read by `config-id-audit.py`. Every
+one of them was green. **This is the recurring shape in this repo** — §50's `config.yml` in neither
+gate half, §52's entity kind in neither, §55's roster keyed by neither — and the instrument is
+always the same: put the *join* under test, not either side.
+
+**What was done:**
+- `scripts/extract-mc-ids.py --mc 26.1 --mc 26.1.1 --write`, offline from Loom's cached server
+  bundlers. Both cross-checked **exact** against the jar assets. **+5,672 lines, 0 deletions** — the
+  existing 14 sections are untouched. The manifest is now **16 versions**, matching declared scope.
+- `ConfigIdManifestTest#theManifestCoversEveryVersionThisBandShipsTo` — the join. Every version in
+  this branch's `supported_minecraft_versions` must have a manifest section.
+- ⚠️ **A subset check, never equality.** The manifest is a fact about Minecraft, byte-identical on
+  every branch, and legitimately carries versions a given band does not ship. Demanding equality
+  would make every branch unshippable at once.
+
+**Mutations — 3 caught, and 2 that honestly do not count:**
+
+| | mutation | result |
+|---|---|---|
+| P1 | drop `master`'s own `## 26.2` section | ✅ caught, names `[26.2]` |
+| **P2** | **the committed pre-56.3 manifest against a band declaring `26.1,26.1.1`** | ✅ **caught — exactly ONE failure, the new guard, naming `[26.1, 26.1.1]`, while all five pre-existing tests stayed GREEN.** This reproduces `mc/26.1.2`'s real state, and it is the whole finding: every existing check was green while two shipped versions went unaudited |
+| P5 | comments-only manifest (parses to zero sections, no orphan id) | ✅ caught by the guard-the-guard assertion, by name |
+| P3 | corrupt every `## ` header | ⚠️ **does not count for this guard** — the parser refuses with `IllegalStateException` before the assertion runs. Fail-closed and fine, but P5 is what actually proves the empty-slice case |
+| P4 | empty `supported_minecraft_versions` | ⚠️ **does not count** — `build.gradle` needs the key, so the BUILD fails in 2s and the test never runs. Absence of a result file is a signal, not a pass (§55's lesson) |
+
+⚠️ **A bug in the guard's own first draft, recorded because it is a shape not a typo:**
+`missing.get(0)` sat inside `assertTrue(cond, String)`, whose message argument is built **eagerly** —
+so the passing case threw `IndexOutOfBoundsException` on an empty list. The lazy `() -> String`
+overload is the fix. A guard that crashes when it should pass is indistinguishable from a guard that
+fails, and it only surfaced because the test was run before it was believed.
+
+🔴 **Adding these two versions changes no verdict today** — `26.1`, `26.1.1` and `26.1.2` have
+identical registry counts (1168 blocks / 1506 items / 157 entities), consistent with §39's finding
+that the `26.x` bands differ on zero records. **That is the answer that makes it safe, not the
+answer that makes it pointless:** the hole was structural, and the next band cut is what it was
+going to cost.
+
+- [x] `mc-ids.txt` at 16 versions, both new sections cross-validated exact
+- [x] the join guard, mutation-proven where it counts
+- [x] `master` suite **169 / 1,880 / 0** (up 1 test)
+- [ ] ⬜ **propagate** — ⚠️ `mc-ids.txt` is a fact about MINECRAFT: **cherry-pick, never regenerate
+      per band.** The inverse of `mc-surface.txt`. A normal cherry-pick gives the byte-identical
+      copy `branch-file-identity-audit.py` requires
+- [ ] ⬜ **the eight bands need REBUILDING after this lands** — the guard is new and reads each
+      band's own `supported_minecraft_versions`, so a green `master` says nothing about them
 
 ### 56.3 — carried debt, the three cheap-to-bounded rows
 
-- ⬜ **`mc-ids.txt` covers 14 of the 16 declared versions** — `26.1` and `26.1.1` are Loom-cached and
-  absent. Regenerate with `scripts/extract-mc-ids.py` (⚠️ dry-run by default, `--write` to apply).
+- [x] ✅ **DONE — and it was a gate blind spot, not bookkeeping. See 56.3 above.**
   🔑🔑 **`mc-ids.txt` is a fact about Minecraft, not about a branch — CHERRY-PICK it to every band,
   never regenerate it per band.** That is the exact inverse of the `mc-surface.txt` rule; do not
   carry that one over. It also sits under `scripts/**`, so `branch-file-identity-audit.py` requires
