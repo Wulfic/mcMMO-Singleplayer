@@ -2103,6 +2103,189 @@ stays a section of its own. Recorded here so it is not silently absorbed into 56
 
 ---
 
+## §57 — the fork race that stopped `mc/26.1.2` releasing — ✅ DONE on `master`
+
+**Found 2026-08-31 (session 37), unprompted, checking `gh run list` before believing `v1.3.4`
+shipped — which is exactly what §49 says to do and what state.md flagged.** `v1.3.4` published on
+**eight** of nine. `mc/26.1.2`'s run [`33445589010`] **failed at the `Build` step** and that band
+stayed on `v1.3.3`.
+
+🔑 **Not R-t's stale-version gate this time.** That step passed; `:test` died before a single test
+ran:
+
+```
+> Test process encountered an unexpected problem.
+   > Could not start Gradle Test Executor 1.
+      > org.junit.platform.launcher.LauncherSessionListener: Provider
+        net.fabricmc.loader.impl.junit.FabricLoaderLauncherSessionListener could not be instantiated
+Caused by: java.lang.RuntimeException: Could not create directory .../mcMMO-Singleplayer/mods
+Caused by: java.nio.file.FileAlreadyExistsException: .../mcMMO-Singleplayer/mods
+```
+
+### The cause — upstream code, armed by our fork count
+
+`fabric-loader` `0.19.3`, `DirectoryModCandidateFinder.findCandidates()`, read out of the sources
+jar rather than recalled:
+
+```java
+if (!Files.exists(path)) {
+    try {
+        Files.createDirectory(path);   // singular: throws FileAlreadyExistsException if it exists
+        return;
+    } catch (IOException e) {
+        throw new RuntimeException("Could not create directory " + path, e);
+    }
+}
+```
+
+A textbook TOCTOU window. `build.gradle` sets `maxParallelForks = 4`; on a **fresh CI checkout**
+`mods/` does not exist, so all four workers evaluate `!Files.exists(path)` as true, one wins the
+create, and a loser's `FileAlreadyExistsException` becomes a `ServiceConfigurationError` that kills
+the executor before any test runs.
+
+🔑 **Not band-specific.** `loader_version=0.19.3` on all nine, verified against each branch's
+`gradle.properties`. `mc/26.1.2` lost a coin flip; any branch could have. One firing in the last 40
+`Build & Release` runs.
+
+🔑🔑 **It cannot reproduce locally, and that is the whole shape of the defect.** A working copy that
+has ever run the suite already has an empty untracked `mods/` at the repo root, so `Files.exists` is
+true and the window never opens. **Green on every developer machine, red only on a fresh checkout** —
+the same failure geometry as the `BandVersionLabelTest` defect documented directly above the fork
+count in `build.gradle`, which shipped to five branches and blocked every release from 2026-08-13.
+
+🔑 **`mods` is the ONLY racing directory — measured, not assumed.** Every other directory-creating
+call in the loader (`configDir`, the `.fabric` cache dir, the deobf jar dir, `ModCandidateImpl`,
+`BuiltinLogHandler`) uses `Files.createDirectories` — **plural**, which by javadoc contract does not
+throw when the directory already exists, because `createAndCheckIsDirectory` swallows
+`FileAlreadyExistsException` after an `isDirectory` recheck. `grep -rn createDirector` over the
+loader sources returns six sites and exactly **one** is the singular form. So this fix closes the
+whole hazard rather than one leg of three.
+
+### The fix — `fabric.modsFolder`, not a repo-root `mkdir`
+
+`FabricLoaderImpl.getModsDirectory0()` has a single resolution point and it honours an override:
+
+```java
+String directory = System.getProperty(SystemProperties.MODS_FOLDER);   // "fabric.modsFolder"
+return directory != null ? Paths.get(directory) : gameDir.resolve("mods");
+```
+
+So point the forks at a directory the **build** owns and pre-creates, in `test { doFirst { … } }`,
+before any worker forks:
+
+- `build/test-mods` — already inside the gitignored `build/`, so no untracked `mods/` at the repo
+  root and **no `.gitignore` change needed on nine branches** (`.gitignore` is under gate 10's
+  byte-identity guard, so a change there is a nine-branch change).
+- `mkdirs()` only. **Nothing in this change deletes anything**, and the directory is deliberately
+  **not** declared as `outputs.dir` — a declared output invites Gradle's stale-output cleanup to
+  remove a directory a developer may have dropped jars into. `gradle clean` removing it is correct
+  and the `doFirst` recreates it.
+- The `systemProperty` is paired with an `inputs.property` carrying the **relative** location, not
+  the absolute path: this repo runs `org.gradle.caching=true`, and an absolute path in the cache key
+  would make `:test` miss the cache on every machine. The relative string still changes when the
+  wiring changes, so deleting the block re-runs `:test`.
+
+### The guard — `TestModsDirectoryTest`, and the marker is what makes it non-vacuous
+
+⚠️ **The obvious guard is vacuous and must not be written.** *"assert the mods directory exists"*
+passes with the fix fully reverted — by the time any test method runs, the loader has already
+created the directory itself. That is the shape of the 14th, 15th and 16th vacuous assertions in
+this repo.
+
+So the `doFirst` also writes a **marker file** into the directory, and the guard asserts the marker.
+The loader never writes one. Reverting the `doFirst` therefore leaves a bare loader-created
+directory with no marker, and the guard goes **red on every machine, including one where the
+directory already existed** — which is the exact escape a bare existence check leaves open.
+
+⚠️ The marker cannot be mistaken for a mod: `DirectoryModCandidateFinder.isValidFile` requires
+`isRegularFile && !isHidden && endsWith(".jar") && !startsWith(".")`. A `.txt` marker fails the
+`.jar` test outright.
+
+Three assertions, each failing for a different reason and saying so:
+
+1. `fabric.modsFolder` is set at all — without it the loader falls back to `gameDir.resolve("mods")`
+   and the race is back. Reads the **loader's own property name**, so nothing but the real wiring
+   can satisfy it.
+2. It names an existing directory.
+3. That directory holds the build's marker — the load-bearing one, per above.
+
+### What this section is NOT doing
+
+- **Not** upgrading or patching `fabric-loader`. The defect is upstream, one line, in a class we do
+  not own; the override is a supported public entry point.
+- **Not** lowering `maxParallelForks`. Four forks is a measured choice (the ~53s `Bootstrap`
+  `@BeforeAll` is a fixed per-JVM cost overlapped across siblings). Lowering it narrows the window
+  without closing it, and pays for that with wall-clock on every band.
+- **Not** re-pushing all nine at a bumped `mod_version`. Owner ruled: re-run the failed job to get
+  `mc/26.1.2` to `v1.3.4`; this fix rides the next bump.
+
+### The measured outcome — 3/3 mutations caught, and the 17th vacuous assertion was MINE
+
+Harness: `scratchpad/mutate.py`. It scores the **failing testcase NAME**, never the exit code — the
+16th vacuous guard in this repo was a mutation harness that scored exit codes and reported 6/6
+caught while its launcher was dying before Gradle ran, because a catch and a crash both return 1.
+It also asserts `:test` **executed** each run (an `UP-TO-DATE` `:test` replays the previous run's
+results, which reads exactly like *"not caught"*), and it restores `build.gradle` in a `finally`
+under a **sha256 match** against the original bytes.
+
+🔑 **Its first run reported all three INVALID — `:test never executed` — and it was right.** The
+runner was invoking `cmd /c gradlew.bat`, which under Git Bash opens an interactive `cmd` and drops
+the arguments. Three silent 1s that a harness scoring exit codes would have reported as **3/3
+caught**. The self-check earned its place on its first outing.
+
+| | mutation | caught by |
+|---|---|---|
+| **M1** | the whole `doFirst` reverted — `fabric.modsFolder` never set | `theBuildPointsEveryForkAtAModsDirectoryItControls` |
+| **M2** | only the marker write removed, directory still pre-created | `theDirectoryCarriesTheBuildsMarkerAndNotJustTheLoaders` |
+| **M3** | override set, pointed where the build creates nothing — **the race relocated, not closed** | `theDirectoryCarriesTheBuildsMarkerAndNotJustTheLoaders` |
+
+🔑🔑 **M3 is the whole justification for the marker, and it turned an argument into a measurement.**
+M3 is the genuine defect state: the property is set, so assertion 1 is satisfied, but nothing
+pre-creates the directory and four forks race `Files.createDirectory` again. On that run the
+directory **existed** by the time any test method ran — `fabric-loader` had created it itself, on
+the racing path. An existence check was therefore **GREEN over the real defect**, and only the
+marker was red.
+
+🔑🔑 **Which convicted an assertion in the first draft of this guard, and it was deleted.**
+`thatDirectoryExists()` was written, ran green in the first full suite, and **cannot fail for any
+reason assertion 1 does not already cover** — because the loader creates the directory before any
+test method runs, unfalsifiably. That is the **seventeenth** vacuous assertion found in this
+repository and the first one authored *by the same change that was hunting for vacuity*. The
+javadoc now records the deletion, so it does not get re-added as an obvious omission.
+
+⚠️ **The prediction table was wrong before the run, and the harness was right.** M3's expected
+testcase was recorded as the existence check; the harness reported `MIS-SCORED -- red, but on
+[the marker]`. Predicting a *specific* failing name is what surfaced that — a harness that only
+asked *"did anything go red?"* would have printed a clean 3/3 and buried the finding. Same lesson
+as the mutation-prediction mismatch that found the 10th and 11th vacuous tests.
+
+**Suite on `master`: 170 classes / 1,882 executed / 0 failures / 0 skipped** — up from 169 / 1,880,
+exactly the +1 class and +2 tests added here, read off the JUnit XML rather than off
+`BUILD SUCCESSFUL`. `> Task :test` ran **bare**, never `FROM-CACHE`, and the configuration cache
+entry stored, which is what proves the `doFirst` is configuration-cache safe.
+
+⚠️ **`build/test-mods` is not in `.gitignore` and does not need to be** — it is inside `build/`,
+which `.gitignore` already covers via `build/` and `**/build/`. That is the point of putting it
+there: `.gitignore` is under ship gate 10's byte-identity guard, so an edit to it is a nine-branch
+change.
+
+### Steps
+
+- [x] `build.gradle` — `doFirst` block: create `build/test-mods`, write the marker, export
+      `fabric.modsFolder`; paired `inputs.property`
+- [x] `TestModsDirectoryTest` in `com.gmail.nossr50.guards`
+- [x] full suite green on `master`; the tally moves by exactly the tests added
+- [x] **mutation-prove the guard** — revert the `doFirst` and confirm it goes red, and confirm the
+      naive existence-only assertion would have stayed **green** (that is the measurement that
+      justifies the marker, not the argument above it)
+- [ ] propagate to all eight bands — `build.gradle` and `src/` are both tracked by
+      `drift-audit.py`, so a normal cherry-pick with `Backport-of:` is enough
+- [ ] gates 7/9/10/11 in a local clone (all four prefer remote refs)
+- [ ] `.agent/memory/` — this is a third fork race in one repo, and the reasoning belongs in
+      `gotchas.md` beside R14's
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
