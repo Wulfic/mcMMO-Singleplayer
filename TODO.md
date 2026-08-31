@@ -1551,6 +1551,192 @@ needs the hierarchy walk and is its own piece of work.
 
 Self-test 147 → **165** checks, all driving the shipped functions.
 
+## §55 — the roster gate for `coreskills.yml` and `sounds.yml`, and `hidden.yml`'s two dead knobs
+
+### What forced it
+
+The carried row out of §50/§52: *"`coreskills.yml`, `hidden.yml`, `skillranks.yml`, `sounds.yml` are
+still outside the gate. Whether they are id-keyed is unmeasured — a question, not a guess."*
+
+Measured, before any edit. **The row's premise is wrong, and this is the third carried row in a row
+to name the wrong thing** — §50's named the wrong *bound* (one dead id, actually 26), §52's named
+the wrong *file* (`advanced.yml`, two live keys), and this one names the wrong *gate*.
+
+🔑 **None of the four is keyed on item/block/entity registry ids.** `config-id-audit.py` (gate 4) is
+the wrong instrument for all four, and extending it — doing exactly what the row said — finds
+nothing and closes the row that leads here.
+
+Three of the four are keyed on a roster mcMMO **owns**: `PrimarySkillType`, `SubSkillType`,
+`SoundType`. That is the same hole against a different roster, and it is unguarded.
+
+### What was measured, before any edit
+
+| file | roster | state today | guard |
+|---|---|---|---|
+| `skillranks.yml` | `SubSkillType` | clean | ✅ **both directions** — `RankConfigTest.everyShippedRankSectionMapsToALiveSubSkill` (yml→enum) + `RankConfig#checkConfig` (enum→yml) |
+| `coreskills.yml` | `PrimarySkillType` | clean, **26 / 26** | ❌ **none, either direction** |
+| `sounds.yml` | `SoundType` | clean, **17 / 17** | ❌ **none, either direction** |
+| `hidden.yml` | n/a — 3 free knobs | 🔴 **2 of 3 DEAD** | ❌ none |
+
+🔑🔑 **Both files already contain a `values()` walk that LOOKS like a roster check and is not — and
+both fail by the same mechanism, a missing key resolving through a DEFAULT.** This is the third
+appearance of §52's `Snowman`/`Vex` shape.
+
+- `CoreSkillsConfig#loadKeys` walks `PrimarySkillType.values()` and reads
+  `config.getBoolean(enabledPath(skill), true)`. **A missing key returns the default `true`, which is
+  byte-for-byte indistinguishable from a present `true`.** Enum→yml is therefore not checked. Dead
+  keys are never visited at all, so yml→enum is not checked either. ⚠️ The default is *correct* —
+  failing closed would silently switch the mod off, and `primarySkillEnabledDefaultsTrueForUnlistedSkill`
+  pins that deliberately. The defect is that nothing else asks the question the default suppresses.
+- `SoundConfig#validateKeys` walks `SoundType.values()` and reads
+  `config.getDouble("Sounds." + soundType + ".Volume")` **with no default**. A missing section yields
+  `0`; `0 < 0` is false; **the validation passes.** A `SoundType` with no section is invisible.
+
+**The dangerous direction is yml→enum.** A dead key is a switch the player sets and nothing reads —
+`coreskills.yml` is written to disk and *is* player-editable, so a renamed skill leaves a row that
+looks live and does nothing. That is how `Unarmed.Disarm` and `Unarmed.IronGrip` outlived their
+mechanics (item 1.1), and `RankConfigTest`'s own comment already names it as the trap.
+
+**Neither file has a live defect today** — 26/26 and 17/17 both directions. There is nothing to fix
+and everything to guard: the next skill added or sound renamed drops out silently, and an added enum
+constant is invisible to every incremental diff (Cooking shipped across six commits with zero wiki
+mentions).
+
+### 🔴 `hidden.yml` — 2 of 3 knobs dead, proven across the whole repo
+
+- **`Chunklets`** — **two hits in the entire repository**, both in `hidden.yml`: the row and its own
+  comment. `HiddenConfig#load` never reads it. Zero Java, zero scripts, zero docs. It is a Bukkit-era
+  Chunklets metadata-store switch that has no meaning in a Fabric singleplayer port.
+- **`ConversionRate`** — read into a field and exposed via `getConversionRate()`, and **that accessor
+  has no caller anywhere**: 4 Java hits are the field, the `getInt`, the accessor and its `return`.
+  The only other hit is `HiddenConfigTest` asserting `assertEquals(1, config.getConversionRate())` —
+  **a test pinning a value nothing consumes.** It proves the plumbing, not that the knob does
+  anything. Chunklets' conversion tick-rate; dead for the same reason.
+- **`EnchantmentBuffs`** — live, one real consumer: `SkillUtils.java:65`. **Keep.**
+
+🔑 **`hidden.yml` is bundled-only and never copied to disk** (`HiddenConfig`'s javadoc, confirmed by
+`run/config/mcmmo/` holding the other three and not this one). So this is **dead code, not a live
+player-facing defect**, and deletion carries no install-migration concern — nobody has an edited copy
+to orphan. That is the opposite of §50, where `copyMissingDefaults` meant additions *did* reach
+existing installs.
+
+### The ruling
+
+1. **Both directions, for both files, in the existing test classes** — mirroring `RankConfigTest`,
+   which holds its roster test beside its behaviour tests. Read the **bundled classpath resource**,
+   not the disk copy, so the guard tests what ships.
+2. **Both directions, not one.** `RankConfigTest` needs only the converse because `RankConfig#checkConfig`
+   supplies enum→yml. Neither of these files has that, and the two walks that look like it are the
+   defect, so the test owns both halves.
+3. **Delete `Chunklets` and `ConversionRate` outright** — rows, comments, field, `getInt` read,
+   accessor, and the test assertion that pins it. Unreachability proven above across the whole repo
+   before any deletion, per §50's precedent.
+
+### Steps
+
+- [x] **55.1** — `CoreSkillsConfigTest`: yml→enum (dead key) + enum→yml (missing row), vs
+      `PrimarySkillType.values()`, against `/coreskills.yml` on the classpath.
+- [x] **55.2** — `SoundConfigTest`: the same two directions vs `SoundType.values()`, against
+      `/sounds.yml`. Section keys live under the `Sounds:` root beside the scalar `MasterVolume`,
+      which is **not** a `SoundType` and must be excluded by name, not by shape.
+- [x] **55.3** — delete the two dead knobs from `hidden.yml`, `HiddenConfig` and `HiddenConfigTest`.
+- [x] **55.4** — **mutation-prove every new assertion.** Each must go RED for the right reason:
+      add a bogus yml key; delete a real one; and for 55.3, confirm `EnchantmentBuffs` still reaches
+      `SkillUtils`. A guard that has never failed is not known to work — thirteen vacuous sightings.
+- [x] **55.5** — build, full suite, read the `N executed` line.
+- [ ] **55.6** — propagate to all eight bands with `Backport-of:`, then gate 7.
+
+### The outcome — 2 dead knobs deleted, 5 guards added, and a 14th vacuous test
+
+**Suite 1,872 → 1,876 executed, 168 classes, 0 failed, 0 skipped** (`--rerun-tasks`; `BUILD
+SUCCESSFUL in 9s` on the first attempt was `:test` UP-TO-DATE and proved nothing).
+
+**Neither roster had a live defect** — `coreskills.yml` 26/26 and `sounds.yml` 17/17, both
+directions. That was the expected result and is not the point: both files now fail closed, and the
+two `values()` walks that looked like this check are documented in the tests as not being it.
+
+🔑🔑 **A 14th vacuous guard, and it was guarding this exact hole.**
+`primarySkillEnabledDefaultsTrueForUnlistedSkill` asserted *"Mining has no entry in the bundled
+default → defaults true"*. **`Mining.Enabled: true` has been present all along** — all 26 are — so it
+re-ran the explicit-true branch above it and **the default branch it was named for was never
+reached**. The test that claimed to cover the unguarded mechanism was the reason nobody looked.
+
+🔑 **And that branch is UNREACHABLE through the public surface, which is the finding rather than an
+excuse.** `copyMissingDefaults` back-fills any key the bundled default has, so a user deleting a row
+gets it returned; the only way to reach `getBoolean(path, true)`'s default is for the **bundled**
+file to omit a skill. That is exactly the drift `everyPrimarySkillHasAnExplicitRow` now forbids, so
+the replacement asserts the precondition that keeps the branch dead instead of pretending to enter it.
+
+🔴 **`hidden.yml`'s two dead knobs, deleted after proving unreachability across the whole repo:**
+`Chunklets` had **two hits in the repository**, both inside `hidden.yml` — the row and its own
+comment; `HiddenConfig#load` never read it. `ConversionRate` was read into a field whose accessor had
+**no caller anywhere**, and was pinned by an `assertEquals(1, config.getConversionRate())` that
+proved the plumbing while nothing consumed the value. `EnchantmentBuffs` is live
+(`SkillUtils.java:65`) and is kept. ⚠️ **Dead code, not a live player defect** — `hidden.yml` is
+bundled-only with no disk copy, so nobody had an edited copy to orphan. The opposite of §50.
+
+### 55.4 — the mutation run, and the vacuity it caught in itself
+
+**6 mutations, 6 caught, each reddening its OWN named assertion**, read from the JUnit XML's failing
+`<testcase>` rather than from the exit code.
+
+| # | mutation | reddens |
+|---|---|---|
+| M1 | delete `Mining:` from `coreskills.yml` | `everyPrimarySkillHasAnExplicitRow` |
+| M2 | add `Woodcuting:` (a typo'd skill) | `everyCoreSkillsSectionMapsToALivePrimarySkill` |
+| M3 | delete the `ANVIL:` section from `sounds.yml` | `everySoundTypeHasASection` (+ the existing `readsPerSoundVolumeAndPitch`, correctly) |
+| M4 | add a `CHIMERA_WING:` section | `everySoundsSectionMapsToALiveSoundType` |
+| M5 | re-add `Chunklets` to `hidden.yml` | `everyHiddenOptionIsRead` |
+| M6 | remove the **live** `EnchantmentBuffs` | `everyHiddenOptionIsRead` |
+
+🔑🔑 **The FIRST mutation run reported all six RED and proved absolutely nothing.** The harness
+shelled out to gradle from python, where `bash` resolves to **WSL's** bash — `execvpe(/bin/bash)
+failed` — so the launcher died before gradle started and returned **the same exit 1 a caught
+mutation returns**. Six launcher failures, scored as six caught mutations. It was caught only
+because the harness also required the output to **name the target assertion**, which never matched.
+⚠️ **Record the failing testcase NAME, never the exit code.** This is the same shape as the collision
+audit that under-reported by 52× while exiting 1 either way — a mutation harness is not exempt from
+being the vacuous thing.
+
+⚠️ Restores are byte-compared against a saved original and the driver **stops the whole run** on a
+mismatch, so an aborted case cannot leave a mutated resource in the tree. Verified after the run:
+`git status` showed exactly the six intended files, `hidden.yml` at 0 insertions / 4 deletions, and
+no `Chunklets`/`Woodcuting`/`CHIMERA_WING` string anywhere in `src/main/resources`.
+
+### Noticed here, deliberately not ridden
+
+- ⬜ **`SoundType` carries a `minecraft:` sound-event registry id per constant**
+  (`minecraft:block.anvil.place`, …) and **nothing validates them**. A real id surface, but it needs
+  the MC sound registry rather than `mc-ids.txt`'s item/block/entity kinds, so it is a section of its
+  own — not a widening of this one.
+- ⬜ **`sounds.yml`'s `CustomSoundId` takes a registry id too.** Every shipped value is `''`, so
+  there is no defect today and no guard either; it lands with the row above.
+- ⬜ **`hidden.yml`'s header still says *"You will need to reset any values in this config every time
+  you update mcMMO"***, which is false — the file is bundled-only and has no user copy to reset.
+  Left alone to keep this diff to the ruling.
+
+### What this section is NOT doing
+
+- **Not extending gate 4** (`config-id-audit.py`). Measured: no registry ids in any of the four. The
+  instrument would run, report clean, and mean nothing.
+- **Not touching `skillranks.yml`** — already guarded both directions. Re-guarding it is ceremony.
+- **Not adding a per-sub-skill switch.** `CoreSkillsConfig`'s dropped `isSkillEnabled(AbstractSubSkill)`
+  is a deliberate GitHub #10 decision, not debt.
+- **Not wiring `ConversionRate` up.** No consumer exists and none is owed in a singleplayer port.
+- **Not generalising to a roster-audit script.** Three files, two rosters, and `RankConfigTest`
+  already sets the in-suite pattern. A script would be a fourth instrument for a question the suite
+  answers unattended.
+- **Not bumping `mod_version` or pushing.** That is a separate ruling, made once the suite is green.
+
+### Rollback
+
+Working tree clean and all nine branches at their origin tip at section start (`master` `687643963`).
+Every change here is a tracked-file edit, so the undo is `git restore <path>` before commit or
+`git revert <sha>` after. Nothing is deleted that is not recoverable from the commit that removed it,
+and nothing outside the repo is touched.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
