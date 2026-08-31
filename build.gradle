@@ -292,6 +292,73 @@ test {
     // across test threads would race. A process fork isolates them for free.
     maxParallelForks = 4
     maxHeapSize = '1g'
+
+    // TODO.md 57 (risk R15). Give the four forks above a mods directory that ALREADY EXISTS, so
+    // fabric-loader never takes its racing create path.
+    //
+    // fabric-loader 0.19.3, DirectoryModCandidateFinder.findCandidates() -- read out of the sources
+    // jar, not recalled:
+    //
+    //     if (!Files.exists(path)) {
+    //         try { Files.createDirectory(path); return; }          // SINGULAR
+    //         catch (IOException e) { throw new RuntimeException("Could not create directory " ...); }
+    //     }
+    //
+    // Files.createDirectory (singular) throws FileAlreadyExistsException when the path exists. On a
+    // FRESH CHECKOUT the directory does not exist, so all four workers evaluate !Files.exists as
+    // true, one wins the create and a loser's exception propagates out of the
+    // FabricLoaderLauncherSessionListener constructor as a ServiceConfigurationError -- killing the
+    // executor before a single test runs. Measured 2026-08-31 on mc/26.1.2's release run
+    // 33445589010: ":test FAILED / Could not start Gradle Test Executor 1", which held that band at
+    // v1.3.3 while the other eight published v1.3.4. loader_version is 0.19.3 on all nine branches,
+    // so this is a coin flip, not a band difference.
+    //
+    // ⚠️⚠️ IT CANNOT REPRODUCE LOCALLY. Any working copy that has ever run this suite already has
+    // an empty untracked mods/ at the repo root, so Files.exists is true and the window never opens.
+    // Green on every developer machine, red only on a fresh checkout -- the same geometry as the
+    // BandVersionLabelTest defect described above, which shipped to five branches.
+    //
+    // 🔑 mods is the ONLY directory at risk, measured rather than assumed: grep for createDirector
+    // over the loader sources returns six sites and this is the sole SINGULAR one. Every other
+    // (configDir, the .fabric cache dir, the deobf jar dir, ModCandidateImpl, BuiltinLogHandler)
+    // uses Files.createDirectories -- plural, which by javadoc contract does not throw when the
+    // directory already exists, because createAndCheckIsDirectory swallows FileAlreadyExistsException
+    // after an isDirectory recheck.
+    //
+    // Why fabric.modsFolder rather than mkdir'ing the repo root's mods/: it keeps an untracked
+    // directory out of the repo root, so .gitignore needs no edit -- and .gitignore is under ship
+    // gate 10's byte-identity guard, where any change is a nine-branch change.
+    //
+    // ⚠️ Deliberately NOT declared as outputs.dir. A declared output invites Gradle's stale-output
+    // cleanup to delete a directory a developer may have put jars in. mkdirs() only: this block
+    // creates and never removes. `gradle clean` dropping it is correct and this doFirst rebuilds it.
+    def testModsDir = layout.buildDirectory.dir('test-mods').get().asFile
+    doFirst {
+        testModsDir.mkdirs()
+        if (!testModsDir.isDirectory()) {
+            throw new GradleException("Could not create the test mods directory ${testModsDir}. "
+                    + "Without it fabric-loader races four forks on Files.createDirectory and the "
+                    + "suite dies before any test runs -- see TODO.md 57.")
+        }
+        // The marker is what stops TestModsDirectoryTest being vacuous. An assertion that the
+        // directory merely EXISTS passes with this whole block reverted, because the loader creates
+        // it itself before any test method runs. The loader never writes a marker, so reverting
+        // this block leaves a bare directory and turns that guard red on EVERY machine -- including
+        // one where the directory already existed, which is the escape a bare existence check
+        // leaves open.
+        // ⚠️ It cannot be mistaken for a mod: isValidFile requires endsWith(".jar").
+        new File(testModsDir, 'mcmmo-test-mods.txt').text =
+                'Created by build.gradle so fabric-loader never races four forks on\n' +
+                'Files.createDirectory. Do not delete -- TestModsDirectoryTest reads it.\n' +
+                'See TODO.md 57.\n'
+        systemProperty 'fabric.modsFolder', testModsDir.absolutePath
+    }
+    // So a changed location re-runs the guard instead of serving a cached pass -- the 2026-08-18
+    // defect, where three real mutations all scored "not caught" because :test never re-ran.
+    // ⚠️ The RELATIVE location on purpose: this build runs with org.gradle.caching=true, and an
+    // absolute path in the cache key would miss the cache on every machine. It still changes
+    // whenever the wiring does, which is all the guard needs.
+    inputs.property 'mcmmo.build.testModsDir', 'build/test-mods'
 }
 
 jar {
