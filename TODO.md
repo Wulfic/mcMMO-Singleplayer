@@ -1402,8 +1402,9 @@ real input domain. Recorded in `gotchas.md`: *"I ran the shipped code" is not th
 
 - ⬜ **`mc-ids.txt` covers 14 versions against a declared scope of 16** — `26.1` and `26.1.1` are
   cached and absent. Adding them is a scope act with a ruling behind it, not a side effect.
-- ⬜ **`coreskills.yml`, `hidden.yml`, `skillranks.yml`, `sounds.yml`** are still outside the gate.
-  Whether they are id-keyed is unmeasured — a question, not a guess.
+- [x] ✅ **ANSWERED by §55, and the question was the wrong one.** **None of the four is id-keyed** —
+  extending `config-id-audit.py` would have reported clean and meant nothing. They are keyed on
+  rosters mcMMO owns, and got a roster guard instead.
 - ⬜ **`Vex: 2.0` and `Creaking: 1.0` are judgement calls**, reasoned per row in the config comment.
   They stop a zero; they are not a measured balance figure and are cheap to retune.
 
@@ -1711,9 +1712,8 @@ no `Chunklets`/`Woodcuting`/`CHIMERA_WING` string anywhere in `src/main/resource
   own — not a widening of this one.
 - ⬜ **`sounds.yml`'s `CustomSoundId` takes a registry id too.** Every shipped value is `''`, so
   there is no defect today and no guard either; it lands with the row above.
-- ⬜ **`hidden.yml`'s header still says *"You will need to reset any values in this config every time
-  you update mcMMO"***, which is false — the file is bundled-only and has no user copy to reset.
-  Left alone to keep this diff to the ruling.
+- [x] ✅ **`hidden.yml`'s false header — CLOSED by §56.1**, together with the same claim in
+  `README.md` and `wiki/Configuration.md`, which was the copy that reached players.
 
 
 ### 55.6 — propagation, and the pre-check that ran BEFORE it
@@ -1781,6 +1781,123 @@ Working tree clean and all nine branches at their origin tip at section start (`
 Every change here is a tracked-file edit, so the undo is `git restore <path>` before commit or
 `git revert <sha>` after. Nothing is deleted that is not recoverable from the commit that removed it,
 and nothing outside the repo is touched.
+
+---
+
+## §56 — the push stays HELD; the four pieces the owner picked instead
+
+**Owner ruling, 2026-08-31 (session 35): HOLD the push.** All nine branches sit **3 ahead, 0 behind**
+their origin with §55 on them, and `v1.3.3` is **already published on all nine** — the tags point at
+the *pre-§55* tips, so `mod_version=1.3.3-SNAPSHOT` is now **stale**. Pushing §55 as it stands fires
+nine release runs that **R-t's stale-version gate refuses**: the §44 shape exactly, where the push
+succeeds and only the release does not. The ruling is to land more work first and bump **once**, so a
+single `1.3.4` carries §55 and whatever §56 turns out to be worth shipping.
+
+⚠️ **The cost of holding, stated rather than discovered later:** `branch-file-identity-audit.py`
+audits **`origin/master`**, so while the hold stands it grades a tree three commits old and reads
+clean no matter what is in the working copy. The same is true of gates 7/9/10/11, which prefer
+**remote** refs. Until the push, every one of those must be run inside
+`git clone --local --no-hardlinks . <scratch>` or it is answering a question nobody asked.
+
+**Scope — the owner picked three of four offered, and §56.5 is the one deliberately NOT taken.**
+
+### 56.1 — a reset that cannot happen — ✅ DONE on `master`, ⬜ not yet propagated
+
+`hidden.yml` opened with *"You will need to reset any values in this config every time you update
+mcMMO"*. **False, and measurably so:** `HiddenConfig#load()` reads
+`getResourceAsStream("/" + fileName)` — the classpath, inside the jar — and `HiddenConfig`
+**does not extend `ConfigLoader`**, so there is no `initConfig` write-out and no
+`copyMissingDefaults` back-fill. Nothing a player could reset, because nothing is on disk.
+The `WARNING: FOR ADVANCED USERS ONLY` line went with it: it addressed a reader who can edit the
+file, and no such reader exists. Header now states the classpath fact and the fail-closed rule.
+
+🔴🔴 **The caveat-expiry sweep found the SAME LIE IN THE PLAYER-FACING DOCS, and that copy is the
+one that mattered.** `README.md` and `wiki/Configuration.md` both list `hidden.yml` in a config
+table introduced by *"Configs are plain YAML, written on first load to `.minecraft/config/mcmmo/`"*.
+That is true of **11 of the 12** bundled `.yml` resources and **false of `hidden.yml` alone** — a
+player following the README goes to that folder, finds no `hidden.yml`, and the docs are simply
+wrong. **The jar comment is read by whoever opens the jar; the table is read by every player.**
+🔑 This is exactly the blind spot `AGENTS.md` names: *grep the **symptom**, not the file you
+edited* — the page carrying the stale claim was neither of the files the fix touched.
+
+**Two guards, both mutation-proven, 8 mutations / 8 caught, each reddening its own named assertion:**
+
+| Guard | Catches |
+|---|---|
+| `HiddenConfigTest#headerDoesNotPromiseAnEditableDiskCopy` | the sentence coming back (M1), the refuting fact being dropped (M2), and — **guard-the-guard** — an empty header slice satisfying both assertions by reading nothing (M3) |
+| `ConfigDocsMatchLoaderTest` (new, `guards/`) | the README row reverting (N1), the wiki row reverting (N2), the keyed row vanishing so the test asserts over nothing (N3), a **13th** bundled `.yml` arriving unclassified (N4), and the code fact flipping under the docs (N5) |
+
+🔑 **`ConfigDocsMatchLoaderTest` asserts BOTH directions on purpose.** A guard that only looks for
+the warning goes permanently green the day `HiddenConfig` is reworked to write itself to disk —
+leaving the docs warning players away from a file now sitting right there. So it measures
+`ConfigLoader.class.isAssignableFrom(HiddenConfig.class)` **first** and holds both documents to
+whichever answer that gives. This is the §55 roster-gate shape: a one-directional check on a fact
+that can move is a check with a scheduled expiry date.
+
+⚠️ **N5 is the weakest of the eight and is labelled as such.** Making `HiddenConfig` genuinely
+extend `ConfigLoader` is not a cheap mutation, so N5 flips the test's own helper instead of
+production code. It proves the inverse branch is **reachable and asserting**; it does not prove the
+reflection predicate reads the real hierarchy correctly. The other seven mutate shipped files.
+
+⚠️ **What neither guard can see:** a differently-worded false claim. Both pin the sentence that
+actually shipped plus the fact that refutes it — revert detectors, not proof that every future
+header is honest.
+
+**Suite on `master`: 169 classes / 1,879 executed / 0 failures** — up from 168 / 1,876, exactly the
++1 class and +3 tests added here, read off the JUnit XML rather than off `BUILD SUCCESSFUL`.
+
+- [x] `hidden.yml` header rewritten; CRLF and the absent trailing newline preserved byte-for-byte
+- [x] `README.md` + `wiki/Configuration.md` config-table row corrected (⚠️ both are under **R-y**'s
+      identity guard, so the two edits must reach every branch **byte-identical**)
+- [x] both guards written, both mutation-proven, full suite green
+- [ ] ⬜ **propagate to all eight bands** — both commits touch `src/`, so `drift-audit.py` tracks
+      them and §55's hand-propagation dance is not needed here
+
+### 56.2 — the six bands that are propagated but NEVER BUILT
+
+`mc/1.21.11`, `mc/1.21.10`, `mc/1.21.8`, `mc/1.21.5`, `mc/1.21.4`, `mc/1.21.3` carry §55 and were
+verified **statically only** — identical rosters, and the changed files touch no MC type. That is a
+good argument and it is not a build.
+
+🔑 **56.1 lands FIRST and propagates FIRST.** Building six bands against a tree that is about to
+change once more is six builds spent on a state that will not ship. Order is: fix, propagate,
+then build.
+
+Per band: `./gradlew build` green, and the **`N executed` line** read off the test result, never
+`BUILD SUCCESSFUL` — ⚠️ a `:test` that is UP-TO-DATE prints success having run nothing, which is how
+§55 nearly recorded a 9-second suite. `--rerun-tasks` when in doubt.
+
+### 56.3 — carried debt, the three cheap-to-bounded rows
+
+- ⬜ **`mc-ids.txt` covers 14 of the 16 declared versions** — `26.1` and `26.1.1` are Loom-cached and
+  absent. Regenerate with `scripts/extract-mc-ids.py` (⚠️ dry-run by default, `--write` to apply).
+  🔑🔑 **`mc-ids.txt` is a fact about Minecraft, not about a branch — CHERRY-PICK it to every band,
+  never regenerate it per band.** That is the exact inverse of the `mc-surface.txt` rule; do not
+  carry that one over. It also sits under `scripts/**`, so `branch-file-identity-audit.py` requires
+  every branch to hold byte-identical bytes.
+- ⬜ **Gate 5 (`brew-smoke.sh`) has no recorded `26.2` run.** Run it and record the number. If it
+  needs a live server this is owner-only work and says so here rather than being quietly skipped.
+- ⬜ **`build/libs/` holds 61 jars / 76 MB and `build` never cleans it.** 🔴 **Destructive — five
+  gates before a single file is removed.** Resolve the target by listing it, prove recoverability
+  (every jar is rebuildable from a committed tag, which is the recovery path — name it), dry-run the
+  deletion, narrow to the jars that are actually stale, and write the undo. Not a `rm -rf build/libs`.
+
+### 56.4 — manifest debt, piece 1 (Tier 2 — plan before code)
+
+Validate manifest symbols against the band's merged jar; refuse a manifest naming a symbol the band
+does not have. Needs a Loom-cached jar and `probe-bands.py`'s resolver.
+⚠️ **It would not have caught the `1c480efc4` incident** — every symbol in that blob was real.
+🔑🔑 That blob was a **perfectly valid manifest for the wrong branch**, and no per-branch check can
+tell that from a correct one, because on the branch it came from every record is true. This piece is
+the only instrument that can, and it is the reason the row is still open.
+**This is the one piece that gets its own written plan and a decision record before any code.**
+
+### 56.5 — NOT doing this section: `SoundType`'s unvalidated registry ids
+
+Offered and **not** picked. `SoundType` carries a `minecraft:` sound-event id per constant and
+nothing validates them; `sounds.yml`'s `CustomSoundId` takes one too (every shipped value is `''`,
+so no defect today). It needs the **MC sound registry**, not `mc-ids.txt`'s three id kinds, so it
+stays a section of its own. Recorded here so it is not silently absorbed into 56.3's id work.
 
 ---
 
