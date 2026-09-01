@@ -2269,6 +2269,27 @@ which `.gitignore` already covers via `build/` and `**/build/`. That is the poin
 there: `.gitignore` is under ship gate 10's byte-identity guard, so an edit to it is a nine-branch
 change.
 
+
+### Gate 1 — all nine branches built with the release command
+
+`./gradlew --no-daemon --stacktrace build -Pmod_version=1.3.4`, tally read off the **JUnit XML**,
+never off `BUILD SUCCESSFUL`, with `> Task :test` asserted **bare** on every one.
+
+| branch | classes / tests / fail / err / skip | guard |
+|---|---|---|
+| `master` | 170 / 1882 / 0 / 0 / 0 | 2 / 0 / 0 |
+| `mc/26.1.2` | 170 / 1882 / 0 / 0 / 0 | 2 / 0 / 0 |
+| `mc/1.21.11` | 169 / 1876 / 0 / 0 / 0 | 2 / 0 / 0 |
+| `mc/1.21.10` | 169 / 1876 / 0 / 0 / 0 | 2 / 0 / 0 |
+| `mc/1.21.8` | 169 / 1876 / 0 / 0 / 0 | 2 / 0 / 0 |
+| `mc/1.21.5` | 169 / 1877 / 0 / 0 / 0 | 2 / 0 / 0 |
+| `mc/1.21.4` | 171 / 1884 / 0 / 0 / 0 | 2 / 0 / 0 |
+| `mc/1.21.3` | 170 / 1878 / 0 / 0 / 0 | 2 / 0 / 0 |
+| `mc/1.21.1` | 169 / 1880 / 0 / 0 / 0 | 2 / 0 / 0 |
+
+🔑 **The differing per-band totals are the evidence each branch ran its OWN suite** — the same
+reasoning gate 12's differing record counts carry. A uniform number across nine branches would be
+the suspicious result, not this.
 ### Steps
 
 - [x] `build.gradle` — `doFirst` block: create `build/test-mods`, write the marker, export
@@ -2278,10 +2299,10 @@ change.
 - [x] **mutation-prove the guard** — revert the `doFirst` and confirm it goes red, and confirm the
       naive existence-only assertion would have stayed **green** (that is the measurement that
       justifies the marker, not the argument above it)
-- [ ] propagate to all eight bands — `build.gradle` and `src/` are both tracked by
+- [x] propagate to all eight bands — `build.gradle` and `src/` are both tracked by
       `drift-audit.py`, so a normal cherry-pick with `Backport-of:` is enough
-- [ ] gates 7/9/10/11 in a local clone (all four prefer remote refs)
-- [ ] `.agent/memory/` — this is a third fork race in one repo, and the reasoning belongs in
+- [x] gates 7/9/10/11 in a local clone (all four prefer remote refs)
+- [x] `.agent/memory/` — this is a third fork race in one repo, and the reasoning belongs in
       `gotchas.md` beside R14's
 
 ---
