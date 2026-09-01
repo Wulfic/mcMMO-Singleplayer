@@ -2649,10 +2649,15 @@ the mutation harness scored 6/6 and proved nothing.
 
 - **Not a build.** These are the shipped artifacts, chosen deliberately (see the ruling above); the
   eight unpushed commits are absent from them and cannot be otherwise, since none touches `src/main`.
-- **Not the seven versions a band covers but does not pin.** Each band was booted at its
-  `minecraft_version` only. `mc/1.21.8` ships to `1.21.6` and `1.21.7` as well, and neither was
-  booted here. **Gate 12 validates the manifest across the whole declared range; gates 3/5/6 do not**,
-  and that asymmetry is now the largest remaining hole in this area.
+- **Not the versions a band covers but does not pin — SEVEN of them, across FIVE bands.**
+  Each band was booted at its `minecraft_version` only. Measured, after this bullet first
+  understated it as one band's problem: `mc/26.1.2` never ran `26.1`/`26.1.1`, `mc/1.21.8`
+  never ran `1.21.6`/`1.21.7`, `mc/1.21.10` never ran `1.21.9`, `mc/1.21.3` never ran
+  `1.21.2`, `mc/1.21.1` never ran `1.21`. **Gate 12 spans the declared range; gates 3/5/6 do
+  not.** Written up as its own row under Carried debt, because a caveat buried in a section
+  is exactly the shape that just cost this repo a cycle — 9.5's stale caveat was relayed to
+  another session as fact the same day. 🔑 It is §56.4's defect in three more instruments:
+  **fixing an instrument does not fix the class.**
 - **Not Trophy Hunter.** Still rank-gated and the smoke player is Hunter 0 — unchanged by this work.
 - **Not the live play-test.** Owner only, and still the oldest debt in the queue.
 ### Rollback
@@ -2920,6 +2925,39 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
 ---
 
 ## Carried debt (open items only — closed rows are in the archives)
+
+- [ ] 🔴 **SEVEN DECLARED VERSIONS ACROSS FIVE BANDS HAVE NEVER BEEN BOOTED, BREWED OR PLAYED.**
+      Raised by §59, measured across all nine `supported_minecraft_versions` (2026-09-01):
+
+      | band | declared | primary | NEVER exercised by gates 3/5/6 |
+      |---|---|---|---|
+      | `mc/26.1.2` | `26.1, 26.1.1, 26.1.2` | `26.1.2` | **`26.1`, `26.1.1`** |
+      | `mc/1.21.8` | `1.21.6, 1.21.7, 1.21.8` | `1.21.8` | **`1.21.6`, `1.21.7`** |
+      | `mc/1.21.10` | `1.21.9, 1.21.10` | `1.21.10` | **`1.21.9`** |
+      | `mc/1.21.3` | `1.21.2, 1.21.3` | `1.21.3` | **`1.21.2`** |
+      | `mc/1.21.1` | `1.21, 1.21.1` | `1.21.1` | **`1.21`** |
+
+      `master`, `mc/1.21.11`, `mc/1.21.5` and `mc/1.21.4` declare exactly their primary and are
+      genuinely covered. **§59 ran all nine bands green — at `minecraft_version` only.**
+      🔑🔑 **This is §56.4's defect reappearing in three more gates, and that is the point.** §56.4
+      found *"the manifest control validated ONE version while a band ships a RANGE"* and fixed it
+      **for `probe-bands.py` alone** (gate 12, which now spans `supported_minecraft_versions`).
+      Gates **3, 5 and 6 still mean per-PRIMARY-VERSION while calling themselves per-band.**
+      **Fixing an instrument does not fix the CLASS.** A player installing the band's jar on `1.21.6`
+      — which the release page tells them is supported — is running a configuration no gate has ever
+      executed. ⚠️ **It is also not hypothetical for `26.1`/`26.1.1`**: those two were the exact pair
+      §56.3 found gate 4 was blind to on a shipped band.
+      ✅ **Mechanically closable — measured, not assumed.** Every one of the seven has fabric-api
+      builds on `maven.fabricmc.net` (`1.21`→23, `1.21.2`→15, `1.21.6`→27, `1.21.7`→4, `1.21.9`→24,
+      `26.1`→34, `26.1.1`→3), and gates 3 and 6 already take `<jar> <MC> <loader> <fapi>` as
+      arguments, so they need no change at all — only driving.
+      🔴 **Gate 5 is the one that cannot**: `brew-smoke.sh` reads `minecraft_version`,
+      `loader_version` and `fabric_version` from `gradle.properties` with **no override**, so it can
+      only ever test a band's primary. Its two siblings take them as arguments. Closing gate 5's half
+      means giving it the same three arguments — a real change to a shared script, and therefore a
+      cherry-pick to all nine branches under the identity guard.
+      ⚠️ **Do not close this row by running gates 3 and 6 alone and calling the range covered** —
+      that is the same "one instrument fixed, class still open" move this row exists to name.
 
 - [x] ✅ **`-Xmaxerrs` — CLOSED 2026-08-26 (§44).** Lifted to 10,000 on `master` (`ee1340bd7`) and
       cherry-picked to all eight bands; all nine built green. Guarded by `CompilerErrorCapTest`,
