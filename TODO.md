@@ -38,10 +38,10 @@ status, because nothing reads it.** Re-measure before quoting this table.
 |---|---|
 | branches | **NINE, all on the remote.** `master` (`26.2`) + `mc/26.1.2` + the seven `1.21.x` bands |
 | vs `origin` | 🔴 **THIS ROW NO LONGER CARRIES A NUMBER, AND THAT IS THE FIX.** It was wrong **three times in three commits** — `1` when the truth was `2`, corrected to `3` and stale one commit later, then `six` written into the commit that made it seven. **A status row cannot count the commit it is written in**, so it stops trying. The measurement is one command and it is never stale: `git rev-list --left-right --count origin/<b>...<b>` per branch, or the loop over all nine in `.agent/memory/state.md`. What is *structurally* true: nothing is behind. ✅ **The skew that stood here is GONE** — §49 closed it and §50 pushed all nine again; every branch measured `0 behind / 5 ahead` immediately before the §50 push and `0 / 0` after. Re-measure rather than trusting this sentence |
-| `master` | `minecraft_version=26.2`, `java_version=25`, `mod_version=1.3.2-SNAPSHOT` |
-| releases | **NINE published at `v1.3.2`** (§50) — the declared 16-version scope is downloadable, and the amethyst/chain bonus-drop fix is in every one. Verified by `gh release list` + `git ls-remote --tags`, **zero drafts, zero prereleases**; §49's nine `v1.3.1` releases were **reaped by the success sweep**, one per Minecraft line, exactly as designed |
+| `master` | `minecraft_version=26.2`, `java_version=25`. 🔴 **`mod_version` LEFT THIS ROW ON PURPOSE.** It sat here reading `1.3.2-SNAPSHOT` through the `1.3.3` **and** `1.3.4` bumps. It is also never a `master` fact: **R-p** requires it identical on all nine and **gate 11** enforces that, so a value written here is a value that rots on nine branches at once. Measure it: `grep -E '^mod_version=' gradle.properties`, on the branch you are on |
+| releases | 🔴 **THIS ROW NO LONGER CARRIES A VERSION, AND THAT IS THE FIX** — the same remedy the `vs origin` row above already arrived at. It said `v1.3.2` while `v1.3.3` and then `v1.3.4` were the published set. What is *structurally* true: **nine releases, one per band**, tagged `mc<VER>-v<mod_version>`, and the declared 16-version scope is downloadable only when all nine are green. `gh release list` is the one thing that answers *“did it ship”* — ⚠️ a branch **agreeing** on `mod_version` is not evidence it released (gate 11), and §57 found one band of nine silently stuck a release behind. ⚠️ Deleting a tag **DRAFTS** its release; never undo one that way |
 | build | ✅ **green on all nine**, each built on its own band this session (§44.3) |
-| suite | ✅ **0 failures on all nine.** `master` **1,869** and `mc/1.21.1` **1,867** re-measured locally in §50 (+4 from `ConfigYamlBonusDropsTest`); the other seven last measured 1,855–1,863 and each went green again in its own §50 release run. ⚠️ The spread is per-band gating, not a master-vs-band split |
+| suite | ✅ **0 failures.** `master` measured **2026-09-01**: **170 classes / 1,882 executed / 0 failures / 0 skipped**, read off the JUnit XML with `> Task :test` confirmed **bare** (not `FROM-CACHE`) under `--no-build-cache cleanTest test`. 🔴 **This is a FOURTH figure, not a tie-break over the other three** — 1,869 (§50), 1,879 (§56.1) and gate 1's old `~1719` were each correct when written, and §57 and §56.4 landed between them. ⚠️ **Per-band counts legitimately DIFFER** and the spread is per-band gating — §56.2's table holds **six distinct totals across eight bands**. ⚠️ **Those figures predate §57 and §56.4, so they do not subtract against this one.** **Re-measure your own branch; never match someone else's total** |
 | gates 7/9/10/11 | ✅ **exit 0, none exit 2**, re-measured in §50 on a fresh `git clone --local --no-hardlinks` carrying all nine §50 tips. Gate 8 (`ci-watch.sh`) also exit 0 post-push, with all 5 mutations caught. ⚠️ All four prefer **remote** refs, so push first or clone locally |
 | mixin gate | ✅ `--check` passes on `master` and `mc/26.1.2` (`ZERO=0 OK=60 SLICE=1`) |
 | boot | ✅ `26.2` (§35) and ✅ `26.1.2` (§43.1, exit 0, 0 ERROR, 0 mixin failures) |
@@ -404,6 +404,15 @@ The band cannot run its own gates until its tooling speaks official names.
 - [ ] ⬜ **`TODO.md`'s one-blob-on-every-branch invariant.** `master` no longer describes the same
       product as the bands, so propagation cannot fix the drift this time. Decide at 9.5 whether the
       invariant survives the `26.x` split at all.
+      📌 **Measured 2026-09-01: the invariant HOLDS — `git rev-parse <b>:TODO.md` is one blob on
+      all nine.** 🔴 **That measurement does NOT answer this row, and must not be read as closing it.**
+      The row is about whether the CONTENT is true per band; byte-identity is a fact about BYTES. Nine
+      identical copies of a document describing `master` is exactly consistent with the concern — it is
+      arguably the concern itself. **R-y's first run found `master` and five bands serving a claim that
+      was FALSE on `mc/1.21.1`, with byte-identity intact throughout, and the BAND was right.**
+      🔑 **Cross-branch equality is not correctness.** What the measurement does buy: declining to
+      propagate a `TODO.md` edit would break a nine-way identity by OMISSION, which is this row being
+      decided by default rather than at 9.5.
 
 ### 🔑🔑 The five blind spots §29 – §33 found — every one read GREEN on every gate
 
@@ -1801,7 +1810,7 @@ clean no matter what is in the working copy. The same is true of gates 7/9/10/11
 
 **Scope — the owner picked three of four offered, and §56.5 is the one deliberately NOT taken.**
 
-### 56.1 — a reset that cannot happen — ✅ DONE on `master`, ⬜ not yet propagated
+### 56.1 — a reset that cannot happen — ✅ DONE on `master` **and propagated to all eight bands**
 
 `hidden.yml` opened with *"You will need to reset any values in this config every time you update
 mcMMO"*. **False, and measurably so:** `HiddenConfig#load()` reads
@@ -2567,8 +2576,18 @@ inert on every band by construction. **The other seven have no automation whatso
 ⚠️ **Twelve gates are listed. Update this sentence when you add one; nothing else counts them.**
 
 1. `./gradlew --no-daemon --stacktrace build -Pmod_version=$(grep -E '^mod_version=' gradle.properties | cut -d= -f2 | sed 's/-SNAPSHOT$//')`
-   — exit 0, suite green, count matching `master` (~1719). A lower count means something was disabled
-   to get there.
+   — exit 0, suite green. 🔴 **DO NOT MATCH `master`'s TOTAL.** This line read *“count
+   matching `master` (~1719)”* long after the real figure passed 1,800 — and the stale number hid a
+   second defect in the instruction itself: **per-band counts are SUPPOSED to differ.** §56.2's
+   table spans **six distinct totals across its eight bands** (1,873 ×3 · 1,874 · 1,875 · 1,877 ·
+   1,879 · 1,881). **Differing counts are the evidence each branch ran its OWN suite; a uniform
+   number would be the suspicious result.** Read your own branch's `N executed` off the JUnit XML
+   and compare it against **that branch's** last recorded figure — §56.2 for the eight bands, the
+   status table above for `master`. A count that DROPS means something was disabled to get there.
+   ⚠️ **Do not compare across dates.** §23's finding that bands run *higher* than `master` was
+   true when measured; `master` measured **1,882** on 2026-09-01, above every figure in §56.2's
+   table — because those predate §57 and §56.4, not because a band lost tests. **A band figure and
+   a `master` figure from different dates do not subtract.**
 
    ⚠️⚠️ **The `-Pmod_version` override is NOT decoration.** A bare `./gradlew build` is not what CI
    runs, and that gap is how §10.7 shipped a guard green on all five branches and red on every
@@ -2756,8 +2775,21 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
       ⚠️ R14's originally-recorded remedy (`-XX:+EnableDynamicAgentLoading`) was **wrong**: it is
       compared against a warning string and never reaches the self-attaching call. Do not re-add it.
 
-- [ ] 🔴 **Manifest debt piece 1** — see *Other open work*. Piece 2 shipped as
+- [x] ✅ **Manifest debt piece 1 — CLOSED by §56.4 as ship gate 12.** Piece 2 shipped as
       `scripts/manifest-identity-audit.py` (Phase 18).
+      🔑 **This row and *Other open work* disagreed — one ⬜, one ✅ — and the disagreement was
+      resolved by reading the CODE, not by trusting the more recently edited row.** Piece 1 asked to
+      *“validate manifest symbols against the band's merged jar; refuse a manifest naming a symbol
+      the band does not have.”* `probe-bands.py --check` resolves every `mc-surface.txt` record
+      against the merged jar of every declared version and returns **exit 3** with `❌ SHIPPING
+      DEFECT` when one is absent. That is the mechanism, and it is **wider** than asked (every
+      version in `supported_minecraft_versions`, not just the primary).
+      🔴 **But the row's stated RATIONALE was false and does not close with it.** It claimed *“only
+      this piece can”* tell a correct manifest from a correct manifest belonging to another branch.
+      It cannot: §39 measured the `26.x` bands as differing on **zero of 1,424** records, so a manifest
+      swapped between them resolves clean on both and gate 12 is blind there **by construction**.
+      That case belongs to gate **10** (`manifest-identity-audit.py`, byte identity). ⚠️ **Closing a
+      mechanism does not close the claim someone attached to it.**
 - [ ] 🟡 **The `--require-bands` floors are hand-maintained** in `.github/workflows/drift-audit.yml`
       and in ship-gate steps 9, 10 and 11. **Now 8**, raised in §43.3 in the same push that put
       `mc/26.1.2` and `mc/1.21.11` on the remote. ⚠️ **8, not 9** — `--require-bands` counts
