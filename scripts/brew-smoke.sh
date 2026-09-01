@@ -7,9 +7,16 @@
 #   scripts/brew-smoke.sh                                   # the default discriminating brew
 #   scripts/brew-smoke.sh mcmmo   <ingredient> <base>       # one side only
 #   scripts/brew-smoke.sh vanilla <ingredient> <base>       # the control
-#   scripts/brew-smoke.sh --self-test                       # prove the jar-resolution refusal
+#   scripts/brew-smoke.sh --self-test                       # prove the refusals, 12 cases
 #
 #   BREW_SMOKE_JAR=<path>   the jar under test, when build/libs holds more than one
+#   BREW_SMOKE_MC=<ver>     test a version OTHER than gradle.properties' minecraft_version
+#   BREW_SMOKE_LOADER=<ver> ) each defaults to gradle.properties; set them together when
+#   BREW_SMOKE_FAPI=<coord> ) brewing on a version the branch does not pin
+#
+# ⚠️ A band ships a RANGE and gradle.properties pins ONE version of it. Without those three this
+# gate could only ever test a band's PRIMARY, which is how seven declared versions across five
+# bands were never brewed on — see §60. Its siblings take them as $2/$3/$4 and always could.
 #
 # 🔑🔑 WHY THE CONTROL RUN EXISTS, AND WHY IT IS NOT OPTIONAL.
 # The obvious smoke test — brew water + sugar and check you get mundane — proves nothing: vanilla
@@ -42,7 +49,23 @@ INGREDIENT="${2:-minecraft:golden_apple}"
 BASE="${3:-minecraft:awkward}"
 
 prop() { grep -E "^$1=" "$REPO/gradle.properties" | head -n1 | cut -d= -f2- | tr -d '[:space:]'; }
-MC="$(prop minecraft_version)"; LOADER="$(prop loader_version)"; FAPI="$(prop fabric_version)"
+
+# A band ships a RANGE and gradle.properties pins ONE version of it, so reading these three
+# straight off the file meant this gate could only ever test a band's PRIMARY. Its two siblings
+# (boot-check.sh, gameplay-smoke.sh) take them as $2/$3/$4 and have always been able to test the
+# rest; only this one could not, which is why seven declared versions across five bands had never
+# been brewed on. Env vars rather than positionals 4-6 because slots 1-3 are MODE/INGREDIENT/BASE
+# and BREW_SMOKE_JAR already settled the convention here: the important argument does not get
+# buried behind two optional ones.
+# In a function, not three bare assignments, so --self-test can exercise the PRECEDENCE rather
+# than assert against whatever this checkout's gradle.properties happens to say today.
+resolve_version_triple() {
+    printf '%s|%s|%s\n' \
+        "${BREW_SMOKE_MC:-$(prop minecraft_version)}" \
+        "${BREW_SMOKE_LOADER:-$(prop loader_version)}" \
+        "${BREW_SMOKE_FAPI:-$(prop fabric_version)}"
+}
+IFS='|' read -r MC LOADER FAPI <<< "$(resolve_version_triple)"
 INSTALLER="1.1.2"
 
 # --- which jar is under test ---------------------------------------------------------------------
@@ -84,6 +107,49 @@ resolve_mod_jar() {
     esac
 }
 
+# --- fabric-api: cache, then download, then REFUSE ------------------------------------------------
+# 🔑 THIS USED TO BE `[[ -n "$fapi_jar" ]] && cp ...` WITH NO `else`, so a cache miss staged NO
+# fabric-api and the run carried on regardless. mcMMO depends on fabric-api, so loader then refuses
+# to load the mod and the mcmmo side fails to brew -- a false RED, reported as "the mod is broken"
+# when the truth is "the environment lacks a dependency". That is precisely the distinction exit 2
+# exists for, and boot-check.sh has guarded it all along; this script had the same failure mode and
+# none of the guard.
+# ⚠️ It was UNREACHABLE until 2026-09-01 and that is the whole lesson: Loom caches fabric-api for
+# the version it built against, so the cache ALWAYS hits for a band's primary -- the only version
+# this gate could test before BREW_SMOKE_MC existed. A guard's absence is invisible while the
+# only inputs anyone can supply happen to avoid the hole.
+# BREW_SMOKE_FAPI_CACHE exists for the self-test, mirroring BOOT_CHECK_FAPI_CACHE.
+stage_fapi() {
+    local dest="$1"
+    local cache_root="${BREW_SMOKE_FAPI_CACHE:-$HOME/.gradle/caches/modules-2/files-2.1/net.fabricmc.fabric-api/fabric-api}"
+    local cache_dir="$cache_root/$FAPI"
+    local url="https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/${FAPI}/fabric-api-${FAPI}.jar"
+    local jar
+    jar="$(find "$cache_dir" -name "fabric-api-${FAPI}.jar" 2>/dev/null | head -1)"
+
+    if [[ -n "$jar" ]]; then
+        cp "$jar" "$dest/" || { echo "error: could not copy $jar" >&2; return 2; }
+        echo "=== fabric-api $FAPI staged from the Gradle cache" >&2
+        return 0
+    fi
+    echo "=== fabric-api $FAPI is not in the Gradle cache; fetching $url" >&2
+    if curl -fsS --max-time 300 -o "$dest/fabric-api-${FAPI}.jar" "$url"; then
+        echo "=== fabric-api $FAPI staged from maven.fabricmc.net" >&2
+        return 0
+    fi
+    rm -f "$dest/fabric-api-${FAPI}.jar"
+    {
+        echo "❌ ENVIRONMENT: could not stage fabric-api ${FAPI} for MC ${MC}."
+        echo "   cache: $cache_dir"
+        echo "   url  : $url"
+        echo "   Refusing to brew without it. Without fabric-api the mod does not load at all, so"
+        echo "   the mcmmo side fails exactly like a broken mod would -- and this gate's whole job"
+        echo "   is telling those two apart."
+        echo "   Fix: BREW_SMOKE_FAPI=<coordinate>, or build once against this MC version."
+    } >&2
+    return 2
+}
+
 # --- self-test -----------------------------------------------------------------------------------
 # ⚠️ The converse cases are not decoration. A resolver that refused EVERYTHING would satisfy the
 # ambiguity assertion perfectly and break the harness for every real run.
@@ -115,6 +181,79 @@ if [[ "$MODE" == "--self-test" ]]; then
     chk "TWO jars             -> exit 2, REFUSES to guess"   "$tmp/two"   "" 2 ""
     chk "override wins over ambiguity"                       "$tmp/two"   "$tmp/one/mcmmo-1.1.0+mc1.21.11.jar" 0 "$tmp/one/mcmmo-1.1.0+mc1.21.11.jar"
     chk "override at a missing path -> exit 2"               "$tmp/one"   "$tmp/nope.jar" 2 ""
+
+    # --- version resolution ----------------------------------------------------------------
+    # The gate could only ever test a band's PRIMARY until these three existed, which is how
+    # seven declared versions across five bands went unbrewed. Assert the PRECEDENCE, not the
+    # value: an assertion against this checkout's gradle.properties would pass on master and
+    # mean nothing on a band.
+    # Calls the REAL resolve_version_triple in a subshell, exactly as the jar cases call the real
+    # resolve_mod_jar. An earlier draft re-implemented the lookup inside `bash -c` and tested a
+    # copy of the logic rather than the logic -- which is its own kind of vacuous.
+    # ⚠️ `export` with no arguments prints every declaration to stdout, so the empty case is guarded
+    # rather than passed through as `export ""`.
+    vchk() { # name, env assignments (as a string), want
+        local name="$1" envs="$2" want="$3" got
+        got="$( [[ -n "$envs" ]] && eval "export $envs"; resolve_version_triple )"
+        if [[ "$got" == "$want" ]]; then
+            echo "  PASS  $name"; pass=$((pass+1))
+        else
+            echo "  FAIL  $name: got '$got' want '$want'"; fail=$((fail+1))
+        fi
+    }
+    dflt="$(prop minecraft_version)|$(prop loader_version)|$(prop fabric_version)"
+    echo
+    echo "brew-smoke self-test: version resolution"
+    vchk "no env            -> gradle.properties (the old behaviour still holds)" "" "$dflt"
+    vchk "all three set     -> env wins"  "BREW_SMOKE_MC=1.21.6 BREW_SMOKE_LOADER=9.9.9 BREW_SMOKE_FAPI=0.1+1.21.6" "1.21.6|9.9.9|0.1+1.21.6"
+    vchk "only MC set       -> the OTHER two still fall back" "BREW_SMOKE_MC=1.21.7" "1.21.7|$(prop loader_version)|$(prop fabric_version)"
+
+    # --- fabric-api staging ----------------------------------------------------------------
+    # ⚠️ The cache-hit case is the converse and is not decoration: a stager that refused
+    # everything would satisfy the 404 assertion perfectly and break every real run.
+    mkdir -p "$tmp/bin" "$tmp/emptycache" "$tmp/dest"
+    cat > "$tmp/bin/curl" <<'STUB'
+#!/usr/bin/env bash
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --max-time) shift 2 ;;
+    -o) out="$2"; shift 2 ;;
+    -*) shift ;;
+    *)  shift ;;
+  esac
+done
+[ -n "$out" ] && [ "${STUB_CURL_RC:-0}" = "0" ] && : > "$out"
+exit "${STUB_CURL_RC:-0}"
+STUB
+    chmod +x "$tmp/bin/curl"
+    mkdir -p "$tmp/hitcache/$FAPI"; : > "$tmp/hitcache/$FAPI/fabric-api-${FAPI}.jar"
+
+    fchk() { # name, cache_root, stub_rc, want_rc, want_staged(1/0)
+        local name="$1" cache="$2" stub="$3" want_rc="$4" want_staged="$5" rc staged
+        rm -rf "$tmp/dest"; mkdir -p "$tmp/dest"
+        ( export BREW_SMOKE_FAPI_CACHE="$cache"
+          [[ -n "$stub" ]] && export PATH="$tmp/bin:$PATH" STUB_CURL_RC="$stub"
+          stage_fapi "$tmp/dest" ) >/dev/null 2>&1
+        rc=$?
+        staged=$(ls "$tmp/dest" 2>/dev/null | grep -c "fabric-api")
+        if [[ "$rc" == "$want_rc" && "$staged" == "$want_staged" ]]; then
+            echo "  PASS  $name (exit $rc, staged=$staged)"; pass=$((pass+1))
+        else
+            echo "  FAIL  $name: exit=$rc (want $want_rc) staged=$staged (want $want_staged)"; fail=$((fail+1))
+        fi
+    }
+    echo
+    echo "brew-smoke self-test: fabric-api staging"
+    # 🔑 The cache-hit case pairs a populated cache with a curl that CANNOT succeed, and that
+    # pairing is the whole assertion. Run with a working network it proves nothing: bypass the
+    # cache entirely and the download quietly fetches the same jar, so the case passes with the
+    # cache path dead. Measured -- mutation M3 (`if [[ -n "$jar" ]]` -> `if false`) went UNCAUGHT
+    # until the failing curl was added. "Something got staged" is not "the cache was used".
+    fchk "cache hit, network BROKEN -> staged anyway (proves the cache path)" "$tmp/hitcache" 22 0 1
+    fchk "cache miss + fetch -> staged from maven, proceeds"   "$tmp/emptycache" 0   0 1
+    fchk "cache miss + 404   -> exit 2 (ENVIRONMENT), stages nothing" "$tmp/emptycache" 22 2 0
+
     echo
     echo "  $pass passed, $fail failed"
     [[ "$fail" -eq 0 ]]; exit $?
@@ -143,10 +282,7 @@ run_one() {
     fi
 
     rm -f "$work"/mods/*.jar
-    local fapi_jar
-    fapi_jar="$(find "$HOME/.gradle/caches/modules-2/files-2.1/net.fabricmc.fabric-api/fabric-api/$FAPI" \
-        -name "fabric-api-${FAPI}.jar" 2>/dev/null | head -1)"
-    [[ -n "$fapi_jar" ]] && cp "$fapi_jar" "$work/mods/"
+    stage_fapi "$work/mods" || return 2
     if [[ "$mode" == "mcmmo" ]]; then
         # Already resolved (and proven unambiguous) at startup; this is the belt to that braces.
         [[ -n "$MOD_JAR" && -f "$MOD_JAR" ]]\
