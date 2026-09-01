@@ -90,6 +90,27 @@ KINDS = (BLOCK, ENTITY, ITEM)
 # that appears in the manifest while the lookup stays the registry's real id.
 REGISTRY_ID = {BLOCK: "minecraft:block", ENTITY: "minecraft:entity_type", ITEM: "minecraft:item"}
 
+# 🔑🔑 SECTION 58 -- EVERY KIND IS EITHER CROSS-CHECKED OR DECLARED UNCHECKABLE, WITH ITS REASON.
+#
+# The producer is GENERIC and `cross_validate` is HAND-WRITTEN PER KIND. A kind added to KINDS and
+# REGISTRY_ID therefore flows through registry_ids() for free and lands, silently, in the
+# "generated but never cross-validated" state -- the state that is documented and asserted for
+# ENTITY and would be ACCIDENTAL for the next one. From outside, a deliberate exclusion and a
+# forgotten one produce the identical clean run.
+#
+# `set(REGISTRY_ID) == set(KINDS)` cannot see that: it proves a kind is MAPPED to a registry, which
+# is a different claim. So the partition is declared here and asserted in the self-test, and a new
+# kind FAILS THE SELF-TEST until somebody classifies it. That failure is the feature.
+#
+# UNCHECKABLE is a dict rather than a set because the REASON is the load-bearing part: a bare set
+# would let a kind be excused by being listed, which is how "temporarily skip this" becomes
+# permanent. The self-test requires a non-empty reason.
+CROSS_CHECKED = frozenset({BLOCK, ITEM})
+UNCHECKABLE = {
+    ENTITY: "no asset counterpart -- entities have no assets/minecraft/items/ or blockstates/ "
+            "tree, so there is no second source to compare the registry dump against",
+}
+
 # The two ids that have a blockstates/ file and are not in the block registry. Entities whose
 # models are declared as blockstates. Verified present on all 12 cached versions 1.21 - 1.21.11.
 #
@@ -343,9 +364,14 @@ def cross_validate(version: str, registry: dict[str, set[str]],
     function would either fail on every version or, with a lenient direction, report a clean pass
     for a comparison that never happened. §52 adds the kind; it does not pretend to validate it.
     """
-    assert ENTITY not in assets, (
-        "asset_ids() produced an ENTITY set. There is no asset source for entities, so this is a "
-        "bug rather than new coverage -- refusing to cross-check against it.")
+    # §58: was `assert ENTITY not in assets`. Hard-coding the one name meant a SECOND
+    # declared-uncheckable kind would not be refused here -- the guard would silently cover one
+    # member of a set it appears to be about.
+    for kind, why in UNCHECKABLE.items():
+        assert kind not in assets, (
+            f"asset_ids() produced a {kind!r} set, but {kind!r} is declared UNCHECKABLE ({why}). "
+            f"That is a bug rather than new coverage -- refusing to cross-check against it. If it "
+            f"genuinely has a second source now, move it to CROSS_CHECKED and give it a leg below.")
     problems = []
     missing = assets[ITEM] - registry[ITEM]
     extra = registry[ITEM] - assets[ITEM]
@@ -494,6 +520,66 @@ def self_test() -> int:
         if not cond:
             failures.append(f"{name}: {detail}")
 
+    # --- §58: MAPPED is not CROSS-CHECKED. Four claims, and the last is the only one that is not
+    #     a naming exercise.
+    #
+    # 🔴🔴 THIS BLOCK RUNS FIRST, AND THE ORDER IS LOAD-BEARING -- it was written second and moved.
+    # Every fixture below is keyed by the three kinds that exist today, so a FOURTH kind raises
+    # `KeyError` inside format_manifest() before any check here executes. The self-test still went
+    # red, but with a bare KeyError instead of the message naming what to do about it -- and a
+    # mutation that dies earlier than the assertion under test proves nothing about that assertion.
+    # These four claims depend on NOTHING but the declarations, so they are stated before any code
+    # that a new kind can break, and they use a self-contained fixture for the same reason.
+    #
+    # (a) the partition covers KINDS exactly. A new kind is forced into REGISTRY_ID by the mapping
+    #     check further down; it still fails HERE until somebody classifies it. That is the hole
+    #     this section closes, and failing loudly is the feature.
+    check("every kind is classified",
+          set(CROSS_CHECKED) | set(UNCHECKABLE) == set(KINDS),
+          f"CROSS_CHECKED={sorted(CROSS_CHECKED)} UNCHECKABLE={sorted(UNCHECKABLE)} "
+          f"leaves {sorted(set(KINDS) - set(CROSS_CHECKED) - set(UNCHECKABLE))} unclassified")
+    check("no kind is both", not (set(CROSS_CHECKED) & set(UNCHECKABLE)),
+          f"claimed both ways: {sorted(set(CROSS_CHECKED) & set(UNCHECKABLE))}")
+
+    # (b) an excuse with no reason is how "skip this for now" becomes permanent.
+    check("every uncheckable kind states WHY",
+          all(isinstance(w, str) and w.strip() for w in UNCHECKABLE.values()),
+          f"empty reason for {sorted(k for k, w in UNCHECKABLE.items() if not str(w).strip())}")
+
+    # (c) 🔑🔑 THE ANTI-VACUITY LEG. Without it, CROSS_CHECKED is a label that asserts itself: a
+    #     kind could be declared cross-checked while cross_validate() never mentions it, and (a)
+    #     would still pass. So prove each leg EXISTS by feeding it bad input -- inject one id into
+    #     that kind's registry that its asset source does not carry, and require a problem back.
+    #     The fixture is built FROM the declarations rather than hard-coded, so it grows with them;
+    #     UNCHECKABLE kinds are deliberately absent from the assets dict, which is what the
+    #     generalised assert in cross_validate() demands.
+    for kind in sorted(CROSS_CHECKED):
+        probe_reg = {k: set() for k in KINDS}
+        # every CROSS_CHECKED kind that is not ALSO declared uncheckable -- a kind claimed both
+        # ways would otherwise trip cross_validate's assert, and (a) above is the check that is
+        # supposed to report that, not this loop.
+        probe_assets = {k: set() for k in CROSS_CHECKED if k not in UNCHECKABLE}
+        probe_reg[kind] = {"mcmmo_section58_probe_id"}
+        try:
+            silent = not cross_validate("t", probe_reg, probe_assets)
+        except Exception as exc:
+            # 🔴 A MALFORMED PARTITION MUST BE REPORTED, NOT RAISED. cross_validate reads
+            # assets[ITEM] and assets[BLOCK] directly, so dropping a kind from CROSS_CHECKED makes
+            # it KeyError here -- and an escaping exception kills the whole self-test before the
+            # `failures` list is ever printed, turning a precise finding into a traceback. That is
+            # the same "crashes instead of reporting" shape as the cp1252 defect, and it was found
+            # the same way: by a mutation that went red for the wrong reason.
+            failures.append(
+                f"kind coverage: probing {kind!r} raised {type(exc).__name__}: {exc}. The "
+                f"declarations and cross_validate() disagree about which kinds exist; fix the "
+                f"partition above rather than this probe.")
+            continue
+        if silent:
+            failures.append(
+                f"kind coverage: {kind!r} is in CROSS_CHECKED but cross_validate() is SILENT on a "
+                f"registry id that its asset source does not carry -- the kind is declared "
+                f"validated and is not. Write its leg, or move it to UNCHECKABLE with a reason.")
+
     # --- format/parse round-trip, including a version whose sets differ.
     sample = {
         "1.21": {BLOCK: {"stone", "dirt"}, ENTITY: {"zombie", "cow"},
@@ -550,6 +636,7 @@ def self_test() -> int:
           f"got {REGISTRY_ID[ENTITY]!r} -- the registry is entity_type, not entity")
     check("every kind is mapped", set(REGISTRY_ID) == set(KINDS),
           f"REGISTRY_ID covers {sorted(REGISTRY_ID)}, KINDS is {sorted(KINDS)}")
+
 
     # (2) An entity-carrying registry with NO entity assets must still cross-validate clean. This is
     #     the quiet direction: if ENTITY ever gets folded into the generic loop, every version fails.
@@ -608,7 +695,10 @@ def self_test() -> int:
     print("=== SELF-TEST ===")
     print(f"  round-trip over {len(sample)} versions ({len(KINDS)} kinds: {', '.join(KINDS)}), "
           f"{len(cases)} disagreement cases, 2 malformed-manifest cases, 5 write-gate cases, "
-          f"4 entity-kind cases")
+          f"4 entity-kind cases, 3 kind-classification checks and "
+          # DERIVED, never a constant: it rises by itself the moment a kind joins
+          # CROSS_CHECKED, so the summary cannot silently under-report new coverage.
+          f"{len(CROSS_CHECKED)} kind-coverage probes")
     if failures:
         print(f"  FAIL -- {len(failures)} problem(s):")
         for f in failures:
