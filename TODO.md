@@ -285,7 +285,7 @@ largest input it will ever be given.
 | **9.2** toolchain | ✅ **DONE (§27), and its premise was measured FALSE.** `26.x` builds on the **existing Loom 1.17.13**. What changed: plugin id → `net.fabricmc.fabric-loom`, `mappings` line **removed entirely**, `modImplementation` → `implementation`, Java 21 → **25** (Mojang's own manifest requirement) |
 | **9.3** translate the source **and** the tooling | ✅ **SOURCE DONE (§28–§33)**: 2,639 → 0 compile errors, 54 → 0 dead injectors, 186 → 1 red tests. ✅ **TOOLING DONE (§38, §36)** — see the checklist below, every box ticked |
 | **9.4** cut the band | ✅ **DONE (§42).** (a) *Which branch?* — ruled: `26.x` **becomes `master`** and `1.21.11` was cut to `mc/1.21.11` (R-z, honouring R-f). (b) *One band or two?* — ✅ **TWO, and it is MEASURED now (§38), not inferred.** `probe-bands.py --versions 26.1,26.2 --control 26.2` on `master`: control green, **84 of 1424 records vary**, and the two versions do **not** collapse into one band. The ecosystem split (`[26.1, 26.1.1, 26.1.2]` vs `[26.2]`) reached the same conclusion by a different route. **`master` takes `26.2` alone; `26.1.x` is a future band.** ✅ **§39 closed the residue**: `26.1.1` and `26.1.2` were Loom-resolved and probed, and all three `26.1.x` versions are **identical on 1424 of 1424 records** — so the `26.1.x` line is ONE band, `mc/26.1.2`, and the declared 16-version scope needs exactly **one more branch** |
-| **9.5** full ship gate | ✅ **RUN (§35, §43.4).** Gate 1 (suite 1,861), gate 2 (`ZERO=0 OK=60 SLICE=1`), gate 3 (`boot-check.sh`, exit 0) and gate 6 (**36/0/0**, control failing as it must) are all green on `26.2`; gates 7/8/9/10/11 ran post-push in §43.4 and 7/9/10/11 again in a local clone after §47. ⚠️ **Gates 4 (`config-id-audit.py`) and 5 (`brew-smoke.sh`) have NO recorded `26.2` run in this file** — that is an absence of evidence, not a failure, and it is the honest state of the ship gate on this branch |
+| **9.5** full ship gate | ✅ **RUN (§35, §43.4).** Gate 1 (suite 1,861), gate 2 (`ZERO=0 OK=60 SLICE=1`), gate 3 (`boot-check.sh`, exit 0) and gate 6 (**36/0/0**, control failing as it must) are all green on `26.2`; gates 7/8/9/10/11 ran post-push in §43.4 and 7/9/10/11 again in a local clone after §47. ✅ **Gates 4 and 5 have BOTH now run on `26.2`, and this row's caveat was FALSE when read.** It said neither had a recorded `26.2` run — but §56.1 recorded gate 5's first `26.2` run, PASSED, **in this same file**, and the row was never revisited. 🔴 **It was not inert: a peer session quoted it back as fact on 2026-09-01**, which is what a stale caveat costs. §59 then ran both on `26.2` against the shipped `v1.3.4` jar — gate 5 PASSED with its vanilla control failing as it must, and gate 4 self-test PASS + `--check` exit 0 over **1011 references / 30 sections / 8 files**, 0 dead-on-every-version. ⚠️ *Absence of evidence* was the right words for the wrong row — the evidence existed two thousand lines below |
 
 ### ✅ 9.3's tooling half — DONE (§36, §38). What used to read yarn names
 
@@ -2587,16 +2587,74 @@ a bounded gap to write down, not a failure to hide and not a reason to weaken th
 
 ### Steps
 
-- [ ] 1. Self-test both instruments first — `boot-check.sh --self-test`, `brew-smoke.sh --self-test`.
+- [x] 1. Self-test both instruments first — `boot-check.sh --self-test`, `brew-smoke.sh --self-test`.
       ✅ **Done before anything else: 4/4 and 6/6.** *"Found nothing"* and *"there is nothing to
       find"* render identically, so a gate is not trusted here until its own control has run.
-- [ ] 2. `mc/1.21.11` end-to-end — gates 3, 5, 6 plus gate 6's control — to measure real cost and
+- [x] 2. `mc/1.21.11` end-to-end — gates 3, 5, 6 plus gate 6's control — to measure real cost and
       surface environment traps before committing hours to the remaining six.
-- [ ] 3. The remaining six `1.21.x` bands: `1.21.10`, `1.21.8`, `1.21.5`, `1.21.4`, `1.21.3`, `1.21.1`.
-- [ ] 4. Gate 5 on `26.1.2` — the one non-`1.21.x` band with no recorded brew run.
-- [ ] 5. Record every result per band in a table here: gate, exit code, the score, and for gate 6 the
+- [x] 3. The remaining six `1.21.x` bands: `1.21.10`, `1.21.8`, `1.21.5`, `1.21.4`, `1.21.3`, `1.21.1`.
+- [x] 4. Gate 5 on `26.1.2` — the one non-`1.21.x` band with no recorded brew run.
+- [x] 5. Record every result per band in a table here: gate, exit code, the score, and for gate 6 the
       control's result. **An unrun gate is written as unrun**, never left to read as green.
 
+### The measured outcome — nine bands, three gates, zero defects
+
+**Every gate returned exit 0 on every band, and every control behaved.** Run 2026-09-01 against the
+published `v1.3.4` asset of each band. Gate 6's score is `passed / failed / inconclusive`.
+
+| band | MC | gate 3 boot | gate 5 brew | gate 6 gameplay | gate 6 control |
+|---|---|---|---|---|---|
+| `master` | `26.2` | ✅ 0 | ✅ 0 | ✅ **36 / 0 / 0** | ✅ failed as it must |
+| `mc/26.1.2` | `26.1.2` | ✅ 0 | ✅ 0 | ✅ **36 / 0 / 0** | ✅ failed as it must |
+| `mc/1.21.11` | `1.21.11` | ✅ 0 | ✅ 0 | ✅ **36 / 0 / 0** | ✅ failed as it must |
+| `mc/1.21.10` | `1.21.10` | ✅ 0 | ✅ 0 | ✅ **36 / 0 / 0** | ✅ failed as it must |
+| `mc/1.21.8` | `1.21.8` | ✅ 0 | ✅ 0 | ✅ **36 / 0 / 0** | ✅ failed as it must |
+| `mc/1.21.5` | `1.21.5` | ✅ 0 | ✅ 0 | ✅ **36 / 0 / 0** | ✅ failed as it must |
+| `mc/1.21.4` | `1.21.4` | ✅ 0 | ✅ 0 | ✅ **36 / 0 / 0** | ✅ failed as it must |
+| `mc/1.21.3` | `1.21.3` | ✅ 0 | ✅ 0 | ✅ **36 / 0 / 0** | ✅ failed as it must |
+| `mc/1.21.1` | `1.21.1` | ✅ 0 | ✅ 0 | ✅ **36 / 0 / 0** | ✅ failed as it must |
+
+Every gate 3 run: **canary provably rejected, 0 ERROR/FATAL lines, 0 mixin failures.**
+Every gate 5 run: vanilla left the ingredient untouched, mcMMO consumed it, and the brewed bottle
+carried the configured custom effect. Every gate 6 control: **0 passed / 1 failed / 1 inconclusive.**
+
+🔴 **UNIFORM GREEN IS WHAT A BROKEN SWEEP PRINTS, so four things were checked before believing it:**
+
+1. **Nine DISTINCT jar SHA-256s.** Each log records the hash of the artifact it actually booted; all
+   nine differ. A mapping slip that ran one jar nine times would have produced this same table.
+2. **Gate 5's vanilla control discriminated on all nine** — not inferred from exit 0, counted in
+   each log. The assertion vanilla also satisfies is the failure mode this gate exists for.
+3. **Gate 6's control failed on all nine**, scored from its own text rather than its exit code.
+4. **The SPEARS capability gate FLIPS at the right version, live.** `1.21.11`, `26.1.2` and `26.2`
+   assert *"this version has the items SPEARS works on and /mcstats lists it"*; the six older
+   `1.21.x` bands assert *"this version cannot furnish SPEARS and /mcstats correctly omits it"*.
+   🔑 **Same total, opposite assertion** — this is the evidence the nine runs are not one test
+   repeated nine times, and it exercises both directions of the R12 gate on real servers.
+
+🔑 **The 36 was checked against `PHASES`, not against the number written in this file.**
+`expected = 3 + len(gates) + sum(len(p.up) + len(p.flat))` = `34 + len(gates)`; every band declared
+2 version-gate lines, so 36 is the derived floor and not a coincidence that all nine matched.
+
+⚠️⚠️ **A trap that would have produced a loud false finding on all nine: `gameplay-smoke.sh`'s
+CONTROL mode INVERTS its exit code**, and the sweep driver written for this section had it backwards.
+`GAMEPLAY_SMOKE_CONTROL=1` returns **0 when the control correctly FAILED** and **1 when the control
+PASSED without mcMMO** — i.e. exit 1 is the vacuous case. The driver's rule was the intuitive one
+(`exit 0 -> control passed -> vacuous`) and would have branded nine correct controls VACUOUS.
+🔑 **Caught by reading the harness's printed verdict against the inferred `$?` convention** — the
+script says `✅ control run failed as it must` on the same run it exits 0. **A wrapper that grades a
+gate is itself a gate, and needs its own control.** Same shape as §55's 16th vacuous guard, where
+the mutation harness scored 6/6 and proved nothing.
+
+### What this did NOT prove
+
+- **Not a build.** These are the shipped artifacts, chosen deliberately (see the ruling above); the
+  eight unpushed commits are absent from them and cannot be otherwise, since none touches `src/main`.
+- **Not the seven versions a band covers but does not pin.** Each band was booted at its
+  `minecraft_version` only. `mc/1.21.8` ships to `1.21.6` and `1.21.7` as well, and neither was
+  booted here. **Gate 12 validates the manifest across the whole declared range; gates 3/5/6 do not**,
+  and that asymmetry is now the largest remaining hole in this area.
+- **Not Trophy Hunter.** Still rank-gated and the smoke player is Hunter 0 — unchanged by this work.
+- **Not the live play-test.** Owner only, and still the oldest debt in the queue.
 ### Rollback
 
 **Nothing in this section mutates the repository.** It downloads release assets to the scratchpad,
