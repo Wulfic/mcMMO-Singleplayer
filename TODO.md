@@ -41,7 +41,7 @@ status, because nothing reads it.** Re-measure before quoting this table.
 | `master` | `minecraft_version=26.2`, `java_version=25`. 🔴 **`mod_version` LEFT THIS ROW ON PURPOSE.** It sat here reading `1.3.2-SNAPSHOT` through the `1.3.3` **and** `1.3.4` bumps. It is also never a `master` fact: **R-p** requires it identical on all nine and **gate 11** enforces that, so a value written here is a value that rots on nine branches at once. Measure it: `grep -E '^mod_version=' gradle.properties`, on the branch you are on |
 | releases | 🔴 **THIS ROW NO LONGER CARRIES A VERSION, AND THAT IS THE FIX** — the same remedy the `vs origin` row above already arrived at. It said `v1.3.2` while `v1.3.3` and then `v1.3.4` were the published set. What is *structurally* true: **nine releases, one per band**, tagged `mc<VER>-v<mod_version>`, and the declared 16-version scope is downloadable only when all nine are green. `gh release list` is the one thing that answers *“did it ship”* — ⚠️ a branch **agreeing** on `mod_version` is not evidence it released (gate 11), and §57 found one band of nine silently stuck a release behind. ⚠️ Deleting a tag **DRAFTS** its release; never undo one that way |
 | build | ✅ **green on all nine**, each built on its own band this session (§44.3) |
-| suite | ✅ **0 failures.** `master` measured **2026-09-01**: **170 classes / 1,882 executed / 0 failures / 0 skipped**, read off the JUnit XML with `> Task :test` confirmed **bare** (not `FROM-CACHE`) under `--no-build-cache cleanTest test`. 🔴 **This is a FOURTH figure, not a tie-break over the other three** — 1,869 (§50), 1,879 (§56.1) and gate 1's old `~1719` were each correct when written, and §57 and §56.4 landed between them. ⚠️ **Per-band counts legitimately DIFFER** and the spread is per-band gating — §56.2's table holds **six distinct totals across eight bands**. ⚠️ **Those figures predate §57 and §56.4, so they do not subtract against this one.** **Re-measure your own branch; never match someone else's total** |
+| suite | ✅ **0 failures.** `master` measured **2026-09-01**: **170 classes / 1,882 executed / 0 failures / 0 skipped**, read off the JUnit XML with `> Task :test` confirmed **bare** (not `FROM-CACHE`) under `--no-build-cache cleanTest test`. 🔴 **This is a FOURTH figure, not a tie-break over the other three** — 1,869 (§50), 1,879 (§56.1) and gate 1's old `~1719` were each correct when written, and §57 and §56.4 landed between them. ✅ **Independently reproduced**: §57's table records `master` at **170 / 1,882** from a separate invocation by another session — two runs, two sessions, same number. ⚠️ **Per-band counts legitimately DIFFER** and the spread is per-band gating; §57's same-date table holds **six distinct totals across the nine**, with `mc/1.21.4` (**1,884**) *above* `master`. 🔴 **No branch is expected to lead**, and §56.2's older figures predate §57/§56.4 so they do not subtract against this one. **Re-measure your own branch; never match someone else's total** |
 | gates 7/9/10/11 | ✅ **exit 0, none exit 2**, re-measured in §50 on a fresh `git clone --local --no-hardlinks` carrying all nine §50 tips. Gate 8 (`ci-watch.sh`) also exit 0 post-push, with all 5 mutations caught. ⚠️ All four prefer **remote** refs, so push first or clone locally |
 | mixin gate | ✅ `--check` passes on `master` and `mc/26.1.2` (`ZERO=0 OK=60 SLICE=1`) |
 | boot | ✅ `26.2` (§35) and ✅ `26.1.2` (§43.1, exit 0, 0 ERROR, 0 mixin failures) |
@@ -2578,16 +2578,20 @@ inert on every band by construction. **The other seven have no automation whatso
 1. `./gradlew --no-daemon --stacktrace build -Pmod_version=$(grep -E '^mod_version=' gradle.properties | cut -d= -f2 | sed 's/-SNAPSHOT$//')`
    — exit 0, suite green. 🔴 **DO NOT MATCH `master`'s TOTAL.** This line read *“count
    matching `master` (~1719)”* long after the real figure passed 1,800 — and the stale number hid a
-   second defect in the instruction itself: **per-band counts are SUPPOSED to differ.** §56.2's
-   table spans **six distinct totals across its eight bands** (1,873 ×3 · 1,874 · 1,875 · 1,877 ·
-   1,879 · 1,881). **Differing counts are the evidence each branch ran its OWN suite; a uniform
-   number would be the suspicious result.** Read your own branch's `N executed` off the JUnit XML
-   and compare it against **that branch's** last recorded figure — §56.2 for the eight bands, the
-   status table above for `master`. A count that DROPS means something was disabled to get there.
-   ⚠️ **Do not compare across dates.** §23's finding that bands run *higher* than `master` was
-   true when measured; `master` measured **1,882** on 2026-09-01, above every figure in §56.2's
-   table — because those predate §57 and §56.4, not because a band lost tests. **A band figure and
-   a `master` figure from different dates do not subtract.**
+   second defect in the instruction itself: **per-band counts are SUPPOSED to differ.** §57's
+   table — the newest one taken on a SINGLE date, so the only one a comparison may use — spans
+   **six distinct totals across the nine** (1,876 ×3 · 1,877 · 1,878 · 1,880 · 1,882 ×2 · 1,884).
+   **Differing counts are the evidence each branch ran its OWN suite; a uniform number would be
+   the suspicious result.** Read your own branch's `N executed` off the JUnit XML and compare it
+   against **that branch's** own last figure. A count that DROPS means something was disabled to
+   get there.
+   🔴 **NO BRANCH IS EXPECTED TO LEAD, and the claim is direction-agnostic ON PURPOSE.** §23
+   recorded bands running *higher* than `master`; on §57's same-date table `mc/1.21.4` (**171 /
+   1,884**) is above `master` (**170 / 1,882**) while six bands sit below it. Both readings are
+   real, and **either one stated as a rule sends someone to “fix” a branch that is fine.**
+   ⚠️ **Do not compare across dates.** `master`'s 1,882 sits above every figure in §56.2's table
+   purely because those predate §57 and §56.4 — a cross-date artifact, not a fact about `master`.
+   **A figure from one date and a figure from another do not subtract, in either direction.**
 
    ⚠️⚠️ **The `-Pmod_version` override is NOT decoration.** A bare `./gradlew build` is not what CI
    runs, and that gap is how §10.7 shipped a guard green on all five branches and red on every
