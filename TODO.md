@@ -2257,7 +2257,41 @@ is reported by name · all nine branches carry it (`scripts/` is propagatable, s
 ⚠️ The summary line's coverage-probe count is **derived** (`len(CROSS_CHECKED)`), never a constant —
 it rises by itself when a kind is added, so it cannot silently under-report new coverage.
 
+### 58.1 — the SAME SHAPE one layer along: a missing kind section round-trips as a FALSE ZERO
+
+🔴 **Found by a peer session probing §58's own scenario against the committed code, and it is a
+worse defect than the one M5 found.** My `KeyError` was real but was a **self-test fixture**
+artifact — a hand-built dict keyed by today's three kinds. **A user never hits it.**
+
+**What a user hits.** `parse_manifest` does `data[version] = {k: set() for k in KINDS}` the moment it
+reads a version header, so a newly-added kind reads back as *"present, zero ids"* from a manifest
+written before it existed. `format_manifest` then writes `### sound 0`. Measured on the real
+manifest: **all 16 versions**. A partial `--write` would commit a manifest **asserting those
+Minecrafts have zero ids of that kind**, and a consumer reports every such id ABSENT — a confident
+wrong answer rather than an error.
+
+🔑🔑 **`_finish()`'s anti-truncation guard is exactly the mechanism you would expect to catch this,
+and it passes**, because for a section that was never there *0 declared* and *0 delivered* agree.
+**A guard that looks like it covers the case and does not** — the same shape as the
+`assert ENTITY not in assets` §58 had just generalised, one layer along.
+
+**Fix:** `parse_manifest` now tracks which sections actually **appeared** and refuses a kind in
+`KINDS` that has none, naming it and saying to regenerate. ⚠️ **Absence of the section is the signal,
+never the count**: a kind that genuinely has zero ids writes an explicit `### <kind> 0` header, which
+IS seen and IS accepted — and the self-test asserts both directions, so the refusal cannot quietly
+become "reject any empty kind".
+
+⚠️ **Honest severity: LOW today.** It needs someone to add a kind AND run a partial `--write` AND
+skip `--self-test`. It is fixed anyway because §58 is the section a future reader consults when
+adding a kind, so an unfixed note here would be read as "handled".
+
+🔑 **Scope, stated so it is not overclaimed:** this is **orthogonal to classification**.
+`format_manifest`/`parse_manifest` never consult `CROSS_CHECKED` or `UNCHECKABLE`, and `run()` never
+calls `self_test()` — so classifying a new kind correctly still would not have prevented it. §58
+neither caused this nor covered it.
+
 - [x] ✅ implement · [x] ✅ mutation-prove (6/6) · [x] ✅ self-test on all nine · [x] ✅ propagate
+- [x] ✅ **58.1** — missing-section refusal, both directions asserted, verified on the real manifest
 
 ---
 
