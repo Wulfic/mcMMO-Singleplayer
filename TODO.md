@@ -1850,7 +1850,8 @@ header is honest.
 - [x] `README.md` + `wiki/Configuration.md` config-table row corrected (⚠️ both are under **R-y**'s
       identity guard, so the two edits must reach every branch **byte-identical**)
 - [x] both guards written, both mutation-proven, full suite green
-- [ ] ⬜ **propagate to all eight bands** — both commits touch `src/`, so `drift-audit.py` tracks
+- [x] ✅ **propagate to all eight bands** (done in session 35; the box was never ticked — all 8
+      carry a `Backport-of:`, re-verified 2026-09-01) — both commits touch `src/`, so `drift-audit.py` tracks
       them and §55's hand-propagation dance is not needed here
 
 ### 56.2 — the six bands never built — ✅ DONE, and all EIGHT were built
@@ -1934,10 +1935,13 @@ going to cost.
 - [x] `mc-ids.txt` at 16 versions, both new sections cross-validated exact
 - [x] the join guard, mutation-proven where it counts
 - [x] `master` suite **169 / 1,880 / 0** (up 1 test)
-- [ ] ⬜ **propagate** — ⚠️ `mc-ids.txt` is a fact about MINECRAFT: **cherry-pick, never regenerate
+- [x] ✅ **propagate** (done in session 35; all 8 carry a `Backport-of:` and `mc-ids.txt` is ONE
+      blob across all nine, re-verified 2026-09-01) — ⚠️ `mc-ids.txt` is a fact about MINECRAFT: **cherry-pick, never regenerate
       per band.** The inverse of `mc-surface.txt`. A normal cherry-pick gives the byte-identical
       copy `branch-file-identity-audit.py` requires
-- [ ] ⬜ **the eight bands need REBUILDING after this lands** — the guard is new and reads each
+- [x] ✅ **the eight bands need REBUILDING after this lands** (done in session 35, which reports
+      `ConfigIdManifestTest` 6/0 and totals 1,874–1,882 per band — ⚠️ that leg is the RUNNING
+      session's report, not re-measured here, unlike the two boxes above) — the guard is new and reads each
       band's own `supported_minecraft_versions`, so a green `master` says nothing about them
 
 ### 56.3 — carried debt, the three cheap-to-bounded rows
@@ -2096,10 +2100,75 @@ second control.
 
 ### 56.5 — NOT doing this section: `SoundType`'s unvalidated registry ids
 
-Offered and **not** picked. `SoundType` carries a `minecraft:` sound-event id per constant and
-nothing validates them; `sounds.yml`'s `CustomSoundId` takes one too (every shipped value is `''`,
-so no defect today). It needs the **MC sound registry**, not `mc-ids.txt`'s three id kinds, so it
-stays a section of its own. Recorded here so it is not silently absorbed into 56.3's id work.
+**Still NOT taken** (owner, 2026-08-31, re-affirmed 2026-09-01). `SoundType` carries a `minecraft:`
+sound-event id per constant and nothing validates them; `sounds.yml`'s `CustomSoundId` takes one too
+(every shipped value is `''`, so no defect there today). Recorded here so it is not silently absorbed
+into 56.3's id work.
+
+🔴 **The REASON recorded here was measured and is FALSE — the decision stands, the reason does not.**
+This block used to say it *"needs the **MC sound registry**, not `mc-ids.txt`'s three id kinds"*,
+i.e. a separate extraction path. That is true of the *registry* and false of the *source*, and the
+difference is the whole price of the section. Measured with the generator rather than reasoned:
+
+```
+java -DbundlerMainClass=net.minecraft.data.Main -jar minecraft-server.jar --reports
+  -> reports/registries.json carries 78-95 registries per version,
+     and `minecraft:sound_event` is one of them.
+```
+
+🔑 **Same file, same command `extract-mc-ids.py` already runs**, and `registry_ids()` is
+`for kind in KINDS: key = REGISTRY_ID[kind]` — generic. ⚠️ **The producer cost is NOT "one line",**
+and getting that wrong here would be the same defect twice: it is a kind constant (line 84), a
+`KINDS` member (line 85) **and** a `REGISTRY_ID` entry (line 91), because the script's own self-test
+asserts `set(REGISTRY_ID) == set(KINDS)` and a bare map entry goes **red**. What it is *not* is a
+separate extraction path.
+
+🔑🔑 **The novelty is the CONSUMER, not the producer.** `SoundType`'s ids are constructor arguments
+in **Java source**; `config-id-audit.py` is file-driven over ymls and cannot reach them. That is the
+real reason this is a section of its own — and it is a different reason from the one that was
+written down.
+
+⚠️⚠️ **THE PRODUCER IS GENERIC; `cross_validate()` IS NOT.** It is hand-written per kind — an ITEM
+leg, a BLOCK leg with `BLOCKSTATE_ONLY` — and opens with `assert ENTITY not in assets`. Its own
+docstring names the hazard: folding a kind into a generic loop compares against an **empty set** and
+either fails on every version or, leniently, **reports a clean pass for a comparison that never
+happened**. So a SOUND kind flows through the producer for free and lands silently in the
+*"generated but never cross-validated"* state — **documented and asserted** for entity,
+**accidental** for sound. 🔑 There is a self-test proving every kind is *mapped* and **none** proving
+every kind is either cross-checked or **explicitly declared uncheckable**. **That missing self-test
+is worth more than this section**, because it closes the hole for the next kind too.
+`assets/minecraft/sounds.json` in the merged jar is the plausible second source; unmeasured.
+
+**The sweep — 16 versions, and it found NOTHING:**
+
+| | |
+|---|---|
+| `minecraft:sound_event` present | **16 / 16** supported versions |
+| entries | 1611 (`1.21`) → 1636 (`1.21.2`) → 1702 (`1.21.5`) → 1838 (`1.21.11`) → 1968 (`26.2`) |
+| `SoundType` | **17 constants, 14 DISTINCT ids** — 0 unresolved on every one of the 16 |
+
+Three constants share an id with another (`ANVIL`/`CRIPPLE`, `ABILITY_ACTIVATED_BERSERK`/`TIRED`,
+`DEFLECT_ARROWS`/`BLEED`). ⚠️ The **monotonically rising** entry counts are the anti-vacuity evidence
+that each version's own dump was read, not one answer replayed sixteen times — the same reasoning
+gate 12's differing record counts carry.
+
+🔴 **"0 unresolved" answers ABSENCE, never CORRECTNESS.** A registry-existence check cannot see an id
+that resolves fine and points at the **wrong sound**. §55 is the precedent: coreskills 26/26 and
+sounds 17/17 were clean the day that guard was written, and it was worth writing anyway. **Do not
+let this table be re-read later as "the sound ids are verified."**
+
+**If it is ever reinstated,** two constraints that are already paid for:
+
+- The shape is §50's two legs: a JUnit guard against the **live** `BuiltInRegistries.SOUND_EVENT`
+  (unattended, every push — but only ever the version the band **compiles** against) **plus** the
+  manifest kind, the only leg that can see every version the band **ships** to (§56.4's lesson).
+  The defect it guards is silent: `PlatformPlayer#playSound` misses → `LOGGER.warn` and `return`.
+- ⚠️ **A consumer that parses `SoundType.java` must not use a naive enum regex.** §55's cross-band
+  pre-check reported a bogus `Woodcutting` orphan on all nine branches because its regex required a
+  trailing `,` or `;` and the **last** constant is terminated by the closing brace alone.
+  `SoundType` is safe only incidentally (`CRIPPLE` ends `;`), so such a reader passes today and
+  breaks the day a constant is appended. Give it a control asserting **17 constants / 14 distinct
+  ids**, and make it **refuse to report** rather than report short.
 
 ---
 
