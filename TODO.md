@@ -2508,6 +2508,106 @@ the suspicious result, not this.
 
 ---
 
+## §59 — gates 3/5/6 across the bands, against the SHIPPED artifact (Tier 2, in progress)
+
+### What forced it
+
+Gates **3** (`boot-check.sh`), **5** (`brew-smoke.sh`) and **6** (`gameplay-smoke.sh`) are the
+largest untested surface left in this repo, and they have been carried as *"unclaimed, needs a booted
+server per version"* since §43. What exists today: gate 3 green on `26.2` (§35) and `26.1.2` (§43.1);
+gate 6 green on `26.2` (**36/0/0**, §47) and `26.1.2` (**30/0/0**, §43.1); gate 5's only recorded run
+is the first `26.2` one (§56.1). **The seven `1.21.x` bands have no recorded run of any of the three.**
+Those seven bands are published and downloadable at `v1.3.4`, so the untested surface is not
+hypothetical — it is what players have.
+
+⚠️ **Nine of the twelve gates say nothing about whether the mod RUNS.** Gates 1/2/4/7/9/10/11/12 are
+structural: they read source, bytecode, manifests and branch topology. §32 found five defect classes
+that every one of them called green. Gates 3/5/6 are the only three that boot a server, and they are
+exactly the three with no automation whatsoever.
+
+### The two rulings that shape it (owner, 2026-09-01)
+
+1. **The jar under test is the PUBLISHED `v1.3.4` release asset**, not a fresh build.
+   🔑 **Measured before the ruling, not assumed:** `git diff --name-only <tag>..<band> -- src/main/`
+   returns **zero files on all nine bands**. The eight unpushed commits touch `TODO.md`,
+   `build.gradle`'s test config, `scripts/extract-mc-ids.py` and **one test file**
+   (`TestModsDirectoryTest.java`) — nothing that can reach the jar's runtime behaviour. So the shipped
+   asset *is* the current production code, and gating it answers a strictly stronger question:
+   `boot-check.sh`'s own header says it exists because `runServer` "can never verify a *shipped
+   artifact*". A fresh build would have re-proven the build, not the mod.
+2. **`build/libs` is LEFT ALONE** — 81 jars, oldest dating to `1.1.0`. Deleting them is destructive,
+   recovery is a rebuild rather than a checkout, and it is not a correctness hazard **so long as
+   nothing globs**. Every jar in this section is passed **by explicit path**, printed before use.
+   ⚠️ `brew-smoke.sh` **refuses** an ambiguous `build/libs` rather than guessing; that refusal is
+   correct behaviour and is not being worked around. `BREW_SMOKE_JAR=<path>` is the supported
+   override and its self-test proves it (**6/6**, run before this section relied on it).
+
+### The isolation decision — a scratch clone, never a branch switch
+
+**Six other Claude sessions share this one working copy**, and all six were messaged and answered
+idle before anything started. Gate 5 is the constraint: it reads `minecraft_version`,
+`loader_version` and `fabric_version` from `gradle.properties` and has **no env override**, so it
+needs the band actually checked out — unlike gates 3 and 6, which take `<jar> <MC> <loader> <fapi>`
+as arguments and can run from anywhere.
+
+Rather than switch `HEAD` in a tree six sessions are reading, band work runs inside
+`git clone --local --no-hardlinks . <scratch>` — **the pattern this repo already uses for gates
+7/9/10/11**, where `origin/*` maps onto the local branches. Cost is disk; the alternative cost is a
+peer's build reading a half-switched tree, which has already happened here once.
+
+### What this section is NOT doing
+
+- **Not pushing, and not bumping `mod_version`.** The hold is the owner's standing call, re-confirmed
+  2026-09-01. `v1.3.4` is published on all nine, so a push at `1.3.4-SNAPSHOT` fires nine release runs
+  that R-t's stale-version gate refuses. Eight commits per branch ride that bump. Four different
+  sessions authored those commits; none of them, and no peer, can authorise it.
+- **Not the live play-test.** Owner only, and explicitly not folded in here.
+- **Not touching `AGENTS.md`.** Session 83 has a reserved edit pending its owner's answer, and the
+  file is identity-enforced across all nine branches by gate 10.
+- **Not deleting anything from `build/libs`.**
+- **Not re-opening §55, §56.5, §57, §58 or manifest debt piece 1.**
+
+### How a result is read — the three traps, stated before any run
+
+1. **Gate 3: read the EXIT CODE, not the output.** `1` = the mod is bad. `2` = **ENVIRONMENT**, and
+   nothing whatsoever was proven about the mod. Reporting a `2` as a boot failure is the specific
+   error §12.2 exists to prevent. ⚠️ These bands pin `java_version=21` and this machine runs Java 25;
+   a JVM incompatibility is an **environment** result, so the log is read, never just the code.
+2. **Gate 5 must pass WITH its vanilla control FAILING.** An assertion vanilla also satisfies is
+   indistinguishable from the mod being uninstalled — measured, not argued: the first two candidate
+   recipes were both vanilla recipes and only the control revealed it.
+3. **Gate 6's expected total is DERIVED, not a constant.** Read it out of `PHASES`, never off the
+   `36` written in this file — that line went stale unnoticed through two phases already. A total
+   **below** the floor is the scorer's own anti-vacuity failure, not a phase failure.
+   `GAMEPLAY_SMOKE_CONTROL=1` must **FAIL**.
+
+⚠️ **A per-band ABSENCE is a real result and gets recorded as one.** `fabric-carpet` is resolved from
+Modrinth per MC version and gate 6 cannot run where no carpet build exists for that version. That is
+a bounded gap to write down, not a failure to hide and not a reason to weaken the harness.
+
+### Steps
+
+- [ ] 1. Self-test both instruments first — `boot-check.sh --self-test`, `brew-smoke.sh --self-test`.
+      ✅ **Done before anything else: 4/4 and 6/6.** *"Found nothing"* and *"there is nothing to
+      find"* render identically, so a gate is not trusted here until its own control has run.
+- [ ] 2. `mc/1.21.11` end-to-end — gates 3, 5, 6 plus gate 6's control — to measure real cost and
+      surface environment traps before committing hours to the remaining six.
+- [ ] 3. The remaining six `1.21.x` bands: `1.21.10`, `1.21.8`, `1.21.5`, `1.21.4`, `1.21.3`, `1.21.1`.
+- [ ] 4. Gate 5 on `26.1.2` — the one non-`1.21.x` band with no recorded brew run.
+- [ ] 5. Record every result per band in a table here: gate, exit code, the score, and for gate 6 the
+      control's result. **An unrun gate is written as unrun**, never left to read as green.
+
+### Rollback
+
+**Nothing in this section mutates the repository.** It downloads release assets to the scratchpad,
+boots servers in `build/boot-check/`, `build/brew-smoke/` and `build/gameplay-smoke/` — all generated,
+all gitignored — and works in a throwaway clone outside the repo. The only tracked file it touches is
+`TODO.md`, and the undo for that is `git checkout <sha> -- TODO.md` against the tip recorded in
+`.agent/memory/state.md`. No branch is switched in the shared working copy, so there is no state a
+peer can lose.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
