@@ -2815,6 +2815,53 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
       concatenation, `var`, a raw generic. Nothing in this repo looks for that shape. It is a
       different instrument from `--receivers` and gets its own section.
 
+- [ ] ⬜ **Sixteen `mc/**` commits of 2026-08-31 carry a `Backport-of:` trailer git's own parser
+      CANNOT see.** §55's propagation appended the trailer directly after the last body line, with no
+      blank line, so `git log --format='%(trailers:key=Backport-of,valueonly)'` returns **empty** for
+      all sixteen. ✅ **Gate 7 is unaffected and this is deliberately NOT being repaired:**
+      `drift-audit.py` matches `^\s*Backport-of:\s*([0-9a-fA-F]{7,40})\s*$` as a **multiline regex
+      over the message text** (line 72), not through git's trailer parser, so the audit reads them
+      correctly — a history rewrite would cost more than the defect. 🔴 **The reason this is a row
+      and not a footnote: anything NEW built on `%(trailers)` will silently skip exactly those
+      sixteen commits and report a clean pass.** Check against `drift-audit.py`'s regex, or accept
+      the gap knowingly. ✅ The remedy for new work, verified on all eight bands:
+      `printf '%s\n\nBackport-of: %s\n' "$(git log -1 --format=%B)" "$SRC"` — **the DOUBLE `\n` is
+      the fix**, because `$(...)` strips `%B`'s own trailing newline. Verify with git's parser, and
+      note the control: the source commit on `master` must return **empty**. A check asserting
+      non-empty on all nine would pass a trailer wrongly applied to the source.
+
+- [ ] ⬜ **Two agents in ONE working copy: `git add <path>` silently commits the other's work.**
+      Every collision note in this repo assumes the conflict is on a **branch or a checkout** — two
+      agents switching `HEAD`, a build reading a half-switched tree. 🔑🔑 **The hazard that actually
+      nearly landed on 2026-09-01 was inside a SINGLE FILE's working copy**, and it is worse because
+      git raises nothing: `git add TODO.md` stages the **whole file**, so a one-row edit would have
+      shipped 44 lines of another session's unfinished §58 plan **under the wrong commit message**,
+      with no conflict, no warning and an entirely ordinary-looking diff. ⚠️ **Path-scoping does NOT
+      save you** — `git add <path>` is precisely the thing that does it, because their in-flight file
+      and your target were the same file; scoping only helps when the two agents are in different
+      files, which is the case everyone pictures and was not the case here. **The rule:**
+      `git status --short` **and** `git diff --numstat <your exact paths>` **immediately before**
+      staging — not at the top of the task — and treat a modified file you did not modify as a
+      **stop, not a merge**. Never `git commit -a`. 🔑 **Liveness is irrelevant:** an uncommitted
+      foreign diff is capturable whether that session is typing right now or stopped an hour ago, so
+      the response never changes. ⚠️ **A peer's *"tree is free/clean"* is a TIMESTAMP, not a lock** —
+      it was true when sent and false when acted on; require `git status --short` behind the claim
+      and re-measure anyway, because their read is as stale as yours by the time it arrives.
+
+- [ ] ⬜ **To tell live editing from residue read the MTIME, not a diff-size delta.** ⚠️ **This row
+      exists because the rule was first recorded BACKWARDS and had to be falsified by another
+      session.** The original claim was that two `--numstat` reads seconds apart distinguish active
+      editing from a stale dirty tree (`62/3 → 66/4` across 37 seconds "proved someone typing").
+      **False:** the mtimes were `01:22:42` and `01:23:06`, so those lines landed in the **two
+      seconds after the first read** and the file was then **static for 35 seconds**. 🔑 **Two
+      samples of a DERIVED quantity bracketing a single write are indistinguishable from continuous
+      editing** — a step function read as a keystroke stream. 🔑🔑 **The direct measurement was in
+      the same `ls -l` output the whole time**; the proxy was chosen with the better instrument
+      already in hand, which is the part that generalises. ⚠️ And per the row above, the answer
+      **changes no decision** — which is the tell: *a rule that cannot change a decision should be
+      suspected of being decoration before it is trusted as detection.* The same test that has been
+      finding vacuous guards here all along, applied to a note instead of an assertion.
+
 ---
 
 ## Standing rules that keep biting
