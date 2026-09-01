@@ -158,6 +158,11 @@ def format_manifest(data: dict[str, dict[str, set[str]]]) -> str:
 def parse_manifest(text: str) -> dict[str, dict[str, set[str]]]:
     """Inverse of `format_manifest`. Raises ValueError on a declared/actual count mismatch."""
     data: dict[str, dict[str, set[str]]] = {}
+    # 🔑🔑 SECTION 58.1 -- WHICH SECTIONS ACTUALLY APPEARED, which is NOT what `data` records.
+    # Line below pre-initialises every kind in KINDS to an empty set the moment a version header
+    # is read, so a kind added to KINDS reads back as "present, zero ids" from a manifest written
+    # before it existed. That is the quiet failure this tracks; see the refusal after the loop.
+    seen: dict[str, set[str]] = {}
     version = kind = None
     declared = 0
     for lineno, line in enumerate(text.splitlines(), 1):
@@ -168,6 +173,7 @@ def parse_manifest(text: str) -> dict[str, dict[str, set[str]]]:
             _finish(data, version, kind, declared, lineno)
             version, kind, declared = line[3:].strip(), None, 0
             data[version] = {k: set() for k in KINDS}
+            seen[version] = set()
             continue
         if line.startswith("### "):
             _finish(data, version, kind, declared, lineno)
@@ -175,11 +181,38 @@ def parse_manifest(text: str) -> dict[str, dict[str, set[str]]]:
             if len(parts) != 2 or parts[0] not in KINDS:
                 raise ValueError(f"line {lineno}: bad kind header {line!r}")
             kind, declared = parts[0], int(parts[1])
+            seen[version].add(kind)
             continue
         if version is None or kind is None:
             raise ValueError(f"line {lineno}: id {line!r} outside any version/kind section")
         data[version][kind].add(line.strip())
     _finish(data, version, kind, declared, "EOF")
+
+    # 🔴🔴 SECTION 58.1 -- A KIND WITH NO SECTION AT ALL MUST REFUSE.
+    #
+    # The anti-truncation guard in _finish() is what you would expect to catch a manifest that
+    # predates a kind, and it CANNOT: it only ever inspects sections it actually saw, and for a
+    # missing one "0 declared" and "0 delivered" agree. Measured on the real manifest -- adding a
+    # fourth kind to KINDS made all 16 versions read back with `sound=0`, format_manifest() wrote
+    # `### sound 0` for every one, and the round-trip through this very function ACCEPTED it.
+    #
+    # The damage is silent and downstream: `--write` after a partial run would commit a manifest
+    # ASSERTING that those Minecraft versions have zero ids of the new kind, and a consumer reading
+    # it reports every such id absent on 15 of 16 versions -- a confident wrong answer, not an
+    # error. A guard that looks like it covers this case and does not is exactly what §58 is about.
+    #
+    # A kind that genuinely has zero ids on a version is NOT this: a real generator run writes an
+    # explicit `### <kind> 0` header, which IS seen, and is accepted. Absence of the section is the
+    # signal, never the count.
+    for v in sorted(seen, key=version_key):
+        gap = sorted(set(KINDS) - seen[v])
+        if gap:
+            raise ValueError(
+                f"{v}: the manifest has no section for kind(s) {gap} -- it was written before that "
+                f"kind existed. It will NOT be treated as zero ids: that would silently assert this "
+                f"Minecraft has none. Regenerate the manifest for every version "
+                f"(scripts/extract-mc-ids.py --write) rather than letting a partial run commit an "
+                f"empty section.")
     return data
 
 
@@ -601,6 +634,33 @@ def self_test() -> int:
         failures.append("truncation: parse_manifest accepted a section short one id")
     except ValueError:
         pass
+
+    # --- §58.1: a kind present in KINDS but with NO section must refuse. The anti-truncation
+    #     guard cannot see this -- for a missing section, 0 declared and 0 delivered agree -- so
+    #     without this the manifest silently gains `### <kind> 0` for every un-regenerated version
+    #     and asserts those Minecrafts have none.
+    entity_ids = sample["1.21"][ENTITY] | sample["1.21.11"][ENTITY]
+    dropped = "\n".join(
+        ln for ln in text.split("\n")
+        if not ln.startswith(f"### {ENTITY} ") and ln.strip() not in entity_ids)
+    try:
+        parse_manifest(dropped)
+        failures.append("missing kind section: parse_manifest accepted a manifest with no "
+                        f"{ENTITY!r} section, which round-trips as a false zero")
+    except ValueError as exc:
+        check("missing kind section names the kind", ENTITY in str(exc),
+              f"refused, but without naming {ENTITY!r}: {exc}")
+
+    # --- ...and the counterpart, so the refusal above is not over-broad: a kind that GENUINELY
+    #     has zero ids on a version writes an explicit `### <kind> 0` header, which must be
+    #     ACCEPTED. Absence of the section is the signal, never the count.
+    zero_ok = {"1.21": {BLOCK: {"stone"}, ENTITY: set(), ITEM: {"stick"}}}
+    try:
+        back_zero = parse_manifest(format_manifest(zero_ok))
+        check("an explicit zero-count section is accepted", back_zero == zero_ok,
+              f"got {back_zero}")
+    except ValueError as exc:
+        failures.append(f"explicit zero-count section was refused: {exc}")
 
     # --- an id outside any section must be rejected, not silently attributed to nothing.
     try:
