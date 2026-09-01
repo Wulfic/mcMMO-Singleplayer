@@ -2136,8 +2136,26 @@ happened**. So a SOUND kind flows through the producer for free and lands silent
 *"generated but never cross-validated"* state — **documented and asserted** for entity,
 **accidental** for sound. 🔑 There is a self-test proving every kind is *mapped* and **none** proving
 every kind is either cross-checked or **explicitly declared uncheckable**. **That missing self-test
-is worth more than this section**, because it closes the hole for the next kind too.
+is worth more than this section**, because it closes the hole for the next kind too — now **§58**.
 `assets/minecraft/sounds.json` in the merged jar is the plausible second source; unmeasured.
+
+🔑🔑 **THE COST OF A NEW KIND WAS PRICED THREE TIMES AND WAS WRONG EVERY TIME, ALWAYS LOW.**
+Recorded because the pattern is worth more than the number:
+
+| | estimate | wrong how |
+|---|---|---|
+| 1 | *"needs the MC sound registry, not `mc-ids.txt`'s three id kinds"* | a **guess written as a measurement**; `minecraft:sound_event` is in the same `registries.json` already parsed, on 16/16 versions |
+| 2 | *"one entry in `REGISTRY_ID`"* | the self-test asserts `set(REGISTRY_ID) == set(KINDS)`, so the entry **alone** goes red |
+| 3 | *"a kind constant, a `KINDS` member and a `REGISTRY_ID` entry"* | still low — **§58's M5 measured it**: it also needs the self-test's round-trip fixture, or `format_manifest()` raises `KeyError` before any check runs |
+
+**The true cost, enumerated by mutation rather than by reading:** a kind constant · a `KINDS` member ·
+a `REGISTRY_ID` entry · the `sample` round-trip fixture · **classification into `CROSS_CHECKED` or
+`UNCHECKABLE` with a reason** · **and a `cross_validate` leg if cross-checked**.
+
+🔑 **Each estimate was made by reading part of the code, and each missed a different part.** Only
+feeding the change to the machine enumerated it. ✅ **The good news is that this is now
+self-enforcing**: after §58 every one of those six steps fails the self-test by name if you skip it,
+so the next person does not need a correct estimate — they need to run `--self-test`.
 
 **The sweep — 16 versions, and it found NOTHING:**
 
@@ -2169,6 +2187,77 @@ let this table be re-read later as "the sound ids are verified."**
   `SoundType` is safe only incidentally (`CRIPPLE` ends `;`), so such a reader passes today and
   breaks the day a constant is appended. Give it a control asserting **17 constants / 14 distinct
   ids**, and make it **refuse to report** rather than report short.
+
+---
+
+## §58 — every kind is MAPPED; none is proven CROSS-CHECKED — ✅ DONE (Tier 1)
+
+**Carried out of §56.5 as worth more than the section that found it.** `extract-mc-ids.py`'s
+self-test asserts `set(REGISTRY_ID) == set(KINDS)` — every kind is *mapped to a registry*. Nothing
+asserts that a kind is either **cross-checked against a second source** or **explicitly declared
+uncheckable with a reason**.
+
+**Why that gap bites.** The producer is generic: a new kind flows through `registry_ids()` for free.
+`cross_validate()` is **hand-written per kind** — an ITEM leg, a BLOCK leg with `BLOCKSTATE_ONLY` —
+and simply never mentions anything else. So a fourth kind lands in the *"generated but never
+cross-validated"* state that is **documented and asserted** for `ENTITY` and would be **accidental**
+for the next one. The two states are indistinguishable from the outside: both produce a clean run.
+
+🔑 **`assert ENTITY not in assets` proves the wrong thing.** It proves `asset_ids()` yields no ENTITY
+set. It does **not** prove ENTITY's exclusion was a decision rather than an omission — and it says
+nothing at all about a kind added later.
+
+**Design.**
+
+| | change |
+|---|---|
+| 1 | Declare the partition next to `KINDS`: `CROSS_CHECKED = frozenset({BLOCK, ITEM})` and `UNCHECKABLE = {ENTITY: "<reason>"}` — a **dict**, so the reason is mandatory rather than a comment that can rot |
+| 2 | Generalise `cross_validate`'s `assert ENTITY not in assets` to loop over `UNCHECKABLE`, so the refusal covers every declared-uncheckable kind rather than one hard-coded name |
+| 3 | Self-test: the partition **exactly covers** `KINDS` and is **disjoint**. A new kind fails the self-test until someone classifies it — that is the whole point |
+| 4 | Self-test: every `UNCHECKABLE` reason is a non-empty string |
+| 5 | 🔑 **The anti-vacuity leg — self-test: every `CROSS_CHECKED` kind is ACTUALLY validated, proven by INJECTION.** For each kind, add a probe id to `registry[kind]` alone and require `cross_validate` to report a problem. Declaring a kind cross-checked while writing no leg for it is otherwise just a second comment |
+
+**Why 5 is the one that matters.** Without it this is a naming exercise: `CROSS_CHECKED` would be a
+label asserting itself. With it, the claim *"this kind is validated"* is checked the same way this
+repo checks every other guard — feed the bad input, require the specific failure. It is the direct
+descendant of the 16 vacuous guards already found here, and of §56.4's M2b.
+
+**What I am NOT doing:** not adding a sound kind (§56.5 stays declined) · not touching the producer,
+`registry_ids()` or `asset_ids()` · not regenerating `mc-ids.txt` · not widening `BLOCKSTATE_ONLY`.
+
+**Acceptance:** `--self-test` green · **each of the 5 checks proven to FIRE** by mutation, scored on
+the failing check NAME rather than the exit code · a simulated fourth kind fails checks 3 and 5 and
+is reported by name · all nine branches carry it (`scripts/` is propagatable, so gate 7 tracks it).
+
+**Outcome — 6/6 mutations, and TWO of them found defects in the guard itself.**
+
+| | mutation | result |
+|---|---|---|
+| M1 | a kind dropped out of the partition | `every kind is classified` |
+| M2 | a kind claimed **both** ways | `no kind is both` |
+| M3 | an `UNCHECKABLE` entry with an empty reason | `every uncheckable kind states WHY` |
+| M4 | a **4th kind**, mapped but unclassified | reported **by name** (`'sound'`) |
+| M5 | a 4th kind **declared cross-checked with no leg** | `is declared validated and is not` — **the anti-vacuity leg; nothing else sees this** |
+| M6 | an **existing** ITEM leg deleted | `'item' … cross_validate() is SILENT` — a regression detector too, not only a new-kind one |
+
+🔑🔑 **The first run scored 4/6 and both misses were real, not harness noise.**
+
+1. **A fourth kind raised `KeyError: 'sound'` in `format_manifest()` before any §58 check ran.**
+   Every self-test fixture is keyed by the three kinds that exist today. So the gate went red — with
+   a bare traceback instead of the message saying what to do. **Fixed by moving the declaration
+   invariants and the injection probe to the TOP of `self_test()`, on a fixture built FROM the
+   declarations.** Second instance of §56.3's lesson: *a mutation that dies earlier than the
+   assertion under test proves nothing about that assertion.*
+2. **A malformed partition made the probe RAISE, and the escaping exception killed the report.**
+   `check()` only appends to `failures`; the list is printed at the end. So a `KeyError` in the probe
+   discarded a finding that had already been recorded. **The probe now catches and reports.**
+   🔑 Same shape as §56.4's cp1252 crash: *a guard that cannot print its finding has not reported
+   it* — found the same way, by a mutation going red for the wrong reason.
+
+⚠️ The summary line's coverage-probe count is **derived** (`len(CROSS_CHECKED)`), never a constant —
+it rises by itself when a kind is added, so it cannot silently under-report new coverage.
+
+- [x] ✅ implement · [x] ✅ mutation-prove (6/6) · [x] ✅ self-test on all nine · [x] ✅ propagate
 
 ---
 
