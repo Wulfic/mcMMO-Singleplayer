@@ -2671,6 +2671,103 @@ peer can lose.
 
 ---
 
+## §60 — the range gap: gates 3/5/6 across the SEVEN never-booted versions (Tier 2, in progress)
+
+### What forced it
+
+§59 ran gates 3/5/6 green on all nine bands — **at each band's `minecraft_version` only**. Seven
+declared versions across five bands have never been booted, brewed or played (the table is in the
+Carried debt row raised by `fa5ecadb4`). A player installing the band's jar on `1.21.6` — which the
+release page tells them is supported — is running a configuration no gate has ever executed.
+
+🔑 **This is §56.4's defect in three more instruments.** That section found *"the control validated
+ONE version while a band ships a RANGE"* and fixed it for `probe-bands.py` alone. **Fixing an
+instrument does not fix the class.**
+
+### What was measured before any edit
+
+**Gates 3 and 6 need NO change.** Both already take `<jar> <MC> <loader> <fapi>` and default each to
+`gradle.properties` only when the argument is absent — §59 drove all nine bands through them that way.
+
+**Gate 5 cannot, and looking at why found a SECOND defect of the same shape:**
+
+1. 🔴 **`brew-smoke.sh` reads `minecraft_version`, `loader_version` and `fabric_version` from
+   `gradle.properties` with no override**, so it can only ever test a band's primary. Its two
+   siblings take them as arguments. This is the blocker the Carried debt row names.
+2. 🔴🔴 **It also stages fabric-api from the Gradle cache and SILENTLY PROCEEDS WHEN THE CACHE
+   MISSES** — `[[ -n "$fapi_jar" ]] && cp "$fapi_jar" "$work/mods/"`, no `else`, no download, no
+   refusal. `boot-check.sh` does cache → download from maven → **REFUSE with exit 2**, and its
+   comment says exactly why: *"A missing dependency and a broken mod BOTH print `never reached
+   'Done ('`, and telling those apart is this script's whole job."* Gate 5 has the identical failure
+   mode and none of the guard.
+   🔑 **This has never bitten for the same root cause as the range gap itself**: Loom caches
+   fabric-api for the version it built against, so the cache ALWAYS hits for a band's primary. The
+   defect is unreachable until someone runs the gate off-primary — which is what §60 does.
+   ⚠️ **Stated precisely: this is a false RED, not a false green.** mcMMO depends on fabric-api, so
+   without it loader refuses to load the mod, the `mcmmo` side fails to brew, and the run exits
+   non-zero. The damage is **misattribution** — "the mod is broken" reported for what is really
+   "the environment lacks a dependency", which is the exact distinction §12.2 built exit 2 for.
+   The script already returns 2 for jar-resolution problems, so the notion exists; only this path
+   was left unguarded.
+
+✅ **All seven versions have fabric-api on `maven.fabricmc.net`**, counted from
+`maven-metadata.xml`: `1.21`→23 builds, `1.21.2`→15, `1.21.6`→27, `1.21.7`→4, `1.21.9`→24,
+`26.1`→34, `26.1.1`→3. So piece 2's download path is not theoretical — it is what will actually
+stage six or seven of these runs.
+
+### The design — env vars, because the script already argued the case
+
+`BREW_SMOKE_MC`, `BREW_SMOKE_LOADER`, `BREW_SMOKE_FAPI`, each defaulting to the `gradle.properties`
+value. **Not positionals**: slots 1–3 are `MODE`, `INGREDIENT` and `BASE`, and the file already
+states the convention for exactly this reason — *"an env var, not a 4th positional, so the most
+important argument is not buried behind two optional ones"* (that is `BREW_SMOKE_JAR`'s own
+rationale, and `BREW_SMOKE_LIBS` follows it). Following the script's stated convention beats
+inventing a second one three arguments deep.
+
+fabric-api staging becomes cache → download → refuse, mirroring `boot-check.sh` rather than
+paraphrasing it, so the two harnesses fail the same way for the same reason.
+
+### What this section is NOT doing
+
+- **Not pushing, and not bumping `mod_version`.** Owner-held, re-confirmed 2026-09-01; eleven
+  commits per branch already ride the bump.
+- **Not touching `build/libs`** (81 jars, ruled left alone). Jars go in by explicit path.
+- **Not closing the range gap by running gates 3 and 6 alone and calling it covered.** That is the
+  identical one-instrument move that produced the gap, and the Carried debt row warns against it
+  by name.
+- **Not re-running the nine primaries.** §59 did those; this section is only the seven that were
+  never run.
+- **Not the live play-test** (owner only), and **not `AGENTS.md`**.
+
+### Steps
+
+- [ ] 1. Add the three env overrides to `brew-smoke.sh`, and make fabric-api cache → download →
+      refuse(2). One logical change, built and self-tested before anything is run against it.
+- [ ] 2. Extend `--self-test` to cover BOTH: override precedence (env wins / default falls back)
+      and the fabric-api refusal. ⚠️ **A refusal that fires on everything is just a broken script**,
+      so the converse case is asserted too — the same shape `boot-check.sh --self-test` already uses.
+- [ ] 3. Prove the guard is not decoration by MUTATION: revert each half in a scratch copy and
+      confirm the self-test goes red **naming that case**, not merely exiting non-zero.
+      🔑 Score the failing case NAME — §55's 16th vacuity was a mutation harness that scored 6/6 on
+      exit codes and proved nothing.
+- [ ] 4. Land on `master`, cherry-pick to all nine (`scripts/**` is inside the identity guard, so a
+      band left behind is a gate-10 violation, not a nicety).
+- [ ] 5. Run gates 3, 5 and 6 + gate 6's control across the seven: `26.1`, `26.1.1`, `1.21.6`,
+      `1.21.7`, `1.21.9`, `1.21.2`, `1.21` — each against **its own band's shipped `v1.3.4` jar**,
+      resolved by explicit path and printed before use.
+- [ ] 6. Record every result, including any version where a gate cannot run. **An unrun gate is
+      written as unrun.**
+
+### Rollback
+
+The only tracked files are `scripts/brew-smoke.sh` and `TODO.md`; both come back with
+`git checkout fa5ecadb4 -- <path>`, and the pre-§60 tip is recorded in `.agent/memory/state.md`.
+Everything else is generated and gitignored (`build/brew-smoke/`, `build/boot-check/`,
+`build/gameplay-smoke/`) or lives in the scratchpad. No branch is switched in the shared working
+copy: propagation runs in a scratch clone and pushes the band refs back.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
