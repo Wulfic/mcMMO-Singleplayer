@@ -2741,22 +2741,102 @@ paraphrasing it, so the two harnesses fail the same way for the same reason.
 
 ### Steps
 
-- [ ] 1. Add the three env overrides to `brew-smoke.sh`, and make fabric-api cache → download →
+- [x] 1. Add the three env overrides to `brew-smoke.sh`, and make fabric-api cache → download →
       refuse(2). One logical change, built and self-tested before anything is run against it.
-- [ ] 2. Extend `--self-test` to cover BOTH: override precedence (env wins / default falls back)
+- [x] 2. Extend `--self-test` to cover BOTH: override precedence (env wins / default falls back)
       and the fabric-api refusal. ⚠️ **A refusal that fires on everything is just a broken script**,
       so the converse case is asserted too — the same shape `boot-check.sh --self-test` already uses.
-- [ ] 3. Prove the guard is not decoration by MUTATION: revert each half in a scratch copy and
+- [x] 3. Prove the guard is not decoration by MUTATION: revert each half in a scratch copy and
       confirm the self-test goes red **naming that case**, not merely exiting non-zero.
       🔑 Score the failing case NAME — §55's 16th vacuity was a mutation harness that scored 6/6 on
       exit codes and proved nothing.
-- [ ] 4. Land on `master`, cherry-pick to all nine (`scripts/**` is inside the identity guard, so a
+- [x] 4. Land on `master`, cherry-pick to all nine (`scripts/**` is inside the identity guard, so a
       band left behind is a gate-10 violation, not a nicety).
-- [ ] 5. Run gates 3, 5 and 6 + gate 6's control across the seven: `26.1`, `26.1.1`, `1.21.6`,
+- [x] 5. Run gates 3, 5 and 6 + gate 6's control across the seven: `26.1`, `26.1.1`, `1.21.6`,
       `1.21.7`, `1.21.9`, `1.21.2`, `1.21` — each against **its own band's shipped `v1.3.4` jar**,
       resolved by explicit path and printed before use.
-- [ ] 6. Record every result, including any version where a gate cannot run. **An unrun gate is
+- [x] 6. Record every result, including any version where a gate cannot run. **An unrun gate is
       written as unrun.**
+
+### The measured outcome — all SEVEN pass, and the sweep found a THIRD instance of the class
+
+**Every gate now passes on every one of the seven, and with §59's nine primaries that is all 16
+declared versions** — the full scope this project claims to support, boot-verified for the first
+time. Run 2026-09-01 against each version's own band jar (`v1.3.4`), resolved by explicit path.
+
+| version | band | gate 3 | gate 5 | gate 6 | gate 6 control |
+|---|---|---|---|---|---|
+| `26.1` | `mc/26.1.2` | ✅ canary rejected | ✅ control discriminated | ✅ **36 / 0 / 0** | ✅ |
+| `26.1.1` | `mc/26.1.2` | ✅ | ✅ | ✅ **36 / 0 / 0** | ✅ |
+| `1.21.6` | `mc/1.21.8` | ✅ | ✅ | ✅ **36 / 0 / 0** | ✅ |
+| `1.21.7` | `mc/1.21.8` | ✅ | ✅ | ✅ **36 / 0 / 0** | ✅ |
+| `1.21.9` | `mc/1.21.10` | ✅ | ✅ | ✅ **36 / 0 / 0** | ✅ |
+| `1.21.2` | `mc/1.21.3` | ✅ | ✅ | ✅ **36 / 0 / 0** | ✅ |
+| `1.21` | `mc/1.21.1` | ✅ | ✅ | ✅ **36 / 0 / 0** | ✅ |
+
+**Five distinct jar SHA-256s across seven versions, and that is the CORRECT number**: `26.1`/`26.1.1`
+share `mc/26.1.2`'s jar and `1.21.6`/`1.21.7` share `mc/1.21.8`'s, because one jar covering a
+contiguous range **is** what a band is. The SPEARS gate resolved per version — present on the two
+`26.x`, correctly omitted on all five `1.21.x` below `1.21.11`.
+
+### 🔴🔴 The third instance — and it had corrupted this section's own first results
+
+`gameplay-smoke.sh` staged fabric-api from the Gradle cache and, on a miss, printed
+*"warn: fabric-api X not in the Gradle cache; mcMMO will fail to load without it"* — **and then ran
+the scenario anyway.** It stated the run was doomed and proceeded. **Five of the seven** (`26.1.1`,
+`1.21.6`, `1.21.7`, `1.21.9`, `1.21`) died at `never reached 'Done ('` and were reported as
+**❌ FAIL — the mod is bad** for what was purely a missing dependency, with nothing in the output
+distinguishing them from a real regression.
+
+🔑🔑 **THREE HARNESSES, ONE BLIND SPOT, ONE CAUSE.** `boot-check.sh` had cache → download → refuse(2)
+all along. `brew-smoke.sh` proceeded silently. `gameplay-smoke.sh` warned and proceeded. All three
+were unreachable until now for the same reason: **Loom caches fabric-api for the version it built
+against, so the cache ALWAYS hits for a band's primary — and until §60 nobody ran these harnesses on
+anything else.** The range gap and this defect are the same root cause wearing two faces: *a gate
+only ever exercised on one input cannot have its other paths tested.*
+
+🔴🔴 **The worse half is that it made the CONTROL VACUOUS, and this section recorded four of them as
+correct.** Without fabric-api mcMMO cannot load, so `GAMEPLAY_SMOKE_CONTROL=1` "failed as it must"
+for a reason having nothing to do with mcMMO being removed — **control and real run failed
+identically, and telling those apart is the control's entire job.** The first sweep's table said
+`0-is-correct-here` for runs that proved nothing.
+✅ **The repair is visible in the failure REASON, which is the honest way to tell these apart:**
+
+| | control's failure |
+|---|---|
+| before (vacuous) | `❌ never reached 'Done ('` — the server never booted |
+| after (meaningful) | server boots, `warn: never saw 'Loaded mcMMO data for Tester'` — the mod simply is not there |
+
+⚠️ **`gameplay-smoke.sh` had NO shell-side self-test at all** — only the scorer's, which cannot see a
+staging bug. That is precisely why no test in this repo could have caught this. It now has one
+(4 cases), as its two siblings always had.
+
+### The guards, and what proves they are not decoration
+
+`brew-smoke.sh` (`2e29ec0cd`): `--self-test` 6 → **12 cases**, **4/4 mutations caught**.
+`gameplay-smoke.sh` (`801afafdd`): new `--self-test`, **4 cases**, **2/2 mutations caught**.
+Both scored on the **failing case NAME**, never the exit code.
+
+🔑 **Three vacuities were caught while building those guards, all in the new work:**
+1. The first version-resolution test re-implemented the lookup inside `bash -c` — **testing a copy
+   of the logic, not the logic**. It now calls the real function.
+2. **The cache-hit case was vacuous**: it paired a populated cache with a *working* network, so
+   bypassing the cache entirely still passed — the download quietly fetched the same jar. Mutation
+   M3 went **UNCAUGHT** until the case was re-paired with a curl that cannot succeed.
+   **"Something got staged" is not "the cache was used."**
+3. The mutation harness invoked bare `bash` from python, which resolves to **WSL's** bash: it dies
+   with `execvpe(/bin/bash)` before reading the script and returns the same exit 1 a caught mutation
+   returns — §55's 16th vacuity exactly. **Caught only because the baseline control went red and
+   because scoring is on names**, which cannot appear unless the case really ran.
+
+### What this did NOT prove
+
+- **Not a rebuild.** Same ruling as §59: the shipped `v1.3.4` assets, whose `src/main` is identical
+  to every band's HEAD.
+- **Not that a band's jar is CORRECT on a non-primary version, only that it BOOTS, BREWS and PLAYS
+  there.** Gate 12 remains the instrument for whether the manifest's symbols exist across the range.
+- **Not Trophy Hunter** (rank-gated, smoke player is Hunter 0) and **not the live play-test** (owner).
+- ⚠️ **Not unattended.** All three gates are still a person running a command. Nothing schedules them.
 
 ### Rollback
 
@@ -3023,7 +3103,7 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
 
 ## Carried debt (open items only — closed rows are in the archives)
 
-- [ ] 🔴 **SEVEN DECLARED VERSIONS ACROSS FIVE BANDS HAVE NEVER BEEN BOOTED, BREWED OR PLAYED.**
+- [x] ✅ **CLOSED by §60 (2026-09-01) — all seven now boot, brew and play, and with §59's nine primaries that is ALL 16 declared versions.** Every one scored gate 3 clean, gate 5 with its vanilla control discriminating, and gate 6 **36 / 0 / 0** with a meaningful control. 🔑 **Closing it required a script change, not just runs**: `brew-smoke.sh` could only read `gradle.properties` (`2e29ec0cd`). 🔴 **And the sweep found a THIRD instance of the class** — `gameplay-smoke.sh` warned that a run would fail without fabric-api and then ran it, turning five environment failures into “the mod is bad” **and making their controls vacuous** (`801afafdd`). The original row read:
       Raised by §59, measured across all nine `supported_minecraft_versions` (2026-09-01):
 
       | band | declared | primary | NEVER exercised by gates 3/5/6 |
