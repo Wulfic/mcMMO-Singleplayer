@@ -54,7 +54,105 @@ to_native() {
   if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi
 }
 
+# --- fabric-api: cache, then download, then REFUSE ------------------------------------------------
+# 🔑 THIS USED TO `warn:` AND CARRY ON. It printed "mcMMO will fail to load without it" and then ran
+# the scenario anyway, so the run died at "never reached 'Done ('" and was reported as ❌ FAIL --
+# the mod is bad -- for what was purely a missing dependency. Measured 2026-09-01: five of §60's
+# seven versions failed exactly this way, and nothing in the output distinguished them from a real
+# regression.
+# 🔴🔴 It also made the CONTROL RUN VACUOUS, which is the worse half. Without fabric-api mcMMO
+# cannot load, so GAMEPLAY_SMOKE_CONTROL=1 "fails as it must" for a reason that has nothing to do
+# with mcMMO being removed -- control and real run fail identically, and telling those apart is the
+# control's entire job. A control that passes because the environment is broken is not evidence.
+# ⚠️ Unreachable until §60 for the same reason as its two siblings: Loom caches fabric-api for the
+# version it built against, so the cache always hits for a band's PRIMARY -- and until §60 nobody
+# ran these harnesses on anything else. Three scripts, one blind spot, one cause.
+stage_fapi() {
+    local dest="$1"
+    local cache_root="${GAMEPLAY_SMOKE_FAPI_CACHE:-$HOME/.gradle/caches/modules-2/files-2.1/net.fabricmc.fabric-api/fabric-api}"
+    local url="https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/${FAPI}/fabric-api-${FAPI}.jar"
+    local jar
+    jar="$(find "$cache_root/$FAPI" -name "fabric-api-${FAPI}.jar" 2>/dev/null | head -1)"
+    if [[ -n "$jar" ]]; then
+        cp "$jar" "$dest/" || { echo "error: could not copy $jar" >&2; return 2; }
+        echo "=== fabric-api $FAPI staged from the Gradle cache"
+        return 0
+    fi
+    echo "=== fabric-api $FAPI is not in the Gradle cache; fetching $url"
+    if curl -fsS --max-time 300 -o "$dest/fabric-api-${FAPI}.jar" "$url"; then
+        echo "=== fabric-api $FAPI staged from maven.fabricmc.net"
+        return 0
+    fi
+    rm -f "$dest/fabric-api-${FAPI}.jar"
+    {
+        echo "❌ ENVIRONMENT: could not stage fabric-api ${FAPI} for MC ${MC:-?}."
+        echo "   cache: $cache_root/$FAPI"
+        echo "   url  : $url"
+        echo "   Refusing to run. Without it mcMMO does not load, the scenario fails exactly like"
+        echo "   a broken mod, AND the control run fails for the same reason -- so the one"
+        echo "   comparison this harness exists to make would be meaningless."
+        echo "   Fix: pass the right coordinate as \$4, or build once against this MC version."
+    } >&2
+    return 2
+}
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# --- shell-side self-test -------------------------------------------------------------------------
+# Its two siblings have had one all along; this script only ever had the SCORER's, which cannot see
+# a staging bug. §60 is why: the fabric-api staging below used to warn-and-continue, and no test in
+# this repo could have caught it. Runs before the JAR argument is required, since it boots nothing.
+if [[ "${1:-}" == "--self-test" ]]; then
+    FAPI="0.0.0+selftest"
+    tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+    mkdir -p "$tmp/bin" "$tmp/emptycache" "$tmp/hit/$FAPI" "$tmp/dest"
+    : > "$tmp/hit/$FAPI/fabric-api-${FAPI}.jar"
+    cat > "$tmp/bin/curl" <<'STUB'
+#!/usr/bin/env bash
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --max-time) shift 2 ;;
+    -o) out="$2"; shift 2 ;;
+    -*) shift ;;
+    *)  shift ;;
+  esac
+done
+[ -n "$out" ] && [ "${STUB_CURL_RC:-0}" = "0" ] && : > "$out"
+exit "${STUB_CURL_RC:-0}"
+STUB
+    chmod +x "$tmp/bin/curl"
+    pass=0; fail=0
+    fchk() { # name, cache_root, stub_rc, want_rc, want_staged
+        local name="$1" cache="$2" stub="$3" want_rc="$4" want_staged="$5" rc staged
+        rm -rf "$tmp/dest"; mkdir -p "$tmp/dest"
+        ( export GAMEPLAY_SMOKE_FAPI_CACHE="$cache" WORK="$tmp"
+          [[ -n "$stub" ]] && export PATH="$tmp/bin:$PATH" STUB_CURL_RC="$stub"
+          stage_fapi "$tmp/dest" ) >/dev/null 2>&1
+        rc=$?
+        staged=$(ls "$tmp/dest" 2>/dev/null | grep -c fabric-api)
+        if [[ "$rc" == "$want_rc" && "$staged" == "$want_staged" ]]; then
+            echo "  PASS  $name (exit $rc, staged=$staged)"; pass=$((pass+1))
+        else
+            echo "  FAIL  $name: exit=$rc (want $want_rc) staged=$staged (want $want_staged)"; fail=$((fail+1))
+        fi
+    }
+    echo "gameplay-smoke self-test: fabric-api staging"
+    # 🔑 The cache-hit case pairs a populated cache with a curl that CANNOT succeed. With a working
+    # network it proves nothing -- bypassing the cache still downloads the same jar and passes.
+    fchk "cache hit, network BROKEN -> staged anyway (proves the cache path)" "$tmp/hit"       22 0 1
+    fchk "cache miss + fetch        -> staged from maven"                     "$tmp/emptycache" 0 0 1
+    fchk "cache miss + 404          -> exit 2 (ENVIRONMENT), stages nothing"  "$tmp/emptycache" 22 2 0
+    echo
+    echo "gameplay-smoke self-test: the scorer"
+    python "$(to_native "$REPO/scripts/gameplay_smoke_scenario.py")" --self-test >/dev/null 2>&1 \
+        && { echo "  PASS  scorer self-test"; pass=$((pass+1)); } \
+        || { echo "  FAIL  scorer self-test"; fail=$((fail+1)); }
+    echo
+    echo "  $pass passed, $fail failed"
+    [[ "$fail" -eq 0 ]]; exit $?
+fi
+
 JAR="${1:-}"
 [[ -n "$JAR" && -f "$JAR" ]] || { echo "usage: scripts/gameplay-smoke.sh <mcmmo.jar> [mcversion] [loader] [fabricapi]" >&2; exit 2; }
 JAR="$(cd "$(dirname "$JAR")" && pwd)/$(basename "$JAR")"
@@ -125,13 +223,21 @@ else
     cp "$JAR" "$WORK/mods/"
 fi
 cp "$CARPET" "$WORK/mods/"
-FAPI_JAR="$(find "$HOME/.gradle/caches/modules-2/files-2.1/net.fabricmc.fabric-api/fabric-api/$FAPI" \
-    -name "fabric-api-${FAPI}.jar" 2>/dev/null | head -1)"
-if [[ -n "$FAPI_JAR" ]]; then
-    cp "$FAPI_JAR" "$WORK/mods/"
-else
-    echo "warn: fabric-api $FAPI not in the Gradle cache; mcMMO will fail to load without it" >&2
-fi
+# --- fabric-api: cache, then download, then REFUSE ------------------------------------------------
+# 🔑 THIS USED TO `warn:` AND CARRY ON. It printed "mcMMO will fail to load without it" and then
+# ran the scenario anyway, so the run died at "never reached 'Done ('" and was reported as
+# ❌ FAIL -- the mod is bad -- for what was purely a missing dependency. Measured on 2026-09-01:
+# five of §60's seven versions failed exactly this way and NOTHING in the output distinguished
+# them from a real regression.
+# 🔴🔴 It also made the CONTROL RUN VACUOUS, which is the worse half. Without fabric-api mcMMO
+# cannot load, so GAMEPLAY_SMOKE_CONTROL=1 "fails as it must" for a reason that has nothing to do
+# with mcMMO being removed -- the control and the real run fail identically, and the control's
+# whole job is telling those apart. A control that passes because the environment is broken is
+# not evidence.
+# ⚠️ Unreachable until §60 for the same reason as its two siblings: Loom caches fabric-api for the
+# version it built against, so the cache always hits for a band's PRIMARY, and until §60 nobody
+# ran these harnesses on anything else.
+stage_fapi "$WORK/mods" || exit 2
 echo "=== mods: $(ls "$WORK/mods" | tr '\n' ' ')"
 
 echo "eula=true" > "$WORK/eula.txt"
