@@ -223,20 +223,10 @@ else
     cp "$JAR" "$WORK/mods/"
 fi
 cp "$CARPET" "$WORK/mods/"
-# --- fabric-api: cache, then download, then REFUSE ------------------------------------------------
-# 🔑 THIS USED TO `warn:` AND CARRY ON. It printed "mcMMO will fail to load without it" and then
-# ran the scenario anyway, so the run died at "never reached 'Done ('" and was reported as
-# ❌ FAIL -- the mod is bad -- for what was purely a missing dependency. Measured on 2026-09-01:
-# five of §60's seven versions failed exactly this way and NOTHING in the output distinguished
-# them from a real regression.
-# 🔴🔴 It also made the CONTROL RUN VACUOUS, which is the worse half. Without fabric-api mcMMO
-# cannot load, so GAMEPLAY_SMOKE_CONTROL=1 "fails as it must" for a reason that has nothing to do
-# with mcMMO being removed -- the control and the real run fail identically, and the control's
-# whole job is telling those apart. A control that passes because the environment is broken is
-# not evidence.
-# ⚠️ Unreachable until §60 for the same reason as its two siblings: Loom caches fabric-api for the
-# version it built against, so the cache always hits for a band's PRIMARY, and until §60 nobody
-# ran these harnesses on anything else.
+# Refuses (exit 2) rather than running without fabric-api -- see stage_fapi's definition above for
+# why, including why that also made the control run vacuous. Deliberately a pointer and not a
+# second copy of the reasoning: this file's comments are load-bearing, and two near-identical
+# explanations drift apart the first time someone edits one of them.
 stage_fapi "$WORK/mods" || exit 2
 echo "=== mods: $(ls "$WORK/mods" | tr '\n' ' ')"
 
