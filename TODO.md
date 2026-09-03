@@ -2848,6 +2848,132 @@ copy: propagation runs in a scratch clone and pushes the band refs back.
 
 ---
 
+## §61 — one command for the declared range, and the two defects underneath it (Tier 2, in progress)
+
+### What forced it
+
+§60 closed the *coverage* gap — all 16 declared versions boot, brew and play — and recorded three
+things it explicitly did not close:
+
+* all three gates are **a person running a command**; nothing schedules them;
+* the sweep took **~3h sequential** because *"no harness sets `server-port`, so all bind 25565"*;
+* driving them means sixteen hand-assembled invocations, each carrying its own fabric-api coordinate.
+
+🔑 **Scoping the second line found it was never a performance complaint.** A busy 25565 does not make
+the sweep slow — it makes all three gates **libel the mod**. That is §60's own class (an ENVIRONMENT
+condition reported as *"the mod is bad"*) in a third disguise, and §60 fixed it only for fabric-api.
+**Fixing an instrument does not fix the class** — the sentence §59 wrote about §56.4, now owed by §60.
+
+### What was measured BEFORE any edit
+
+**1. 🔴 A busy 25565 is reported as a mod failure.** Measured 2026-09-03 on `master`: a listener was
+made to hold `0.0.0.0:25565`, then gate 3 was run on the shipped `v1.3.4` `26.2` jar. The server
+loads fabric-api, loads mcMMO, and then:
+
+```
+[15:16:46] [Server thread/INFO]: Starting Minecraft server on *:25565
+[15:16:47] [Server thread/WARN]: **** FAILED TO BIND TO PORT!
+[15:16:47] [Server thread/WARN]: The exception was: java.net.BindException: Address already in use: bind
+[15:16:47] [Server thread/WARN]: Perhaps a server is already running on that port?
+[15:16:47] [Server thread/INFO]: Stopping server
+```
+
+It never reaches `Done (`, so the 420-second wait runs out and the harness prints
+`❌ FAIL: never reached 'Done ('` and exits **1** — the code that means **THE MOD IS
+BAD**. Nothing about the mod was tested. ⚠️ **Seven wasted minutes per version is the cheap half of
+the cost;** the expensive half is that the verdict is wrong and reads exactly like a real failure.
+🔑 **The reason nobody hit it is the reason §60's cache bug survived: one machine, one server at a
+time.** It fires the moment a peer session, a second sweep, or the owner's own game holds the port.
+
+**2. 🔴 `brew-smoke.sh` runs every version against ONE mcMMO config tree, and it is three weeks old.**
+Three measurements, in order:
+
+| | |
+|---|---|
+| the asymmetry | `gameplay-smoke.sh:240` clears `"$WORK/config"` every run. `brew-smoke.sh:296` does not, and `boot-check.sh:179` does not |
+| the sharing | `brew-smoke`'s work dir is `build/brew-smoke/$mode` — keyed on **mode**, while both siblings key on **`$MC`**. So one `config/mcmmo/` tree serves all 16 versions |
+| **why that matters** | **the generated config IS version-dependent.** `build/boot-check/26.2` vs `build/boot-check/1.21`, each written by its own version's run: `config.yml` **9585 vs 9030** and `experience.yml` **15535 vs 15356** differ. Nine of eleven files match; two do not, and they are the two the id gates care about |
+
+On disk today that tree dates to **2026-08-14**, partially rewritten 08-19 and 08-31, and **§60's
+seven-version sweep did not touch it** (its `mods/` are stamped 09-01 21:50; the config files are
+not). So at most **one** of the sixteen versions §59/§60 brewed was reading the config its own
+version generates.
+⚠️ **State the severity honestly: this is a false-PASS risk, not a false FAIL.** Every one of those
+runs passed, and Catalysis may well be indifferent to the two files that differ. What is unproven —
+and was never asked — is that gate 5 passes on the config a player's **first install** writes.
+
+**3. ✅ A negative result, recorded because it was the suspicion that started the check.** The server
+jar is **not** contaminated across versions: the launcher stores `versions/<mc>/server-<mc>.jar` and
+`.fabric/processedMods/` entries are content-hashed, so a shared work dir cannot make one version run
+another's server. Measured, not assumed. **The contamination is in the config alone.**
+
+**4. ⚠️ `hidden.yml` is a red herring — and it nearly went into this plan as evidence.** The jar
+packages **12** `.yml` resources and every generated tree on this machine has **11**. The first
+reading was *"brew-smoke's tree is missing a file"*; the control killed it — `hidden.yml` is absent
+from `boot-check/26.2` and `boot-check/1.21` too, i.e. mcMMO never writes it to disk. **A difference
+that appears in the suspect AND in the control is a fact about the program, not a defect.**
+
+### The steps
+
+- [ ] **61.1 — the port.** Each of the three harnesses takes a port (`BOOT_CHECK_PORT`,
+      `BREW_SMOKE_PORT`, `GAMEPLAY_SMOKE_PORT`, default `25565`, an env var rather than a positional
+      for the reason `BREW_SMOKE_JAR` already settled) and writes `server-port=` into its
+      `server.properties`.
+- [ ] **61.2 — the misclassification, which is the half that matters.** The boot wait also watches for
+      `FAILED TO BIND TO PORT` and returns **2 (ENVIRONMENT)** naming the port, *immediately* rather
+      than after 420 seconds. 🔑 **61.1 without 61.2 is worse than nothing**: giving the sweep distinct
+      ports makes the collision rarer without making it legible, which is how a rare failure gets
+      diagnosed as a flaky mod.
+- [ ] **61.3 — brew-smoke clears its config**, adding `"$work/config"` to the `rm -rf` its sibling
+      already has on line 240. One line, an existing pattern, not a new mechanism.
+- [ ] **61.4 — the sweep driver**, `scripts/version-sweep.sh`: reads `supported_minecraft_versions`,
+      resolves loader + fabric-api per version, runs gates 3/5/6 **and their controls** one version at
+      a time, and prints a version × gate matrix. ⚠️ **The matrix distinguishes exit 2 from exit 1** —
+      collapsing them is the exact thing §60 and 61.2 exist to prevent, and a driver that prints ❌ for
+      both would re-introduce the defect one layer up.
+- [ ] **61.5 — the guards.** A `--self-test` case per harness for 61.1–61.3 and one for the driver,
+      each scored on the **failing case name** and mutation-checked. Per §60: the mutation runner must
+      invoke `bash` by the path this repo's harnesses use, or WSL's bash returns the same exit 1 a
+      caught mutation returns.
+- [ ] **61.6 — the sweep**, all 16 declared versions, sequential, against the shipped `v1.3.4` assets.
+- [ ] **61.7 — propagate** to all eight bands with `Backport-of:`, verified through git's own trailer
+      parser **with the master-empty control**, from a scratch clone pushing band refs back.
+
+### What I am NOT doing
+
+* **No parallel mode, no `--jobs`.** The owner ruled the sweep sequential (2026-09-03). Distinct ports
+  are still needed — for the collision with *whatever else* holds 25565 — but an untested parallel
+  path is worse than none, and building one nobody asked to run is how a second unexercised code path
+  ships. **That is the mistake §60 spent a section on.**
+* **Not a new ship gate 13** (owner, 2026-09-03). A wrapper that runs three gates is not a fourth gate;
+  numbering it would count the same evidence twice. Gates 3/5/6's entries get rewritten instead, and
+  the *"Twelve gates are listed"* sentence stays true.
+* **Not scheduling anything.** `.github/` is `master`-only and weekly, and R11 says that tab is unread
+  — *unattended* is a separate decision with its own failure mode, not a free rider on this one.
+* **Not re-keying `brew-smoke`'s work dir on `$MC`.** Measured unnecessary once the config is cleared:
+  everything else in that directory is either version-keyed, content-hashed, or removed per run.
+  Recorded so the next reader does not re-derive it.
+* **Not clearing `boot-check`'s config.** Its dir *is* version-keyed, so it has no cross-version
+  contamination — only staleness in time. Clearing it would trade *"exercises config migration"* for
+  *"exercises first install"*, and neither is obviously the right thing for a boot gate to test.
+  ⚠️ Stated as a deliberate non-change with the trade-off written down, rather than left silent.
+* **Not rebuilding jars** (§59/§60's standing ruling: gate the shipped artifact), **not the live
+  play-test**, and **not touching the push hold** — still held, 2026-09-03.
+
+### Blast radius and rollback
+
+Three shared scripts change, so each edit is a nine-branch change under the identity guard;
+`scripts/version-sweep.sh` is a **new** shared file, and the identity guard takes the **union** of
+every branch's tree, so a driver that lands on `master` alone is a gate-10 violation by construction.
+Rollback is `git checkout <pre-§61 tip> -- scripts/<file>` per file, or `git reset --hard <tip>~N` per
+branch; the pre-§61 tips go in `.agent/memory/state.md` before the first commit.
+Everything the sweep writes is gitignored (`build/boot-check/`, `build/brew-smoke/`,
+`build/gameplay-smoke/`) or lives in the scratchpad. The one new delete — `rm -rf "$work/config"` —
+sits inside a path built from `$REPO`, on the line that already deletes `"$work/logs"`, so it adds no
+exposure that line does not already carry.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
