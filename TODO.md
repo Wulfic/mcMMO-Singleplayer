@@ -3167,6 +3167,12 @@ inert on every band by construction. **The other seven have no automation whatso
 3. `scripts/boot-check.sh <jar> <version>` — 0 ERROR, 0 mixin failures, canary rejected.
    ⚠️ **Read the exit code: `1` = the mod is bad, `2` = ENVIRONMENT and nothing was proven about the
    mod.** `--self-test` first, as with every gate.
+   🔑 **Run it across the whole DECLARED RANGE, not just `minecraft_version`** —
+   `scripts/version-sweep.sh` (§61) drives gates 3, 5 and 6 over every entry in
+   `supported_minecraft_versions`, resolving each version's fabric-api itself. ⚠️ **That script is a
+   DRIVER, not a thirteenth gate** — do not count it as one.
+   ⚠️ **`BOOT_CHECK_PORT=<n>`** when something already holds 25565. Until §61 a busy port spent 420
+   seconds and then reported exit **1** — the mod is bad — for a purely environmental fact.
 4. `python scripts/config-id-audit.py --self-test` **then** `--check` — **0 dead-everywhere**,
    over **875 references / 26 sections / 7 files** as of §50. Reads the committed
    `scripts/mc-ids.txt`, so it needs no local Loom cache.
@@ -3184,8 +3190,18 @@ inert on every band by construction. **The other seven have no automation whatso
    `experience.yml`'s: both call Smelting an ITEM, but this file keys it on the furnace **result**
    and that one on the **input**.
 5. `scripts/brew-smoke.sh` — passes **with** its vanilla control failing.
+   ⚠️ **`BREW_SMOKE_PORT=<n>`**, as gate 3. 🔴 **And read the exit code here too, which until §61 you
+   could not:** `both` mode captured each run's output with `$( )` and never read `$?`, so an
+   ENVIRONMENT refusal was discarded and the run reported `❌ mcMMO did not brew` — having also
+   printed `✅ mcMMO consumed the ingredient` about a server that never started. It now exits **2**.
+   ⚠️ **The mcMMO config is regenerated every run as of §61.** It used to persist, and because the
+   work dir is keyed on `$mode` rather than `$MC`, one 2026-08-14 tree served all sixteen versions.
 6. `scripts/gameplay-smoke.sh` — **36 passed / 0 failed / 0 inconclusive** on `master`, and
    `GAMEPLAY_SMOKE_CONTROL=1` must **fail**.
+   ⚠️⚠️ **The control run INVERTS its exit code**: **0** means it failed as it must, **1** means it
+   PASSED without mcMMO and the scenario discriminates nothing. A driver that assumes the ordinary
+   convention brands every correct control vacuous.
+   ⚠️ **`GAMEPLAY_SMOKE_PORT=<n>`**, as gates 3 and 5.
    ⚠️ **This number moves whenever a phase is added, and it went stale unnoticed once already** — it
    read `29/29` through both §46 (+3) and up to §47 (+3), i.e. the caveat-expiry pass missed it twice
    because the phase commits touched the scenario file and not this line. The total is
