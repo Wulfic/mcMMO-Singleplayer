@@ -2508,7 +2508,7 @@ the suspicious result, not this.
 
 ---
 
-## §59 — gates 3/5/6 across the bands, against the SHIPPED artifact (Tier 2, in progress)
+## §59 — gates 3/5/6 across the bands, against the SHIPPED artifact — ✅ DONE (Tier 2)
 
 ### What forced it
 
@@ -2671,7 +2671,7 @@ peer can lose.
 
 ---
 
-## §60 — the range gap: gates 3/5/6 across the SEVEN never-booted versions (Tier 2, in progress)
+## §60 — the range gap: gates 3/5/6 across the SEVEN never-booted versions — ✅ DONE (Tier 2)
 
 ### What forced it
 
