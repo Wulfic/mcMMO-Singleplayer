@@ -2915,29 +2915,114 @@ that appears in the suspect AND in the control is a fact about the program, not 
 
 ### The steps
 
-- [ ] **61.1 — the port.** Each of the three harnesses takes a port (`BOOT_CHECK_PORT`,
+- [x] ✅ **61.1 — the port.** Each of the three harnesses takes a port (`BOOT_CHECK_PORT`,
       `BREW_SMOKE_PORT`, `GAMEPLAY_SMOKE_PORT`, default `25565`, an env var rather than a positional
       for the reason `BREW_SMOKE_JAR` already settled) and writes `server-port=` into its
       `server.properties`.
-- [ ] **61.2 — the misclassification, which is the half that matters.** The boot wait also watches for
+- [x] ✅ **61.2 — the misclassification, which is the half that matters.** The boot wait also watches for
       `FAILED TO BIND TO PORT` and returns **2 (ENVIRONMENT)** naming the port, *immediately* rather
       than after 420 seconds. 🔑 **61.1 without 61.2 is worse than nothing**: giving the sweep distinct
       ports makes the collision rarer without making it legible, which is how a rare failure gets
       diagnosed as a flaky mod.
-- [ ] **61.3 — brew-smoke clears its config**, adding `"$work/config"` to the `rm -rf` its sibling
+- [x] ✅ **61.3 — brew-smoke clears its config**, adding `"$work/config"` to the `rm -rf` its sibling
       already has on line 240. One line, an existing pattern, not a new mechanism.
-- [ ] **61.4 — the sweep driver**, `scripts/version-sweep.sh`: reads `supported_minecraft_versions`,
+- [x] ✅ **61.4 — the sweep driver**, `scripts/version-sweep.sh`: reads `supported_minecraft_versions`,
       resolves loader + fabric-api per version, runs gates 3/5/6 **and their controls** one version at
       a time, and prints a version × gate matrix. ⚠️ **The matrix distinguishes exit 2 from exit 1** —
       collapsing them is the exact thing §60 and 61.2 exist to prevent, and a driver that prints ❌ for
       both would re-introduce the defect one layer up.
-- [ ] **61.5 — the guards.** A `--self-test` case per harness for 61.1–61.3 and one for the driver,
+- [x] ✅ **61.5 — the guards.** A `--self-test` case per harness for 61.1–61.3 and one for the driver,
       each scored on the **failing case name** and mutation-checked. Per §60: the mutation runner must
       invoke `bash` by the path this repo's harnesses use, or WSL's bash returns the same exit 1 a
       caught mutation returns.
 - [ ] **61.6 — the sweep**, all 16 declared versions, sequential, against the shipped `v1.3.4` assets.
 - [ ] **61.7 — propagate** to all eight bands with `Backport-of:`, verified through git's own trailer
       parser **with the master-empty control**, from a scratch clone pushing band refs back.
+
+### What landed (2026-09-03)
+
+| | |
+|---|---|
+| `754162bf8` | `docs(61)`: this plan, and the two defects found while scoping it |
+| `21c95f813` | `fix(gate3,gate6)`: a busy port was reported as THE MOD IS BAD |
+| `a0fcd38ba` | `fix(gate5)`: three defects, every one ENVIRONMENT reported as a mod failure |
+| `546b46852` | `feat(61)`: `scripts/version-sweep.sh` — one command for a branch's declared range |
+
+**A THIRD defect of the class turned up in `brew-smoke.sh` while fixing the second**, and it is the
+worst of the three because it produces a **positive false claim**. `both` — the mode the ship gate
+runs — captured `run_one`'s output with `$( )` and never read `$?`. `run_one` returns 2 for every
+ENVIRONMENT refusal, **including the fabric-api refusal §60 added to this very file**, so in the
+default mode that 2 was discarded, the comparisons then grepped **empty strings**, and the run
+reported:
+
+```
+❌ vanilla consumed the ingredient too — this scenario does NOT discriminate
+✅ mcMMO consumed the ingredient            ← on a server that never started
+❌ no custom effect on the brewed bottle
+=== ❌ brew-smoke FAILED                                              exit 1
+```
+
+Measured before and after against `754162bf8`'s copy of the script, with fabric-api made
+unstageable. **§60's fix was defeated in this file's default mode**: a refusal the caller swallows
+is not a refusal.
+
+### The measurements
+
+| | |
+|---|---|
+| gate 3, 25565 held, default port | **exit 2 in 26s** — was exit 1 after ~7 minutes |
+| gate 3, 25565 held, `BOOT_CHECK_PORT=25599` | **exit 0 in 33s**, log confirms `Starting Minecraft server on *:25599` |
+| gate 6, 25565 held | **exit 2 in 56s** |
+| gate 5 `both`, 25565 held | **exit 2 in 65s**, naming the port |
+| gate 5 `both`, fabric-api unstageable | **exit 2**, was **exit 1** with a false ✅ |
+
+The second row is the **converse control** and is not decoration: a refusal that fired on everything
+would satisfy the first row perfectly and break every real run.
+
+Self-tests: boot-check **5 → 10**, brew-smoke **12 → 26**, gameplay-smoke **4 → 11**, and
+`version-sweep.sh` ships with **17**. Mutations, green baseline first and scored on the failing case
+**name**: **6/6**, **10/10**, **7/7**, **9/9**.
+
+### 🔑 Four vacuities caught in this section's OWN new work
+
+1. **Three `env_refusal` cases passed against a function that did not exist.** "command not found"
+   is 127, 127 is not 0, and the "no refusal" expectation was therefore satisfied by absence. `echk`
+   now treats any status above 1 as an error. **A case that passes when its subject is absent tests
+   nothing.**
+2. **A case NAMED for the anchored suffix did not test the anchor.** It asked for `1.21.1` and
+   asserted the `1.21.1` build — which an *unanchored* pattern also returns. The mutation was
+   caught, but by a different case, and **only the per-mutation name prediction revealed it**; a
+   harness asking *"did anything go red?"* would have printed a clean 9/9. Each property now has its
+   own query.
+3. **`--dry-run` printed `✅ every requested gate passed on every requested version` having executed
+   nothing.** A summary asserting a state that never happened — the same failure four documents in
+   this repo have already been corrected for. The verdict is now computed by `verdict_line()`, with
+   a case pinning that a dry run can never report a pass.
+4. 🔴 **The first live verification of gate 5 exited 2 for the WRONG REASON.** `build/libs` holds
+   forty jars, so the pre-existing ambiguous-jar refusal fired in **3 seconds** and no server was
+   ever involved. The exit code was the one I wanted; the cause had nothing to do with the port.
+   **Read WHY a run failed, never that it failed** — §60's lesson, and it caught me inside the
+   section that quotes it.
+
+⚠️ **And one about the harness rather than the subject:** the first mutation run scored **0 caught /
+6 mis-scored** because the mutants were written to a temp directory, where `$REPO` (derived from
+`BASH_SOURCE/..`) resolves to a tree with no `gradle.properties` — so an unrelated case went red in
+every mutant. **A mutation harness that cannot produce a green baseline is measuring itself.**
+
+### ⚠️ What the sweep does NOT prove
+
+* **Not the pinned fabric-api.** `resolve_fapi` takes the NEWEST build for each Minecraft, because
+  for fifteen of the sixteen versions there is no pin to take. On `26.2` that resolved
+  **`0.159.0+26.2`** while `gradle.properties` pins `0.158.0+26.2`. This is what a player installing
+  today gets, and it is a deliberate difference from §59/§60, which used the pin for each band's
+  primary. 🔴 **The consequence cuts both ways: a green sweep does not certify the pinned
+  coordinate, and a red one might be fabric-api's fault rather than the mod's.** Read the run.
+* **Not a rebuild** — same ruling as §59/§60, the shipped artifact is what is gated. ⚠️ These are the
+  **locally built** `v1.3.4` jars, not the published release assets; nine distinct SHA-256s, each
+  matched to its band by reading `depends.minecraft` out of its own `fabric.mod.json` rather than
+  off the filename.
+* **Not unattended.** Still a person running a command — one command now instead of sixteen, which
+  is a smaller claim than "automated" and is the only one being made.
 
 ### What I am NOT doing
 
