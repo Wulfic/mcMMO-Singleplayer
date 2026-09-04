@@ -81,6 +81,15 @@ control_label() {  # rc
     esac
 }
 
+# --- should the control run? -----------------------------------------------------------------------
+# Only after a PASS. A control answers "was that pass meaningful?", so after a FAIL it qualifies
+# nothing -- and it is destructive here, because gameplay-smoke.sh clears "$WORK/logs" at startup
+# and both runs share the work dir. Running it after a failure DELETES the failing run's log, which
+# is the file the failure message tells the reader to open. Measured on 1.21.4.
+control_wanted() {  # gate6 label
+    [[ "$1" == "PASS" ]]
+}
+
 # --- the closing verdict ---------------------------------------------------------------------------
 # ⚠️ A --dry-run once printed "✅ every requested gate passed on every requested version" having run
 # nothing at all. That is a status line asserting a state that never happened -- the failure this
@@ -183,6 +192,26 @@ XML
         fi
     }
     echo
+    echo "version-sweep self-test: whether the control runs"
+    cchk() { # name, gate6 label, want ("yes"/"no")
+        local got="no" rc
+        control_wanted "$2"; rc=$?
+        [[ "$rc" == "0" ]] && got="yes"
+        # Anything above 1 is a missing function, not an answer -- a case that passes when its
+        # subject is absent tests nothing, which this file already learned once this session.
+        [[ "$rc" -gt 1 ]] && got="error($rc)"
+        if [[ "$got" == "$3" ]]; then
+            echo "  PASS  $1"; pass=$((pass+1))
+        else
+            echo "  FAIL  $1: got '$got' want '$3'"; fail=$((fail+1))
+        fi
+    }
+    cchk "after a PASS -> run the control"                    PASS yes
+    # 🔑 The one that matters: the control would DELETE the failing run's log.
+    cchk "after a FAIL -> skip it, keep the log"              FAIL no
+    cchk "after an ENV refusal -> skip it too"                ENV  no
+
+    echo
     echo "version-sweep self-test: the closing verdict"
     vchk "nothing wrong            -> PASS" 0 0 0 PASS
     vchk "a mod failure            -> FAIL" 0 1 0 FAIL
@@ -267,17 +296,31 @@ for v in "${VLIST[@]}"; do
     if wants 6; then
         GAMEPLAY_SMOKE_PORT="$PORT" "$REPO/scripts/gameplay-smoke.sh" "$JAR" "$v" "$LOADER" "$fapi"
         g6="$(gate_label $?)"; echo "    gate 6: $g6"
-        # The control is not optional: gate 6 scores mcMMO's own files, so without it a green run
-        # and a run against a scenario that cannot discriminate look identical.
-        GAMEPLAY_SMOKE_CONTROL=1 GAMEPLAY_SMOKE_PORT="$PORT" \
-            "$REPO/scripts/gameplay-smoke.sh" "$JAR" "$v" "$LOADER" "$fapi"
-        g6c="$(control_label $?)"; echo "    gate 6 control: $g6c"
+        # The control is not optional AFTER A PASS: gate 6 scores mcMMO's own files, so a green
+        # run and a run whose scenario cannot discriminate look identical without it.
+        #
+        # 🔴 But it is SKIPPED after a failure, and that is a defect this script shipped with for
+        # exactly one sweep. gameplay-smoke.sh clears "$WORK/logs" at startup and both runs share
+        # the work dir, so the control DELETED the failing run's log -- the very file the failure
+        # message had just told the reader to open. Measured on 1.21.4, whose single red phase was
+        # left with no evidence behind it.
+        # A control answers "was that PASS meaningful?". After a FAIL there is no pass to qualify,
+        # so it buys nothing and costs the diagnosis.
+        if control_wanted "$g6"; then
+            GAMEPLAY_SMOKE_CONTROL=1 GAMEPLAY_SMOKE_PORT="$PORT" \
+                "$REPO/scripts/gameplay-smoke.sh" "$JAR" "$v" "$LOADER" "$fapi"
+            g6c="$(control_label $?)"; echo "    gate 6 control: $g6c"
+        else
+            g6c="skipped"
+            echo "    gate 6 control: skipped -- preserving the failing run's log for diagnosis"
+        fi
     fi
     ROWS+=("$v|$g3|$g5|$g6|$g6c")
     for cell in "$g3" "$g5" "$g6"; do
         [[ "$cell" == "FAIL" ]] && worst_mod=1
         [[ "$cell" == "ENV"  ]] && worst_env=1
     done
+    # "skipped" is never read as a pass: the FAIL that caused the skip already set worst_mod.
     [[ "$g6c" == "VACUOUS" ]] && worst_mod=1
     [[ "$g6c" == "ENV"     ]] && worst_env=1
 done
