@@ -620,9 +620,11 @@ instrument is `git log --all -p`. Full provenance in §63.
 **Not deleted, and that is a decision rather than an omission.** Deleting a tag **DRAFTS** its
 release (this file's own standing warning), these are not in scope for a docs cleanup, and nobody has
 established where they came from. 🔑 **It also means `git tag --list` is the wrong instrument for
-"what shipped"** — it holds six tags the remote does not, and is *missing* `mc26.1.2-v1.3.4`, which
-the remote has and this clone simply never fetched. **`git ls-remote --tags` is the instrument.**
-Carried to *Carried debt*.
+"what shipped"** — as measured that day it **held six tags the remote did not, and was missing**
+`mc26.1.2-v1.3.4`, **which the remote had**: wrong in both directions at once.
+**`git ls-remote --tags origin` is the instrument.** ✅ Both directions were closed by §63 on the
+same day (six deleted, the missing one fetched) — but the lesson is about the **instrument**, not
+the counts, and it survives them being reconciled.
 
 ### What I did NOT do
 
@@ -1066,13 +1068,18 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
       it is wanted. 🔴 **Do NOT reach for `git fetch --prune --prune-tags`**: it re-queries the remote
       and deletes whatever is not in the answer, so a network hiccup returning an empty tag list
       deletes **all 71**. Freeze the list to a file, read it, delete from the frozen list.
-      ⚠️ The local tag set also **errs the other way**: `mc26.1.2-v1.3.4` is on the remote and was
-      never fetched here. `git tag --list` is wrong in **both** directions at once.
-      🔑 **The lesson is already banked, though: `git tag --list` is the WRONG instrument for
-      "what shipped".** It holds six tags the remote does not, and is *missing* `mc26.1.2-v1.3.4`,
-      which the remote has and this clone never fetched — so it errs in **both** directions at once.
-      **`git ls-remote --tags origin` is the instrument.** A local tag list answering a question
-      about releases is how §57 nearly missed a band being a release behind.
+      ✅ **The other direction is CLOSED:** `mc26.1.2-v1.3.4` was on the remote and un-fetched here;
+      §63 fetched it, so the local set is no longer missing anything (`comm -13` returns 0).
+      🔑 **The lesson is about the INSTRUMENT and outlives the counts.** `git tag --list` was wrong in
+      **both** directions at once — 62 tags the remote did not have, one it did — which is why it is the
+      wrong instrument for *"what shipped"* even now that the two agree. **Agreement today is not a
+      property of the instrument.** `git ls-remote --tags origin` is the instrument. A local tag list
+      answering a question about releases is how §57 nearly missed a band being a release behind.
+      ⚠️⚠️ **This row's own text was stale within the hour, and §63 wrote it that way:** the
+      *"was never fetched here"* sentence was authored **before** the same session ran the fetch that
+      falsified it. 🔑 **A fix and the sentence describing it are two separate writes, and only the
+      first one is on anybody's checklist** — which is the whole reason the caveat-expiry pass greps for
+      the **symptom** rather than the file just edited. Caught by a peer session re-reading the diff.
 - [x] ✅ **CLOSED by §60 (2026-09-01) — all seven now boot, brew and play, and with §59's nine primaries that is ALL 16 declared versions.** Every one scored gate 3 clean, gate 5 with its vanilla control discriminating, and gate 6 **36 / 0 / 0** with a meaningful control. 🔑 **Closing it required a script change, not just runs**: `brew-smoke.sh` could only read `gradle.properties` (`2e29ec0cd`). 🔴 **And the sweep found a THIRD instance of the class** — `gameplay-smoke.sh` warned that a run would fail without fabric-api and then ran it, turning five environment failures into “the mod is bad” **and making their controls vacuous** (`801afafdd`). The original row read:
       Raised by §59, measured across all nine `supported_minecraft_versions` (2026-09-01):
 
