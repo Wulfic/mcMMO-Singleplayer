@@ -11,6 +11,10 @@
 #   scripts/boot-check.sh path/to/mcmmo.jar 1.21.8 0.19.3 0.130.0+1.21.8    # explicit loader / fabric-api
 #   scripts/boot-check.sh --self-test                                       # prove the staging refusal
 #
+# ENV:
+#   BOOT_CHECK_PORT=<n>   bind this port instead of 25565. A busy 25565 used to spend 420s and
+#                         then report exit 1 (THE MOD IS BAD) for a purely environmental fact.
+#
 # EXIT CODES — 1 and 2 are not interchangeable, and that is the whole of TODO §12.2:
 #   0  the server reached "Done (", a canary command was provably rejected, mcMMO initialised,
 #      /mcmmo rendered, /mcstats dispatched, and the log held no ERROR or mixin failure
@@ -21,6 +25,32 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 prop() { grep -E "^$1=" "$REPO/gradle.properties" | head -n1 | cut -d= -f2- | tr -d '[:space:]'; }
+
+# --- server.properties, with the port ------------------------------------------------------------
+# A function rather than an inline printf so --self-test can assert the port actually REACHES the
+# file. A port that is resolved correctly and then never written is the failure this shape prevents.
+server_props() {  # level, port
+    printf 'level-name=%s\nlevel-type=minecraft\\:flat\nonline-mode=false\nmax-tick-time=-1\nsync-chunk-writes=false\nview-distance=4\nspawn-protection=0\nserver-port=%s\n' "$1" "$2"
+}
+
+# --- classify the server log ----------------------------------------------------------------------
+# Echoes "up", "portbusy", or nothing (not decided yet). Extracted from the wait loop below so that
+# --self-test can drive it with synthetic logs: the loop needs a real JVM, and a test that
+# re-implemented this grep would be testing a COPY of the logic rather than the logic itself.
+#
+# 🔑 Why a busy port earns its own verdict. Measured 2026-09-03: a server that cannot bind logs
+# "**** FAILED TO BIND TO PORT!" and SHUTS ITSELF DOWN, so "Done (" never arrives. Without this
+# branch the loop waits out all 420 seconds and the script exits 1 -- THE MOD IS BAD -- for a port
+# that was merely in use. That is the same ENVIRONMENT-reported-as-mod-failure confusion the
+# fabric-api refusal exists to prevent, and telling the two apart is this script's whole job.
+# ⚠️ The line lands in logs/latest.log, which is the file this loop already reads.
+boot_verdict() {  # log
+    [[ -f "$1" ]] || return 0
+    # "up" is checked first on purpose: a server that reached Done( is up whatever else it logged.
+    grep -q 'Done (' "$1" 2>/dev/null && { echo up; return 0; }
+    grep -q 'FAILED TO BIND TO PORT' "$1" 2>/dev/null && { echo portbusy; return 0; }
+    return 0
+}
 
 # --- self-test ---------------------------------------------------------------------------------
 # Proves the refusal added in §12.2, and its converse. Boots nothing: BOOT_CHECK_STAGE_ONLY stops
@@ -90,6 +120,46 @@ STUB
     else
         echo "  FAIL  wrong URL:"; echo "        got : $got_url"; echo "        want: $want_url"; fail=$((fail+1))
     fi
+
+    # --- §61: the boot verdict, driven with synthetic logs ------------------------------------
+    # These call the REAL boot_verdict. Re-grepping the log inside the test would score a copy of
+    # the logic and pass while the shipped function was broken.
+    verdchk() { # name, log-content, want
+        local name="$1" want="$3" got
+        printf '%s\n' "$2" > "$tmp/verdict.log"
+        got="$(boot_verdict "$tmp/verdict.log")"
+        if [[ "$got" == "$want" ]]; then
+            echo "  PASS  $name (verdict '${got:-<none>}')"; pass=$((pass+1))
+        else
+            echo "  FAIL  $name: got '${got:-<none>}', want '${want:-<none>}'"; fail=$((fail+1))
+        fi
+    }
+    verdchk "verdict: 'Done (' -> up" \
+        '[15:00:00] [Server thread/INFO]: Done (12.345s)! For help, type "help"' up
+    verdchk "verdict: bind failure -> portbusy" \
+        '[15:00:00] [Server thread/WARN]: **** FAILED TO BIND TO PORT!' portbusy
+    verdchk "verdict: neither -> undecided (keep waiting)" \
+        '[15:00:00] [Server thread/INFO]: Preparing spawn area: 0%' ''
+    # Cannot occur in a real run, but the precedence must be deliberate rather than incidental.
+    verdchk "verdict: both -> up wins" \
+        "$(printf 'FAILED TO BIND TO PORT\nDone (1.0s)!')" up
+
+    # The port must reach the FILE. Resolving it into a variable and never writing it is exactly
+    # the bug that would leave every run on 25565 while the log claims otherwise.
+    if [[ "$(server_props bootcheck 25599 | grep -c '^server-port=25599$')" == "1" ]]; then
+        echo "  PASS  server_props writes exactly one server-port, with the given port"; pass=$((pass+1))
+    else
+        echo "  FAIL  server_props writes exactly one server-port, with the given port -- it did not"; fail=$((fail+1))
+        server_props bootcheck 25599 | sed 's/^/        | /'
+    fi
+    # The rest of the file must survive the change -- a properties file that lost level-type boots
+    # a DIFFERENT world and every block coordinate the gates assert would move.
+    if [[ "$(server_props bootcheck 25599 | grep -c '^level-type=minecraft\\:flat$')" == "1" ]]; then
+        echo "  PASS  server_props still writes the superflat level-type"; pass=$((pass+1))
+    else
+        echo "  FAIL  server_props still writes the superflat level-type -- it lost it"; fail=$((fail+1))
+    fi
+
     echo
     echo "  $pass passed, $fail failed"
     [[ "$fail" -eq 0 ]]; exit $?
@@ -103,6 +173,8 @@ MC="${2:-$(prop minecraft_version)}"
 LOADER="${3:-$(prop loader_version)}"
 FAPI="${4:-$(prop fabric_version)}"
 INSTALLER="1.1.2"
+# An env var, not a 5th positional -- the same call the fabric-api coordinate already made.
+PORT="${BOOT_CHECK_PORT:-25565}"
 
 WORK="${BOOT_CHECK_DIR:-$REPO/build/boot-check/$MC}"
 LOG="$WORK/logs/latest.log"
@@ -174,7 +246,7 @@ if [[ ! -f "$LAUNCH" ]]; then
 fi
 
 echo "eula=true" > "$WORK/eula.txt"
-printf 'level-name=bootcheck\nlevel-type=minecraft\\:flat\nonline-mode=false\nmax-tick-time=-1\nsync-chunk-writes=false\nview-distance=4\nspawn-protection=0\n' > "$WORK/server.properties"
+server_props bootcheck "$PORT" > "$WORK/server.properties"
 
 rm -rf "$WORK/logs" "$WORK/bootcheck" "$WORK/commands.txt"
 : > "$WORK/commands.txt"
@@ -224,10 +296,25 @@ reap() {
 }
 
 booted=0
+verdict=""
 for _ in $(seq 1 420); do
-    [[ -f "$LOG" ]] && grep -q 'Done (' "$LOG" 2>/dev/null && { booted=1; break; }
+    verdict="$(boot_verdict "$LOG")"
+    [[ "$verdict" == "up" ]] && { booted=1; break; }
+    # Break immediately rather than waiting out the remaining ~400s: the server has already gone.
+    [[ "$verdict" == "portbusy" ]] && break
     sleep 1
 done
+if [[ "$verdict" == "portbusy" ]]; then
+    {
+        echo "❌ ENVIRONMENT: port $PORT is already in use — the server shut down before it booted."
+        echo "   Nothing was proven about the mod. Exit 2 for the same reason a missing dependency"
+        echo "   is: \"never reached 'Done ('\" would have been a verdict on the mod, and wrong."
+        echo "   Fix: BOOT_CHECK_PORT=<free port> scripts/boot-check.sh ...   (or free port $PORT)"
+    } >&2
+    echo "stop" >> "$WORK/commands.txt"
+    sleep 3; reap
+    exit 2
+fi
 if [[ "$booted" != "1" ]]; then
     echo "❌ FAIL: never reached 'Done (' — see $LOG" >&2
     echo "stop" >> "$WORK/commands.txt"
