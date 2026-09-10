@@ -101,11 +101,15 @@ own `fabric.mod.json`.
 **Shipped coverage is continuous `1.21` → `1.21.11` plus `26.1` → `26.2` — the declared
 16-version scope, closed.** ✅ **Re-measured 2026-09-10**, because this table had gone three bumps
 stale: `gradle.properties` reads **`1.3.4-SNAPSHOT`** on `master`, and `git ls-remote --tags origin`
-returns **nine `v1.3.4` tags**, one per band. ⚠️ The local clone holds only eight of them —
-`mc26.1.2-v1.3.4` is on the remote and simply un-fetched here, so **`git tag --list` is not the
-instrument for this question**; `git ls-remote --tags` is.
-🔴 **Six local-only tags exist that no release ever produced** — `mc<VER>-v2.2.050` on six bands,
-pointing at unrelated August commits, absent from the remote. Carried, not deleted (see *Carried debt*).
+returns **nine `v1.3.4` tags**, one per band. ✅ **The clone now holds all nine** — it held eight
+until §63 fetched the missing `mc26.1.2-v1.3.4` (2026-09-10). **`git tag --list` is still not the
+instrument for this question**; `git ls-remote --tags` is. 🔑 The reason is unchanged by the fetch:
+a local tag list is a **cache**, and it was wrong in both directions at once — six tags the remote
+did not have, one the remote did. Agreement today is not a property of the instrument.
+✅ **The six `v2.2.050` tags are DELETED and their provenance is settled (§63, 2026-09-10).** They were
+not a mystery and `2.2.050` was not an impossible number: it **was** this repo's `mod_version` until R-s.
+🔴 **They were a lower bound, not a count — 62 local tags are absent from the remote**, same cause,
+and the other 56 are still here pending the owner's call (see *Carried debt*).
 
 🔑 **Nothing in the eleven gates reads the remote TAG list.** Gates 9/10/11 compare branches; the
 release sweep enumerates `gh release list`, which a bare tag is invisible to. **Re-read
@@ -259,9 +263,21 @@ the branch does not.
       `.github/workflows/drift-audit.yml` goes to the **new** band count, on `master` first and then
       on every band. The floor is what makes *"found no bands"* fail instead of reading as a clean
       audit. Leaving it stale is under-strict rather than noisy — the audit still passes — which is
-      exactly why nothing will remind you to do it. ✅ **At `6` since 2026-08-19** — raised as 8.3's
-      x.9, one release cycle late, which is itself the evidence: 8.3 shipped and released with the
-      floor still admitting five bands, and every gate stayed green throughout.
+      exactly why nothing will remind you to do it. ✅ **The floor's home is `BAND_COUNT` in
+      `.github/workflows/drift-audit.yml` — read it there, do not carry it here.** The two commands
+      that answer it: `grep -n 'BAND_COUNT:' .github/workflows/drift-audit.yml` against
+      `git for-each-ref --format='%(refname:short)' refs/heads/ | grep -c '^mc/'`.
+      ⚠️ **They are allowed to differ by design** — `--require-bands` counts `mc/**` only and
+      `master` lives outside that namespace, so a floor one too high returns exit 2 while the same
+      run still prints *"No drift"*.
+      🔑 **This line used to carry the number, and the number rotted.** It read *"At `6` since
+      2026-08-19"* until 2026-09-10, left behind by §43.3's raise to 8 in the ordinary way: the commit
+      that changed the status did not update the row that states it. Same defect §62 found six times,
+      same fix L587 already prescribes — **stop carrying the number, name the command.** 🔴 It costs
+      more here than in a status table, because **a recipe is read at the NEXT band cut**: `6` would
+      have set the floor two bands too low, the audit would have passed, and nothing would have said so.
+      Raised as 8.3's x.9 one release cycle late, which is itself the evidence: 8.3 shipped and
+      released with the floor still admitting five bands, and every gate stayed green throughout.
 - [ ] **x.10** ⚠️ **Move the documented support floor in the SAME commit.** `README.md` and
       `wiki/Installation.md` both carry a *"Minecraft **&lt;version&gt; and older are not supported**"*
       sentence — `1.20.6` as of 8.3. That
@@ -591,8 +607,15 @@ three more bumps.** A row that has rotted twice will rot a third time — the fi
 **Six local-only tags exist that no release ever produced:** `mc<VER>-v2.2.050` on `mc/1.21.3`,
 `mc/1.21.4`, `mc/1.21.5`, `mc/1.21.8`, `mc/1.21.10` and `mc/1.21.11`. They are **absent from the
 remote**, and they point at unrelated August commits (`edd7a8932` *"the sweep skipped its own
-orphans"*, `44e3dc1d0` *"the Taming rulings"*) rather than at any release. `2.2.050` is a version
-this repo has never carried.
+orphans"*, `44e3dc1d0` *"the Taming rulings"*) rather than at any release.
+
+✅ **RESOLVED by §63 (2026-09-10) — and the sentence that stood here was FALSE.** It read
+*"`2.2.050` is a version this repo has never carried"*. It was carried:
+`git log --all -p -- gradle.properties | grep mod_version` returns **`mod_version=2.2.050-SNAPSHOT`**,
+retired by **R-s** (2026-08-18) in favour of `1.0.0-SNAPSHOT`. 🔑 **The claim was reached by checking
+the number against the CURRENT value and the release table — both of which post-date R-s.** Asking
+*"has this repo ever carried X?"* of any present-tense source answers a different question; the
+instrument is `git log --all -p`. Full provenance in §63.
 
 **Not deleted, and that is a decision rather than an omission.** Deleting a tag **DRAFTS** its
 release (this file's own standing warning), these are not in scope for a docs cleanup, and nobody has
@@ -650,6 +673,94 @@ rm plans/completed/TODO-multiversion-through-section-61.md
 
 or `git revert <sha>` per branch. The pre-§62 tips are recorded in `.agent/memory/state.md`; the
 archive is a **new** file, so a revert also removes it.
+
+---
+
+## §63 — the tag provenance, and a floor that rotted — ✅ DONE
+
+**Asked:** *"if the todo list has been completed then clean it up"*, then *"fix it and then fix the
+tags"*. 🔑 **The condition was CHECKED and the honest answer was NO** — §62 had already archived
+§48 – §61 hours earlier, and the 18 remaining `^- \[ \]` boxes are live work, not residue. **10 of
+the 18 are not work at all**: they are the per-band recipe, a template that is unchecked on purpose.
+Reporting *"already done, and here is what is actually left"* was the deliverable; the two repairs
+below are what came out of measuring it.
+
+### The six `v2.2.050` tags — provenance settled, tags deleted
+
+§62 raised them as *"nobody can account for"* and declined to delete, which was the right call on
+the evidence it had. The account, from this repo's own history:
+
+1. **`2.2.050` WAS this repo's `mod_version`.** `git log --all -p -- gradle.properties` returns
+   `mod_version=2.2.050-SNAPSHOT`. It was upstream mcMMO's *Bukkit plugin* number, borrowed by a
+   singleplayer Fabric fork sharing none of its cadence. **R-s** (2026-08-18) retired it for
+   `1.0.0-SNAPSHOT`, partly because its padded patch does not survive Fabric's parser
+   (`Version.parse("2.2.050")` → `2.2.50`), so the jar filename and ModMenu disagreed.
+2. **They point at ordinary commits because the tag MOVED.** R-s records that the tag step
+   *force-deletes and re-pushes the ref*, and `mc<VER>-v2.2.050` was **re-used on every push for
+   roughly a month** because nothing forced a bump — the defect R-t's stale-version gate now blocks.
+   A ref re-pointed on every push is not a release marker; it lands wherever that push's HEAD was.
+   🔑 R-s's own note measures `mc1.21.11-v2.2.050` as *local `f18cbef82` vs origin `44e3dc1d0`*.
+   **`44e3dc1d0` is exactly where this clone's copy pointed** — what survived here is the origin
+   side of that very measurement, and `f18cbef82` is still in the repo to check it against.
+3. **The remote was clean because the reap sweep worked.** R-s's sweep retired each band's
+   `2.2.050` release *and its remote tag* automatically. **`git fetch` never deletes a local tag**
+   without `--prune-tags`, so the local copies simply stayed.
+
+**Deleted** (local only, nothing pushed, no remote release to draft). ↩️ **Undo:**
+`git tag mc1.21.3-v2.2.050 f3ef33c0c` · `mc1.21.4 4b2716be6` · `mc1.21.5 edd7a8932` ·
+`mc1.21.8 6c4ec8db4` · `mc1.21.10 1608d5084` · `mc1.21.11 44e3dc1d0`. Verified before the delete:
+**all 62 local-only tags are reachable from a live branch**, so no commit was orphaned; verified
+after: the six commits still resolve and the remote still has its 11 refs.
+
+### 🔑🔑 Three things worth carrying
+
+**1. The false claim was reached by asking a PRESENT-TENSE source a HISTORICAL question.**
+*"`2.2.050` is a version this repo has never carried"* was checked against the current
+`mod_version` and the release table — **both of which post-date R-s, the ruling that removed it.**
+Every instrument consulted agreed, and all of them were answering a different question.
+🔴 *"Has this repo ever…"* has exactly one instrument: `git log --all -p`.
+
+**2. "Six" was a lower bound, and the count was never the finding.** Measuring the six properly
+showed **62** local tags absent from the remote — the six plus **56** superseded release tags
+(`v1.0.0` … `v1.3.3`), same cause, never pruned. Local held **71**, remote **10**. Same shape as the
+`config.yml` row that understated its defect by 26×: **a carried row naming a specific defect is a
+lower bound, never a count.** The 56 are left for the owner — 62 is a different blast radius than 6,
+and *"they authorised the six"* does not carry.
+
+**3. The obvious one-command fix is the dangerous one.** `git fetch --prune --prune-tags` fixes both
+directions at once and is **wrong here**: it re-queries the remote and deletes every local tag not in
+the answer, so a hiccup returning an empty list deletes **all 71**. It fails OPEN. The safe shape is
+freeze the list to a file → read it → delete from the frozen list, which is what was done.
+
+### The drift-audit floor — the number was removed, not re-numbered
+
+Recipe step **x.9** claimed *"At `6` since 2026-08-19"*. Measured: `BAND_COUNT: '8'` at
+`.github/workflows/drift-audit.yml:127`, against **8** `mc/**` branches. §43.3 raised it and left the
+row behind — the ordinary shape, *the commit that changes the status does not update the row that
+states it*, which §62 hit six times in one file.
+🔴 **It was NOT re-numbered to 8**, per this file's own L587 ruling — **stop carrying the number,
+name the command.** Re-numbering buys one edition and rots at the next band cut. The row now names
+`BAND_COUNT` and the two commands that compare it. **A recipe is read at the NEXT cut**, so `6` would
+have set the floor two bands too low with every gate still green — which is the whole reason the
+floor exists.
+
+### What I did NOT do
+
+- **Did not delete the other 56 stale tags.** Safe (reachability-checked) but unauthorised; filed
+  as an open box in *Carried debt* with the command and the `--prune-tags` warning.
+- **Did not push.** The hold from §60 stands; `master` and the eight bands stay ahead of `origin`.
+- **Did not touch the remote.** No tag push, no release, no draft — the delete was local by design.
+
+### Propagation and rollback
+
+- pre-§63 `master` tip: **`22cd71a60`** · pre-§63 `TODO.md` blob: **`0d36d940e`**, byte-identical on
+  **all nine** branches (verified before the first write).
+- undo, while unpushed: `git checkout 22cd71a60 -- TODO.md`, plus the six `git tag` commands above.
+- ⚠️ **A `master`-only `TODO.md` edit silently breaks the nine-way blob identity, and NEITHER gate
+  reports it** — `drift-audit.py` ignores docs-only commits by design and `TODO.md` is not in gate
+  10's identity set. Verify directly, never by a green gate:
+  `for b in master mc/26.1.2 mc/1.21.11 mc/1.21.10 mc/1.21.8 mc/1.21.5 mc/1.21.4 mc/1.21.3 mc/1.21.1;`
+  `do git rev-parse $b:TODO.md; done | sort -u | wc -l` **must print 1.**
 
 ---
 
@@ -924,15 +1035,39 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
 
 ## Carried debt (open items only — closed rows are in the archives)
 
-- [ ] ⬜ **Six local-only `v2.2.050` tags nobody can account for** (raised by §62, 2026-09-10).
-      `mc<VER>-v2.2.050` exists locally on `mc/1.21.3`, `mc/1.21.4`, `mc/1.21.5`, `mc/1.21.8`,
-      `mc/1.21.10` and `mc/1.21.11`. They are **absent from the remote**, and they point at
-      unrelated August commits (`edd7a8932` *"the sweep skipped its own orphans"*, `44e3dc1d0`
-      *"the Taming rulings"*) rather than at any release. **`2.2.050` is a version this repo has
-      never carried** — `mod_version` has gone `1.0.0` → `1.3.4-SNAPSHOT` throughout.
-      ⚠️ **Do not reflexively delete them.** Deleting a tag **DRAFTS** its release, and this repo
-      has already collected six orphaned drafts that way. These have no remote release to draft,
-      but the provenance is unknown and *that* is the open question, not the tidying.
+- [x] ✅ **The six `v2.2.050` tags — CLOSED by §63 (2026-09-10). Provenance settled, tags deleted.**
+      They were an ordinary **moving release tag**, not an anomaly. `mod_version` **was**
+      `2.2.050-SNAPSHOT` (upstream mcMMO's Bukkit number, borrowed); **R-s** retired it on 2026-08-18.
+      🔑 **Why they sat on unrelated August commits:** R-s records that the tag step *force-deletes
+      and re-pushes the ref*, and `mc<VER>-v2.2.050` was **re-used on every push for roughly a month**
+      because nothing forced a bump. A tag that is re-pointed on every push is not a release marker;
+      it lands wherever that push's HEAD was. R-s's own note measures `mc1.21.11-v2.2.050` as
+      *local `f18cbef82` vs origin `44e3dc1d0`* — and `44e3dc1d0` is **exactly** where this clone's
+      copy pointed, so what survived here was the origin side of that very measurement.
+      🔑 **Why the remote is clean and the local copy was not:** R-s's reap sweep retired each band's
+      `2.2.050` release *and its remote tag* automatically, and **`git fetch` never deletes a local
+      tag** without `--prune-tags`. Nothing pushed, nothing outward-facing.
+      ⚠️ The old text warned *"deleting a tag DRAFTS its release"*. True in general, **inapplicable
+      here** — no remote tag, no remote release, so there is nothing to draft. Stated rather than
+      assumed, because this repo already collected six orphaned drafts making that mistake.
+      ↩️ **Undo:** `git tag mc1.21.3-v2.2.050 f3ef33c0c` · `mc1.21.4 4b2716be6` · `mc1.21.5 edd7a8932`
+      · `mc1.21.8 6c4ec8db4` · `mc1.21.10 1608d5084` · `mc1.21.11 44e3dc1d0`. All six commits are
+      reachable from a live branch, so the delete orphaned nothing (verified for all 62, not just six).
+
+- [ ] ⬜ **56 MORE stale local-only tags, same cause — owner's call, raised by §63 (2026-09-10).**
+      🔑🔑 **"Six" was a lower bound, and the count was never the finding.** Measured:
+      `comm -23 <(git tag -l | sort) <(git ls-remote --tags origin | sed 's|.*refs/tags/||' |
+      grep -v '\^{}' | sort -u)` returns **62** — the six `v2.2.050` plus **56** superseded release
+      tags (`v1.0.0` … `v1.3.3`) the reap sweep retired on the remote and nobody pruned locally.
+      **Local 71, remote 10.** This is the same shape as the `config.yml` row that understated its
+      defect by 26×: *a carried row naming a specific defect is a lower bound, never a count.*
+      ⚠️ **Not deleted, deliberately** — the owner authorised the six, and 62 is a different blast
+      radius than 6. All 62 were reachability-checked (0 unreachable), so the delete is safe whenever
+      it is wanted. 🔴 **Do NOT reach for `git fetch --prune --prune-tags`**: it re-queries the remote
+      and deletes whatever is not in the answer, so a network hiccup returning an empty tag list
+      deletes **all 71**. Freeze the list to a file, read it, delete from the frozen list.
+      ⚠️ The local tag set also **errs the other way**: `mc26.1.2-v1.3.4` is on the remote and was
+      never fetched here. `git tag --list` is wrong in **both** directions at once.
       🔑 **The lesson is already banked, though: `git tag --list` is the WRONG instrument for
       "what shipped".** It holds six tags the remote does not, and is *missing* `mc26.1.2-v1.3.4`,
       which the remote has and this clone never fetched — so it errs in **both** directions at once.
