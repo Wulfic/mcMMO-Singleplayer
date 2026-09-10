@@ -766,6 +766,183 @@ floor exists.
 
 ---
 
+## §64 — three code items: the Loom id, the skill-gate partition, the band floor — 🚧 IN PROGRESS
+
+**Owner-scoped 2026-09-10:** *"continue with the code portion of the todo list"*, then all three
+candidates picked explicitly, **with propagation to all eight bands**. The push stays **HELD**.
+
+🔑 **The open-box list has no `src/` item in it, and that is a finding rather than an obstacle.**
+The composition of the box list is §63's finding and is **not restated here** — see it there, in one
+place. What §64 adds is the consequence: **the real code work was not in the checkboxes at all.**
+64.2 is **R12 Residual 1**, a line in the *risk register*; nothing in the box list points at it, and
+a session working the boxes top-to-bottom would never reach it.
+
+⚠️ **Do not inherit a box count from this file, including from this paragraph.** It read **18**
+when §64 was drafted and **19** an hour later — a peer's `ce2b6d5d7` opened the CR-strip box at
+L1059 mid-session. Three sessions independently derived 18 and all three were about to be wrong
+together. `grep -c '^- \[ \]' TODO.md`, at the moment you need it.
+
+**Rollback anchors, recorded BEFORE the first write:**
+- pre-§64 `master` tip: **`ce2b6d5d7`** · pre-§64 `TODO.md` blob on `master`: **`d6b90cb4d`**
+- undo this plan edit, while unpushed: `git checkout ce2b6d5d7 -- TODO.md`
+- 🔴 **These are the SECOND set of anchors. The first were stale within minutes, and the way that
+  was caught is the point.** They were recorded as tip `d998b81a4` / blob `f0ad94a35` **on all
+  nine**, both verified directly. A peer session then landed `ce2b6d5d7` (a `master`-only `TODO.md`
+  commit) in the gap between recording them and the first write. `git status --short` read **clean
+  immediately before the write** and was truthful — the peer had *committed*, not left a dirty tree,
+  so the L1183 check cannot see it and neither can gate 7 or gate 10. 🔑 **What caught it was the
+  insert script asserting BYTE GROWTH against a byte count it had taken earlier**: 124,667 measured,
+  127,034 found. An edit-in-place that trusted `status` would have committed a plan citing two
+  anchors that no longer existed. **A recorded anchor is a measurement with a timestamp; re-verify
+  it at the write, not at the plan.**
+- ✅ **RESOLVED, and the resolution is the same lesson pointing the other way.** This bullet was
+  written as *"the nine-way blob is BROKEN — `master` `d6b90cb4d`, the eight bands `f0ad94a35`"*,
+  measured directly and true when measured. **It was already stale when written**: the peer
+  propagated `ce2b6d5d7` in that same window. Re-measured — **one blob `d6b90cb4d` on all nine**,
+  and `git log --all --grep='Backport-of: ce2b6d5d7'` returns **8**. 🔑 **Both halves of this
+  section's anchor story are the same defect** — I caught the peer's stale claim by re-measuring
+  and then published a stale claim of my own from a measurement two minutes older. Neither read was
+  careless; both were timestamps. **The only safe form is the command, never the number** — which
+  is why the verification line below is a command and this bullet keeps its refuted text instead of
+  quietly showing the right answer.
+- each of 64.1–64.3 lands as its **own commit**, so any one reverts alone.
+
+### 64.1 — `build.gradle:2`'s plugin id: MEASURED, and it is load-bearing
+
+Closes the L431 box. The row asked what the **bare** `fabric-loom` id does on the `1.21.x` bands and
+recorded the answer as *inferred, not measured*. **Now measured, from Loom 1.17.13's own bytecode.**
+
+Loom registers **five** plugin ids, not two — `META-INF/gradle-plugins/*.properties`:
+
+| plugin id | implementation class |
+|---|---|
+| `fabric-loom` | `LoomGradlePlugin` |
+| `net.fabricmc.fabric-loom` | `LoomNoRemapGradlePlugin` |
+| `net.fabricmc.fabric-loom-remap` | `LoomRemapGradlePlugin` |
+| `net.fabricmc.fabric-loom-companion` | `LoomCompanionGradlePlugin` |
+| `net.fabricmc.fabric-loom-repositories` | `LoomRepositoryPlugin` |
+
+⚠️ **The wrapper classes alone do NOT answer the question, and reading only those gives the
+wrong answer.** Both `LoomNoRemapGradlePlugin` and `LoomRemapGradlePlugin` merely
+`plugins.apply("fabric-loom")` — the no-remap one first throwing
+`IllegalStateException("net.fabricmc.fabric-loom must be applied before fabric-loom")` if the bare id
+is already applied. On that evidence the two ids look behaviourally identical. **They are not.**
+
+The branch is in `LoomGradleExtensionImpl`'s constructor, which asks *which id was applied*:
+
+```java
+if (project.getPluginManager().hasPlugin("net.fabricmc.fabric-loom")) {
+    disableObfuscation.set(true);
+    disableObfuscation.finalizeValue();          // forced, and unoverridable
+} else {
+    disableObfuscation.set(project.provider(...));   // computed
+    disableObfuscation.finalizeValueOnRead();
+}
+dontRemap.set(disableObfuscation.map(d -> d || getBooleanProperty(project, "fabric.loom.dontRemap")));
+```
+
+| | `master` + `mc/26.1.2` — `net.fabricmc.fabric-loom` | the seven bands — bare `fabric-loom` |
+|---|---|---|
+| `disableObfuscation` | **forced `true`**, `finalizeValue()` | computed, `finalizeValueOnRead()` |
+| `dontRemap` | `true` | computed ‖ `-Pfabric.loom.dontRemap` |
+| shipping artifact | plain `jar` — no remap tasks exist | `remapJar` |
+
+✅ **So the row's parenthetical was correct** — `net.fabricmc.fabric-loom` really is the explicit
+non-remap id — and §35's *"Loom registers NO `remapJar` on `26.x`"* now has its mechanism. §35
+attributed it to `build.gradle` naming no mappings artifact; that is a **consistent second half**,
+not the cause. The id forces it on its own.
+
+🔴 **The finding that matters is the guard-shaped one: `build.gradle:2` is a REQUIRED per-band
+difference that NO gate looks at.** `build.gradle` is not in gate 10's identity set (it must differ),
+and gate 11 compares `gradle.properties` keys only. Unifying line 2 across branches is exactly the
+kind of tidy-up that reads as correct in review — and it would make the seven bands ship
+**unremapped, yarn-named jars** that cannot run, with every existing gate green.
+
+**Build:** `BandLoomRemapPostureTest` — a per-branch, checkout-local test (the
+`BandDocsMatchRealityTest` shape: it asks *"is this branch self-consistent?"*, needs no remote and no
+cross-branch view, so it is correct on all nine). It parses `build.gradle` and asserts the posture is
+coherent in **both** directions:
+- applies `net.fabricmc.fabric-loom` ⇔ there is **no** `mappings` dependency line
+- bare `fabric-loom` ⇒ `mappings` present **and** loader/fabric-api on `modImplementation`
+- qualified id ⇒ loader/fabric-api on plain `implementation`
+
+### 64.2 — R12 Residual 1: a new skill is wired to nothing and nothing goes red
+
+Not a checkbox — the open residual under **R12** in the risk register:
+*"the map is still a hand-maintained list; a NEW skill whose items postdate the floor is added to
+`PrimarySkillType` and to nothing else, and nothing goes red. Auditing skills against required ids
+is not yet mechanical."*
+
+Today `SkillAvailability.GATED` is `Map.of(SPEARS, MACES)` against **25** `PrimarySkillType`
+constants. The other 23 are ungated **by assumption**, recorded nowhere.
+
+**Build:** a partition guard — every `PrimarySkillType` constant must be either in `GATED` or in an
+explicitly declared *acknowledged-ungated* set. A constant in neither fails the build, naming the
+constant and both remedies. Adding a skill then forces a recorded decision instead of a silent
+default.
+
+⚠️ **The vacuity trap here is real and this repo has hit its shape ~17 times.** `MACES` is
+**inert on every in-scope version** (R-x withdrew the `1.20` line; `Items.MACE` ships from `1.20.5`),
+so the disabling half is reachable only through `setSupportedForTesting`. A partition test written
+against the live enum can therefore pass forever without ever being *able* to fail. **The partition
+check is extracted as a pure function over an injected skill universe**, and a case feeds it a
+synthetic unknown constant and asserts it is reported — so the guard is shown to say NO, not just
+observed saying YES. 🔑 A one-sided guard pair proves only that it can say NO (§61.6).
+
+### 64.3 — the `--require-bands` floor: one declared list, not four hand-kept numbers
+
+The L1147 box. The floor is hand-maintained in `.github/workflows/drift-audit.yml` (`BAND_COUNT: '8'`)
+and in ship-gate steps 9, 10 and 11.
+
+🔴 **The obvious fix is VACUOUS and must not be built.** Deriving the floor from the same
+`band_branches()` enumeration the scripts glob makes the comparison `len(x) >= len(x)` — always
+true. `--require-bands` exists *precisely* because that enumeration can come back short (a shallow
+clone, a rename, missing remote refs) while the audit still prints *"No drift"*. A derived floor
+would delete the guard and leave it looking present.
+
+**Build:** `scripts/expected-bands.txt` — a committed declaration of the band branch names, read as
+the floor. It is **independent** of the live enumeration, which is the whole point, and it lands
+under `scripts/**`, already in gate 10's identity set, so it is kept byte-identical on all nine
+branches with no new mechanism. Two upgrades fall out for free:
+- **count → set.** A *renamed* band keeps the count and breaks the set; the number could never see it.
+- **one place, not four.** Recipe step x.9 becomes *"add a line"* instead of *"raise four numbers"*.
+
+⚠️ **It is still hand-maintained, and saying otherwise would be the same false-closure this file
+keeps catching.** What changes is the count of copies and the strength of the check, not the fact
+that a human declares it.
+
+### What I am NOT doing
+
+- **Not pushing.** The §60 hold stands; `master` and the eight bands stay ahead of `origin`.
+- **Not deleting the 56 stale tags** — still unauthorised, still an open box.
+- **Not touching the live play-test** — owner-only.
+- **Not repairing the sixteen `Backport-of:` trailers** — ruled deliberately unrepaired (L1168).
+- **Not unifying `build.gradle:2`.** 64.1 measured the divergence as **required**; it gets a guard,
+  not a merge.
+- **Not lowering or removing `--require-bands`** — named in R-ab as the make-the-symptom-disappear
+  move.
+- **Not changing `SkillAvailability`'s log wording.** `"Version support: {} is available"` is a
+  **parsed interface**, not prose: `gameplay_smoke_scenario.py:947`'s `_GATE_RE` reads it and the
+  generator at :1040 rebuilds it. A reword scores **zero gated skills** instead of erroring — a
+  green, blind run. Guarded by that script's `--self-test` `drop-gate-lines` case, which is run
+  before the 64.2 commit.
+
+### Blast radius
+
+| step | touches | lost if wrong | comes back from |
+|---|---|---|---|
+| 64.1 | one new test file | nothing — additive | `git revert` of one commit |
+| 64.2 | `SkillAvailability.java` + tests | a wrong partition reddens the build loudly; no runtime path changes | one commit |
+| 64.3 | new `scripts/expected-bands.txt`, the workflow, the three scripts' floor read | a wrong list turns gates 9/10/11 **exit 2** — loud, never silently clean | one commit |
+| propagation | eight band refs, from a scratch clone | band refs only; `HEAD` never moves and nothing is pushed | every pre-move band tip recorded below before the first move |
+
+⚠️ **A `master`-only `TODO.md` edit silently breaks the nine-way blob identity and NEITHER gate
+reports it.** Verify directly after every commit that touches it, never by a green gate:
+`for b in master mc/26.1.2 mc/1.21.11 mc/1.21.10 mc/1.21.8 mc/1.21.5 mc/1.21.4 mc/1.21.3 mc/1.21.1;`
+`do git rev-parse $b:TODO.md; done | sort -u | wc -l` **must print 1.**
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
