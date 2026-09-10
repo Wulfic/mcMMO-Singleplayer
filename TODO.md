@@ -2939,8 +2939,17 @@ that appears in the suspect AND in the control is a fact about the program, not 
       assets. **Ran 2026-09-03, 15:48 → 20:35 (4h47m). Fifteen green; `1.21.4` red on gate 6.**
       🔑 **The red was the harness accusing the mod** — re-run 2026-09-10 on the same jar: 36/0/0.
       See *The one red* below.
-- [ ] **61.7 — propagate** to all eight bands with `Backport-of:`, verified through git's own trailer
-      parser **with the master-empty control**, from a scratch clone pushing band refs back.
+- [x] ✅ **61.7 — propagate** to all eight bands with `Backport-of:`, verified through git's own
+      trailer parser **with the master-empty control**, from a scratch clone pushing band refs back.
+      **Done 2026-09-10.** Six code commits × eight bands, **zero conflicts** — every band's copy of
+      all four touched files was byte-identical to master's pre-§61 baseline, measured first.
+      **48/48 trailers** found by `%(trailers:key=Backport-of,valueonly)`; the **master-empty
+      control returned 0**, so the check discriminates rather than matching anything.
+      Gate 7 **0 MISSING on all eight**; gate 10 **51 shared paths byte-identical** (50 + the new
+      `version-sweep.sh` — the gate-10-violation-by-construction risk, now closed).
+      All five self-tests re-run **on `mc/26.1.2` and `mc/1.21.1`** — byte-identity is not
+      evidence that a script still runs on a band that pins a different Minecraft.
+      ⚠️ `origin` was **not** touched: the push stays held, so this moved local refs only.
 
 ### What landed (2026-09-03)
 
