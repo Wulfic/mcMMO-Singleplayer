@@ -13,6 +13,8 @@
 #   BREW_SMOKE_MC=<ver>     test a version OTHER than gradle.properties' minecraft_version
 #   BREW_SMOKE_LOADER=<ver> ) each defaults to gradle.properties; set them together when
 #   BREW_SMOKE_FAPI=<coord> ) brewing on a version the branch does not pin
+#   BREW_SMOKE_PORT=<n>     bind this port instead of 25565. A busy 25565 used to spend 420s
+#                           and then report a brewing failure for an environmental fact.
 #
 # ⚠️ A band ships a RANGE and gradle.properties pins ONE version of it. Without those three this
 # gate could only ever test a band's PRIMARY, which is how seven declared versions across five
@@ -67,6 +69,53 @@ resolve_version_triple() {
 }
 IFS='|' read -r MC LOADER FAPI <<< "$(resolve_version_triple)"
 INSTALLER="1.1.2"
+# An env var for the same reason the triple above are: slots 1-3 are MODE/INGREDIENT/BASE.
+PORT="${BREW_SMOKE_PORT:-25565}"
+
+# --- server.properties, with the port ------------------------------------------------------------
+# A function rather than an inline printf so --self-test can assert the port actually REACHES the
+# file: a port resolved into a variable and never written leaves every run on 25565.
+server_props() {  # level, port
+    printf 'level-name=%s\nlevel-type=minecraft\\:flat\nonline-mode=false\nmax-tick-time=-1\nsync-chunk-writes=false\nview-distance=4\nspawn-protection=0\nserver-port=%s\n' "$1" "$2"
+}
+
+# --- classify the server log ----------------------------------------------------------------------
+# Echoes "up", "portbusy", or nothing (undecided). Extracted from the wait loop in run_one() so
+# --self-test can drive it with synthetic logs; the loop itself needs a real JVM, and a test that
+# re-implemented this grep would score a COPY of the logic -- the first vacuity §60 caught.
+#
+# 🔑 Measured 2026-09-03: a server that cannot bind logs "**** FAILED TO BIND TO PORT!" and shuts
+# itself down, so "Done (" never arrives, the loop waits out all 420 seconds, and the run is
+# reported as a brewing failure. Same ENVIRONMENT-as-mod-failure confusion the fabric-api refusal
+# above exists to prevent.
+boot_verdict() {  # log
+    [[ -f "$1" ]] || return 0
+    # "up" first on purpose: a server that reached Done( is up whatever else the log says.
+    grep -q 'Done (' "$1" 2>/dev/null && { echo up; return 0; }
+    grep -q 'FAILED TO BIND TO PORT' "$1" 2>/dev/null && { echo portbusy; return 0; }
+    return 0
+}
+
+# --- the per-run reset ------------------------------------------------------------------------
+# A function so --self-test can prove it removes what it claims to -- in particular "$work/config",
+# added in §61 -- and so the empty-path guard below has somewhere to live.
+# ⚠️ This is an `rm -rf` built from a variable. An unset $work turns it into `rm -rf /logs
+# /brewsmoke /commands.txt /config`, so it fails closed, and the self-test feeds it "" and asserts
+# nothing was destroyed. A guard with no test gets refactored away as dead code.
+reset_work_dir() {  # work
+    local work="${1:-}"
+    [[ -n "$work" ]] || { echo "reset_work_dir: refusing to clean an empty path" >&2; return 2; }
+    rm -rf "$work/logs" "$work/brewsmoke" "$work/commands.txt" "$work/config"
+}
+
+# --- did either run refuse for ENVIRONMENT reasons? --------------------------------------------
+# True when a run returned 2. Split out so --self-test can pin the CONVERSE too: a genuine brewing
+# failure (1) must NOT be laundered into an environment refusal, or the gate stops reporting the
+# defect it exists to find.
+env_refusal() {  # rc_control, rc_treated
+    [[ "$1" == "2" || "$2" == "2" ]]
+}
+
 
 # --- which jar is under test ---------------------------------------------------------------------
 # 🔑 THIS USED TO BE `find ... | head -1`, AND THAT IS A GATE CERTIFYING AN ARBITRARY ARTIFACT.
@@ -254,6 +303,94 @@ STUB
     fchk "cache miss + fetch -> staged from maven, proceeds"   "$tmp/emptycache" 0   0 1
     fchk "cache miss + 404   -> exit 2 (ENVIRONMENT), stages nothing" "$tmp/emptycache" 22 2 0
 
+
+    # --- §61: the boot verdict and the port ---------------------------------------------------
+    # Calls the REAL boot_verdict, for the same reason the version cases call the real
+    # resolve_version_triple: a re-grep here would pass while the shipped function was broken.
+    echo
+    echo "brew-smoke self-test: boot verdict and port"
+    verdchk() { # name, log-content, want
+        local name="$1" want="$3" got
+        printf '%s\n' "$2" > "$tmp/verdict.log"
+        got="$(boot_verdict "$tmp/verdict.log")"
+        if [[ "$got" == "$want" ]]; then
+            echo "  PASS  $name (verdict '${got:-<none>}')"; pass=$((pass+1))
+        else
+            echo "  FAIL  $name: got '${got:-<none>}', want '${want:-<none>}'"; fail=$((fail+1))
+        fi
+    }
+    verdchk "verdict: 'Done (' -> up" \
+        '[15:00:00] [Server thread/INFO]: Done (12.345s)! For help, type "help"' up
+    verdchk "verdict: bind failure -> portbusy" \
+        '[15:00:00] [Server thread/WARN]: **** FAILED TO BIND TO PORT!' portbusy
+    verdchk "verdict: neither -> undecided (keep waiting)" \
+        '[15:00:00] [Server thread/INFO]: Preparing spawn area: 0%' ''
+    verdchk "verdict: both -> up wins" \
+        "$(printf 'FAILED TO BIND TO PORT\nDone (1.0s)!')" up
+
+    if [[ "$(server_props brewsmoke 25599 | grep -c '^server-port=25599$')" == "1" ]]; then
+        echo "  PASS  server_props writes exactly one server-port, with the given port"; pass=$((pass+1))
+    else
+        echo "  FAIL  server_props writes exactly one server-port, with the given port -- it did not"; fail=$((fail+1))
+        server_props brewsmoke 25599 | sed 's/^/        | /'
+    fi
+    if [[ "$(server_props brewsmoke 25599 | grep -c '^level-type=')" == "1" ]]; then
+        echo "  PASS  server_props still writes the superflat level-type"; pass=$((pass+1))
+    else
+        echo "  FAIL  server_props still writes the superflat level-type -- it lost it"; fail=$((fail+1))
+    fi
+
+    # --- §61: the per-run reset, and its empty-path guard --------------------------------------
+    echo
+    echo "brew-smoke self-test: work-dir reset"
+    mkdir -p "$tmp/wd/config/mcmmo" "$tmp/wd/logs" "$tmp/wd/brewsmoke" "$tmp/wd/mods"
+    : > "$tmp/wd/config/mcmmo/potions.yml"; : > "$tmp/wd/mods/keepme.jar"
+    reset_work_dir "$tmp/wd" >/dev/null 2>&1
+    if [[ ! -e "$tmp/wd/config" && ! -e "$tmp/wd/logs" && ! -e "$tmp/wd/brewsmoke" ]]; then
+        echo "  PASS  reset_work_dir removes config, logs and the world"; pass=$((pass+1))
+    else
+        echo "  FAIL  reset_work_dir removes config, logs and the world -- something survived"; fail=$((fail+1))
+        ls -a "$tmp/wd" | sed 's/^/        | /'
+    fi
+    # The staged mods must NOT be collateral: run_one clears those itself, by pattern, later.
+    if [[ -f "$tmp/wd/mods/keepme.jar" ]]; then
+        echo "  PASS  reset_work_dir leaves the mods directory alone"; pass=$((pass+1))
+    else
+        echo "  FAIL  reset_work_dir leaves the mods directory alone -- it deleted them"; fail=$((fail+1))
+    fi
+    # Bad input in, nothing destroyed out. Without this the guard is decoration.
+    mkdir -p "$tmp/guard/logs"; : > "$tmp/guard/logs/latest.log"
+    ( cd "$tmp/guard" && reset_work_dir "" ) >/dev/null 2>&1; guard_rc=$?
+    if [[ "$guard_rc" == "2" && -f "$tmp/guard/logs/latest.log" ]]; then
+        echo "  PASS  reset_work_dir refuses an empty path and destroys nothing"; pass=$((pass+1))
+    else
+        echo "  FAIL  reset_work_dir refuses an empty path and destroys nothing: rc=$guard_rc"; fail=$((fail+1))
+    fi
+
+    # --- §61: the ENVIRONMENT code the caller used to throw away -------------------------------
+    echo
+    echo "brew-smoke self-test: environment refusal"
+    echk() { # name, rc_control, rc_treated, want ("yes" = refuse)
+        local name="$1" got="no" rc
+        env_refusal "$2" "$3"; rc=$?
+        [[ "$rc" == "0" ]] && got="yes"
+        # 127 is "command not found". Without this line a DELETED env_refusal scores the three
+        # "no refusal" cases as PASS -- a case that passes when its subject is absent is vacuous.
+        [[ "$rc" -gt 1 ]] && got="error($rc)"
+        if [[ "$got" == "$4" ]]; then
+            echo "  PASS  $name"; pass=$((pass+1))
+        else
+            echo "  FAIL  $name: got '$got' want '$4'"; fail=$((fail+1))
+        fi
+    }
+    echk "both ran           -> no refusal"                    0 0 no
+    echk "control refused    -> refusal"                       2 0 yes
+    echk "treated refused    -> refusal"                       0 2 yes
+    echk "both refused       -> refusal"                       2 2 yes
+    # 🔑 The converse, and the one that keeps this honest: a real brewing failure is exit 1, and
+    # laundering it into "environment" would silence the defect this gate exists to find.
+    echk "a genuine failure  -> NOT laundered into environment" 1 1 no
+
     echo
     echo "  $pass passed, $fail failed"
     [[ "$fail" -eq 0 ]]; exit $?
@@ -292,19 +429,35 @@ run_one() {
     echo "=== $mode: $BASE + $INGREDIENT   mods: $(ls "$work/mods" | tr '\n' ' ')" >&2
 
     echo "eula=true" > "$work/eula.txt"
-    printf 'level-name=brewsmoke\nlevel-type=minecraft\\:flat\nonline-mode=false\nmax-tick-time=-1\nsync-chunk-writes=false\nview-distance=4\nspawn-protection=0\n' > "$work/server.properties"
-    rm -rf "$work/logs" "$work/brewsmoke" "$work/commands.txt"
+    server_props brewsmoke "$PORT" > "$work/server.properties"
+    # 🔑 reset_work_dir removes "$work/config" as of §61, and that is not tidiness. This work dir
+    # is keyed on $mode while both sibling harnesses key on $MC, so ONE generated mcMMO config
+    # served every version -- and the generated config IS version-dependent (measured: config.yml
+    # 9585 vs 9030 and experience.yml 15535 vs 15356 between 26.2 and 1.21). Every run now starts
+    # from the config a first install writes, which is the only config a player actually has.
+    # gameplay-smoke.sh has always done this; this harness simply never did.
+    reset_work_dir "$work" || return 2
     : > "$work/commands.txt"
 
     cd "$work" || return 2
     ( echo $BASHPID > tail.pid; exec tail -f -n +1 commands.txt ) \
         | java -Xmx2G -jar "$launch" nogui > server-console.out 2>&1 &
 
-    local booted=0
+    local booted=0 verdict=""
     for _ in $(seq 1 420); do
-        [[ -f "$log" ]] && grep -q 'Done (' "$log" 2>/dev/null && { booted=1; break; }
+        verdict="$(boot_verdict "$log")"
+        [[ "$verdict" == "up" ]] && { booted=1; break; }
+        # Break at once rather than waiting out the remaining ~400s: the server has already gone.
+        [[ "$verdict" == "portbusy" ]] && break
         sleep 1
     done
+    if [[ "$verdict" == "portbusy" ]]; then
+        {
+            echo "❌ ENVIRONMENT: port $PORT is in use — the $mode server shut down before it booted."
+            echo "   Nothing was proven about the mod. Fix: BREW_SMOKE_PORT=<free port>, or free $PORT."
+        } >&2
+        echo stop >> commands.txt; sleep 3; reap "$work"; return 2
+    fi
     if [[ "$booted" != "1" ]]; then
         echo "❌ $mode: never booted" >&2; echo stop >> commands.txt; sleep 10; reap "$work"; return 1
     fi
@@ -356,8 +509,19 @@ reap() {
 }
 
 if [[ "$MODE" == "both" ]]; then
-    control="$(run_one vanilla)"; echo "  control: $control"
-    treated="$(run_one mcmmo)";   echo "  mcmmo:   $treated"
+    control="$(run_one vanilla)"; rc_control=$?; echo "  control: $control"
+    treated="$(run_one mcmmo)";   rc_treated=$?; echo "  mcmmo:   $treated"
+
+    # 🔑 `var=$(cmd)` DOES set $?, and until §61 nobody read it. run_one returns 2 for every
+    # ENVIRONMENT refusal -- a missing fabric-api (§60) and now a busy port -- and in `both` mode,
+    # which is the mode the ship gate runs, that 2 was discarded. The empty output then failed the
+    # comparisons below and the script exited 1: "mcMMO did not brew". A refusal that the caller
+    # swallows is not a refusal, and it defeated §60's fix in this file's DEFAULT mode.
+    if env_refusal "$rc_control" "$rc_treated"; then
+        echo "=== ❌ ENVIRONMENT: a run could not be staged (control=$rc_control mcmmo=$rc_treated)." >&2
+        echo "    Nothing was proven about the mod. See the refusal above." >&2
+        exit 2
+    fi
 
     fail=0
     # The control must NOT brew. If it does, the scenario is a vanilla recipe and proves nothing
