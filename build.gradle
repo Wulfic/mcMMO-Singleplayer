@@ -250,6 +250,15 @@ test {
     inputs.file(rootProject.file('.github/workflows/release.yml'))
             .withPropertyName('releaseWorkflow')
 
+    // TODO.md 64.1. BandLoomRemapPostureTest reads THIS FILE to check that the Loom plugin id on
+    // line 2 matches what this branch's minecraft_version needs. Same rule as release.yml above: a
+    // file a guard reads is a file the guard must re-run for. Without this entry, editing the plugin
+    // id changes no declared input -- not mcmmo.build.version, not compilerArgs -- so :test is
+    // UP-TO-DATE and the one guard that inspects that line never executes. The edit it exists to
+    // catch is precisely an edit to this file, which makes the omission self-defeating rather than
+    // merely incomplete.
+    inputs.file(rootProject.file('build.gradle')).withPropertyName('buildScript')
+
     // TODO.md 45.1 (risk R14). Install Mockito's agent AT VM START instead of letting it self-attach.
     //
     // Mockito's inline mock maker needs an Instrumentation. PremainAttachAccess.getInstrumentation()
