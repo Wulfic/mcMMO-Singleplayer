@@ -105,7 +105,25 @@ boot_verdict() {  # log
 reset_work_dir() {  # work
     local work="${1:-}"
     [[ -n "$work" ]] || { echo "reset_work_dir: refusing to clean an empty path" >&2; return 2; }
-    rm -rf "$work/logs" "$work/brewsmoke" "$work/commands.txt" "$work/config"
+    local paths=("$work/logs" "$work/brewsmoke" "$work/commands.txt" "$work/config")
+    rm -rf "${paths[@]}" 2>/dev/null
+    # ⚠️⚠️ AND PROVE IT WENT. Removing is not the same as having removed: on Windows a file still
+    # held open by a server from an earlier run cannot be deleted, `rm` returns non-zero, and an
+    # unchecked call sails past it. The run then keeps the PREVIOUS run's `logs/`, and boot_verdict
+    # above reads `Done (` out of that stale log and calls a server that never started "up".
+    # 🔑 Measured in gameplay-smoke.sh on 2026-09-10: it turned a port collision into a reported MOD
+    # failure while `**** FAILED TO BIND TO PORT!` sat in the very log being graded. All three
+    # harnesses carried the same unchecked clear and the same "up wins" rule.
+    local left=() p
+    for p in "${paths[@]}"; do [[ -e "$p" ]] && left+=("$p"); done
+    (( ${#left[@]} == 0 )) && return 0
+    {
+        echo "reset_work_dir: the work directory could not be cleared. Still present:"
+        printf '     %s\n' "${left[@]}"
+        echo "   Almost always a server from an earlier run still holding these files open."
+        echo "   Grading would read THAT run's log, so nothing here would be about this mod."
+    } >&2
+    return 2   # ENVIRONMENT, never 1 -- nothing was proven about the mod.
 }
 
 # --- did either run refuse for ENVIRONMENT reasons? --------------------------------------------
@@ -345,11 +363,16 @@ STUB
     echo "brew-smoke self-test: work-dir reset"
     mkdir -p "$tmp/wd/config/mcmmo" "$tmp/wd/logs" "$tmp/wd/brewsmoke" "$tmp/wd/mods"
     : > "$tmp/wd/config/mcmmo/potions.yml"; : > "$tmp/wd/mods/keepme.jar"
-    reset_work_dir "$tmp/wd" >/dev/null 2>&1
-    if [[ ! -e "$tmp/wd/config" && ! -e "$tmp/wd/logs" && ! -e "$tmp/wd/brewsmoke" ]]; then
-        echo "  PASS  reset_work_dir removes config, logs and the world"; pass=$((pass+1))
+    reset_work_dir "$tmp/wd" >/dev/null 2>&1; wd_rc=$?
+    # WARN: the EXIT CODE is asserted here, not just the filesystem. Without it this case passes a
+    # reset_work_dir that refuses unconditionally -- measured 2026-09-10, when the "always refuses"
+    # mutant survived brew-smoke's whole suite while its two siblings caught the same mutation.
+    # This is the CONVERSE CONTROL for the survives-removal refusal below; a one-sided pair proves
+    # only that the function can say no.
+    if [[ "$wd_rc" == "0" && ! -e "$tmp/wd/config" && ! -e "$tmp/wd/logs" && ! -e "$tmp/wd/brewsmoke" ]]; then
+        echo "  PASS  reset_work_dir removes config, logs and the world, and returns 0"; pass=$((pass+1))
     else
-        echo "  FAIL  reset_work_dir removes config, logs and the world -- something survived"; fail=$((fail+1))
+        echo "  FAIL  reset_work_dir removes config/logs/world and returns 0 -- rc=$wd_rc"; fail=$((fail+1))
         ls -a "$tmp/wd" | sed 's/^/        | /'
     fi
     # The staged mods must NOT be collateral: run_one clears those itself, by pattern, later.
@@ -360,6 +383,18 @@ STUB
     fi
     # Bad input in, nothing destroyed out. Without this the guard is decoration.
     mkdir -p "$tmp/guard/logs"; : > "$tmp/guard/logs/latest.log"
+    # The other way this function can lie: it ran `rm` and the path is STILL THERE. `rm` is stubbed
+    # to a no-op to stand in for a Windows file lock, which cannot be produced portably here.
+    # 🔑 Its CONVERSE is the "removes config, logs and the world" case above, which would go red if
+    # this ever returned 2 unconditionally -- so both directions are pinned.
+    mkdir -p "$tmp/locked/logs"; : > "$tmp/locked/logs/latest.log"
+    lock_rc=0
+    ( rm() { :; }; reset_work_dir "$tmp/locked" ) >/dev/null 2>&1 || lock_rc=$?
+    if [[ "$lock_rc" == "2" ]]; then
+        echo "  PASS  reset_work_dir refuses (2) when the path survives removal"; pass=$((pass+1))
+    else
+        echo "  FAIL  reset_work_dir refuses (2) when the path survives removal: rc=$lock_rc"; fail=$((fail+1))
+    fi
     ( cd "$tmp/guard" && reset_work_dir "" ) >/dev/null 2>&1; guard_rc=$?
     if [[ "$guard_rc" == "2" && -f "$tmp/guard/logs/latest.log" ]]; then
         echo "  PASS  reset_work_dir refuses an empty path and destroys nothing"; pass=$((pass+1))
