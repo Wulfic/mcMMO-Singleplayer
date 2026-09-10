@@ -190,6 +190,129 @@ SETUP: list[str] = [
     "SLEEP 2",
 ]
 
+# --- the double-click confirmation window, and why its usable half is not 3 seconds -------------
+#
+# RepairManager#checkConfirmation arms on the first anvil click and repairs on a second inside a
+# 3-second window. Both numbers below are read off the mod, not chosen here:
+#
+#   RepairManager#actualizeLastAnvilUse:  lastClick = (int)(System.currentTimeMillis() / 1000L)
+#   SkillUtils#cooldownExpired:           now_ms >= (lastClick + 3) * 1000
+#
+# ⚠️⚠️ THE START OF THE WINDOW IS TRUNCATED TO A WHOLE SECOND, SO THE WINDOW IS NOT 3s. An arming
+# click at X.999 records X and the window shuts at X+3.000 -- 2.001s later. The duration this
+# harness may rely on is therefore the WORST case, 2s, and treating the nominal 3s as the budget
+# is how the pacing below came to run on 0.4s of slack.
+CONFIRM_WINDOW_S = 3.0
+#: The most a truncated `lastClick` can throw away. Whole seconds in, so one whole second.
+CONFIRM_TRUNCATION_S = 1.0
+#: What the harness may actually count on: 2.0s, never 3.0s.
+GUARANTEED_CONFIRM_WINDOW_S = CONFIRM_WINDOW_S - CONFIRM_TRUNCATION_S
+#: Slack demanded of the pacing, so an ordinary hiccup cannot decide the verdict. Half the
+#: guaranteed window: the run may lose a full second to GC, disk or a neighbouring JVM and still
+#: land the confirming click.
+CONFIRM_SLACK_S = 1.0
+#: A server tick. The clicks must also be far enough APART to reach the server on separate ticks --
+#: `player use once` arms one use for the NEXT tick, so two in one tick deliver a single click.
+TICK_S = 0.05
+#: The floor on the gap, in ticks. One tick is the true minimum; four is the same number with room
+#: for the server to be busy, and still an order of magnitude under the ceiling above.
+MIN_CLICK_GAP_TICKS = 4
+
+_USE_ONCE = f"player {BOT} use once"
+
+
+def driver_command_delay_s() -> float:
+    """How long `gameplay-smoke.sh` sleeps after sending EACH command.
+
+    ⚠️ READ OUT OF THE SHELL SCRIPT, never copied here. This value is half of the gap between the
+    two anvil clicks, and it lives in the other half of the harness -- so a hardcoded copy would let
+    the driver's pacing drift away from the guard that checks it while the guard kept printing
+    green. That is the same failure the module header already avoids for the command table: what
+    RUNS and what is CHECKED must come from one source.
+    """
+    path = Path(__file__).resolve().parent / "gameplay-smoke.sh"
+    text = path.read_text(encoding="utf-8", errors="replace")
+    m = re.search(r"^\s*sleep\s+([0-9.]+)\s*#\s*one command per", text, re.M)
+    if not m:
+        raise RuntimeError(
+            f"{path.name}: could not find the per-command sleep. The pacing guard cannot be "
+            "evaluated, and a guard that cannot measure must refuse rather than pass."
+        )
+    return float(m.group(1))
+
+
+def double_click_gap_s(phase: "Phase", delay_s: float) -> float | None:
+    """Seconds between the two `use once` clicks of a double-click phase, or None if it has none.
+
+    The driver sleeps `delay_s` after every command it sends and honours `SLEEP n` literally, so
+    the gap the server sees is the post-click delay plus everything scripted between the two.
+    """
+    idx = [i for i, c in enumerate(phase.commands) if c == _USE_ONCE]
+    if len(idx) < 2:
+        return None
+    first, second = idx[0], idx[1]
+    gap = delay_s  # the driver's own pause after the arming click
+    for cmd in phase.commands[first + 1:second]:
+        gap += float(cmd[len("SLEEP "):]) if cmd.startswith("SLEEP ") else delay_s
+    return gap
+
+
+def check_double_click_pacing() -> list[str]:
+    """Every double-click phase must land its confirming click well inside the WORST-case window.
+
+    Returns a list of complaints; empty means the pacing is sound.
+
+    🔑 WHY THIS IS A GUARD AND NOT A COMMENT. On 2026-09-03 the §61.6 sweep reported
+    `repair: REPAIR did NOT move` on 1.21.4 and on 1.21.4 alone -- 15 of 16 versions green, both
+    immediate neighbours green on identical code, and the same jar scored 36/0/0 when re-run.
+    Nothing was wrong with the mod. The phase was pacing its confirming click 1.6s into a window
+    guaranteed to be only 2.001s, so it ran on 401ms of slack on a box four hours into a sweep, and
+    when that slack ran out the harness reported it as a defect in the mod.
+
+    ⚠️ THE BOUND IS TWO-SIDED, and the lower half is not padding. Removing the gap entirely also
+    satisfies "well inside the window" while delivering both clicks in ONE tick -- which the mod
+    correctly answers by arming and not repairing, and which reads in the scorer as the identical
+    "REPAIR did NOT move". Both ways of getting this wrong produce the same false accusation, so
+    both are fenced.
+
+    ⚠️ It fences `repair-control` for the same reason and a worse one: a negative phase whose
+    clicks miss the window does not fail, it passes VACUOUSLY -- "REPAIR stayed flat" is exactly
+    what a click that never counted looks like.
+    """
+    delay_s = driver_command_delay_s()
+    ceiling = GUARANTEED_CONFIRM_WINDOW_S - CONFIRM_SLACK_S
+    floor = MIN_CLICK_GAP_TICKS * TICK_S
+    out: list[str] = []
+    seen = 0
+    for phase in PHASES:
+        gap = double_click_gap_s(phase, delay_s)
+        if gap is None:
+            continue
+        seen += 1
+        if gap > ceiling:
+            out.append(
+                f"phase '{phase.name}': the confirming click lands {gap:.2f}s after the arming one, "
+                f"leaving {GUARANTEED_CONFIRM_WINDOW_S - gap:.2f}s of the worst-case "
+                f"{GUARANTEED_CONFIRM_WINDOW_S:.2f}s window -- under the {CONFIRM_SLACK_S:.2f}s of "
+                f"slack this pacing must keep, so a slow tick scores the mod as broken"
+            )
+        elif gap < floor:
+            out.append(
+                f"phase '{phase.name}': the two clicks are only {gap:.2f}s apart (floor "
+                f"{floor:.2f}s = {MIN_CLICK_GAP_TICKS} ticks) -- close enough to be consumed in one "
+                f"tick, which delivers a SINGLE click and reads as 'REPAIR did NOT move'"
+            )
+    if not seen:
+        # Exit-2 reasoning, in a function that can only return strings: measuring nothing is not a
+        # pass. If the phases are ever renamed or the click command reworded, this guard would go
+        # quietly green having checked no phase at all.
+        out.append(
+            f"no phase issues two '{_USE_ONCE}' commands -- the pacing guard measured NOTHING, "
+            "which is not the same as the pacing being correct"
+        )
+    return out
+
+
 PHASES: list[Phase] = [
     Phase(
         name="mine-natural",
@@ -508,10 +631,17 @@ PHASES: list[Phase] = [
             # Measured on 26.2, 2026-08-25: with no gap the server logged a SINGLE onUseBlock for
             # the anvil (kind=REPAIR, anvilAction=true) and checkConfirmation(true) returned false,
             # which is the RIGHT answer to one click.
-            # ⚠️ 1s, not 3s. RepairManager's confirmation window is 3 SECONDS and the second click
-            # must land inside it; pacing a gap exactly ON that boundary is how this repo has
-            # produced a false failure before.
-            "SLEEP 1",
+            # ⚠️⚠️ AND YET SHORT, because the ceiling is not the 3s the mod's config implies.
+            # `lastClick` is truncated to a whole second, so the window this can rely on is 2.001s
+            # (see GUARANTEED_CONFIRM_WINDOW_S). The driver also sleeps ~0.6s after EVERY command,
+            # which is half the gap on its own -- so `SLEEP 1` put the confirming click 1.6s in and
+            # left 0.4s of slack. That is what failed on 1.21.4 during the §61.6 sweep, four hours
+            # into a run, and was reported as `repair: REPAIR did NOT move` -- a mod defect that did
+            # not exist. 0.25 puts the click 0.85s in with ~1.15s to spare, and is still ~17 ticks,
+            # far more than the one tick the coalescing hazard above needs.
+            # 🔑 Do not restore a whole-second value here: check_double_click_pacing() computes this
+            # gap from the real command table and goes red, which is how this is kept true.
+            "SLEEP 0.25",
             f"player {BOT} use once",   # confirms -> the actual repair
             "SLEEP 3",
         ],
@@ -530,11 +660,14 @@ PHASES: list[Phase] = [
             _give("weapon.mainhand", "minecraft:iron_pickaxe[minecraft:damage=200]"),
             *_look(2.0, -59.5, 0.5),
             f"player {BOT} use once",
-            # The same gap, for the same reason, and here it matters MORE: a control that silently
-            # delivers one click where the phase above delivers two is not the same experiment, so
-            # "Repair stayed flat" would be evidence about a DIFFERENT action. A control must differ
-            # from its phase in exactly one variable -- here, the block.
-            "SLEEP 1",
+            # The same gap, for the same reasons, and here it matters MORE -- in BOTH directions.
+            # A control that silently delivers one click where the phase above delivers two is not
+            # the same experiment, so "Repair stayed flat" would be evidence about a DIFFERENT
+            # action. A control must differ from its phase in exactly one variable -- here, the
+            # block. And because this phase is a pure negative, a click that misses the window does
+            # not fail it: it passes VACUOUSLY, which is worse than the false failure the phase
+            # above suffers, because nothing draws anyone's attention to it.
+            "SLEEP 0.25",
             f"player {BOT} use once",
             "SLEEP 3",
             "execute if block 2 -60 0 minecraft:cobblestone run say ===MARK repair-control-clicked===",
@@ -985,6 +1118,16 @@ def self_test() -> int:
                 failures += 1
     if not failures:
         print("  [ok] every required marker is emitted by a command in its own phase")
+
+    # The pacing of the double-click phases, against the mod's own confirmation window. Structural,
+    # like the marker check above and for the same reason: it reads the REAL command table, so it
+    # sees a phase whose timing no synthetic log could ever expose. See check_double_click_pacing.
+    pacing = check_double_click_pacing()
+    for complaint in pacing:
+        print(f"  [BROKEN] {complaint}")
+    failures += len(pacing)
+    if not pacing:
+        print("  [ok] every double-click phase lands its confirming click inside the worst-case window")
 
     for label, mutation, profile, should_flag in cases:
         log = _synthetic_log(mutation)
