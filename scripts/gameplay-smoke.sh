@@ -7,6 +7,10 @@
 #   scripts/gameplay-smoke.sh path/to/mcmmo.jar 1.21.10                      # explicit MC version
 #   scripts/gameplay-smoke.sh path/to/mcmmo.jar 1.21.10 0.19.3 0.130.0+1.21.10
 #
+# ENV:
+#   GAMEPLAY_SMOKE_PORT=<n>  bind this port instead of 25565. A busy 25565 used to spend 420s
+#                            and then report ❌ FAIL for a purely environmental fact.
+#
 # The third member of the per-band harness, and the one that needed a player:
 #   scripts/boot-check.sh   -- the jar boots, mcMMO initialises, commands dispatch
 #   scripts/brew-smoke.sh   -- one gameplay path (Alchemy) fires, with a vanilla control
@@ -98,6 +102,30 @@ stage_fapi() {
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# --- server.properties, with the port ------------------------------------------------------------
+# A function rather than an inline printf so --self-test can assert the port actually REACHES the
+# file: a port resolved into a variable and never written leaves every run on 25565.
+server_props() {  # level, port
+    printf 'level-name=%s\nlevel-type=minecraft\\:flat\nonline-mode=false\ngamemode=survival\nmax-tick-time=-1\nsync-chunk-writes=false\nview-distance=4\nspawn-protection=0\nserver-port=%s\n' "$1" "$2"
+}
+
+# --- classify the server log ----------------------------------------------------------------------
+# Echoes "up", "portbusy", or nothing (undecided). Extracted from the wait loop below so --self-test
+# can drive it with synthetic logs; the loop itself needs a real JVM, and a test that re-implemented
+# this grep would score a COPY of the logic -- the first vacuity §60 caught in its own new work.
+#
+# 🔑 Measured 2026-09-03: a server that cannot bind logs "**** FAILED TO BIND TO PORT!" and shuts
+# itself down, so "Done (" never arrives, the loop waits out all 420 seconds, and the run is
+# reported as ❌ FAIL -- the mod is bad -- for a port that was merely in use. Same shape as the
+# fabric-api confusion §60 fixed in this very file, which is why it deserved looking for.
+boot_verdict() {  # log
+    [[ -f "$1" ]] || return 0
+    # "up" first on purpose: a server that reached Done( is up whatever else the log says.
+    grep -q 'Done (' "$1" 2>/dev/null && { echo up; return 0; }
+    grep -q 'FAILED TO BIND TO PORT' "$1" 2>/dev/null && { echo portbusy; return 0; }
+    return 0
+}
+
 # --- shell-side self-test -------------------------------------------------------------------------
 # Its two siblings have had one all along; this script only ever had the SCORER's, which cannot see
 # a staging bug. §60 is why: the fabric-api staging below used to warn-and-continue, and no test in
@@ -149,6 +177,47 @@ STUB
         && { echo "  PASS  scorer self-test"; pass=$((pass+1)); } \
         || { echo "  FAIL  scorer self-test"; fail=$((fail+1)); }
     echo
+    echo "gameplay-smoke self-test: boot verdict and port"
+    # Calls the REAL boot_verdict; a re-grep here would pass while the shipped function was broken.
+    verdchk() { # name, log-content, want
+        local name="$1" want="$3" got
+        printf '%s\n' "$2" > "$tmp/verdict.log"
+        got="$(boot_verdict "$tmp/verdict.log")"
+        if [[ "$got" == "$want" ]]; then
+            echo "  PASS  $name (verdict '${got:-<none>}')"; pass=$((pass+1))
+        else
+            echo "  FAIL  $name: got '${got:-<none>}', want '${want:-<none>}'"; fail=$((fail+1))
+        fi
+    }
+    verdchk "verdict: 'Done (' -> up" \
+        '[15:00:00] [Server thread/INFO]: Done (12.345s)! For help, type "help"' up
+    verdchk "verdict: bind failure -> portbusy" \
+        '[15:00:00] [Server thread/WARN]: **** FAILED TO BIND TO PORT!' portbusy
+    verdchk "verdict: neither -> undecided (keep waiting)" \
+        '[15:00:00] [Server thread/INFO]: Preparing spawn area: 0%' ''
+    verdchk "verdict: both -> up wins" \
+        "$(printf 'FAILED TO BIND TO PORT\nDone (1.0s)!')" up
+
+    if [[ "$(server_props gpsmoke 25599 | grep -c '^server-port=25599$')" == "1" ]]; then
+        echo "  PASS  server_props writes exactly one server-port, with the given port"; pass=$((pass+1))
+    else
+        echo "  FAIL  server_props writes exactly one server-port, with the given port -- it did not"; fail=$((fail+1))
+        server_props gpsmoke 25599 | sed 's/^/        | /'
+    fi
+    # 🔑 gamemode=survival is not incidental here: every earning phase needs a survival player, and
+    # a properties file that lost it would score zero passes for a reason no phase reports.
+    if [[ "$(server_props gpsmoke 25599 | grep -c '^gamemode=survival$')" == "1" ]]; then
+        echo "  PASS  server_props still writes gamemode=survival"; pass=$((pass+1))
+    else
+        echo "  FAIL  server_props still writes gamemode=survival -- it lost it"; fail=$((fail+1))
+    fi
+    if [[ "$(server_props gpsmoke 25599 | head -1)" == "level-name=gpsmoke" ]]; then
+        echo "  PASS  server_props still takes the level name from its argument"; pass=$((pass+1))
+    else
+        echo "  FAIL  server_props still takes the level name from its argument -- it did not"; fail=$((fail+1))
+    fi
+
+    echo
     echo "  $pass passed, $fail failed"
     [[ "$fail" -eq 0 ]]; exit $?
 fi
@@ -162,6 +231,8 @@ MC="${2:-$(prop minecraft_version)}"
 LOADER="${3:-$(prop loader_version)}"
 FAPI="${4:-$(prop fabric_version)}"
 INSTALLER="1.1.2"
+# An env var, not a 5th positional -- the same call the fabric-api coordinate already made.
+PORT="${GAMEPLAY_SMOKE_PORT:-25565}"
 LEVEL="gpsmoke"
 
 WORK="${GAMEPLAY_SMOKE_DIR:-$REPO/build/gameplay-smoke/$MC}"
@@ -231,8 +302,7 @@ stage_fapi "$WORK/mods" || exit 2
 echo "=== mods: $(ls "$WORK/mods" | tr '\n' ' ')"
 
 echo "eula=true" > "$WORK/eula.txt"
-printf 'level-name=%s\nlevel-type=minecraft\\:flat\nonline-mode=false\ngamemode=survival\nmax-tick-time=-1\nsync-chunk-writes=false\nview-distance=4\nspawn-protection=0\n' \
-    "$LEVEL" > "$WORK/server.properties"
+server_props "$LEVEL" "$PORT" > "$WORK/server.properties"
 
 # A fresh world every run. The phases measure DELTAS, so a profile carried over from a previous run
 # would not break the verdict -- but a carried-over placed-block tracker would, since mine-placed
@@ -259,10 +329,21 @@ reap() {
 }
 
 booted=0
+verdict=""
 for _ in $(seq 1 420); do
-    [[ -f "$LOG" ]] && grep -q 'Done (' "$LOG" 2>/dev/null && { booted=1; break; }
+    verdict="$(boot_verdict "$LOG")"
+    [[ "$verdict" == "up" ]] && { booted=1; break; }
+    # Break at once rather than waiting out the remaining ~400s: the server has already gone.
+    [[ "$verdict" == "portbusy" ]] && break
     sleep 1
 done
+if [[ "$verdict" == "portbusy" ]]; then
+    {
+        echo "❌ ENVIRONMENT: port $PORT is already in use — the server shut down before it booted."
+        echo "   Nothing was proven about the mod. Fix: GAMEPLAY_SMOKE_PORT=<free port>, or free it."
+    } >&2
+    echo "stop" >> "$WORK/commands.txt"; sleep 3; reap; exit 2
+fi
 if [[ "$booted" != "1" ]]; then
     echo "❌ FAIL: never reached 'Done (' — see $LOG" >&2
     echo "stop" >> "$WORK/commands.txt"; sleep 10; reap; exit 1
