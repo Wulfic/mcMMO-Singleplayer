@@ -52,6 +52,34 @@ boot_verdict() {  # log
     return 0
 }
 
+# --- clear the work directory, and PROVE it cleared ---------------------------------------------
+# ⚠️⚠️ AN UNCHECKED `rm -rf` HERE IS NOT A TIDINESS BUG -- IT IS A FALSE VERDICT ABOUT THE MOD.
+# On Windows a file still held open by a server from an earlier run cannot be removed: `rm` writes
+# to stderr, returns non-zero, and an unchecked call sails straight past it. The run then proceeds
+# with the PREVIOUS run's `logs/` in place, and boot_verdict above reads that stale log, finds its
+# `Done (`, and reports the server "up" -- a server that never started.
+#
+# 🔑 Measured in gameplay-smoke.sh on 2026-09-10, where it turned a port collision into
+# `gate 6: FAIL` (THE MOD IS BAD) while `**** FAILED TO BIND TO PORT!` sat in the log it graded.
+# This file has the same unchecked clear and the same "up wins" rule, so it has the same defect --
+# fixing an instrument does not fix the class.
+#
+# ⚠️ The refusal is exit 2 (ENVIRONMENT), never 1: nothing was proven about the mod.
+clear_work() {  # paths...
+    rm -rf "$@" 2>/dev/null
+    local left=() p
+    for p in "$@"; do [[ -e "$p" ]] && left+=("$p"); done
+    (( ${#left[@]} == 0 )) && return 0
+    {
+        echo "❌ ENVIRONMENT: the work directory could not be cleared. Still present:"
+        printf '     %s\n' "${left[@]}"
+        echo "   Almost always a server from an earlier run still holding these files open."
+        echo "   Grading would read THAT run's log, so nothing here would be about this mod."
+        echo "   Fix: wait for it to exit, or kill it, then re-run."
+    } >&2
+    return 2
+}
+
 # --- self-test ---------------------------------------------------------------------------------
 # Proves the refusal added in §12.2, and its converse. Boots nothing: BOOT_CHECK_STAGE_ONLY stops
 # the script the moment staging has succeeded, which is the only part being asserted on.
@@ -161,6 +189,47 @@ STUB
     fi
 
     echo
+    echo "boot-check self-test: clearing the work directory"
+    # Calls the REAL clear_work. `rm` is stubbed to a no-op to stand in for a Windows file lock,
+    # which cannot be produced portably here -- the branch under test is "rm ran and the path is
+    # STILL THERE", reached identically either way.
+    cwchk() {  # name, stub-rm?, want-rc
+        local name="$1" stub="$2" want="$3" rc
+        rm -rf "$tmp/cw"; mkdir -p "$tmp/cw"; : > "$tmp/cw/held.log"
+        if [[ "$stub" == "yes" ]]; then
+            rm() { :; }
+            clear_work "$tmp/cw" 2>/dev/null; rc=$?
+            unset -f rm
+        else
+            clear_work "$tmp/cw"; rc=$?
+        fi
+        if [[ "$rc" == "$want" ]]; then
+            echo "  PASS  $name (exit $rc)"; pass=$((pass+1))
+        else
+            echo "  FAIL  $name: exit=$rc (want $want)"; fail=$((fail+1))
+        fi
+    }
+    # The refusal, and the CONVERSE CONTROL: a clear_work that always returned 2 would satisfy the
+    # first line perfectly and break every real run.
+    cwchk "a path that survives removal -> exit 2 (ENVIRONMENT), never 1" yes 2
+    cwchk "a path that really goes      -> exit 0, the run may proceed"   no  0
+    if [[ -e "$tmp/cw" ]]; then
+        echo "  FAIL  clear_work returned 0 but the directory is still there"; fail=$((fail+1))
+    else
+        echo "  PASS  clear_work's exit 0 means the path is actually gone"; pass=$((pass+1))
+    fi
+    # A refusal the CALLER SWALLOWS is not a refusal (§61 found exactly that in brew-smoke's `both`
+    # mode). Only column-0 calls are real; the indented ones above are this test driving it.
+    cw_calls=$(grep -cE '^clear_work ' "$0")
+    cw_guarded=$(grep -cE '^clear_work .*\|\| exit 2' "$0")
+    if [[ "$cw_calls" -ge 1 && "$cw_calls" == "$cw_guarded" ]]; then
+        echo "  PASS  every clear_work call site propagates its refusal ($cw_guarded/$cw_calls)"; pass=$((pass+1))
+    else
+        # Zero call sites is a FAILURE, not a pass: it means this check measured nothing.
+        echo "  FAIL  clear_work call sites: $cw_guarded of $cw_calls propagate the refusal"; fail=$((fail+1))
+    fi
+
+    echo
     echo "  $pass passed, $fail failed"
     [[ "$fail" -eq 0 ]]; exit $?
 fi
@@ -248,7 +317,7 @@ fi
 echo "eula=true" > "$WORK/eula.txt"
 server_props bootcheck "$PORT" > "$WORK/server.properties"
 
-rm -rf "$WORK/logs" "$WORK/bootcheck" "$WORK/commands.txt"
+clear_work "$WORK/logs" "$WORK/bootcheck" "$WORK/commands.txt" || exit 2
 : > "$WORK/commands.txt"
 
 # ⚠️⚠️ NEVER drive the JVM from a mkfifo. Under git-bash on Windows, MSYS emulates the FIFO and a
