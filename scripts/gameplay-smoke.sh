@@ -126,6 +126,35 @@ boot_verdict() {  # log
     return 0
 }
 
+# --- clear the work directory, and PROVE it cleared ---------------------------------------------
+# ⚠️⚠️ AN UNCHECKED `rm -rf` HERE IS NOT A TIDINESS BUG -- IT IS A FALSE VERDICT ABOUT THE MOD.
+# On Windows a file still held open by a server from an earlier run cannot be removed: `rm` writes
+# to stderr, returns non-zero, and an unchecked call sails straight past it. The run then proceeds
+# with the PREVIOUS run's `logs/` still in place, and `boot_verdict` above reads that stale log,
+# finds its `Done (`, and reports the server "up" -- a server that never started.
+#
+# 🔑 That is not hypothetical and it is why this function exists. Measured 2026-09-10: a second run
+# was started while the first still held the port, `rm -rf "$WORK/logs"` failed, the stale log said
+# `Done (`, the new server died with `**** FAILED TO BIND TO PORT!`, and the harness reported
+# `gate 6: FAIL` -- THE MOD IS BAD -- with the bind failure sitting in the very log it had graded.
+# The `portbusy` verdict never got a turn, because "up" had already been read off the wrong run.
+#
+# ⚠️ So the refusal is exit 2 (ENVIRONMENT), never 1: nothing whatsoever was proven about the mod.
+clear_work() {  # paths...
+    rm -rf "$@" 2>/dev/null
+    local left=() p
+    for p in "$@"; do [[ -e "$p" ]] && left+=("$p"); done
+    (( ${#left[@]} == 0 )) && return 0
+    {
+        echo "❌ ENVIRONMENT: the work directory could not be cleared. Still present:"
+        printf '     %s\n' "${left[@]}"
+        echo "   Almost always a server from an earlier run still holding these files open."
+        echo "   Grading would read THAT run's log, so nothing here would be about this mod."
+        echo "   Fix: wait for it to exit, or kill it, then re-run."
+    } >&2
+    return 2
+}
+
 # --- shell-side self-test -------------------------------------------------------------------------
 # Its two siblings have had one all along; this script only ever had the SCORER's, which cannot see
 # a staging bug. §60 is why: the fabric-api staging below used to warn-and-continue, and no test in
@@ -197,6 +226,55 @@ STUB
         '[15:00:00] [Server thread/INFO]: Preparing spawn area: 0%' ''
     verdchk "verdict: both -> up wins" \
         "$(printf 'FAILED TO BIND TO PORT\nDone (1.0s)!')" up
+
+    # WARN: "up wins" above is only safe because the log it reads is GUARANTEED FRESH by
+    # clear_work. Against a stale log that same rule is precisely what reports a server that never
+    # started as "up" -- the two are a pair, and neither one is correct on its own.
+
+    echo
+    echo "gameplay-smoke self-test: clearing the work directory"
+    # Calls the REAL clear_work. `rm` is stubbed to a no-op to stand in for a Windows file lock,
+    # which cannot be produced portably here -- the branch under test is "rm ran and the path is
+    # STILL THERE", and that branch is reached identically either way.
+    cwchk() {  # name, stub-rm?, want-rc
+        local name="$1" stub="$2" want="$3" rc
+        rm -rf "$tmp/cw"; mkdir -p "$tmp/cw"; : > "$tmp/cw/held.log"
+        if [[ "$stub" == "yes" ]]; then
+            rm() { :; }        # the lock: removal silently does nothing
+            clear_work "$tmp/cw" 2>/dev/null; rc=$?
+            unset -f rm
+        else
+            clear_work "$tmp/cw"; rc=$?
+        fi
+        if [[ "$rc" == "$want" ]]; then
+            echo "  PASS  $name (exit $rc)"; pass=$((pass+1))
+        else
+            echo "  FAIL  $name: exit=$rc (want $want)"; fail=$((fail+1))
+        fi
+    }
+    # The refusal, and the CONVERSE CONTROL underneath it: a clear_work that returned 2
+    # unconditionally would satisfy the first line perfectly and break every real run.
+    cwchk "a path that survives removal -> exit 2 (ENVIRONMENT), never 1" yes 2
+    cwchk "a path that really goes      -> exit 0, the run may proceed"   no  0
+    if [[ -e "$tmp/cw" ]]; then
+        echo "  FAIL  clear_work returned 0 but the directory is still there"; fail=$((fail+1))
+    else
+        echo "  PASS  clear_work's exit 0 means the path is actually gone"; pass=$((pass+1))
+    fi
+    # A refusal the CALLER SWALLOWS is not a refusal. That is not a hypothetical either: §61 found
+    # exactly it in brew-smoke's `both` mode, which captured run_one's output and never read $?, so
+    # every ENVIRONMENT 2 was discarded and the run printed a green tick about a server that never
+    # started. So the CALL SITES are checked here, in this script's own source -- returning 2
+    # correctly buys nothing if the one place that calls it carries on regardless.
+    # Only column-0 calls are real ones; the two indented calls above are this test driving it.
+    cw_calls=$(grep -cE '^clear_work ' "$0")
+    cw_guarded=$(grep -cE '^clear_work .*\|\| exit 2' "$0")
+    if [[ "$cw_calls" -ge 1 && "$cw_calls" == "$cw_guarded" ]]; then
+        echo "  PASS  every clear_work call site propagates its refusal ($cw_guarded/$cw_calls)"; pass=$((pass+1))
+    else
+        # ⚠️ Zero call sites is a FAILURE, not a pass: it means this check measured nothing.
+        echo "  FAIL  clear_work call sites: $cw_guarded of $cw_calls propagate the refusal"; fail=$((fail+1))
+    fi
 
     if [[ "$(server_props gpsmoke 25599 | grep -c '^server-port=25599$')" == "1" ]]; then
         echo "  PASS  server_props writes exactly one server-port, with the given port"; pass=$((pass+1))
@@ -307,7 +385,7 @@ server_props "$LEVEL" "$PORT" > "$WORK/server.properties"
 # A fresh world every run. The phases measure DELTAS, so a profile carried over from a previous run
 # would not break the verdict -- but a carried-over placed-block tracker would, since mine-placed
 # depends on the flag for (3,-59,0) being set by this run's own placement.
-rm -rf "$WORK/logs" "$WORK/$LEVEL" "$WORK/commands.txt" "$WORK/config"
+clear_work "$WORK/logs" "$WORK/$LEVEL" "$WORK/commands.txt" "$WORK/config" || exit 2
 : > "$WORK/commands.txt"
 
 cd "$WORK" || exit 2
@@ -356,6 +434,17 @@ echo "$CANARY" >> "$WORK/commands.txt"
 canary_seen=0
 for _ in $(seq 1 30); do grep -q "$CANARY" "$LOG" 2>/dev/null && { canary_seen=1; break; }; sleep 1; done
 if [[ "$canary_seen" != "1" ]]; then
+    # 🔑 Ask WHY before saying whose fault it is. A server that died for an environmental reason
+    # after this script decided it was "up" reaches exactly this branch, and returning 1 here calls
+    # that a mod defect. Re-read the verdict: an environment cause outranks the canary, always.
+    if [[ "$(boot_verdict "$LOG")" == "portbusy" ]]; then
+        {
+            echo "❌ ENVIRONMENT: port $PORT is already in use — the server died after this script"
+            echo "   had already read a boot marker. Nothing was proven about the mod."
+            echo "   Fix: GAMEPLAY_SMOKE_PORT=<free port>, or free it."
+        } >&2
+        echo "stop" >> "$WORK/commands.txt"; sleep 3; reap; exit 2
+    fi
     echo "❌ FAIL: the canary was never rejected — the console is not live, so every phase below" >&2
     echo "        would silently do nothing and score as a clean run." >&2
     echo "stop" >> "$WORK/commands.txt"; sleep 10; reap; exit 1
