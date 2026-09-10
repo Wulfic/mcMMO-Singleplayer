@@ -1056,6 +1056,32 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
       · `mc1.21.8 6c4ec8db4` · `mc1.21.10 1608d5084` · `mc1.21.11 44e3dc1d0`. All six commits are
       reachable from a live branch, so the delete orphaned nothing (verified for all 62, not just six).
 
+- [ ] ⬜ **The CR-strip at `gameplay-smoke.sh:466` is one REFACTOR from a silent catastrophic
+      no-op** (raised by §63, 2026-09-10, jointly with a peer session).
+      🔴 **The shipped code is CORRECT — this is a latent hazard, not a defect.** `line="${line%$'\r'}"`
+      strips properly at top level. **Move that same line inside a command substitution and it becomes
+      a silent no-op**, because an unquoted `$'\r'` re-lexes to EMPTY inside `$( )`, so `${line%}` strips
+      an empty suffix. Measured: top level `73746f70 0d` → `73746f70`; nested → `73746f70 0d` unchanged.
+      Same syntax, same exit status, **no error**.
+      🔴 **The symptom is the documented catastrophic one.** That line's own comment records that the
+      harness's first run *"lost every `gamerule`, every `mine continuous` and every `attack
+      continuous`"* — brigadier reads `false\r` as an invalid boolean — while commands with a greedy
+      last argument still went through, **so the run looked like a partly-working scenario rather than
+      a broken pipe.** A green-ish smoke run is the failure mode.
+      ⚠️ **Second site: `gen-milestone-advancements.sh:272`**, identical construct.
+      ✅ **`ci-watch.sh:423-425` is NOT affected** — it strips `$'\t'`, and **TAB survives the re-lex**;
+      measured, nested and top level both yield `field`. Only **CR** is discarded. Do not "fix" those.
+      ✅ **The immune form, if the code must move:** hold the CR in a variable —
+      `CR=$(printf '\r'); line="${line%"$CR"}"` — measured correct **nested and at top level**.
+      🔑 **Why this is a row and not a footnote: nothing in this repo asserts that the strip strips.**
+      No test, no gate. Tidying that line into a shared helper called via `$( )` is an ordinary,
+      well-intentioned refactor, and every instrument would stay green.
+      ✅ **Not a hazard for `prop()`** (`boot-check.sh:27`, `brew-smoke.sh:53`, `gameplay-smoke.sh:307`):
+      `gradle.properties` is 100% CRLF, but that is **output**-side, where `$( )` strips only the
+      trailing `\r`\n` — and MSYS `grep` has already stripped the CR from the line it emits, with
+      `tr -d '[:space:]'` as an explicit second guard. **Argument side and output side behave
+      OPPOSITELY**; see `.agent/memory/gotchas.md` under 2026-09-10.
+
 - [ ] ⬜ **56 MORE stale local-only tags, same cause — owner's call, raised by §63 (2026-09-10).**
       🔑🔑 **"Six" was a lower bound, and the count was never the finding.** Measured:
       `comm -23 <(git tag -l | sort) <(git ls-remote --tags origin | sed 's|.*refs/tags/||' |
