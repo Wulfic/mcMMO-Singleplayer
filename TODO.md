@@ -2508,7 +2508,7 @@ the suspicious result, not this.
 
 ---
 
-## §59 — gates 3/5/6 across the bands, against the SHIPPED artifact (Tier 2, in progress)
+## §59 — gates 3/5/6 across the bands, against the SHIPPED artifact — ✅ DONE (Tier 2)
 
 ### What forced it
 
@@ -2671,7 +2671,7 @@ peer can lose.
 
 ---
 
-## §60 — the range gap: gates 3/5/6 across the SEVEN never-booted versions (Tier 2, in progress)
+## §60 — the range gap: gates 3/5/6 across the SEVEN never-booted versions — ✅ DONE (Tier 2)
 
 ### What forced it
 
@@ -2848,6 +2848,345 @@ copy: propagation runs in a scratch clone and pushes the band refs back.
 
 ---
 
+## §61 — one command for the declared range, and the two defects underneath it (Tier 2, in progress)
+
+### What forced it
+
+§60 closed the *coverage* gap — all 16 declared versions boot, brew and play — and recorded three
+things it explicitly did not close:
+
+* all three gates are **a person running a command**; nothing schedules them;
+* the sweep took **~3h sequential** because *"no harness sets `server-port`, so all bind 25565"*;
+* driving them means sixteen hand-assembled invocations, each carrying its own fabric-api coordinate.
+
+🔑 **Scoping the second line found it was never a performance complaint.** A busy 25565 does not make
+the sweep slow — it makes all three gates **libel the mod**. That is §60's own class (an ENVIRONMENT
+condition reported as *"the mod is bad"*) in a third disguise, and §60 fixed it only for fabric-api.
+**Fixing an instrument does not fix the class** — the sentence §59 wrote about §56.4, now owed by §60.
+
+### What was measured BEFORE any edit
+
+**1. 🔴 A busy 25565 is reported as a mod failure.** Measured 2026-09-03 on `master`: a listener was
+made to hold `0.0.0.0:25565`, then gate 3 was run on the shipped `v1.3.4` `26.2` jar. The server
+loads fabric-api, loads mcMMO, and then:
+
+```
+[15:16:46] [Server thread/INFO]: Starting Minecraft server on *:25565
+[15:16:47] [Server thread/WARN]: **** FAILED TO BIND TO PORT!
+[15:16:47] [Server thread/WARN]: The exception was: java.net.BindException: Address already in use: bind
+[15:16:47] [Server thread/WARN]: Perhaps a server is already running on that port?
+[15:16:47] [Server thread/INFO]: Stopping server
+```
+
+It never reaches `Done (`, so the 420-second wait runs out and the harness prints
+`❌ FAIL: never reached 'Done ('` and exits **1** — the code that means **THE MOD IS
+BAD**. Nothing about the mod was tested. ⚠️ **Seven wasted minutes per version is the cheap half of
+the cost;** the expensive half is that the verdict is wrong and reads exactly like a real failure.
+🔑 **The reason nobody hit it is the reason §60's cache bug survived: one machine, one server at a
+time.** It fires the moment a peer session, a second sweep, or the owner's own game holds the port.
+
+**2. 🔴 `brew-smoke.sh` runs every version against ONE mcMMO config tree, and it is three weeks old.**
+Three measurements, in order:
+
+| | |
+|---|---|
+| the asymmetry | `gameplay-smoke.sh:240` clears `"$WORK/config"` every run. `brew-smoke.sh:296` does not, and `boot-check.sh:179` does not |
+| the sharing | `brew-smoke`'s work dir is `build/brew-smoke/$mode` — keyed on **mode**, while both siblings key on **`$MC`**. So one `config/mcmmo/` tree serves all 16 versions |
+| **why that matters** | **the generated config IS version-dependent.** `build/boot-check/26.2` vs `build/boot-check/1.21`, each written by its own version's run: `config.yml` **9585 vs 9030** and `experience.yml` **15535 vs 15356** differ. Nine of eleven files match; two do not, and they are the two the id gates care about |
+
+On disk today that tree dates to **2026-08-14**, partially rewritten 08-19 and 08-31, and **§60's
+seven-version sweep did not touch it** (its `mods/` are stamped 09-01 21:50; the config files are
+not). So at most **one** of the sixteen versions §59/§60 brewed was reading the config its own
+version generates.
+⚠️ **State the severity honestly: this is a false-PASS risk, not a false FAIL.** Every one of those
+runs passed, and Catalysis may well be indifferent to the two files that differ. What is unproven —
+and was never asked — is that gate 5 passes on the config a player's **first install** writes.
+
+**3. ✅ A negative result, recorded because it was the suspicion that started the check.** The server
+jar is **not** contaminated across versions: the launcher stores `versions/<mc>/server-<mc>.jar` and
+`.fabric/processedMods/` entries are content-hashed, so a shared work dir cannot make one version run
+another's server. Measured, not assumed. **The contamination is in the config alone.**
+
+**4. ⚠️ `hidden.yml` is a red herring — and it nearly went into this plan as evidence.** The jar
+packages **12** `.yml` resources and every generated tree on this machine has **11**. The first
+reading was *"brew-smoke's tree is missing a file"*; the control killed it — `hidden.yml` is absent
+from `boot-check/26.2` and `boot-check/1.21` too, i.e. mcMMO never writes it to disk. **A difference
+that appears in the suspect AND in the control is a fact about the program, not a defect.**
+
+### The steps
+
+- [x] ✅ **61.1 — the port.** Each of the three harnesses takes a port (`BOOT_CHECK_PORT`,
+      `BREW_SMOKE_PORT`, `GAMEPLAY_SMOKE_PORT`, default `25565`, an env var rather than a positional
+      for the reason `BREW_SMOKE_JAR` already settled) and writes `server-port=` into its
+      `server.properties`.
+- [x] ✅ **61.2 — the misclassification, which is the half that matters.** The boot wait also watches for
+      `FAILED TO BIND TO PORT` and returns **2 (ENVIRONMENT)** naming the port, *immediately* rather
+      than after 420 seconds. 🔑 **61.1 without 61.2 is worse than nothing**: giving the sweep distinct
+      ports makes the collision rarer without making it legible, which is how a rare failure gets
+      diagnosed as a flaky mod.
+- [x] ✅ **61.3 — brew-smoke clears its config**, adding `"$work/config"` to the `rm -rf` its sibling
+      already has on line 240. One line, an existing pattern, not a new mechanism.
+- [x] ✅ **61.4 — the sweep driver**, `scripts/version-sweep.sh`: reads `supported_minecraft_versions`,
+      resolves loader + fabric-api per version, runs gates 3/5/6 **and their controls** one version at
+      a time, and prints a version × gate matrix. ⚠️ **The matrix distinguishes exit 2 from exit 1** —
+      collapsing them is the exact thing §60 and 61.2 exist to prevent, and a driver that prints ❌ for
+      both would re-introduce the defect one layer up.
+- [x] ✅ **61.5 — the guards.** A `--self-test` case per harness for 61.1–61.3 and one for the driver,
+      each scored on the **failing case name** and mutation-checked. Per §60: the mutation runner must
+      invoke `bash` by the path this repo's harnesses use, or WSL's bash returns the same exit 1 a
+      caught mutation returns.
+- [x] ✅ **61.6 — the sweep**, all 16 declared versions, sequential, against the shipped `v1.3.4`
+      assets. **Ran 2026-09-03, 15:48 → 20:35 (4h47m). Fifteen green; `1.21.4` red on gate 6.**
+      🔑 **The red was the harness accusing the mod** — re-run 2026-09-10 on the same jar: 36/0/0.
+      See *The one red* below.
+- [ ] **61.7 — propagate** to all eight bands with `Backport-of:`, verified through git's own trailer
+      parser **with the master-empty control**, from a scratch clone pushing band refs back.
+
+### What landed (2026-09-03)
+
+| | |
+|---|---|
+| `754162bf8` | `docs(61)`: this plan, and the two defects found while scoping it |
+| `21c95f813` | `fix(gate3,gate6)`: a busy port was reported as THE MOD IS BAD |
+| `a0fcd38ba` | `fix(gate5)`: three defects, every one ENVIRONMENT reported as a mod failure |
+| `546b46852` | `feat(61)`: `scripts/version-sweep.sh` — one command for a branch's declared range |
+
+**A THIRD defect of the class turned up in `brew-smoke.sh` while fixing the second**, and it is the
+worst of the three because it produces a **positive false claim**. `both` — the mode the ship gate
+runs — captured `run_one`'s output with `$( )` and never read `$?`. `run_one` returns 2 for every
+ENVIRONMENT refusal, **including the fabric-api refusal §60 added to this very file**, so in the
+default mode that 2 was discarded, the comparisons then grepped **empty strings**, and the run
+reported:
+
+```
+❌ vanilla consumed the ingredient too — this scenario does NOT discriminate
+✅ mcMMO consumed the ingredient            ← on a server that never started
+❌ no custom effect on the brewed bottle
+=== ❌ brew-smoke FAILED                                              exit 1
+```
+
+Measured before and after against `754162bf8`'s copy of the script, with fabric-api made
+unstageable. **§60's fix was defeated in this file's default mode**: a refusal the caller swallows
+is not a refusal.
+
+### The measurements
+
+| | |
+|---|---|
+| gate 3, 25565 held, default port | **exit 2 in 26s** — was exit 1 after ~7 minutes |
+| gate 3, 25565 held, `BOOT_CHECK_PORT=25599` | **exit 0 in 33s**, log confirms `Starting Minecraft server on *:25599` |
+| gate 6, 25565 held | **exit 2 in 56s** |
+| gate 5 `both`, 25565 held | **exit 2 in 65s**, naming the port |
+| gate 5 `both`, fabric-api unstageable | **exit 2**, was **exit 1** with a false ✅ |
+
+The second row is the **converse control** and is not decoration: a refusal that fired on everything
+would satisfy the first row perfectly and break every real run.
+
+Self-tests: boot-check **5 → 10**, brew-smoke **12 → 26**, gameplay-smoke **4 → 11**, and
+`version-sweep.sh` ships with **17**. Mutations, green baseline first and scored on the failing case
+**name**: **6/6**, **10/10**, **7/7**, **9/9**.
+
+### 🔑 Four vacuities caught in this section's OWN new work
+
+1. **Three `env_refusal` cases passed against a function that did not exist.** "command not found"
+   is 127, 127 is not 0, and the "no refusal" expectation was therefore satisfied by absence. `echk`
+   now treats any status above 1 as an error. **A case that passes when its subject is absent tests
+   nothing.**
+2. **A case NAMED for the anchored suffix did not test the anchor.** It asked for `1.21.1` and
+   asserted the `1.21.1` build — which an *unanchored* pattern also returns. The mutation was
+   caught, but by a different case, and **only the per-mutation name prediction revealed it**; a
+   harness asking *"did anything go red?"* would have printed a clean 9/9. Each property now has its
+   own query.
+3. **`--dry-run` printed `✅ every requested gate passed on every requested version` having executed
+   nothing.** A summary asserting a state that never happened — the same failure four documents in
+   this repo have already been corrected for. The verdict is now computed by `verdict_line()`, with
+   a case pinning that a dry run can never report a pass.
+4. 🔴 **The first live verification of gate 5 exited 2 for the WRONG REASON.** `build/libs` holds
+   forty jars, so the pre-existing ambiguous-jar refusal fired in **3 seconds** and no server was
+   ever involved. The exit code was the one I wanted; the cause had nothing to do with the port.
+   **Read WHY a run failed, never that it failed** — §60's lesson, and it caught me inside the
+   section that quotes it.
+
+⚠️ **And one about the harness rather than the subject:** the first mutation run scored **0 caught /
+6 mis-scored** because the mutants were written to a temp directory, where `$REPO` (derived from
+`BASH_SOURCE/..`) resolves to a tree with no `gradle.properties` — so an unrelated case went red in
+every mutant. **A mutation harness that cannot produce a green baseline is measuring itself.**
+
+### 🔑 The one red — and it was the harness, not the mod
+
+`1.21.4` reported `[FAIL] repair: REPAIR did NOT move (stayed (0, 0))`, 35 passed / 1 failed, and
+every other one of the sixteen was clean. Re-run on **2026-09-10** against the same jar
+(`f7f75edc…`), same Minecraft, same fabric-api, same port: **36 passed, 0 failed, 0 inconclusive —
+`repair: REPAIR moved (0, 0) -> (0, 880)`**. Nothing about the mod was wrong, on that band or any
+other. ⚠️ Its own log had been deleted by the control run, which is the defect `e3b9034c7` fixed
+half an hour later — so the diagnosis below was reconstructed from arithmetic, not read off a file.
+
+**The root cause is two numbers that live in two different files, and neither one is wrong alone.**
+
+| | |
+|---|---|
+| the window | `RepairManager#actualizeLastAnvilUse` stores `(int)(System.currentTimeMillis() / 1000L)` — **truncated to a whole second** — and `SkillUtils#cooldownExpired` shuts the window at `(lastClick + 3) * 1000`. An arming click at `X.999` therefore leaves **2001 ms**, not 3000. The duration the harness may rely on is the worst case: **2.0s** |
+| the gap | `gameplay-smoke.sh:392` sleeps **0.6s after every command it sends**, and the phase then scripted `SLEEP 1` — so the confirming click landed **1.6s** after the arming one |
+| the slack | **401 ms.** Four hours into a sweep, on a box with seven other JVMs on it, that ran out |
+
+🔴 **And the failure is silent in the direction that matters.** One click is the RIGHT input to
+answer with "armed, not repaired", so the mod behaved correctly and the scorer printed the exact
+words a dead listener produces. Nothing in the run said *"the click missed its window"*, because
+nothing measured the window.
+
+**The fix is the pacing plus a guard that keeps it true**, not a longer sleep and a hope:
+
+* `SLEEP 1` → **`SLEEP 0.25`** in `repair` *and* `repair-control`. The confirming click now lands
+  **0.85s** in, leaving **~1.15s** of the worst-case window — and it is still ~17 ticks, far above
+  the one tick the coalescing hazard needs.
+* `check_double_click_pacing()` computes that gap **from the real command table** and refuses it
+  outside `[4 ticks, 1.0s]`. ⚠️ It **reads the 0.6s out of `gameplay-smoke.sh`** rather than
+  copying it: the two halves of the gap live in two files, and a hardcoded copy is how a guard goes
+  on printing green after the thing it guards has moved.
+
+⚠️⚠️ **The bound is two-sided because both ways of getting it wrong produce the SAME false
+sentence.** Too slow, the window shuts; too fast, both clicks land in one tick and only one
+right-click ever reaches `UseBlockCallback` — and the scorer says `REPAIR did NOT move` either way.
+
+⚠️ **`repair-control` is fenced for the worse reason.** It is a pure negative, so a click that
+misses the window does not fail it — it passes **vacuously**, and nothing draws anyone's eye to it.
+The false FAIL above at least announced itself.
+
+🔑 **The precedent was already in this file and this is the phase that never got it.**
+`_acquire_natural_target` carries *"9 runs, 8 × 29/29 and 1 × 27/29"* — the same shape, one flaky
+version, markers all firing, the assertion failing — and it was closed by making the precondition
+**verifiable** so the phase reports INCONCLUSIVE instead of FAIL. `repair` was the remaining
+double-click phase whose precondition nothing checked.
+
+**Guards:** `--self-test` **10 → 11** cases, and the new one **goes red on the shipped pacing**
+(1.60s / 0.40s slack) before the fix — watched fail for the right reason, with the number derived
+independently of the hand arithmetic above. Mutations **5/5**, each scored on *which* complaint
+appears, on a green baseline staged in a scratch dir holding **both** files the guard reads.
+⚠️ **M3 is compound on purpose**: today's 0.6s driver sleep alone holds the gap above the floor, so
+the floor branch is unreachable by editing the scenario alone. It guards a driver that gets
+*faster* — which is the whole reason that value is read rather than copied.
+
+⚠️ **Not changed: the truncation itself.** `lastClick`'s whole-second store is a faithful port of
+legacy mcMMO, it costs a player nothing at human double-click speed, and "the window is 2s not 3s"
+is now written down where the harness can act on it. Changing it would be a behaviour change
+against upstream to suit a test.
+
+### 🔴 A FOURTH of the class, found while verifying the fix -- and the first that grades the WRONG RUN
+
+The pacing fix above was verified by re-running gate 6 on `1.21.4`. That run reported
+**`gate 6: FAIL`** -- and it was lying, for a new reason.
+
+I had started it while the previous run's control server was still alive on the same port. What the
+harness did with that collision is the defect:
+
+```
+rm: cannot remove '.../gameplay-smoke/1.21.4/logs/latest.log': Device or resource busy
+...
+[01:32:49] [Server thread/WARN]: **** FAILED TO BIND TO PORT!
+❌ FAIL: the canary was never rejected
+    gate 6: FAIL
+```
+
+**The bind failure is right there in the log, and the harness still said the mod was bad.** The
+chain, measured:
+
+| | |
+|---|---|
+| 1 | `rm -rf "$WORK/logs" ...` could not delete a file the old server held open. `rm` returned non-zero **and nothing read it** |
+| 2 | so the PREVIOUS run's `latest.log` survived -- and it contains `Done (` |
+| 3 | `boot_verdict` reads `Done (` first *"on purpose: a server that reached Done( is up whatever else the log says"* -- and reported **"up"** |
+| 4 | the new server then died on the bind. `portbusy` **never got a turn**, because "up" had already been read off a different run |
+| 5 | the canary never appeared, and that branch returns **1 -- THE MOD IS BAD** |
+
+🔑 **This is worse than a misclassification: step 3 grades a server that never started, using
+another run's log.** That is §61's `brew-smoke` defect -- a green tick about a server that never
+started -- reached by a completely different route, in a different file.
+
+🔴 **And it was in all three harnesses**, because all three carry the same unchecked clear and
+the same "up wins" rule. `boot-check.sh:251`, `brew-smoke.sh:108`, `gameplay-smoke.sh:310`. *Fixing
+an instrument does not fix the class* -- the sentence §59 wrote about §56.4 and §60 owed, now owed by
+§61 as well.
+
+**The fix, in all three:**
+
+* **`clear_work()` proves the removal**, listing what survived, and refuses with **2 (ENVIRONMENT)**
+  -- never 1. `brew-smoke`'s existing `reset_work_dir` gained the same check rather than a second
+  function beside it.
+* **A canary failure now asks WHY before assigning blame**: if `boot_verdict` says `portbusy`, the
+  verdict is 2, not 1. Defence in depth -- with the clear verified, a stale log cannot arise, but an
+  environment death *after* the boot marker was read still reached the branch that says "mod".
+
+⚠️ **"up wins" is not a bug and was not changed.** It is correct against a *fresh* log and it is
+what makes a noisy-but-booted server pass. It is only lethal against a stale one -- so the two are a
+pair, and `gameplay-smoke.sh`'s existing `verdict: both -> up wins` case now says so in place.
+
+**Guards:** self-tests **boot-check 10 -> 14**, **brew-smoke 26 -> 27**, **gameplay-smoke 11 -> 15**,
+each with the refusal *and its converse control*, plus a check that every **call site** propagates
+the refusal -- §61 already found one refusal that a caller swallowed, so the return value alone is
+not the guarantee. Mutations **8/8**, scored on which case goes red.
+
+⚠️ **A vacuity in my own new work, caught by exactly that scoring.** `brew-smoke`'s happy-path case
+asserted only that the files were gone, never the exit code -- so the *"always refuses"* mutant
+survived its entire suite while both siblings caught the identical mutation. **A one-sided pair
+proves only that the function can say no.** The case now asserts `rc == 0` too.
+
+⚠️ Two mechanical traps re-encountered, both already in this repo's notes: the mutation runner must
+invoke **git-bash by path** (bare `bash` is WSL's here, dies before the script, and returns the same
+exit 1 a caught mutation returns -- every mutant would have scored "caught" against nothing; the
+required **green baseline** is what exposed it), and **the Bash heredoc collapses backslashes**, so
+three `printf` format strings landed with a literal newline instead of `\n` and had to be rebuilt
+via `chr(92)`.
+
+### ⚠️ What the sweep does NOT prove
+
+* **Not the pinned fabric-api.** `resolve_fapi` takes the NEWEST build for each Minecraft, because
+  for fifteen of the sixteen versions there is no pin to take. On `26.2` that resolved
+  **`0.159.0+26.2`** while `gradle.properties` pins `0.158.0+26.2`. This is what a player installing
+  today gets, and it is a deliberate difference from §59/§60, which used the pin for each band's
+  primary. 🔴 **The consequence cuts both ways: a green sweep does not certify the pinned
+  coordinate, and a red one might be fabric-api's fault rather than the mod's.** Read the run.
+* **Not a rebuild** — same ruling as §59/§60, the shipped artifact is what is gated. ⚠️ These are the
+  **locally built** `v1.3.4` jars, not the published release assets; nine distinct SHA-256s, each
+  matched to its band by reading `depends.minecraft` out of its own `fabric.mod.json` rather than
+  off the filename.
+* **Not unattended.** Still a person running a command — one command now instead of sixteen, which
+  is a smaller claim than "automated" and is the only one being made.
+
+### What I am NOT doing
+
+* **No parallel mode, no `--jobs`.** The owner ruled the sweep sequential (2026-09-03). Distinct ports
+  are still needed — for the collision with *whatever else* holds 25565 — but an untested parallel
+  path is worse than none, and building one nobody asked to run is how a second unexercised code path
+  ships. **That is the mistake §60 spent a section on.**
+* **Not a new ship gate 13** (owner, 2026-09-03). A wrapper that runs three gates is not a fourth gate;
+  numbering it would count the same evidence twice. Gates 3/5/6's entries get rewritten instead, and
+  the *"Twelve gates are listed"* sentence stays true.
+* **Not scheduling anything.** `.github/` is `master`-only and weekly, and R11 says that tab is unread
+  — *unattended* is a separate decision with its own failure mode, not a free rider on this one.
+* **Not re-keying `brew-smoke`'s work dir on `$MC`.** Measured unnecessary once the config is cleared:
+  everything else in that directory is either version-keyed, content-hashed, or removed per run.
+  Recorded so the next reader does not re-derive it.
+* **Not clearing `boot-check`'s config.** Its dir *is* version-keyed, so it has no cross-version
+  contamination — only staleness in time. Clearing it would trade *"exercises config migration"* for
+  *"exercises first install"*, and neither is obviously the right thing for a boot gate to test.
+  ⚠️ Stated as a deliberate non-change with the trade-off written down, rather than left silent.
+* **Not rebuilding jars** (§59/§60's standing ruling: gate the shipped artifact), **not the live
+  play-test**, and **not touching the push hold** — still held, 2026-09-03.
+
+### Blast radius and rollback
+
+Three shared scripts change, so each edit is a nine-branch change under the identity guard;
+`scripts/version-sweep.sh` is a **new** shared file, and the identity guard takes the **union** of
+every branch's tree, so a driver that lands on `master` alone is a gate-10 violation by construction.
+Rollback is `git checkout <pre-§61 tip> -- scripts/<file>` per file, or `git reset --hard <tip>~N` per
+branch; the pre-§61 tips go in `.agent/memory/state.md` before the first commit.
+Everything the sweep writes is gitignored (`build/boot-check/`, `build/brew-smoke/`,
+`build/gameplay-smoke/`) or lives in the scratchpad. The one new delete — `rm -rf "$work/config"` —
+sits inside a path built from `$REPO`, on the line that already deletes `"$work/logs"`, so it adds no
+exposure that line does not already carry.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
@@ -2956,6 +3295,12 @@ inert on every band by construction. **The other seven have no automation whatso
 3. `scripts/boot-check.sh <jar> <version>` — 0 ERROR, 0 mixin failures, canary rejected.
    ⚠️ **Read the exit code: `1` = the mod is bad, `2` = ENVIRONMENT and nothing was proven about the
    mod.** `--self-test` first, as with every gate.
+   🔑 **Run it across the whole DECLARED RANGE, not just `minecraft_version`** —
+   `scripts/version-sweep.sh` (§61) drives gates 3, 5 and 6 over every entry in
+   `supported_minecraft_versions`, resolving each version's fabric-api itself. ⚠️ **That script is a
+   DRIVER, not a thirteenth gate** — do not count it as one.
+   ⚠️ **`BOOT_CHECK_PORT=<n>`** when something already holds 25565. Until §61 a busy port spent 420
+   seconds and then reported exit **1** — the mod is bad — for a purely environmental fact.
 4. `python scripts/config-id-audit.py --self-test` **then** `--check` — **0 dead-everywhere**,
    over **875 references / 26 sections / 7 files** as of §50. Reads the committed
    `scripts/mc-ids.txt`, so it needs no local Loom cache.
@@ -2973,8 +3318,18 @@ inert on every band by construction. **The other seven have no automation whatso
    `experience.yml`'s: both call Smelting an ITEM, but this file keys it on the furnace **result**
    and that one on the **input**.
 5. `scripts/brew-smoke.sh` — passes **with** its vanilla control failing.
+   ⚠️ **`BREW_SMOKE_PORT=<n>`**, as gate 3. 🔴 **And read the exit code here too, which until §61 you
+   could not:** `both` mode captured each run's output with `$( )` and never read `$?`, so an
+   ENVIRONMENT refusal was discarded and the run reported `❌ mcMMO did not brew` — having also
+   printed `✅ mcMMO consumed the ingredient` about a server that never started. It now exits **2**.
+   ⚠️ **The mcMMO config is regenerated every run as of §61.** It used to persist, and because the
+   work dir is keyed on `$mode` rather than `$MC`, one 2026-08-14 tree served all sixteen versions.
 6. `scripts/gameplay-smoke.sh` — **36 passed / 0 failed / 0 inconclusive** on `master`, and
    `GAMEPLAY_SMOKE_CONTROL=1` must **fail**.
+   ⚠️⚠️ **The control run INVERTS its exit code**: **0** means it failed as it must, **1** means it
+   PASSED without mcMMO and the scenario discriminates nothing. A driver that assumes the ordinary
+   convention brands every correct control vacuous.
+   ⚠️ **`GAMEPLAY_SMOKE_PORT=<n>`**, as gates 3 and 5.
    ⚠️ **This number moves whenever a phase is added, and it went stale unnoticed once already** — it
    read `29/29` through both §46 (+3) and up to §47 (+3), i.e. the caveat-expiry pass missed it twice
    because the phase commits touched the scenario file and not this line. The total is
