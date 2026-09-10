@@ -2935,7 +2935,10 @@ that appears in the suspect AND in the control is a fact about the program, not 
       each scored on the **failing case name** and mutation-checked. Per §60: the mutation runner must
       invoke `bash` by the path this repo's harnesses use, or WSL's bash returns the same exit 1 a
       caught mutation returns.
-- [ ] **61.6 — the sweep**, all 16 declared versions, sequential, against the shipped `v1.3.4` assets.
+- [x] ✅ **61.6 — the sweep**, all 16 declared versions, sequential, against the shipped `v1.3.4`
+      assets. **Ran 2026-09-03, 15:48 → 20:35 (4h47m). Fifteen green; `1.21.4` red on gate 6.**
+      🔑 **The red was the harness accusing the mod** — re-run 2026-09-10 on the same jar: 36/0/0.
+      See *The one red* below.
 - [ ] **61.7 — propagate** to all eight bands with `Backport-of:`, verified through git's own trailer
       parser **with the master-empty control**, from a scratch clone pushing band refs back.
 
@@ -3008,6 +3011,131 @@ Self-tests: boot-check **5 → 10**, brew-smoke **12 → 26**, gameplay-smoke **
 6 mis-scored** because the mutants were written to a temp directory, where `$REPO` (derived from
 `BASH_SOURCE/..`) resolves to a tree with no `gradle.properties` — so an unrelated case went red in
 every mutant. **A mutation harness that cannot produce a green baseline is measuring itself.**
+
+### 🔑 The one red — and it was the harness, not the mod
+
+`1.21.4` reported `[FAIL] repair: REPAIR did NOT move (stayed (0, 0))`, 35 passed / 1 failed, and
+every other one of the sixteen was clean. Re-run on **2026-09-10** against the same jar
+(`f7f75edc…`), same Minecraft, same fabric-api, same port: **36 passed, 0 failed, 0 inconclusive —
+`repair: REPAIR moved (0, 0) -> (0, 880)`**. Nothing about the mod was wrong, on that band or any
+other. ⚠️ Its own log had been deleted by the control run, which is the defect `e3b9034c7` fixed
+half an hour later — so the diagnosis below was reconstructed from arithmetic, not read off a file.
+
+**The root cause is two numbers that live in two different files, and neither one is wrong alone.**
+
+| | |
+|---|---|
+| the window | `RepairManager#actualizeLastAnvilUse` stores `(int)(System.currentTimeMillis() / 1000L)` — **truncated to a whole second** — and `SkillUtils#cooldownExpired` shuts the window at `(lastClick + 3) * 1000`. An arming click at `X.999` therefore leaves **2001 ms**, not 3000. The duration the harness may rely on is the worst case: **2.0s** |
+| the gap | `gameplay-smoke.sh:392` sleeps **0.6s after every command it sends**, and the phase then scripted `SLEEP 1` — so the confirming click landed **1.6s** after the arming one |
+| the slack | **401 ms.** Four hours into a sweep, on a box with seven other JVMs on it, that ran out |
+
+🔴 **And the failure is silent in the direction that matters.** One click is the RIGHT input to
+answer with "armed, not repaired", so the mod behaved correctly and the scorer printed the exact
+words a dead listener produces. Nothing in the run said *"the click missed its window"*, because
+nothing measured the window.
+
+**The fix is the pacing plus a guard that keeps it true**, not a longer sleep and a hope:
+
+* `SLEEP 1` → **`SLEEP 0.25`** in `repair` *and* `repair-control`. The confirming click now lands
+  **0.85s** in, leaving **~1.15s** of the worst-case window — and it is still ~17 ticks, far above
+  the one tick the coalescing hazard needs.
+* `check_double_click_pacing()` computes that gap **from the real command table** and refuses it
+  outside `[4 ticks, 1.0s]`. ⚠️ It **reads the 0.6s out of `gameplay-smoke.sh`** rather than
+  copying it: the two halves of the gap live in two files, and a hardcoded copy is how a guard goes
+  on printing green after the thing it guards has moved.
+
+⚠️⚠️ **The bound is two-sided because both ways of getting it wrong produce the SAME false
+sentence.** Too slow, the window shuts; too fast, both clicks land in one tick and only one
+right-click ever reaches `UseBlockCallback` — and the scorer says `REPAIR did NOT move` either way.
+
+⚠️ **`repair-control` is fenced for the worse reason.** It is a pure negative, so a click that
+misses the window does not fail it — it passes **vacuously**, and nothing draws anyone's eye to it.
+The false FAIL above at least announced itself.
+
+🔑 **The precedent was already in this file and this is the phase that never got it.**
+`_acquire_natural_target` carries *"9 runs, 8 × 29/29 and 1 × 27/29"* — the same shape, one flaky
+version, markers all firing, the assertion failing — and it was closed by making the precondition
+**verifiable** so the phase reports INCONCLUSIVE instead of FAIL. `repair` was the remaining
+double-click phase whose precondition nothing checked.
+
+**Guards:** `--self-test` **10 → 11** cases, and the new one **goes red on the shipped pacing**
+(1.60s / 0.40s slack) before the fix — watched fail for the right reason, with the number derived
+independently of the hand arithmetic above. Mutations **5/5**, each scored on *which* complaint
+appears, on a green baseline staged in a scratch dir holding **both** files the guard reads.
+⚠️ **M3 is compound on purpose**: today's 0.6s driver sleep alone holds the gap above the floor, so
+the floor branch is unreachable by editing the scenario alone. It guards a driver that gets
+*faster* — which is the whole reason that value is read rather than copied.
+
+⚠️ **Not changed: the truncation itself.** `lastClick`'s whole-second store is a faithful port of
+legacy mcMMO, it costs a player nothing at human double-click speed, and "the window is 2s not 3s"
+is now written down where the harness can act on it. Changing it would be a behaviour change
+against upstream to suit a test.
+
+### 🔴 A FOURTH of the class, found while verifying the fix -- and the first that grades the WRONG RUN
+
+The pacing fix above was verified by re-running gate 6 on `1.21.4`. That run reported
+**`gate 6: FAIL`** -- and it was lying, for a new reason.
+
+I had started it while the previous run's control server was still alive on the same port. What the
+harness did with that collision is the defect:
+
+```
+rm: cannot remove '.../gameplay-smoke/1.21.4/logs/latest.log': Device or resource busy
+...
+[01:32:49] [Server thread/WARN]: **** FAILED TO BIND TO PORT!
+❌ FAIL: the canary was never rejected
+    gate 6: FAIL
+```
+
+**The bind failure is right there in the log, and the harness still said the mod was bad.** The
+chain, measured:
+
+| | |
+|---|---|
+| 1 | `rm -rf "$WORK/logs" ...` could not delete a file the old server held open. `rm` returned non-zero **and nothing read it** |
+| 2 | so the PREVIOUS run's `latest.log` survived -- and it contains `Done (` |
+| 3 | `boot_verdict` reads `Done (` first *"on purpose: a server that reached Done( is up whatever else the log says"* -- and reported **"up"** |
+| 4 | the new server then died on the bind. `portbusy` **never got a turn**, because "up" had already been read off a different run |
+| 5 | the canary never appeared, and that branch returns **1 -- THE MOD IS BAD** |
+
+🔑 **This is worse than a misclassification: step 3 grades a server that never started, using
+another run's log.** That is §61's `brew-smoke` defect -- a green tick about a server that never
+started -- reached by a completely different route, in a different file.
+
+🔴 **And it was in all three harnesses**, because all three carry the same unchecked clear and
+the same "up wins" rule. `boot-check.sh:251`, `brew-smoke.sh:108`, `gameplay-smoke.sh:310`. *Fixing
+an instrument does not fix the class* -- the sentence §59 wrote about §56.4 and §60 owed, now owed by
+§61 as well.
+
+**The fix, in all three:**
+
+* **`clear_work()` proves the removal**, listing what survived, and refuses with **2 (ENVIRONMENT)**
+  -- never 1. `brew-smoke`'s existing `reset_work_dir` gained the same check rather than a second
+  function beside it.
+* **A canary failure now asks WHY before assigning blame**: if `boot_verdict` says `portbusy`, the
+  verdict is 2, not 1. Defence in depth -- with the clear verified, a stale log cannot arise, but an
+  environment death *after* the boot marker was read still reached the branch that says "mod".
+
+⚠️ **"up wins" is not a bug and was not changed.** It is correct against a *fresh* log and it is
+what makes a noisy-but-booted server pass. It is only lethal against a stale one -- so the two are a
+pair, and `gameplay-smoke.sh`'s existing `verdict: both -> up wins` case now says so in place.
+
+**Guards:** self-tests **boot-check 10 -> 14**, **brew-smoke 26 -> 27**, **gameplay-smoke 11 -> 15**,
+each with the refusal *and its converse control*, plus a check that every **call site** propagates
+the refusal -- §61 already found one refusal that a caller swallowed, so the return value alone is
+not the guarantee. Mutations **8/8**, scored on which case goes red.
+
+⚠️ **A vacuity in my own new work, caught by exactly that scoring.** `brew-smoke`'s happy-path case
+asserted only that the files were gone, never the exit code -- so the *"always refuses"* mutant
+survived its entire suite while both siblings caught the identical mutation. **A one-sided pair
+proves only that the function can say no.** The case now asserts `rc == 0` too.
+
+⚠️ Two mechanical traps re-encountered, both already in this repo's notes: the mutation runner must
+invoke **git-bash by path** (bare `bash` is WSL's here, dies before the script, and returns the same
+exit 1 a caught mutation returns -- every mutant would have scored "caught" against nothing; the
+required **green baseline** is what exposed it), and **the Bash heredoc collapses backslashes**, so
+three `printf` format strings landed with a literal newline instead of `\n` and had to be rebuilt
+via `chr(92)`.
 
 ### ⚠️ What the sweep does NOT prove
 
