@@ -802,7 +802,7 @@ longer exists.** The floor is declared once in `scripts/expected-bands.txt` and 
 
 ---
 
-## §64 — three code items: the Loom id, the skill-gate partition, the band floor — 🚧 IN PROGRESS
+## §64 — three code items: the Loom id, the skill-gate partition, the band floor — ✅ DONE
 
 **Owner-scoped 2026-09-10:** *"continue with the code portion of the todo list"*, then all three
 candidates picked explicitly, **with propagation to all eight bands**. The push stays **HELD**.
@@ -842,6 +842,46 @@ together. `grep -c '^- \[ \]' TODO.md`, at the moment you need it.
   is why the verification line below is a command and this bullet keeps its refuted text instead of
   quietly showing the right answer.
 - each of 64.1–64.3 lands as its **own commit**, so any one reverts alone.
+
+### ✅ Result — measured, not asserted
+
+**Six commits on `master`, propagated to all eight bands, `HEAD` never moved, push still HELD.**
+
+| | measurement |
+|---|---|
+| suite on `master` | **172 classes / 1,904 executed / 0 failures / 0 errors / 0 skipped**, with `> Task :test` confirmed **bare** (not `UP-TO-DATE`, not `FROM-CACHE`). Up from 170 / 1,882 by exactly the two new classes and their 22 cases — re-measure your own branch, never match this |
+| the two new guards on a **band** | run on `mc/1.21.11` (bare id, `minecraft_version=1.21.11`) in a scratch clone: **14 / 0** and **8 / 0**. 🔑 The point of running them there: `BandLoomRemapPostureTest` must be correct on *both* postures, and a green run on `master` alone would not show that |
+| nine-way `TODO.md` blob | **1** (`f7370e491`), measured directly in the main repo — **not** via a gate, because neither gate can see a docs commit |
+| shared layer | `scripts/expected-bands.txt`, `scripts/expected_bands.py`, `.github/workflows/drift-audit.yml`, `AGENTS.md` — **1 blob each** across nine |
+| `build.gradle` | **2 blobs, and that is REQUIRED** — `master`+`mc/26.1.2` on the qualified id, the seven `1.21.x` bands on the bare one, each group internally identical |
+| gates 7 / 9 / 10 / 11 | **all exit 0** in a `git clone --local --no-hardlinks` (a default run here grades a stale `origin`). Gate 7: **0 MISSING** on all eight. Gate 10 now covers **53** shared paths, and both new `scripts/` files were confirmed *in* that set — a green gate over a set that excludes your file is not evidence |
+| `expected_bands.py` | `--self-test` 12 cases, `--verify` clean; and under a `compare() -> []` mutation **5 of 12 go red** |
+
+### 🔑 What this section actually cost, and what it is worth carrying
+
+**Three of my own claims were falsified by measurement, two of them mine from this same section.**
+
+1. *"Unifying `build.gradle:2` would ship unremapped jars with every gate green"* — **false**. Gradle
+   refuses a bare line-2 swap in both directions. The real gap is narrower and needed restating.
+2. *"The coordinated conversion configures cleanly"* — **also false**. It fails on `cloth-config`'s
+   access widener: protection **borrowed from an optional dependency**, naming the wrong culprit.
+3. The first design of the Loom guard checked **self-consistency**, which calls a fully-converted
+   band *coherent*. Anchoring to `minecraft_version` is what makes it a correctness check.
+
+🔴 **And three defects were caught by peer review, none by a gate**: a stale row body claiming
+the thing `ccb97fc4e` had just deleted, a comment left at column 0 in a file under byte-identity
+rules, and — the sharpest — **a self-test case that could not fail** (`len(base) == len([...])`,
+2 == 2 over two literals, calling no code under test) sitting *inside the guard written to close
+that exact class*. All three were fixed **before** propagation; each would otherwise have become
+nine copies.
+
+⚠️ **The caveat-expiry pass found SIX stale claims, and only one was in a file this section
+touched.** Grepping the *symptom* rather than the edited files is the whole technique.
+
+⚠️ **`git status --short` cannot see a peer's COMMIT.** It read clean immediately before the
+first write and was truthful; a peer had committed, not left a dirty tree. What caught it was an
+insert script asserting **byte growth against a byte count taken earlier**. That is strictly
+stronger than L1183's *"run `git status` before staging"*, which defends only against a dirty tree.
 
 ### 64.1 — `build.gradle:2`'s plugin id: MEASURED, and it is load-bearing
 
