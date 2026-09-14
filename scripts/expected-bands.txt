@@ -1,0 +1,41 @@
+# The band branches this repo is expected to carry.
+#
+# ONE SOURCE FOR A NUMBER THAT USED TO LIVE IN FOUR PLACES. Before this file, the
+# `--require-bands` floor was typed by hand into .github/workflows/drift-audit.yml
+# (BAND_COUNT) and into ship-gate steps 9, 10 and 11. Four copies of one fact, kept in
+# step by memory. A stale floor is UNDER-STRICT and the audit still passes, so nothing
+# ever reports the drift -- see TODO.md, "The --require-bands floors are hand-maintained".
+#
+# 🔑 THIS IS STILL HAND-MAINTAINED, AND SAYING OTHERWISE WOULD BE THE FALSE CLOSURE THIS
+# REPO KEEPS CATCHING. What changed is the number of copies (four -> one) and the strength
+# of the check (a count -> a set). Adding a band is still a human writing a line.
+#
+# 🔴 AND IT MUST NOT BE DERIVED FROM THE BRANCHES. The obvious "fix" -- generate this list
+# by globbing mc/** -- makes the comparison len(x) >= len(x) and deletes the guard while
+# leaving it looking present. --require-bands exists precisely because that enumeration can
+# come back SHORT: a shallow clone, a missing fetch-depth: 0, a rename, absent remote refs.
+# An auditor that finds zero bands prints "No drift" and exits 0, which is indistinguishable
+# from a clean run. This file is the independent statement that makes that detectable.
+#
+# WHAT A SET BUYS OVER A COUNT: a RENAMED band keeps the count and breaks the set. The old
+# floor could never see it. `expected_bands.py --verify` reports the names, both directions.
+#
+# ⚠️ master is NOT listed and must not be. It IS the newest supported band (ruling R-a) but
+# it lives outside the mc/** namespace that every one of these scripts globs, which is why
+# the floor is 8 and not 9. Section 37 measured the failure mode of guessing high:
+# --require-bands 9 against eight bands returns EXIT 2 while the very same run still prints
+# "No drift" above it. Read the exit code, never the sentence.
+#
+# ⚠️ Ordering and case are not significant; duplicates and an empty list are refused.
+#
+# To add a band: cut it per TODO.md's per-band recipe, then add its name here in the same
+# commit. To retire one: remove the line in the commit that deletes the branch.
+
+mc/1.21.1
+mc/1.21.3
+mc/1.21.4
+mc/1.21.5
+mc/1.21.8
+mc/1.21.10
+mc/1.21.11
+mc/26.1.2
