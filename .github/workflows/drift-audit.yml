@@ -183,8 +183,8 @@ jobs:
       - name: Audit every band branch against master
         # The `||` is load-bearing on the SCHEDULED run, not just the manual one:
         # `github.event.inputs` is null on a `schedule` event, so this fallback is
-        # the value the weekly audit always uses. It comes from the
-# "Resolve the declared band floor" step, i.e. scripts/expected-bands.txt.
+        # the value the weekly audit always uses. It comes from the "Resolve the
+        # declared band floor" step, i.e. from scripts/expected-bands.txt.
         run: |
           python scripts/drift-audit.py \
             --require-bands "${{ github.event.inputs.require_bands || steps.bands.outputs.count }}" \
