@@ -259,14 +259,23 @@ the branch does not.
       **compiled perfectly**. Then run the full gate. Then push.
 - [ ] **x.8** Back-port anything that belongs on `master` **to `master` first**, then to every other
       band with `Backport-of:` trailers.
-- [ ] **x.9** Raise the weekly drift audit's floor: `--require-bands` in
-      `.github/workflows/drift-audit.yml` goes to the **new** band count, on `master` first and then
-      on every band. The floor is what makes *"found no bands"* fail instead of reading as a clean
-      audit. Leaving it stale is under-strict rather than noisy — the audit still passes — which is
-      exactly why nothing will remind you to do it. ✅ **The floor's home is `BAND_COUNT` in
-      `.github/workflows/drift-audit.yml` — read it there, do not carry it here.** The two commands
-      that answer it: `grep -n 'BAND_COUNT:' .github/workflows/drift-audit.yml` against
-      `git for-each-ref --format='%(refname:short)' refs/heads/ | grep -c '^mc/'`.
+- [ ] **x.9** Declare the new band: add its branch name to **`scripts/expected-bands.txt`**, on
+      `master` first and then on every band. The floor is what makes *"found no bands"* fail instead
+      of reading as a clean audit. Leaving it stale is under-strict rather than noisy — the audit
+      still passes — which is exactly why nothing will remind you to do it.
+      ✅ **§64.3 collapsed four hand-kept numbers into one declared list.** The floor used to be
+      typed into `BAND_COUNT` in `.github/workflows/drift-audit.yml` **and** into ship-gate steps 9,
+      10 and 11; `BAND_COUNT` is **gone**, and every consumer now reads
+      `python scripts/expected_bands.py --count`. Adding a band is **one line in one file**.
+      🔑 **And the check got stronger in the same move: a count became a SET.** A *renamed*
+      band keeps the count and breaks the set — the old floor could never see it.
+      `python scripts/expected_bands.py --verify` reports both directions by name.
+      ⚠️ **It is still hand-maintained.** What changed is the number of copies and the strength of
+      the check, not that a human declares it. Run `--self-test` first: *"sets match"* is also what a
+      broken comparator prints.
+      🔴 **Never regenerate the declaration by globbing `mc/**`.** That makes the comparison
+      `len(x) >= len(x)` — always true — and deletes the guard while leaving it looking present.
+      `--require-bands` exists *precisely* because that enumeration can come back short.
       ⚠️ **They are allowed to differ by design** — `--require-bands` counts `mc/**` only and
       `master` lives outside that namespace, so a floor one too high returns exit 2 while the same
       run still prints *"No drift"*.
@@ -1093,8 +1102,12 @@ inert on every band by construction. **The other seven have no automation whatso
    band declaring a different number of gates legitimately differs by that much. **Read the count out
    of `PHASES` rather than trusting this line**, and a total *below* the floor is the scorer's own
    anti-vacuity failure, not a phase failure.
-7. `python scripts/drift-audit.py --self-test` **then** `--master master` — **0 MISSING on every
-   band**. ⚠️ It audits `origin/master`, so **push first, then audit**.
+7. `python scripts/expected_bands.py --self-test` **then** `--verify`, **then**
+   `python scripts/drift-audit.py --self-test` **then**
+   `--master master --require-bands "$(python scripts/expected_bands.py --count)"` — **0 MISSING on
+   every band**. ⚠️ It audits `origin/master`, so **push first, then audit**.
+   🔑 **§64.3: the floor is declared once, in `scripts/expected-bands.txt`.** `--verify` is the
+   half a count cannot do — it catches a **renamed** band, which leaves the count untouched.
    ⚠️⚠️ **It cannot see a docs-only commit** (Phase 21, defect B): docs are excluded from
    `PROPAGATABLE_PREFIXES` by design, so a docs edit propagates **iff its commit also touched `src/`**.
    Five bands once documented Agility as live while their jars had it retired, and the auditor printed
@@ -1102,12 +1115,14 @@ inert on every band by construction. **The other seven have no automation whatso
 8. `scripts/ci-watch.sh --mutate` **then** `scripts/ci-watch.sh HEAD` — **after** the push; the only
    gate downstream of it. ⚠️ **Run it FROM the branch you pushed**, or it fails closed at exit 3
    (*cannot tell*). `CI_WATCH_BASE=<sha before the push>` is the override when the reflog is gone.
-9. `python scripts/manifest-identity-audit.py --self-test` **then** `--require-bands <count>` —
+9. `python scripts/manifest-identity-audit.py --self-test` **then**
+   `--require-bands "$(python scripts/expected_bands.py --count)"` —
    **0 collisions**; every branch's `scripts/mc-surface.txt` distinct.
    ⚠️ **Defaults to `origin/**`, so push first — or pass `--local`.**
    ⚠️ **Exit 2 is not a pass** — fewer than two branches means zero pairs compared.
    🔑 **Distinct is not correct.** Six manifests that all differ can all six be wrong.
-10. `python scripts/branch-file-identity-audit.py --self-test` **then** `--require-bands <count>` —
+10. `python scripts/branch-file-identity-audit.py --self-test` **then**
+    `--require-bands "$(python scripts/expected_bands.py --count)"` —
     **0 differing paths**. The **inverse** of gate 9: `AGENTS.md`, `.gitignore`,
     `.github/workflows/*.yml`, `scripts/**` and — since **R-y** — `README.md` + `wiki/**` are one
     artifact every branch shares.
@@ -1125,7 +1140,8 @@ inert on every band by construction. **The other seven have no automation whatso
     ⚠️ **Exit 2 is not a pass**, and this gate has an extra way to hit it: an empty path set means the
     include globs matched nothing.
     🔑 **Identical is not correct.** Six copies that agree can be six copies of the same wrong file.
-11. `python scripts/gradle-key-identity-audit.py --self-test` **then** `--require-bands <count>` —
+11. `python scripts/gradle-key-identity-audit.py --self-test` **then**
+    `--require-bands "$(python scripts/expected_bands.py --count)"` —
     **0 violations**. The **per-KEY** guard (**R-w'**), and the reason it is a third script rather
     than a flag on gate 9 or 10: `gradle.properties` is the one shared file that can never be
     compared whole. `mod_version` must be **identical** on every branch (R-p) while
