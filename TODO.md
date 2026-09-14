@@ -140,8 +140,13 @@ thirteen times**. Its disabling half is reachable only through `setSupportedForT
 ⚠️ **Do not close a future gap by adding a version number.** One registry expression, correct on every
 band, needing no edit when the next band is cut: add a `GATED` map entry, never a second hardcoded
 field.
-⚠️ **Residual (risk R12):** the map is hand-maintained. A NEW skill whose items postdate the floor is
-added to `PrimarySkillType` and to nothing else, and nothing goes red.
+✅ **Residual (risk R12) — CLOSED by §64.2 (2026-09-10).** This read *"the map is hand-maintained.
+A NEW skill whose items postdate the floor is added to `PrimarySkillType` and to nothing else, and
+nothing goes red."* `SkillAvailability.UNGATED` now records the other half of the decision and
+`SkillGatePartitionTest` requires every constant to sit in exactly one of the two sets, so a skill
+added to the enum alone fails the build naming both remedies. 🔑 **It found a real omission on its
+first run** — `WOODCUTTING`, the last constant, which a comma-anchored regex over the enum source
+silently drops. The enum has **26** constants; two sessions independently measured 25.
 
 🔴 **That audit is a statement about SOURCE.** Identical source proves the skill *roster* is uniform;
 it does not prove a skill *fires*. The per-band evidence for "it fires" is gate 1's suite count and
@@ -754,6 +759,10 @@ name the command.** Re-numbering buys one edition and rots at the next band cut.
 `BAND_COUNT` and the two commands that compare it. **A recipe is read at the NEXT cut**, so `6` would
 have set the floor two bands too low with every gate still green — which is the whole reason the
 floor exists.
+✅ **Superseded by §64.3 (same day): the row no longer names `BAND_COUNT`, because `BAND_COUNT` no
+longer exists.** The floor is declared once in `scripts/expected-bands.txt` and read with
+`python scripts/expected_bands.py --count`. §63's fix — *stop carrying the number, name the command*
+— is intact and is what made this edit one line instead of five; only the command changed.
 
 ### What I did NOT do
 
@@ -1224,7 +1233,7 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
 | R9 | A fix outside `src/` never reaches a band, and the docs deny a band that ships | 🟡 **RE-OPENED IN PART by Phase 21.** R9a (propagation of `scripts/`+`.github/`) and R9b (`BandDocsMatchRealityTest`) both hold. But Phase 21 found a **third** hole: **a docs edit propagates iff its commit also touched `src/`** — the effective policy was never *"docs are not propagated"*, it was a coin flip that reads as a deliberate exclusion in every document describing it. ⚠️ `BandDocsMatchRealityTest` is not broken and **could never catch it**: it asks *"is what this branch's docs say true HERE?"* and was correctly green on all five. **Cross-branch equality is not correctness; correctness-per-branch is not equality.** The open owner call in *Other open work* is the candidate fix |
 | R10 | Two branches resolving to the same `minecraft_version` | 🟡 **DISCHARGED FOR NOW, and the reason it was thought LIVE is itself the lesson.** Measured 2026-08-24: `origin/master` is at `26.2` and `mc/1.21.11` is **absent from the remote**, so no two branches share a value. The plan had asserted for four days that both sat at `1.21.11` — true when written, false the moment `master` was pushed at `26.2`, and nothing reported the change. ⚠️ **It re-arms the instant `mc/1.21.11` is pushed**, which is why the two must diverge *before* either goes out. The tag-reaping sweep is live on every branch, `release.yml` detects a collision and emits a `::warning::` — deliberately not a failure, so **nothing stops it** |
 | R11 | A band's release fails and nobody finds out | 🟡 **DOWNGRADED, still open.** It has happened once: §10.7 failed **four** band releases and was invisible for a day behind green local builds, a green ship gate, a green drift audit and a clean `git status`. `scripts/ci-watch.sh` (gate 8) reports four states rather than a boolean, because *"I could not see a run"* and *"the run passed"* are the two R11 conflates. ⚠️ **It is still a person running a command. A real close needs a notification, not a workflow** |
-| **R12** | **A skill is inert on a band and nothing says so** | 🟡 **MITIGATED 2026-08-19 (§22.1).** `SkillAvailability` now carries a **skill → required-id-paths** map rather than one field per skill; `MACES` is gated alongside `SPEARS`, and gating the next one is a single `GATED` entry with no call-site edit. The javadoc claim that every other skill *"predates the floor of the supported range"* is gone — it was load-bearing prose and R-v falsified it in a day. ⚠️ **R-x makes that sentence true again and it stays out**: it was only ever true by accident of the floor. Proven by 21 tests (was 15), and by mutation: making the gate dead (`return true`) reddens exactly the 4 wiring tests. ⚠️ **The registry-driven test did NOT fail under that mutation** — this band has both items, so only the `setSupportedForTesting` seam reaches the disabling half. Vacuity confirmed empirically, not argued. ⚠️ **Residual 1:** the map is still a hand-maintained list; a NEW skill whose items postdate the floor is added to `PrimarySkillType` and to nothing else, and nothing goes red. Auditing skills against required ids is not yet mechanical. ⚠️ **Residual 2 (R-x):** with the `1.20` line withdrawn, the `MACES` entry can never fire on any in-scope version — the only row that still exercises the gate on a real band is `SPEARS` |
+| **R12** | **A skill is inert on a band and nothing says so** | 🟡 **MITIGATED 2026-08-19 (§22.1).** `SkillAvailability` now carries a **skill → required-id-paths** map rather than one field per skill; `MACES` is gated alongside `SPEARS`, and gating the next one is a single `GATED` entry with no call-site edit. The javadoc claim that every other skill *"predates the floor of the supported range"* is gone — it was load-bearing prose and R-v falsified it in a day. ⚠️ **R-x makes that sentence true again and it stays out**: it was only ever true by accident of the floor. Proven by 21 tests (was 15), and by mutation: making the gate dead (`return true`) reddens exactly the 4 wiring tests. ⚠️ **The registry-driven test did NOT fail under that mutation** — this band has both items, so only the `setSupportedForTesting` seam reaches the disabling half. Vacuity confirmed empirically, not argued. ✅ **Residual 1 — CLOSED by §64.2 (2026-09-10).** It read *"the map is still a hand-maintained list; a NEW skill whose items postdate the floor is added to `PrimarySkillType` and to nothing else, and nothing goes red. Auditing skills against required ids is not yet mechanical."* `UNGATED` + `SkillGatePartitionTest` make the ungated case an explicit claim: every constant must be in exactly one of the two sets, checked by a pure function over an **injected** universe so the rejection cases can build the state a new constant creates — which cannot be manufactured on a live enum, the reason a values()-walking test could pass forever without being able to fail. 🔑 It caught `WOODCUTTING` on its first run (26 constants, not 25). ⚠️ **The map is still hand-maintained**; what is now mechanical is that forgetting it is LOUD. ⚠️ **Residual 2 (R-x):** with the `1.20` line withdrawn, the `MACES` entry can never fire on any in-scope version — the only row that still exercises the gate on a real band is `SPEARS` |
 
 ---
 
@@ -1363,13 +1372,25 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
       swapped between them resolves clean on both and gate 12 is blind there **by construction**.
       That case belongs to gate **10** (`manifest-identity-audit.py`, byte identity). ⚠️ **Closing a
       mechanism does not close the claim someone attached to it.**
-- [ ] 🟡 **The `--require-bands` floors are hand-maintained** in `.github/workflows/drift-audit.yml`
-      and in ship-gate steps 9, 10 and 11. **Now 8**, raised in §43.3 in the same push that put
-      `mc/26.1.2` and `mc/1.21.11` on the remote. ⚠️ **8, not 9** — `--require-bands` counts
-      `mc/**` only, and `master` lives outside that namespace; one too many returns exit 2 while
-      the same run still prints *"No drift"*. R-x withdrew R-v's extra cuts, so the declared scope is
-      closed and **no further raise is owed**. It stays listed because nothing reminds you: a stale
-      floor is under-strict and the audit still passes.
+- [ ] 🟡 **The `--require-bands` floor is hand-maintained** — now in **one** place,
+      `scripts/expected-bands.txt`, read by every consumer as
+      `python scripts/expected_bands.py --count`.
+      ⚠️ **The box stays OPEN on purpose: a human still declares the list.** §64.3 changed the
+      number of copies and the strength of the check, not that fact, and the declaration file says
+      so itself. It stays listed because nothing reminds you: a stale floor is under-strict and the
+      audit still passes.
+      🔴 **This row's BODY was stale for one commit and the checkbox was not, which is the
+      distinction worth keeping.** It read *"hand-maintained in `.github/workflows/drift-audit.yml`
+      and in ship-gate steps 9, 10 and 11 — **Now 8**, raised in §43.3"*, and `ccb97fc4e` deleted
+      `BAND_COUNT` from that workflow while claiming to close this box. **The mechanism changed and
+      the claim attached to it did not** — the row two above already says exactly that, so this is
+      that lesson recurring one row later and inside the commit that cites it. Caught in review by a
+      peer session before it propagated to nine branches, not by any gate.
+      ✅ **What §64.3 added beyond fewer copies: a count became a SET.** A *renamed* band keeps the
+      count and breaks the set; `--verify` names both directions. Measured — renaming `mc/1.21.10`
+      to `mc/1.21.010` leaves `--count` at 8 and `--verify` still exits 1.
+      ⚠️ **8, not 9** — the declaration lists `mc/**` only, and `master` lives outside that
+      namespace; one too many returns exit 2 while the same run still prints *"No drift"*.
 - [x] ✅ **R13 — CLOSED 2026-08-27 (§54)**, `--overload-rebind`: 2,251 sites, ZERO armed.
       Carried out of §33; detail under §9 and §54.
       ✅ §31.5 is CLOSED (§51) — 39 sites reviewed, zero defects.
