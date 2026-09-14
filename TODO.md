@@ -111,7 +111,7 @@ not a mystery and `2.2.050` was not an impossible number: it **was** this repo's
 🔴 **They were a lower bound, not a count — 62 local tags are absent from the remote**, same cause,
 and the other 56 are still here pending the owner's call (see *Carried debt*).
 
-🔑 **Nothing in the eleven gates reads the remote TAG list.** Gates 9/10/11 compare branches; the
+🔑 **Nothing in the twelve gates reads the remote TAG list.** Gates 9/10/11 compare branches; the
 release sweep enumerates `gh release list`, which a bare tag is invisible to. **Re-read
 `git ls-remote --tags` before repeating any statement about which tags exist.** ⚠️ One bare tag
 does exist and is not a release: `v1.21.11-baseline`.
@@ -442,9 +442,27 @@ The band cannot run its own gates until its tooling speaks official names.
       138 entity-keyed rows had never been audited on any branch. 🔴 **Six defects, two of them
       severe**: `Vex` and `Creaking` paid **zero** combat XP (an ABSENT row, which no id audit can
       see), and `Snow_Golem`'s deliberate `0.0` was inert under the Bukkit spelling. See §52.
-- [ ] ⬜ **`build.gradle:2`'s bare `fabric-loom` id.** Resolved on `master` (it is the explicit
-      non-remap id); what the **bare** id does on the `1.21.x` branches is inferred, not measured. It
-      matters the next time a band's toolchain is touched.
+- [x] ✅ **`build.gradle:2`'s bare `fabric-loom` id — MEASURED, CLOSED by §64.1 (2026-09-10).**
+      The wording above was *"Resolved on `master` (it is the explicit non-remap id); what the
+      **bare** id does on the `1.21.x` branches is inferred, not measured"* — and §62 carried it
+      across **verbatim, deliberately, "including wording I think is now wrong"**. 🔑 **Measuring it
+      is the event that earns the rewrite; until 64.1 there was nothing to replace it with.**
+      Read out of Loom 1.17.13's bytecode: five plugin ids are registered, and
+      `LoomGradleExtensionImpl`'s constructor branches on `hasPlugin("net.fabricmc.fabric-loom")`,
+      setting `disableObfuscation=true` and `finalizeValue()`-ing it — forced and unoverridable —
+      which forces `dontRemap`. The bare id leaves both computed. So the parenthetical was **right**,
+      and §35's *"Loom registers no `remapJar` on `26.x`"* now has its mechanism.
+      ⚠️ **Reading the wrapper classes alone gives the opposite, convincing answer**: both
+      `LoomNoRemapGradlePlugin` and `LoomRemapGradlePlugin` merely `plugins.apply("fabric-loom")`.
+      🔴 **The row was right that it matters, and understated how**: a *coordinated* conversion of a
+      band to `master`'s whole posture is internally coherent and no gate inspects that line —
+      `build.gradle` is outside gate 10's identity set by design and gate 11 reads
+      `gradle.properties` keys only. Guarded by `BandLoomRemapPostureTest`, anchored to
+      `minecraft_version` rather than to self-consistency, because self-consistency calls the
+      converted band correct.
+      ⚠️ **Corrected while measuring:** the conversion does fail today, but *incidentally* — on
+      `cloth-config`'s access widener, an optional dependency, with an error naming the wrong
+      culprit. Not "no gate catches it"; "nothing names it, and the accidental catch can vanish".
 - [ ] ⬜ **`TODO.md`'s one-blob-on-every-branch invariant.** `master` no longer describes the same
       product as the bands, so propagation cannot fix the drift this time. Decide at 9.5 whether the
       invariant survives the `26.x` split at all.
@@ -1026,7 +1044,15 @@ watches (**R11**). Run the list first; the workflow is a backstop, never the che
 Gate 1 fires per push via `release.yml`; gates **7**, **9**, **10** and **11** run from
 `.github/workflows/drift-audit.yml`, which GitHub fires **weekly and only from the default branch** —
 inert on every band by construction. **The other seven have no automation whatsoever.**
-⚠️ **Twelve gates are listed. Update this sentence when you add one; nothing else counts them.**
+⚠️ **Twelve gates are listed. Update this sentence when you add one.**
+🔴 **This line used to end *"nothing else counts them"*, and that was FALSE when written.**
+L114 said *"the **eleven** gates"* (bolded here so this citation does not match the grep below) — 915 lines earlier, stale since §56.4 added gate 12, and found by a
+peer session in §64, not by this warning. 🔑 **The countermeasure was attached to the list rather
+than to the number that rots**, and it read as sufficient precisely because it sounded like an
+inventory. Worse, the stale sentence's *claim* was still true — no gate reads the remote tag list,
+gate 12 included — so reading it carefully left you agreeing with it. **Grep the number, not the
+noun:** `grep -nE '(eleven|twelve|thirteen|[0-9]+) gates' TODO.md` against
+`sed -n '/^## The ship gate/,/^## Risk register/p' TODO.md | grep -cE '^[0-9]+\. '`.
 
 1. `./gradlew --no-daemon --stacktrace build -Pmod_version=$(grep -E '^mod_version=' gradle.properties | cut -d= -f2 | sed 's/-SNAPSHOT$//')`
    — exit 0, suite green. 🔴 **DO NOT MATCH `master`'s TOTAL.** This line read *“count
