@@ -7,6 +7,7 @@ import com.gmail.nossr50.util.MaterialMapStore;
 import com.google.common.annotations.VisibleForTesting;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -91,11 +92,62 @@ public final class SkillAvailability {
      * the drift {@link MaterialMapStore#getSpears()} exists to prevent.
      *
      * <p>🔑 <b>To gate the next skill, add one entry here.</b> {@link #isSkillSupported} treats every
-     * skill absent from this map as supported, so nothing else needs an edit.
+     * skill absent from this map as supported, so nothing else needs an edit at the call sites —
+     * but it does need an entry in {@link #UNGATED}, which is what stops "absent" from being a
+     * silent default. See that field.
      */
     private static final Map<PrimarySkillType, Function<MaterialMapStore, Set<String>>> GATED =
             Map.of(PrimarySkillType.SPEARS, MaterialMapStore::getSpears,
                     PrimarySkillType.MACES, MaterialMapStore::getMaces);
+
+    /**
+     * Every skill deliberately <b>not</b> version-gated — the other half of a decision that used to
+     * be made by omission.
+     *
+     * <h2>The residual this closes (risk R12, residual 1)</h2>
+     * {@link #isSkillSupported} treats any skill missing from {@link #GATED} as supported. That is
+     * the right runtime behaviour and it was also, until now, the whole record of the decision: a
+     * new skill whose items postdate the supported floor could be added to {@link PrimarySkillType}
+     * and <b>to nothing else</b>, and nothing anywhere would go red. The risk register recorded it
+     * as <i>"auditing skills against required ids is not yet mechanical"</i>.
+     *
+     * <p>🔑 <b>This field carries no runtime behaviour, and that is deliberate.</b> Nothing reads it
+     * to decide anything — {@link #isSkillSupported} still keys off {@link #GATED} alone, so the hot
+     * path is unchanged. Its only job is to make the ungated case an <em>explicit</em> claim that
+     * {@code SkillGatePartitionTest} can hold you to: every constant in {@link PrimarySkillType}
+     * must appear in exactly one of the two sets, so adding a skill forces a recorded decision
+     * rather than inheriting one.
+     *
+     * <p>⚠️ <b>Being in this set is a claim about Minecraft, not about mcMMO.</b> It says the items
+     * or blocks this skill needs exist on <em>every</em> version in the supported range — never that
+     * the skill is finished, wired, or reachable. A half-built skill still belongs here if its
+     * subject matter is old enough.
+     */
+    private static final Set<PrimarySkillType> UNGATED = Collections.unmodifiableSet(EnumSet.of(
+            PrimarySkillType.ALCHEMY,
+            PrimarySkillType.ARCHERY,
+            PrimarySkillType.AXES,
+            PrimarySkillType.COOKING,
+            PrimarySkillType.CROSSBOWS,
+            PrimarySkillType.EXCAVATION,
+            PrimarySkillType.FISHING,
+            PrimarySkillType.FLYING,
+            PrimarySkillType.HERBALISM,
+            PrimarySkillType.HUNTER,
+            PrimarySkillType.HUSBANDRY,
+            PrimarySkillType.MINING,
+            PrimarySkillType.PARKOUR,
+            PrimarySkillType.REPAIR,
+            PrimarySkillType.SALVAGE,
+            PrimarySkillType.SMELTING,
+            PrimarySkillType.STEALTH,
+            PrimarySkillType.SWIMMING,
+            PrimarySkillType.SWORDS,
+            PrimarySkillType.TAMING,
+            PrimarySkillType.TRIDENTS,
+            PrimarySkillType.UNARMED,
+            PrimarySkillType.UNARMORED,
+            PrimarySkillType.WOODCUTTING));
 
     /**
      * The probed answer per gated skill, or {@code null} if {@link #probe()} has not run — mod init
@@ -224,6 +276,18 @@ public final class SkillAvailability {
     @VisibleForTesting
     static @NotNull Map<PrimarySkillType, Function<MaterialMapStore, Set<String>>> gatedSkills() {
         return GATED;
+    }
+
+    /**
+     * The skills explicitly declared as never version-gated, for the partition guard.
+     *
+     * <p>Together with {@link #gatedSkills()} this must cover {@link PrimarySkillType#values()}
+     * exactly once each — see {@link #UNGATED} for why the claim is written down rather than
+     * inferred from absence.
+     */
+    @VisibleForTesting
+    static @NotNull Set<PrimarySkillType> acknowledgedUngatedSkills() {
+        return UNGATED;
     }
 
     /**
