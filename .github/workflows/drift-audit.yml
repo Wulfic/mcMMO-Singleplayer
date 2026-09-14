@@ -21,7 +21,8 @@
 # remote refs, and the script would find zero band branches and exit 0 --
 # indistinguishable from a clean audit. --require-bands is what turns that
 # specific failure into a hard error, and it must be raised to the real band
-# count as branches are cut -- see BAND_COUNT below and TODO step 8.x.9.
+# count as branches are cut -- declared once in scripts/expected-bands.txt
+# and read from there (TODO 64.3, recipe step x.9).
 #
 # ⚠️ This file only runs from the DEFAULT BRANCH. GitHub fires `schedule` from
 # there and nowhere else, so the copies on the mc/** band branches are inert by
@@ -78,7 +79,7 @@ on:
   workflow_dispatch:
     inputs:
       require_bands:
-        description: 'Override the band floor (blank = use the declared BAND_COUNT)'
+        description: 'Override the band floor (blank = use scripts/expected-bands.txt)'
         required: false
         # Deliberately NO default. A literal here would be a second copy of the
         # number below, and the two would drift; blank is falsy, so the `||` in
@@ -124,7 +125,16 @@ env:
   # Section 37 measured the failure mode of guessing high -- --require-bands 8
   # against seven bands returns EXIT 2 while the very same run still prints
   # "No drift" above it. Read the exit code, never the sentence.
-  BAND_COUNT: '8'
+  #
+  # ✅ TODO.md 64.3: THE NUMBER NO LONGER LIVES HERE. It is derived, at run time, from
+  # scripts/expected-bands.txt -- the single declaration, which ship-gate steps 9, 10
+  # and 11 read too. This value is gone rather than kept in sync, because a second copy
+  # of a fact is the defect being removed; the "Resolve the declared band floor" step
+  # below publishes steps.bands.outputs.count.
+  #
+  # ⚠️ Derived from a DECLARATION, never from the branches. Deriving the floor from the
+  # same mc/** glob the audits use makes the check len(x) >= len(x) -- always true --
+  # which would delete the guard while leaving it looking present.
 
 jobs:
   audit:
@@ -144,6 +154,26 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Prove the band declaration can detect a mismatch
+        # Before anything reads the floor. "Sets match" is also what a broken
+        # comparator prints, and a declaration that cannot be parsed would yield a
+        # floor of 0 -- which passes against zero bands.
+        run: python scripts/expected_bands.py --self-test
+
+      - name: Resolve the declared band floor
+        id: bands
+        # The one place the number is read. A missing, empty, duplicated or malformed
+        # declaration exits 2 here rather than silently producing a floor of 0.
+        run: |
+          count="$(python scripts/expected_bands.py --count)"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Declared band floor: $count"
+
+      - name: Check the declared bands are exactly the bands that exist
+        # The upgrade a count cannot give: a RENAMED band keeps the count and breaks
+        # the set. Exit 1 is a real finding, exit 2 means it could not be determined.
+        run: python scripts/expected_bands.py --verify
+
       - name: Prove the auditor can still detect drift
         # Runs FIRST, and on its own synthetic repository. A drift report of
         # "nothing missing" is what a working auditor prints and also what a
@@ -153,10 +183,11 @@ jobs:
       - name: Audit every band branch against master
         # The `||` is load-bearing on the SCHEDULED run, not just the manual one:
         # `github.event.inputs` is null on a `schedule` event, so this fallback is
-        # the value the weekly audit always uses. See BAND_COUNT above.
+        # the value the weekly audit always uses. It comes from the
+# "Resolve the declared band floor" step, i.e. scripts/expected-bands.txt.
         run: |
           python scripts/drift-audit.py \
-            --require-bands "${{ github.event.inputs.require_bands || env.BAND_COUNT }}" \
+            --require-bands "${{ github.event.inputs.require_bands || steps.bands.outputs.count }}" \
             --json drift-audit.json
 
       # ---------------------------------------------------------------------
@@ -182,13 +213,13 @@ jobs:
 
       - name: Refuse two branches carrying a byte-identical mc-surface.txt
         if: ${{ !cancelled() }}
-        # BAND_COUNT means the same thing to both scripts -- mc/** branches,
+        # The declared floor means the same thing to both scripts -- mc/** branches,
         # master excluded -- so the one declared number governs both floors.
         # Without a floor this guard passes trivially on a shallow clone: zero
         # pairs to compare reads exactly like zero collisions.
         run: |
           python scripts/manifest-identity-audit.py \
-            --require-bands "${{ github.event.inputs.require_bands || env.BAND_COUNT }}" \
+            --require-bands "${{ github.event.inputs.require_bands || steps.bands.outputs.count }}" \
             --json manifest-identity.json
 
       - name: Prove the shared-layer guard can still detect drift
@@ -200,7 +231,7 @@ jobs:
 
       - name: Refuse a shared file that differs between branches
         if: ${{ !cancelled() }}
-        # BAND_COUNT means the same thing to all three scripts -- mc/**
+        # The declared floor means the same thing to all three scripts -- mc/**
         # branches, master excluded -- so the one declared number governs
         # every floor.
         #
@@ -210,7 +241,7 @@ jobs:
         # reason, so treat a 2 here as a red result, never as a skip.
         run: |
           python scripts/branch-file-identity-audit.py \
-            --require-bands "${{ github.event.inputs.require_bands || env.BAND_COUNT }}" \
+            --require-bands "${{ github.event.inputs.require_bands || steps.bands.outputs.count }}" \
             --json branch-file-identity.json
 
       # ---------------------------------------------------------------------
@@ -233,12 +264,12 @@ jobs:
 
       - name: Refuse a divergent mod_version or a colliding minecraft_version
         if: ${{ !cancelled() }}
-        # BAND_COUNT means the same thing to all four scripts -- mc/** branches,
+        # The declared floor means the same thing to all four scripts -- mc/** branches,
         # master excluded -- so the one declared number governs every floor.
         # Without it this guard passes trivially on a shallow clone: zero pairs
         # to compare reads exactly like zero divergences.
         run: |
-          python scripts/gradle-key-identity-audit.py             --require-bands "${{ github.event.inputs.require_bands || env.BAND_COUNT }}"             --json gradle-key-identity.json
+          python scripts/gradle-key-identity-audit.py             --require-bands "${{ github.event.inputs.require_bands || steps.bands.outputs.count }}"             --json gradle-key-identity.json
 
       - name: Upload the report
         if: always()
