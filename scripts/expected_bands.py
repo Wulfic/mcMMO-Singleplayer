@@ -170,12 +170,18 @@ def self_test() -> int:
     check(any("UNDECLARED" in p for p in compare(base, base + ["mc/1.22.0"])),
           "a band cut but never declared -> UNDECLARED")
 
-    renamed = compare(base, ["mc/1.21.1", "mc/1.21.03"])
+    renamed_found = ["mc/1.21.1", "mc/1.21.03"]
+    renamed = compare(base, renamed_found)
     check(len(renamed) == 2 and any("MISSING" in p for p in renamed)
           and any("UNDECLARED" in p for p in renamed),
           "a RENAMED band -> both directions reported (the case a count cannot see)")
-    check(len(base) == len(["mc/1.21.1", "mc/1.21.03"]),
-          "  ...and that rename leaves the COUNT identical, which is the whole point")
+    # ⚠️ This case must ASSERT OVER compare(), not restate arithmetic. An earlier edition read
+    # `check(len(base) == len(["mc/1.21.1", "mc/1.21.03"]))` -- 2 == 2 over two literals, calling
+    # no code under test and unable to fail however broken compare() became. A self-test case that
+    # cannot say NO, inside the guard written to close exactly that class, caught in review.
+    check(len(base) == len(renamed_found) and compare(base, renamed_found) != [],
+          "  ...and the rename leaves the COUNT equal while compare() still reports it -- "
+          "the count and the set disagreeing is the whole point")
 
     check(compare(base, []) != [], "git reporting NOTHING is a finding, not a clean run")
 
