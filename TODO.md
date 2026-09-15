@@ -650,6 +650,125 @@ different gate.
 
 ---
 
+## §66 — the CR-strip hazard: the immune form, and the guard that was never there — ✅ DONE
+
+**Closes the `gameplay-smoke.sh:466` row in *Carried debt*.** Raised by §63 (2026-09-10) jointly
+with a peer session as a **latent hazard, not a defect** — the shipped code is correct today and
+this section does not fix a bug. It fixes the fact that **nothing would notice if it stopped being
+correct.**
+
+### Re-measured here before touching anything — a carried row is a claim, not a fact
+
+§63's measurement was reproduced on this machine (`od -An -tx1` over the real expansions), and the
+row is accurate in every direction, including the direction that says *do not touch `ci-watch.sh`*:
+
+| construct | at top level | inside `$( )` |
+|---|---|---|
+| `${line%$'\r'}` — **the shipped CR strip** | `73 74 6f 70` — strips | `73 74 6f 70 0d` — **silent no-op** |
+| `CR=$(printf '\r'); ${line%"$CR"}` — the immune form | strips | `73 74 6f 70` — **strips** |
+| `${match%%$'\t'*}` — `ci-watch.sh:423-425` | `field` | `field` — **TAB survives the re-lex** |
+
+🔑 **Only CR is discarded**, because an unquoted `$'\r'` re-lexes to an empty word inside a command
+substitution and `${line%}` then strips an empty suffix. Same syntax, same exit status, no error.
+**`ci-watch.sh` is therefore NOT to be "fixed"** — its three TAB expansions are correct in both
+positions, and editing them would be churn on a file under the cross-branch identity guard.
+
+### Why this is worth a section and not a one-line edit
+
+The symptom is the documented catastrophic one. `gameplay-smoke.sh:466`'s own comment records that
+the harness's first run **lost every `gamerule`, every `mine continuous` and every `attack
+continuous`** — brigadier reads `false\r` as an invalid boolean — while commands with a greedy last
+argument still went through. **A green-ish smoke run is the failure mode**, not a red one, and the
+smoke harness is the instrument nine branches are shipped on.
+
+🔴 **The real finding is the absence, not the syntax.** Nothing in this repo asserts that the strip
+strips: no test, no gate, no self-test case. Tidying that line into a shared helper called through
+`$( )` is an ordinary, well-intentioned refactor, and **every instrument in the repo would stay
+green** while the harness quietly went back to scoring a broken pipe as a partial pass.
+
+### The three pieces
+
+- [x] ✅ **66.1 — both CR sites move to the immune form.** `scripts/gameplay-smoke.sh:466` and
+      `scripts/gen-milestone-advancements.sh:272`, the only two the census finds
+      (`grep -rn -F "%\$'" scripts/` returns five sites; the other three are `ci-watch.sh`'s TAB).
+      The form is `CR=$(printf '\r')` once, then `${line%"$CR"}` — measured correct **nested and at
+      top level**, so the construct survives being moved rather than depending on where it sits.
+- [x] ✅ **66.2 — a static guard: `ShellCrStripHazardTest`.** Refuses the hazardous
+      `$'\r'`-in-a-suffix-expansion form anywhere under `scripts/**/*.sh`. It lives in the **JUnit
+      suite**, not in a script, deliberately: a script is *"somebody remembers to run it"*, which is
+      the R8/R11 failure mode this repo keeps paying for, whereas the suite runs unattended on every
+      push. Carries its own converse checks and a **reach** check — a guard that scans zero files
+      passes forever.
+- [x] ✅ **66.3 — a behavioural case in `gameplay-smoke.sh --self-test`.** 66.2 asserts the *shape*;
+      this asserts the *behaviour*, and asserts it **nested**, which is the whole hazard. Feeds a
+      real CRLF line through the shipped construct and fails if the CR survives.
+
+
+### What the measurement found — all of it converse-checked
+
+✅ **The hazard reproduces exactly as §63 recorded it**, `od`-verified here before any edit:
+`${line%$'\r'}` strips at top level and is a **silent no-op** inside `$( )`, while the
+`CR=$(printf '\r')` form is correct in **both** positions. ⚠️ **Wider than the row said**, measured
+while scoping the guard: a bare `$'\r'` loses its CR inside `$( )` **anywhere**, not only in a
+parameter expansion — as a bare argument and in a concatenation too. `$'\t'` survives all of it, so
+`ci-watch.sh` is confirmed untouchable for the second time by a second session.
+
+🔴🔴 **The sharpest finding is in `build.gradle`, and it is a NEAR MISS.** A guard that reads a file
+Gradle has not been told about is served a **cached pass** — `org.gradle.caching=true` here. Measured
+in two steps, because build.gradle is itself a declared input and editing it masks the effect:
+remove the `inputs.files(fileTree('scripts'))` entry, run green, then mutate **only** a shell script
+— `:test` does not re-run and the real violation scores **NOT CAUGHT**. With the entry, the same
+mutation reddens 2 of 5. **Without that one line the entire section would have been decoration.**
+
+✅ **Mutation scores — every case converse-checked against a green control:**
+
+| mutation | reddened |
+|---|---|
+| a real script regains the bare form | 2/5 |
+| the detector is dead (`violations()` empty) | 1/5 |
+| the scan reads nothing (`shellScripts()` empty) | 1/5 |
+| full-line-comment handling removed | 2/5 |
+| scope widened to TAB | 2/5 |
+| the strip is dead (`CR` empty) — self-test | 2/7 |
+| the strip is over-eager (`CR=p`) — self-test | 3/7 |
+| `CR` is a literal backslash-r — self-test | 2/7 |
+| a real advancement file gains a bare CR | 2/8 |
+| the byte / parsed-string detectors are dead | 1/8 each |
+
+🔑 **The over-eager mutation is why the "a line with no CR is passed through untouched" case
+exists** — it is the **only** case that catches it. A strip that chewed the last character off every
+command would satisfy every other case perfectly.
+
+⚠️ **The generated datapack was MEASURED, not assumed: 335 files parsed, ZERO string values carry a
+CR or LF.** Six files are CRLF and 329 are LF, which is an editor artefact and explicitly **not**
+this defect — `noGeneratedAdvancementCarriesAStrayCarriageReturn` refuses a **bare** CR and leaves
+line endings alone, so it cannot acquire a second job and a reason to be relaxed later.
+
+⚠️ **My own fix made the guard's comment-stripping load-bearing.** The comment that explains the
+hazard quotes it verbatim, so a grep-shaped guard reads the explanation as a violation — the exact
+inverse of `MixinAllowCoverageTest`, where a javadoc sentence read as compliance. The planned
+unscored diagnostic line in the self-test was **dropped for the same reason**: it would have had to
+write the bare form in code, and carving an exemption is how a guard starts rotting.
+
+⚠️ **Two harness defects of my own, both found by a control rather than by reasoning.** The first
+mutation run scored **all five "NOT CAUGHT"** — `cmd /c gradlew.bat` never resolved, so Gradle never
+ran and a **stale XML** read as a pass. The second scored zero because a bash heredoc collapsed the
+backslash in `'\r'` and the anchor matched nothing. 🔑 **A harness with no positive control and no
+exit-code check cannot tell "the guard is vacuous" from "I never ran it"**, and both times the
+answer it printed was the alarming one.
+
+Suite: **173 classes / 1,911 executed / 0 failures** (was 172 / 1,904).
+
+### What I am NOT doing
+
+- **Not touching `ci-watch.sh:423-425`.** Measured immune in both positions, twice, by two sessions.
+- **Not refactoring the strip into a shared helper.** That is the hazard, not the remedy.
+- **Not pushing.** The hold stands; `master` and the eight bands stay ahead of `origin`.
+- **Not widening to `.github/workflows/*.yml`.** Those carry bash too, but they are `master`-only
+  under R-g and the guard's scope claim should match what it actually scans. Stated, not skipped.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
@@ -955,7 +1074,7 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
       · `mc1.21.8 6c4ec8db4` · `mc1.21.10 1608d5084` · `mc1.21.11 44e3dc1d0`. All six commits are
       reachable from a live branch, so the delete orphaned nothing (verified for all 62, not just six).
 
-- [ ] ⬜ **The CR-strip at `gameplay-smoke.sh:466` is one REFACTOR from a silent catastrophic
+- [x] ✅ **CLOSED by §66 (2026-09-14) — both sites on the immune form, and two guards where there were none.** The CR-strip at `gameplay-smoke.sh:466` was one REFACTOR from a silent catastrophic
       no-op** (raised by §63, 2026-09-10, jointly with a peer session).
       🔴 **The shipped code is CORRECT — this is a latent hazard, not a defect.** `line="${line%$'\r'}"`
       strips properly at top level. **Move that same line inside a command substitution and it becomes
@@ -980,6 +1099,12 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
       trailing `\r`\n` — and MSYS `grep` has already stripped the CR from the line it emits, with
       `tr -d '[:space:]'` as an explicit second guard. **Argument side and output side behave
       OPPOSITELY**; see `.agent/memory/gotchas.md` under 2026-09-10.
+      ✅ **Closed by:** `ShellCrStripHazardTest` (shape, whole `scripts/` tree, 5 cases) +
+      four `gameplay-smoke.sh --self-test` cases (behaviour, nested AND top level) + two
+      `MilestoneAdvancementResourcesTest` cases (the second site has no self-test, so its
+      strip is asserted through its OUTPUT). ⚠️ **The guard only works because `build.gradle`
+      now declares `scripts/**/*.sh` a `:test` input** — measured: without it a real violation
+      is a CACHED PASS. See §66.
 
 - [ ] ⬜ **56 MORE stale local-only tags, same cause — owner's call, raised by §63 (2026-09-10).**
       🔑🔑 **"Six" was a lower bound, and the count was never the finding.** Measured:
