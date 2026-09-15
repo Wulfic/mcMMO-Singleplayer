@@ -88,20 +88,24 @@ own `fabric.mod.json`.
 
 | Branch | MC versions covered | `depends.minecraft` | Released tag |
 |---|---|---|---|
-| `master` | `26.2` | `~26.2` | `mc26.2-v1.3.4` |
-| `mc/26.1.2` | `26.1`, `26.1.1`, `26.1.2` | `>=26.1 <26.2` | `mc26.1.2-v1.3.4` |
-| `mc/1.21.11` | `1.21.11` | `~1.21.11` | `mc1.21.11-v1.3.4` |
-| `mc/1.21.10` | `1.21.9`, `1.21.10` | `>=1.21.9 <1.21.11` | `mc1.21.10-v1.3.4` |
-| `mc/1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | `>=1.21.6 <1.21.9` | `mc1.21.8-v1.3.4` |
-| `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v1.3.4` |
-| `mc/1.21.4` | `1.21.4` | `>=1.21.4 <1.21.5` | `mc1.21.4-v1.3.4` |
-| `mc/1.21.3` | `1.21.2`, `1.21.3` | `>=1.21.2 <1.21.4` | `mc1.21.3-v1.3.4` |
-| `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | `mc1.21.1-v1.3.4` |
+| `master` | `26.2` | `~26.2` | `mc26.2-v<mod_version>` |
+| `mc/26.1.2` | `26.1`, `26.1.1`, `26.1.2` | `>=26.1 <26.2` | `mc26.1.2-v<mod_version>` |
+| `mc/1.21.11` | `1.21.11` | `~1.21.11` | `mc1.21.11-v<mod_version>` |
+| `mc/1.21.10` | `1.21.9`, `1.21.10` | `>=1.21.9 <1.21.11` | `mc1.21.10-v<mod_version>` |
+| `mc/1.21.8` | `1.21.6`, `1.21.7`, `1.21.8` | `>=1.21.6 <1.21.9` | `mc1.21.8-v<mod_version>` |
+| `mc/1.21.5` | `1.21.5` | `>=1.21.5 <1.21.6` | `mc1.21.5-v<mod_version>` |
+| `mc/1.21.4` | `1.21.4` | `>=1.21.4 <1.21.5` | `mc1.21.4-v<mod_version>` |
+| `mc/1.21.3` | `1.21.2`, `1.21.3` | `>=1.21.2 <1.21.4` | `mc1.21.3-v<mod_version>` |
+| `mc/1.21.1` | `1.21`, `1.21.1` | `>=1.21 <1.21.2` | `mc1.21.1-v<mod_version>` |
 
 **Shipped coverage is continuous `1.21` → `1.21.11` plus `26.1` → `26.2` — the declared
-16-version scope, closed.** ✅ **Re-measured 2026-09-10**, because this table had gone three bumps
-stale: `gradle.properties` reads **`1.3.4-SNAPSHOT`** on `master`, and `git ls-remote --tags origin`
-returns **nine `v1.3.4` tags**, one per band. ✅ **The clone now holds all nine** — it held eight
+16-version scope, closed.** 🔴 **THE VERSION HAS LEFT THIS TABLE, AND THAT IS THE FIX.** It read
+`v1.3.4` in nine cells and in the sentence below them, and it had already gone **three bumps stale**
+once before — the same rot the `vs origin` and `releases` rows above each ended by dropping their
+number rather than correcting it a fourth time. The tag SHAPE is the stable fact; the version inside it
+is not. **Measure it, never quote it:** `git ls-remote --tags origin` for what actually shipped, and
+`grep -E '^mod_version=' gradle.properties` for what the next push would ship.
+⚠ A tag list proves a TAG exists, not that a RELEASE did — `gh release list` is that question. ✅ **The clone now holds all nine** — it held eight
 until §63 fetched the missing `mc26.1.2-v1.3.4` (2026-09-10). **`git tag --list` is still not the
 instrument for this question**; `git ls-remote --tags` is. 🔑 The reason is unchanged by the fetch:
 a local tag list is a **cache**, and it was wrong in both directions at once — six tags the remote
@@ -161,9 +165,9 @@ Identical source still proves only that the roster is uniform.
 
 | Band | MC versions | Status |
 |---|---|---|
-| `1.21` … `1.21.11` | 12 versions, 7 bands | ✅ **SHIPPED**, all at **`v1.3.4`** (re-measured 2026-09-10). 🔴 This row has now been stale **twice**: it read `v1.2.0` for three sections after that bump, then `v1.3.1` through the `1.3.2`, `1.3.3` **and** `1.3.4` bumps |
-| `26.2` | `26.2` | ✅ **SHIPPED — `master`.** Booted (§35), smoke **36/0/0** (§47), released `mc26.2-v1.3.4` |
-| `26.1.x` | `26.1`, `26.1.1`, `26.1.2` | ✅ **CUT AND SHIPPED** as `mc/26.1.2` (§42, §43) — the three differ on **zero of 1424** records (§39), so one branch serves all three. Released `mc26.1.2-v1.3.4` |
+| `1.21` … `1.21.11` | 12 versions, 7 bands | ✅ **SHIPPED**, one release per band. 🔴 **THE VERSION HAS LEFT THIS ROW** after going stale a THIRD time (`v1.2.0`, then `v1.3.1` through three bumps, then `v1.3.4` through the `1.4.0` bump). Run `gh release list` — a number written here is a number nothing re-checks |
+| `26.2` | `26.2` | ✅ **SHIPPED — `master`.** Booted (§35), smoke **36/0/0** (§47), released as `mc26.2-v<mod_version>` |
+| `26.1.x` | `26.1`, `26.1.1`, `26.1.2` | ✅ **CUT AND SHIPPED** as `mc/26.1.2` (§42, §43) — the three differ on **zero of 1424** records (§39), so one branch serves all three. Released as `mc26.1.2-v<mod_version>` |
 | `1.20.x` | `1.20` … `1.20.6` | 🚫 **OUT OF SCOPE (R-x)** — withdrawn on scope, **never priced** |
 
 ⚠️⚠️ **Read a probe-row count as *rows to look at*, never as work to do.** The completed bands are the
@@ -766,6 +770,85 @@ Suite: **173 classes / 1,911 executed / 0 failures** (was 172 / 1,904).
 - **Not pushing.** The hold stands; `master` and the eight bands stay ahead of `origin`.
 - **Not widening to `.github/workflows/*.yml`.** Those carry bash too, but they are `master`-only
   under R-g and the guard's scope claim should match what it actually scans. Stated, not skipped.
+
+---
+
+## §67 — the release: v1.4.0 on all nine, and the workflow that could not start — ✅ DONE
+
+🎉🎉 **THE PUSH IS NO LONGER HELD.** It had stood for 44 commits across §62—§66. `master` and the
+eight bands are at `ahead=0 behind=0`, and **v1.4.0 is published on all nine** — the full declared
+16-version scope, downloadable. Owner picked `1.4.0` over `1.3.5` when told the 44 commits carry
+**no player-facing change**: the one `src/main` edit in them (§64.2's `SkillAvailability.UNGATED`)
+states in its own javadoc that it carries no runtime behaviour.
+
+🔴🔴 **Why the bump was not optional.** `mod_version` was `1.3.4-SNAPSHOT` while nine
+`mc<VER>-v1.3.4` tags already sat on origin, so a push would have hit R-t's stale-version gate on
+**every one of the nine** and built **zero jars**. The owner asked to push *to get new jars*; the
+push alone would not have produced one. 🔑 **"Push" and "release" are different questions in this
+repo, and only one of them was asked out loud.**
+
+### 67.1 — an `env:` header left with nothing under it killed the weekly drift audit
+
+🔴🔴 **`ccb97fc4e` (§64.3) broke `drift-audit.yml` and it stayed broken through a full
+section.** It moved the band floor to `scripts/expected-bands.txt` — correct — and deleted the
+`BAND_COUNT` **entry** while leaving the `env:` **header**. A YAML mapping key with no entries
+parses as **null**, GitHub refuses the whole file, and every run ends in `startup_failure` at
+**0s**. Nine such runs fired on the v1.4.0 push, one per branch.
+
+🔴 **Every guard in this repo was green on it, and each for a different reason.** The YAML is
+well-formed, so no parser objects. Gate 10 compares the file across branches byte-for-byte and is
+**satisfied when all nine carry the same broken copy** — *identical is not correct*, stated in
+that gate's own warning and demonstrated here. And the drift audit is **itself** the thing that
+stopped running, so it cannot report its own death — to a tab nobody opens (**R11**).
+🔑🔑 **The weekly run is the ONLY unattended leg of R8.** From the next Monday it was dead, and
+nothing local would ever have said so.
+
+✅ **Guard: `WorkflowYamlWellFormedTest`** (9 cases). Two quiet — a valid workflow, and an
+**ABSENT** key, because deleting a block *entirely* is the correct way to remove one and must not
+be punished; three firing — top-level, job-level, and an empty job body; plus a detector case
+separating null from populated **inside one document**, so a detector keyed on something
+incidental to the fixtures cannot pass. 🔑 **The controls call the same `nullValuedKeys()` the
+scan does**, not a re-implementation of it. It also **fails closed on an empty file set**.
+
+⚠⚠ **`build.gradle`'s `:test` input was widened from `release.yml` alone to the whole
+`.github/workflows` tree.** Without it the guard is decoration: `org.gradle.caching=true`, and
+`drift-audit.yml` was an input to `:test` by **no route at all**. This is §66.2's lesson recurring
+one section later — and note the shape: declaring only the one workflow a guard *happened to
+read first* reproduces the same blind spot for every other file beside it.
+
+✅ **Verified by mutation**, not by reasoning: re-inserting the bare `env:` reddens
+`noWorkflowCarriesAKeyWithNothingUnderIt` with `> Task :test` **bare**; restoring returns the file
+to sha256 `8935ad28`. And end-to-end on GitHub — `gh workflow run drift-audit.yml` now completes
+**success in 18s**, where the same workflow scored **failure at 0s** an hour earlier.
+
+### What §67 measured that a green gate would have hidden
+
+⚠⚠ **`mc/26.1.2`'s release failed, and it was ENVIRONMENT.** Maven Central returned
+**403 Forbidden** on a HEAD for `asm-tree-9.10.1.pom`. Re-run: success in 2m16s, same commit. 🔑 A
+band release going red is exactly **R11**, so the reflex is to believe it — **read WHY it failed**.
+This repo has now recorded that lesson for gates 3, 5, 6 and a release run.
+
+⚠ **A suite run failed once at 174 classes minus one, and it was NOT the version bump.** The
+first `--no-build-cache cleanTest build` after the bump reported `:test FAILED` with **172 classes /
+1,909 executed and 0 failures in the XML** — a class that never wrote its XML. Three subsequent
+runs of the **identical** command scored 173/1,911/0 and 174/1,920/0. 🔴 **The culprit is NOT
+proven**: the XML was overwritten before it could be read. `TestModsDirectoryTest` is the only
+candidate matching both the arithmetic (exactly 2 tests) and a known race in this repo
+(`15e8e0ed3`, four forks racing fabric-loader on the mods directory). **Recorded as unproven
+rather than diagnosed** — if it recurs, copy `build/test-results/` BEFORE re-running.
+
+⚠ **Gate 8 (`ci-watch.sh`) was NOT run, deliberately.** The second push — the 67.1 fix — fires
+`release.yml` on all nine (it touches `build.gradle` and `src/**`, both in that workflow's `paths:`
+filter) and every run **correctly refuses** at *Refuse a stale mod_version*, v1.4.0 having just
+shipped. Nine red runs is the **guard working**, not a regression, and a gate whose job is to read
+CI colour cannot say anything useful about a red that was predicted. Verified instead by reading
+the failing step name directly, and by confirming **all nine v1.4.0 tags and releases survived**
+(the failure precedes *Create and push tag*, so *Clean up tag on failure* had nothing to remove).
+
+🔑 **The band table and the shipped-scope rows lost their version number.** `v1.3.4` sat in nine
+table cells plus three prose rows, and that table had **already gone three bumps stale once**. It
+is now `mc<VER>-v<mod_version>` plus the command — the same remedy the `vs origin` and `releases`
+rows each reached on their own. **A number no gate reads is a number that rots.**
 
 ---
 
