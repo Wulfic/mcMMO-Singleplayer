@@ -247,8 +247,14 @@ test {
     //
     // gradle.properties needs no entry here: mcmmo.build.version above already changes with it.
     // fabric.mod.json rides in on processResources' output, which is already a test input.
-    inputs.file(rootProject.file('.github/workflows/release.yml'))
-            .withPropertyName('releaseWorkflow')
+    // TODO.md 67.1. WIDENED from release.yml alone to the whole directory:
+    // WorkflowYamlWellFormedTest reads EVERY workflow, because the defect it caught -- a key
+    // left behind with nothing under it, which GitHub refuses outright -- landed in
+    // drift-audit.yml, a file that was not an input to :test by any route. Declaring only the
+    // one workflow a guard happened to read first reproduces the same blind spot for every
+    // other file in the directory.
+    inputs.files(rootProject.fileTree('.github/workflows') { include '**/*.yml', '**/*.yaml' })
+            .withPropertyName('workflows')
 
     // TODO.md 64.1. BandLoomRemapPostureTest reads THIS FILE to check that the Loom plugin id on
     // line 2 matches what this branch's minecraft_version needs. Same rule as release.yml above: a
