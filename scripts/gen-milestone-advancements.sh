@@ -43,6 +43,16 @@
 
 set -euo pipefail
 
+# The carriage return, held in a variable rather than written as $'\r' at each use site.
+# NOT style: an unquoted $'\r' re-lexes to an EMPTY word inside a command substitution, so
+# ${line%$'\r'} strips nothing at all the moment the expansion is moved into a $( ) -- same
+# syntax, same exit status, no error, and the CR survives. Measured: top level 73746f70,
+# nested 73746f70 0d. This form is correct in BOTH positions, so the strip survives being
+# refactored. ShellCrStripHazardTest refuses the bare form anywhere under scripts/.
+# (Only CR re-lexes away; $'\t' survives it, which is why ci-watch.sh is deliberately
+# untouched.)
+CR=$(printf '\r')
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$REPO_ROOT/src/main/resources/data/mcmmo/advancement/milestone"
 LOCALE="$REPO_ROOT/src/main/resources/com/gmail/nossr50/locale/locale_en_US.properties"
@@ -269,7 +279,7 @@ write_adv() {
 # datapack. Strip it at the single point where the file is read.
 declare -A LOCALE_STRINGS=()
 while IFS= read -r line || [[ -n "$line" ]]; do
-    line="${line%$'\r'}"
+    line="${line%"$CR"}"
     [[ "$line" == *=* ]] || continue
     [[ "$line" == \#* ]] && continue
     LOCALE_STRINGS["${line%%=*}"]="${line#*=}"
