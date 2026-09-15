@@ -88,8 +88,14 @@ on:
 permissions:
   contents: read
 
-env:
-  # ⚠️ THE ONE PLACE THIS NUMBER LIVES. The count of mc/** band branches that
+  # ⚠️ HISTORICAL NOTE. This block documented an `env: BAND_COUNT` key, and that key is
+  # GONE (TODO.md 64.3). The `env:` header outlived it by one commit, and that BROKE THE
+  # WORKFLOW: a YAML mapping key with no entries parses as null, GitHub rejects the file
+  # outright, and EVERY run -- including the weekly one this file exists for -- ends in
+  # startup_failure at 0s. Deleting a key means deleting its header too.
+  # Guarded by WorkflowYamlWellFormedTest.
+  #
+  # What the removed key did: declare the count of mc/** band branches that
   # MUST be found, or the audit fails instead of reporting success.
   #
   # This exists because "found no bands" and "found no drift" print identically.
