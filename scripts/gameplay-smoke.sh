@@ -39,6 +39,16 @@
 # load-bearing on Windows and each one cost a debugging session.
 set -uo pipefail
 
+# The carriage return, held in a variable rather than written as $'\r' at each use site.
+# NOT style: an unquoted $'\r' re-lexes to an EMPTY word inside a command substitution, so
+# ${line%$'\r'} strips nothing at all the moment the expansion is moved into a $( ) -- same
+# syntax, same exit status, no error, and the CR survives. Measured: top level 73746f70,
+# nested 73746f70 0d. This form is correct in BOTH positions, so the strip survives being
+# refactored. ShellCrStripHazardTest refuses the bare form anywhere under scripts/.
+# (Only CR re-lexes away; $'\t' survives it, which is why ci-watch.sh is deliberately
+# untouched.)
+CR=$(printf '\r')
+
 # --- Hand a path to a NATIVE child process -----------------------------------
 # ⚠️⚠️ Under git-bash `python` is the native Windows interpreter: it cannot see
 # `/c/Users/...` or `/tmp/...`. Those paths normally survive only because MSYS
@@ -276,6 +286,45 @@ STUB
         echo "  FAIL  clear_work call sites: $cw_guarded of $cw_calls propagate the refusal"; fail=$((fail+1))
     fi
 
+    echo
+    echo "gameplay-smoke self-test: the trailing-CR strip"
+    # 66.3. Asserts the SHIPPED construct -- $CR plus the same expansion the scenario loop near the
+    # bottom of this file uses -- actually strips, and asserts it from INSIDE a command
+    # substitution, because that is the position where the bare form silently strips nothing at
+    # all. A top-level-only case would pass against the broken form too and would prove nothing.
+    #
+    # Pairs with ShellCrStripHazardTest, which refuses the bare form by SHAPE. This one asserts the
+    # BEHAVIOUR: shape and behaviour are different questions, and the strip going quietly dead is
+    # what costs a whole scenario run.
+    #
+    # ⚠️ There is deliberately NO case asserting the bare form is broken. It is, on this bash, and
+    # that measurement is recorded in the guard's javadoc -- but asserting it here would turn a
+    # bash where the bare form happens to work into a red line about a defect that does not exist,
+    # and a red line nobody can act on is how a harness gets ignored. It would also have to WRITE
+    # the bare form in code, which the guard correctly refuses.
+    crchk() { # name, input, want
+        local name="$1" got
+        got="$( printf '%s' "${2%"$CR"}" )"
+        if [[ "$got" == "$3" ]]; then
+            echo "  PASS  $name ($(printf '%q' "$got"))"; pass=$((pass+1))
+        else
+            echo "  FAIL  $name: got $(printf '%q' "$got"), want $(printf '%q' "$3")"; fail=$((fail+1))
+        fi
+    }
+    crlf_line="$(printf 'stop\r')"
+    crchk "a trailing CR is stripped INSIDE \$( ) -- the position that breaks" "$crlf_line" "stop"
+    # The converse: a clean line must come back untouched. A strip that chewed the last character
+    # off every command would satisfy the case above perfectly.
+    crchk "a line with no CR is passed through untouched"                     "stop"       "stop"
+    crchk "a line ending in a NON-CR character keeps it"                      "false"      "false"
+    # Top level as well: the entire point of holding the CR in a variable is that the construct is
+    # correct WHEREVER it sits, so a refactor that moves it cannot silently disarm it.
+    if [[ "${crlf_line%"$CR"}" == "stop" ]]; then
+        echo "  PASS  the same construct strips at top level too (position-independent)"; pass=$((pass+1))
+    else
+        echo "  FAIL  the construct does not strip at top level"; fail=$((fail+1))
+    fi
+
     if [[ "$(server_props gpsmoke 25599 | grep -c '^server-port=25599$')" == "1" ]]; then
         echo "  PASS  server_props writes exactly one server-port, with the given port"; pass=$((pass+1))
     else
@@ -463,7 +512,7 @@ while IFS= read -r line; do
     # commands whose last argument was greedy (say, fill) went through -- so the run looked like a
     # partly-working scenario rather than like a broken pipe. Stripped HERE, at the boundary, so it
     # holds no matter how the generator is invoked.
-    line="${line%$'\r'}"
+    line="${line%"$CR"}"
     case "$line" in
         "")        continue ;;
         "SLEEP "*) sleep "${line#SLEEP }" ;;
