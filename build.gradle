@@ -259,6 +259,15 @@ test {
     // merely incomplete.
     inputs.file(rootProject.file('build.gradle')).withPropertyName('buildScript')
 
+    // TODO.md 66.2. ShellCrStripHazardTest reads every scripts/**/*.sh to refuse a bare $'\r', which
+    // is silently discarded inside a command substitution. Same rule as the two entries above, and
+    // the omission would be self-defeating in the same way: the edit this guard exists to catch is an
+    // edit to a shell script, and a shell script is not otherwise an input to :test at all -- not via
+    // mcmmo.build.version, not via compilerArgs, not via processResources. Without this line the
+    // guard passes from cache forever after the first green run, no matter what lands in scripts/.
+    inputs.files(rootProject.fileTree('scripts') { include '**/*.sh' })
+            .withPropertyName('shellScripts')
+
     // TODO.md 45.1 (risk R14). Install Mockito's agent AT VM START instead of letting it self-attach.
     //
     // Mockito's inline mock maker needs an Instrumentation. PremainAttachAccess.getInstrumentation()
