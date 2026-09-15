@@ -11,6 +11,7 @@ import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -281,6 +282,104 @@ class MilestoneAdvancementResourcesTest {
         assertEquals(expected, shipped,
                 "the bundled datapack is out of step with Milestones — re-run "
                         + "scripts/gen-milestone-advancements.sh");
+    }
+
+    /**
+     * <b>TODO.md §66.3, the second half.</b> No generated advancement may carry a stray carriage
+     * return inside a value.
+     *
+     * <p>{@code gen-milestone-advancements.sh} reads {@code locale_en_US.properties}, which is
+     * stored CRLF, and embeds the values it finds <em>inside JSON strings</em>. With the trailing-CR
+     * strip dead, every one of these files gets a title like {@code "Skull Splitter\r Unlocked"} —
+     * and <b>nothing else in this repo would say so</b>: the JSON stays well-formed, the reachability
+     * check above compares only ids, and the damage is visible solely on a toast in game.
+     *
+     * <p>{@code gameplay-smoke.sh --self-test} asserts the equivalent strip behaviourally, but that
+     * script can test only itself. This generator has no self-test, so its strip is asserted here,
+     * through its <em>output</em> — which is the stronger place anyway: it stays true however the
+     * generator is rewritten.
+     *
+     * <p>⚠️ A CR as part of a {@code \r\n} <em>line ending</em> is explicitly allowed. Six of the
+     * shipped files are CRLF and 329 are LF, which is an editor artefact and not this defect; making
+     * this test police line endings would give it a second job and a reason to be relaxed later.
+     * What it refuses is a <b>bare</b> CR — one not paired with a newline — and any CR or LF that
+     * survives parsing into a string value.
+     */
+    @Test
+    void noGeneratedAdvancementCarriesAStrayCarriageReturn() {
+        final List<String> offenders = new ArrayList<>();
+        int scanned = 0;
+        try (Stream<Path> files = Files.walk(SOURCE_BASE)) {
+            for (Path file : files.filter(p -> p.toString().endsWith(".json")).toList()) {
+                scanned++;
+                final byte[] raw = Files.readAllBytes(file);
+                if (bareCarriageReturns(raw) > 0) {
+                    offenders.add(file + " — a CR not part of a CRLF line ending");
+                }
+                final String relative = SOURCE_BASE.relativize(file).toString()
+                        .replace('\\', '/');
+                collectControlBearingStrings(
+                        load(relative.substring(0, relative.length() - ".json".length())),
+                        file.toString(), offenders);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("failed to walk " + SOURCE_BASE, e);
+        }
+
+        assertTrue(scanned > 0, "scanned no advancement files at all under " + SOURCE_BASE);
+        assertTrue(offenders.isEmpty(),
+                () -> "A carriage return reached the generated datapack, which is what a dead "
+                        + "trailing-CR strip in scripts/gen-milestone-advancements.sh looks like "
+                        + "from the outside — the JSON stays valid and only a toast shows it. "
+                        + "Re-run the generator with the strip working:\n  "
+                        + String.join("\n  ", offenders));
+    }
+
+    /**
+     * Converse check for {@link #noGeneratedAdvancementCarriesAStrayCarriageReturn()}: a scan that
+     * reported nothing because it <em>detects</em> nothing would pass forever.
+     */
+    @Test
+    void theCarriageReturnDetectorActuallyFires() {
+        assertEquals(0, bareCarriageReturns("{\r\n  \"a\": 1\r\n}".getBytes(StandardCharsets.UTF_8)),
+                "CRLF line endings are deliberately allowed");
+        assertEquals(1, bareCarriageReturns("{\"title\": \"Skull Splitter\r Unlocked\"}"
+                        .getBytes(StandardCharsets.UTF_8)),
+                "a CR inside a value is the defect and must be reported");
+
+        final List<String> found = new ArrayList<>();
+        collectControlBearingStrings(Map.of("display", Map.of("title", "Skull Splitter\r Unlocked")),
+                "crafted", found);
+        assertEquals(1, found.size(), "a parsed string value carrying a CR must be reported");
+
+        final List<String> clean = new ArrayList<>();
+        collectControlBearingStrings(Map.of("display", Map.of("title", "Skull Splitter Unlocked")),
+                "crafted", clean);
+        assertTrue(clean.isEmpty(), "a clean value must not be reported");
+    }
+
+    /** Carriage returns that are not the {@code \r} of a {@code \r\n} line ending. */
+    private static int bareCarriageReturns(byte[] raw) {
+        int count = 0;
+        for (int i = 0; i < raw.length; i++) {
+            if (raw[i] == '\r' && (i + 1 >= raw.length || raw[i + 1] != '\n')) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** Every string anywhere in the parsed document that still contains a CR or an LF. */
+    private static void collectControlBearingStrings(Object node, String file, List<String> into) {
+        if (node instanceof String text) {
+            if (text.indexOf('\r') >= 0 || text.indexOf('\n') >= 0) {
+                into.add(file + " — value " + text.replace("\r", "\\r").replace("\n", "\\n"));
+            }
+        } else if (node instanceof Map<?, ?> map) {
+            map.values().forEach(v -> collectControlBearingStrings(v, file, into));
+        } else if (node instanceof List<?> list) {
+            list.forEach(v -> collectControlBearingStrings(v, file, into));
+        }
     }
 
     private static void assertImpossibleCriterion(String path, Map<?, ?> adv) {
