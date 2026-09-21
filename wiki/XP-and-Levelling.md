@@ -167,6 +167,8 @@ Per-skill colour and style are configurable too:
 
 > **Child skills show no bar.** Salvage and Smelting earn no XP of their own — their level is the average of their parents' — so a bar for them would be a bar that never moves on its own. Train Repair and you see Repair's bar.
 
+> **Salvage and Smelting differ in where the XP goes.** Salvaging divides its XP between Repair and Fishing, so the act does move its parents' bars. **Smelting divides nothing** — a smelt pays neither Mining nor Repair, and the `Smelting:` table in `experience.yml` is inert as a result. Smelting's level still tracks the mean of Mining and Repair; it simply has no way to push them.
+
 > ⚠️ **Changing a default in a new release won't reach your existing config.** `Enable`, `Max_Visible` and friends are only written when *absent*. Delete the key to pick up a new default.
 
 ---

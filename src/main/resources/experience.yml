@@ -933,6 +933,14 @@ Experience_Values:
         Leather: 1.6
         String: 1.8
         Other: 1.5
+    # ⚠️ INERT TABLE -- every row below is read and then discarded. Smelting is a child skill whose
+    # XP used to be divided between Mining and Repair; GitHub #19 stopped that, because running a
+    # furnace was levelling two skills the player never used. Nothing else consumes a Smelting XP
+    # value, so tuning these numbers has no effect today.
+    #
+    # They are KEPT, not deleted: they are the per-ore price list this skill would need the moment
+    # Smelting earns XP of its own, and deleting a player-facing table to silence a dead knob loses
+    # tuning that cannot be reconstructed. See TODO.md §68.A.
     Smelting:
         Copper_Nugget: 85
         Raw_Copper: 75
