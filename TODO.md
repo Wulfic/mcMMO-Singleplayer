@@ -1068,11 +1068,70 @@ remote instead.
 
 ### Still open in Phase A
 
-- [ ] ⬜ **17.4 — uneven sub-skill unlock spread** on Parkour, Flying, Stealth, Swimming, Unarmored.
-      🔑 **A balance judgement, not a defect.** "Too early or too late" has no mechanical test, so
-      this needs a concrete proposed re-spread put to the owner before anything is edited. The data
-      lives in `skillranks.yml`; RetroMode doubles every threshold, so a spread must be checked in
-      BOTH modes or it is only half-tuned.
+- [ ] 🟡 **17.4 — uneven unlock spread. MEASURED, PROPOSAL BELOW, AWAITING APPROVAL.**
+      Owner asked for a proposed re-spread rather than a direct edit. Nothing in `skillranks.yml`
+      has been touched.
+
+#### The complaint is real, and here it is as a number
+
+Every one of the **eight established skills** spreads its unlocks across the full range and ends at
+**100** (Taming stops at 75). The five named skills do not:
+
+| Skill | sub-skills | unlocks span | dead range |
+|---|---|---|---|
+| Mining *(reference)* | 6 | 1 → **100** | — |
+| Swords *(reference)* | 5 | 1 → **100** | — |
+| **Parkour** | 7 | 1 → **25** | 🔴 **levels 26–100 pay NOTHING** |
+| **Stealth** | 3 | 1 → **25** | 🔴 **levels 26–100 pay NOTHING** |
+| **Swimming** | 4 | 1 → **50** | 🔴 levels 51–100 pay nothing; two unlocks collide on 25 |
+| **Flying** | 4 | 1 → 75 | 🟡 thin, but reaches most of the range |
+| **Unarmored** | 2 | 10 → **100** | ✅ already matches the house curve |
+
+🔑 **The house curve, read off the eight established skills:** basic passive at **1**, super
+ability at **5** (Mining, Woodcutting, Excavation, Swords, Axes and Herbalism ALL put their super at
+exactly 5), then a ladder to a **capstone at 100**.
+🔴 **Second Wind is at 25 on all three movement skills** — five times later than every other
+super ability in the mod. That single value is most of the "too late" half of the complaint.
+
+#### Proposed (Standard mode)
+
+| Skill | Sub-skill | Now | **Proposed** | Why |
+|---|---|---|---|---|
+| Parkour | Roll | *(undeclared → 0)* | **0, declared** | see defect below |
+| Parkour | Dodge | 1 | **1** | basic passive, house convention |
+| Parkour | Second Wind | 25 | **5** | supers unlock at 5 everywhere else |
+| Parkour | Athlete | 5 | **15** | |
+| Parkour | Fleet Footed | 1 | **35** | was free at level 1 alongside Dodge |
+| Parkour | Snow Walker | 10 | **60** | |
+| Parkour | Smash | 15 | **100** | capstone — the strongest effect it has |
+| Flying | Fleet Footed | 1 | **1** | |
+| Flying | Second Wind | 25 | **5** | |
+| Flying | Glide | 35 | **30** | |
+| Flying | Solar Wings | 75 | **100** | capstone |
+| Stealth | Padfoot | 1 | **1** | |
+| Stealth | Assassin | 15 | **40** | |
+| Stealth | Smoke Bomb | 25 | **100** | capstone (Stealth has no super ability) |
+| Swimming | Fleet Footed | 1 | **1** | |
+| Swimming | Second Wind | 25 | **5** | |
+| Swimming | Lead Lungs | 25 | **30** | breaks the collision on 25 |
+| Swimming | Lake Raider | 50 | **100** | capstone |
+| Unarmored | Iron Skin R1–R4 | 10/20/50/100 | **1/25/60/100** | R1 to 1, matching every other basic |
+| Unarmored | Thorny Skin | 35 | **40** | |
+
+⚠️ **RetroMode = 10× Standard, with ONE documented exception that I nearly "fixed" wrongly.**
+A `Standard: 1` unlock is `RetroMode: 1`, **not 10** — measured across the whole file: **27 of 27**
+such entries use 1 in both. It means "available from the start" and is deliberate. A first pass
+flagged those as mismatches; they are the house convention. `0` likewise stays `0`.
+
+#### 🔴 Defect found while measuring, independent of the balance question
+
+- [ ] ⬜ **`PARKOUR_ROLL` has NO entry in `skillranks.yml`.** It is the only sub-skill of these five
+      missing from the file. `RankConfig.getSubSkillUnlockLevel` resolves a missing key through
+      `config.getInt(key, defaultConfig.getInt(key))`, and a missing key answers **0** — so Roll is
+      free from level 0 by ACCIDENT of a missing entry rather than by declaration.
+      🔑 Level 0 is probably the right value (upstream's Acrobatics Roll is free from the start),
+      so this is likely a no-op in behaviour — but it is currently an *implicit* 0 that no file
+      states and no test covers. **Declare it explicitly whatever the balance decision is.**
 - [ ] ⬜ **17.9 — ability messages draw over the hotbar.** 🔴 **Needs a design ruling — see below.**
 - [ ] ⬜ **#14 — multiplayer crash.** Ruled **supported**; comment posted 2026-09-21 asking for the
       crash log. **Blocked on the reporter**, not on us.
