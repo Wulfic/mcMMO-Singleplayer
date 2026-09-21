@@ -59,7 +59,7 @@ That attribute is a clamped one (0.3 default, hard ceiling 1.0), and **vanilla's
 
 It also applies **while crawling**, since vanilla uses the same attribute for the crawling pose. Squeezing through a 1-block gap is faster too.
 
-### Assassin — unlocks at 150
+### Assassin — unlocks at 400
 
 **Strike from the shadows for far greater damage.**
 
@@ -76,7 +76,7 @@ The 5-second window is tuned so you **cannot trade blows and keep stabbing**, bu
 
 **Assassin cannot stack with Parkour's Smash.** Smash requires sprinting and Assassin requires sneaking, and you can't do both at once.
 
-### Smoke Bomb — unlocks at 250
+### Smoke Bomb — unlocks at 1000
 
 **Vanish in a puff of nothing at all.** Stealth's super ability.
 

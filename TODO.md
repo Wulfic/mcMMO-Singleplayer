@@ -1068,9 +1068,28 @@ remote instead.
 
 ### Still open in Phase A
 
-- [ ] 🟡 **17.4 — uneven unlock spread. MEASURED, PROPOSAL BELOW, AWAITING APPROVAL.**
-      Owner asked for a proposed re-spread rather than a direct edit. Nothing in `skillranks.yml`
-      has been touched.
+- [x] ✅ **17.4 — APPLIED, owner-approved, with TWO corrections the tests forced.**
+      🔑 **The proposal was approved as written and it was WRONG IN TWO PLACES.** Both were caught
+      by existing tests the moment it was applied, and both are recorded below rather than quietly
+      amended — the approved table is not what shipped.
+
+**Correction 1 — Parkour Fleet Footed stays at 1, not 35.**
+`MovementTravelTest.fleetFootedUnlocksInEveryMediumAtLevelOneOfThatMediumsSkill` guards a deliberate
+design from the **Agility retirement (2026-08-17)**: Fleet Footed unlocks at 1 in *each* medium so
+that training one medium never gates another. That test exists because the old mean-of-three gate
+denied a pure swimmer their water bonus. Moving Parkour's copy to 35 would have **half-reverted that
+fix**, asymmetrically, on the one medium. Snow Walker took the vacated mid-ladder slot (45).
+
+**Correction 2 — Unarmored reverted to its shipped values entirely.**
+It was the one of the five that was **not broken**: it already spanned 10→100, the house curve.
+Moving Iron Skin rank 1 from 10 to 1 would hand a brand-new unarmoured player **7 armour points
+immediately** — a buff, and the opposite of the "arrives too late" complaint. `UnarmoredManagerTest`
+failing on four cases is what prompted re-reading it.
+
+🔑 **11 failures on first application → 5 after the corrections.** The six that disappeared were
+my errors; the five that remained were expectations that legitimately moved. **That split is the
+signal** — without it, "update the failing tests" would have buried a real regression in a batch of
+routine expectation churn.
 
 #### The complaint is real, and here it is as a number
 
@@ -1101,8 +1120,8 @@ super ability in the mod. That single value is most of the "too late" half of th
 | Parkour | Dodge | 1 | **1** | basic passive, house convention |
 | Parkour | Second Wind | 25 | **5** | supers unlock at 5 everywhere else |
 | Parkour | Athlete | 5 | **15** | |
-| Parkour | Fleet Footed | 1 | **35** | was free at level 1 alongside Dodge |
-| Parkour | Snow Walker | 10 | **60** | |
+| Parkour | Fleet Footed | 1 | ~~35~~ → **1 (unchanged)** | 🔴 correction 1 — medium symmetry |
+| Parkour | Snow Walker | 10 | **45** | took the slot Fleet Footed vacated |
 | Parkour | Smash | 15 | **100** | capstone — the strongest effect it has |
 | Flying | Fleet Footed | 1 | **1** | |
 | Flying | Second Wind | 25 | **5** | |
@@ -1115,8 +1134,8 @@ super ability in the mod. That single value is most of the "too late" half of th
 | Swimming | Second Wind | 25 | **5** | |
 | Swimming | Lead Lungs | 25 | **30** | breaks the collision on 25 |
 | Swimming | Lake Raider | 50 | **100** | capstone |
-| Unarmored | Iron Skin R1–R4 | 10/20/50/100 | **1/25/60/100** | R1 to 1, matching every other basic |
-| Unarmored | Thorny Skin | 35 | **40** | |
+| Unarmored | Iron Skin R1–R4 | 10/20/50/100 | ~~1/25/60/100~~ → **unchanged** | 🔴 correction 2 |
+| Unarmored | Thorny Skin | 35 | ~~40~~ → **unchanged** | 🔴 correction 2 |
 
 ⚠️ **RetroMode = 10× Standard, with ONE documented exception that I nearly "fixed" wrongly.**
 A `Standard: 1` unlock is `RetroMode: 1`, **not 10** — measured across the whole file: **27 of 27**
@@ -1125,7 +1144,26 @@ flagged those as mismatches; they are the house convention. `0` likewise stays `
 
 #### 🔴 Defect found while measuring, independent of the balance question
 
-- [ ] ⬜ **`PARKOUR_ROLL` has NO entry in `skillranks.yml`.** It is the only sub-skill of these five
+- [x] ✅ **SIX sub-skills had no entry, not one — all now declared at 0, behaviour unchanged.**
+      `PARKOUR_ROLL`, `ARCHERY_DAZE`, `HERBALISM_HYLIAN_LUCK`, `HERBALISM_SHROOM_THUMB`,
+      `SMELTING_SECOND_SMELT`, `UNARMED_BLOCK_CRACKER`. **All 111 `SubSkillType` constants are now
+      declared** (count taken from `javap` over the compiled enum, not a regex over source — this
+      repo has had two sessions get that wrong the same way).
+      🧪 `RankConfigTest.everySubSkillDeclaresItsUnlockLevel` stops the next one recurring, plus
+      `theRespreadSkillsReachTheTopOfTheRange` and
+      `retroModeIsTenTimesStandardExceptForImmediateUnlocks`. Each mutation-tested and each caught by
+      **exactly one** case, no cross-talk.
+      ⚠️ **Whether 0 is the RIGHT level for those five is still an open balance question** — it is
+      their current effective value, so declaring it changed nothing, but nobody ever chose it.
+      Hylian Luck and Second Smelt being free from level 0 looks unintended.
+
+✅ **27 doc corrections** across `wiki/Skills.md`, `wiki/Movement-Skills.md`, `wiki/Stealth.md`,
+`wiki/Super-Abilities.md` and `README.md` — including an **anchor link**
+(`Stealth#smoke-bomb--unlocks-at-250`) that would have silently stopped resolving. Doc guards run
+explicitly (`BandDocsMatchRealityTest` 5/0, `ConfigDocsMatchLoaderTest` 2/0) because Gradle skips
+them in a normal run.
+
+- [ ] ⬜ **OLD, now superseded — kept for the record:** `PARKOUR_ROLL` has NO entry. It is the only sub-skill of these five
       missing from the file. `RankConfig.getSubSkillUnlockLevel` resolves a missing key through
       `config.getInt(key, defaultConfig.getInt(key))`, and a missing key answers **0** — so Roll is
       free from level 0 by ACCIDENT of a missing entry rather than by declaration.

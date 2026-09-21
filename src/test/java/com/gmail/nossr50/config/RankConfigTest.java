@@ -4,10 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -25,6 +27,98 @@ import org.yaml.snakeyaml.Yaml;
  * exercises full validation over every {@link SubSkillType} via {@code McMMOMod.getSkillTools()}.
  */
 class RankConfigTest {
+
+    /**
+     * Every {@link SubSkillType} must have a DECLARED entry in {@code skillranks.yml}.
+     *
+     * <p>GitHub #17.4 found six that did not: {@code PARKOUR_ROLL}, {@code ARCHERY_DAZE},
+     * {@code HERBALISM_HYLIAN_LUCK}, {@code HERBALISM_SHROOM_THUMB}, {@code SMELTING_SECOND_SMELT}
+     * and {@code UNARMED_BLOCK_CRACKER}. None of them failed anything — and that is the point.
+     * {@code RankConfig.getSubSkillUnlockLevel} resolves a missing key through
+     * {@code config.getInt(key, defaultConfig.getInt(key))}, and a missing key answers <b>0</b>, so
+     * each of them silently unlocked at level 0. A sub-skill that is free from the first second of a
+     * new world, because nobody wrote a line in a YAML file, is indistinguishable from one that was
+     * deliberately made free.
+     *
+     * <p>They are now declared at 0 — their existing effective value, so behaviour is unchanged —
+     * and this case stops the next one being added without an entry. Driven from
+     * {@code values()}, never a transcribed list, because an enum constant added tomorrow is exactly
+     * what an incremental edit cannot see.
+     */
+    @Test
+    void everySubSkillDeclaresItsUnlockLevel(@TempDir Path dataFolder) throws Exception {
+        final Map<String, Object> yaml;
+        try (InputStream in = RankConfigTest.class.getResourceAsStream("/skillranks.yml")) {
+            assertNotNull(in, "bundled skillranks.yml missing from the test classpath");
+            yaml = new Yaml().load(in);
+        }
+
+        final RankConfig config = new RankConfig(dataFolder);
+        final Set<String> undeclared = new TreeSet<>();
+        for (SubSkillType subSkill : SubSkillType.values()) {
+            // getRankAddressKey builds "<Skill>.<SubSkill>.<Mode>.Rank_<n>" -- the same address the
+            // reader uses, so this cannot pass by looking somewhere the runtime never looks.
+            final String[] parts = config.getRankAddressKey(subSkill, 1, false).split("\\.");
+            final Object skillSection = yaml.get(parts[0]);
+            final Object subSection = skillSection instanceof Map<?, ?> m ? m.get(parts[1]) : null;
+            if (subSection == null) {
+                undeclared.add(subSkill.name());
+            }
+        }
+        assertTrue(undeclared.isEmpty(),
+                "these sub-skills have no skillranks.yml entry and so silently unlock at level 0: "
+                        + undeclared);
+    }
+
+    /**
+     * GitHub #17.4 — the five re-spread skills must each reach level 100.
+     *
+     * <p>Parkour and Stealth used to finish at 25 and Swimming at 50, so levels past that paid those
+     * players nothing at all, while all eight established skills spread to 100. This pins the
+     * decision: a revert fails here rather than being noticed by a player a year later.
+     */
+    @Test
+    void theRespreadSkillsReachTheTopOfTheRange(@TempDir Path dataFolder) {
+        final RankConfig config = new RankConfig(dataFolder);
+        for (PrimarySkillType skill : List.of(PrimarySkillType.PARKOUR, PrimarySkillType.FLYING,
+                PrimarySkillType.STEALTH, PrimarySkillType.SWIMMING, PrimarySkillType.UNARMORED)) {
+            int highest = 0;
+            for (SubSkillType subSkill : SubSkillType.values()) {
+                if (subSkill.getParentSkill() != skill) {
+                    continue;
+                }
+                for (int rank = 1; rank <= subSkill.getNumRanks(); rank++) {
+                    highest = Math.max(highest, config.getSubSkillUnlockLevel(subSkill, rank, false));
+                }
+            }
+            assertEquals(100, highest,
+                    skill + " must have a capstone at level 100 (GitHub #17.4); highest was "
+                            + highest);
+        }
+    }
+
+    /**
+     * RetroMode is 10x Standard, with one documented exception: a value of 0 or 1 stays put, because
+     * it means "available from the start" rather than "at level 1 of 100".
+     *
+     * <p>Measured before it was asserted — 27 of 27 {@code Standard: 1} entries in the shipped file
+     * use 1 in RetroMode too. A first pass at #17.4 read those as mismatches; "fixing" them would
+     * have been a silent gameplay change to every skill in the mod.
+     */
+    @Test
+    void retroModeIsTenTimesStandardExceptForImmediateUnlocks(@TempDir Path dataFolder) {
+        final RankConfig config = new RankConfig(dataFolder);
+        for (SubSkillType subSkill : SubSkillType.values()) {
+            for (int rank = 1; rank <= subSkill.getNumRanks(); rank++) {
+                final int standard = config.getSubSkillUnlockLevel(subSkill, rank, false);
+                final int retro = config.getSubSkillUnlockLevel(subSkill, rank, true);
+                final int expected = standard <= 1 ? standard : standard * 10;
+                assertEquals(expected, retro,
+                        subSkill + " rank " + rank + ": RetroMode must be 10x Standard (" + standard
+                                + "), or unchanged when Standard is 0 or 1");
+            }
+        }
+    }
 
     @Test
     void writesDefaultToDiskWhenMissing(@TempDir Path dataFolder) {
