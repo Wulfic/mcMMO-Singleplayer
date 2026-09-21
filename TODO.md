@@ -1239,6 +1239,168 @@ would need if it ever earns XP of its own.
       should Smelting hold its own XP (a real change to the child-skill model)? The issue's wording
       — *"gets lvled up passively"* — reads as the former, which is what shipped.
 
+## §69 — the topology change: MC 26.3 first, then the six-band archive — ⬜ OPEN
+
+**THE PLAN, written before any code (Tier 2).** Six owner rulings taken 2026-09-21, each put as a
+question with its collision named; all are in `.agent/memory/decisions.md` under
+*"§69: SIX owner rulings that re-shape the branch topology"*. This section is the execution plan,
+not the intake.
+
+| # | Ruling |
+|---|---|
+| 1 | 🔴 **HOLD THE PUSH ENTIRELY.** No `mod_version` bump, no push, this session |
+| 2 | Fixes propagate to the **`26.x` bands and `mc/1.21.11` only**; everything else is archived |
+| 3 | "Archived" = **keep the branches, teach the guards to skip them.** NOT deletion |
+| 4 | The six archived bands **keep their published releases**, marked final in the docs |
+| 5 | 🔴 **26.3 FIRST, archive after** |
+| 6 | 17.4's six sub-skills stay at **0**, recorded as accepted — ✅ done, see §68.A |
+| 7 | #19's end state (a smelt trains nothing) is **intended** — ✅ done, see §68.A |
+
+🔑 **Ruling 5 keeps §68.P's C-before-D order, but ruling 1 removed the ship that preceded both.**
+§68.P had Phase A ship → C → D → E. What runs now is C → D, with ten commits still sitting
+unpropagated on `master`.
+
+🔴 **The consequence, stated rather than discovered later:** `mc/26.2` is cut from a `master` that
+is **10 ahead of `origin/master`**, and every guard in this repo PREFERS REMOTE REFS. A green gate
+run during §69 grades a tree the remote does not have. **Re-run gates 7/9/10/11 after the eventual
+push** — nothing measured in §69 is evidence about what shipped.
+
+### Go / no-go for 26.3 — measured 2026-09-21, not assumed
+
+| Component | Pin | Source |
+|---|---|---|
+| `minecraft_version` | **26.3** | `meta.fabricmc.net/v2/versions/game` — `stable: true` |
+| `loader_version` | **0.19.5** | newest stable (master is on `0.19.3`) |
+| `fabric_version` | **0.161.0+26.3** | Modrinth, release channel |
+| `cloth_config_version` | **26.3.158+fabric** | Modrinth, release |
+| `modmenu_version` | ⚠️ **21.0.0-beta.1** | **the only 26.3 build — a beta** |
+| mappings | **none** | unchanged; 26.x ships unobfuscated and yarn publishes nothing |
+| `java_version` | **25 — MEASURED** | Mojang manifest for 26.3: `javaVersion.majorVersion = 25` |
+
+⚠️ **`java_version` was NOT carried over from 26.2.** `gradle.properties` states the boundary is
+read from Mojang's own manifest, and assuming it is exactly how a band compiles against the wrong
+release with nothing to report it. It happens to be 25 — that is a measurement, not an inheritance.
+⚠️ **The ModMenu beta is a narrow, deliberate acceptance.** ModMenu and Cloth are *"dev classpath
+only; never bundled"*, so a beta cannot reach a player through our jar. If it breaks the dev build,
+drop the integration for the band rather than pinning `master` to a ModMenu that does not know 26.3.
+
+### Phase C — cut `mc/26.2`, move `master` to 26.3
+
+Follows the per-band recipe above, with **one inversion worth stating**: a normal cut takes an
+*older* band off `master` and re-pins the NEW branch. Here `master` itself moves forward, so
+`mc/26.2` inherits pins that are **already correct** and recipe step x.2 is a no-op on the branch —
+the re-pin lands on `master` instead. Do not read x.2 as "nothing to do".
+
+- [ ] **C.1** `git switch -c mc/26.2` off `master` at its current tip. No toolchain commit needed
+      (`minecraft_version=26.2`, `supported_minecraft_versions=26.2` are already correct).
+- [ ] **C.2** Recipe x.4 — `git ls-tree -r --name-only HEAD -- .github` on `mc/26.2` must list
+      **exactly three** paths. `.github/` is gitignored; re-add by explicit path, never
+      `git add -f .github`.
+- [ ] **C.3** On `master`, re-pin `gradle.properties` to the table above, **and nothing else** in
+      that commit. `supported_minecraft_versions=26.3`.
+- [ ] **C.4** `fabric.mod.json` `depends.minecraft` → the 26.3 range. `BandVersionLabelTest` proves
+      it agrees with `supported_minecraft_versions` in both directions — run it, do not assume.
+- [ ] **C.5** Compile. Fix **inside `fabric/` and `platform/` only**; `PlatformBoundaryGuardTest`
+      stays green. Recipe x.6: ask whether `master` can absorb each difference — and measure the
+      absorption's reach, because MC API availability is **not monotonic**.
+- [ ] **C.6** Regenerate the per-band generated facts on `master`: `./gradlew classes testClasses`
+      FIRST, then `extract-mc-surface.py` (a stale `build/classes` yields a confidently wrong
+      answer), then `probe-bands.py`. ⚠️ `mc-ids.txt` is a fact about **Minecraft**, not a branch —
+      adding 26.3 regenerates it once on `master` and it is **cherry-picked**, never regenerated
+      per band.
+- [ ] **C.7** Recipe x.7 — **gate 2 (`mixin-allow-audit.py --check`) BEFORE gate 1.** A clean
+      compile is structural; §42 found an injector that compiled perfectly and bound to nothing.
+- [ ] **C.8** Declare the new band: add `mc/26.2` to `scripts/expected-bands.txt`, on `master`
+      first, then every live band. Run `expected_bands.py --self-test` first — *"sets match"* is
+      also what a broken comparator prints.
+- [ ] **C.9** Full suite, then the ship gates that can run without a push. Record which cannot.
+
+⚠️ **The support-floor sentence is deliberately NOT changed in Phase C.** It moves once, in Phase D,
+because the archive is what determines its new value. Changing it twice is how a doc claim rots.
+
+### Phase D — archive the six `1.21.x` bands below `1.21.11`
+
+**The set is exactly:** `mc/1.21.1`, `mc/1.21.3`, `mc/1.21.4`, `mc/1.21.5`, `mc/1.21.8`,
+`mc/1.21.10` — covering MC `1.21`, `1.21.1`, `1.21.2`, `1.21.3`, `1.21.4`, `1.21.5`, `1.21.6`,
+`1.21.7`, `1.21.8`, `1.21.9`, `1.21.10` (**11 versions**).
+**Live after §69:** `master` (26.3), `mc/26.2`, `mc/26.1.2` (26.1 / 26.1.1 / 26.1.2), `mc/1.21.11`
+— **6 versions**. 11 + 6 = 17 = the declared 16 plus 26.3. The numbers reconcile; check them again
+if they stop doing so.
+
+🔴 **Why this cannot be a docs edit.** `scripts/expected-bands.txt` says in its own header: *"To
+retire one: remove the line in the commit that deletes the branch."* Every guard enumerates from
+git refs (`origin/mc/.+`). Remove six lines while the six branches still exist and
+`expected_bands.py --verify` reports six **undeclared** bands — exit 1 — so ship gates 9/10/11 go
+**red permanently**. Ruling 3 keeps the branches, so the tooling has to learn the concept.
+
+- [ ] **D.1** Add an **ARCHIVED** set to the declaration. Semantics, decided up front because
+      getting them wrong is the failure mode:
+      - `--count` → **live bands only**. It is the `--require-bands` floor for audits that now skip
+        archived bands; counting archived ones makes the floor unreachable
+      - `--verify` → declared **live ∪ archived** must equal git's `mc/**` set, **both directions**.
+        An archived branch is still expected to EXIST; it is simply not audited for drift
+      - 🔴 **Never derive either set by globbing `mc/**`** — that is `len(x) >= len(x)`, and it
+        deletes the guard while leaving it looking present
+- [ ] **D.2** Teach the live-band filter to `drift-audit.py`, `branch-file-identity-audit.py`,
+      `manifest-identity-audit.py` and `gradle-key-identity-audit.py`.
+      🔴 **This WEAKENS four guards, and it is the whole risk of Phase D.** A filter bug that
+      matches too much leaves every guard auditing **zero** branches and printing green — the exact
+      vacuity family this repo has now caught sixteen times.
+      🧪 **Each of the four gets a self-test case that feeds an over-matching filter and asserts the
+      run EXITS 2, not 0.** "Fewer than two branches compared" is already exit 2 in two of them; the
+      other two need it. A guard with no test is decoration.
+- [ ] **D.3** Mutation-test every filter: archive a band that should be live and assert the audit
+      **notices**; un-archive one and assert drift is reported again. Count **which** cases notice —
+      a pass alone proves nothing.
+- [ ] **D.4** Docs: the band table in `README.md` and `wiki/**` marks the six **archived, final
+      release v1.4.0** (ruling 4 — the rows stay, relabelled; the jars stay downloadable).
+- [ ] **D.5** 🔴 **The support-floor sentence, and the R-x collision it walks into.**
+      `README.md:50` and `wiki/Installation.md:32` read *"Minecraft **1.20.6 and older are not
+      supported**"*. After the archive that implies live support for `1.21` – `1.21.10`, which is
+      false. **`BandDocsMatchRealityTest` will NOT catch it** — it asserts the floor sits *below*
+      every version the branch ships, and `1.20.6` still does. The guard stays satisfied by a
+      sentence that has become false in the **other direction**.
+      ➡️ **Proposed floor: `1.21.10`.** Strictly below every version each LIVE branch ships
+      (`mc/1.21.11` → 1.21.11 ✅, `mc/26.1.2` → 26.1 ✅, `mc/26.2` → 26.2 ✅, `master` → 26.3 ✅).
+      ⚠️ **It is only safe because the six archived branches are leaving the R-y identity set** —
+      `mc/1.21.1` ships MC `1.21`, so a `1.21.10` floor on ITS copy would fail that branch's own
+      `BandDocsMatchRealityTest`. Archived branches keep their frozen `1.20.6` text, which is still
+      true there. **Verify against the test's actual assertion before writing the sentence.**
+      ⚠️ Word it as *archived / final release*, not a bare "not supported" — a downloadable v1.4.0
+      jar exists for every one of those versions and ruling 4 keeps it that way.
+- [ ] **D.6** `README.md` and `wiki/**` leave the identity set for archived branches. Confirm what
+      `branch-file-identity-audit.py`'s union-of-trees logic does once six branches are excluded,
+      rather than assuming it does the right thing.
+- [ ] **D.7** Propagate C+D to the live bands only — `mc/26.2`, `mc/26.1.2`, `mc/1.21.11` — with
+      `Backport-of:` trailers. ⚠️ From a **scratch clone** (`git clone --local --no-hardlinks .`),
+      never this working copy.
+
+### Rollback — and why §69 is unusually safe
+
+✅ **Ruling 1 (hold the push) makes EVERY step below local and fully reversible.** Nothing reaches
+the remote, no tag moves, no release changes, no player is affected. This is the strongest rollback
+position this repo gets, and it is a consequence of the owner's call rather than of care taken here.
+
+- **Anchor, recorded before the first command:** `master` at **`742c334a2`**, tree clean, 10 ahead
+  of `origin/master`. Written to `scratchpad/UNDO-69.txt` **before** Phase C starts.
+- **Undo Phase C:** `git switch master && git reset --hard 742c334a2`, then
+  `git branch -D mc/26.2`. That branch is a pointer to a commit which stays reachable from
+  `master`, so deleting it loses nothing.
+- **Undo Phase D:** the same anchor; `expected-bands.txt` and the four scripts are tracked files.
+- **What is NOT reversible this way:** nothing, today. If any step grows a push, a tag or a
+  release, it stops and gets its own blast-radius line first.
+
+### What I am NOT doing
+
+- **Not pushing**, and **not bumping `mod_version`** (ruling 1). The nine `v1.4.0` tags on origin
+  still make a push produce nine red runs and zero jars — that blocker is untouched, not solved.
+- **Not deleting any branch, tag or release** (rulings 3 and 4).
+- **Not propagating to the six archived bands** (ruling 2) — that is the point of the archive.
+- **Not starting Phase E** (#16.1, docs-only `master`). It re-points every mechanism §69 relies on,
+  and it gets its own plan.
+- **Not re-opening** 17.4's six zero-level sub-skills (ruling 6) or #19's end state (ruling 7).
+- **Not regenerating `mc-ids.txt` per band** — it is a fact about Minecraft and it cherry-picks.
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
