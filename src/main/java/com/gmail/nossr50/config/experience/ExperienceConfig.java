@@ -410,9 +410,21 @@ public class ExperienceConfig extends ConfigLoader {
         return config.getBoolean("Experience_Bars.Update.Passive", true);
     }
 
+    /**
+     * The {@code experience.yml} key that switches one skill's XP bar on or off.
+     *
+     * <p>Static, and public, because the ModMenu catalogue builds its per-skill bar rows from it
+     * during static init (GitHub #15) and must not be able to disagree with the reader below about
+     * where the value lives. Same one-source treatment {@code CoreSkillsConfig.enabledPath} gets for
+     * the master switches.
+     */
+    public static @NotNull String experienceBarEnabledPath(PrimarySkillType primarySkillType) {
+        return "Experience_Bars." + StringUtils.getCapitalized(primarySkillType.toString())
+                + ".Enable";
+    }
+
     public boolean isExperienceBarEnabled(PrimarySkillType primarySkillType) {
-        return config.getBoolean("Experience_Bars."
-                + StringUtils.getCapitalized(primarySkillType.toString()) + ".Enable", true);
+        return config.getBoolean(experienceBarEnabledPath(primarySkillType), true);
     }
 
     public boolean getDoExperienceBarsAlwaysUpdateTitle() {

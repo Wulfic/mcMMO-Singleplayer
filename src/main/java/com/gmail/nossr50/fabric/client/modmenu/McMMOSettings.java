@@ -1,6 +1,7 @@
 package com.gmail.nossr50.fabric.client.modmenu;
 
 import com.gmail.nossr50.config.CoreSkillsConfig;
+import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.skills.movement.MovementXpSettings;
 import com.gmail.nossr50.skills.stealth.StealthXpSettings;
@@ -317,6 +318,25 @@ public final class McMMOSettings {
             list.add(ConfigSetting.bool(CAT_SKILLS, CORESKILLS_YML,
                     CoreSkillsConfig.enabledPath(skill), true, displayName(skill),
                     masterSwitchTooltip(skill)));
+            // GitHub #15: a show/hide for that skill's XP bar, directly under its master switch.
+            // Same shape as #10 -- experience.yml has carried Experience_Bars.<Skill>.Enable all
+            // along and ExperienceBarManager has always enforced it, but the only way to reach it
+            // was to hand-edit YAML.
+            //
+            // ⚠️ The path comes from ExperienceConfig.experienceBarEnabledPath, the same method
+            // the reader uses, so this row cannot address a key the manager never consults.
+            //
+            // ⚠️ SKIPPED for child skills, unlike the master switch above. Every surviving child
+            // (Salvage, Smelting) is in ExperienceBarManager's `disabledBars` and its bar is
+            // suppressed before this key is ever read -- a row here would be a switch that does
+            // nothing, which is the dead-knob class this catalogue has shipped twice before.
+            if (!SkillTools.isChildSkill(skill)) {
+                list.add(ConfigSetting.bool(CAT_SKILLS, EXPERIENCE_YML,
+                        ExperienceConfig.experienceBarEnabledPath(skill), true,
+                        displayName(skill) + " XP Bar",
+                        "Show the XP bar for " + displayName(skill)
+                                + ". The skill still earns XP when its bar is hidden."));
+            }
         }
 
         // ---- Effects: particles, fireworks and the anvil/Tree-Feller feedback (config.yml) ------
