@@ -150,12 +150,12 @@ its medium.
 
 All three movement skills additionally get their **own** copy of **Fleet Footed** (a movement-speed
 bonus that scales with the skill) and their own body of the **Second Wind** super ability. Fleet
-Footed unlocks at level **1** and Second Wind at **250**, separately in each of the three.
+Footed unlocks at level **1** and Second Wind at **50**, separately in each of the three.
 
 > **This is deliberately a buff for specialists.** Those two perks used to be gated on the *average*
 > of Parkour, Swimming and Flying, which meant a player who only flew could never reach them at all —
 > flying alone capped that average at 333, and the air ranks sat at 400 and 750. Now a pure flier
-> gets air Fleet Footed at Flying 1 and the air Second Wind at Flying 250, and a pure swimmer the
+> gets air Fleet Footed at Flying 1 and the air Second Wind at Flying 50, and a pure swimmer the
 > same in water. Being an all-rounder still earns *more* — all six perks instead of two — but it is
 > no longer a **gate** on any one of them. Second Wind's strength and duration follow the medium you
 > are actually moving through, and Dodge, Roll, Fall XP and Fleet Footed's scaling all read the skill
@@ -206,7 +206,7 @@ holding a configured item, which is **never consumed**:
 
 | Ability | Skill | Trigger item | Effect |
 |---|---|---|---|
-| **Second Wind** | Parkour / Swimming / Flying | `FEATHER` | One ability, three bodies, chosen by how you are moving — a forward **lunge** on land, a **water buff** while swimming, a **speed burst** while gliding. One cooldown shared across all three. Each medium unlocks its own body at level **250** in that skill, independently of the other two. |
+| **Second Wind** | Parkour / Swimming / Flying | `FEATHER` | One ability, three bodies, chosen by how you are moving — a forward **lunge** on land, a **water buff** while swimming, a **speed burst** while gliding. One cooldown shared across all three. Each medium unlocks its own body at level **50** in that skill, independently of the other two. |
 | **Smoke Bomb** | Stealth | `GUNPOWDER` | Vanilla Invisibility for 5 s. Note that vanilla invisibility does **not** hide armour or held items. |
 
 Both items are configurable in `config.yml` (`Skills.Movement.Second_Wind_Item`,

@@ -67,7 +67,7 @@ The three Pass-2 abilities are **not gated on holding a tool**. They fire immedi
 | Ability | Skill | Trigger item | Config key |
 |---|---|---|---|
 | **Second Wind** | [Parkour / Swimming / Flying](Movement-Skills#second-wind--the-super-ability) | `FEATHER` | `Skills.Movement.Second_Wind_Item` |
-| **Smoke Bomb** | [Stealth](Stealth#smoke-bomb--unlocks-at-250) | `GUNPOWDER` | `Skills.Stealth.Smoke_Bomb_Item` |
+| **Smoke Bomb** | [Stealth](Stealth#smoke-bomb--unlocks-at-1000) | `GUNPOWDER` | `Skills.Stealth.Smoke_Bomb_Item` |
 | **Herdsman's Call** | [Husbandry](Husbandry#herdsmans-call--the-super-ability) | `GOAT_HORN` | `Skills.Husbandry.Herdsmans_Call_Item` |
 
 > ⚠️ **All three items must differ from each other.** The actives listen on the same use-item event, so sharing an item fires one and prints another's refusal message — which looks like a broken ability rather than a config collision.
@@ -86,7 +86,7 @@ Each body is gated on its own skill and nothing else, so they arrive in whatever
 
 ### Smoke Bomb
 
-Vanilla **Invisibility for 100 ticks (5 s)**, no firework, no particle burst. Unlocks at Stealth 250.
+Vanilla **Invisibility for 100 ticks (5 s)**, no firework, no particle burst. Unlocks at Stealth 1000 — Stealth's capstone.
 
 Remember that vanilla invisibility does **not** hide armour or held items.
 

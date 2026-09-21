@@ -277,7 +277,7 @@ Earn XP by taming animals and fighting alongside your wolves.
 
 Three skills, one per medium you travel through. Each owns the perks specific to its own medium, plus its own copy of the two that work in every medium — **Fleet Footed** and the **Second Wind** super ability.
 
-Those two appear once under each skill below and unlock separately, but Second Wind is still **one ability on one cooldown**: it picks its body from how you are actually moving. Reaching Swimming 250 gets you the water body whether or not you have ever flown.
+Those two appear once under each skill below and unlock separately, but Second Wind is still **one ability on one cooldown**: it picks its body from how you are actually moving. Reaching Swimming 50 gets you the water body whether or not you have ever flown.
 
 Movement XP is **speed-normalised**: you're paid per *second* of travel with each tick's distance clamped at the medium's reference speed. Going faster than the reference pays nothing extra. Full explanation on **[Movement Skills](Movement-Skills)**.
 
@@ -289,11 +289,11 @@ Earn XP by **sprinting on land**. Falling, rolling and dodging pay into Parkour 
 |---|---|---|
 | Dodge | 1 | Halve incoming attack damage. Available from level 1. |
 | Roll | — | Land strategically to avoid fall damage. Hold **sneak** as you land for a **Graceful Roll**: twice the odds and twice the damage negated. |
-| Athlete | 1 | Sprinting costs less hunger. Unlocks at Parkour 50 (RetroMode). |
-| Smash | 1 | Sprint attacks hit harder and send targets flying. Unlocks at Parkour 150. |
-| Snow Walker | 1 | Cross **powder snow** without sinking into it. Unlocks at Parkour 100 (RetroMode). |
+| Athlete | 1 | Sprinting costs less hunger. Unlocks at Parkour 150 (RetroMode). |
+| Smash | 1 | Sprint attacks hit harder and send targets flying. Unlocks at Parkour 1000 — Parkour's capstone. |
+| Snow Walker | 1 | Cross **powder snow** without sinking into it. Unlocks at Parkour 450 (RetroMode). |
 | Fleet Footed | 1 | Move faster on land. Available from level 1. |
-| Second Wind | 1 | **Lunge** forward, striking whatever you land on. Super ability, triggered by holding a **feather** and right-clicking. Unlocks at Parkour 250 (RetroMode). |
+| Second Wind | 1 | **Lunge** forward, striking whatever you land on. Super ability, triggered by holding a **feather** and right-clicking. Unlocks at Parkour 50 (RetroMode). |
 
 Every one of them is gated on Parkour itself, so you earn them by running, jumping and landing rather than by a swimmer and a flier dragging an average up. Roll and Dodge matter most: falling and dodging pay their XP *into* Parkour, so the very hits that earn them now level their own unlock at full rate.
 
@@ -305,10 +305,10 @@ Earn XP by **swimming**.
 
 | Sub-skill | Ranks | Effect |
 |---|---|---|
-| Lead Lungs | 1 | Hold your breath far longer underwater. Unlocks at Swimming 250 (RetroMode). |
-| Lake Raider | 1 | Underwater digging turns up treasure. Unlocks at Swimming 500. |
+| Lead Lungs | 1 | Hold your breath far longer underwater. Unlocks at Swimming 300 (RetroMode). |
+| Lake Raider | 1 | Underwater digging turns up treasure. Unlocks at Swimming 1000 — Swimming's capstone. |
 | Fleet Footed | 1 | Move faster through water. Available from level 1. |
-| Second Wind | 1 | **Surge** through the water for a while. Super ability, same feather trigger. Unlocks at Swimming 250 (RetroMode). |
+| Second Wind | 1 | **Surge** through the water for a while. Super ability, same feather trigger. Unlocks at Swimming 50 (RetroMode). |
 
 ## Flying
 
@@ -316,10 +316,10 @@ Earn XP by **elytra gliding**.
 
 | Sub-skill | Ranks | Effect |
 |---|---|---|
-| Glide | 1 | Descend more slowly while gliding. Unlocks at Flying 350 (RetroMode). |
-| Solar Wings | 1 | A worn elytra slowly mends in daylight. Unlocks at Flying 750. |
+| Glide | 1 | Descend more slowly while gliding. Unlocks at Flying 300 (RetroMode). |
+| Solar Wings | 1 | A worn elytra slowly mends in daylight. Unlocks at Flying 1000 — Flying's capstone. |
 | Fleet Footed | 1 | Move faster while gliding. Available from level 1. |
-| Second Wind | 1 | **Soar** with a burst of forward speed. Super ability, same feather trigger. Unlocks at Flying 250 (RetroMode). |
+| Second Wind | 1 | **Soar** with a burst of forward speed. Super ability, same feather trigger. Unlocks at Flying 50 (RetroMode). |
 
 Both are gated on Flying itself, and for these two that is the difference between slow and impossible. Read against an average of Parkour, Swimming and Flying, their unlocks needed Flying **1050** and **2250** from a player who only flew — past the level cap, so a specialist could never reach them at all. [Why](Movement-Skills#why-every-perk-sits-on-the-skill-that-earns-it).
 
@@ -334,8 +334,8 @@ Both are gated on Flying itself, and for these two that is the difference betwee
 | Sub-skill | Ranks | Effect |
 |---|---|---|
 | Padfoot | 1 | Sneak almost as fast as you walk. |
-| Assassin | 1 | Backstab — far greater damage while sneaking, if you haven't been hit recently. |
-| Smoke Bomb | 1 | Vanish. Super ability, triggered by holding **gunpowder** and right-clicking. |
+| Assassin | 1 | Backstab — far greater damage while sneaking, if you haven't been hit recently. Unlocks at Stealth 400 (RetroMode). |
+| Smoke Bomb | 1 | Vanish. Super ability, triggered by holding **gunpowder** and right-clicking. Unlocks at Stealth 1000 — Stealth's capstone. |
 
 ## Unarmored
 

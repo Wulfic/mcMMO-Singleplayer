@@ -181,9 +181,11 @@ class StealthManagerTest {
 
     @Test
     void assassinIsLockedBelowItsRank() {
-        // skillranks.yml puts Assassin at RetroMode 150.
-        assertFalse(managerAtLevel(149).canAssassin());
-        assertTrue(managerAtLevel(150).canAssassin());
+        // skillranks.yml puts Assassin at RetroMode 400 (Standard 40) since the GitHub #17.4
+        // re-spread; it was 150. Stealth used to finish unlocking at level 25 of 100, so everything
+        // past that paid nothing.
+        assertFalse(managerAtLevel(399).canAssassin());
+        assertTrue(managerAtLevel(400).canAssassin());
     }
 
     @Test
@@ -238,9 +240,11 @@ class StealthManagerTest {
 
     @Test
     void smokeBombIsLockedBelowItsRank() {
-        // skillranks.yml puts Smoke Bomb at RetroMode 250.
-        assertFalse(managerAtLevel(249).canSmokeBomb());
-        assertTrue(managerAtLevel(250).canSmokeBomb());
+        // skillranks.yml puts Smoke Bomb at RetroMode 1000 (Standard 100) since the GitHub #17.4
+        // re-spread; it was 250. It is Stealth's capstone -- the skill has no super ability, so this
+        // is the thing the last stretch of levels is for.
+        assertFalse(managerAtLevel(999).canSmokeBomb());
+        assertTrue(managerAtLevel(1000).canSmokeBomb());
     }
 
     @Test

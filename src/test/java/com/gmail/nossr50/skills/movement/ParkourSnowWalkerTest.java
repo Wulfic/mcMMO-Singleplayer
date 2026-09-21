@@ -62,21 +62,27 @@ class ParkourSnowWalkerTest {
     }
 
     @Test
-    void itUnlocksAtParkourOneHundredInRetroMode() {
-        assertEquals(100,
+    void itUnlocksAtItsConfiguredRetroLevel() {
+        // GitHub #17.4 moved this from Parkour 10 to 45 (100 -> 450 in RetroMode) when the skill was
+        // re-spread to reach level 100. This is the ONE case that pins the literal, so a future
+        // change to the ladder has to be deliberate; the behaviour cases below derive from it rather
+        // than repeating it, so they cannot drift out of step with the config.
+        assertEquals(450,
                 RankUtils.getRankUnlockLevel(SubSkillType.PARKOUR_SNOW_WALKER, 1));
     }
 
     @Test
     void aNoviceCannotWalkOnSnow() {
-        when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR)).thenReturn(99);
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR))
+                .thenReturn(RankUtils.getRankUnlockLevel(SubSkillType.PARKOUR_SNOW_WALKER, 1) - 1);
 
         assertFalse(new MovementManager(mmoPlayer).canSnowWalk());
     }
 
     @Test
-    void oneHundredParkourUnlocksIt() {
-        when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR)).thenReturn(100);
+    void reachingItsUnlockLevelGrantsIt() {
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.PARKOUR))
+                .thenReturn(RankUtils.getRankUnlockLevel(SubSkillType.PARKOUR_SNOW_WALKER, 1));
 
         assertTrue(new MovementManager(mmoPlayer).canSnowWalk());
     }
