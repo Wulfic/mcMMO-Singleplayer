@@ -852,6 +852,116 @@ rows each reached on their own. **A number no gate reads is a number that rots.*
 
 ---
 
+## §68 — the GitHub issue queue: five open issues, pulled 2026-09-21 — ⬜ OPEN
+
+**This is INTAKE, not a plan.** Pulled on 2026-09-21 from
+<https://github.com/Wulfic/mcMMO-Singleplayer/issues> with `gh issue list --state open --limit 100`
+(the `github` MCP was down that session; the `gh` CLI did the work — say which path ran, always).
+Every row below is the owner's words restated, **not diagnosed, not reproduced, not scoped**. A box
+here means *"this was asked for"*; it does not mean the cause is known or that a named file is the fix.
+
+🔑 **Rule 1 applies to all five.** Fixes land on `master` FIRST, then propagate with a
+`Backport-of:` trailer. AGENTS.md records that **11 of the last 12 issue fixes were version-agnostic
+logic bugs** — the exact shape that lands on `master`, is forgotten on eight bands, and comes back
+months later as a user report. Assume every row here is version-agnostic until measured otherwise.
+
+⚠️ **Four of the five are owner-authored UX/feature asks. #14 is the only outside bug report, and it
+has no crash log attached** — see its row.
+
+### #19 — Smelting must stop paying XP into Mining and Repair (owner, 2026-09-21)
+
+- [ ] ⬜ **Smelting actions must award NO XP to Mining or Repair.** Issue text: *"Smelting should not
+      give xp to either mining or repair. gets lvled up passively"*.
+      ✅ **The premise is confirmed, not assumed:** Smelting is a CHILD skill whose parents are
+      `MINING` and `REPAIR` — `SkillTools.java:65-68` (`SMELTING_PARENTS`) — so its level is derived
+      from the parents' mean and it does level passively. The ask is therefore about the
+      **reverse** direction: a smelt must not feed XP back up into either parent.
+      ⬜ **Not yet measured:** which path, if any, actually awards parent XP on a smelt.
+      `SmeltingListener.java` contains no `applyXpGain` / `MINING` / `REPAIR` reference at all, so
+      the award — if it exists — lives somewhere else (a furnace mixin, the generic child-skill XP
+      path, or an `ExperienceConfig` row). **Find the award before writing the fix.**
+      🧪 Test that must fail if reverted: smelt with mcMMO loaded, assert Mining XP and Repair XP are
+      both unchanged while Smelting's own counter moves.
+
+### #17 — a handful of skill bugs (owner, 2026-09-20) — NINE separate items
+
+⚠️ **Nine sub-items, and they are not one commit.** 17.1, 17.3, 17.4 and 17.9 are behaviour; 17.2,
+17.5, 17.6, 17.7 and 17.8 are display strings and menu wiring. **17.4 is the only balance change.**
+
+- [ ] ⬜ **17.1 — `/mcstats <skill> keep`**: a new sub-command that keeps printing XP updates to chat
+      for that skill.
+- [ ] ⬜ **17.2 — `/mcstats alchemy` dumps an ingredient list.** Either hide it, or explain better
+      what the ingredients are for. The owner's wording leaves both open — **pick one and say why.**
+- [ ] ⬜ **17.3 — most sub-skills have NO description.** Add one, **one short sentence each**.
+      ⚠️ This is a roster-wide sweep: audit against `SubSkillType.values()`, **never against a diff**
+      — an added constant is invisible to an incremental edit. That is exactly how Cooking shipped
+      across six commits with zero mentions in all 16 wiki files.
+- [ ] ⬜ **17.4 — unlock spread is uneven on the new custom skills.** Abilities arrive too early or
+      too late, giving an uneven reward curve. Named: **Parkour, Flying, Stealth, Swimming,
+      Unarmored.**
+- [ ] ⬜ **17.5 — Cooking's hourly cap is mislabelled.** Rename to **"Hourly XP Cook Limit"**: the
+      cap is on food XP per hour, not on the amount of food cooked.
+- [ ] ⬜ **17.6 — a bare `Duration: 5` needs a unit.** Render it as `5 Seconds` under
+      `/mcstats <skill>` wherever a duration is shown.
+- [ ] ⬜ **17.7 — `/mcstats mining` shows a redundant line.** Drop the bonus-drop-chance-while-active
+      line.
+- [ ] ⬜ **17.8 — ModMenu > Effects has TWO "Super ability firework" rows**, one for on and one for
+      off, each with its own enable/disable button. Collapse to a single clear control.
+- [ ] ⬜ **17.9 — ability messages render too low** and get drawn over the hotbar. Move them up so
+      they do not overlap the item bar.
+
+### #16 — refactor and update (owner, 2026-09-20) — THREE asks, one needs a ruling
+
+- [ ] 🔴 **16.1 — "no code in the main branch."** Issue text: *"Refactor the READMEs, so we have no
+      code in the main branch, and each branch stays the same, maintaining its code."*
+      🔴 **STOP — this collides head-on with ruling R-a, and needs an explicit owner decision before
+      any command runs.** `master` **is** the newest supported band and carries its code; nine
+      branches release from it; `drift-audit.py` grades every band **against `master`**; and rule 1
+      says fixes land there FIRST. A docs-only `master` invalidates all of that at once.
+      ⚠️ It also breaks the identity guard's load-bearing case: `AGENTS.md`, `scripts/**`,
+      `README.md` and `wiki/**` are byte-identical across branches **by rule** (P19-1, R-y), and
+      `.github/workflows/*` fires `schedule` from the default branch **and nowhere else**.
+      ↩️ **Blast radius if done wrong:** the weekly drift leg dies — that is **R-g**, a decision this
+      repo already made once and had to reverse with R-r — and every band loses its back-port
+      reference point. **Do not start this as a refactor. Get the ruling first.**
+- [ ] ⬜ **16.2 — archive `1.21.10` and below**; those bands receive no further updates.
+      ⚠️ Touches the band table, plus the support-floor sentence in `README.md` and
+      `wiki/Installation.md`, which **R-x** requires to sit strictly below every version the branch
+      ships. `BandDocsMatchRealityTest` reads that sentence — it is the instrument that says whether
+      the docs still hold after the scope changes.
+- [ ] ⬜ **16.3 — bump the mod to version 26.3.** ⚠️ `mod_version` must be **identical on every
+      branch** (R-p), guarded per-key by `gradle-key-identity-audit.py` (ship gate 11). A band left
+      behind on `mod_version` **silently stops releasing** via R-t's stale-version gate.
+      🔑 Do not confuse it with `minecraft_version`, which must **differ** on every branch (R-a).
+
+### #15 — per-skill show/hide for the XP bar (owner, 2026-09-20)
+
+- [ ] ⬜ **Under each skill in the Skills section, add a show/hide option for that skill's XP bar.**
+      Issue text: *"to the skills section, under each skill add a show/hide option for the xp bar."*
+      Shipped work to follow rather than reinvent: the per-skill toggle from issue #10, the ModMenu
+      Skills tab, and the XP-bar three-bar cap. **Find the existing pattern first.**
+
+### #14 — crashes in multiplayer (HobraTacobra, 2026-09-15) — the only outside report
+
+- [ ] ⬜ **A non-host client crashes on world interaction in multiplayer.** Reported on **MC
+      1.21.11**, installed through the CurseForge client. The crash fires immediately on placing a
+      block or using a crafting table, furnace or chest. **It is symmetric:** the host is always
+      fine and the joining client always crashes — reporter hosting is clean, reporter joining
+      someone else crashes, and the same holds in reverse for their friends.
+      🔴 **FIRST ACTION IS NOT A FIX — there is no crash log on the issue.** Ask for the
+      `crash-reports/` file or `logs/latest.log` from the crashing client. A symmetric
+      host-fine/client-crashes split is the classic logical-side signature (client code touching
+      server-only state, or a mixin applied on the wrong side), but **that is a hypothesis, not a
+      diagnosis**, and guessing before reading the failure has already cost this repo sessions.
+      ⚠️ **Scope is an owner call.** The mod is named *Singleplayer*, multiplayer is not in the
+      declared scope, and the reporter says so themselves. Decide **supported / best-effort /
+      won't-fix** and post it on the issue — an outside reporter left waiting is worse than a
+      documented no.
+      🔑 **If it is fixed: `master` first, then `Backport-of:` to `mc/1.21.11`** — the band the
+      reporter actually runs. A fix that stops at `master` never reaches them.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
