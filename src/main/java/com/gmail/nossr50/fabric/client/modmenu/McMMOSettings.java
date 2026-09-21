@@ -341,13 +341,15 @@ public final class McMMOSettings {
                 "Explosion puff when Axes' Greater Impact or a wolf's Pummel sends a mob flying."));
         list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Call_of_the_Wild", true,
                 "Call of the Wild Particles", "Flame burst around a freshly summoned Taming pet."));
-        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Ability_Activation", false,
-                "Super Ability Firework (on)",
-                "Launch a green firework when a super ability activates. Harmless — mcMMO's own "
-                        + "fireworks deal no damage."));
-        list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.Ability_Deactivation", false,
-                "Super Ability Firework (off)",
-                "Launch a red firework when a super ability expires."));
+        // GitHub #17.8: one control, not two. This was a "(on)" row and a "(off)" row, each with
+        // its own switch, which read as two unrelated features instead of one firework setting.
+        // ⚠️ Both config keys survive and are still read independently by GeneralConfig -- only
+        // the SCREEN collapsed. Someone hand-editing config.yml keeps green-on-without-red-off.
+        list.add(ConfigSetting.boolMirrored(CAT_EFFECTS, CONFIG_YML, "Particles.Ability_Activation",
+                false, "Super Ability Fireworks",
+                "Launch a firework when a super ability starts and when it ends — green on, red "
+                        + "off. Harmless — mcMMO's own fireworks deal no damage.",
+                List.of("Particles.Ability_Deactivation")));
         list.add(ConfigSetting.bool(CAT_EFFECTS, CONFIG_YML, "Particles.LevelUp_Enabled", true,
                 "Milestone Firework", "Launch a blue firework on milestone skill levels."));
         list.add(ConfigSetting.integer(CAT_EFFECTS, CONFIG_YML, "Particles.LevelUp_Tier", 100, 1,
