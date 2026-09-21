@@ -13,6 +13,7 @@ The command list is **much shorter than upstream mcMMO's**. Most of the legacy t
 | `/mcmmo` | Mod + version banner. |
 | `/mcstats` | Level, current XP and XP-to-next for **every** skill, plus your **power level**. |
 | `/mcstats <skill>` | The full per-skill screen — see below. |
+| `/mcstats <skill> keep` | Toggle a running chat readout of that skill's XP gains. Run it again to stop. Not remembered across a restart. |
 | `/mcability` | Toggle whether super abilities may be readied/activated **at all**. |
 
 ### `/mcstats <skill>`

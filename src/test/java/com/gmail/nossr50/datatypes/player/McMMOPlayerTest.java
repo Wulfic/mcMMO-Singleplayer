@@ -5,10 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -537,6 +540,43 @@ class McMMOPlayerTest {
 
         assertEquals(15, mmoPlayer.getSkillLevel(PrimarySkillType.SMELTING),
                 "Smelting is the mean of MINING and REPAIR — it levels passively, no smelt required");
+    }
+
+    /**
+     * GitHub #17.1 — {@code /mcstats <skill> keep} echoes that skill's XP gains to chat.
+     *
+     * <p>Asserted through the player handle, which is the seam that actually carries a line to the
+     * screen: a test on {@code isXpChatEnabled} alone would pass against a flag nothing reads, which
+     * is exactly how a feature ships switched on and silent.
+     */
+    @Test
+    void keepEchoesOnlyTheKeptSkillsGains() {
+        assertFalse(mmoPlayer.isXpChatEnabled(PrimarySkillType.MINING),
+                "the echo starts off");
+
+        assertTrue(mmoPlayer.toggleXpChat(PrimarySkillType.MINING), "first toggle turns it ON");
+
+        mmoPlayer.beginXpGain(PrimarySkillType.MINING, 50f, XPGainReason.PVE, XPGainSource.SELF);
+        // The line names the skill and carries the STORED gain. Not asserted against the 50f passed
+        // in: the early-game boost and the config multipliers both land before storage, so pinning
+        // the raw input would be asserting the wrong number and would break on any tuning change.
+        verify(player, times(1)).sendMessage(contains("XP"));
+
+        // A skill that was never kept must stay silent -- the control that proves the flag is
+        // consulted rather than the echo being unconditional. Counted rather than matched on text,
+        // so it cannot pass merely because the needle was spelled differently.
+        mmoPlayer.beginXpGain(PrimarySkillType.SWORDS, 50f, XPGainReason.PVE, XPGainSource.SELF);
+        verify(player, times(1)).sendMessage(anyString());
+    }
+
+    @Test
+    void keepTogglesBackOffAndStopsEchoing() {
+        assertTrue(mmoPlayer.toggleXpChat(PrimarySkillType.MINING));
+        assertFalse(mmoPlayer.toggleXpChat(PrimarySkillType.MINING), "second toggle turns it OFF");
+        assertFalse(mmoPlayer.isXpChatEnabled(PrimarySkillType.MINING));
+
+        mmoPlayer.beginXpGain(PrimarySkillType.MINING, 50f, XPGainReason.PVE, XPGainSource.SELF);
+        verify(player, never()).sendMessage(anyString());
     }
 
     @Test

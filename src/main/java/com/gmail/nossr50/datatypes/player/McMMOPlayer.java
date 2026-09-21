@@ -56,8 +56,11 @@ import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -390,6 +393,47 @@ public class McMMOPlayer {
      * @param skill Skill being used
      * @param xp Experience amount to process
      */
+    /**
+     * One line of {@code /mcstats <skill> keep} output: what was gained, and where that leaves you.
+     *
+     * <p>Quotes the post-gain stored values, so it agrees with {@code /mcstats} rather than leading
+     * it by one gain.
+     */
+    private void sendXpChatUpdate(@NotNull PrimarySkillType skill, float gained) {
+        player.sendMessage(LocaleLoader.getString("Commands.XPGain.Keep",
+                McMMOMod.getSkillTools().getLocalizedSkillName(skill),
+                String.format(Locale.ROOT, "%.1f", gained),
+                String.valueOf(profile.getSkillXpLevel(skill)),
+                String.valueOf(profile.getXpToLevel(skill)),
+                String.valueOf(getSkillLevel(skill))));
+    }
+
+    /**
+     * Skills whose every XP gain is echoed to chat — {@code /mcstats <skill> keep} (GitHub #17.1).
+     *
+     * <p>Deliberately NOT persisted. It is a debugging/curiosity view a player turns on to watch a
+     * number move, and a chat echo that survived a restart would be a surprise rather than a
+     * setting. The XP bar remains the persistent display.
+     */
+    private final Set<PrimarySkillType> xpChatSkills = EnumSet.noneOf(PrimarySkillType.class);
+
+    /**
+     * Toggles the chat echo for {@code skill}.
+     *
+     * @return {@code true} if the echo is now ON
+     */
+    public boolean toggleXpChat(@NotNull PrimarySkillType skill) {
+        if (!xpChatSkills.add(skill)) {
+            xpChatSkills.remove(skill);
+            return false;
+        }
+        return true;
+    }
+
+    public boolean isXpChatEnabled(@NotNull PrimarySkillType skill) {
+        return xpChatSkills.contains(skill);
+    }
+
     public void beginXpGain(PrimarySkillType skill, float xp, XPGainReason xpGainReason,
             XPGainSource xpGainSource) {
         if (xp <= 0) {
@@ -503,6 +547,14 @@ public class McMMOPlayer {
 
         isUsingUnarmed = (primarySkillType == PrimarySkillType.UNARMED);
         checkXp(primarySkillType, xpGainReason, xpGainSource);
+
+        // GitHub #17.1: echo the gain to chat while `/mcstats <skill> keep` is on for this skill.
+        // Placed on the same tail as the bar refresh, and for the same reason -- this is the point
+        // where the gain has actually reached the profile, so the numbers quoted are the stored ones
+        // rather than the ones that were about to be stored.
+        if (isXpChatEnabled(primarySkillType)) {
+            sendXpChatUpdate(primarySkillType, finalXp);
+        }
 
         // PORT Phase 11 (now wired): the deferred processPostXpEvent — refresh the on-screen XP bar
         // for the skill that just gained. Only non-child skills reach here (the child branch above
