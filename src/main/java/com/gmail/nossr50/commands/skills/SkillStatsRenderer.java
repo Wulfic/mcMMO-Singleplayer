@@ -288,7 +288,10 @@ public abstract class SkillStatsRenderer {
         if (maxLength != 0) {
             length = Math.min(length, maxLength);
         }
-        return String.valueOf(length);
+        // GitHub #17.6: this used to return a bare number, so the screen read "Duration: 5" and left
+        // the player to guess the unit. Every one of the ten callers is a super-ability length in
+        // seconds, so the unit is applied here rather than in ten call sites and ten locale strings.
+        return LocaleLoader.getString("Ability.Generic.Template.Seconds", String.valueOf(length));
     }
 
     // --- per-skill hooks ----------------------------------------------------

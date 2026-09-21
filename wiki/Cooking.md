@@ -193,7 +193,7 @@ Shows your level and XP, then the live value of whichever passives you have unlo
 - **Fuel Efficiency Multiplier** — the real multiplier at your rank, read off the manager rather than re-derived, so the screen and the mechanic can never disagree
 - **Second Helping Chance** — your actual chance right now, not the config's maximum
 - **Effect Duration** — Power Cook seconds at your rank
-- **Hourly Cook Limit** — rendered **only when the cap is on**. A line reading "0 per hour" would be worse than no line.
+- **Hourly XP Cook Limit** — rendered **only when the cap is on**. A line reading "0 per hour" would be worse than no line. The cap is on food **XP** per hour, not on how much food you may cook; the label says so since GitHub #17.5.
 
 ---
 

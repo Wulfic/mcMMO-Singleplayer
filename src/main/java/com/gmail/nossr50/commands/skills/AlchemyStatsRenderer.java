@@ -9,7 +9,9 @@ import java.util.List;
 
 /**
  * {@code /mcstats alchemy} — port of legacy {@code AlchemyCommand}. Shows Catalysis brew speed and
- * Concoctions (tier + unlocked ingredient list).
+ * the Concoctions tier.
+ *
+ * <p>The unlocked-ingredient list was dropped by GitHub #17.2; the in-game guide still carries it.
  */
 public final class AlchemyStatsRenderer extends SkillStatsRenderer {
 
@@ -17,8 +19,6 @@ public final class AlchemyStatsRenderer extends SkillStatsRenderer {
     private boolean canConcoctions;
     private String brewSpeed;
     private int tier;
-    private int ingredientCount;
-    private String ingredientList;
 
     public AlchemyStatsRenderer() {
         super(PrimarySkillType.ALCHEMY);
@@ -35,8 +35,6 @@ public final class AlchemyStatsRenderer extends SkillStatsRenderer {
         }
         if (canConcoctions) {
             tier = alchemyManager.getTier();
-            ingredientCount = alchemyManager.getIngredients().size();
-            ingredientList = alchemyManager.getIngredientList();
         }
     }
 
@@ -48,11 +46,14 @@ public final class AlchemyStatsRenderer extends SkillStatsRenderer {
             messages.add(getStatMessage(SubSkillType.ALCHEMY_CATALYSIS, brewSpeed));
         }
         if (canConcoctions) {
+            // GitHub #17.2: the unlocked-ingredient dump is no longer shown. It was a long,
+            // comma-separated wall of item names on a screen that is otherwise one line per
+            // sub-skill. The rank line below still says which tier you are on, and the in-game guide
+            // (Guides.Alchemy.Section.3-6) still lists every tier's ingredients for anyone who wants
+            // them -- so the information is moved, not lost.
             messages.add(getStatMessage(false, true, SubSkillType.ALCHEMY_CONCOCTIONS,
                     String.valueOf(tier),
                     String.valueOf(RankUtils.getHighestRank(SubSkillType.ALCHEMY_CONCOCTIONS))));
-            messages.add(getStatMessage(true, true, SubSkillType.ALCHEMY_CONCOCTIONS,
-                    String.valueOf(ingredientCount), ingredientList));
         }
 
         return messages;
