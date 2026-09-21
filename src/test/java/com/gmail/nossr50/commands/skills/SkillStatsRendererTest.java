@@ -177,6 +177,67 @@ class SkillStatsRendererTest {
                 "no effect stats before anything is unlocked");
     }
 
+    /**
+     * GitHub #17.7 — the "Bonus Drop Chance While Active" line is gone as redundant.
+     *
+     * <p>⚠️ Paired with a positive assertion on the line that STAYS. On its own, an assertFalse on a
+     * label passes just as happily when the whole Mining screen fails to render — which is the exact
+     * shape of vacuity this suite has been bitten by before. The duration line proves the screen is
+     * really there and really has a Super Breaker block to have dropped a line from.
+     */
+    @Test
+    void miningNoLongerShowsTheRedundantBonusDropChanceWhileActiveLine() {
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.MINING)).thenReturn(1000);
+
+        final List<String> lines = render(new MiningStatsRenderer());
+
+        assertTrue(anyLineContains(lines, "Super Breaker Length"),
+                "precondition: the Super Breaker block still renders its duration; lines=" + lines);
+        assertFalse(anyLineContains(lines, "Bonus Drop Chance While Active"),
+                "GitHub #17.7: the redundant line must be gone; lines=" + lines);
+    }
+
+    /**
+     * GitHub #17.6 — a super-ability duration used to render as a bare "Duration: 5".
+     *
+     * <p>The value is asserted too, not just the word "Seconds": the unit is applied by
+     * {@code calculateLength}, and a template that dropped its argument would still print the word.
+     */
+    @Test
+    void superAbilityDurationCarriesItsUnit() {
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.MINING)).thenReturn(1000);
+
+        final List<String> lines = render(new MiningStatsRenderer());
+
+        final String line = lines.stream().filter(l -> l.contains("Super Breaker Length"))
+                .findFirst().orElse(null);
+        assertNotNull(line, "the Super Breaker duration line must render; lines=" + lines);
+        assertTrue(line.matches(".*\\d+ Seconds.*"),
+                "GitHub #17.6: the duration must carry its unit, e.g. \"5 Seconds\" — got: " + line);
+    }
+
+    /**
+     * GitHub #17.2 — the unlocked-ingredient dump is hidden.
+     *
+     * <p>Again paired with a positive assertion: Concoctions must still report its rank, or this
+     * would pass against an Alchemy screen that renders nothing at all.
+     */
+    @Test
+    void alchemyNoLongerDumpsTheIngredientList() {
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.ALCHEMY)).thenReturn(1000);
+
+        final List<String> lines = render(new AlchemyStatsRenderer());
+
+        assertTrue(anyLineContains(lines, "Concoctions Rank"),
+                "precondition: Concoctions still reports its rank; lines=" + lines);
+        assertFalse(anyLineContains(lines, "Ingredients ["),
+                "GitHub #17.2: the ingredient list must be hidden; lines=" + lines);
+        // The tier-1 ingredient list opens with Blaze Powder, so its absence is a second, independent
+        // check that the wall of item names is really gone rather than merely relabelled.
+        assertFalse(anyLineContains(lines, "Blaze Powder"),
+                "GitHub #17.2: no ingredient names on the stats screen; lines=" + lines);
+    }
+
     @Test
     void gatheringRenderersEmitAStatsSectionAtMaxLevel() {
         // The stats-section header ("Stats") only appears when a dedicated renderer produced effect
@@ -266,7 +327,7 @@ class SkillStatsRendererTest {
         // with no {0} placeholder discards them. Both the label and the value are on screen or the
         // screen is lying about being a stats screen.
         for (String label : List.of("Fuel Efficiency Multiplier", "Second Helping Chance",
-                "Effect Duration", "Hourly Cook Limit")) {
+                "Effect Duration", "Hourly XP Cook Limit")) {
             final String line = lines.stream().filter(l -> l.contains(label)).findFirst()
                     .orElse(null);
             assertNotNull(line, "/mcstats cooking must show " + label + " — got: " + lines);
@@ -278,7 +339,7 @@ class SkillStatsRendererTest {
         // through the locale's own number format ("1,200").
         assertTrue(lines.stream().map(l -> l.replace(",", ""))
                         .anyMatch(l -> l.contains(
-                                "Hourly Cook Limit: " + CookingManager.DEFAULT_MAX_COOKS_PER_HOUR)),
+                                "Hourly XP Cook Limit: " + CookingManager.DEFAULT_MAX_COOKS_PER_HOUR)),
                 "the hourly cap must render its actual value — got: " + lines);
     }
 
@@ -296,7 +357,7 @@ class SkillStatsRendererTest {
             assertFalse(anyLineContains(lines, label),
                     "an unranked cook must not be shown " + label + " — got: " + lines);
         }
-        assertTrue(anyLineContains(lines, "Hourly Cook Limit"));
+        assertTrue(anyLineContains(lines, "Hourly XP Cook Limit"));
     }
 
     @Test
