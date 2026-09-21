@@ -117,12 +117,17 @@ Archery:
 #
 # Parkour, Swimming and Flying were Agility's three parent skills. Every sub-skill below is gated on
 # that parent's OWN level, so it is earned by doing the thing it is a perk for.
+    Daze:
+        Standard:
+            Rank_1: 0
+        RetroMode:
+            Rank_1: 0
 Parkour:
     SnowWalker:
         Standard:
-            Rank_1: 10
+            Rank_1: 45
         RetroMode:
-            Rank_1: 100
+            Rank_1: 450
     # Dodge, Athlete and Smash moved here from Agility on 2026-08-10 with their numbers untouched.
     # Read against Parkour instead of the mean of three, they unlock roughly 3x sooner for a player
     # who runs rather than swims and flies -- which is the point of the move.
@@ -133,14 +138,14 @@ Parkour:
             Rank_1: 1
     Athlete:
         Standard:
-            Rank_1: 5
-        RetroMode:
-            Rank_1: 50
-    Smash:
-        Standard:
             Rank_1: 15
         RetroMode:
             Rank_1: 150
+    Smash:
+        Standard:
+            Rank_1: 100
+        RetroMode:
+            Rank_1: 1000
     # The land third of the two retired Agility sub-skills (2026-08-17). Identical numbers sit under
     # Swimming and Flying: one perk per medium, each earned in its own medium, at the same price.
     FleetFooted:
@@ -150,21 +155,26 @@ Parkour:
             Rank_1: 1
     SecondWind:
         Standard:
-            Rank_1: 25
+            Rank_1: 5
         RetroMode:
-            Rank_1: 250
+            Rank_1: 50
+    Roll:
+        Standard:
+            Rank_1: 0
+        RetroMode:
+            Rank_1: 0
 Swimming:
     # Moved here from Agility on 2026-08-10, numbers unchanged.
     LeadLungs:
         Standard:
-            Rank_1: 25
+            Rank_1: 30
         RetroMode:
-            Rank_1: 250
+            Rank_1: 300
     LakeRaider:
         Standard:
-            Rank_1: 50
+            Rank_1: 100
         RetroMode:
-            Rank_1: 500
+            Rank_1: 1000
     # The water third of the two retired Agility sub-skills (2026-08-17).
     FleetFooted:
         Standard:
@@ -173,23 +183,23 @@ Swimming:
             Rank_1: 1
     SecondWind:
         Standard:
-            Rank_1: 25
+            Rank_1: 5
         RetroMode:
-            Rank_1: 250
+            Rank_1: 50
 Flying:
     # Moved here from Agility on 2026-08-10, numbers unchanged -- and for these two the move is what
     # makes them reachable at all. Against Agility's mean, Glide's 350 needed Flying 1050 and
     # SolarWings' 750 needed Flying 2250 from a player who only flew: both past the 1000 level cap.
     Glide:
         Standard:
-            Rank_1: 35
+            Rank_1: 30
         RetroMode:
-            Rank_1: 350
+            Rank_1: 300
     SolarWings:
         Standard:
-            Rank_1: 75
+            Rank_1: 100
         RetroMode:
-            Rank_1: 750
+            Rank_1: 1000
     # The air third of the two retired Agility sub-skills (2026-08-17). These two are the clearest
     # case for flattening: as ranks 3 and 3 of the shared ladder they needed 400 and 750 of the MEAN
     # of three skills, which a pure flier could never reach -- Agility caps at 333 for them.
@@ -200,9 +210,9 @@ Flying:
             Rank_1: 1
     SecondWind:
         Standard:
-            Rank_1: 25
+            Rank_1: 5
         RetroMode:
-            Rank_1: 250
+            Rank_1: 50
 Axes:
     AxesLimitBreak:
         Standard:
@@ -543,6 +553,11 @@ Smelting:
             Rank_6: 750
             Rank_7: 850
             Rank_8: 1000
+    SecondSmelt:
+        Standard:
+            Rank_1: 0
+        RetroMode:
+            Rank_1: 0
 Spears:
     SpearsLimitBreak:
         Standard:
@@ -889,6 +904,16 @@ Herbalism:
             Rank_3: 600
             Rank_4: 800
             Rank_5: 1000
+    HylianLuck:
+        Standard:
+            Rank_1: 0
+        RetroMode:
+            Rank_1: 0
+    ShroomThumb:
+        Standard:
+            Rank_1: 0
+        RetroMode:
+            Rank_1: 0
 Fishing:
     MagicHunter:
         Standard:
@@ -981,14 +1006,14 @@ Stealth:
             Rank_1: 1
     Assassin:
         Standard:
-            Rank_1: 15
+            Rank_1: 40
         RetroMode:
-            Rank_1: 150
+            Rank_1: 400
     SmokeBomb:
         Standard:
-            Rank_1: 25
+            Rank_1: 100
         RetroMode:
-            Rank_1: 250
+            Rank_1: 1000
 Swords:
     SwordsLimitBreak:
         Standard:
@@ -1139,6 +1164,11 @@ Unarmed:
             Rank_19: 950
             Rank_20: 1000
 
+    BlockCracker:
+        Standard:
+            Rank_1: 0
+        RetroMode:
+            Rank_1: 0
 Woodcutting:
     TreeFeller:
         Standard:

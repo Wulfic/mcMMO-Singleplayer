@@ -23,6 +23,7 @@ import com.gmail.nossr50.datatypes.experience.XPGainSource;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.PlatformPlayer;
 import java.nio.file.Path;
@@ -339,19 +340,33 @@ class MovementTravelTest {
     // --- Second Wind ----------------------------------------------------------------------------
 
     @Test
-    void everySecondWindBodyUnlocksAt250OfItsOwnMediumsSkill() {
-        // Flattened on 2026-08-17: SecondWind Rank_1: 250 under Parkour, Swimming AND Flying. It used
-        // to be one 3-rank ladder at 250/500/750 read against the mean of the three.
-        final MovementManager justUnder = managerAtLevel(249);
+    void everySecondWindBodyUnlocksAtTheSameLevelOfItsOwnMediumsSkill() {
+        // Flattened on 2026-08-17: SecondWind Rank_1 is the SAME under Parkour, Swimming AND Flying.
+        // It used to be one 3-rank ladder at 250/500/750 read against the mean of the three.
+        //
+        // GitHub #17.4 moved that shared value from 250 to 50 (Standard 25 -> 5), because every
+        // other super ability in the mod unlocks at Standard 5 -- Mining, Woodcutting, Excavation,
+        // Swords, Axes and Herbalism all do -- and the movement super was five times later than any
+        // of them. The SYMMETRY across the three mediums is the property under test here and is
+        // unchanged; the level is read from the config so this case tracks the ladder rather than
+        // restating it.
+        final int unlock = RankUtils.getRankUnlockLevel(SubSkillType.PARKOUR_SECOND_WIND, 1);
+        assertEquals(unlock, RankUtils.getRankUnlockLevel(SubSkillType.SWIMMING_SECOND_WIND, 1),
+                "Swimming's Second Wind must unlock at the same level as Parkour's");
+        assertEquals(unlock, RankUtils.getRankUnlockLevel(SubSkillType.FLYING_SECOND_WIND, 1),
+                "Flying's Second Wind must unlock at the same level as Parkour's");
+
+        final MovementManager justUnder = managerAtLevel(unlock - 1);
         for (Medium medium : Medium.values()) {
-            assertFalse(justUnder.canSecondWind(medium), () -> medium + " is locked at 249");
+            assertFalse(justUnder.canSecondWind(medium),
+                    () -> medium + " is locked one level below the threshold");
         }
 
-        final MovementManager atThreshold = managerAtLevel(250);
+        final MovementManager atThreshold = managerAtLevel(unlock);
         for (Medium medium : Medium.values()) {
             assertTrue(atThreshold.canSecondWind(medium),
-                    () -> medium + " unlocks at exactly 250 of its own skill — under the retired "
-                            + "ladder only the land body was live at this level");
+                    () -> medium + " unlocks at exactly the threshold of its own skill — under the "
+                            + "retired ladder only the land body was live at this level");
         }
     }
 
