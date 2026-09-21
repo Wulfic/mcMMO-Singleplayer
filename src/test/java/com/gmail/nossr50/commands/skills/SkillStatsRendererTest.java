@@ -238,6 +238,44 @@ class SkillStatsRendererTest {
                 "GitHub #17.2: no ingredient names on the stats screen; lines=" + lines);
     }
 
+    /**
+     * GitHub #17.3 — sub-skills appeared to have no description in game.
+     *
+     * <p>They all had one: every SubSkillType carries a one-sentence .Description and
+     * SkillLocaleCompletenessTest already asserted so. This screen just never printed it. The case
+     * therefore asserts the RENDERED line, which is the thing that was actually broken — a locale
+     * assertion would have passed before the fix as happily as after it.
+     */
+    @Test
+    void everySubSkillLineCarriesItsDescription() {
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.MINING)).thenReturn(1000);
+
+        final List<String> lines = render(new MiningStatsRenderer());
+
+        // "Super Breaker - ..." is the sub-skill line; "Super Breaker Length: ..." is the stats line.
+        final String superBreaker = lines.stream().filter(l -> l.contains("Super Breaker -"))
+                .findFirst().orElse(null);
+        assertNotNull(superBreaker, "the Super Breaker sub-skill line must render; lines=" + lines);
+        // The locale's own text for MINING_SUPER_BREAKER, so the assertion tracks the file rather
+        // than a copy of it that could drift.
+        assertTrue(superBreaker.contains(SubSkillType.MINING_SUPER_BREAKER.getLocaleDescription()),
+                "GitHub #17.3: the line must carry the description — got: " + superBreaker);
+    }
+
+    /** The locked half: the description is what tells you what the unlock actually buys. */
+    @Test
+    void aLockedSubSkillStillShowsWhatItWouldDo() {
+        when(mmoPlayer.getSkillLevel(PrimarySkillType.MINING)).thenReturn(0);
+
+        final List<String> lines = render(new MiningStatsRenderer());
+
+        final String locked = lines.stream().filter(l -> l.contains("Super Breaker"))
+                .filter(l -> l.contains("Locked")).findFirst().orElse(null);
+        assertNotNull(locked, "a level-0 miner must see Super Breaker as Locked; lines=" + lines);
+        assertTrue(locked.contains(SubSkillType.MINING_SUPER_BREAKER.getLocaleDescription()),
+                "GitHub #17.3: a locked sub-skill still describes itself — got: " + locked);
+    }
+
     @Test
     void gatheringRenderersEmitAStatsSectionAtMaxLevel() {
         // The stats-section header ("Stats") only appears when a dedicated renderer produced effect
