@@ -408,6 +408,14 @@ public class McMMOPlayer {
         }
 
         if (SkillTools.isChildSkill(skill)) {
+            // GitHub #19. A child skill that does not feed its parents drops the gain here: its level
+            // is the mean of the parents' levels either way, so paying XP up would credit skills the
+            // player never used. ⚠️ This check is NOT redundant with the one in applyXpGain — see the
+            // note on that copy. Both entry points own a copy of the split, so both own this gate.
+            if (!SkillTools.childSkillFeedsParents(skill)) {
+                return;
+            }
+
             var parentSkills = McMMOMod.getSkillTools().getChildSkillParents(skill);
             float splitXp = xp / parentSkills.size();
 
@@ -464,6 +472,15 @@ public class McMMOPlayer {
         // has none. Re-home onto the internal EventBus if a pre-gain hook is ever needed.
 
         if (SkillTools.isChildSkill(primarySkillType)) {
+            // GitHub #19, and the twin of the gate in beginXpGain. ⚠️ Neither is redundant: this
+            // method is a public entry point in its own right, and the SkillManager awards (including
+            // SmeltingManager's) arrive here via beginUnsharedXpGain rather than through the split
+            // above. Fixing only beginXpGain would have left every real smelt still paying Mining and
+            // Repair in full. A test drives each entry point separately for exactly this reason.
+            if (!SkillTools.childSkillFeedsParents(primarySkillType)) {
+                return;
+            }
+
             var parentSkills = McMMOMod.getSkillTools().getChildSkillParents(primarySkillType);
 
             for (PrimarySkillType parentSkill : parentSkills) {

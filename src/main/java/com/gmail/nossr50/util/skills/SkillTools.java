@@ -455,6 +455,35 @@ public class SkillTools {
     }
 
     /**
+     * Whether a child skill's own XP gains are divided among its parents.
+     *
+     * <p>Being a child skill answers where the <em>level</em> comes from — the mean of the parents'
+     * levels — and that is a separate question from whether the child pays XP back <em>up</em>. The
+     * two used to be the same switch, which is what GitHub #19 reported: smelting an ore credited
+     * Mining and Repair, so a furnace levelled two skills the player never actually used, and
+     * Smelting (derived from their mean) rose passively off the back of it. Double-dipping in both
+     * directions.
+     *
+     * <p>{@code SMELTING} therefore returns {@code false}: a smelt awards nothing to either parent
+     * and Smelting's level continues to track the mean, which is the passive behaviour the issue
+     * asks for. {@code SALVAGE} is unchanged and still feeds Repair and Fishing — the issue named
+     * Smelting only, and a control test asserts Salvage still splits, so this predicate is proved to
+     * discriminate rather than to switch the whole mechanism off.
+     *
+     * <p>Answering {@code true} for a non-child skill is meaningless but harmless; callers ask this
+     * only after {@link #isChildSkill(PrimarySkillType)}.
+     *
+     * @param primarySkillType the child skill whose gain is being routed
+     * @return {@code true} when the gain should be divided among the parents
+     */
+    public static boolean childSkillFeedsParents(PrimarySkillType primarySkillType) {
+        return switch (primarySkillType) {
+            case SMELTING -> false;
+            default -> true;
+        };
+    }
+
+    /**
      * Get the localized name for a {@link PrimarySkillType}
      *
      * @param primarySkillType target {@link PrimarySkillType}

@@ -962,6 +962,104 @@ has no crash log attached** — see its row.
 
 ---
 
+## §68.P — the execution plan + the four owner rulings — ⬜ OPEN
+
+**Rulings taken from the owner 2026-09-21, before any code.** All four were put as questions with
+the collision named; these are the answers, not my reading of them.
+
+| # | Question | **Ruling** |
+|---|---|---|
+| 16.1 | `master` docs-only vs ruling R-a | 🔴 **DO IT** — cut `mc/26.2`, then strip `master` to docs |
+| 16.3 | "version 26.3" = mod or Minecraft? | **Minecraft.** Support MC 26.3; `mod_version` stays on its own 1.x line (R-s/R-p) |
+| 14 | multiplayer scope | **Supported.** Treat the crash as a real bug; log requested first |
+| 17.2 | alchemy ingredient list | **Hide it** |
+
+🔑 **MC 26.3 exists and is stable** — measured, not assumed:
+`curl -s https://meta.fabricmc.net/v2/versions/game` lists `26.3` as the newest stable. That is what
+makes 16.3 a band cut rather than a typo.
+
+⚠️ **16.1 was recommended AGAINST and the owner chose it anyway.** That is their call and it
+proceeds — but it proceeds with a written plan and a verified rollback, because it re-points every
+mechanism this repo uses to keep nine branches honest. It is **not** a README edit.
+
+### Order of operations — this is the load-bearing part
+
+🔴 **16.1 must go LAST, and the reason is mechanical, not stylistic.** Rule 1 says every fix
+lands on `master` FIRST and propagates with a `Backport-of:` trailer; `drift-audit.py` grades each
+band **against `master`**. Making `master` docs-only removes the very mechanism every other item on
+this list needs in order to reach a band. Do 16.1 first and the remaining fixes have nowhere to land.
+
+```
+Phase A  code fixes on master, propagate to 8 bands   #19, #17.1-.9, #15   ← UNBLOCKED, start here
+Phase B  #14 multiplayer crash                        blocked on the reporter's log
+Phase C  #16.3 band cut: mc/26.2 cut, master -> 26.3
+Phase D  #16.2 archive 1.21.10 and below              docs floor, R-x interaction
+Phase E  #16.1 master -> docs-only                    LAST; re-points drift-audit, rule 1, release.yml
+```
+
+### What I am NOT doing
+
+- **Not** touching `mod_version`. 16.3 is a Minecraft version; R-s restarted the fork's line at
+  `1.0.0` precisely so the two stop being compared. Ruling confirms Minecraft.
+- **Not** starting Phase E as a refactor. It gets its own plan, its own decision record, and a
+  rollback that has been run — not assumed — before the first destructive command.
+- **Not** fixing #14 from the symmetry alone. Host-fine/client-crashes is a *hypothesis* about
+  logical side; the stack trace is the diagnosis. Comment posted 2026-09-21 asking for it.
+- **Not** changing SALVAGE. #19 names Smelting only; Salvage keeps feeding its parents.
+
+---
+
+## §68.A — Phase A, the code fixes — ⬜ OPEN
+
+### #19 — Smelting must stop paying XP into Mining and Repair
+
+✅ **The award path is FOUND and it is not where the intake guessed.** `SmeltingListener` was a
+red herring: the award is `SmeltingManager.java:52`, `applyXpGain(xp, PVE, SELF)` for
+`PrimarySkillType.SMELTING` — and **the split into Mining and Repair happens generically**, in
+`McMMOPlayer`, because Smelting is a child skill:
+
+- `McMMOPlayer.java:410-419` (`beginXpGain`) — splits a child gain across its parents, recursing
+- `McMMOPlayer.java:466-473` (`applyXpGain`) — **a second, independent copy of the same split**
+
+🔑 **Both copies are load-bearing and both must be fixed.** The file says so in its own
+comments and GitHub #10 already proved it with a test: they are two public entry points that each own
+a copy of the split, so patching one leaves the other paying the parents in full.
+
+- [x] ✅ **`SkillTools.childSkillFeedsParents(child)` added** — `SMELTING → false`,
+      `SALVAGE → true` — and consulted at **both** split sites
+      (`McMMOPlayer.beginXpGain`, `McMMOPlayer.applyXpGain`). A Smelting gain is dropped rather than
+      divided; Smelting keeps levelling passively off the parents' mean.
+      🔑 Gated CENTRALLY, not in `SmeltingManager`: an admin `/addxp smelting` and any future
+      caller reach the same rule. A fix in the manager alone would have left those routes splitting.
+- [x] ✅ 🧪 **Four cases, and the guard was MUTATION-TESTED in both directions** — the
+      pass alone proves nothing, so which cases notice was measured, not assumed:
+      | Mutation | Expected to notice | Result |
+      |---|---|---|
+      | revert the fix (`default -> true`) | the two #19 cases | ✅ **both FAILED**, control passed |
+      | over-apply it (`default -> false`) | the SALVAGE control | ✅ **control FAILED**, #19 cases passed |
+      ⚠️ **The pre-existing `childSkillGainSplitsAcrossParents` drove SMELTING** — exactly the
+      behaviour #19 removes. It was **re-pointed to SALVAGE, not deleted**: without it, the #19 cases
+      pass just as happily against a predicate that returns `false` for everything, and the split
+      would be dead for Salvage too with nothing failing. That is the case mutation 2 catches.
+- [x] ✅ Suite **174 classes / 1,923 executed / 0 failures** (was 174 / 1,920 — +3 new cases;
+      the fourth is the re-pointed existing one). Counted from the XML, not read off `BUILD SUCCESSFUL`.
+- [x] ✅ Caveat-expiry pass done — `wiki/Skills.md` (Smelting section) and
+      `wiki/XP-and-Levelling.md` (the child-bar note) now state that Salvage and Smelting differ in
+      where their XP goes. ⚠️ Both are under the R-y identity guard, so they propagate with the fix.
+
+🔴 **CONSEQUENCE THE OWNER SHOULD SEE: the 24-row `Smelting:` XP table in `experience.yml` is
+now INERT.** Every row is still read and then discarded, because nothing else consumes a Smelting XP
+value. This follows unavoidably from the ruling — a child skill has no XP of its own to hold — but it
+means smelting an ore now advances **nothing at all**: not Mining, not Repair, not Smelting. Smelting
+still rises as you mine and repair, and every sub-skill (Second Smelt, Fuel Efficiency, Understanding
+the Art) is unaffected.
+✅ **The table is KEPT and marked inert in place**, not deleted — deleting a player-facing price list
+to silence a dead knob loses tuning that cannot be reconstructed, and it is exactly what Smelting
+would need if it ever earns XP of its own.
+- [ ] ⬜ **Owner call, not a blocker:** is "smelting trains nothing" the intended end state, or
+      should Smelting hold its own XP (a real change to the child-skill model)? The issue's wording
+      — *"gets lvled up passively"* — reads as the former, which is what shipped.
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*

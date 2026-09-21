@@ -470,16 +470,73 @@ class McMMOPlayerTest {
                 "creative mode short-circuits the gain before it reaches the profile");
     }
 
+    /**
+     * The control for the three GitHub #19 cases below, and the reason this case now reads SALVAGE.
+     *
+     * <p>It used to drive SMELTING, which is precisely the behaviour #19 asked to remove — so it was
+     * re-pointed rather than deleted. Re-pointing keeps the original property under test (a child
+     * gain really is divided among its parents) while freeing SMELTING to assert the opposite. If
+     * this case were dropped instead, the #19 cases would pass just as happily against a
+     * {@code childSkillFeedsParents} that returned {@code false} for everything — the split would be
+     * dead for Salvage too and nothing would fail.
+     */
     @Test
     void childSkillGainSplitsAcrossParents() {
-        // SMELTING's parents are MINING and REPAIR. A small gain stays below the level-up threshold,
+        // SALVAGE's parents are REPAIR and FISHING. A small gain stays below the level-up threshold,
         // so it accumulates as raw XP on each parent.
+        mmoPlayer.beginXpGain(PrimarySkillType.SALVAGE, 50f, XPGainReason.PVE, XPGainSource.SELF);
+
+        assertTrue(mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.REPAIR) > 0f,
+                "REPAIR (a SALVAGE parent) received part of the split");
+        assertTrue(mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.FISHING) > 0f,
+                "FISHING (a SALVAGE parent) received part of the split");
+    }
+
+    /**
+     * GitHub #19 — smelting must not credit Mining or Repair.
+     *
+     * <p>⚠️ Driven through {@code beginXpGain} AND {@code applyXpGain} as two separate cases, because
+     * the two methods own independent copies of the child split and a gate on one is invisible to the
+     * other. A real smelt reaches {@code applyXpGain} via {@code beginUnsharedXpGain}, so the second
+     * case is the one that covers {@code SmeltingManager}; the first covers a direct child gain.
+     */
+    @Test
+    void smeltingGainDoesNotReachMiningOrRepairViaBeginXpGain() {
         mmoPlayer.beginXpGain(PrimarySkillType.SMELTING, 50f, XPGainReason.PVE, XPGainSource.SELF);
 
-        assertTrue(mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.MINING) > 0f,
-                "MINING (a SMELTING parent) received part of the split");
-        assertTrue(mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.REPAIR) > 0f,
-                "REPAIR (a SMELTING parent) received part of the split");
+        assertEquals(0f, mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.MINING), 1.0E-9,
+                "MINING must gain nothing from a smelt (GitHub #19)");
+        assertEquals(0f, mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.REPAIR), 1.0E-9,
+                "REPAIR must gain nothing from a smelt (GitHub #19)");
+    }
+
+    @Test
+    void smeltingGainDoesNotReachMiningOrRepairViaApplyXpGain() {
+        // The path a real smelt takes: SmeltingManager -> applyXpGain, never through the split above.
+        mmoPlayer.applyXpGain(PrimarySkillType.SMELTING, 50f, XPGainReason.PVE, XPGainSource.SELF);
+
+        assertEquals(0f, mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.MINING), 1.0E-9,
+                "MINING must gain nothing from a smelt applied directly (GitHub #19)");
+        assertEquals(0f, mmoPlayer.getSkillXpLevelRaw(PrimarySkillType.REPAIR), 1.0E-9,
+                "REPAIR must gain nothing from a smelt applied directly (GitHub #19)");
+    }
+
+    /**
+     * Smelting still levels — passively, off the parents' mean — which is the half of #19 that is
+     * easy to break while making the other half pass. Mining and Repair are levelled directly here,
+     * exactly as a player would by mining and repairing; Smelting's level must track them without a
+     * single smelt having occurred.
+     */
+    @Test
+    void smeltingStillLevelsPassivelyFromItsParents() {
+        assertEquals(0, mmoPlayer.getSkillLevel(PrimarySkillType.SMELTING),
+                "precondition: Smelting starts at 0");
+
+        profile.addLevels(PrimarySkillType.MINING, 10);
+        profile.addLevels(PrimarySkillType.REPAIR, 20);
+
+        assertEquals(15, mmoPlayer.getSkillLevel(PrimarySkillType.SMELTING),
+                "Smelting is the mean of MINING and REPAIR — it levels passively, no smelt required");
     }
 
     @Test

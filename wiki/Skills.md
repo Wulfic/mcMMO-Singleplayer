@@ -402,6 +402,12 @@ Level = mean of **Repair + Fishing**. Salvage items back into their materials at
 
 Level = mean of **Mining + Repair**. Applies while smelting in a furnace.
 
+> **Smelting pays no XP to anything.** Running a furnace does not train Mining or Repair, and it
+> does not train Smelting either — Smelting's level is the average of its parents, so it rises when
+> you mine and when you repair, and at no other time. Before this change a smelt credited both
+> parents, which levelled two skills the player was not using. The sub-skills below are unaffected:
+> they gate on the derived level and work exactly as before.
+
 | Sub-skill | Ranks | Effect |
 |---|---|---|
 | Second Smelt | 1 | Double the resources gained from smelting. |
