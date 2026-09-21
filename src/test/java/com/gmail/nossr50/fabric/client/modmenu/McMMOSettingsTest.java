@@ -8,6 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import com.gmail.nossr50.config.YamlConfiguration;
+import com.gmail.nossr50.config.experience.ExperienceConfig;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.util.skills.SkillTools;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashSet;
@@ -25,6 +28,52 @@ class McMMOSettingsTest {
         final InputStream in = McMMOSettingsTest.class.getResourceAsStream("/" + resource);
         assertNotNull(in, "bundled default resource missing from test classpath: " + resource);
         return YamlConfiguration.loadConfiguration(in);
+    }
+
+    /**
+     * GitHub #15 — a show/hide for each skill's XP bar, under that skill on the Skills tab.
+     *
+     * <p>Driven from {@code PrimarySkillType.values()}, never a transcribed list: this catalogue has
+     * already shipped two hand-kept rosters with a skill missing from them, and an incremental edit
+     * cannot see an enum constant added tomorrow.
+     */
+    @Test
+    void everyNonChildSkillHasAnXpBarToggle() {
+        final Set<String> barPaths = new HashSet<>();
+        McMMOSettings.all().stream()
+                .filter(s -> s.file().equals(McMMOSettings.EXPERIENCE_YML))
+                .filter(s -> s.path().startsWith("Experience_Bars."))
+                .filter(s -> s.path().endsWith(".Enable"))
+                .forEach(s -> barPaths.add(s.path()));
+
+        for (PrimarySkillType skill : PrimarySkillType.values()) {
+            final String path = ExperienceConfig.experienceBarEnabledPath(skill);
+            if (SkillTools.isChildSkill(skill)) {
+                // A child skill's bar is suppressed by ExperienceBarManager before this key is read,
+                // so a row would be a control that does nothing.
+                assertFalse(barPaths.contains(path),
+                        "child skill " + skill + " must NOT get a dead XP-bar row");
+            } else {
+                assertTrue(barPaths.contains(path),
+                        "GitHub #15: " + skill + " needs an XP-bar toggle (" + path + ")");
+            }
+        }
+    }
+
+    /**
+     * The row must address the key the manager actually reads. Asserted through
+     * {@code experienceBarEnabledPath} so a change to the key shape moves both together, and
+     * separately spot-checked against the literal shape so that method cannot quietly become
+     * wrong in both places at once.
+     */
+    @Test
+    void theXpBarRowAddressesTheKeyTheManagerReads() {
+        assertEquals("Experience_Bars.Mining.Enable",
+                ExperienceConfig.experienceBarEnabledPath(PrimarySkillType.MINING));
+        assertTrue(McMMOSettings.all().stream()
+                        .anyMatch(s -> s.path().equals("Experience_Bars.Mining.Enable")
+                                && s.file().equals(McMMOSettings.EXPERIENCE_YML)),
+                "the Mining XP-bar row must exist and live in experience.yml");
     }
 
     @Test

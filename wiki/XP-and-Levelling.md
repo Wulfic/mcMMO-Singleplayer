@@ -137,6 +137,11 @@ There is also a **diminishing-returns** system, and `Skills.Herbalism.Prevent_AF
 
 A fading, per-skill XP boss bar appears above the hotbar as you train.
 
+> **You can hide any skill's bar from the config screen.** Mod Menu → mcMMO → **Skills** lists every
+> skill with its master switch and, under it, an **XP Bar** show/hide. Hiding a bar does not stop the
+> skill earning XP. Child skills (Salvage, Smelting) have no row because they never show a bar at
+> all — their level is the average of their parents'.
+
 `experience.yml` → `Experience_Bars`:
 
 ```yaml
