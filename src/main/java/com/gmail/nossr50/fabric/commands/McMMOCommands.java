@@ -125,7 +125,14 @@ public final class McMMOCommands {
                 .then(argument("skill", StringArgumentType.word())
                         .suggests(skillOnlySuggestions())
                         .executes(ctx -> statsForSkill(ctx.getSource(),
-                                StringArgumentType.getString(ctx, "skill")))));
+                                StringArgumentType.getString(ctx, "skill")))
+                        // GitHub #17.1: /mcstats <skill> keep toggles a chat echo of that skill's
+                        // XP gains. A sub-literal under the existing skill argument rather than a
+                        // command of its own, so it is discoverable from the command the player is
+                        // already typing.
+                        .then(literal("keep")
+                                .executes(ctx -> keepXpUpdates(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "skill"))))));
         // Also ungated on purpose: /mcability only ever RESTRICTS the caller (it is the build-mode
         // switch that stops Super Breaker firing while you place blocks). Gating a self-imposed
         // restriction behind op would be a worse game with no cheat closed.
@@ -233,6 +240,41 @@ public final class McMMOCommands {
 
     /** Full-detail per-skill screen (legacy {@code /<skillname>}), rendered by {@link
      * SkillStatsRenderer}. */
+    /**
+     * {@code /mcstats <skill> keep} — toggle a chat echo of that skill's XP gains (GitHub #17.1).
+     *
+     * <p>Resolves the skill through the same {@code matchSkill} the stats screen uses, so a typo
+     * answers the same way in both, and refuses a disabled skill rather than quietly arming an echo
+     * that could never fire.
+     */
+    private static int keepXpUpdates(ServerCommandSource source, String token)
+            throws CommandSyntaxException {
+        final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrThrow().getUuid());
+        if (mmoPlayer == null) {
+            source.sendError(Text.literal("Your mcMMO data has not loaded yet."));
+            return 0;
+        }
+
+        final PrimarySkillType skill = McMMOMod.getSkillTools().matchSkill(token);
+        if (skill == null) {
+            source.sendError(Text.literal("Unknown skill: " + token));
+            return 0;
+        }
+
+        final String name = McMMOMod.getSkillTools().getLocalizedSkillName(skill);
+        if (!SkillGating.isSkillEnabled(skill)) {
+            // An echo on a skill that cannot gain XP would look broken rather than off.
+            source.sendError(Text.literal(
+                    name + " is switched off, so it has no XP gains to print."));
+            return 0;
+        }
+
+        final boolean on = mmoPlayer.toggleXpChat(skill);
+        source.sendFeedback(() -> TextUtils.toText(LocaleLoader.getString(
+                on ? "Commands.XPGain.Keep.On" : "Commands.XPGain.Keep.Off", name)), false);
+        return 1;
+    }
+
     private static int statsForSkill(ServerCommandSource source, String token)
             throws CommandSyntaxException {
         final McMMOPlayer mmoPlayer = UserManager.getPlayer(source.getPlayerOrThrow().getUuid());
