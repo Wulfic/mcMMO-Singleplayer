@@ -2,12 +2,15 @@ package com.gmail.nossr50.fabric.client.modmenu;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gmail.nossr50.config.YamlConfiguration;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -22,12 +25,62 @@ class ConfigSessionTest {
     private static final String GLOBAL_XP = "Experience_Formula.Multiplier.Global";
     private static final String MASTER_VOLUME = "Sounds.MasterVolume";
     private static final String SAVE_INTERVAL = "General.Save_Interval";
+    private static final String ABILITY_FIREWORK_ON = "Particles.Ability_Activation";
+    private static final String ABILITY_FIREWORK_OFF = "Particles.Ability_Deactivation";
 
     private static ConfigSetting byPath(String path) {
         return McMMOSettings.all().stream()
                 .filter(s -> s.path().equals(path))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("no catalogue entry for " + path));
+    }
+
+    /** GitHub #17.8 — the Effects tab must front both firework keys with a single control. */
+    @Test
+    void oneControlFrontsBothSuperAbilityFireworkKeys(@TempDir Path dir) throws IOException {
+        final ConfigSetting fireworks = byPath(ABILITY_FIREWORK_ON);
+
+        assertEquals(List.of(ABILITY_FIREWORK_OFF), fireworks.mirrors(),
+                "the firework row must mirror the deactivation key");
+
+        final ConfigSession session = new ConfigSession(dir);
+        session.write(fireworks, true);
+        session.saveAll();
+
+        // Read the file rather than the session: the point is that BOTH keys reached disk, and the
+        // session would answer from path() alone whether or not the mirror was ever written.
+        final YamlConfiguration onDisk =
+                YamlConfiguration.loadConfiguration(dir.resolve(McMMOSettings.CONFIG_YML));
+        assertTrue(onDisk.getBoolean(ABILITY_FIREWORK_ON, false),
+                "the primary key must be written");
+        assertTrue(onDisk.getBoolean(ABILITY_FIREWORK_OFF, false),
+                "GitHub #17.8: the mirrored key must be written by the same control");
+    }
+
+    /**
+     * The other half of #17.8, and the reason the case above is not enough on its own: the two rows
+     * must be GONE, not merely joined by a mirror. A catalogue that still carried a separate "(off)"
+     * switch would satisfy every assertion above and still show the player two buttons.
+     */
+    @Test
+    void theSeparateFireworkOffRowIsGone() {
+        assertTrue(McMMOSettings.all().stream()
+                        .noneMatch(s -> s.path().equals(ABILITY_FIREWORK_OFF)),
+                "GitHub #17.8: no row of its own for the deactivation key");
+        assertEquals(1, McMMOSettings.all().stream()
+                        .filter(s -> s.label().toLowerCase(Locale.ROOT).contains("firework"))
+                        .filter(s -> s.label().toLowerCase(Locale.ROOT).contains("super ability"))
+                        .count(),
+                "exactly one super-ability firework control on the Effects tab");
+    }
+
+    /** A mirror list naming its own primary key is a catalogue bug, and fails closed. */
+    @Test
+    void aSettingCannotMirrorItself() {
+        assertThrows(IllegalArgumentException.class,
+                () -> ConfigSetting.boolMirrored("Effects", McMMOSettings.CONFIG_YML,
+                        "Particles.Ability_Activation", false, "x", null,
+                        List.of("Particles.Ability_Activation")));
     }
 
     @Test

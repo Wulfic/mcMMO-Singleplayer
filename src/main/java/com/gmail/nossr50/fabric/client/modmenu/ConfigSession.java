@@ -53,6 +53,12 @@ public final class ConfigSession {
     /** Stages an edit to {@code setting}; only actually marks the file dirty if the value changed. */
     public void write(@NotNull ConfigSetting setting, @NotNull Object value) {
         doc(setting.file()).set(setting.path(), value);
+        // GitHub #17.8: a control that fronts several keys writes all of them. Reads come from
+        // path() alone, so a config hand-edited into disagreement resolves to the primary key's
+        // value the next time the screen is opened and saved.
+        for (String mirror : setting.mirrors()) {
+            doc(setting.file()).set(mirror, value);
+        }
     }
 
     /**
