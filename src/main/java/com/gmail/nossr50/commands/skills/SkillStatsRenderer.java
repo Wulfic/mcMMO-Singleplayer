@@ -186,17 +186,36 @@ public abstract class SkillStatsRenderer {
         return LocaleLoader.addColors(legacy);
     }
 
+    /**
+     * One sub-skill's line: name, rank-or-locked, and what it actually does.
+     *
+     * <p>GitHub #17.3 asked for descriptions because, in game, most sub-skills appeared to have
+     * none. They all did — every {@code SubSkillType} has a one-sentence {@code .Description} in the
+     * locale, and {@code SkillLocaleCompletenessTest} has been asserting that all along. Nothing was
+     * ever missing from the data; this screen simply never printed it, so the text existed where no
+     * player could read it. The fix is to render what is already written, not to write more.
+     *
+     * <p>The description is shown for a LOCKED sub-skill too, and deliberately: that is the line
+     * that tells you what the level you are working toward actually buys.
+     */
     private String subSkillLine(SubSkillType subSkill) {
         final String name = subSkill.getLocaleName();
+        final String description = subSkill.getLocaleDescription();
+        // Descriptions are authored without trailing punctuation in most rows but not all, so the
+        // separator carries the structure rather than relying on the sentence to end cleanly.
+        final String suffix = description == null || description.isBlank()
+                ? ""
+                : " &8- &7" + description;
         if (!RankUtils.hasUnlockedSubskill(mmoPlayer, subSkill)) {
             final int unlockLevel = RankUtils.getRankUnlockLevel(subSkill, 1);
-            return "&8" + name + " &7- Locked (unlocks at Lv." + unlockLevel + ")";
+            return "&8" + name + " &7- Locked (unlocks at Lv." + unlockLevel + ")" + suffix;
         }
         final int highest = RankUtils.getHighestRank(subSkill);
         if (highest > 1) {
-            return "&a" + name + " &7- Rank " + RankUtils.getRank(mmoPlayer, subSkill) + "/" + highest;
+            return "&a" + name + " &7- Rank " + RankUtils.getRank(mmoPlayer, subSkill) + "/" + highest
+                    + suffix;
         }
-        return "&a" + name + " &7- Unlocked";
+        return "&a" + name + " &7- Unlocked" + suffix;
     }
 
     // --- shared stats section -----------------------------------------------
