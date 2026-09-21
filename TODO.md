@@ -868,7 +868,7 @@ months later as a user report. Assume every row here is version-agnostic until m
 ⚠️ **Four of the five are owner-authored UX/feature asks. #14 is the only outside bug report, and it
 has no crash log attached** — see its row.
 
-### #19 — Smelting must stop paying XP into Mining and Repair (owner, 2026-09-21)
+### #19 — Smelting must stop paying XP into Mining and Repair — ✅ DONE `e77d59a2e`
 
 - [ ] ⬜ **Smelting actions must award NO XP to Mining or Repair.** Issue text: *"Smelting should not
       give xp to either mining or repair. gets lvled up passively"*.
@@ -888,25 +888,46 @@ has no crash log attached** — see its row.
 ⚠️ **Nine sub-items, and they are not one commit.** 17.1, 17.3, 17.4 and 17.9 are behaviour; 17.2,
 17.5, 17.6, 17.7 and 17.8 are display strings and menu wiring. **17.4 is the only balance change.**
 
-- [ ] ⬜ **17.1 — `/mcstats <skill> keep`**: a new sub-command that keeps printing XP updates to chat
-      for that skill.
-- [ ] ⬜ **17.2 — `/mcstats alchemy` dumps an ingredient list.** Either hide it, or explain better
-      what the ingredients are for. The owner's wording leaves both open — **pick one and say why.**
-- [ ] ⬜ **17.3 — most sub-skills have NO description.** Add one, **one short sentence each**.
-      ⚠️ This is a roster-wide sweep: audit against `SubSkillType.values()`, **never against a diff**
-      — an added constant is invisible to an incremental edit. That is exactly how Cooking shipped
-      across six commits with zero mentions in all 16 wiki files.
+- [x] ✅ **17.1 — `/mcstats <skill> keep`** — `b638318ad`. A sub-literal under the existing skill
+      argument, so it is discoverable from the command already being typed. Toggles; refuses a
+      disabled skill; **not persisted** (a view, not a setting). Echo sits on the same tail as the
+      XP-bar refresh, so the numbers quoted are the STORED ones.
+      🧪 Asserted through the player handle, not the flag. Mutation-tested both ways.
+- [x] ✅ **17.2 — ingredient dump HIDDEN** — `611bda1b3`. Owner chose hide over explain. The
+      Concoctions rank line stays and the in-game guide still lists every tier's ingredients, so the
+      information moved rather than went away. Locale key kept and marked unused.
+- [x] ✅ **17.3 — the descriptions ALREADY EXISTED; the screen never printed them** — `55dde7e0d`.
+      🔑 **The premise was false, and measuring it first changed the entire fix.** Every
+      `SubSkillType` already carries a one-sentence `.Description`, and
+      `SkillLocaleCompletenessTest` has been asserting exactly that all along. `/mcstats <skill>`
+      showed name + rank only, so the text existed where no player could read it — in game they
+      genuinely were missing, which is the only place that counts.
+      ✅ So: render what is written, rather than write 111 new sentences. Shown for LOCKED sub-skills
+      too — that is the line that says what the level you are working toward actually buys.
+      🧪 Tests assert the RENDERED line. A locale assertion would have passed identically before
+      and after the fix, which is the whole trap.
 - [ ] ⬜ **17.4 — unlock spread is uneven on the new custom skills.** Abilities arrive too early or
       too late, giving an uneven reward curve. Named: **Parkour, Flying, Stealth, Swimming,
       Unarmored.**
-- [ ] ⬜ **17.5 — Cooking's hourly cap is mislabelled.** Rename to **"Hourly XP Cook Limit"**: the
-      cap is on food XP per hour, not on the amount of food cooked.
-- [ ] ⬜ **17.6 — a bare `Duration: 5` needs a unit.** Render it as `5 Seconds` under
-      `/mcstats <skill>` wherever a duration is shown.
-- [ ] ⬜ **17.7 — `/mcstats mining` shows a redundant line.** Drop the bonus-drop-chance-while-active
-      line.
-- [ ] ⬜ **17.8 — ModMenu > Effects has TWO "Super ability firework" rows**, one for on and one for
-      off, each with its own enable/disable button. Collapse to a single clear control.
+- [x] ✅ **17.5 — renamed to "Hourly XP Cook Limit"** — `611bda1b3`. `wiki/Cooking.md` says why too.
+      Two existing cases already asserted the old label, so their expectation moved with the rename.
+- [x] ✅ **17.6 — durations carry their unit** — `611bda1b3`. Applied in `calculateLength` via a new
+      `Ability.Generic.Template.Seconds` locale key: **all ten callers are super-ability lengths in
+      seconds**, so the unit is stated once and stays translatable instead of being baked into ten
+      `.Stat` labels.
+- [x] ✅ **17.7 — redundant line dropped** — `611bda1b3`. The dead field, its computation and two
+      imports went with it.
+      ⚠️ **This is the DISPLAY half of GitHub #5**, checked before removing. #5's complaint was about
+      the MECHANIC, which is untouched — Super Breaker still multiplies the bonus-drop chance while
+      it runs, from the same config value. Stated in the code, the javadoc and the commit so nobody
+      re-derives it.
+- [x] ✅ **17.8 — one "Super Ability Fireworks" control** — `9b184f328`. `ConfigSetting` gained a
+      `mirrors` list (further keys written with the primary); reads still come from `path()` alone.
+      ⚠️ **Both config keys survive** and `GeneralConfig` still reads them independently — only the
+      SCREEN collapsed, so a hand-editor keeps green-on-without-red-off.
+      🧪 Two SEPARATE properties (the mirror reaches disk; the second row is gone), and mutation
+      proved it: restoring the rows fails only the row case, disabling the fan-out fails only the
+      mirror case. **Either test alone would have missed half the fix.**
 - [ ] ⬜ **17.9 — ability messages render too low** and get drawn over the hotbar. Move them up so
       they do not overlap the item bar.
 
@@ -936,10 +957,16 @@ has no crash log attached** — see its row.
 
 ### #15 — per-skill show/hide for the XP bar (owner, 2026-09-20)
 
-- [ ] ⬜ **Under each skill in the Skills section, add a show/hide option for that skill's XP bar.**
-      Issue text: *"to the skills section, under each skill add a show/hide option for the xp bar."*
-      Shipped work to follow rather than reinvent: the per-skill toggle from issue #10, the ModMenu
-      Skills tab, and the XP-bar three-bar cap. **Find the existing pattern first.**
+- [x] ✅ **DONE** — `bcdac5386`, and it was the #10 gap again, not new plumbing.
+      `experience.yml` has carried `Experience_Bars.<Skill>.Enable` all along and
+      `ExperienceBarManager` has always enforced it — the only way to reach it was hand-editing YAML.
+      ✅ Key comes from `ExperienceConfig.experienceBarEnabledPath`, newly extracted as a static, so
+      the catalogue and the reader cannot disagree about where the value lives.
+      ⚠️ **Child skills SKIPPED on purpose.** Salvage and Smelting sit in `disabledBars` and their
+      bars are suppressed before this key is read — a row would be a switch that does nothing, the
+      dead-knob class this catalogue has already shipped twice.
+      🧪 Test iterates `PrimarySkillType.values()` and asserts presence for non-child skills and
+      **ABSENCE for child skills**.
 
 ### #14 — crashes in multiplayer (HobraTacobra, 2026-09-15) — the only outside report
 
@@ -1009,7 +1036,62 @@ Phase E  #16.1 master -> docs-only                    LAST; re-points drift-audi
 
 ---
 
-## §68.A — Phase A, the code fixes — ⬜ OPEN
+## §68.A — Phase A, the code fixes — 🟡 SEVEN DONE, THREE OPEN
+
+✅ **Seven sub-items shipped on `master` in six commits**, suite **174 classes / 1,935 executed /
+0 failures** (was 174 / 1,920 — +15 cases). Every guard was **mutation-tested**, and in three cases
+the mutation is what proved a second test was load-bearing rather than decorative.
+
+| Commit | Item |
+|---|---|
+| `e77d59a2e` | **#19** smelting stops paying Mining/Repair |
+| `611bda1b3` | **17.2 / 17.5 / 17.6 / 17.7** the `/mcstats` display pass |
+| `9b184f328` | **17.8** one firework control |
+| `55dde7e0d` | **17.3** print the descriptions that already existed |
+| `bcdac5386` | **#15** per-skill XP-bar show/hide |
+| `b638318ad` | **17.1** `/mcstats <skill> keep` |
+
+🔴 **DO NOT PUSH YET — measured, not assumed.** `mod_version` is **`1.4.0-SNAPSHOT`**,
+`release.yml` strips `-SNAPSHOT` and releases `1.4.0`, and **nine `v1.4.0` tags are already on
+origin** (`git ls-remote --tags origin | grep -c v1.4.0` → 9). Pushing as-is trips **R-t**'s
+stale-version gate: nine RED release runs and **zero jars**. `master` is **7 ahead, 0 behind**.
+➡️ **Bump `mod_version` first** — and it is R-p, so the bump is identical on all nine branches.
+⚠️ This is the SAME blocker §67 hit. It recurs after every release and nothing warns before the push.
+
+🔴 **NOT YET PROPAGATED.** All six commits are `master`-only. Rule 1 is satisfied (they landed
+there first); the `Backport-of:` propagation to the eight bands is still owed, and
+`branch-file-identity-audit.py` will fail until it happens — `README.md`, `wiki/**` and `AGENTS.md`
+are byte-identical **by rule** and four of these commits touch `wiki/**`.
+⚠️ Propagate from a **scratch clone** (`git clone --local --no-hardlinks . <dir>`), never this
+working copy — `drift-audit.py`'s `band_branches()` PREFERS REMOTE refs and would grade the stale
+remote instead.
+
+### Still open in Phase A
+
+- [ ] ⬜ **17.4 — uneven sub-skill unlock spread** on Parkour, Flying, Stealth, Swimming, Unarmored.
+      🔑 **A balance judgement, not a defect.** "Too early or too late" has no mechanical test, so
+      this needs a concrete proposed re-spread put to the owner before anything is edited. The data
+      lives in `skillranks.yml`; RetroMode doubles every threshold, so a spread must be checked in
+      BOTH modes or it is only half-tuned.
+- [ ] ⬜ **17.9 — ability messages draw over the hotbar.** 🔴 **Needs a design ruling — see below.**
+- [ ] ⬜ **#14 — multiplayer crash.** Ruled **supported**; comment posted 2026-09-21 asking for the
+      crash log. **Blocked on the reporter**, not on us.
+
+### 🔴 17.9 — why this one stopped for a ruling
+
+The messages are vanilla **action-bar** messages: `PlatformPlayer.sendActionBar` calls
+`sendSystemMessage(text, true)`, and Minecraft draws that just above the hotbar, where it collides
+with the held-item name. **There is no HUD rendering code in this mod at all** — `fabric/client/`
+contains only the ModMenu integration — so either answer means introducing some. Two options, and
+they are not close to equivalent:
+
+| | What it does | Cost |
+|---|---|---|
+| **(a) Mixin `Gui`** | Shift the vanilla overlay message up | Moves **vanilla's own** action-bar messages too, not just mcMMO's. A mixin into a render method across **nine bands / 16 MC versions** — the most version-volatile surface there is, and `mixin-allow-audit.py` must pass per band |
+| **(b) Own HUD layer** | Stop using the action bar for ability messages; draw them ourselves at a configurable height | More code, but self-contained, version-portable via Fabric API's HUD callback, and gives the player an offset slider |
+
+➡️ **Recommendation: (b).** (a) is cheaper today and is the option that breaks silently on the next
+MC version, on eight branches at once, with no compiler and no test to catch it.
 
 ### #19 — Smelting must stop paying XP into Mining and Repair
 
