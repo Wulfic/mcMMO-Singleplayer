@@ -268,14 +268,47 @@ test {
     // merely incomplete.
     inputs.file(rootProject.file('build.gradle')).withPropertyName('buildScript')
 
-    // TODO.md 66.2. ShellCrStripHazardTest reads every scripts/**/*.sh to refuse a bare $'\r', which
-    // is silently discarded inside a command substitution. Same rule as the two entries above, and
-    // the omission would be self-defeating in the same way: the edit this guard exists to catch is an
-    // edit to a shell script, and a shell script is not otherwise an input to :test at all -- not via
-    // mcmmo.build.version, not via compilerArgs, not via processResources. Without this line the
-    // guard passes from cache forever after the first green run, no matter what lands in scripts/.
-    inputs.files(rootProject.fileTree('scripts') { include '**/*.sh' })
-            .withPropertyName('shellScripts')
+    // TODO.md 66.2, WIDENED in 69 D.5 from '**/*.sh' to the whole directory. ShellCrStripHazardTest
+    // reads every scripts/**/*.sh to refuse a bare $'\r', which is silently discarded inside a
+    // command substitution -- but it is not the only guard reading this directory: ConfigIdCoverage
+    // reads scripts/mc-ids.txt, and the .sh-only filter left that one cached exactly as if the entry
+    // did not exist. Same widening, and the same reason, as the .github/workflows entry above:
+    // declaring only the files one guard happened to read first reproduces the blind spot for every
+    // other file in the directory.
+    // 🔴 __pycache__ MUST be excluded, and this is not tidiness. Python rewrites scripts/
+    // __pycache__/*.pyc on every run of every script in here, so including it makes :test
+    // depend on a file that changes whenever anyone runs a guard -- :test then NEVER reaches
+    // UP-TO-DATE again. That is not merely slow: it destroys the only instrument that can
+    // detect this whole class of bug. Proving a file is a declared input needs a two-step
+    // experiment -- untouched must be CACHED, edited must RE-RUN -- and a task that always
+    // re-runs makes step one impossible, so every future "is X an input?" question becomes
+    // unanswerable. Measured here: the first probe after adding this entry reported :test
+    // executing in BOTH steps, which looks like a pass and proves nothing.
+    inputs.files(rootProject.fileTree('scripts') {
+        exclude '**/__pycache__/**', '**/*.pyc'
+    }).withPropertyName('scripts')
+
+    // TODO.md 69 D.5. 🔴 THE DOC GUARDS, and the gap that made this section's own verification
+    // decoration. BandDocsMatchRealityTest reads README.md and wiki/Installation.md to prove this
+    // band's docs do not deny that this band exists (risk R9's recorded instance); ModContactLinks
+    // and the wiki-roster guards read six further wiki pages. NONE of those files was a declared
+    // input, so 69 D.5 -- which moves the support-floor sentence in exactly those two files -- would
+    // have changed no declared input, left :test UP-TO-DATE, and shipped a floor sentence that its
+    // own guard never read. Measured 2026-08-19 and recorded in gotchas.md: a docs-only edit gave
+    // "BUILD SUCCESSFUL, 1 executed, 2 from cache, 7 up-to-date" and the two guards that police
+    // these files are precisely the two a docs edit cannot wake up.
+    //
+    // 🔑 A green build is not evidence a docs change was gated. It is evidence Gradle believed
+    // nothing relevant changed -- and it was right, because nobody had told it otherwise.
+    inputs.file(rootProject.file('README.md')).withPropertyName('readme')
+    inputs.files(rootProject.fileTree('wiki') { include '**/*.md' })
+            .withPropertyName('wiki')
+
+    // Same rule, same directory of guards: five tests read gradle.properties directly, and
+    // BandDocsMatchRealityTest reads supported_minecraft_versions out of it to know what this band
+    // ships. 'mcmmo.build.version' above captures the VERSION value only, so editing the band range
+    // -- the exact edit a band cut makes -- changed no declared input at all.
+    inputs.file(rootProject.file('gradle.properties')).withPropertyName('gradleProperties')
 
     // TODO.md 45.1 (risk R14). Install Mockito's agent AT VM START instead of letting it self-attach.
     //
