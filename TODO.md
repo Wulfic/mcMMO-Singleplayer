@@ -2368,6 +2368,27 @@ seam, and it is not one:
 git-trailer-parser blind spot, behaving exactly as the carried row predicts. **Check against the
 auditor's regex, never git's parser.**
 
+
+### ↩️ Blast radius for 72.4 — the only destructive step
+
+The mutation harness **overwrites three tracked files in place, five times**, and all three were
+**modified and UNCOMMITTED** when it ran. That is the dangerous combination: `git checkout --` would
+have destroyed the session's work rather than restoring it, so **restore is from
+`scratchpad/mut-backup/`, never from git** — stated in the harness's own docstring, not just here.
+
+| | |
+|---|---|
+| **Touches** | `src/main/resources/skillranks.yml`, `src/test/…/RankConfigTest.java`, `src/main/java/…/SubSkillType.java` |
+| **Lost if wrong** | this session's uncommitted edits — nothing else; no branch, tag, remote or shared state is involved |
+| **Comes back from** | `scratchpad/mut-backup/`, byte-exact copies taken **before** the first mutation, with their sha256 printed at capture |
+| **Verified** | every restore re-hashes all three files against the backup and **asserts equality** — the harness prints *"restored 3 files, all byte-identical to backup"* or raises |
+| **Scope** | one mutation per invocation, each preceded by a full restore, so no two mutations can compound |
+| **Undo note** | `scratchpad/UNDO-s11.txt`, written **before** the first mutation |
+
+✅ **And the guard fired for real:** M3's first run aborted on a missing anchor and applied **nothing**,
+leaving the tree untouched — a harness that swallowed that would have scored two mutations against an
+unmutated tree as *"survived"*. **Fail closed, then restore, then re-run.**
+
 ### What I am NOT doing
 
 - **Not** pushing, and **not** bumping `mod_version` — ruling 1, **fifth** re-ask.
