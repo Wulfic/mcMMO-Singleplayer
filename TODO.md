@@ -1057,11 +1057,16 @@ has no crash log attached** — see its row.
 
 ### #14 — crashes in multiplayer (HobraTacobra, 2026-09-15) — the only outside report
 
-- [ ] ⬜ **A non-host client crashes on world interaction in multiplayer.** Reported on **MC
+- [x] ✅ **A non-host client crashes on world interaction in multiplayer — FIXED by §73
+      (`a790720a6`), 2026-09-22.** Reported on **MC
       1.21.11**, installed through the CurseForge client. The crash fires immediately on placing a
       block or using a crafting table, furnace or chest. **It is symmetric:** the host is always
       fine and the joining client always crashes — reporter hosting is clean, reporter joining
       someone else crashes, and the same holds in reverse for their friends.
+      🔑 **Every word of that description turned out to be load-bearing**, including the one thing it
+      does *not* list: breaking a block. Cause was `RepairSalvageListener.anvilKindAt` dereferencing
+      `GeneralConfig` — bound at server start, so `null` forever on a joining client — on the
+      `UseBlockCallback` path, ahead of the `ServerPlayer` guard. Full reasoning in §73.
       🔴 **FIRST ACTION IS NOT A FIX — there is no crash log on the issue.** Ask for the
       `crash-reports/` file or `logs/latest.log` from the crashing client. A symmetric
       host-fine/client-crashes split is the classic logical-side signature (client code touching
@@ -1309,8 +1314,13 @@ them in a normal run.
 - [x] 🚫 **17.9 — WON'T FIX, owner ruling 2026-09-22.** The ruling was asked for and the answer was
       **neither option**: accept the collision with the held-item name and close it. Phase A's code
       work is therefore **complete**; only #14 remains, and that is not on us.
-- [ ] ⬜ **#14 — multiplayer crash.** Ruled **supported**; comment posted 2026-09-21 asking for the
-      crash log. **Blocked on the reporter**, not on us.
+- [x] ✅ **#14 — multiplayer crash — DIAGNOSED AND FIXED 2026-09-22 (§73), without the crash log.**
+      `a790720a6`, propagated to all three live bands. 🔑 **The row below was right that a fix must
+      not precede a diagnosis, and wrong that the diagnosis needed the reporter.** The symptom list
+      was the evidence: four right-click actions and *no* left-click, which separates
+      `UseBlockCallback` from `AttackBlockCallback` and lands on the one client-reachable config
+      dereference that runs before a side guard. **Still blocked on the reporter for
+      CONFIRMATION** — and the issue stays open until the fix is pushed and released. See §73.
 
 ### 🚫 17.9 — the ruling, and why the measurement mattered anyway
 
@@ -2406,7 +2416,7 @@ unmutated tree as *"survived"*. **Fail closed, then restore, then re-run.**
 
 ---
 
-## §73 — GitHub #14: the multiplayer client crash — ⬜ IN PROGRESS
+## §73 — GitHub #14: the multiplayer client crash — ✅ DONE (not pushed; #14 stays open until it is)
 
 **Issue:** *"Crashes when playing with friends"* (HobraTacobra, 2026-09-15), MC **1.21.11**, CurseForge
 client. Ruled **supported** in §68. Owner ruling 2026-09-22: **work it statically anyway** — the crash
@@ -2506,10 +2516,65 @@ simply never the state under test. The axis tested was *which side*; the axis th
       construction.** The identity guard is green *because* they agree, and `BandDocsMatchRealityTest`
       asks only whether the support floor is right. This is the [[identical-docs-lie-invisible-to-guards]]
       shape again, and only a human reading for *truth* finds it.
-- [ ] **73.4** Suite on `master`, then propagate to the **three live bands** with `Backport-of:`.
-      ⚠️ `mc/1.21.11` is **yarn-mapped** — the reporter's own band. The hunk's context carries
-      `Level`/`Player`, so expect a conflict and **translate**, never *"take master"*.
-- [ ] **73.5** Gate sweep (7/9/10/11) in a **fresh clone**, per the pre-push rule.
+- [x] ✅ **73.4 — DONE. `a790720a6` on `master`, propagated to all three live bands**
+      (`mc/26.2` → `032f1cc47`, `mc/26.1.2` → `d6095c50d`, `mc/1.21.11` → `96a150514`), each with a
+      `Backport-of:` trailer **git's own parser reads** (the double-`\n` remedy), and the control
+      holds: the source commit on `master` returns empty. `627d8818d` is `TODO.md` only and carries
+      `Backport-not-needed:`.
+      **Suites — each number predicted from the previous session's before it was read:** `master`
+      174 classes / **1,948** (1,944 + 4), `mc/1.21.11` 173 / **1,938** (1,934 + 4). 0 failures,
+      0 errors, 0 skipped on both.
+      🔴🔴 **The yarn band conflicted on `anvilKindAt`, and the conflict was the SAFE half.** It was
+      resolved into the band's own spellings (`World`, `ServerPlayerEntity`) read off the band's file,
+      never recalled. **The dangerous half auto-merged with no conflict at all:**
+      `RepairSalvageListenerTest.java` took master's `InteractionResult`/`InteractionHand` **silently**
+      — 12 occurrences — because the hunks' context happened to avoid renamed lines. Exactly the
+      failure mode AGENTS.md describes, caught by grepping for official names in **code** with
+      comments and string literals stripped, not by the merge. The band then **built**, which is the
+      only thing that turns a translation from a claim into a fact.
+- [x] ✅ **73.5 — DONE, all four gates exit 0 in a fresh `git clone --local --no-hardlinks`** (they
+      prefer remote refs, so the working copy would have graded a stale origin):
+      gate 7 `drift-audit.py` **`--self-test` first**, then **0 MISSING** on all three live bands with
+      the 6 archived correctly skipped · gate 9 **53 shared paths byte-identical** across `master` +
+      3 live — which is also what proves the three docs edits landed identically · gate 10 **4
+      distinct manifests** · gate 11 **12 keys, 10 SHARED / 2 DISTINCT**. None exited 2.
+
+### 🔴🔴 The mutation harness was wrong TWICE, and both were traps already written down here
+
+**The first run reported `M1 SURVIVED, M2 SURVIVED`, 0 cases noticed, and it was entirely false.**
+Both defects are ones this repo has already paid for once, which is the point worth carrying: a
+lesson on file is not a lesson applied.
+
+1. **`> Task :test UP-TO-DATE` — the harness never re-ran.** It mutated the source, invoked Gradle,
+   and then parsed the JUnit XML *from the control run*, whose numbers were therefore byte-identical
+   to the control. 🔑 **Identical counts across a mutation are the tell, not a reassurance.** The fix
+   is three assertions the harness now makes: delete the XML first, check the subprocess exit code,
+   and **abort** if the XML is not newer than the run — never score an absent result as a survival.
+   ⚠️ `cleanTest test` alone is not enough (§70); `--no-build-cache` is also required.
+2. **The red-case regex mis-scored passes** — [[junit-xml-regex-misattribution]] verbatim. A passing
+   case is `<testcase .../>`, self-closing, so a pattern scanning forward to the next `</testcase>`
+   attributes a **later** failure to an **earlier** passing case. That is why the second run's red
+   set was incoherent (M2 listing `clientSideFireWithAnEmptyHandPasses` while omitting the two
+   `ClaimsTheClick` cases it must break). Now parsed with `ElementTree`, and the per-case count is
+   cross-checked against the suite header's `failures` + `errors` so a parse that drifts **aborts**.
+
+🔑 **A third, subtler one: M1 did not compile, and a compile error is not an answer.** Deleting the
+guard while leaving `config.` behind is not the pre-fix code — it is uncompilable code, and it
+cannot tell you whether the new tests fail *when the fix is reverted*. **A mutation has to reach the
+tests to be worth anything.** M1 is now the verbatim pre-fix body: guard removed *and* both reads
+put back through `McMMOMod.getGeneralConfig()`.
+
+✅ **What the corrected harness actually measured** — control green, 11 cases parsed every run,
+source restored byte-exact:
+
+| Mutation | Red cases | Reading |
+|---|---|---|
+| **M1** the verbatim pre-fix body | **3** — exactly the new no-world-session cases | the fix is what they test |
+| **M2** `anvilKindAt` always `null` | **4** — exactly the claim cases, none of the new three | the new tests cannot be satisfied by gutting the anvil |
+| **M3** salvage key read from the repair getter | **1** — the salvage claim case | the two keys are told apart |
+
+**M1 and M2 are disjoint and together cover all seven**, which is the biconditional shape §72 landed
+on: one direction proves the guard fires, the other proves it does not fire always.
 
 ### ⚠️ The behavioural consequence, stated rather than discovered later
 
