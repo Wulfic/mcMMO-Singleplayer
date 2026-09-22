@@ -1166,9 +1166,9 @@ Unarmed:
 
     BlockCracker:
         Standard:
-            Rank_1: 0
+            Rank_1: 50
         RetroMode:
-            Rank_1: 0
+            Rank_1: 500
 Woodcutting:
     TreeFeller:
         Standard:

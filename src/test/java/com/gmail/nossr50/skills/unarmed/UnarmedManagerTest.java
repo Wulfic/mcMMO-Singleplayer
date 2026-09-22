@@ -118,4 +118,29 @@ class UnarmedManagerTest {
         when(platformPlayer.isUnarmed()).thenReturn(true);
         assertTrue(unarmedManager.canDeflect(), "bare-handed → deflect available");
     }
+
+    /**
+     * Block Cracker unlocks at Unarmed 500 in RetroMode ({@code skillranks.yml} BlockCracker
+     * Rank_1 — Standard 50 × 10), raised from 0 by the §71 balance ruling.
+     *
+     * <p>🔴 <b>Why this asserts the gate and not the config value.</b> Block Cracker is the one
+     * sub-skill in this family with <em>no probability ramp</em>: {@code rollBlockCracker} calls
+     * {@link com.gmail.nossr50.util.random.ProbabilityUtil#isNonRNGSkillActivationSuccessful},
+     * which this port hard-returns {@code true} because the Bukkit event hook it wrapped was cut in
+     * Phase 10.2. So the unlock level is the <em>entire</em> gate — at 0 it was unconditionally on
+     * from the first punch. A test that read {@code skillranks.yml} back would prove the file
+     * parses, not that a player is gated, and the two came apart here exactly once already.
+     *
+     * <p>Mutation-checked: restoring Rank_1 to 0 turns the 499 case red and leaves the 500 case
+     * green, so the boundary is load-bearing rather than decorative.
+     */
+    @Test
+    void blockCrackerGateNeedsUnlock() {
+        atUnarmedLevel(499); // one short of the RetroMode Rank_1 unlock
+        assertFalse(unarmedManager.canUseBlockCracker(),
+                "locked below rank 1 — at level 0 this was always on, which is GitHub #17.4's tail");
+
+        atUnarmedLevel(500); // BlockCracker Rank_1
+        assertTrue(unarmedManager.canUseBlockCracker(), "level 500 → Block Cracker available");
+    }
 }
