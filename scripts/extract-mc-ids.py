@@ -586,7 +586,9 @@ def self_test() -> int:
     #     The fixture is built FROM the declarations rather than hard-coded, so it grows with them;
     #     UNCHECKABLE kinds are deliberately absent from the assets dict, which is what the
     #     generalised assert in cross_validate() demands.
+    ran_cover = 0
     for kind in sorted(CROSS_CHECKED):
+        ran_cover += 1
         probe_reg = {k: set() for k in KINDS}
         # every CROSS_CHECKED kind that is not ALSO declared uncheckable -- a kind claimed both
         # ways would otherwise trip cross_validate's assert, and (a) above is the check that is
@@ -684,7 +686,9 @@ def self_test() -> int:
         ("a third blockstate-only id", reg,
          {ITEM: assets_ok[ITEM], BLOCK: assets_ok[BLOCK] | {"mcmmo_not_a_block"}}),
     ]
+    ran_cases = 0
     for name, r, a in cases:
+        ran_cases += 1
         if not cross_validate("t", r, a):
             failures.append(f"cross_validate: silent on '{name}'")
 
@@ -751,6 +755,19 @@ def self_test() -> int:
                   f"regenerating one version left {sorted(after)}")
     finally:
         MANIFEST, globals()["generate"] = real_manifest, real_generate
+
+    # ANTI-VACUITY FLOOR (section 75). The summary below already prints both of these counts and
+    # the kind-coverage one is even DERIVED so it cannot under-report -- but a derived count is
+    # still only PRINTED. Emptying either collection produced a clean "PASS -- parser
+    # round-trips..." at exit 0. 🔑 Count EXECUTED iterations: `== 0` catches an empty
+    # declaration, `!= len(...)` catches a loop that ran over only part of it. A floor computed
+    # from len() of the declared list cannot see the second half at all.
+    for label, ran, declared in (
+        ("disagreement", ran_cases, len(cases)),
+        ("kind-coverage", ran_cover, len(CROSS_CHECKED)),
+    ):
+        if ran == 0 or ran != declared:
+            failures.append(f"FLOOR   RAN {ran}/{declared} {label} cases -- cases were SKIPPED")
 
     print("=== SELF-TEST ===")
     print(f"  round-trip over {len(sample)} versions ({len(KINDS)} kinds: {', '.join(KINDS)}), "

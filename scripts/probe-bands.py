@@ -487,7 +487,11 @@ def selftest_decl_parsing() -> int:
     ]
 
     failures: list[str] = []
+    # COUNT WHAT RUNS, not what is declared. See the anti-vacuity floor below.
+    ran = 0
+    ran_supers = 0
     for label, line, want_name, want_supers in cases:
+        ran += 1
         m = DECL_RE.match(line)
         if not m:
             failures.append(f"{label}: DID NOT MATCH -- the class would be silently missing")
@@ -496,8 +500,23 @@ def selftest_decl_parsing() -> int:
             failures.append(f"{label}: name {m.group(1)!r}, wanted {want_name!r}")
         got = _split_types(m.group(2)) + _split_types(m.group(3))
         for s in want_supers:
+            ran_supers += 1
             if s not in got:
                 failures.append(f"{label}: supertype {s!r} lost; got {got!r}")
+
+    # ANTI-VACUITY FLOOR (section 75). Without it this function printed
+    # "PASS -- 0 real javap declaration lines parse" and exited 0: it went green by running
+    # out of things to check, while the number zero sat in its own success message.
+    # 🔑 The counters are of EXECUTED iterations, deliberately. A floor written over the
+    # declared list -- `if len(cases) < 7` -- still reads 7 when the loop body runs zero
+    # times, which is the half section 75 measured every other floor in scripts/ to be blind
+    # to. An over-matching filter or an added `continue` empties the loop, never the list.
+    want_supers_total = sum(len(c[3]) for c in cases)
+    if ran == 0 or ran != len(cases):
+        failures.append(f"RAN {ran}/{len(cases)} declaration cases -- cases were SKIPPED")
+    if ran_supers == 0 or ran_supers != want_supers_total:
+        failures.append(f"RAN {ran_supers}/{want_supers_total} supertype assertions -- "
+                        "assertions were SKIPPED")
 
     print("=== SELF-TEST: javap declaration parsing ===")
     if failures:

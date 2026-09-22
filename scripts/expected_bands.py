@@ -440,7 +440,10 @@ def self_test() -> int:
         # 🔴 A declaration that cannot be read must be an ERROR, never a silent "nothing is
         # archived". The fallback looks harmless because it audits MORE -- and that is exactly
         # why it would go unnoticed while the archive quietly stopped applying.
-        for name, content in (("gone.txt", None), ("bad.txt", "[retired]\nmc/26.2\n")):
+        unusable_cases = (("gone.txt", None), ("bad.txt", "[retired]\nmc/26.2\n"))
+        ran_unusable = 0
+        for name, content in unusable_cases:
+            ran_unusable += 1
             path = tmpdir / name
             if content is not None:
                 path.write_text(content, encoding="utf-8")
@@ -448,6 +451,16 @@ def self_test() -> int:
             check(err is not None and kept == [] and skipped == [],
                   f"an unusable declaration ({name}) is an ERROR with NOTHING audited, "
                   f"not a silent 'nothing is archived'")
+
+    # ANTI-VACUITY FLOOR (section 75). The unusable-declaration cases are the only ones in
+    # this self-test that live in a loop, and a loop that iterates nothing asserts nothing
+    # while every surrounding check() still passes, so the run stays green.
+    # 🔑 Counts EXECUTED iterations, not len() of the literal: a declared-length floor still
+    # reads 2 when the body ran zero times. That is the half section 75 measured every other
+    # floor in scripts/ to be blind to.
+    check(ran_unusable > 0 and ran_unusable == len(unusable_cases),
+          f"FLOOR: RAN {ran_unusable}/{len(unusable_cases)} unusable-declaration cases -- "
+          "cases were SKIPPED")
 
     print(f"\n{'PASSED' if failures == 0 else f'FAILED ({failures})'}")
     return 0 if failures == 0 else 1
