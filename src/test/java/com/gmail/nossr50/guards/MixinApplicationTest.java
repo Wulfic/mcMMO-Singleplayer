@@ -141,15 +141,23 @@ class MixinApplicationTest {
 
     @Test
     void theScanFoundTheRealMixinPopulation() {
-        // 37, not 42: seven target classes are shared by more than one mixin file (four
+        // 36, not 41: target classes are shared by more than one mixin file (four
         // LivingEntity*Mixin files alone target LivingEntity, and BrewingStandBrewTimeAccessor
-        // shares BrewingStandBlockEntity with its mixin). That is the same 37 that Phase 1's
-        // independently-written scripts/extract-mc-surface.py records as `MIXINCLASS 37` in
+        // shares BrewingStandBlockEntity with its mixin). That is the same 36 that Phase 1's
+        // independently-written scripts/extract-mc-surface.py records as `MIXINCLASS 36` in
         // scripts/mc-surface.txt -- two parsers written months apart agreeing on the population is
         // the cross-check that makes this floor meaningful rather than a number chosen to pass.
+        //
+        // ⚠️ WAS 37 until Minecraft 26.3. 26.3 deleted HoeItem, so HoeTillingActionsAccessor --
+        // the mixin that read its TILLABLES table -- lost its target and was removed;
+        // SuperAbilityListener.isTillAction now reads the public BLOCK_TRANSFORMER component
+        // instead, which is one fewer injection to audit per band. The floor was lowered only
+        // AFTER regenerating mc-surface.txt and reading 36 back out of it -- the cross-check
+        // above is the whole point, and moving this number to match a red test without it
+        // would delete the guard.
         final Map<String, String> targets = targetsByMixin();
-        assertTrue(targets.size() >= 37,
-                () -> "expected the full mixin target population (37 distinct classes); parsed only "
+        assertTrue(targets.size() >= 36,
+                () -> "expected the full mixin target population (36 distinct classes); parsed only "
                         + targets.size()
                         + ". A parser that matches nothing passes the load test trivially.");
         assertTrue(targets.keySet().stream().allMatch(n -> n.startsWith("net.minecraft.")),

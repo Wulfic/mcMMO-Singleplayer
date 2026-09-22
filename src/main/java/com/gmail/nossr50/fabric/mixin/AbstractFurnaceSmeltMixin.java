@@ -88,8 +88,11 @@ public abstract class AbstractFurnaceSmeltMixin {
             allow = 1,
             at = @At(
                     value = "INVOKE",
+                    // ⚠️ 26.3 changed this from getBurnDuration(FuelValues, ItemStack) to
+                    // getBurnDuration(ServerLevel, ItemStack). javac saw nothing -- the mixin
+                    // compiled and computed=0, i.e. Fuel Efficiency was silently doing nothing.
                     target = "Lnet/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity;getBurnDuration("
-                            + "Lnet/minecraft/world/level/block/entity/FuelValues;"
+                            + "Lnet/minecraft/server/level/ServerLevel;"
                             + "Lnet/minecraft/world/item/ItemStack;)I"))
     private static int mcmmo$applyFuelEfficiency(int burnTime, ServerLevel world, BlockPos pos,
             BlockState state, AbstractFurnaceBlockEntity blockEntity) {

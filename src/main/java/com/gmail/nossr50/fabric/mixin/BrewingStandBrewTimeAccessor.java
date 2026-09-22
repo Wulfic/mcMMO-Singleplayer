@@ -1,5 +1,7 @@
 package com.gmail.nossr50.fabric.mixin;
 
+import net.minecraft.core.NonNullList;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BrewingStandBlockEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
@@ -25,4 +27,17 @@ public interface BrewingStandBrewTimeAccessor {
     /** Overwrite the ticks left on the current brew. */
     @Accessor("brewTime")
     void setBrewTime(int brewTime);
+
+    /**
+     * The stand's five inventory slots.
+     *
+     * <p>⚠️ Added for Minecraft 26.3, which stopped PASSING the slots to the brewing statics:
+     * {@code isBrewable} and {@code doBrew} used to take a {@code NonNullList<ItemStack>} and now
+     * take the block entity itself, so the injection handlers have to read the field the same way
+     * {@code brewTime} above is read. The field is {@code private} with no getter.
+     *
+     * @return the live backing list; treat it as read-only
+     */
+    @Accessor("items")
+    NonNullList<ItemStack> mcmmo$getItems();
 }

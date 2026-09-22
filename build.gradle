@@ -202,7 +202,13 @@ tasks.withType(JavaCompile).configureEach {
     it.options.compilerArgs << '-Xmaxerrs' << compilerErrorCap.toString()
 }
 
-test {
+// ⚠️ SHARED BY EVERY Test TASK, and that is the point -- see tagBoundTest below.
+// This used to be a plain `test { ... }` block. It became `withType(Test).configureEach` when
+// SuperAbilityListenerTillingTest needed its own JVM: a second task configured by hand would be a
+// second copy of 185 lines of hard-won settings (the mods/ race fix, the Mockito agent, the
+// resolved-version system properties), kept in step by memory. One of those copies would rot, and
+// the one that rots is the one nobody reads.
+tasks.withType(Test).configureEach {
     useJUnitPlatform()
 
     // Hand BandVersionLabelTest the version this build ACTUALLY computed, so the guard cross-checks
@@ -386,6 +392,57 @@ test {
     // absolute path in the cache key would miss the cache on every machine. It still changes
     // whenever the wiring does, which is all the guard needs.
     inputs.property 'mcmmo.build.testModsDir', 'build/test-mods'
+}
+
+// ⚠️⚠️ ONE TEST CLASS, ONE JVM, ON PURPOSE -- do not fold this back into `test`.
+//
+// SuperAbilityListenerTillingTest calls McTestRegistries.bootstrapWithTags(), which BINDS vanilla's
+// item and block tags into the BuiltInRegistries singletons. That is global, process-wide, one-way
+// mutation: nothing unbinds them.
+//
+// BlockUtilsTest asserts the OPPOSITE -- that tags are NOT bound -- and it is right to. Its Hylian
+// assertions only prove the tag suppliers are lazy if evaluating one would have thrown, so it
+// asserts its own precondition rather than trusting it. Its javadoc predicted this exact day:
+// "this file would keep passing on the day a future harness starts binding tags, while silently
+// testing nothing."
+//
+// 🔴 `test` runs maxParallelForks = 4 and Gradle assigns classes to forks NON-DETERMINISTICALLY, so
+// leaving both in one task does not produce a failure -- it produces a COIN FLIP, red only when the
+// two land in the same JVM in the wrong order. That is strictly worse than a clean break, and it is
+// the same geometry as the mods/ race documented above.
+tasks.register('tagBoundTest', Test) {
+    description = 'Tests that need vanilla tags BOUND, isolated so the binding cannot leak.'
+    group = 'verification'
+
+    // 🔴 A REGISTERED Test TASK INHERITS NEITHER OF THESE, and without them it scans no
+    // classes, runs ZERO tests and reports BUILD SUCCESSFUL. Measured, not theorised: the
+    // first cut of this task did exactly that -- green in 6 seconds, 0 tests in the XML.
+    // `test` gets them by convention; a task you register does not.
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    // The other half of that lesson: make an empty run LOUD. If the filter above ever stops
+    // matching -- a rename, a move, a typo -- this fails instead of passing vacuously.
+    filter {
+        failOnNoMatchingTests = true
+    }
+    filter {
+        includeTestsMatching 'com.gmail.nossr50.fabric.listeners.SuperAbilityListenerTillingTest'
+    }
+    // One fork: the whole reason this task exists is that the JVM is not shared.
+    maxParallelForks = 1
+}
+
+tasks.named('test') {
+    // The other half of the split. Without this the class runs in BOTH tasks, and the copy in `test`
+    // is the one that binds tags into a shared fork -- reintroducing exactly the race above.
+    filter {
+        excludeTestsMatching 'com.gmail.nossr50.fabric.listeners.SuperAbilityListenerTillingTest'
+    }
+}
+
+tasks.named('check') {
+    dependsOn 'tagBoundTest'
 }
 
 jar {

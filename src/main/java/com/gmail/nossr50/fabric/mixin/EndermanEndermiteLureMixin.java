@@ -5,7 +5,7 @@ import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.platform.MetadataStore;
 import com.gmail.nossr50.platform.CombatUtils;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Enderman;
 import net.minecraft.world.entity.monster.Endermite;
 import net.minecraft.world.entity.Mob;
 import org.spongepowered.asm.mixin.Mixin;
@@ -45,7 +45,7 @@ public abstract class EndermanEndermiteLureMixin {
             return;
         }
         final Mob self = (Mob) (Object) this;
-        if (!(self instanceof EnderMan)) {
+        if (!(self instanceof Enderman)) {
             return;
         }
         // Checked at the write as well as at the read so the flag is never stamped at all while the

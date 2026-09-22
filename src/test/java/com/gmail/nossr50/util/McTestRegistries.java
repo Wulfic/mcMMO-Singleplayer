@@ -11,6 +11,32 @@ import net.minecraft.core.component.DataComponentInitializers;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.core.Holder;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.tags.TagKey;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.Registry;
+import net.minecraft.resources.ResourceKey;
+import com.google.gson.JsonObject;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
  * Shared one-time Minecraft bootstrap for unit tests that touch live vanilla registries (item/block
@@ -25,6 +51,7 @@ import net.minecraft.resources.Identifier;
 public final class McTestRegistries {
 
     private static boolean bootstrapped;
+    private static boolean tagsBound;
 
     private McTestRegistries() {}
 
@@ -36,6 +63,30 @@ public final class McTestRegistries {
         Bootstrap.bootStrap();
         bindDataComponents();
         bootstrapped = true;
+    }
+
+    /**
+     * {@link #bootstrap()} plus vanilla's item and block <b>tags</b>.
+     *
+     * <p>🔴 <b>Deliberately NOT folded into {@link #bootstrap()}, and it must not be.</b>
+     * Binding tags mutates the {@code BuiltInRegistries} singletons process-wide and nothing
+     * unbinds them. {@code BlockUtilsTest} asserts tags are UNBOUND -- its Hylian assertions
+     * only prove the tag suppliers are lazy if evaluating one would have thrown, so it asserts
+     * its own precondition instead of trusting it, and its javadoc names this exact day.
+     *
+     * <p>⚠️ <b>Callers of this method run in the {@code tagBoundTest} Gradle task, which forks
+     * its own JVM.</b> `test` runs {@code maxParallelForks = 4} and assigns classes to forks
+     * non-deterministically, so calling this from a class in `test` would not fail -- it would
+     * produce a COIN FLIP, red only when the two classes share a fork in the wrong order.
+     * If you call this from a new test class, add that class to `tagBoundTest`'s filter in
+     * build.gradle in the same change.
+     */
+    public static synchronized void bootstrapWithTags() {
+        bootstrap();
+        if (!tagsBound) {
+            bindVanillaTags();
+            tagsBound = true;
+        }
     }
 
     /**
@@ -81,7 +132,7 @@ public final class McTestRegistries {
      * {@link #itemComponentsAreBound()} exists to rule out.
      */
     private static void bindDataComponents() {
-        final HolderLookup.Provider provider = VanillaRegistries.createLookup();
+        final HolderLookup.Provider provider = VanillaRegistries.createWorldLookup();
         for (DataComponentInitializers.PendingComponents<?> pending
                 : BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(provider)) {
             pending.apply();
@@ -180,5 +231,148 @@ public final class McTestRegistries {
     public static boolean entityTypeRegistryIsPopulated() {
         return BuiltInRegistries.ENTITY_TYPE.containsKey(Identifier.withDefaultNamespace("zombie"))
                 && BuiltInRegistries.ENTITY_TYPE.containsKey(Identifier.withDefaultNamespace("cow"));
+    }
+
+    /**
+     * Binds vanilla's <b>item and block tags</b>, which {@link Bootstrap#bootStrap()} does not bind.
+     *
+     * <p>⚠️ <b>Same shape as {@link #bindDataComponents()} above, one layer further out, and equally
+     * silent until something reads one.</b> An unbound tag does not read as empty — it throws
+     * {@code IllegalStateException: Tags not bound}, so a single tag read anywhere under test fails
+     * the class with no hint that the harness, not the code, is at fault. In the real game the
+     * binding comes from data-pack load, which a unit test never runs.
+     *
+     * <p><b>Why this arrived with Minecraft 26.3.</b> 26.3 deleted the per-tool item classes
+     * ({@code HoeItem}, {@code AxeItem}, {@code ShovelItem}), so {@code instanceof HoeItem} — which
+     * needed no registry at all — stopped existing. {@link ItemTags#HOES} is vanilla's replacement
+     * answer to "is this a hoe".
+     *
+     * <p>🔑 <b>BOTH registries are required, and item-only looked like it worked.</b> Binding items
+     * alone fixed the "is this a hoe" half and left the other half throwing from deep inside
+     * {@code MatchingBlockTagPredicate} — a tilling transform matches its target through a BLOCK tag.
+     * Half the tags bound is not half the tests passing; it is a different stack trace.
+     *
+     * <p>Read straight out of the Minecraft jar on the test classpath rather than hand-written, so it
+     * tracks the version: {@code data/minecraft/tags/{item,block}/**.json}.
+     * ⚠️ <b>{@code #other_tag} references are RESOLVED, not skipped.</b> Skipping them silently
+     * under-populates a tag, and an under-populated tag makes a predicate answer {@code false} —
+     * which reads as a clean "not a till" rather than as a broken harness.
+     *
+     * <p>🔴 <b>Fails closed.</b> If the jar cannot be found, or a registry yields no tags, this
+     * throws. Binding nothing would leave every {@code is(tag)} answering {@code false}, and every
+     * tag-gated test would go green against a gate that matches nothing.
+     */
+    private static void bindVanillaTags() {
+        final URL marker = McTestRegistries.class.getResource("/data/minecraft/tags/item/hoes.json");
+        if (marker == null) {
+            throw new IllegalStateException(
+                    "Cannot find data/minecraft/tags/ on the test classpath, so tags cannot be bound. "
+                            + "An unbound tag throws rather than reading as empty.");
+        }
+        final String spec = marker.toString();
+        final int bang = spec.indexOf("!/");
+        if (bang < 0 || !spec.startsWith("jar:")) {
+            throw new IllegalStateException("Expected a jar to supply vanilla tags, got " + spec);
+        }
+        final Path jar = Path.of(URI.create(spec.substring("jar:".length(), bang)));
+
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            bindTagsFrom(zip, "item", Registries.ITEM, BuiltInRegistries.ITEM);
+            bindTagsFrom(zip, "block", Registries.BLOCK, BuiltInRegistries.BLOCK);
+        } catch (IOException exc) {
+            throw new IllegalStateException("Could not read vanilla tags from " + jar, exc);
+        }
+    }
+
+    /** Load, resolve and bind one registry's tag directory. */
+    @SuppressWarnings("unchecked")
+    private static <T> void bindTagsFrom(ZipFile zip, String dir,
+            ResourceKey<? extends Registry<T>> registryKey, Registry<T> registry) throws IOException {
+        final String prefix = "data/minecraft/tags/" + dir + "/";
+        final Map<String, List<String>> raw = new HashMap<>();
+
+        for (final ZipEntry entry : zip.stream()
+                .filter(e -> e.getName().startsWith(prefix) && e.getName().endsWith(".json"))
+                .toList()) {
+            final String name = entry.getName()
+                    .substring(prefix.length(), entry.getName().length() - ".json".length());
+            final List<String> entries = new ArrayList<>();
+            try (InputStream in = zip.getInputStream(entry)) {
+                final JsonObject json = JsonParser
+                        .parseString(new String(in.readAllBytes(), StandardCharsets.UTF_8))
+                        .getAsJsonObject();
+                if (json.has("values")) {
+                    for (final JsonElement value : json.getAsJsonArray("values")) {
+                        if (value.isJsonPrimitive()) {
+                            entries.add(value.getAsString());
+                        } else if (value.isJsonObject() && value.getAsJsonObject().has("id")) {
+                            entries.add(value.getAsJsonObject().get("id").getAsString());
+                        }
+                    }
+                }
+            }
+            raw.put(name, entries);
+        }
+
+        if (raw.isEmpty()) {
+            throw new IllegalStateException(
+                    "Read zero " + dir + " tags from the Minecraft jar. Binding an empty map makes "
+                            + "every is(tag) answer false, so a tag-gated test would pass against a "
+                            + "gate that matches nothing.");
+        }
+
+        final Map<TagKey<T>, List<Holder<T>>> resolved = new HashMap<>();
+        for (final String name : raw.keySet()) {
+            final Set<String> ids = new LinkedHashSet<>();
+            collectTagMembers(raw, name, ids, new HashSet<>());
+            final List<Holder<T>> members = new ArrayList<>();
+            for (final String id : ids) {
+                final Identifier key = Identifier.parse(id);
+                if (registry.containsKey(key)) {
+                    registry.get(key).ifPresent(members::add);
+                }
+            }
+            resolved.put(TagKey.create(registryKey, Identifier.withDefaultNamespace(name)), members);
+        }
+
+        final MappedRegistry<T> mapped = (MappedRegistry<T>) registry;
+        mapped.bindTags(resolved);
+        // 🔑 bindTags() alone is NOT enough, and the difference is invisible until a read. It fills
+        // the registry's own tag map but never touches the HOLDERS, and Holder.Reference.is(TagKey)
+        // reads the holder's copy -- which still throws "Tags not bound". refreshTagsInHolders() is
+        // private; freeze() is the public call that invokes it (bytecode-verified), and it is what
+        // the real game does after a load.
+        mapped.freeze();
+    }
+
+    /** Flatten a tag's members, following {@code #other_tag} references, with cycle protection. */
+    private static void collectTagMembers(Map<String, List<String>> raw, String name,
+            Set<String> into, Set<String> visiting) {
+        if (!visiting.add(name)) {
+            return;     // a cyclic tag reference: vanilla has none, but do not hang if one appears
+        }
+        for (final String entry : raw.getOrDefault(name, List.of())) {
+            if (entry.startsWith("#")) {
+                collectTagMembers(raw, stripNamespace(entry.substring(1)), into, visiting);
+            } else {
+                into.add(entry);
+            }
+        }
+    }
+
+    private static String stripNamespace(String id) {
+        final int colon = id.indexOf(':');
+        return colon < 0 ? id : id.substring(colon + 1);
+    }
+
+    /**
+     * True if item tags actually bound, with real members.
+     *
+     * <p>The {@link #itemRegistryIsPopulated} argument again, for tags: "this hoe is not in the tag"
+     * and "no tag ever bound" look identical from a failing assertion, and only the second is a
+     * harness fault. A test concluding anything from a tag MISS should rule this out first.
+     */
+    public static boolean itemTagsAreBound() {
+        return BuiltInRegistries.ITEM.get(ItemTags.HOES).map(HolderSet::size).orElse(0) > 0;
     }
 }

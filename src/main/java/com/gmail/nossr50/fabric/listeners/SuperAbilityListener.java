@@ -9,7 +9,6 @@ import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SuperAbilityType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.fabric.McMMOMod;
-import com.gmail.nossr50.fabric.mixin.HoeTillingActionsAccessor;
 import com.gmail.nossr50.platform.Materials;
 import com.gmail.nossr50.skills.herbalism.Herbalism;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
@@ -21,10 +20,7 @@ import com.gmail.nossr50.util.player.NotificationManager;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.sounds.SoundManager;
 import com.gmail.nossr50.util.sounds.SoundType;
-import com.mojang.datafixers.util.Pair;
 import java.util.Optional;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
@@ -32,10 +28,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.item.HoeItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.item.Items;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerPlayer;
@@ -43,6 +37,11 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.BlockTransformer;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.util.RandomSource;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -97,6 +96,16 @@ import net.minecraft.world.level.Level;
  */
 public final class SuperAbilityListener {
 
+    /**
+     * Random source for the read-only {@code isTillAction} query, deliberately NOT the level's.
+     *
+     * <p>{@code BlockStateProvider#getOptionalState} takes a {@link RandomSource} because a
+     * weighted provider picks among states with it. We only read whether the result is
+     * {@code null}, so drawing from {@code level.getRandom()} would perturb world RNG to answer a
+     * question whose answer does not depend on the draw.
+     */
+    private static final RandomSource TILL_QUERY_RANDOM = RandomSource.create();
+
     private SuperAbilityListener() {
     }
 
@@ -146,7 +155,7 @@ public final class SuperAbilityListener {
         // tool on every till — a message and a sound every few seconds, and a permanently armed hoe
         // whose next left-click on a crop spent Green Terra's 240-second cooldown by accident.
         if (McMMOMod.getGeneralConfig().getAbilitiesEnabled() && BlockUtils.canActivateTools(state)
-                && !isTillAction(player, hand, hitResult, state)) {
+                && !isTillAction(player, hand, hitResult)) {
             if (BlockUtils.canActivateHerbalism(state)) {
                 mmoPlayer.processAbilityActivation(PrimarySkillType.HERBALISM);
             }
@@ -593,24 +602,32 @@ public final class SuperAbilityListener {
 
     /**
      * Whether this right-click is about to <b>till</b> — vanilla is going to turn the block into
-     * farmland (or a dirt path / de-waxed copper, whatever else its table holds), so the click is a
+     * farmland (or a dirt path, whatever else the hoe's own transform list holds), so the click is a
      * tool <i>use</i> and not a request to ready the hoe (GitHub #1).
      *
-     * <p>Asked of vanilla's own {@code HoeItem#TILLING_ACTIONS} rather than a block list of ours:
-     * {@code useOnBlock} looks the block up in that map, passes when there is no entry, and otherwise
-     * runs the entry's own predicate (bytecode-verified). Reproducing that here means the answer stays
-     * right when Mojang adds a tillable block or changes a condition, and it costs one map lookup on a
-     * path that already builds several objects.
+     * <p>Asked of vanilla's own data rather than a block list of ours, so the answer stays right when
+     * Mojang adds a tillable block or changes a condition. The mechanism moved in Minecraft 26.3:
+     * where there used to be a {@code HoeItem#TILLABLES} map behind an accessor mixin, a transforming
+     * tool now carries a {@link DataComponents#BLOCK_TRANSFORMER} component listing its transforms.
+     * This reproduces vanilla's own loop from {@code BlockTransformer#transformBlock} (bytecode
+     * verified): skip a transform whose {@code disallowedFaces} contains the clicked face, then ask
+     * its {@code BlockStateProvider} for a state at this position — <b>a {@code null} return is
+     * vanilla's "this transform does not apply here"</b>, and a non-null one means the click
+     * transforms the block.
      *
-     * <p><b>⚠️ The held-item check is the load-bearing half, not the table lookup.</b>
-     * {@code useOnBlock} is an <i>instance</i> method on {@code HoeItem}, so vanilla only ever reaches
-     * that table when the held item is a hoe — and no entry's predicate looks at the item, because by
-     * then it cannot be anything else. The table itself is the five blocks a player spends the game
-     * standing on ({@code grass_block}, {@code dirt}, {@code coarse_dirt}, {@code dirt_path},
-     * {@code rooted_dirt}), so a block-only test would call every right-click on the ground a till and
-     * suppress the ready for <i>every</i> tool: Super Breaker, Giga Drill Breaker, Tree Feller,
-     * Serrated Strikes and Berserk would all become unreadyable while aiming at the floor, which is
-     * exactly where you aim before mining or digging. Trading this issue for that one is not a fix.
+     * <p>✅ <b>The component replaced a mixin, so there is one fewer injection to audit per band.</b>
+     * {@code BLOCK_TRANSFORMER} is public API; the old {@code HoeTillingActionsAccessor} read a
+     * {@code protected static} field and existed only because there was no other way in.
+     *
+     * <p><b>⚠️ The hoe check is the load-bearing half, not the transform lookup — and it got MORE
+     * load-bearing in 26.3, not less.</b> The old table belonged to {@code HoeItem}, so only a hoe
+     * could ever reach it. A {@code BLOCK_TRANSFORMER} component is carried by <b>axes and shovels
+     * too</b> (stripping a log, pathing a grass block), so a component-only test would call an axe
+     * right-click on a log a "till" and suppress readying for <em>Woodcutting</em>, and a shovel on
+     * grass would do the same to <em>Excavation</em>. That is the regression this check exists to
+     * prevent, arriving by a new route. {@link ItemTags#HOES} is vanilla's own answer to "is this a
+     * hoe" now that the class is gone, which keeps the original intent: the question is "will
+     * <i>vanilla</i> till", not "does mcMMO call this a hoe".
      *
      * <p>Deliberately narrow. It suppresses <em>only</em> the click that actually tills:
      * <ul>
@@ -619,31 +636,40 @@ public final class SuperAbilityListener {
      *   <li>right-clicking a crop, farmland, or anything else non-tillable still readies the hoe, so
      *       the legitimate "ready hoe → strike → Green Terra" flow is untouched — and that flow is
      *       order-sensitive (the strike that activates Green Terra also converts the block it hit);</li>
-     *   <li>a hoe click on a tillable block where the predicate fails (something is on top of it) is
+     *   <li>a hoe click on a tillable block where the provider declines (something is on top of it) is
      *       not a till, so it still readies.</li>
      * </ul>
      *
-     * <p>The hoe test is {@code instanceof HoeItem} rather than {@link ItemUtils#isHoe}, because the
-     * question is "will <i>vanilla</i> till", not "does mcMMO call this a hoe". The two can disagree
-     * and both disagreements are safe: a modded hoe outside {@code HoeItem} does not reach this table
-     * so it must still ready, and a {@code HoeItem} outside mcMMO's list cannot ready Herbalism anyway
-     * ({@code processAbilityActivation} gates on {@code isHoldingTool}).
+     * <p>⚠️ <b>Queried with a throwaway {@link RandomSource}, never {@code level.getRandom()}.</b>
+     * This is a question, not the transform: a weighted provider would draw from the level's random
+     * and perturb world RNG for an answer we only read the nullness of. Which state comes back does
+     * not matter here; only whether one does.
      *
      * <p>Package-private for {@code SuperAbilityListenerTillingTest}.
      *
      * @return whether vanilla will till this block with this click
      */
-    static boolean isTillAction(Player player, InteractionHand hand, BlockHitResult hitResult,
-            BlockState state) {
-        if (!(player.getItemInHand(hand).getItem() instanceof HoeItem)) {
+    static boolean isTillAction(Player player, InteractionHand hand, BlockHitResult hitResult) {
+        final ItemStack held = player.getItemInHand(hand);
+        if (!held.typeHolder().is(ItemTags.HOES)) {
             return false;
         }
-        final Pair<Predicate<UseOnContext>, Consumer<UseOnContext>> tilling =
-                HoeTillingActionsAccessor.getTillingActions().get(state.getBlock());
-        if (tilling == null) {
+        final Holder<BlockTransformer> transformer = held.get(DataComponents.BLOCK_TRANSFORMER);
+        if (transformer == null) {
             return false;
         }
-        return tilling.getFirst().test(new UseOnContext(player, hand, hitResult));
+        final Level level = player.level();
+        final BlockPos pos = hitResult.getBlockPos();
+        for (BlockTransformer.BlockTransformData transform : transformer.value().transforms()) {
+            if (transform.disallowedFaces().contains(hitResult.getDirection())) {
+                continue;
+            }
+            if (transform.blockStateProvider().value()
+                    .getOptionalState(level, TILL_QUERY_RANDOM, pos) != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -9,7 +9,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import net.minecraft.ChatFormatting;
-import net.minecraft.util.Util;
+import com.mojang.blaze3d.Blaze3D;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -67,7 +67,7 @@ public final class McMMOInfoScreen extends Screen {
     private void openConfigFolder() {
         try {
             Files.createDirectories(configDir);
-            Util.getPlatform().openUri(configDir.toUri());
+            Blaze3D.openPath(configDir);
         } catch (IOException | RuntimeException e) {
             McMMOMod.LOGGER.warn("Could not open the mcMMO config folder {}", configDir, e);
         }

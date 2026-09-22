@@ -27,7 +27,6 @@
     "FluidBlockFormationMixin",
     "FoodComponentMixin",
     "FurnaceOutputSlotMixin",
-    "HoeTillingActionsAccessor",
     "HorseChildAttributesMixin",
     "HungerManagerExhaustionMixin",
     "LavaFluidStoneFormationMixin",

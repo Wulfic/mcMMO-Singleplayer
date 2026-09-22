@@ -4,10 +4,9 @@ import com.gmail.nossr50.fabric.listeners.AlchemyListener;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.entity.BrewingStandBlockEntity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.alchemy.PotionBrewing;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -46,26 +45,40 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(BrewingStandBlockEntity.class)
 public abstract class BrewingStandBlockEntityMixin {
 
+    /**
+     * ⚠️ <b>Minecraft 26.3 changed all three signatures.</b> {@code isBrewable} and {@code doBrew}
+     * used to be handed the slots as a {@code NonNullList<ItemStack>}; they now take the block entity
+     * and read the slots off it, and every one of the three now takes a {@code ServerLevel} rather
+     * than a {@code Level}. {@code PotionBrewing} — the first parameter of the old
+     * {@code isBrewable} — was deleted outright, brewing having moved to a recipe
+     * ({@code BrewingRecipe} / {@code BrewingInput}) lookup. mcMMO does not consult it either way:
+     * recognition is {@link AlchemyListener#isValidBrew}, which reads the slots.
+     */
+    private static NonNullList<ItemStack> mcmmo$slotsOf(BrewingStandBlockEntity stand) {
+        return ((BrewingStandBrewTimeAccessor) stand).mcmmo$getItems();
+    }
+
     @Inject(method = "isBrewable", allow = 1, at = @At("HEAD"), cancellable = true)
-    private static void mcmmo$forceMcMMOBrewRecognition(PotionBrewing registry,
-            NonNullList<ItemStack> slots, CallbackInfoReturnable<Boolean> cir) {
-        if (AlchemyListener.isValidBrew(slots)) {
+    private static void mcmmo$forceMcMMOBrewRecognition(ServerLevel level,
+            BrewingStandBlockEntity stand, CallbackInfoReturnable<Boolean> cir) {
+        if (AlchemyListener.isValidBrew(mcmmo$slotsOf(stand))) {
             cir.setReturnValue(true);
         }
     }
 
     @Inject(method = "doBrew", allow = 1, at = @At("HEAD"), cancellable = true)
-    private static void mcmmo$onBrewCraft(Level world, BlockPos pos,
-            NonNullList<ItemStack> slots, CallbackInfo ci) {
+    private static void mcmmo$onBrewCraft(ServerLevel level, BlockPos pos,
+            BrewingStandBlockEntity stand, CallbackInfo ci) {
+        final NonNullList<ItemStack> slots = mcmmo$slotsOf(stand);
         if (AlchemyListener.isValidBrew(slots)) {
-            AlchemyListener.onBrewCraft(world, pos, slots);
+            AlchemyListener.onBrewCraft(level, pos, slots);
             ci.cancel();
         }
     }
 
     @Inject(method = "serverTick", allow = 1, at = @At("HEAD"))
-    private static void mcmmo$applyCatalysisBrewSpeed(Level world, BlockPos pos, BlockState state,
-            BrewingStandBlockEntity blockEntity, CallbackInfo ci) {
+    private static void mcmmo$applyCatalysisBrewSpeed(ServerLevel level, BlockPos pos,
+            BlockState state, BrewingStandBlockEntity blockEntity, CallbackInfo ci) {
         AlchemyListener.applyCatalysis(pos, blockEntity);
     }
 }
