@@ -1048,6 +1048,31 @@ Phase E  #16.1 master -> docs-only                    LAST; re-points drift-audi
 **declined**, not built (owner ruling 2026-09-22), and #14 is waiting on a crash log that may never
 arrive. Nothing in Phase A is waiting on this repo.
 
+### 🔴 The caveat-expiry pass for 17.9 found a defect no guard could see — `fbcd3d492`
+
+17.9 shipped **no code**, and the pass still paid for itself. Grepping the **symptom** (`hotbar`)
+rather than the files the item touched turned up **five spots** — `README.md`,
+`wiki/XP-and-Levelling.md` ×2, and the `experience.yml` comment **shipped inside the jar** — all
+claiming the per-skill XP bar *"appears above the hotbar"* and that bars *"stack downward over the
+hotbar"*.
+
+**Both halves are false.** `ExperienceBarWrapper` builds a vanilla `ServerBossEvent`, and Minecraft
+draws boss bars at the **top centre** of the screen. The text contradicted **itself** two lines
+later: bars that stack *downward* and *"eventually cover the screen"* are not bars above the hotbar.
+
+🔑 **Why it survived every previous pass — and this is the part to carry.** The copies were
+**byte-identical on every branch and identically wrong**, so `branch-file-identity-audit.py` was
+green. Its own output says exactly this: *"identical is not correct — six copies of a wrong file
+pass."* No test asserted the wording either (`grep -rn hotbar src/test/` → nothing). **A doc defect
+that is consistent across all branches is invisible to every equality guard in this repo**; only
+reading the code that produces the behaviour finds it — here, one import.
+
+✅ Propagated to all three live bands in the same pass (R-y: `README.md` and `wiki/**` are
+byte-identical by rule). All four guards exit 0 afterwards.
+⚠️ **Exit codes were captured directly, not through a pipe** — `python … | tail` reports **tail's**
+status, and `drift-audit.py` has **no `--local` flag**: it errored outright while the piped exit
+still read `0`.
+
 ✅ **Seven sub-items shipped on `master` in six commits**, suite **174 classes / 1,935 executed /
 0 failures** (was 174 / 1,920 — +15 cases). Every guard was **mutation-tested**, and in three cases
 the mutation is what proved a second test was load-bearing rather than decorative.
