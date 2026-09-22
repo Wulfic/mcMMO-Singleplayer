@@ -3,9 +3,13 @@ package com.gmail.nossr50.config;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
 
+import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
 import com.gmail.nossr50.datatypes.skills.SubSkillType;
+import com.gmail.nossr50.util.skills.RankUtils;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,24 +33,34 @@ import org.yaml.snakeyaml.Yaml;
 class RankConfigTest {
 
     /**
-     * Every {@link SubSkillType} must have a DECLARED entry in {@code skillranks.yml}.
+     * A sub-skill has a {@code skillranks.yml} section <b>if and only if</b> it declares ranks.
      *
-     * <p>GitHub #17.4 found six that did not: {@code PARKOUR_ROLL}, {@code ARCHERY_DAZE},
-     * {@code HERBALISM_HYLIAN_LUCK}, {@code HERBALISM_SHROOM_THUMB}, {@code SMELTING_SECOND_SMELT}
-     * and {@code UNARMED_BLOCK_CRACKER}. None of them failed anything — and that is the point.
-     * {@code RankConfig.getSubSkillUnlockLevel} resolves a missing key through
-     * {@code config.getInt(key, defaultConfig.getInt(key))}, and a missing key answers <b>0</b>, so
-     * each of them silently unlocked at level 0. A sub-skill that is free from the first second of a
-     * new world, because nobody wrote a line in a YAML file, is indistinguishable from one that was
-     * deliberately made free.
+     * <p>Both halves are real defects and both have happened.
      *
-     * <p>They are now declared at 0 — their existing effective value, so behaviour is unchanged —
-     * and this case stops the next one being added without an entry. Driven from
-     * {@code values()}, never a transcribed list, because an enum constant added tomorrow is exactly
-     * what an incremental edit cannot see.
+     * <p><b>Ranked with no section</b> is GitHub #17.4: {@code getSubSkillUnlockLevel} resolves a
+     * missing key through {@code config.getInt(key, defaultConfig.getInt(key))}, a missing key
+     * answers <b>0</b>, and the sub-skill silently unlocks at level 0. Six were found that way, and
+     * a sub-skill that is free from the first second of a new world because nobody wrote a line in a
+     * YAML file is indistinguishable from one that was deliberately made free.
+     *
+     * <p><b>Rank-less with a section</b> is the defect the #17.4 fix introduced while closing the
+     * first: {@link com.gmail.nossr50.util.skills.RankUtils#getRank} short-circuits to {@code -1}
+     * when {@code numRanks == 0}, <em>before</em> any unlock level is read, so those six entries
+     * were parsed, validated and never consulted. The old version of this test asserted a key at an
+     * address the runtime never visits for exactly those sub-skills — it could not fail for a real
+     * reason on them, while reporting the whole family as covered. Five of the six were harmless
+     * (a probability ramp did the gating); {@code UNARMED_BLOCK_CRACKER} had no ramp, so
+     * always-unlocked meant always-on, and it was given a real rank instead.
+     *
+     * <p>⚠️ This is about declaring <em>no ranks</em>, not about the value {@code 0}.
+     * {@code Alchemy.Catalysis} ships {@code Rank_1: 0} and is read every time — that is a
+     * deliberate "available immediately" on a sub-skill that does have a rank.
+     *
+     * <p>Driven from {@code values()}, never a transcribed list, because an enum constant added
+     * tomorrow is exactly what an incremental edit cannot see.
      */
     @Test
-    void everySubSkillDeclaresItsUnlockLevel(@TempDir Path dataFolder) throws Exception {
+    void aSubSkillHasARankSectionExactlyWhenItHasRanks(@TempDir Path dataFolder) throws Exception {
         final Map<String, Object> yaml;
         try (InputStream in = RankConfigTest.class.getResourceAsStream("/skillranks.yml")) {
             assertNotNull(in, "bundled skillranks.yml missing from the test classpath");
@@ -54,20 +68,69 @@ class RankConfigTest {
         }
 
         final RankConfig config = new RankConfig(dataFolder);
-        final Set<String> undeclared = new TreeSet<>();
+        final Set<String> rankedButUndeclared = new TreeSet<>();
+        final Set<String> rankLessButDeclared = new TreeSet<>();
+        int rankLessSeen = 0;
         for (SubSkillType subSkill : SubSkillType.values()) {
             // getRankAddressKey builds "<Skill>.<SubSkill>.<Mode>.Rank_<n>" -- the same address the
-            // reader uses, so this cannot pass by looking somewhere the runtime never looks.
+            // reader uses, so neither direction can pass by looking somewhere the runtime never looks.
             final String[] parts = config.getRankAddressKey(subSkill, 1, false).split("\\.");
             final Object skillSection = yaml.get(parts[0]);
             final Object subSection = skillSection instanceof Map<?, ?> m ? m.get(parts[1]) : null;
-            if (subSection == null) {
-                undeclared.add(subSkill.name());
+            final boolean hasRanks = subSkill.getNumRanks() > 0;
+            if (hasRanks && subSection == null) {
+                rankedButUndeclared.add(subSkill.name());
+            } else if (!hasRanks) {
+                rankLessSeen++;
+                if (subSection != null) {
+                    rankLessButDeclared.add(subSkill.name() + " -> " + parts[0] + "." + parts[1]);
+                }
             }
         }
-        assertTrue(undeclared.isEmpty(),
-                "these sub-skills have no skillranks.yml entry and so silently unlock at level 0: "
-                        + undeclared);
+
+        // ⚠️ The loop above asserts nothing about a rank-less sub-skill if there are none left, and
+        // an assertion that cannot fail is the exact defect this test was rewritten to close. If the
+        // last rank-less sub-skill is ever given a rank, this line reddens and says so, rather than
+        // letting the second half of the biconditional quietly become decoration.
+        assertTrue(rankLessSeen > 0,
+                "no rank-less sub-skill left, so half of this test asserted nothing; re-point it or "
+                        + "delete it deliberately");
+
+        assertTrue(rankedButUndeclared.isEmpty(),
+                "these sub-skills declare ranks but have no skillranks.yml entry, so every rank "
+                        + "silently unlocks at level 0 (GitHub #17.4): " + rankedButUndeclared);
+        assertTrue(rankLessButDeclared.isEmpty(),
+                "these sub-skills declare NO ranks, so RankUtils.getRank returns -1 before reading "
+                        + "any unlock level and the entry below is dead config the runtime never "
+                        + "consults -- delete it, or give the sub-skill a real rank: "
+                        + rankLessButDeclared);
+    }
+
+    /**
+     * The mechanism that made the old guard vacuous, pinned so it cannot be forgotten and re-created.
+     *
+     * <p>A rank-less sub-skill is <b>always unlocked, for everyone, from level 0</b>, and no entry in
+     * {@code skillranks.yml} can change that. Writing one looks like gating it and does nothing —
+     * which is precisely what happened to six sub-skills for a day. Anyone tempted to re-add an entry
+     * has to make this test fail first, and it says what to do instead.
+     */
+    @Test
+    void aRankLessSubSkillIsAlwaysUnlockedAndNoEntryCanGateIt() {
+        final McMMOPlayer mmoPlayer = mock(McMMOPlayer.class, RETURNS_DEEP_STUBS);
+
+        int checked = 0;
+        for (SubSkillType subSkill : SubSkillType.values()) {
+            if (subSkill.getNumRanks() > 0) {
+                continue;
+            }
+            checked++;
+            assertEquals(-1, RankUtils.getRank(mmoPlayer, subSkill),
+                    subSkill + " declares no ranks, so getRank must short-circuit to -1");
+            assertTrue(RankUtils.hasUnlockedSubskill(mmoPlayer, subSkill),
+                    subSkill + " declares no ranks, so it is unlocked for everyone and an unlock "
+                            + "level cannot be made to apply to it");
+        }
+        assertTrue(checked > 0, "no rank-less sub-skill was exercised, so this test asserted nothing");
     }
 
     /**
