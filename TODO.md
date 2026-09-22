@@ -1239,7 +1239,7 @@ would need if it ever earns XP of its own.
       should Smelting hold its own XP (a real change to the child-skill model)? The issue's wording
       — *"gets lvled up passively"* — reads as the former, which is what shipped.
 
-## §69 — the topology change: MC 26.3 first, then the six-band archive — ⬜ OPEN
+## §69 — the topology change: MC 26.3 first, then the six-band archive — 🟡 PHASE C DONE, D OPEN
 
 **THE PLAN, written before any code (Tier 2).** Six owner rulings taken 2026-09-21, each put as a
 question with its collision named; all are in `.agent/memory/decisions.md` under
@@ -1284,39 +1284,101 @@ release with nothing to report it. It happens to be 25 — that is a measurement
 only; never bundled"*, so a beta cannot reach a player through our jar. If it breaks the dev build,
 drop the integration for the band rather than pinning `master` to a ModMenu that does not know 26.3.
 
-### Phase C — cut `mc/26.2`, move `master` to 26.3
+### Phase C — cut `mc/26.2`, move `master` to 26.3 — ✅ DONE ON `master`, ⬜ NOT PROPAGATED
 
-Follows the per-band recipe above, with **one inversion worth stating**: a normal cut takes an
-*older* band off `master` and re-pins the NEW branch. Here `master` itself moves forward, so
-`mc/26.2` inherits pins that are **already correct** and recipe step x.2 is a no-op on the branch —
-the re-pin lands on `master` instead. Do not read x.2 as "nothing to do".
+✅ **Shipped in two commits, deliberately split**: `f434d7e41` (docs + manifests, **propagates**) and
+`d6761338c` (the port, **does not**). They could not be one commit: `README.md`, `wiki/**` and
+`scripts/**` are byte-identical across branches **by rule** (R-y, P19-1), while the port breaks every
+band that is not 26.3. A single commit could not have taken either trailer honestly.
 
-- [ ] **C.1** `git switch -c mc/26.2` off `master` at its current tip. No toolchain commit needed
-      (`minecraft_version=26.2`, `supported_minecraft_versions=26.2` are already correct).
-- [ ] **C.2** Recipe x.4 — `git ls-tree -r --name-only HEAD -- .github` on `mc/26.2` must list
-      **exactly three** paths. `.github/` is gitignored; re-add by explicit path, never
-      `git add -f .github`.
-- [ ] **C.3** On `master`, re-pin `gradle.properties` to the table above, **and nothing else** in
-      that commit. `supported_minecraft_versions=26.3`.
-- [ ] **C.4** `fabric.mod.json` `depends.minecraft` → the 26.3 range. `BandVersionLabelTest` proves
-      it agrees with `supported_minecraft_versions` in both directions — run it, do not assume.
-- [ ] **C.5** Compile. Fix **inside `fabric/` and `platform/` only**; `PlatformBoundaryGuardTest`
-      stays green. Recipe x.6: ask whether `master` can absorb each difference — and measure the
-      absorption's reach, because MC API availability is **not monotonic**.
-- [ ] **C.6** Regenerate the per-band generated facts on `master`: `./gradlew classes testClasses`
-      FIRST, then `extract-mc-surface.py` (a stale `build/classes` yields a confidently wrong
-      answer), then `probe-bands.py`. ⚠️ `mc-ids.txt` is a fact about **Minecraft**, not a branch —
-      adding 26.3 regenerates it once on `master` and it is **cherry-picked**, never regenerated
-      per band.
-- [ ] **C.7** Recipe x.7 — **gate 2 (`mixin-allow-audit.py --check`) BEFORE gate 1.** A clean
-      compile is structural; §42 found an injector that compiled perfectly and bound to nothing.
-- [ ] **C.8** Declare the new band: add `mc/26.2` to `scripts/expected-bands.txt`, on `master`
-      first, then every live band. Run `expected_bands.py --self-test` first — *"sets match"* is
-      also what a broken comparator prints.
-- [ ] **C.9** Full suite, then the ship gates that can run without a push. Record which cannot.
+🔑 **The plan called this "a band cut". It was a PORT.** 26.3 did not rename API, it **deleted**
+classes this mod is built on. That is the one prediction in §69's go/no-go that was wrong, and it was
+wrong in the expensive direction.
 
-⚠️ **The support-floor sentence is deliberately NOT changed in Phase C.** It moves once, in Phase D,
-because the archive is what determines its new value. Changing it twice is how a doc claim rots.
+- [x] **C.1** `mc/26.2` cut off `master` at `ce34cd2ea`. ✅ **It needed NO commit of its own** —
+      the inversion §69 predicted held: `minecraft_version=26.2` and `supported_minecraft_versions=26.2`
+      were already correct, so the band inherits them and the re-pin lands on `master` instead.
+      🔑 **Cutting it from the current tip IS the propagation for that band**: it carries all ten
+      Phase A commits already, so no cherry-pick is owed to `mc/26.2` for them.
+- [x] **C.2** `.github` inheritance verified: exactly three paths.
+- [x] **C.3/C.4** `gradle.properties` + `fabric.mod.json` re-pinned. **Every pin verified by fetching
+      its POM**, which is how the one bad value was caught — see the gotcha below.
+- [x] **C.5** Compiles. **Seven API breaks**, all resolved against the Loom-cached merged jar:
+
+      | Break | 26.3 answer |
+      |---|---|
+      | `EnderMan` | → `Enderman` (capitalisation, same package) |
+      | `net.minecraft.Util` | → `net.minecraft.util.Util`; `OS.openUri` **gone** → `Blaze3D.openPath` |
+      | `ServerPlayer.drop(stack, bool)` | gained a **`Prediction`** arg (`SERVER_ONLY`) |
+      | `VanillaRegistries.createLookup` | → `createWorldLookup` |
+      | **`PotionBrewing`** | **DELETED**; `isBrewable`/`doBrew`/`serverTick` all changed shape and no longer receive the slots |
+      | **`HoeItem`** | **DELETED**, with `AxeItem` and `ShovelItem` — the whole per-tool hierarchy |
+      | `LavaFluid.spreadTo`'s `setBlock` | → `setBlockAndUpdate` |
+
+      🔴 **TWO OF THOSE COMPILED PERFECTLY AND BOUND TO NOTHING** — the lava-generator gate and Fuel
+      Efficiency. `allow = 1` is the only reason they were loud instead of silently dead. This is the
+      §42 shape again, and it is why recipe x.7 puts gate 2 **before** gate 1.
+- [x] **C.6** `mc-surface.txt` regenerated (**`MIXINCLASS 36`**, was 37), `mc-ids.txt` given a 26.3
+      section (17 versions, 46 489 ids), `probe-bands.py --check` **green: 1466 records resolve on
+      26.3**, control trusted.
+- [x] **C.7** Gate 2 **`ZERO=0 SLICE=1 OK=60`** — the same state it held on 26.2.
+- [x] **C.8** `mc/26.2` declared in `expected-bands.txt`; `--self-test` passes and `--verify --local`
+      reports 9 declared, none undeclared. ⬜ **Owed to the live bands** — see D.7.
+- [x] **C.9** Suite **174 classes / 1 942 tests / 0 failures** (`test` 1 929 + `tagBoundTest` 13),
+      counted from the JUnit XML with the task **confirmed executed, not restored from the build
+      cache**. Gate 4 exits 0 — its 3 absent ids on 26.3 are the same 3 already absent on 26.2, so
+      the move introduced no new drift.
+
+#### 🔑 Tilling was REDESIGNED, and the danger moved with it
+
+`isTillAction` — the **GitHub #1** gate that stops a till from also re-readying the hoe — read
+`HoeItem#TILLABLES` through an accessor mixin. **That map does not exist anywhere in the 26.3 jar.**
+Tool/block interaction is now the `BLOCK_TRANSFORMER` data component.
+
+✅ It now reproduces **vanilla's own loop** from `BlockTransformer#transformBlock` (bytecode-read):
+skip a transform whose `disallowedFaces` holds the clicked face, then ask its `BlockStateProvider`
+for a state — **a `null` return is vanilla's "does not apply here"**.
+✅ **`HoeTillingActionsAccessor` is DELETED** — the component is public API, so this is **one fewer
+injection to audit per band**.
+⚠️ Queried with a **throwaway `RandomSource`**: a weighted provider would otherwise perturb world RNG
+to answer a question whose answer does not depend on the draw.
+
+🔴 **The held-item gate got MORE load-bearing, not less — and this is the trap to remember.** The old
+table belonged to `HoeItem`, so *"is it a hoe"* was implied by reaching it at all. **Axes and shovels
+carry `BLOCK_TRANSFORMER` too**, so a component-only test calls an axe on a log and a shovel on grass
+a *till* and suppresses readying for **Woodcutting** and **Excavation**. `ItemTags.HOES` is the
+replacement gate, and both pairs now have a test **with a premise check** proving the pair really does
+match — otherwise `assertFalse` would prove nothing.
+
+🧪 **Mutation-tested in three directions, each caught by a DISJOINT set:** removing the hoe gate fails
+exactly the **3** over-suppression guards; inverting the transform match fails **4** negative cases;
+never returning true fails the **4** positive ones.
+
+#### 🔴 `tagBoundTest` — a new Gradle task, and why it is not optional
+
+`isTillAction` reads `ItemTags.HOES`, and the transform's own predicate is a
+`MatchingBlockTagPredicate`. **`Bootstrap.bootStrap()` binds neither**, and an unbound tag does not
+read as empty — it **throws**. `McTestRegistries` can now bind vanilla item *and* block tags, read out
+of the jar with `#tag` references **resolved rather than skipped** (skipping under-populates a tag,
+and an under-populated tag answers `false`, which reads as a clean *"not a till"*).
+🔑 **`bindTags()` alone is not enough** — it fills the registry's tag map but never the **holders**;
+`freeze()` is the public call that refreshes them.
+
+🔴 **The binding is opt-in and its one caller runs in its own JVM.** `BlockUtilsTest` asserts tags are
+**UNBOUND** — its Hylian assertions only prove the suppliers are lazy if evaluating one would throw —
+and **its javadoc predicted this exact day**. `test` runs `maxParallelForks = 4` with
+**non-deterministic** class assignment, so leaving both in one task would not have produced a failure
+but a **COIN FLIP**. Owner ruled: isolate.
+⚠️ **If you add a class that calls `bootstrapWithTags()`, add it to `tagBoundTest`'s filter in the
+same change.**
+
+### ⬜ What Phase C still owes
+
+- [ ] **Propagate `f434d7e41`** (docs + manifests) to the live bands — `mc/26.2`, `mc/26.1.2`,
+      `mc/1.21.11` — with `Backport-of:` trailers, **from a scratch clone**.
+      🔴 **Never propagate `d6761338c`** — it would break all eight other bands.
+- [ ] **The ten Phase A commits** are still unpropagated. `mc/26.2` has them by inheritance; the other
+      two live bands do not.
 
 ### Phase D — archive the six `1.21.x` bands below `1.21.11`
 
