@@ -1068,8 +1068,17 @@ def self_test() -> int:
         return 1
     # An anti-vacuity floor: if a block of checks is deleted or an early `return` creeps in, the
     # count drops and this refuses. "0 checks ran" and "everything passed" print identically.
-    if len(ran) < 43:
-        print(f"SELF-TEST INCONCLUSIVE: only {len(ran)} checks ran, expected at least 43")
+    #
+    # EXACT, not the `< 43` lower bound this used to be. That bound was written when 43 checks
+    # existed; fifteen were added afterwards and nothing reported the slack, because a lower bound
+    # only ever fails downward. An exact count fails in BOTH directions, so adding a check forces a
+    # deliberate bump here -- the friction IS the mechanism. Do not derive it by counting `check(`
+    # in this file: deleting a check would drop both sides together and this would still pass.
+    EXPECTED_CHECKS = 58
+    if len(ran) != EXPECTED_CHECKS:
+        print(f"SELF-TEST INCONCLUSIVE: {len(ran)} checks ran, expected exactly "
+              f"{EXPECTED_CHECKS}. A check was added, deleted or SKIPPED -- if you meant it, "
+              f"update the literal in the same commit.")
         return 1
     print(f"SELF-TEST PASSED ({len(ran)} checks)")
     return 0
