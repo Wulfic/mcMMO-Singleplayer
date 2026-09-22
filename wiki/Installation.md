@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Minecraft** | 1.21 – 1.21.11 and 26.1 – 26.2 — see [Supported versions](#supported-versions) |
+| **Minecraft** | 1.21 – 1.21.11 and 26.1 – 26.3 — see [Supported versions](#supported-versions) |
 | **Fabric Loader** | ≥ 0.19.3 |
 | **Fabric API** | required |
 | **Java** | 21 or newer |
@@ -15,6 +15,7 @@ mcMMO-SP ships **one build per version band**. A band is a run of Minecraft vers
 
 | Minecraft | Jar file | Fabric API | Mod Menu | Cloth Config |
 |---|---|---|---|---|
+| **26.3** | `mcmmo-<version>+mc26.3.jar` | `0.161.0+26.3` | `21.0.0-beta.1` | `26.3.158` |
 | **26.2** | `mcmmo-<version>+mc26.2.jar` | `0.158.0+26.2` | `20.0.1` | `26.2.155` |
 | **26.1 – 26.1.2** | `mcmmo-<version>+mc26.1-26.1.2.jar` | `0.155.2+26.1.2` | `18.0.0` | `26.1.154` |
 | **1.21.11** | `mcmmo-<version>+mc1.21.11.jar` | `0.141.4+1.21.11` | `17.0.0` | `21.11.153` |
@@ -29,7 +30,7 @@ Every band needs Fabric Loader ≥ 0.19.3. The `1.21.x` bands need Java 21+; the
 
 That label is only the half you read. Each jar also declares the same band as a dependency range in `fabric.mod.json`, which is the half Fabric Loader **enforces** — a mismatched install is stopped at startup with a clear message rather than misbehaving quietly. A test keeps the two in agreement, so a filename promising a version the loader would refuse fails the build instead of reaching this page.
 
-**Minecraft 1.20.6 and older are not supported**. The whole `26.x` line **is** supported: two bands in the table above cover `26.1`, `26.1.1`, `26.1.2` and `26.2`.
+**Minecraft 1.20.6 and older are not supported**. The whole `26.x` line **is** supported: three bands in the table above cover `26.1`, `26.1.1`, `26.1.2`, `26.2` and `26.3`.
 
 ### What differs between bands
 
