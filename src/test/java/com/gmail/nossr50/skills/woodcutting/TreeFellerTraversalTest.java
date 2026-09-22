@@ -103,11 +103,20 @@ class TreeFellerTraversalTest {
         }
         final List<FelledBlock> felled = TreeFellerTraversal.collect(0, 0, 0, 100, tree);
 
+        // THE FLOOR IS THE TEST. Without it this loop asserts nothing: an empty result
+        // has no duplicates either, so "never returns duplicates" is trivially true of
+        // felling NOTHING. Measured -- making collect() return an empty list reddened
+        // three cases in this class and left this one GREEN.
+        // 11 = the 2 trunk logs + the 3x3 leaf slab; the start block is excluded.
+        assertEquals(11, felled.size(),
+                "the fixture must actually fell something, or the dedup check below is vacuous");
+
         final Set<Long> seen = new HashSet<>();
         for (FelledBlock block : felled) {
             assertTrue(seen.add(MockTree.key(block.x(), block.y(), block.z())),
                     "coordinate " + block + " felled more than once");
         }
+        assertEquals(felled.size(), seen.size(), "every felled coordinate must be distinct");
     }
 
     @Test
