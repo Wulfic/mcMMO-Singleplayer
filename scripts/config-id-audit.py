@@ -954,10 +954,14 @@ def self_test() -> int:
     flat = {(src, kind, tok) for src, entries in found.items() for kind, tok in entries}
     tokens = {tok for _, _, tok in flat}
 
+    # COUNT WHAT RUNS. See the anti-vacuity floor before the summary print.
+    ran_must = ran_mustnot = ran_norm = ran_entity = 0
     for want in sorted(SELF_TEST_MUST_FIND):
+        ran_must += 1
         if want not in flat:
             failures.append(f"MISSED  {want[0]:38} {want[1]:5} {want[2]}")
     for bad in sorted(SELF_TEST_MUST_NOT_FIND):
+        ran_mustnot += 1
         if bad in tokens:
             where = sorted(s for s, _, t in flat if t == bad)
             failures.append(f"FALSE+  {bad!r} extracted from {where}")
@@ -966,6 +970,7 @@ def self_test() -> int:
     checks = [("WATER_LILY", "lily_pad"), ("Iron_Ore", "iron_ore"),
               ("minecraft:stone", "stone"), ("somemod:stone", None), ("  ", None)]
     for raw, want in checks:
+        ran_norm += 1
         got = normalise(raw)
         if got != want:
             failures.append(f"NORM    normalise({raw!r}) = {got!r}, want {want!r}")
@@ -986,6 +991,7 @@ def self_test() -> int:
         ("Snow_Golem", True, "...and the corrected spelling must resolve"),
     ]
     for tok, want, why in entity_cases:
+        ran_entity += 1
         got = resolve_all({"t.yml:S": {(ENTITY, tok)}}, entity_sets)[("t.yml:S", ENTITY, tok)]
         if got != want:
             failures.append(f"ENTITY  {tok!r} resolved={got}, want {want} -- {why}")
@@ -1011,6 +1017,24 @@ def self_test() -> int:
             if "Excavation" not in str(e) or "BONUS_DROP_KIND" not in str(e):
                 failures.append(f"CLOSED  refused, but the message names neither the section nor "
                                 f"the map to fix: {e}")
+
+    # ANTI-VACUITY FLOOR (section 75). Every count below was ALREADY being printed in the PASS
+    # line and none of it was asserted, so emptying any one collection produced
+    # "PASS -- 0 normalisation cases correct" at exit 0. A printed count is not a floor.
+    # 🔑 These count EXECUTED iterations, not len() of the declared list. Both halves matter and
+    # they catch different things: `== 0` catches a collection that is empty, `!= len(...)`
+    # catches a loop that ran over only SOME of it -- an over-matching filter or an added
+    # `continue`, which leaves the list at full length while the body runs less often or not at
+    # all. A floor over the declared list is blind to that half; section 75 measured every other
+    # floor in scripts/ to have exactly that blind spot.
+    for label, ran, declared in (
+        ("required-reference", ran_must, len(SELF_TEST_MUST_FIND)),
+        ("must-not-find", ran_mustnot, len(SELF_TEST_MUST_NOT_FIND)),
+        ("normalisation", ran_norm, len(checks)),
+        ("entity-resolution", ran_entity, len(entity_cases)),
+    ):
+        if ran == 0 or ran != declared:
+            failures.append(f"FLOOR   RAN {ran}/{declared} {label} cases -- cases were SKIPPED")
 
     print("=== SELF-TEST ===")
     print(f"  fixture produced {len(flat)} references across {len(found)} sections")

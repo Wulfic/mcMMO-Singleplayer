@@ -1109,9 +1109,12 @@ def self_test() -> int:
     # command *produces*. Its symptom is not a failure -- it is every affected phase reporting
     # INCONCLUSIVE forever, which reads as "the harness could not tell" rather than "the harness is
     # broken". So the emission side is checked here, against the real command table.
+    ran_phases = ran_markers = ran_cases = 0
     for phase in PHASES:
+        ran_phases += 1
         emitted = " ".join(phase.commands)
         for marker in phase.requires_markers:
+            ran_markers += 1
             if f"===MARK {marker}===" not in emitted:
                 print(f"  [BROKEN] phase '{phase.name}' requires marker '{marker}' but no command "
                       f"in it emits '===MARK {marker}==='")
@@ -1130,6 +1133,7 @@ def self_test() -> int:
         print("  [ok] every double-click phase lands its confirming click inside the worst-case window")
 
     for label, mutation, profile, should_flag in cases:
+        ran_cases += 1
         log = _synthetic_log(mutation)
         v = check(log, profile)
         snaps = parse_snapshots(log)
@@ -1157,6 +1161,33 @@ def self_test() -> int:
             print(f"  [BROKEN] {label}: expected flagged={should_flag}, got {flagged}")
             print("\n".join("      " + line for line in v.lines))
             failures += 1
+    # ANTI-VACUITY FLOOR (section 75). Three loops above announce an [ok] or a pass that they
+    # cannot withhold when they iterate nothing. Emptying `cases` printed
+    # "=== self-test passed (0 cases)" and exited 0 -- the count was in the message and nothing
+    # compared it to anything.
+    # 🔑 COUNT WHAT RAN. A floor written as len(cases) still reads 9 when the body executes zero
+    # times, which is the half a declared-length floor cannot see: an over-matching filter or an
+    # added `continue` leaves the list full and the loop empty.
+    # ⚠️ The per-case floor further down (`expected = 3 + len(gates) + sum(... for p in PHASES)`)
+    # is DERIVED, which is right, and it is derived FROM PHASES -- so anything that empties this
+    # function's view of PHASES also lowers that floor to match. It lives inside the `cases` loop
+    # too, so zero iterations run zero floor checks. Both are why the counters below sit OUTSIDE
+    # every loop.
+    # ⚠️ `pacing` is deliberately NOT floored here: check_double_click_pacing() already refuses
+    # with "the pacing guard measured NOTHING" when it sees no double-click phase. Measured, not
+    # assumed -- do not add a second floor for it and do not delete that one.
+    for label, ran, declared in (
+        ("phase marker-emission", ran_phases, len(PHASES)),
+        ("scorer", ran_cases, len(cases)),
+    ):
+        if ran == 0 or ran != declared:
+            print(f"  [BROKEN] FLOOR: RAN {ran}/{declared} {label} cases -- cases were SKIPPED")
+            failures += 1
+    if ran_markers == 0:
+        print("  [BROKEN] FLOOR: the marker check asserted NOTHING -- no phase declared a "
+              "required marker, so its [ok] above is about an empty set")
+        failures += 1
+
     if failures:
         print(f"=== SELF-TEST FAILED ({failures})")
         return 1
