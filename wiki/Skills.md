@@ -73,10 +73,12 @@ Earn XP by harvesting crops and plants. Super ability: **Green Terra**.
 | Double Drops | 1 | Skilfully harvest double the loot. |
 | Verdant Bounty | 1 | While **Green Terra** is active, a successful Double Drop roll yields *triple* instead of double. It is a rider on Green Terra, not a roll of its own — so its chance **is** the Double Drop chance, and you tune it with `DoubleDrops`. |
 | Farmer's Diet | 5 | Improves hunger restored from farmed foods. |
-| Hylian Luck | 1 | Sword-breaking flowers, bushes, saplings and flower pots can turn up rare treasure **instead of** the normal drop. |
-| Shroom Thumb | 1 | Spread mycelium to dirt & grass. |
+| Hylian Luck | — | Sword-breaking flowers, bushes, saplings and flower pots can turn up rare treasure **instead of** the normal drop. |
+| Shroom Thumb | — | Spread mycelium to dirt & grass. |
 
 > **Note:** harvesting crops **from horseback pays no XP** (`Skills.Herbalism.Prevent_AFK_Leveling`, shipped on). This is an anti-AFK gate, not a bug.
+
+**Hylian Luck and Shroom Thumb have no rank ladder** and deliberately no `skillranks.yml` entry — both are available from level 1, gated by a chance that scales with Herbalism rather than by an unlock level. The same call Mob Mastery and Roll made.
 
 ## Excavation
 
@@ -170,9 +172,11 @@ Fighting with an empty hand. Super ability: **Berserk**. (Not to be confused wit
 | Sub-skill | Ranks | Effect |
 |---|---|---|
 | Skill Shot | 20 | Increases bow damage. |
-| Daze | 1 | Disorients foes and deals extra damage. |
+| Daze | — | Disorients foes and deals extra damage. |
 | Arrow Retrieval | 1 | Chance to retrieve arrows from corpses. |
 | Archery Limit Break | 10 | **Off by default.** Flat +1 damage per rank (rank 1 at level 100, rising to +10 at level 1000). Enable in Settings -> Abilities. |
+
+**Daze has no rank ladder** and deliberately no `skillranks.yml` entry — it is available from level 1, gated by a chance that scales with Archery rather than by an unlock level. The same call Mob Mastery and Roll made.
 
 ## Crossbows
 
@@ -297,7 +301,7 @@ Earn XP by **sprinting on land**. Falling, rolling and dodging pay into Parkour 
 
 Every one of them is gated on Parkour itself, so you earn them by running, jumping and landing rather than by a swimmer and a flier dragging an average up. Roll and Dodge matter most: falling and dodging pay their XP *into* Parkour, so the very hits that earn them now level their own unlock at full rate.
 
-Roll has no rank ladder — it is available from level 1 and its odds scale linearly with Parkour, reaching the configured maximum at Parkour 1000 (RetroMode). `/mcstats parkour` shows both the plain and the Graceful figure.
+Roll has no rank ladder — and so deliberately no `skillranks.yml` entry — it is available from level 1 and its odds scale linearly with Parkour, reaching the configured maximum at Parkour 1000 (RetroMode). `/mcstats parkour` shows both the plain and the Graceful figure.
 
 ## Swimming
 
@@ -410,6 +414,8 @@ Level = mean of **Mining + Repair**. Applies while smelting in a furnace.
 
 | Sub-skill | Ranks | Effect |
 |---|---|---|
-| Second Smelt | 1 | Double the resources gained from smelting. |
+| Second Smelt | — | Double the resources gained from smelting. |
 | Fuel Efficiency | 3 | Increases the burn time of furnace fuel. |
 | Understanding the Art | 8 | Boosts the vanilla XP a furnace drops. |
+
+**Second Smelt has no rank ladder** and deliberately no `skillranks.yml` entry — it is available from the first smelt, gated by a chance that scales with Smelting rather than by an unlock level. The same call Mob Mastery and Roll made.
