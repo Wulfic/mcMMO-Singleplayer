@@ -467,7 +467,30 @@ The band cannot run its own gates until its tooling speaks official names.
       ⚠️ **Corrected while measuring:** the conversion does fail today, but *incidentally* — on
       `cloth-config`'s access widener, an optional dependency, with an error naming the wrong
       culprit. Not "no gate catches it"; "nothing names it, and the accidental catch can vanish".
-- [ ] ⬜ **`TODO.md`'s one-blob-on-every-branch invariant.** `master` no longer describes the same
+- [x] 🚫 **RETIRED 2026-09-22 by owner ruling (§71, ruling 2). `TODO.md` has NO cross-branch identity
+      invariant any more, and that is now the deliberate, recorded state rather than a default.**
+      **Why retired rather than repaired:** the `26.x` split already decided it. `master` genuinely
+      does not describe the same product as `mc/1.21.11`, so one blob across ten branches would
+      require the document to be **wrong on nine of them**. Byte-identity would have bought
+      consistency at the cost of correctness — and **R-y's first run proved the band can be the one
+      that is right**, with identity intact the whole time.
+      🔑 **The failure this closes is not the drift; it is the SILENCE.** The row below predicted its
+      own ending in writing (*"decided by default rather than at 9.5"*), the default won anyway, and
+      **no gate went red** because `TODO.md` sits in the seam: excluded from `drift-audit.py`
+      (propagation), absent from `branch-file-identity-audit.py` (identity). **A written prediction
+      is not a guard.**
+      ⚠️ **The seam is NOT closed, and must not be read as closed.** Retiring the invariant means
+      nothing is expected of `TODO.md` across branches — it does **not** mean something now checks it.
+      This is the **second** file to fall in that exact gap (`mod_version` was the first, closed by
+      **R-w′**'s per-key guard). **Two is a pattern: when a shared file needs neither equality nor
+      propagation, no guard in this repo covers it.**
+      🔴 **Do NOT "restore" one blob in a later session.** It is retired on purpose; re-propagating
+      `TODO.md` to the bands would knowingly ship a wrong document to nine of them.
+      ✅ **What `TODO.md` still owes, unchanged:** it stays `master`-authoritative and
+      **excluded from propagation**. Band-specific notes belong in the band's own copy.
+
+- [x] ⬜ **The original row, kept verbatim below because the reasoning is the record.**
+      **`TODO.md`'s one-blob-on-every-branch invariant.** `master` no longer describes the same
       product as the bands, so propagation cannot fix the drift this time. Decide at 9.5 whether the
       invariant survives the `26.x` split at all.
       📌 **Measured 2026-09-01: the invariant HOLDS — `git rev-parse <b>:TODO.md` is one blob on
@@ -491,12 +514,11 @@ The band cannot run its own gates until its tooling speaks official names.
       the defect is that it was read as a standing fact for three weeks. A dated measurement is a
       snapshot — this is the same lesson as the *"status row cannot count the commit it is written
       in"* block at the top of this file, arriving in a second place.
-      ⬜ **Still undecided, and now urgent rather than theoretical:** does the invariant survive at
-      all? 🔑 **The honest answer is that the `26.x` split already decided it — `master` genuinely
-      does not describe the same product as `mc/1.21.11`**, so one blob on nine branches would now
-      require the document to be wrong on eight of them. **Recommendation: retire the invariant
-      explicitly** rather than leave a broken one on the books, since a guard nobody can satisfy is
-      one people learn to ignore. ⚠️ **Owner call — not taken unilaterally.**
+      ✅ **ANSWERED 2026-09-22 — the owner took the recommendation and the invariant is RETIRED.**
+      See the retirement block immediately above; this paragraph is the question it answers.
+      The recommendation on file was *"retire it explicitly, since a guard nobody can satisfy is one
+      people learn to ignore"*, and that is the ruling. 🔑 **It was asked, not assumed** — deciding it
+      silently is the precise failure §70 reported about this very row.
 
 ### 🔑🔑 The five blind spots §29 – §33 found — every one read GREEN on every gate
 
@@ -965,7 +987,33 @@ has no crash log attached** — see its row.
 
 ### #16 — refactor and update (owner, 2026-09-20) — TWO of three DONE; 16.1 still needs a ruling
 
-- [ ] 🔴 **16.1 — "no code in the main branch."** Issue text: *"Refactor the READMEs, so we have no
+- [x] 🚫 **16.1 — CLOSED WON'T FIX, owner ruling 2026-09-22 (§71, ruling 3). Phase E is cancelled,
+      not deferred — there is no remaining phase in §69.**
+      **The ruling:** *"Decline — incompatible with R-a."* Asked with the full blast radius on the
+      table; the answer was to close it rather than reinterpret it.
+      🔑 **Why it cannot be done as written, in one line:** under **R-a** `master` **is** the newest
+      supported band. It is not a landing page that happens to hold code — it is the band the newest
+      Minecraft version ships from, the reference every band is graded against, and the only ref
+      GitHub fires `schedule` from. *"No code in the main branch"* removes all three at once.
+      ↩️ **What it would have cost, stated so nobody re-opens it as a five-minute refactor:**
+
+      | Load-bearing thing | What a docs-only `master` does to it |
+      |---|---|
+      | **R-a** — `master` IS the newest band | Gone. 26.3 would need a band branch of its own, and every reference to *"land it on `master` first"* becomes meaningless |
+      | Rule 1 — fixes land on `master` FIRST | Gone. There is no `master` to land them on, so the back-port reference point disappears for every band |
+      | `drift-audit.py` | Grades each band **against `master`**. With no code there, gate 7 compares against nothing |
+      | `.github/workflows/drift-audit.yml` | GitHub fires `schedule` from the **default branch and nowhere else**. This is **R-g** — a decision this repo already made once and had to reverse with **R-r** |
+      | `branch-file-identity-audit.py` | `AGENTS.md`, `scripts/**`, `README.md`, `wiki/**` are byte-identical **by rule** (P19-1, R-y); the guard's whole premise is that every branch carries the same shared layer |
+
+      ✅ **The issue's underlying want is already satisfied**, which is why declining costs nothing:
+      *"each branch stays the same, maintaining its code"* is exactly what branch-per-band already
+      does, and 16.2 (the six-band archive) and 16.3 (the 26.3 cut) — the other two thirds of #16 —
+      both shipped in §69.
+      ⚠️ **If it is ever re-opened, it is a Tier 2 with a written plan first**, and the plan must name
+      the replacement for the drift reference point **and** for the `schedule` leg **before** any
+      command runs. Do not start it as a refactor.
+
+      **Original issue text, kept for the record:** *"Refactor the READMEs, so we have no
       code in the main branch, and each branch stays the same, maintaining its code."*
       🔴 **STOP — this collides head-on with ruling R-a, and needs an explicit owner decision before
       any command runs.** `master` **is** the newest supported band and carries its code; nine
@@ -1228,9 +1276,22 @@ flagged those as mismatches; they are the house convention. `0` likewise stays `
       `theRespreadSkillsReachTheTopOfTheRange` and
       `retroModeIsTenTimesStandardExceptForImmediateUnlocks`. Each mutation-tested and each caught by
       **exactly one** case, no cross-talk.
-      ⚠️ **Whether 0 is the RIGHT level for those five is still an open balance question** — it is
-      their current effective value, so declaring it changed nothing, but nobody ever chose it.
-      Hylian Luck and Second Smelt being free from level 0 looks unintended.
+      ✅ **RESOLVED by §71 (2026-09-22) — owner ruling 6, and the reason is MEASURED, not deferred.**
+      The five keep `0`: `ARCHERY_DAZE`, `PARKOUR_ROLL`, `HERBALISM_HYLIAN_LUCK`,
+      `HERBALISM_SHROOM_THUMB`, `SMELTING_SECOND_SMELT`. Each is **probability-ramped** — its chance
+      derives from skill level against `getMaxBonusLevel`/`getMaximumProbability`, so at level 0 the
+      chance **is** 0% and it scales up from there. The ramp is the gate. **Unlocking at 0 costs
+      nothing.**
+      🔴 **The old text above was a suspicion pointing AWAY from the defect, and is kept to show
+      that.** It named Hylian Luck and Second Smelt as *"looks unintended"*; both are ramped and
+      harmless. The one that was genuinely broken — `UNARMED_BLOCK_CRACKER`, the sixth — **was not on
+      the list**, because it is the only one with **no ramp** behind the gate. **A carried suspicion
+      is a hypothesis, not a finding.**
+      🔴🔴 **And the deeper correction: all six have `numRanks = 0`, so the entries this row added
+      are DEAD CONFIG the runtime never reads** — see §71, *"The config edit was not the fix"*.
+      The behaviour claim (*"declaring 0 changed nothing"*) is true; the stated reason was wrong.
+      ⚠️ `RankConfigTest.everySubSkillDeclaresItsUnlockLevel` is therefore **vacuous for these six**.
+      Block Cracker was fixed by giving it a rank; the remaining five are logged as carried debt.
 
 ✅ **27 doc corrections** across `wiki/Skills.md`, `wiki/Movement-Skills.md`, `wiki/Stealth.md`,
 `wiki/Super-Abilities.md` and `README.md` — including an **anchor link**
@@ -1330,7 +1391,24 @@ the Art) is unaffected.
 ✅ **The table is KEPT and marked inert in place**, not deleted — deleting a player-facing price list
 to silence a dead knob loses tuning that cannot be reconstructed, and it is exactly what Smelting
 would need if it ever earns XP of its own.
-- [ ] ⬜ **Owner call, not a blocker:** is "smelting trains nothing" the intended end state, or
+- [x] ✅ **ANSWERED 2026-09-22 (§71, ruling 4) — and the QUESTION contained a false premise.**
+      Owner: *"smelting is fine with the changes we made already, we just didn't want to gain xp from
+      smelting, but rather have that skill lvl up passively from mining and repair."*
+      🔑 **"Smelting trains nothing" was never true.** Smelting is a **child skill**: its level is the
+      **mean of Mining and Repair**, so it levels passively exactly as the owner describes, without a
+      single smelt. What #19 removed was the *reverse* flow — a smelt paying XP **up** into Mining and
+      Repair, which levelled two skills the player never used. Both halves are what was wanted.
+      ✅ **Verified in code before closing, not taken on the javadoc's word:**
+      `SkillTools.childSkillFeedsParents(SMELTING)` → `false`, gated at **both** entry points
+      (`McMMOPlayer.beginXpGain` *and* `applyXpGain` — neither is redundant);
+      `PlayerProfile.getChildSkillLevel` → `sum / parents.size()` over `[MINING, REPAIR]`; and
+      `McMMOPlayerTest.smeltingStillLevelsPassivelyFromItsParents` already fails if either half
+      regresses (Mining 10 + Repair 20 → Smelting **15**). **#19 owed no code, only a closed row.**
+      🔑 **Second session running where asking beat auditing** (§70's 16.3 was the first). Every
+      mechanical check happily answers a question whose premise is wrong.
+
+- [x] ⬜ **Superseded — the original wording, kept because the false premise is the lesson:**
+      is "smelting trains nothing" the intended end state, or
       should Smelting hold its own XP (a real change to the child-skill model)? The issue's wording
       — *"gets lvled up passively"* — reads as the former, which is what shipped.
 
@@ -1803,6 +1881,233 @@ deciding it silently is precisely the failure being reported.
   `Backport-of:` and no band is left behind by them. ⚠️ This is the one file where a docs edit is
   correctly `master`-only — do not generalise it.
 - **Not** started Phase E. It needs ruling 4 of §68.P, which the owner has not given.
+  📌 **Superseded the next day:** §71 ruling 3 gave that ruling — **declined**. Kept as written
+  because it was true when written; the correction lives forward, not in place.
+
+---
+
+## §71 — six rulings executed: the invariant retired, 16.1 declined, Block Cracker gated — ⬜ IN PROGRESS
+
+**Written before the first edit**, per the Tier 2 rule. All six rulings were taken before any
+command ran, and two of them were only reachable by asking — see *"What asking bought"* below.
+
+### The six owner rulings, taken 2026-09-22 before any edit
+
+| # | Ruling |
+|---|---|
+| 1 | 🔴 **The push hold STILL STANDS.** Re-asked, not inherited — it is scoped *"this session"* and this is a new one. **FOURTH consecutive session to re-ask; same answer every time.** No push, no `mod_version` bump |
+| 2 | ✅ **Retire the one-blob `TODO.md` invariant explicitly.** The recommendation standing on the row was taken |
+| 3 | 🚫 **#16.1 / Phase E — DECLINED, incompatible with R-a.** Close won't-fix with the blast radius written down, so the next reader does not re-open it as a five-minute refactor |
+| 4 | ✅ **#19 is CLOSED and what ships is already right.** Owner: *"smelting is fine with the changes we made already, we just didn't want to gain xp from smelting, but rather have that skill lvl up passively from mining and repair"* |
+| 5 | **`UNARMED_BLOCK_CRACKER` unlocks at 50** (Standard) / **500** (RetroMode) |
+| 6 | **The other five level-0 sub-skills STAY at 0**, with the reason recorded so the row closes rather than re-opening at every audit |
+
+### 🔑 What asking bought — measured, not assumed
+
+**Ruling 4 arrived as a correction to my own framing.** The carried row asked *"is 'Smelting trains
+nothing' the intended end state?"* and that question contains a false premise: Smelting is **not**
+trained by smelting and is **not** untrained. It is a **child skill** whose level is the mean of
+Mining and Repair, exactly as the owner described. Verified in code before writing this, not taken
+on the javadoc's word:
+
+| Claim | Instrument | Result |
+|---|---|---|
+| A smelt pays nothing to either parent | `SkillTools.childSkillFeedsParents(SMELTING)` → `false`, gated at **both** entry points (`McMMOPlayer.beginXpGain` **and** `applyXpGain`) | ✅ holds |
+| Smelting's level is the parents' mean | `PlayerProfile.getChildSkillLevel` → `sum / parents.size()` over `SMELTING_PARENTS = [MINING, REPAIR]` | ✅ holds |
+| A test fails if either half regresses | `McMMOPlayerTest.smeltingStillLevelsPassivelyFromItsParents` (10 + 20 → **15**), plus one test per entry point | ✅ already present |
+
+🔑 **So #19 owes no code.** It owes a closed row. **A row phrased as a question can encode a wrong
+premise, and every mechanical check will happily answer the wrong question** — the same shape §70
+hit with 16.3, one session earlier, and the second time in two sessions that asking beat auditing.
+
+**Ruling 5 came out of measuring the thing nobody had measured.** The carried row said *"whether 0 is
+the RIGHT level for those five is still an open balance question"* and singled out Hylian Luck and
+Second Smelt as *"looks unintended"*. Measuring inverted that:
+
+- **Five of the six are probability-ramped.** Chance is derived from level against
+  `getMaxBonusLevel` / `getMaximumProbability`, so at level 0 the chance **is** 0%. Unlocking at 0
+  costs nothing in balance; it only lists them in `/mcstats` at `0.00%`. **The two rows flagged as
+  suspicious are the harmless ones.**
+- 🔴 **`UNARMED_BLOCK_CRACKER` is the one that is not, and it was not on the suspicion list.**
+  `UnarmedManager.rollBlockCracker` calls `ProbabilityUtil.isNonRNGSkillActivationSuccessful`, which
+  this port **hard-returns `true`** (`ProbabilityUtil:277-282`) because the Bukkit event hook it used
+  to wrap was dropped in Phase 10.2. There is no ramp. Unlock level 0 means **always on**.
+
+🔑 **The named suspects were innocent and the real defect was the unnamed row.** A carried suspicion
+is a hypothesis, not a finding — and this one pointed away from the defect for weeks.
+
+⚠️ **Effective gate today is 5, not 0**, and that is why this is a balance change rather than a bug
+fix: Block Cracker only fires inside **Berserk** (`SuperAbilityListener.processBlockCracker`), which
+unlocks at 5. Stated so nobody later reads *"always on from 0"* as *"active before Berserk exists"*.
+
+### ⚠️ A docs defect I claimed and then falsified — corrected here rather than quietly dropped
+
+**The first draft of this plan asserted that `wiki/Skills.md:165` documented Block Cracker's unlock
+level as `1` while the config said `0`, and called it a pre-existing lie. That claim was FALSE, and
+it was mine.** The Unarmed table's header is `| Sub-skill | Ranks | Effect |` — the `1` is Block
+Cracker's **rank count**, which is correct (it has exactly one rank). I read a column by its contents
+and never checked its heading.
+
+🔑 **Worth keeping because of what it nearly cost.** Acting on it would have rewritten a *correct*
+rank count to `50`, silently breaking the one column in that table that was right, in the name of
+fixing a docs lie. **A grep result is a string, not a fact about the field it sits in** — and this
+repo's whole docs-defect family is *"a true-looking number in the wrong frame"*. I reproduced the
+defect I was hunting.
+
+**The real docs gap, measured after the correction:** the Unarmed table carries **no unlock levels at
+all**, so nothing in it is false — but a player cannot learn that Block Cracker now needs 50. The
+house pattern for exactly this already exists two dozen lines up (`wiki/Skills.md:48`, Mother Lode:
+*"**Unlocks at Mining 1000**"*), so 71.3 follows it rather than inventing a column.
+
+### 🔴🔴 The config edit was not the fix — `numRanks = 0` made the unlock level UNREADABLE
+
+**71.1 was applied, the suite was green, and the new test still FAILED at level 499.** The config
+was correct and the gate ignored it. The mechanism:
+
+```
+SubSkillType.UNARMED_BLOCK_CRACKER      // no-arg ctor  -> numRanks = 0
+RankUtils.getRank(...)                  // if (numRanks == 0) return -1;   <-- never reads the level
+RankUtils.hasUnlockedSubskill(...)      // return curRank == -1 || curRank >= 1;   <-- -1 = ALWAYS UNLOCKED
+```
+
+🔑 **A sub-skill declared with no rank count can never be level-gated, whatever `skillranks.yml`
+says.** Its entry there is **dead config**: parsed, validated, and never consulted. `skillranks.yml`'s
+own header says so in the first two lines — *"You cannot alter how many ranks a skill has, that is
+coded into mcMMO directly"* — which is the fact, stated in the file, that nobody had connected to
+the level-0 rows.
+
+🔴 **This retroactively reframes §68's fix, and the reframing is the important part.** §68 closed
+*"six sub-skills silently unlock at level 0"* by **adding `Rank_1: 0` entries** for all six and
+guarding it with `RankConfigTest.everySubSkillDeclaresItsUnlockLevel`. All six have `numRanks = 0`.
+So:
+
+- the six entries §68 added are **unreadable by the runtime** — every one of them;
+- ✅ **the row's stated claim is still true** — declaring `0` changed no behaviour — but it is true
+  for the **wrong reason**: not "0 was already the effective value" but *"nothing there is read at all"*;
+- 🔴 **`everySubSkillDeclaresItsUnlockLevel` is VACUOUS for exactly these six.** It asserts a YAML key
+  exists at an address the runtime never visits for a rank-less sub-skill. It cannot fail for a real
+  reason on them, and it reports the family as *handled*. **Vacuity #17**, and it was written by the
+  very pass that was closing a vacuity.
+
+⚠️ **The other five are still fine to leave at 0** (ruling 6) — but now for a **measured** reason
+rather than the one on file: their gate is always-open, and what actually limits them is the
+**probability ramp**, which reads the level directly and yields ~0% early. **Block Cracker was the
+only one of the six with no ramp behind the always-open gate**, which is precisely why it was the
+only one that mattered.
+
+✅ **The precedent for a rank-less sub-skill is already documented and was followed correctly
+elsewhere:** `wiki/Skills.md:270` — Mob Mastery *"has no rank ladder and deliberately no
+`skillranks.yml` entry"*, because a rank display for it would lie. **That is the shape the six should
+have had.**
+
+⬜ **Left open deliberately, NOT fixed here:** whether the other five rank-less sub-skills should
+lose their unreadable `skillranks.yml` entries, or gain a rank each. Both are real changes with
+balance consequences, neither is needed for ruling 5, and quietly widening this item into a
+five-skill rebalance is the scope creep the Tier 2 rules exist to stop. **It is written down in the
+carried-debt list instead.**
+
+### The plan, file by file
+
+**Order is deliberate: docs and config first, the destructive step LAST and on its own.**
+
+- [x] ✅ **71.1 — Block Cracker to 50.** `src/main/resources/skillranks.yml` — `Unarmed.BlockCracker`
+      `Standard.Rank_1` `0` → **50**, `RetroMode.Rank_1` `0` → **500**.
+      🔴 **AND `SubSkillType.UNARMED_BLOCK_CRACKER` → `UNARMED_BLOCK_CRACKER(1)`, without which 71.1
+      CHANGES NOTHING.** See *"The config edit was not the fix"* below — this is the session's real
+      finding and it was not in the plan, because nobody had measured it.
+- [x] ✅ **71.2 — a test that fails if 71.1 is reverted.** `UnarmedManagerTest.blockCrackerGateNeedsUnlock`,
+      asserting through `UnarmedManager.canUseBlockCracker` — the seam gameplay actually crosses —
+      at the **499 / 500** boundary, matching the existing `arrowDeflectGateNeedsUnlock` pattern.
+      ✅ **Mutation-checked BOTH ways, because the fix has two halves and either alone is inert:**
+
+      | Mutation | Result |
+      |---|---|
+      | `skillranks.yml` Rank_1 back to `0` (keep the rank) | `blockCrackerGateNeedsUnlock` **RED**, other 5 Unarmed cases green |
+      | `UNARMED_BLOCK_CRACKER(1)` back to no-arg (keep the level) | `blockCrackerGateNeedsUnlock` **RED**, other 5 green |
+
+      🔑 **Exactly one case red each time, no cross-talk** — so the boundary is load-bearing and the
+      test is not passing for an unrelated reason. Files restored from `scratchpad/*.mutbak` and
+      `cmp`-verified byte-identical afterwards.
+      ⚠️ `python … | grep` / `| tail` reports the **PIPE's** exit code. Read the `BUILD FAILED` line.
+- [x] ✅ **71.3 — docs.** `wiki/Skills.md:165` Block Cracker **Effect** cell now carries
+      *"**Unlocks at Unarmed 500**, and it only fires while Berserk is active"*, following the Mother
+      Lode pattern on line 48. The `Ranks` column was **not** touched — it was already correct.
+      🔴 **500, not 50: the wiki documents RETROMODE numbers**, and `config.yml` ships
+      `RetroMode.Enabled: true`. Verified against two existing rows rather than assumed — Mother Lode
+      is Standard 100 and the wiki says *"Mining 1000"*; Second Wind is Standard 5 and
+      `wiki/Movement-Skills.md:104` says *"moved … to 50"*. **My first edit said 50 and was wrong.**
+      ✅ **Caveat-expiry pass CLEAN.** Grepped the symptom (`Block Cracker`, `always on`, `level 0`,
+      `from the start`) across `README.md` and all of `wiki/**`: the corrected line is the **only**
+      mention of Block Cracker anywhere in player-facing docs. Recording a clean result rather than
+      staying silent, per §70.
+- [x] ✅ **71.4 — recorded why the other five stay at 0**, in the carried row, with the ramp measurement.
+      A row closed with *"owner said so"* and no mechanism re-opens at the next audit.
+- [x] ✅ **71.5 — retired the one-blob `TODO.md` invariant** (ruling 2), in the row itself, with the
+      reasoning and the seam it sat in.
+- [x] ✅ **71.6 — closed #16.1 won't-fix** (ruling 3) with the R-a collision and blast radius stated.
+- [x] ✅ **71.7 — closed #19** (ruling 4) with the three verified claims above.
+- [x] ✅ **71.8 — build + full suite green.** **174 classes / 1,943 tests / 0 failures / 0 errors /
+      0 skipped** (was 174 / 1,942 — exactly the one case 71.2 adds).
+      ✅ Both tasks attributable to this HEAD: a bare `> Task :test` (not FROM-CACHE) under
+      `--no-build-cache`, and `tagBoundTest` run separately. Counted by globbing the XML
+      **recursively and splitting by task directory** — `test` 173/1,930, `tagBoundTest` 1/13.
+      ✅ **The doc guards DID run this time** (`BandDocsMatchRealityTest`, `ConfigDocsMatchLoaderTest`
+      both present in `build/test-results/test/`), because §69's `f5da6bb9d` declared the repo files
+      they read as `:test` inputs and the resource change invalidated them. **That fix is working** —
+      the standing *"Gradle skips the doc guards"* warning did not apply here. Verified by listing
+      the results, not by assuming.
+- [x] ✅ **71.8b — UNPLANNED: the rank plaque datapack had to be regenerated.** Giving Block Cracker
+      a rank made it eligible for a milestone advancement, and four `MilestoneAdvancementResourcesTest`
+      cases went red naming the exact remedy (*"re-run scripts/gen-milestone-advancements.sh"*).
+      **A guard that names its own fix is worth the line it costs.**
+      ↩️ `gen-milestone-advancements.sh` does `rm -rf "$ROOT"`, so the five gates were run before it:
+      `$ROOT` resolved to the one generated dir (335 files, **all tracked, zero uncommitted**), undo
+      written to `scratchpad/UNDO-s10.txt` **first**, scope is that directory only, and its
+      zero-sub-skills guard fails closed.
+      ✅ **The enum-parse off-by-one this repo has hit twice was checked, not assumed:** the script's
+      `sed` regex yields **106** ranked + **5** rank-less = **111**, matching §68's `javap` count
+      exactly, and the final constant (`WOODCUTTING_CLEAN_CUTS`, terminated by `;` not `,`) **is**
+      captured. Generated **336** files = 335 + 1.
+      ⚠️ **Six files then showed as modified with an EMPTY `git diff`** — the generator writes LF
+      where the working copy had CRLF. Confirmed **zero content change** on all six via
+      `git diff --numstat`, then restored them, so the commit carries **one added file and nothing
+      else**. A line-ending-only diff on six untouched plaques would have been noise in a review and
+      a false positive for the identity guard.
+- [ ] **71.9 — propagate 71.1–71.3 to the three LIVE bands** with `Backport-of:`.
+      ⚠️ `skillranks.yml` and `wiki/**` are shared; `TODO.md` is **excluded** and stays `master`-only.
+      ⚠️ Propagate from a **scratch clone** (`git clone --local --no-hardlinks . <dir>`) —
+      `drift-audit.py`'s `band_branches()` PREFERS REMOTE refs and would grade the stale remote.
+      ⚠️ `mc/1.21.11` is **yarn-mapped**; a `src/` hunk needs **translation**, never "take master".
+      71.1/71.3 are resources and docs, so this should be clean — **verify, do not assume**.
+- [ ] **71.10 — 🔴 DESTRUCTIVE, LAST, its own commit-free step: the 56 stale local-only tags.**
+      See the blast-radius block below. **Nothing else in this section depends on it**, so it can be
+      abandoned without unwinding 71.1–71.9.
+
+### ↩️ Blast radius for 71.10 — the only destructive step
+
+| Gate | Answer |
+|---|---|
+| **1. Resolve the target** | Freeze the list to a file first: `comm -23 <(git tag -l \| sort) <(git ls-remote --tags origin \| sed 's\|.*refs/tags/\|\|' \| grep -v '\^{}' \| sort -u) > scratchpad/stale-tags.txt`. **Delete from the frozen file, never from a live re-query.** |
+| **2. Prove it's recoverable** | Every tag's commit must be reachable from a live branch — §63 verified all 62, **re-verify, do not quote**. The undo is `git tag <name> <sha>`, written to `scratchpad/UNDO-s10-tags.txt` **before** the first delete |
+| **3. Dry-run** | Print the frozen list with each tag's sha and reachability. Read it. |
+| **4. Narrow** | Local tags only. **Nothing touches origin** — these are local-only by definition, and the remote is already correct |
+| **5. Undo + confirm** | Quote the count and the exact command to the owner before running it |
+
+🔴 **NEVER `git fetch --prune --prune-tags`.** It re-queries the remote and deletes whatever is not
+in the answer, so a network hiccup returning an empty tag list deletes **all 71** — it **fails open**.
+That is the documented trap on this row and it is the whole reason the list gets frozen to a file.
+
+### What I am NOT doing
+
+- **Not** pushing, and **not** bumping `mod_version` — ruling 1, fourth re-ask.
+- **Not** touching the five level-0 rows — ruling 6. They are measured harmless; the row gets the
+  measurement, not an edit.
+- **Not** starting Phase E as a refactor. Ruling 3 **declined** it; the work is to close it.
+- **Not** propagating `TODO.md`. It is excluded by design — and §70 found that this is precisely the
+  seam the one-blob invariant died in, which 71.5 now retires rather than re-opens.
+- **Not** propagating anything to the six **archived** bands. Archived means archived (§70 ruling 4).
+- **Not** deleting a single tag until 71.1–71.9 are committed and green. A destructive step riding
+  along with feature work is how a bad rollback becomes unattributable.
 
 ---
 
@@ -2263,6 +2568,32 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
       set of call sites whose result is consumed type-agnostically** — `equals(Object)`, string
       concatenation, `var`, a raw generic. Nothing in this repo looks for that shape. It is a
       different instrument from `--receivers` and gets its own section.
+
+- [ ] ⬜ **Five rank-less sub-skills carry `skillranks.yml` entries the runtime CANNOT read — and the
+      guard that "closed" this reports them as handled.** Raised by §71 (2026-09-22), deliberately
+      **not** fixed there.
+      `ARCHERY_DAZE`, `PARKOUR_ROLL`, `HERBALISM_HYLIAN_LUCK`, `HERBALISM_SHROOM_THUMB`,
+      `SMELTING_SECOND_SMELT` are all declared with `SubSkillType`'s **no-arg** constructor →
+      `numRanks = 0` → `RankUtils.getRank` returns **-1** before the unlock level is consulted →
+      `hasUnlockedSubskill` reads -1 as **always unlocked**. Their `Rank_1: 0` entries are parsed,
+      validated, and **never read**.
+      ✅ **Harmless today, and that is measured, not assumed:** all five are probability-ramped, so
+      the ramp does the gating and the chance is ~0% at low level. `UNARMED_BLOCK_CRACKER` was the
+      sixth and the only one with **no** ramp — that one was the real defect and §71 fixed it by
+      giving it a rank.
+      🔴 **The reason this is a row and not a footnote:
+      `RankConfigTest.everySubSkillDeclaresItsUnlockLevel` is VACUOUS for exactly these five.** It
+      asserts a YAML key exists at an address the runtime never visits for a rank-less sub-skill, so
+      it can never fail for a real reason on them — while reporting the whole family as covered.
+      **Vacuity #17, and it was introduced by the pass that was closing a vacuity.**
+      ⚠️ **Do not "fix" this by deleting the five entries OR by handing each a rank** without a
+      balance decision: a rank makes the level load-bearing (a real gameplay change, and it mints a
+      milestone plaque per §71.8b), while deleting the entries makes the file honest but loses the
+      declaration `everySubSkillDeclaresItsUnlockLevel` was written to enforce.
+      ✅ **The precedent to copy is already in the docs:** `wiki/Skills.md:270` — Mob Mastery *"has no
+      rank ladder and deliberately no `skillranks.yml` entry"*, because a rank display for it would
+      lie. 🔑 **Whatever is chosen, the guard must be re-pointed at something a rank-less sub-skill
+      can actually falsify**, or this closes a second time without closing.
 
 - [ ] ⬜ **Sixteen `mc/**` commits of 2026-08-31 carry a `Backport-of:` trailer git's own parser
       CANNOT see.** §55's propagation appended the trailer directly after the last body line, with no
