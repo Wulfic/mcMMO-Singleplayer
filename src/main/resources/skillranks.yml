@@ -5,6 +5,20 @@
 # Retro Mode is setup to be an entirely cosmetic change, keeping the old 0-1000 feeling of mcMMO.
 # Retro Mode has 10x faster leveling and 10x higher skill requirements, if you do the math you can see its the same as Standard and only cosmetic!.
 ###
+# A sub-skill with NO RANK LADDER deliberately has NO SECTION in this file.
+#
+# SubSkillType declares a rank count per sub-skill; a few are declared with none at all, and for
+# those RankUtils.getRank short-circuits to -1 BEFORE any unlock level is read -- which
+# hasUnlockedSubskill then treats as always-unlocked. So a section for one of them is parsed,
+# validated, and never consulted by anything: editing it would change nothing in-game, which is
+# worse than it being absent. Those sub-skills are gated by their own probability ramp instead,
+# and RankConfigTest enforces the rule in BOTH directions -- a ranked sub-skill must have a
+# section, a rank-less one must not.
+#
+# Note this is about having no ranks, NOT about the value 0. Alchemy.Catalysis below is a real,
+# read entry that happens to unlock at 0; that is a deliberate 'available immediately' and stays.
+#
+# Same call as Mob Mastery, which has never had a section here -- see wiki/Skills.md.
 Alchemy:
     Catalysis:
         Standard:
@@ -117,11 +131,7 @@ Archery:
 #
 # Parkour, Swimming and Flying were Agility's three parent skills. Every sub-skill below is gated on
 # that parent's OWN level, so it is earned by doing the thing it is a perk for.
-    Daze:
-        Standard:
-            Rank_1: 0
-        RetroMode:
-            Rank_1: 0
+    # Daze has no rank ladder (ARCHERY_DAZE declares no rank count), so it deliberately has no entry -- see the header.
 Parkour:
     SnowWalker:
         Standard:
@@ -158,11 +168,7 @@ Parkour:
             Rank_1: 5
         RetroMode:
             Rank_1: 50
-    Roll:
-        Standard:
-            Rank_1: 0
-        RetroMode:
-            Rank_1: 0
+    # Roll has no rank ladder (PARKOUR_ROLL declares no rank count), so it deliberately has no entry -- see the header.
 Swimming:
     # Moved here from Agility on 2026-08-10, numbers unchanged.
     LeadLungs:
@@ -553,11 +559,7 @@ Smelting:
             Rank_6: 750
             Rank_7: 850
             Rank_8: 1000
-    SecondSmelt:
-        Standard:
-            Rank_1: 0
-        RetroMode:
-            Rank_1: 0
+    # SecondSmelt has no rank ladder (SMELTING_SECOND_SMELT declares no rank count), so it deliberately has no entry -- see the header.
 Spears:
     SpearsLimitBreak:
         Standard:
@@ -904,16 +906,8 @@ Herbalism:
             Rank_3: 600
             Rank_4: 800
             Rank_5: 1000
-    HylianLuck:
-        Standard:
-            Rank_1: 0
-        RetroMode:
-            Rank_1: 0
-    ShroomThumb:
-        Standard:
-            Rank_1: 0
-        RetroMode:
-            Rank_1: 0
+    # HylianLuck has no rank ladder (HERBALISM_HYLIAN_LUCK declares no rank count), so it deliberately has no entry -- see the header.
+    # ShroomThumb has no rank ladder (HERBALISM_SHROOM_THUMB declares no rank count), so it deliberately has no entry -- see the header.
 Fishing:
     MagicHunter:
         Standard:
