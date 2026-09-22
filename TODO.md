@@ -3504,6 +3504,94 @@ treated as a failure everywhere, never a pass.**
 
 ---
 
+## §77 — §74's two carried items: the undeclared mixin, and the cache that hid a config read — ⬜ IN PROGRESS
+
+**Owner-chosen 2026-09-22 (session 16)**, over the §76 `failures.append()` follow-up, the §75 S2
+one-sided sweep, and gates 2/12's mis-scoped `--self-test`. Tier **2** — a new guard, a production
+null-safety claim made falsifiable, and a propagation to three live bands.
+
+### Two owner rulings taken FIRST, before any command
+
+| # | Ruling |
+|---|---|
+| 1 | 🔴 **The push hold STILL STANDS.** Re-asked, not inherited — **TENTH consecutive session**, same answer every time. No push, no `mod_version` bump, no issue closed |
+| 2 | ✅ **`resetRankCache()` gets a TEST-SUPPORT class, not a widened production API.** A `src/test` class in `com.gmail.nossr50.util.skills` calls the package-private method and re-exposes it. `RankUtils` ships not one extra public method |
+
+### The two holes, both MEASURED before a line was written
+
+**A — a mixin deleted from `mcmmo.mixins.json` is INERT, and nothing goes red.**
+§74 stated this as a residual gap next to four `MixinApplicationTest` false positives. Measured here:
+`grep -rn 'mcmmo.mixins.json' src/test` returns **eight files and every hit is a javadoc mention** —
+**nothing in the suite parses the `mixins` array.** The source tree carries **41** `@Mixin` files and
+the manifest declares **41**; they agree today and no instrument knows it.
+🔑 **Why an undeclared mixin is silent rather than loud.** `defaultRequire = 1` makes a *drifted*
+injection throw at class-load, which is exactly what the four `assertDoesNotThrow(Class.forName(…))`
+tests rely on. An **undeclared** mixin is the opposite shape: Mixin never tries to apply it, the
+target class loads clean, and the feature it implements simply stops happening. No exception, no log
+line, no red test — the defect is a *missing* transformation, and every instrument in this repo
+watches for *failed* ones.
+⚠️ `theMixinsWereActuallyApplied` cannot see it either: its floor is `>= 20` transformed targets, so
+deleting one of 41 leaves ~35 and it passes comfortably.
+
+**B — a STATIC warmed by a sibling test class made a config claim unfalsifiable.**
+`NotificationManagerTest`'s three null-player guards unbind `AdvancedConfig`/`GeneralConfig`/
+`RankConfig` on purpose and claim the null guard sits before **every config read**. The no-throw half
+is mutation-proven. The **config half is not**, for `sendPlayerUnlockNotification`: hoisting
+`RankUtils.getRank(...)` above the guard SURVIVES, because `getRank` short-circuits on a warm
+`RankUtils.subSkillRanks` and never reaches `addRanks()` → `getRankUnlockLevel()` →
+`McMMOMod.getRankConfig()`. Cold, that mutation NPEs and reddens.
+🔑 **A test's reachability can depend on what a SIBLING TEST CLASS did to a static** — and which
+sibling ran first is decided by Gradle's non-deterministic fork assignment, so the guard's strength
+was a coin flip nobody was tossing.
+✅ **Clearing it cannot break a sibling.** Checked, not assumed: `test` runs `maxParallelForks = 4`
+but classes are **sequential within a fork**, there is no `junit-platform.properties` enabling
+parallel execution, and **cold is the fresh-JVM default** that `RankUtilsTest` and `SkillGatingTest`
+already reset to in their own setup. A class that needs a warm cache and does not bind `RankConfig`
+is already a latent flake under fork assignment; this makes it deterministic rather than creating it.
+⚠️ **The SoundManager half is NOT the same defect and is deliberately left alone.** A hoisted
+`SoundManager.sendCategorizedSound(null, …)` also survives, but because `readyConfig` null-guards
+*itself* — that is defence in depth working, not a missing assertion.
+
+### Phases — file by file
+
+| # | Phase | Touches |
+|---|---|---|
+| **1** | **Prove hole A by mutation BEFORE writing the guard.** Delete one name from `mcmmo.mixins.json`, run both `MixinApplicationTest` copies + `MixinAllowCoverageTest`, and record them **GREEN**. A guard written against an unproven hole is decoration | `src/main/resources/mcmmo.mixins.json` **temporarily** |
+| **2** | Write `MixinManifestDeclarationTest` — set equality both directions, plus the `defaultRequire`/`package` claims four other tests cite as their own justification | new `src/test/java/com/gmail/nossr50/guards/MixinManifestDeclarationTest.java` |
+| **3** | Mutation-prove the new guard: name deleted → red · bogus name added → red · `defaultRequire: 0` → red · `package` drifted → red · unmutated control → green | the manifest **temporarily** |
+| **4** | Hole B: add `RankCacheTestSupport`, reset the cache in the three null-player tests, and mutation-prove the hoisted rank read now reddens | new `src/test/java/com/gmail/nossr50/util/skills/RankCacheTestSupport.java`, `NotificationManagerTest` |
+| **5** | Full suite — **BOTH tasks**, `test` + `tagBoundTest`, and the baseline is the **SUM** (174 / 1,948). Then gates 7–11, caveat-expiry, propagation to the three live bands | — |
+| **6** | `.agent/memory/` + close the section | — |
+
+### ❌ What I am NOT doing
+
+- ❌ **Not pushing, not bumping `mod_version`, not closing an issue** — ruling 1, tenth session.
+- ❌ **Not making `resetRankCache()` public** — ruling 2 chose the test-support class.
+- ❌ **Not the §76 `failures.append()` follow-up**, not the **S2 one-sided sweep**, not **gates 2/12's
+  mis-scoped `--self-test`**. All three stay open and stay listed.
+- ❌ **Not "fixing" the SoundManager hoist** — measured as defence in depth, not a gap.
+- ❌ **Not re-measuring the `>= 36` target floor or touching either `MixinApplicationTest`.** The new
+  guard is additive; the four false positives §74 justified stay exactly as they are.
+- ❌ **Not running gates 1–6 or 12** — they need a built jar and a live server per version. Not run,
+  therefore not claimed.
+
+### ↩️ Blast radius and rollback — written BEFORE the destructive steps
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| **Phases 1 + 3 mutations** | `src/main/resources/mcmmo.mixins.json` **temporarily** — the only production file this section mutates | 🔴 a mutated manifest left behind ships a mod with a mixin switched off | byte-exact copy at `scratchpad/mixins-json-s16.orig`, taken **before the first mutation**, `cmp`-verified after **every** run, with a final census at exit |
+| Phase 4 mutation | `src/main/java/.../NotificationManager.java` **temporarily** | a hoisted read left in production | byte-exact copy at `scratchpad/notifmgr-s16.orig`, same discipline |
+| New test files | `src/test/**` only | nothing — untracked until committed | `git rm` / `git diff` |
+| `NotificationManagerTest` edits | one file | a green guard becomes red | `git diff` is the undo |
+| Propagation | 3 band heads | a band left mid-propagation | `scratchpad/UNDO-s16-bands.txt` — pre-propagation heads as ready-to-run `git branch -f` lines |
+| `TODO.md` / `.agent/memory/` | docs | — | `scratchpad/TODO.md.bak-s16`, `scratchpad/{gotchas,decisions,state}.md.bak-s16` |
+
+⚠️ **`TODO.md` is 100% CRLF in this working copy** (censused: 4103 CRLF, 0 bare LF). §76 recorded
+`git diff --numstat` masking a CRLF/LF mix **twice in two sessions** — census the bytes before and
+after every programmatic write, and re-read the file's own ending each time rather than recalling it.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
