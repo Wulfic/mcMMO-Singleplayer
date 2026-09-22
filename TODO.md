@@ -2847,6 +2847,131 @@ uncompiled; this one records the restore check as a step, not a habit.
 ---
 
 
+## §75 — §74's Phase 5: are the SELF-TESTS themselves falsifiable? — 🚧 IN PROGRESS (Tier 2)
+
+**Owner-chosen 2026-09-22 (§75 ruling 2)**, over the `MixinApplicationTest` hole and the
+`RankUtils.resetRankCache()` visibility ruling. §74 shipped P1–P4 and P6 and left **P5 explicitly
+NOT REACHED**, calling it *"a Tier 1 job on its own"*.
+
+### 🔴 Why this is the meta-layer, and why it is not optional
+
+Every ship gate in this repo is certified by its own `--self-test`. Gate 3's entry says
+*"`--self-test` first, **as with every gate**"*. So the self-tests are the bottom turtle: if one of
+them cannot fail, then the gate above it reports green on no evidence, and **every result that gate
+has ever produced is unproven** — not wrong, unproven, which is worse because nothing distinguishes
+the two. §74's central finding was that **a detector reporting zero is indistinguishable from a
+clean codebase**. This section asks that question of the detectors' own proofs.
+
+### Scope — measured before it was written, and §74's row UNDERSTATED it
+
+🔴 **§74's row says "the Python `--self-test` family (15 scripts)". Both halves are wrong.**
+
+| | §74's row | Measured 2026-09-22 |
+|---|---|---|
+| Python scripts carrying `--self-test` | 15 | **16** (`vacuity-census.py` was added *by* §74, after the row was written) |
+| Shell scripts carrying `--self-test` | not counted at all | **6** (`boot-check`, `brew-smoke`, `ci-watch`, `gameplay-smoke`, `javap-mc`, `version-sweep`) |
+| **Total self-test entry points** | — | **22** |
+| Distinct self-test *functions* (Python) | — | **20** — `loomjar.py` has three, `drift-audit.py` two |
+
+🔑 **This is the repo's own "a row naming N is a LOWER BOUND, never a count" lesson, and the row
+that understated it was written by the session that coined it.** Reading the rule is not applying
+it. Re-measure, always.
+
+⚠️ **`--self-test` is not the only self-proof mode in `scripts/`.** `ci-watch.sh` prints
+*"Run with `--mutate` to prove these cases can fail"*, so at least one script carries a second,
+separately-invoked proof mode. **The 22 is a floor on entry points, not a census of self-proof.**
+
+### Baseline — all 22 are GREEN, which is exactly why the question is worth asking
+
+All 16 Python and all 6 shell self-tests were run and every one exited **0**. A uniformly green
+population is the *starting* condition of this investigation, never its conclusion.
+
+### ✅ One shape is already CLOSED by measurement — exit-code propagation
+
+The cheapest total vacuity is a self-test whose non-zero return is dropped on the floor by `main()`.
+**Checked all 16 Python scripts: every one does `return self_test()` from `main()`, and every one
+ends in `sys.exit(main())` or `raise SystemExit(main())`.** No script swallows its own verdict.
+🔑 Recorded as a *negative* result on purpose: the next session should not re-derive it.
+
+### The shapes being hunted — and what does NOT count
+
+§74's definition governs and is deliberately narrow: **a test that checks less than it could is thin;
+a test that CANNOT FAIL is vacuous. Only the second kind gets touched.**
+
+| # | Shape | Why it cannot fail |
+|---|---|---|
+| **S1** | **No floor on what executed** | The self-test loops a case list and prints PASS without asserting how many cases *ran*. Empty the list and it goes green **by running out of things to check** — the §72 defect, which §74 then found *inside the guard built to hunt it* |
+| **S2** | **One-sided** | Only positive fixtures (the detector can say YES) with no planted clean control, or only negatives. Proves the detector fires, never that it can stay quiet |
+| **S3** | **Self-grading** | The expected value is derived from the same code under test, so the comparison is a tautology. Precedent: P16-1, where `--check` regenerated the manifest and then graded its own output |
+| **S4** | **Asserts only "does not throw"** | No claim about the result |
+| **S5** | **Borrowed** | The self-test exercises a *different* instrument than the gate it certifies. ⚠️ **This one is a CANDIDATE CLASS, not automatically a finding** — a borrowed self-test can fail, so by §74's definition it is thin, not vacuous. It is listed because the *gate* it certifies is left unproven, which is a real defect of a different name. **Say which of the two it is; do not let "vacuous" do the work of "mis-scoped".** |
+
+🔴 **S5 is already suspected in two places and NEITHER is confirmed yet:**
+`mixin-allow-audit.py --self-test` returns `selftest_jar_selection() or selftest_naming()` — both
+imported from `loomjar.py` — so **nothing in it exercises injection-point counting**, which is the
+whole job of ship gate 2. `probe-bands.py --self-test` runs `selftest_decl_parsing()` alone: a javap
+parser, not the manifest validation that is ship gate 12. **Both must be read and mutation-proven
+before either is called anything.**
+
+### 🔴 The instrument must be mutation, NOT a regex over the source
+
+A first heuristic pass was written and **thrown away, deliberately, before it produced a number.**
+It scored "has a zero floor" by matching `== 0` and the string `REFUS` inside each self-test body,
+and it was wrong in **both** directions: it fires on *refusal cases* (the self-test proving the TOOL
+refuses bad input) which are not floors at all, and it cannot see a floor written as a comparison
+against a declared length. §74 measured this exact failure — its crude pass produced 343 and 199
+candidates, nearly all noise.
+
+**The direct measurement is available and cheap here, so the proxy has no excuse:** break the thing
+the self-test claims to prove, re-run it, and read the exit code. 22 is a small enough population to
+do that to every member.
+
+### Phases
+
+```
+P1  characterise all 22: case count, directions, floor, what it certifies   READ, do not grep
+P2  the universal probe -- empty each case set, assert the self-test REFUSES  S1, mechanical
+P3  triage every hit by READING it -> confirmed vacuous / thin / justified
+P4  mutation-prove each confirmed one, fix it, re-run the SAME mutation       both directions
+P5  the two S5 suspects: decide vacuous vs mis-scoped, and say which
+P6  propagate to the 3 live bands + gate sweep; record decisions/gotchas/state
+```
+
+⚠️ **P2 is a probe of the SELF-TEST, so it mutates the self-test's own fixture list — not production
+source.** That is a smaller blast radius than §74's, and it is still a mutation: same backup-and-`cmp`
+discipline, no exceptions.
+
+### What I am NOT doing
+
+- **Not** rewriting a self-test that is merely thin. §74's line holds: cannot-fail, or it is not
+  touched.
+- **Not** deleting a single self-test case. A vacuous proof is given a claim that can fail; it is
+  never removed.
+- **Not** reporting a count from a detector that has not rejected a planted control first.
+- **Not** letting "vacuous" stand in for "mis-scoped" on the two S5 suspects — the finding names
+  which one it is, or it is not a finding.
+- **Not** touching `mod_version`, **not** pushing (ruling 1, **eighth** consecutive session), **not**
+  closing any GitHub issue.
+- **Not** auditing the `--mutate` modes or any other second proof mode. The 22 `--self-test` entry
+  points are this section's scope; the wider set is named above so it is not lost.
+- **Not** propagating `TODO.md`; it is excluded from propagation by design.
+
+### Blast radius and rollback
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| P1 characterisation | nothing — reading only | nothing | n/a |
+| **P2/P4 mutation runs** | `scripts/**` **temporarily** | 🔴 a mutated script left behind, which would make a *gate* lie, not just a test | byte-exact `.orig` copies in `scratchpad/mut-backup-s14/`, taken **before the first mutation**, restored and **`cmp`-verified** after each |
+| P4 fixes | `scripts/**` | a green self-test becomes red | `git diff` is the undo; one file per logical unit, committed separately |
+| P6 propagation | 3 live band branches | a band left behind | pre-propagation band heads frozen as ready-to-run `git branch -f` lines in `scratchpad/UNDO-s14-bands.txt` |
+
+🔴 **A mutation left behind in `scripts/` is worse than §74's.** §74 mutated `src/**`, where the
+suite would eventually notice. A corrupted self-test in `scripts/` is read by a **ship gate**, and a
+gate that has been quietly disarmed is the exact failure this whole section exists to detect.
+**Copy first, `cmp` the restore, never carry a mutation across a commit.**
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
