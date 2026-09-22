@@ -1,5 +1,6 @@
 package com.gmail.nossr50.util.player;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -106,9 +107,18 @@ class NotificationManagerTest {
 
     @Test
     void nullPlayerIsANoOp() {
-        // Must not throw and must not read config/player.
-        NotificationManager.sendPlayerInformation(null, NotificationType.ABILITY_COOLDOWN,
-                "Skills.TooTired", "5");
+        // The configs are UNBOUND on purpose, and that is the whole assertion. Binding
+        // them (as setUp does) makes this test vacuous: hoisting the getAdvancedConfig()
+        // read above the null guard in sendPlayerInformation was measured to leave the
+        // class GREEN at 12/0/0. Unbound, that same defect is an NPE and reddens here.
+        // This is the GitHub #14 shape -- a joining client has no configs and never will,
+        // so any config read reached before the guard crashes for that player.
+        McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setGeneralConfig(null);
+        McMMOMod.setRankConfig(null);
+
+        assertDoesNotThrow(() -> NotificationManager.sendPlayerInformation(null,
+                NotificationType.ABILITY_COOLDOWN, "Skills.TooTired", "5"));
     }
 
     @Test
@@ -148,8 +158,16 @@ class NotificationManagerTest {
 
     @Test
     void unlockNotificationIsNoOpForNullPlayer() {
-        // Must not throw and must not touch config/player.
-        NotificationManager.sendPlayerUnlockNotification(null, SubSkillType.PARKOUR_DODGE);
+        // Configs UNBOUND on purpose -- see nullPlayerIsANoOp for why binding them makes
+        // this vacuous. sendPlayerUnlockNotification reaches RankUtils, which reads
+        // RankConfig, which reads GeneralConfig, so this path has THREE config reads that
+        // must all sit behind the null guard.
+        McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setGeneralConfig(null);
+        McMMOMod.setRankConfig(null);
+
+        assertDoesNotThrow(() -> NotificationManager.sendPlayerUnlockNotification(
+                null, SubSkillType.PARKOUR_DODGE));
     }
 
     @Test
@@ -177,7 +195,12 @@ class NotificationManagerTest {
 
     @Test
     void levelUpNotificationIsNoOpForNullPlayer() {
-        // Must not throw and must not touch config/player.
-        NotificationManager.sendPlayerLevelUpNotification(null, PrimarySkillType.MINING, 1, 2);
+        // Configs UNBOUND on purpose -- see nullPlayerIsANoOp.
+        McMMOMod.setAdvancedConfig(null);
+        McMMOMod.setGeneralConfig(null);
+        McMMOMod.setRankConfig(null);
+
+        assertDoesNotThrow(() -> NotificationManager.sendPlayerLevelUpNotification(
+                null, PrimarySkillType.MINING, 1, 2));
     }
 }
