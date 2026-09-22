@@ -146,10 +146,44 @@ So keep running it by hand after every `master` commit that could need back-port
 python scripts/drift-audit.py --self-test && python scripts/drift-audit.py --master master
 ```
 
+🔴 **NOT EVERY BAND IS PROPAGATED TO ANY MORE — read `scripts/expected-bands.txt` before you
+back-port.** Since 2026-09-22 (§69 Phase D, owner ruling) the declaration has **two sections**:
+
+| | |
+|---|---|
+| **live** | audited and propagated to. `master` (26.3) plus `mc/26.2`, `mc/26.1.2`, `mc/1.21.11` |
+| **`[archived]`** | **kept, not deleted.** The six `1.21.x` bands below `1.21.11`. Their branches stay, their published **v1.4.0** releases stay downloadable, and **propagation to them stops** |
+
+- `expected_bands.py --count` → **live only**. It is the `--require-bands` floor, and every guard
+  now subtracts the archived set, so counting archived bands would make the floor unreachable.
+- `--verify` → **live ∪ archived** against git. An archived branch is still expected to **EXIST**;
+  a deleted one is still a finding.
+- `--list-archived` / `--list-all` print each set.
+
+🔑 **Drift against an archived band is EXPECTED and is not a finding.** That is the whole point:
+before this, the six would have shown up as permanently drifted forever, and a guard that is red
+for an expected reason is a guard people stop reading.
+
+🔴 **The filter is set subtraction by EXACT NAME, never a glob or prefix**, and that is the entire
+safety argument. A filter matching too much would leave all four guards comparing **zero** branches
+and printing green — the same false-clean `--require-bands` exists for, one level up. Three
+fail-closed rules, each with its own self-test case:
+- a ref in **NEITHER** section is **KEPT and audited**, so a band cut without a declaration cannot
+  become invisible to every guard at once
+- **`master` can never be dropped**, whatever the declaration says
+- an unreadable declaration **REFUSES with exit 2**, never *"assume nothing is archived"* — that
+  fallback audits *more*, not less, which is exactly why nobody would notice it
+
+⚠️ **To archive a band:** move its line below `[archived]`, in the commit that stops propagating to
+it. **To bring one back:** move it above **and propagate everything it missed in the same change.**
+⚠️ **`drift-audit.py --branch <name>` bypasses the filter**, so an archived band can still be
+audited deliberately.
+
 **Three rules, all mandatory:**
 
 1. **Fixes land on `master` FIRST, always.** A fix authored directly on a band branch is a defect,
    even when the bug was only reported on that band. Fix it on `master`, then propagate.
+   ⚠️ **"Propagate" now means the LIVE bands.** Rule 1 is unchanged; its audience shrank.
 2. **Every band-propagation commit carries a `Backport-of:` trailer** naming the `master` commit it
    came from:
 
