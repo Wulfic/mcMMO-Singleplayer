@@ -3278,6 +3278,98 @@ redone byte-wise. `scripts/*.py` are CRLF on disk, `TODO.md` is LF, and `*.sh` i
 - [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **eighth** consecutive
       session. `master` is now **49** commits ahead of `origin/master` (MEASURED after the closing commit, not predicted before it).
 
+## §76 — the uncounted `check()` family: a self-test that cannot say how much it ran — ⬜ PLAN
+
+**§75's own carried row, taken as this session's work** (owner ruling 2, 2026-09-22 s15). §75 floored
+the **collection-driven** self-tests on what RAN. The straight-line `check()` harnesses were left
+open because they are *immune to that shape* — there is no collection to empty — and **immune is not
+safe**: delete any one of ~400 `check()` lines and nothing anywhere goes red.
+
+🔴 **It is §75's defect one level up, and the tell is identical.** `rename-to-official.py` ends its
+self-test with `print(f"\n  {checks} checks, {failures} failed")` and `return 1 if failures else 0`.
+**The count is printed and nothing asserts it.** `0 checks, 0 failed` exits 0 and reads as a pass —
+the exact sentence §75 wrote about gates 4, 6 and 12.
+
+### P1 — the census, MEASURED (✅ done)
+
+⚠️ **Counted by `sys.settrace` over the live `self_test()`, not by grepping `check(`** — and the two
+disagree in **both directions on four of eight scripts**, so a source-derived number would have been
+wrong before it was committed. This is the repo's twice-recorded *"a regex over source"* trap, hit a
+third time and caught this time by using the right instrument.
+
+| script | source grep | **runtime** | why they differ | floor today |
+|---|---|---|---|---|
+| `rename-to-official.py` | 166 | **165** | 1 try/except pair; only one arm runs | ❌ none — count **printed** |
+| `mixin-target-sizer.py` | 67 | **63** | 4 try/except pairs | ❌ none — count **printed** |
+| `branch-file-identity-audit.py` | 64 | **64** | — | ❌ none — **no count at all** |
+| `derive-official-names.py` | 58 | **58** | — | 🔴 **`< 43` — SLACK BY 15** |
+| `gradle-key-identity-audit.py` | 46 | **46** | — | ❌ none — **no count at all** |
+| `expected_bands.py` | 31 | **38** | a loop — grep **under**-counts by 7 | 🟡 §75 loop floor only |
+| `manifest-identity-audit.py` | 35 | **35** | — | ❌ none — **no count at all** |
+| `extract-mc-ids.py` | — | **16** | — | 🟡 §75 loop floor only; **the TODO row never listed this script** |
+
+🔑 **Two corrections to the §75 row that named this work.** It said *"nine"* scripts and named
+`drift-audit.py` and `loomjar.py`; both have **zero** `check()` calls and neither has this shape. It
+said `expected_bands.py` 30; the source has 31 and **38 actually run**. The real set is **eight**, and
+one of them (`extract-mc-ids.py`) was never named.
+
+🔴 **`derive-official-names.py` is the finding that justifies the design.** It is the only script that
+already tried — `if len(ran) < 43` — and it has been **slack by fifteen checks** ever since checks
+were added after it was written. A lower bound does not stay tight; it rots in the one direction
+nobody looks.
+
+⚠️ **One false positive of the instrument, recorded so it is not re-derived:**
+`gameplay_smoke_scenario.py` reports 9, but its `check(log, profile_text) -> Verdict` is the
+**scorer**, not an assertion helper. The tracer matched on the name. It is **out of scope**.
+
+### P2 — the design decision
+
+1. ✅ **Exact equality (`ran != EXPECTED`), not a floor (`ran < N`).** `derive-official-names.py` is
+   the measurement that settles it: a floor only fails downward, so every check added after it was
+   written widens the slack silently. Exact fails in **both** directions, so adding a check forces a
+   deliberate bump. **That friction is the mechanism, not its cost.**
+2. 🔴 **The constant is a LITERAL, never derived from the script's own source.** Counting `check(` in
+   the file at runtime is **vacuous for the deletion case** — delete a line and both sides drop
+   together, and the guard reports green. P1 also measured the source count as simply *wrong* on four
+   of eight scripts.
+3. ✅ **Placed AFTER the failures report.** Several `check()` calls are nested under `if` guards that
+   only skip when a prior check already failed; a failing run must exit 1 on the failure, not on a
+   confusing count mismatch.
+
+### P3 – P6
+
+- **P3** implement. Two commits: (a) the floor across all eight scripts, (b) `derive-official-names.py`'s
+  slack floor `43` → exact `58`, which is a separate decision and gets its own diff.
+- **P4** prove it. Per script, a mutation in **each direction** — delete one `check()` (under) and add
+  one (over) — and assert exit 1. **16 mutations + a green control.** A floor that has not been seen
+  to fire is decoration.
+- **P5** prove the constant is **branch-invariant**. `scripts/**` is byte-identical on every branch
+  (P19-1), so one literal must be right on all of them; a per-band count would make the constant
+  unshippable. Run all eight on each live band.
+- **P6** propagate to the three live bands, then the gate sweep.
+
+### What I am NOT doing
+
+- ❌ **Not pushing, not bumping `mod_version`, not closing an issue** — ruling 1, **ninth** session.
+- ❌ **Not touching gates 2/12's mis-scoped `--self-test`** — deferred by owner ruling 3 this session.
+- ❌ **Not the S2 one-sided sweep** — §75's other carried row, still open.
+- ❌ **Not adding, removing or rewriting a single `check()`.** This section counts the assertions that
+  exist; changing what they assert is a different question and would hide this one.
+- ❌ **Not `gameplay_smoke_scenario.py`** (scorer, not an assertion helper — see P1),
+  nor `config-id-audit.py` / `extract-mc-surface.py` / `drift-audit.py` (**0** `check()` calls; §75
+  already floored their collection loops).
+
+### Blast radius and rollback
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| P1 census | nothing — tracing only | nothing | n/a |
+| P3 fix | 8 files in `scripts/` | a green gate self-test turns red, or a floor that cannot fire | `git diff`; `scratchpad/TODO.md.bak-s15` for the doc |
+| **P4 mutations** | `scripts/**` **temporarily**, 16 mutations | 🔴 **a mutated script left behind disarms a SHIP GATE** — worse than a red test, because a gate that lies reads as green | byte-exact `.orig` copies in `scratchpad/mut-backup-s15/`, taken **before the first mutation**, `cmp`-verified after **every** run |
+| P6 propagation | 3 live band heads | a band left behind | pre-propagation heads frozen as ready-to-run `git branch -f` lines in `scratchpad/UNDO-s15-bands.txt` |
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
