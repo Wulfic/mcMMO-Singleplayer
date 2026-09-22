@@ -3276,7 +3276,7 @@ redone byte-wise. `scripts/*.py` are CRLF on disk, `TODO.md` is LF, and `*.sh` i
       *"Run with `--mutate` to prove these cases can fail"*, so 22 is a floor on entry points, not
       a census of self-proof.
 - [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **eighth** consecutive
-      session. `master` is now **47** commits ahead of `origin/master`.
+      session. `master` is now **49** commits ahead of `origin/master` (MEASURED after the closing commit, not predicted before it).
 
 ## Other open work — harness and playtest
 
