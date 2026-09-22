@@ -2406,6 +2406,137 @@ unmutated tree as *"survived"*. **Fail closed, then restore, then re-run.**
 
 ---
 
+## §73 — GitHub #14: the multiplayer client crash — ⬜ IN PROGRESS
+
+**Issue:** *"Crashes when playing with friends"* (HobraTacobra, 2026-09-15), MC **1.21.11**, CurseForge
+client. Ruled **supported** in §68. Owner ruling 2026-09-22: **work it statically anyway** — the crash
+log was asked for on 2026-09-21 and the reporter has not replied.
+
+### Re-measured here before touching anything — a carried row is a claim, not a fact
+
+| Claim | Measured |
+|---|---|
+| *"blocked on the reporter"* | **True but not blocking a diagnosis.** `gh issue view 14` — 1 comment, ours, no reply |
+| *"no crash log"* | **True.** Nothing attached, nothing pasted |
+| the fix must reach the reporter's band | **`mc/1.21.11` is LIVE** (`expected_bands.py --count` → 3), so it is propagated to, not archived |
+
+### 🔑 The diagnosis, reached without the crash log — and the symptom list is what proves it
+
+**The reporter's own words are the discriminator, and the TODO paraphrase had lost it.** They list
+*placing a block, crafting tables, furnaces, chests* — **every one a right-click on a block** — and
+they do **not** list breaking a block. That splits `UseBlockCallback` from `AttackBlockCallback`
+cleanly, and the code agrees: the attack path resolves through `resolve(player)` → `null` on a client
+and never reads a config, so it cannot throw. **A symptom list is evidence in what it omits.**
+
+🔴 **The defect: `RepairSalvageListener.anvilKindAt` dereferences a `@Nullable` config on a path that
+runs on the logical CLIENT, before any side guard.**
+
+```java
+final Block repairAnvil = anvilBlock(McMMOMod.getGeneralConfig().getRepairAnvilMaterialName());
+```
+
+- `UseBlockCallback` fires on **both** logical sides — the listener's own javadoc says so, and the
+  claim-on-both-sides behaviour is deliberate (it is what stopped vanilla equipping the armour
+  mid-repair, the bug that listener was written for).
+- `onUseBlock` runs `anvilKindAt(world, pos)` **before** its `instanceof ServerPlayer` check, because
+  the identity test is supposed to be side-agnostic.
+- **Configs are loaded at `onServerStarting`, not `onInitialize`** — `McMMOMod.getGeneralConfig()` is
+  declared `@Nullable` and its field javadoc says *"null before then"*.
+- A **joining** client never starts a server ⇒ `generalConfig == null` ⇒ **NPE on every right-click of
+  any block.**
+
+🔑 **That is the whole symmetry, and it is why the host is always fine.** An integrated-server host
+runs the server in the *same JVM*, so the config statics are populated for its client too. The joining
+client's JVM has no server and never will. Swap who hosts and the crash swaps with them — exactly as
+reported, in both directions.
+
+### ✅ It is the INSTANCE, and the class was swept — 176 sites, one defect
+
+Fixing an instrument does not fix the class, so the client-reachable surface was enumerated rather
+than sampled. **There is no custom networking and the client package is ModMenu screens only**, so the
+surface is exactly: 6 `UseBlockCallback` + 4 `UseItemCallback` + 1 `UseEntityCallback` +
+1 `AttackBlockCallback` + the 42 mixins in the **common** config (`mcmmo.client.mixins.json` is
+`"client": []` — every mixin applies on both sides).
+
+| Entry point | Verdict |
+|---|---|
+| `SuperAbility` (use/attack block, use item) | safe — `resolve()` returns `null` for a non-`ServerPlayer` |
+| `Alchemy`, `Cooking`, `Smelting` use-block | safe — `instanceof ServerPlayer` is the **first** statement |
+| `SecondWind`, `SmokeBomb`, `HerdsmansCall` | safe — `world.isClientSide() \|\| !(player instanceof ServerPlayer)` first |
+| `PetCombatMode` use-entity | ✅ **safe, and it is the precedent** — same claim-on-both-sides shape, and it *does* null-check: `getGeneralConfig() == null ? "BONE" : ...` |
+| 42 mixin delegates | safe — each bails on `instanceof ServerPlayer` or resolves through `UserManager`, which is **empty** on a remote client |
+| **`RepairSalvage` use-block** | 🔴 **the defect** |
+
+🔑🔑 **The pattern was understood and applied one listener over.** `PetCombatModeListener` guards the
+identical shape with a default; `anvilKindAt` does not. And `RepairSalvageListener`'s *own* second-level
+helpers `repairableInHand`/`salvageableInHand` **do** null-check their managers, with a javadoc naming
+*"configs that never loaded (no world session)"* — so the state was known, guarded at depth 2, and
+missed at depth 1, which is the only depth that runs first.
+
+### 🔴 The existing test covers the client side and could never have caught this
+
+`RepairSalvageListenerTest` already drives `onUseBlock` with a `clientPlayer(...)` — the client-side
+fire **is** tested. Its fixture sets a mocked `generalConfig` in `@BeforeEach` and its own comment says
+why: *"resolving the anvil is the first thing the dispatch does, so a fixture that left them unset
+would test nothing at all."* **True, and it is also exactly what left the multiplayer state
+unreachable.** `tearDown` sets the field back to `null`, so the null state is representable — it was
+simply never the state under test. The axis tested was *which side*; the axis that crashes is
+*is there a world session*, and the two are independent.
+
+### The plan, file by file
+
+- [x] ✅ **73.1 — DONE.** `RepairSalvageListener.anvilKindAt` reads `McMMOMod.getGeneralConfig()` once
+      into a local and returns `null` when it is absent. Follows `PetCombatModeListener`'s form;
+      `null` already means *"not an mcMMO anvil"* and `onUseBlock` already answers `PASS` to it.
+- [x] ✅ **73.2 — DONE, four cases, and the axis is covered in BOTH directions.** Three assert the
+      no-world-session state (repair anvil, salvage anvil, and a **crafting table** — the reported
+      crash verbatim) answers `PASS` and does not throw; the fourth asserts the same click is still
+      **claimed** once configs exist, so *"return null always"* cannot satisfy the set.
+      🔑 The fixture nulls **all three** server-start statics, not just the one this fix reads — a
+      joining client has none of them, and nulling only `generalConfig` would stop modelling the
+      reported state the moment the dispatch reached for another.
+- [x] ✅ **73.3 — DONE, and the caveat pass found the real docs defect on pages the fix never
+      touched.** The class javadoc's *"they cannot disagree about whose click it was"* is now scoped
+      to singleplayer. 🔴 **Then the symptom grep found the claim that actually mattered, in THREE
+      places:** `README.md:92`, `wiki/Home.md:40` and `wiki/Installation.md:96` each told players the
+      mod *"works in single-player, on LAN, and on a dedicated Fabric server."* **That was false the
+      whole time #14 was open** — a joining player crashed on every right-click. All three now say
+      multiplayer is best-effort and untested, and name the issue.
+      🔑🔑 **Three byte-identical copies of one false sentence: invisible to BOTH guards by
+      construction.** The identity guard is green *because* they agree, and `BandDocsMatchRealityTest`
+      asks only whether the support floor is right. This is the [[identical-docs-lie-invisible-to-guards]]
+      shape again, and only a human reading for *truth* finds it.
+- [ ] **73.4** Suite on `master`, then propagate to the **three live bands** with `Backport-of:`.
+      ⚠️ `mc/1.21.11` is **yarn-mapped** — the reporter's own band. The hunk's context carries
+      `Level`/`Player`, so expect a conflict and **translate**, never *"take master"*.
+- [ ] **73.5** Gate sweep (7/9/10/11) in a **fresh clone**, per the pre-push rule.
+
+### ⚠️ The behavioural consequence, stated rather than discovered later
+
+On a **remote client** mcMMO can no longer claim the anvil click, because it genuinely does not have
+the data to decide — the configs live on the server. So the client predicts vanilla's use-item
+fall-through and the server corrects it on the next sync: a **visual flicker in multiplayer**, in
+exchange for not crashing. **Singleplayer behaviour is unchanged byte for byte** — `generalConfig` is
+non-null there, so the new branch is never taken, and that is the invariant the tests pin.
+
+🔴 **Loading the configs client-side is the WRONG fix and is not being done.** It would restore the
+symmetric claim only by making the client decide from *its own* config file, which on a remote server
+is a different machine's — so the two sides would disagree about whose click it was while both
+believing they agreed. **A wrong claim is worse than an absent one.**
+
+### What I am NOT doing
+
+- **Not** pushing, and **not** bumping `mod_version` — the hold was re-asked this session (**sixth**)
+  and stands.
+- **Not** closing #14, #15, #16, #17 or #19. Owner ruled **close at push time**; the fixes are in 32
+  unpushed commits and have reached no player.
+- **Not** taking multiplayer into declared scope. This fixes a crash; it does not promise a mode.
+- **Not** auditing the other 176 `@Nullable`-getter dereferences beyond the client-reachable surface.
+  The server-side ones cannot see a null config **by construction** — the server loaded them.
+- **Not** propagating to the six archived bands, and **not** propagating `TODO.md`.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
