@@ -78,6 +78,12 @@ FLOOR = re.compile(
     r"|assertFalse\s*\(\s*[\w.()]*\.isEmpty\s*\(\)"
     r"|assertTrue\s*\(\s*[\w.()]*\.size\s*\(\)\s*>"
     r"|assert\w*\s*\(\s*[\w.()]*\.size\s*\(\)\s*[,)]"
+    # `assertEquals(3, broken.size())` -- size() as the SECOND argument, which is how
+    # this codebase actually writes it. The first version only matched size() as the
+    # FIRST argument and so missed every real floor in the herbalism traversal tests,
+    # accusing three sound tests. A NON-ZERO literal only: assertEquals(0, x.size())
+    # asserts emptiness and is the opposite of a floor.
+    r"|assertEquals\s*\(\s*[1-9]\d*\s*,\s*[\w.()]*\.size\s*\(\)"
     r"|assertNotEquals\s*\(\s*0\s*,"
     r"|assert\w*\s*\([^;]*?\.count\s*\(\)"
 )
@@ -387,6 +393,14 @@ SHAPES = [
             ),
             ("assertTrueNoneMatch", "{ assertTrue(all().stream().noneMatch(r -> r.bad())); }"),
             ("assertTrueAllMatch", "{ assertTrue(all().stream().allMatch(r -> r.ok())); }"),
+            # assertEquals(0, ...) asserts EMPTY - the opposite of a floor, so a body
+            # carrying it is still vacuous for a later allMatch.
+            (
+                "zeroSizeIsNotAFloor",
+                "{ var rows = all().stream().filter(r -> r.bad()).toList();"
+                " assertEquals(0, rows.size());"
+                " assertTrue(rows.stream().allMatch(r -> r.ok())); }",
+            ),
         ],
         negatives=[
             # THE SOUND POLARITIES. Each of these FAILS when the derivation comes back
@@ -398,6 +412,13 @@ SHAPES = [
                 "{ assertFalse(all().stream().filter(r -> r.ok()).toList().isEmpty()); }",
             ),
             ("assertFalseNoneMatch", "{ assertFalse(all().stream().noneMatch(r -> r.ok())); }"),
+            # assertEquals(N, x.size()) is a floor -- the shape this codebase actually
+            # uses. Missing it accused three sound herbalism traversal tests.
+            (
+                "flooredBySizeAsSecondArg",
+                "{ var broken = collect(0); assertEquals(3, broken.size());"
+                " assertTrue(broken.stream().allMatch(c -> c.y() <= 64)); }",
+            ),
             # a floor on the source collection makes the claim real
             (
                 "guardedByFloor",
