@@ -213,17 +213,32 @@ def detect_a3(t: TestMethod) -> bool:
     return False
 
 
+# POLARITY IS THE WHOLE POINT HERE, and the first version of A4 ignored it.
+# Over an EMPTY derived collection:
+#   anyMatch  -> false     noneMatch -> true
+#   allMatch  -> true      isEmpty   -> true
+# So only the combinations that PASS on empty are vacuous. assertTrue(anyMatch)
+# and assertFalse(isEmpty) are sound - they FAIL when the derivation breaks, which
+# is exactly the property being asked for. Flagging them made MixinApplicationTest
+# look guilty for using the correct idiom.
+VACUOUS_ON_EMPTY = [
+    (r"assertTrue\s*\(", r"\.isEmpty\s*\(\)"),
+    (r"assertTrue\s*\(", r"\.noneMatch\s*\("),
+    (r"assertTrue\s*\(", r"\.allMatch\s*\("),
+    (r"assertFalse\s*\(", r"\.anyMatch\s*\("),
+]
+
+
 def detect_a4(t: TestMethod) -> bool:
-    """assertTrue/assertFalse over a derived collection's emptiness or match."""
-    for m in re.finditer(r"assert(?:True|False)\s*\(", t.body):
-        close = brace_match("(" + t.body[m.end():], 0)
-        arg = t.body[m.end():m.end() + (close if close > 0 else 300)]
-        arg = arg.split(";")[0]
-        if DERIVED.search(arg) and re.search(
-            r"\.isEmpty\s*\(\)|\.anyMatch|\.noneMatch|\.allMatch", arg
-        ):
-            if not FLOOR.search(t.body):
-                return True
+    """assert over a derived collection, in a polarity that PASSES when it is empty."""
+    for assert_pat, op_pat in VACUOUS_ON_EMPTY:
+        for m in re.finditer(assert_pat, t.body):
+            close = brace_match("(" + t.body[m.end():], 0)
+            arg = t.body[m.end():m.end() + (close if close > 0 else 300)]
+            arg = arg.split(";")[0]
+            if DERIVED.search(arg) and re.search(op_pat, arg):
+                if not FLOOR.search(t.body):
+                    return True
     return False
 
 
@@ -370,8 +385,19 @@ SHAPES = [
                 "assertFalseAnyMatch",
                 "{ assertFalse(all().stream().anyMatch(r -> r.bad())); }",
             ),
+            ("assertTrueNoneMatch", "{ assertTrue(all().stream().noneMatch(r -> r.bad())); }"),
+            ("assertTrueAllMatch", "{ assertTrue(all().stream().allMatch(r -> r.ok())); }"),
         ],
         negatives=[
+            # THE SOUND POLARITIES. Each of these FAILS when the derivation comes back
+            # empty, which is the property being asked for - flagging them accused
+            # MixinApplicationTest of using the correct idiom.
+            ("assertTrueAnyMatch", "{ assertTrue(all().stream().anyMatch(r -> r.ok())); }"),
+            (
+                "assertFalseIsEmpty",
+                "{ assertFalse(all().stream().filter(r -> r.ok()).toList().isEmpty()); }",
+            ),
+            ("assertFalseNoneMatch", "{ assertFalse(all().stream().noneMatch(r -> r.ok())); }"),
             # a floor on the source collection makes the claim real
             (
                 "guardedByFloor",
