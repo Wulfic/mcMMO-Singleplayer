@@ -241,9 +241,10 @@ stance **instead of sitting the pet**; a plain right‑click, or any other item,
 
 ## In‑game feedback
 
-- **XP boss bar** — a fading, per‑skill XP bar appears above the hotbar as you train. Configure or
-  disable it in `experience.yml` under `Experience_Bars` (`Enable`, `Hide_Delay_Seconds` default
-  `10`, `Max_Visible` default `3`). Bars stack downward over the hotbar, so the count is capped —
+- **XP boss bar** — a fading, per‑skill XP bar appears at the top of the screen as you train, where
+  Minecraft draws boss bars. Configure or disable it in `experience.yml` under `Experience_Bars`
+  (`Enable`, `Hide_Delay_Seconds` default `10`, `Max_Visible` default `3`). Bars stack downward from
+  there, so the count is capped —
   sprinting through a forest while mining can easily have five skills live at once, and the least
   recently trained bar is hidden to make room.
 - **Milestone advancements** — hidden vanilla advancements are granted on round levels, rank

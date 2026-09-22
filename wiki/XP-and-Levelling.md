@@ -135,7 +135,8 @@ There is also a **diminishing-returns** system, and `Skills.Herbalism.Prevent_AF
 
 ## XP bars
 
-A fading, per-skill XP boss bar appears above the hotbar as you train.
+A fading, per-skill XP boss bar appears at the top of the screen as you train, where Minecraft draws
+boss bars.
 
 > **You can hide any skill's bar from the config screen.** Mod Menu → mcMMO → **Skills** lists every
 > skill with its master switch and, under it, an **XP Bar** show/hide. Hiding a bar does not stop the
@@ -159,7 +160,7 @@ Experience_Bars:
 | `Hide_Delay_Seconds` | How long a bar stays after you stop gaining XP in that skill. |
 | `Max_Visible` | **How many bars may show at once. Default 3, 0 = unlimited.** |
 
-Boss bars stack downward over the hotbar, so an unbounded number eventually covers the screen — sprinting through a forest while mining can easily have five skills live at once. When a new bar appears and `Max_Visible` are already showing, the **least recently trained** one is hidden to make room.
+Boss bars stack downward from the top of the screen, so an unbounded number eventually covers it — sprinting through a forest while mining can easily have five skills live at once. When a new bar appears and `Max_Visible` are already showing, the **least recently trained** one is hidden to make room.
 
 Per-skill colour and style are configurable too:
 
