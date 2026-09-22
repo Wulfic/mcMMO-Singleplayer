@@ -1886,7 +1886,7 @@ deciding it silently is precisely the failure being reported.
 
 ---
 
-## §71 — six rulings executed: the invariant retired, 16.1 declined, Block Cracker gated — ⬜ IN PROGRESS
+## §71 — six rulings executed: the invariant retired, 16.1 declined, Block Cracker gated — ✅ DONE
 
 **Written before the first edit**, per the Tier 2 rule. All six rulings were taken before any
 command ran, and two of them were only reachable by asking — see *"What asking bought"* below.
@@ -2073,13 +2073,51 @@ carried-debt list instead.**
       `git diff --numstat`, then restored them, so the commit carries **one added file and nothing
       else**. A line-ending-only diff on six untouched plaques would have been noise in a review and
       a false positive for the identity guard.
-- [ ] **71.9 — propagate 71.1–71.3 to the three LIVE bands** with `Backport-of:`.
+- [x] ✅ **71.9 — DONE. `762f47b1e` propagated to all three live bands** from a scratch clone:
+      `mc/26.2` → `cfa2c0a96`, `mc/26.1.2` → `6e5e7893e`, `mc/1.21.11` → `2a61a8e1d`. All three
+      applied **cleanly**, all three fast-forwarded back into this working copy.
+      ✅ **Trailer verified through git's OWN parser**, not by eyeballing the message — and with the
+      control: `%(trailers:key=Backport-of,valueonly)` returns the source sha on each band and
+      **EMPTY on `762f47b1e` itself**. A check asserting non-empty everywhere would pass a trailer
+      wrongly applied to the source. The double-`\n` `printf` form was used.
+      ✅ **The yarn band's clean apply was NOT taken on trust** — AGENTS.md is explicit that the clean
+      applies are the danger. Two checks: the added Java lines (string literals stripped) contain
+      **no** official-name symbols, and `mc/1.21.11` **BUILDS** — suite **173 classes / 1,933 tests /
+      0 failures**, with `blockCrackerGateNeedsUnlock` present and passing **on the band**.
+      🔑 The change is mapping-agnostic by construction (an enum constant, comments, a test and two
+      resources), which is *why* it needed no translation — stated as the reason, not as luck.
+      ✅ **All four guards exit 0 afterwards** (read directly, never through a pipe), self-test FIRST:
+      `drift-audit.py --self-test` PASSED · `--master master` in a **fresh** clone → **0 MISSING** on
+      all three live bands, 6 archived skipped · identity **53 paths** byte-identical ·
+      manifest **4 distinct** · gradle-key **12 keys, 10 SHARED / 2 DISTINCT**.
+      ⚠️ **The propagation clone was stale for the audit** — its `origin/mc/*` still pointed at the
+      pre-propagation tips — so gate 7 was re-run in a **second, fresh** clone. Reusing the first one
+      would have graded the work as though it had never happened.
       ⚠️ `skillranks.yml` and `wiki/**` are shared; `TODO.md` is **excluded** and stays `master`-only.
       ⚠️ Propagate from a **scratch clone** (`git clone --local --no-hardlinks . <dir>`) —
       `drift-audit.py`'s `band_branches()` PREFERS REMOTE refs and would grade the stale remote.
       ⚠️ `mc/1.21.11` is **yarn-mapped**; a `src/` hunk needs **translation**, never "take master".
       71.1/71.3 are resources and docs, so this should be clean — **verify, do not assume**.
-- [ ] **71.10 — 🔴 DESTRUCTIVE, LAST, its own commit-free step: the 56 stale local-only tags.**
+- [x] ✅ **71.10 — DONE, owner-authorised in the moment. 65 stale local-only tags deleted; 0 errors.**
+      Local went **75 → 10**, and the local set now **equals** the remote set exactly (`comm` both
+      directions → 0). All 65 were superseded release tags `v1.0.0`–`v1.3.4`.
+      🔴🔴 **THE ROW SAID 56. THE MEASUREMENT SAID 65.** Local was 75, not the 71 on file. **This is
+      the third time this exact row has been a lower bound** — 6 → 62 → 56 → **65** — and the row
+      two entries down already states the lesson: *a carried row naming a specific defect is a lower
+      bound, never a count.* It was re-measured before asking, and the owner was asked with **65**,
+      not with the number on the page.
+      ✅ **Five gates, all of them, before the command:** list **frozen to a file** (never a live
+      re-query); remote reply asserted **non-empty** first, because an empty answer is the fail-open
+      trap; all 65 commits **reachability-checked** against live branches (**0 unreachable**);
+      `scratchpad/UNDO-s10-tags.txt` written with **65 exact `git tag <name> <sha>` lines BEFORE the
+      first delete**; control confirmed **none** of the 10 remote-backed tags were in scope; and the
+      owner confirmed the count and blast radius in the moment rather than by inheritance.
+      🔴 **`git fetch --prune --prune-tags` was NOT used and must never be** — it re-queries the
+      remote and deletes whatever is absent from the answer, so one empty reply takes **all 75**.
+      Deleting from a frozen file is the whole defence.
+      ⚠️ **Nothing outward-facing.** These were local-only by definition; origin was never written to.
+
+      **Original row text:** the 56 stale local-only tags.
       See the blast-radius block below. **Nothing else in this section depends on it**, so it can be
       abandoned without unwinding 71.1–71.9.
 
@@ -2448,7 +2486,18 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
       now declares `scripts/**/*.sh` a `:test` input** — measured: without it a real violation
       is a CACHED PASS. See §66.
 
-- [ ] ⬜ **56 MORE stale local-only tags, same cause — owner's call, raised by §63 (2026-09-10).**
+- [x] ✅ **CLOSED 2026-09-22 (§71.10) — 65 deleted, not 56. Local 75 → 10, and the local tag set now
+      equals the remote set exactly.** Owner-authorised in the moment, with the **re-measured** count
+      on the table rather than the one written here.
+      🔑🔑 **The count was wrong in the row that exists to warn that counts go wrong.** 6 → 62 → 56 →
+      **65**: four numbers for one defect, and the row's own text already said *"a carried row naming
+      a specific defect is a lower bound, never a count."* **Reading that sentence is not the same as
+      applying it** — the fix was to re-measure before asking, which is what made the authorisation
+      honest.
+      ✅ Five gates run in full; undo is `scratchpad/UNDO-s10-tags.txt` (65 exact `git tag` lines, all
+      commits reachability-checked, 0 unreachable). 🔴 `--prune-tags` was not used and must never be.
+
+- [x] ⬜ **Original row, kept for the reasoning:** 56 MORE stale local-only tags, same cause — owner's call, raised by §63 (2026-09-10).
       🔑🔑 **"Six" was a lower bound, and the count was never the finding.** Measured:
       `comm -23 <(git tag -l | sort) <(git ls-remote --tags origin | sed 's|.*refs/tags/||' |
       grep -v '\^{}' | sort -u)` returns **62** — the six `v2.2.050` plus **56** superseded release
