@@ -2639,7 +2639,7 @@ believing they agreed. **A wrong claim is worse than an absent one.**
   The server-side ones cannot see a null config **by construction** — the server loaded them.
 - **Not** propagating to the six archived bands, and **not** propagating `TODO.md`.
 
-## §74 — the vacuous-guard census: stop finding them ONE AT A TIME — ⬜ IN PROGRESS (Tier 2)
+## §74 — the vacuous-guard census: stop finding them ONE AT A TIME — ✅ DONE (Tier 2; P5 NOT reached)
 
 **Owner-chosen 2026-09-22 (§74 ruling 2)**, over the stale-claim pass and a band drift audit. It had
 been offered in four prior sessions and never taken.
@@ -2709,9 +2709,16 @@ P1  build scripts/vacuity-census.py + its two-sided --self-test      instrument 
 P2  fix the A3 detector; re-measure all four shapes honestly          the number moves
 P3  triage every candidate by READING it -> confirmed / false positive
 P4  mutation-prove each confirmed one, fix it, mutation-prove the fix  both directions
-P5  the Python --self-test family (15 scripts) -- assess, then scope   may defer
+P5  the Python --self-test family (15 scripts) -- assess, then scope   NOT REACHED
 P6  record: decisions.md, gotchas.md, state.md, this section
 ```
+
+✅ **P1-P4 and P6 are DONE. 🔴 P5 was NOT REACHED and is the one open thing here** — the 15
+`--self-test` modes in `scripts/` have **never been audited for vacuity as a group**, which is
+exactly the meta-layer argument this section opens with. It is a Tier 1 job on its own.
+⚠️ **And the census covers shapes A1–A4 only.** It is a **floor on what is detectable, not a
+ceiling** — a vacuity in a shape nobody has written a detector for is still invisible, and this
+script going green is not evidence that none exist.
 
 ### What I am NOT doing
 
