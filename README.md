@@ -6,7 +6,7 @@ super abilities for vanilla Minecraft — no server, no database, no plugin plat
 
 | | |
 |---|---|
-| **Minecraft** | 1.21 – 1.21.11 and 26.1 – 26.2 — one build per version band, see [Supported versions](#supported-versions) |
+| **Minecraft** | 1.21 – 1.21.11 and 26.1 – 26.3 — one build per version band, see [Supported versions](#supported-versions) |
 | **Mod loader** | Fabric Loader ≥ 0.19.3 |
 | **Required dependency** | Fabric API |
 | **Java** | 21+ on the `1.21.x` bands; **25+** on the `26.x` line, which is Minecraft's own requirement there |
@@ -24,6 +24,7 @@ the mod's Minecraft‑facing surface is identical, so a single jar covers all of
 
 | Minecraft | Jar file | Fabric API | Mod Menu | Cloth Config |
 |---|---|---|---|---|
+| **26.3** | `mcmmo-<version>+mc26.3.jar` | `0.161.0+26.3` | `21.0.0-beta.1` | `26.3.158` |
 | **26.2** | `mcmmo-<version>+mc26.2.jar` | `0.158.0+26.2` | `20.0.1` | `26.2.155` |
 | **26.1 – 26.1.2** | `mcmmo-<version>+mc26.1-26.1.2.jar` | `0.155.2+26.1.2` | `18.0.0` | `26.1.154` |
 | **1.21.11** | `mcmmo-<version>+mc1.21.11.jar` | `0.141.4+1.21.11` | `17.0.0` | `21.11.153` |
@@ -47,8 +48,8 @@ startup with a clear message instead of misbehaving quietly. The two are kept in
 (`BandVersionLabelTest`), so a filename that promises a version the loader would refuse fails the
 build rather than reaching a download page.
 
-Minecraft **1.20.6 and older are not supported**. The whole `26.x` line **is** supported: two
-bands cover `26.1`, `26.1.1`, `26.1.2` and `26.2`.
+Minecraft **1.20.6 and older are not supported**. The whole `26.x` line **is** supported: three
+bands cover `26.1`, `26.1.1`, `26.1.2`, `26.2` and `26.3`.
 
 ### What differs between bands
 
@@ -357,7 +358,8 @@ exist only for older ones.
 
 | Branch | Band |
 |---|---|
-| `master` | 26.2 |
+| `master` | 26.3 |
+| `mc/26.2` | 26.2 |
 | `mc/26.1.2` | 26.1 – 26.1.2 |
 | `mc/1.21.11` | 1.21.11 |
 | `mc/1.21.10` | 1.21.9 – 1.21.10 |
