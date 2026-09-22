@@ -548,8 +548,11 @@ def run(versions: list[str], write: bool, check: bool) -> int:
 
 def self_test() -> int:
     failures: list[str] = []
+    ran_checks = 0
 
     def check(name: str, cond: bool, detail: str = "") -> None:
+        nonlocal ran_checks
+        ran_checks += 1
         if not cond:
             failures.append(f"{name}: {detail}")
 
@@ -780,6 +783,19 @@ def self_test() -> int:
         print(f"  FAIL -- {len(failures)} problem(s):")
         for f in failures:
             print(f"      {f}")
+        return 1
+    # --- anti-vacuity floor: assert HOW MANY checks ran -------------------------------------
+    # EXPECTED_CHECKS is a hand-written literal on purpose. Deriving it by counting `check(` in
+    # this file would be VACUOUS for the case that matters -- delete a check and both sides drop
+    # together -- and it is also wrong: a source grep miscounts a check() in a try/except arm or
+    # in a loop. Add or remove a check and you bump this number in the same commit; the friction
+    # IS the mechanism. An exact count, never a `>=` floor: the one script that used a lower
+    # bound (derive-official-names.py, `< 43`) sat slack by fifteen checks and nothing said so.
+    EXPECTED_CHECKS = 16
+    if ran_checks != EXPECTED_CHECKS:
+        print(f"SELF-TEST INCONCLUSIVE: {ran_checks} checks ran, expected exactly "
+              f"{EXPECTED_CHECKS}. A check was added, deleted or SKIPPED -- if you meant it, "
+              f"update the literal in the same commit.", file=sys.stderr)
         return 1
     print("  PASS -- parser round-trips, truncation and orphan ids are rejected, and every "
           "cross-check direction fires.")
