@@ -1395,47 +1395,118 @@ git refs (`origin/mc/.+`). Remove six lines while the six branches still exist a
 `expected_bands.py --verify` reports six **undeclared** bands — exit 1 — so ship gates 9/10/11 go
 **red permanently**. Ruling 3 keeps the branches, so the tooling has to learn the concept.
 
-- [ ] **D.1** Add an **ARCHIVED** set to the declaration. Semantics, decided up front because
-      getting them wrong is the failure mode:
-      - `--count` → **live bands only**. It is the `--require-bands` floor for audits that now skip
-        archived bands; counting archived ones makes the floor unreachable
-      - `--verify` → declared **live ∪ archived** must equal git's `mc/**` set, **both directions**.
-        An archived branch is still expected to EXIST; it is simply not audited for drift
-      - 🔴 **Never derive either set by globbing `mc/**`** — that is `len(x) >= len(x)`, and it
-        deletes the guard while leaving it looking present
-- [ ] **D.2** Teach the live-band filter to `drift-audit.py`, `branch-file-identity-audit.py`,
-      `manifest-identity-audit.py` and `gradle-key-identity-audit.py`.
-      🔴 **This WEAKENS four guards, and it is the whole risk of Phase D.** A filter bug that
-      matches too much leaves every guard auditing **zero** branches and printing green — the exact
-      vacuity family this repo has now caught sixteen times.
-      🧪 **Each of the four gets a self-test case that feeds an over-matching filter and asserts the
-      run EXITS 2, not 0.** "Fewer than two branches compared" is already exit 2 in two of them; the
-      other two need it. A guard with no test is decoration.
-- [ ] **D.3** Mutation-test every filter: archive a band that should be live and assert the audit
-      **notices**; un-archive one and assert drift is reported again. Count **which** cases notice —
-      a pass alone proves nothing.
-- [ ] **D.4** Docs: the band table in `README.md` and `wiki/**` marks the six **archived, final
-      release v1.4.0** (ruling 4 — the rows stay, relabelled; the jars stay downloadable).
-- [ ] **D.5** 🔴 **The support-floor sentence, and the R-x collision it walks into.**
-      `README.md:50` and `wiki/Installation.md:32` read *"Minecraft **1.20.6 and older are not
-      supported**"*. After the archive that implies live support for `1.21` – `1.21.10`, which is
-      false. **`BandDocsMatchRealityTest` will NOT catch it** — it asserts the floor sits *below*
-      every version the branch ships, and `1.20.6` still does. The guard stays satisfied by a
-      sentence that has become false in the **other direction**.
-      ➡️ **Proposed floor: `1.21.10`.** Strictly below every version each LIVE branch ships
-      (`mc/1.21.11` → 1.21.11 ✅, `mc/26.1.2` → 26.1 ✅, `mc/26.2` → 26.2 ✅, `master` → 26.3 ✅).
-      ⚠️ **It is only safe because the six archived branches are leaving the R-y identity set** —
-      `mc/1.21.1` ships MC `1.21`, so a `1.21.10` floor on ITS copy would fail that branch's own
-      `BandDocsMatchRealityTest`. Archived branches keep their frozen `1.20.6` text, which is still
-      true there. **Verify against the test's actual assertion before writing the sentence.**
-      ⚠️ Word it as *archived / final release*, not a bare "not supported" — a downloadable v1.4.0
-      jar exists for every one of those versions and ruling 4 keeps it that way.
-- [ ] **D.6** `README.md` and `wiki/**` leave the identity set for archived branches. Confirm what
-      `branch-file-identity-audit.py`'s union-of-trees logic does once six branches are excluded,
-      rather than assuming it does the right thing.
-- [ ] **D.7** Propagate C+D to the live bands only — `mc/26.2`, `mc/26.1.2`, `mc/1.21.11` — with
-      `Backport-of:` trailers. ⚠️ From a **scratch clone** (`git clone --local --no-hardlinks .`),
-      never this working copy.
+### Phase D — the measured design, written 2026-09-22 before the first edit
+
+**Three owner rulings opened this session** (`decisions.md`, *"§69 Phase D: three owner rulings"*):
+the **push hold STAYS** (no push, no `mod_version` bump); **Phase D is the work**; and §69's
+self-contradiction on propagation is resolved in favour of **D.7 — ONE pass, after D**. The
+separate *"propagate `f434d7e41` now"* step under *"What Phase C still owes"* is therefore **folded
+into D.7**, not dropped.
+
+🔑 **The whole risk of Phase D is one sentence:** four guards are being taught to audit FEWER
+branches, and a filter that matches too much leaves all four auditing **zero** branches and printing
+green. Every design choice below exists to make that impossible *by construction* rather than by
+care taken here.
+
+**The mechanism — set subtraction by exact declared name, never a pattern:**
+
+| Rule | Why it is this way |
+|---|---|
+| The archived set is an **explicit list of exact branch names** under an `[archived]` header in `scripts/expected-bands.txt` | A glob, prefix or regex can over-match. An exact-name subtraction cannot — the only way to empty the audited set is a declaration that visibly names every band, line by line, in a reviewed file |
+| A ref in **NEITHER** declared set is **KEPT and audited** | 🔴 Fail-closed. An undeclared band must never be silently skipped — that is exactly how a band cut without a declaration escapes every guard at once |
+| A missing or unparseable declaration → each guard **exits 2** | Not *"assume nothing is archived"*, not *"assume everything is"*. Exit 2 is the honest answer and this repo's existing convention for *could not run* |
+| An unknown `[section]` header is **refused** | A typo must not land lines in a section that silently means *skip me* |
+| Lines before any header are **LIVE** | The historic file format keeps its historic meaning, so the old declaration parses as all-live rather than as an empty set |
+| `master` stays refused in both sections | `BAND_NAME` already rejects it; it lives outside `mc/**` and is audited by every guard unconditionally |
+
+⚠️ **Measured, not assumed — D.5's collision is NOT where §69 predicted.**
+`BandDocsMatchRealityTest` carries a **hardcoded literal** in
+`theDetectorFiresOnADocThatDeniesThisBand`: `assertTrue(compare("1.20.6", oldest) < 0, …)`. That is
+a *floor-accepted* case, not the floor itself, and it stays green on every live branch (`1.20.6` is
+below `1.21.11`, `26.1`, `26.2`, `26.3`). **Moving the documented floor to `1.21.10` does not touch
+it.** Verified against the assertions, per D.5's own instruction.
+
+✅ **The proposed floor `1.21.10` is strictly below every version each LIVE branch ships** —
+`master` 26.3 · `mc/26.2` 26.2 · `mc/26.1.2` 26.1 · `mc/1.21.11` 1.21.11 — using the test's own
+numeric dotted compare, where `[1,21,10] < [1,21,11]`. A string compare gets that pair wrong; the
+test does not.
+
+### Phase D — RESULTS, measured 2026-09-22
+
+✅ **D.1 – D.6 DONE.** ⬜ **D.7 (the propagation pass) is the only item left open.**
+
+| Measurement | Value |
+|---|---|
+| `expected_bands.py --self-test` | **37 cases**, all green |
+| its own mutation harness | **9/9 caught, 0 silent** (M1 and M8 are each caught by exactly ONE case, so neither is decorative) |
+| cross-guard mutation, 5 modules | **7/7 caught, 0 silent** |
+| end-to-end refusal paths | **0 failures** across all four guards × four declarations |
+| `--count` (live) / `--verify` (live ∪ archived) | **3** / **9** |
+| Java suite | **174 classes / 1 942 tests / 0 failures**, both test tasks CONFIRMED EXECUTED (XML mtimes 17s and 66s), matching the phase-C baseline exactly |
+
+- [x] **D.1** `scripts/expected-bands.txt` has an `[archived]` section naming the six;
+      `expected_bands.py` parses both sets. `--count` → live only, `--verify` → live ∪ archived,
+      `--list-archived` / `--list-all` added, plus `drop_archived()` and `filter_to_live()`.
+      Refusals: unknown `[section]`, a name in both sections, an **empty LIVE set**, and the
+      pre-existing missing/duplicate/malformed cases.
+- [x] **D.2** All four guards subtract the archived set through the ONE filter.
+      `drift-audit.py` gained **`resolve_branches()`** so its exit contract is directly
+      assertable from `--self-test` rather than buried in `main()`; the other three filter in
+      `main()` and lean on the existing `exit_code()` (`len(refs) < 2 → 2`).
+      `--branch` stays an explicit override that bypasses the filter, so an archived band can
+      still be audited deliberately.
+- [x] **D.3** Mutation-tested in two layers, and **counted**, never just run:
+      - within `expected_bands.py`: **9/9**. 🔑 M1 (prefix instead of exact) and M8 (`--count`
+        returning everything) are each caught by **exactly one** case — proof those two cases
+        carry their own weight
+      - across all five modules: **7/7**. X1–X3 (the filter itself) are caught by **5/5**;
+        X4–X7 by `expected_bands.py` **alone**, which is correct — that is where those
+        behaviours live and where their cases are
+      - end to end, in a scratch clone: the real declaration **skips 6 and still compares the
+        remaining 4**; a missing declaration, an unknown `[section]`, and an
+        archive-everything declaration each **exit 2** on all four guards
+- [x] **D.4** `README.md`, `wiki/Installation.md` (archived band tables, final release v1.4.0),
+      `wiki/Building-from-Source.md` (branch table) and `wiki/Optional-Integrations.md`.
+- [x] **D.5** Floor moved **1.20.6 → 1.21.10** in `README.md` and `wiki/Installation.md`,
+      worded as *archived / final release* rather than a bare "not supported".
+      ✅ `BandDocsMatchRealityTest` ran **all 5 cases against the new floor** and passed.
+- [x] **D.6** MEASURED, not assumed: `branch-file-identity-audit.py --local` prints
+      *"Skipping 6 archived band(s)"* and audits **53 paths across 4 branches**. The union IS
+      taken over the audited refs only, so `README.md` and `wiki/**` simply stop being compared
+      against the archived six.
+
+#### 🔴 THREE DEFECTS THIS PHASE FOUND IN ITS OWN VERIFICATION
+
+1. 🔴🔴 **D.5 WAS UNGATED AND WOULD HAVE SHIPPED THAT WAY.** `build.gradle` declared
+   `.github/workflows`, itself, and `scripts/**/*.sh` as `:test` inputs — each with a comment
+   saying *"a file a guard reads is a file the guard must re-run for"* — but **not `README.md`,
+   not `wiki/**`, not `gradle.properties`**. `BandDocsMatchRealityTest` reads all three through
+   `Path.of(...)`, so moving the floor sentence changed **no declared input**, left `:test`
+   UP-TO-DATE, and the one guard that polices that sentence would never have run.
+   Recorded in `gotchas.md` on 2026-08-19 and still live. Now declared — and the widened
+   `scripts/**` also un-caches `scripts/mc-ids.txt`, which a guard reads and the `.sh` filter
+   had left out.
+2. 🔴🔴 **The fix for (1) then broke the only instrument that can detect (1).** Including
+   `scripts/` wholesale pulled in **`scripts/__pycache__`**, which Python rewrites on every run
+   of every guard — so `:test` could never reach UP-TO-DATE again. Proving a file is a declared
+   input needs a **two-step** experiment (untouched → CACHED, edited → RE-RUN), and a task that
+   always re-runs makes step one impossible. The probe reported `:test` executing in **both**
+   steps, which reads like a pass and proves nothing. `__pycache__/**` and `*.pyc` are excluded.
+   ⚠️ It is **gitignored**, so CI would never have seen it and this was local-only — which is
+   worse, not better: the instrument would have been dead on exactly the machine that uses it.
+3. ⚠️ **The first cross-guard harness reported 2 SILENT mutations and 4 end-to-end failures,
+   and ALL SIX were defects in the HARNESS.** It excluded `expected_bands.py` from the audited
+   set — the module that owns the mutated code and holds its cases — and it passed `--local`
+   inside a fresh clone, which has exactly **one** local branch. 🔑 A red result is a claim
+   about the harness until the harness has been checked too.
+
+- [ ] **D.7** 🔑 **The ONE propagation pass (ruling 3).** To the live bands only — `mc/26.2`,
+      `mc/26.1.2`, `mc/1.21.11` — with `Backport-of:` trailers. It carries **three things**:
+      Phase C's `f434d7e41` (docs + manifests), the **ten Phase A commits** (`mc/26.2` has those by
+      inheritance; the other two do not), and Phase D's own commits.
+      🔴 **Never propagate `d6761338c`** — the 26.3 port breaks every band that is not 26.3.
+      ⚠️ From a **scratch clone** (`git clone --local --no-hardlinks .`), never this working copy:
+      `band_branches()` prefers REMOTE refs, so a run here grades the stale remote.
 
 ### Rollback — and why §69 is unusually safe
 
