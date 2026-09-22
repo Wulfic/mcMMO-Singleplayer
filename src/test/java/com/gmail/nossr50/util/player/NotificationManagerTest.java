@@ -17,6 +17,7 @@ import com.gmail.nossr50.datatypes.skills.SubSkillType;
 import com.gmail.nossr50.fabric.McMMOMod;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.platform.PlatformPlayer;
+import com.gmail.nossr50.util.skills.RankCacheTestSupport;
 import com.gmail.nossr50.util.skills.RankUtils;
 import com.gmail.nossr50.util.text.StringUtils;
 import java.nio.file.Path;
@@ -48,6 +49,20 @@ class NotificationManagerTest {
         // RankConfig in turn reads GeneralConfig to pick the RetroMode vs Standard rank column.
         McMMOMod.setGeneralConfig(new GeneralConfig(dataFolder));
         McMMOMod.setRankConfig(new RankConfig(dataFolder));
+
+        // 🔑 RankUtils caches unlock levels in a STATIC map shared by the whole fork, and whichever
+        // test class touches ranks first warms it while ITS configs are still bound. Without this
+        // reset the three null-player tests below cannot prove their "reads no config" half:
+        // getRank returns straight out of the warm map and never reaches getRankUnlockLevel() ->
+        // McMMOMod.getRankConfig(), so hoisting that read above the null guard SURVIVES. Measured
+        // in §74, fixed in §77. Which sibling warmed it is decided by Gradle's non-deterministic
+        // fork assignment, so the strength of those guards was a coin flip nobody was tossing.
+        //
+        // ⚠️ Resetting here rather than inside the three tests on purpose: it makes the WHOLE class
+        // independent of fork order instead of patching the three cases that happen to care today.
+        // Cold is the fresh-JVM default and the configs above are bound, so the tests that DO read
+        // ranks simply rebuild the map.
+        RankCacheTestSupport.resetRankCache();
 
         platformPlayer = mock(PlatformPlayer.class);
         mmoPlayer = mock(McMMOPlayer.class);
@@ -162,6 +177,13 @@ class NotificationManagerTest {
         // this vacuous. sendPlayerUnlockNotification reaches RankUtils, which reads
         // RankConfig, which reads GeneralConfig, so this path has THREE config reads that
         // must all sit behind the null guard.
+        //
+        // 🔑 Unbinding them is NOT sufficient on its own, and §74 measured that the hard way:
+        // RankUtils' static rank cache made the config read unreachable no matter where the null
+        // guard sat, so this assertion was one-sided for as long as it existed. setUp's
+        // RankCacheTestSupport.resetRankCache() is the other half -- WITHOUT IT, hoisting
+        // RankUtils.getRank(...) above the guard in sendPlayerUnlockNotification SURVIVES; with
+        // it, that mutation reddens this test. Proven both ways in §77. Do not drop the reset.
         McMMOMod.setAdvancedConfig(null);
         McMMOMod.setGeneralConfig(null);
         McMMOMod.setRankConfig(null);
