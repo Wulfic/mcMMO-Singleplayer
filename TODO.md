@@ -2447,6 +2447,9 @@ unmutated tree as *"survived"*. **Fail closed, then restore, then re-run.**
   section going stale, so it stays exactly as it is.
 - **Not** widening this into the general vacuous-guard sweep. That was offered and is a Tier 2 job of
   its own; **vacuity #17 is closed here, the census is not.**
+  ↙️ **The census WAS taken the next day (§74, owner ruling 2)** and is now an instrument,
+  `scripts/vacuity-census.py`. It found four more vacuities and **five in itself**. This line stays
+  because it was true when written, and it is the row that carried the job forward.
 - **Not** propagating `TODO.md` (excluded by design), and **not** propagating anything to the six
   archived bands.
 
