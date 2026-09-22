@@ -1239,7 +1239,7 @@ would need if it ever earns XP of its own.
       should Smelting hold its own XP (a real change to the child-skill model)? The issue's wording
       — *"gets lvled up passively"* — reads as the former, which is what shipped.
 
-## §69 — the topology change: MC 26.3 first, then the six-band archive — 🟡 PHASE C DONE, D OPEN
+## §69 — the topology change: MC 26.3 first, then the six-band archive — ✅ C AND D DONE
 
 **THE PLAN, written before any code (Tier 2).** Six owner rulings taken 2026-09-21, each put as a
 question with its collision named; all are in `.agent/memory/decisions.md` under
@@ -1500,13 +1500,80 @@ test does not.
    inside a fresh clone, which has exactly **one** local branch. 🔑 A red result is a claim
    about the harness until the harness has been checked too.
 
-- [ ] **D.7** 🔑 **The ONE propagation pass (ruling 3).** To the live bands only — `mc/26.2`,
-      `mc/26.1.2`, `mc/1.21.11` — with `Backport-of:` trailers. It carries **three things**:
-      Phase C's `f434d7e41` (docs + manifests), the **ten Phase A commits** (`mc/26.2` has those by
-      inheritance; the other two do not), and Phase D's own commits.
-      🔴 **Never propagate `d6761338c`** — the 26.3 port breaks every band that is not 26.3.
-      ⚠️ From a **scratch clone** (`git clone --local --no-hardlinks .`), never this working copy:
-      `band_branches()` prefers REMOTE refs, so a run here grades the stale remote.
+- [x] **D.7 ✅ DONE — the ONE propagation pass (ruling 3).** To the live bands only.
+      **13 commits** propagated, **0 MISSING** on all three, every new commit carrying a
+      `Backport-of:` trailer. Done from a `git clone --local --no-hardlinks` scratch clone and
+      fetched back as strict fast-forwards (+6, +13, +13), so the shared working copy was never
+      left sitting on a band branch.
+
+      | Band | Applied | Note |
+      |---|---|---|
+      | `mc/26.2` | **+6** | Already had the seven phase-A commits by inheritance (cut at `ce34cd2ea`) |
+      | `mc/26.1.2` | **+13** | Every one applied untouched |
+      | `mc/1.21.11` | **+13** | **One needed hand translation** — see below |
+
+      🔴 **`d6761338c` was NOT propagated** — the 26.3 port breaks every band that is not 26.3.
+      ⬜ **Six TODO-only commits were deliberately not propagated.** `TODO.md` sits outside the
+      R-y identity set and outside `drift-audit.py`'s path list, and **AGENTS.md says band-specific
+      notes belong there**, so it is legitimately per-band. It was the only conflicted path on the
+      first `mc/26.1.2` attempt; excluding it made all twelve apply cleanly.
+
+#### 🔴 A `src/` BACK-PORT TO A `1.21.x` BAND NEEDS TRANSLATION, NOT A CHERRY-PICK
+
+`master` and the `26.x` bands compile against **official Minecraft names**; the `1.21.x` bands are
+**yarn-mapped**. `mc/26.1.2` took all thirteen untouched; `mc/1.21.11` conflicted on
+`McMMOCommands.java`, where the inserted `keepXpUpdates` method's anchor line differed **only by a
+type name**.
+
+🔑 **The conflict is not the danger — the clean applies are.** A hunk whose context happens to
+avoid renamed lines applies silently, so *"it cherry-picked without complaining"* is not evidence
+the band is correct. Only a build is. **Eleven of the twelve applied clean on that band.**
+
+Resolved by translating, with every pair read out of **the band's own copy of the file** rather
+than recalled: `CommandSourceStack`→`ServerCommandSource`, `Component`→`Text`,
+`sendFailure`→`sendError`, `sendSuccess`→`sendFeedback`,
+`getPlayerOrException()`→`getPlayerOrThrow()`, `getUUID()`→`getUuid()`. The commit carries a
+`Band-note:` trailer saying so.
+⚠️ **The leftover-check refused a CORRECT translation first.** A bare `Commands.` search fired on
+the locale key `"Commands.XPGain.Keep.On"` — a property key, not the `net.minecraft.commands`
+class. Strip string literals and check **code only**, or the real signal drowns in the false one.
+✅ **Verified by building the band, because no identity or drift guard reads Java:**
+`mc/1.21.11` → `BUILD SUCCESSFUL`, **5 actionable tasks, 5 executed**, **173 classes / 1 932 tests
+/ 0 failures**, and `BandDocsMatchRealityTest` **5/5** — which is also the proof that the new
+`1.21.10` floor is correct for a band shipping `1.21.11`.
+✅ Recorded in **AGENTS.md** (`da4b42c3b`), not just here: it will recur on every future `src/`
+back-port, and the agent who needs it is the one working on the band.
+
+### ✅ Gate sweep after D.7 — all four green, in the working copy
+
+| Guard | Before D.7 | After |
+|---|---|---|
+| `branch-file-identity-audit.py` | **exit 1** — `README.md` in **3 distinct versions** | **exit 0** — 53 paths byte-identical across `master` + 3 live bands |
+| `drift-audit.py` | 17 commits had not reached a band | **exit 0** — **0 MISSING** on all three |
+| `manifest-identity-audit.py` | exit 0 | **exit 0** — 4 distinct manifests (`mc-surface.txt` correctly still per-band) |
+| `gradle-key-identity-audit.py` | exit 0 | **exit 0** — 10 shared keys agree, 2 distinct differ |
+| `expected_bands.py --verify --local` | — | **exit 0** — 9 declared (3 live, 6 archived), none undeclared |
+
+⚠️ **All `--local`.** `--verify` against **`origin/**`** still reports `mc/26.2` **MISSING**, and
+that is correct: the branch has never been pushed. Ruling 1 holds the push, so every result above
+is about local refs and says nothing about what is on the remote.
+⚠️ **At push time the CI floor becomes reachable only once `mc/26.2` is on origin.** `--count` is
+now **3**, and origin currently carries two of the three live bands, so a scheduled run today
+would exit 2 at the verify step. That is a consequence of the held push, not of phase D.
+
+### ⚠️ One consequence of ruling 2, stated rather than discovered later
+
+The six archived branches keep their **pre-phase-D** `AGENTS.md`, `scripts/**` and docs — ruling 2
+says do not propagate to them. So an agent checking one out is handed a guard system with **no
+concept of an archive**, and `AGENTS.md` there still says *"propagate to every band"*.
+🔑 Those branches are **internally consistent** at their frozen state: their `expected-bands.txt`
+has no `[archived]` section, their guards are the pre-D versions, and running them there reports
+drift against `master` — which is true. Nothing is broken; it is simply frozen.
+⬜ **Open question for the owner:** should `AGENTS.md` alone be propagated to the archived bands,
+as a documentation-only exception to ruling 2? It cannot break a band (it is not code), and the
+argument for it is the one P19-1 was made on — *a doc that tells an agent a guard does not exist
+argues against running the thing that would catch the problem.* **Not done unilaterally**, because
+ruling 2 is explicit and this is exactly the kind of edge a session should not decide for itself.
 
 ### Rollback — and why §69 is unusually safe
 
