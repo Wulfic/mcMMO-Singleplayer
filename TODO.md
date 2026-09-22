@@ -2941,6 +2941,126 @@ P6  propagate to the 3 live bands + gate sweep; record decisions/gotchas/state
 source.** That is a smaller blast radius than §74's, and it is still a mutation: same backup-and-`cmp`
 discipline, no exceptions.
 
+### ✅ P1–P3 RESULTS (2026-09-22) — 31 loops probed, **20 SURVIVED**
+
+⚠️ **Read the method before the number.** Every figure below comes from a mutation that was
+**verified to land byte-wise** and **verified to still parse**, with a control that discriminates.
+Files were restored from byte-exact copies and `cmp`-checked after every single run.
+
+#### 🔴🔴 THE HEADLINE: there are TWO ways a case loop goes quiet, and this repo only defends one
+
+The sweep was run twice with what looked like the same mutation, and the two disagreed. That
+disagreement is the finding:
+
+| | Mutation **A** — *the data is gone* | Mutation **B** — *the loop did not run* |
+|---|---|---|
+| How | rebind the collection: `CASES = []` before the loop | rewrite the loop: `for c in []:` |
+| Models | a fixture list emptied, a discovery that found nothing | **an over-matching filter, a `continue` guard, a comprehension that selected nothing** |
+| `extract-mc-surface.py` (4 floored collections) | ✅ **CAUGHT** | 🔴 **SURVIVED — all six** |
+| `vacuity-census.py` (the control) | ✅ CAUGHT rc=2 | ✅ **CAUGHT rc=2** |
+
+🔑 **Why:** every floor in this repo but one is a **DECLARED-LENGTH floor** —
+`positives = sum(1 for _, _, e in SELF_TEST_CASES if e)` counts the *list*. Mutation B never
+touches the list, so the floor still reads 4 positives while the loop body executed **zero times**.
+**A floor over the declared collection cannot see a loop that did not execute.**
+
+✅ **`vacuity-census.py` is the ONLY script in `scripts/` that counts what actually RAN**
+(`ran_pos += 1` … `if ran_pos != len(shape.positives)`), which is why it is the only one that
+catches both. §74 built those counters after measuring this exact failure and wrote the reason into
+the code — *"COUNT what actually executed, per direction"*. **That idiom never propagated to the
+other nineteen self-tests**, and P5 is where that shows up.
+
+🔴 **Mutation B is not the artificial one — it is this repo's own most-feared failure mode.**
+`scripts/expected-bands.txt` warns in its own header that *"a filter that matches too much leaves
+all four guards auditing ZERO branches and printing green."* That is mutation B exactly, and the
+self-tests certifying those guards cannot detect it.
+
+#### 🔴 The count was ALREADY PRINTED. Nothing asserted it.
+
+The most uncomfortable part is that several of these print the evidence in their own PASS line:
+
+| Script | What it prints with the collection emptied | Exit |
+|---|---|---|
+| `probe-bands.py` (**ship gate 12**) | `PASS -- 0 real javap declaration lines parse` | **0** |
+| `gameplay_smoke_scenario.py` (**gate 6**'s scorer) | `=== self-test passed (0 cases)` | **0** |
+| `config-id-audit.py` (**gate 4**) | `PASS -- 0 normalisation cases correct` | **0** |
+
+**The number is right there in the output and nothing compares it to anything.** A printed count is
+not a floor; it is a decoration that reads like one, which is worse than no count at all.
+
+#### 🔴 `gameplay_smoke_scenario.py` — the anti-vacuity floor is INSIDE the loop it protects
+
+This one is worth its own row, because it is the subtlest shape found.
+
+Its per-case floor is the one `TODO.md` already praises as **derived, not constant** —
+`expected = 3 + len(gates) + sum(len(p.up) + len(p.flat) for p in PHASES)`. Two defects:
+
+1. **Zero iterations run zero floor checks.** The floor lives in the loop body, so emptying `cases`
+   skips the anti-vacuity machinery entirely rather than tripping it.
+2. 🔴 **The floor is DERIVED FROM THE TABLE WHOSE EMPTINESS IT SHOULD CATCH.** Empty `PHASES` and
+   the `sum(...)` term goes to 0 — **the floor lowers itself to match**. A derived floor is a real
+   improvement over a constant *and* it inherits the vacuity of whatever it derives from. Measured:
+   with `PHASES` emptied the self-test still printed `passed (9 cases)` and exited **0**, including
+   a cheerful `[ok] every required marker is emitted by a command in its own phase` — asserted over
+   **zero phases**.
+
+#### The 20 survivors, by what they certify
+
+| Script | Collections that survived | Certifies |
+|---|---|---|
+| `extract-mc-surface.py` | 6 (incl. `NESTED_CASES`, which has no floor at all) | the MC contact-surface manifest |
+| `config-id-audit.py` | 4 — `SELF_TEST_MUST_FIND`, `SELF_TEST_MUST_NOT_FIND`, `checks`, `entity_cases` | **ship gate 4** |
+| `gameplay_smoke_scenario.py` | 4 — `PHASES`, `cases`, `pacing`, `phase.requires_markers` | **ship gate 6**'s scorer |
+| `probe-bands.py` | 2 — `cases`, `want_supers` | **ship gate 12** |
+| `extract-mc-ids.py` | 2 — `cases`, `sorted(CROSS_CHECKED)` | `mc-ids.txt`, which gate 4 reads |
+| `branch-file-identity-audit.py` | 1 — `trees.values()` (a **discovered** collection) | the shared-file identity guard |
+| `expected_bands.py` | 1 | the `--require-bands` floor itself |
+
+#### ⚠️ Eleven loops were "caught" and SIX of those catches are NOT evidence of a floor
+
+§74's lesson 4 was that overstating a finding is the same error as missing one, so these are
+classified rather than counted:
+
+- **Caught by a real assertion (5):** `vacuity-census.py` ×3 (the control, rc=2),
+  `gradle-key-identity-audit.py` ×1 (a named `FIRING2` check fired), and the mutation-A run of
+  `extract-mc-surface.py` ×4.
+- 🔴 **Caught by a CRASH, which proves nothing (6):** `config-id-audit.py`'s
+  `SELF_TEST_FILES.items()` ×2 and `rename-to-official.py` ×4 are **setup loops**, not case
+  collections — emptying them breaks the fixture machinery and the script dies with
+  `FileNotFoundError`. **A crash is not a guard firing.** Counting these as catches would have
+  turned a 20-survivor result into a tidier and wronger one.
+- **1 VOID:** `derive-official-names.py`'s multi-line `for` tuple did not survive the rewrite and
+  was not probed.
+
+#### ✅ Negative results, recorded so the next session does not re-derive them
+
+- **Exit-code propagation is clean on all 16.** Every script does `return self_test()` from `main()`
+  and ends in `sys.exit(main())` / `raise SystemExit(main())`. No script swallows its verdict.
+- **Nine self-tests are STRUCTURALLY IMMUNE to this shape** because they are straight-line `check()`
+  calls with no case collection at all: `rename-to-official.py` (166 checks),
+  `mixin-target-sizer.py` (67), `branch-file-identity-audit.py` (64),
+  `derive-official-names.py` (58), `gradle-key-identity-audit.py` (46),
+  `manifest-identity-audit.py` (35), `expected_bands.py` (30), `drift-audit.py`, `loomjar.py`.
+  🔑 **Immune to S1 is not "safe"** — they trade an emptiable list for 166 statements nobody counts.
+  A deleted `check()` line is invisible to every one of them. That is a different shape and it is
+  **not in this section's scope**; it is recorded here so it is not mistaken for covered.
+- **All 22 self-tests exit 0 in their shipped state.** The baseline was green before any of this,
+  which is the entire reason the question needed asking.
+
+#### ⚠️ The two S5 suspects — both are MIS-SCOPED, neither is vacuous
+
+Named in the plan and now settled, because "vacuous" must not do the work of "mis-scoped":
+
+- `mixin-allow-audit.py --self-test` returns `selftest_jar_selection() or selftest_naming()`, both
+  imported from `loomjar.py`. It is a **real, falsifiable** self-test — of the jar chooser. **It
+  exercises nothing in injection-point counting, which is the whole job of ship gate 2.**
+- `probe-bands.py --self-test` runs `selftest_decl_parsing()` alone — a javap regex, not the
+  manifest validation that is gate 12. *(Its one case loop is separately vacuous, above.)*
+
+**Neither is a vacuity finding.** Both mean the same operational thing: running *"`--self-test`
+first, as with every gate"* on gates 2 and 12 returns a green that says nothing about what those
+gates do.
+
 ### What I am NOT doing
 
 - **Not** rewriting a self-test that is merely thin. §74's line holds: cannot-fail, or it is not
