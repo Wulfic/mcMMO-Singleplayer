@@ -892,7 +892,17 @@ rows each reached on their own. **A number no gate reads is a number that rots.*
 
 ---
 
-## §68 — the GitHub issue queue: five open issues, pulled 2026-09-21 — ⬜ OPEN
+## §68 — the GitHub issue queue, pulled 2026-09-21 — ✅ ALL FIVE FIXED; closes HELD until push
+
+🔴 **"Fixed" and "closed" are different states, and this header states both on purpose.** All five
+issues (#14, #15, #16, #17, #19) are fixed on `master` and propagated to the three live bands. **None
+is closed on GitHub**, by owner ruling (2026-09-22, §73 ruling 3): they close **at push time**, when
+their fixes have actually reached a player — a closed issue whose fix sits in an unpushed commit is
+a lie to the reporter. The push itself is held by a separate standing ruling, re-asked and upheld
+**seven consecutive sessions**.
+⚠️ **This header read *"five open issues — ⬜ OPEN"* until §74.** It was the literal truth about
+GitHub and a false signal about this repo — a session reading it re-derives work that is already
+done. Header fixed by owner ruling rather than by my reading of it.
 
 **This is INTAKE, not a plan.** Pulled on 2026-09-21 from
 <https://github.com/Wulfic/mcMMO-Singleplayer/issues> with `gh issue list --state open --limit 100`
@@ -1109,19 +1119,29 @@ band **against `master`**. Making `master` docs-only removes the very mechanism 
 this list needs in order to reach a band. Do 16.1 first and the remaining fixes have nowhere to land.
 
 ```
-Phase A  code fixes on master, propagate                #19, #17.1-.9, #15   ✅ DONE (8 shipped,
-                                                                                1 won't-fix, 1 blocked)
-Phase B  #14 multiplayer crash                          blocked on the reporter's log   ⛔ NOT OURS
+Phase A  code fixes on master, propagate                #19, #17.1-.9, #15   ✅ DONE (9 shipped,
+                                                                                1 won't-fix)
+Phase B  #14 multiplayer crash          ✅ DONE a790720a6 (§73) - diagnosed WITHOUT the crash log
 Phase C  #16.3 band cut: mc/26.2 cut, master -> 26.3                                 ✅ DONE d6761338c
 Phase D  #16.2 archive 1.21.10 and below                docs floor, R-x interaction  ✅ DONE §69 D
-Phase E  #16.1 master -> docs-only     LAST; re-points drift-audit, rule 1, release.yml  🔴 NEEDS RULING
+Phase E  #16.1 master -> docs-only      🚫 CANCELLED - §71 ruling 3, WON'T FIX (incompatible w/ R-a)
 ```
 
 ⚠️ **"propagate to 8 bands" stood in this table until 2026-09-22 and was already false when written**
 — §69 Phase D archived six, so the propagation target is **3 live bands**, not 8. Corrected here
 rather than left, because this block is the thing a session reads to decide what to do next.
-🔴 **Phase E is the ONLY phase left, and it is the one that needs an owner ruling before any command
-runs.** A, C and D are done; B is not ours. Do not read "Phase E is next" as authorisation.
+🔴🔴 **AND IT WENT STALE AGAIN THE VERY NEXT DAY, IN TWO ROWS AT ONCE — corrected 2026-09-22 (§74).**
+The block said **Phase B was blocked on the reporter's log and "NOT OURS"** (§73 fixed it that same
+day, `a790720a6`, propagated to all three live bands) and **Phase E "NEEDS RULING"** (§71 ruling 3
+had already closed 16.1 WON'T FIX — *cancelled, not deferred*). The prose beneath it repeated both.
+🔑 **Every phase is now closed and NO phase is "next".** The sentence that stood here — *"Phase E is
+the ONLY phase left … A, C and D are done; B is not ours"* — was false in both of its clauses.
+🔴 **This is the third correction to this one block, and the pattern is the finding:** a block whose
+job is *"read me to decide what to do next"* is updated by the sections that supersede it and never
+by the block itself, so it rots one section behind reality every time. §73 wrote the #14 fix into
+§68.A at line ~1317 and left this table alone; §71 wrote the 16.1 ruling into §68 and left it alone.
+**When a section closes a phase, correct THIS TABLE in the same commit** — the sections are the
+record, but this table is the thing that gets acted on.
 
 ### What I am NOT doing
 
@@ -1129,17 +1149,26 @@ runs.** A, C and D are done; B is not ours. Do not read "Phase E is next" as aut
   `1.0.0` precisely so the two stop being compared. Ruling confirms Minecraft.
 - **Not** starting Phase E as a refactor. It gets its own plan, its own decision record, and a
   rollback that has been run — not assumed — before the first destructive command.
+  ↩️ **MOOT as of §71 ruling 3 — Phase E is cancelled, so there is no refactor to not-start.**
+  Kept because the reasoning is the record.
 - **Not** fixing #14 from the symmetry alone. Host-fine/client-crashes is a *hypothesis* about
   logical side; the stack trace is the diagnosis. Comment posted 2026-09-21 asking for it.
+  🔑 **This line was RIGHT about the principle and WRONG about the only route to it — see §73.**
+  The fix did not come from the symmetry, and it did not need the stack trace either: it came from
+  what the symptom list **omitted**. A diagnosis is still required; a *reporter* is not the only
+  thing that can supply one.
 - **Not** changing SALVAGE. #19 names Smelting only; Salvage keeps feeding its parents.
 
 ---
 
-## §68.A — Phase A, the code fixes — ✅ CODE WORK COMPLETE; one item blocked on a reporter
+## §68.A — Phase A, the code fixes — ✅ CODE WORK COMPLETE
 
-🔑 **Read the closure state honestly: 8 shipped, 1 won't-fix, 1 blocked — not "10 done".** 17.9 was
-**declined**, not built (owner ruling 2026-09-22), and #14 is waiting on a crash log that may never
-arrive. Nothing in Phase A is waiting on this repo.
+🔑 **Read the closure state honestly: 9 shipped, 1 won't-fix — not "10 done".** 17.9 was
+**declined**, not built (owner ruling 2026-09-22). Nothing in Phase A is waiting on this repo.
+⚠️ **This header said *"one item blocked on a reporter"* and the body said #14 *"is waiting on a
+crash log that may never arrive"* — both FALSE from `a790720a6` (§73) onward**, corrected §74. The
+row two hundred lines below already recorded the fix; the summary above it did not move. **A
+section's own header is the last thing to get corrected and the first thing to get read.**
 
 ### 🔴 The caveat-expiry pass for 17.9 found a defect no guard could see — `fbcd3d492`
 
@@ -1194,7 +1223,10 @@ are byte-identical **by rule** and four of these commits touch `wiki/**`.
 working copy — `drift-audit.py`'s `band_branches()` PREFERS REMOTE refs and would grade the stale
 remote instead.
 
-### Still open in Phase A — one item, and it is not ours
+### Phase A — ✅ NOTHING STILL OPEN (this heading read *"one item, and it is not ours"* until §74)
+
+⚠️ The one item was #14, fixed `a790720a6` (§73). **A heading is a claim and it expires like any
+other** — this one outlived its defect by a day and sat directly above the rows that disprove it.
 
 - [x] ✅ **17.4 — APPLIED, owner-approved, with TWO corrections the tests forced.**
       🔑 **The proposal was approved as written and it was WRONG IN TWO PLACES.** Both were caught
@@ -1313,7 +1345,9 @@ them in a normal run.
       states and no test covers. **Declare it explicitly whatever the balance decision is.**
 - [x] 🚫 **17.9 — WON'T FIX, owner ruling 2026-09-22.** The ruling was asked for and the answer was
       **neither option**: accept the collision with the held-item name and close it. Phase A's code
-      work is therefore **complete**; only #14 remains, and that is not on us.
+      work is therefore **complete**. ⚠️ This row ended *"only #14 remains, and that is not on us"*
+      — true when written, false the next day; the row directly below is the fix, and §74 corrected
+      this sentence rather than leaving two adjacent rows contradicting each other.
 - [x] ✅ **#14 — multiplayer crash — DIAGNOSED AND FIXED 2026-09-22 (§73), without the crash log.**
       `a790720a6`, propagated to all three live bands. 🔑 **The row below was right that a fix must
       not precede a diagnosis, and wrong that the diagnosis needed the reporter.** The symptom list
@@ -1802,6 +1836,8 @@ position this repo gets, and it is a consequence of the owner's call rather than
 - **Not propagating to the six archived bands** (ruling 2) — that is the point of the archive.
 - **Not starting Phase E** (#16.1, docs-only `master`). It re-points every mechanism §69 relies on,
   and it gets its own plan.
+  📌 **Superseded the next day:** §71 ruling 3 **declined** Phase E outright — it gets no plan,
+  because it is cancelled, not deferred. Kept as written; the correction lives forward.
 - **Not re-opening** 17.4's six zero-level sub-skills (ruling 6) or #19's end state (ruling 7).
 - **Not regenerating `mc-ids.txt` per band** — it is a fact about Minecraft and it cherry-picks.
 
