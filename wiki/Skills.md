@@ -162,7 +162,7 @@ Fighting with an empty hand. Super ability: **Berserk**. (Not to be confused wit
 | Berserk | 1 | +50 % damage, breaks weak materials. Super ability. |
 | Steel Arm Style | 20 | Hardens your arm over time — flat bonus damage. |
 | Arrow Deflect | 1 | Deflect incoming arrows. |
-| Block Cracker | 1 | Break rock with your fists. |
+| Block Cracker | 1 | Break rock with your fists — stone bricks crack under a Berserk strike. **Unlocks at Unarmed 500**, and it only fires while Berserk is active. |
 | Unarmed Limit Break | 10 | **Off by default.** Flat +1 damage per rank (rank 1 at level 100, rising to +10 at level 1000). Enable in Settings -> Abilities. |
 
 ## Archery

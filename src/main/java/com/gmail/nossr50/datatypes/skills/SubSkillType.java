@@ -274,7 +274,14 @@ public enum SubSkillType {
     /* Unarmed */
     UNARMED_ARROW_DEFLECT(1),
     UNARMED_BERSERK(1),
-    UNARMED_BLOCK_CRACKER,
+    // §71: was rank-less, and that is what made it unconditional. A SubSkillType declared with no
+    // rank count gets numRanks = 0, RankUtils.getRank short-circuits to -1 ("no unlockable levels"),
+    // and hasUnlockedSubskill reads -1 as always-unlocked — so its skillranks.yml entry was never
+    // consulted at all. Block Cracker is the one sub-skill in that group with no probability ramp
+    // behind the gate (rollBlockCracker's isNonRNGSkillActivationSuccessful hard-returns true since
+    // the Bukkit hook was cut in Phase 10.2), so always-unlocked meant literally always-on.
+    // Declaring one rank is what makes the unlock level load-bearing.
+    UNARMED_BLOCK_CRACKER(1),
     // Disarm and Iron Grip are deliberately absent, not merely unimplemented: both require
     // `target instanceof Player` (Disarm drops the victim's held item; Iron Grip resists it), which
     // is unreachable in singleplayer. Legacy's constants, ranks, plaques, locale keys and
