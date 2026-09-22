@@ -2242,12 +2242,12 @@ treat it as the default failure mode of a grep, not an accident.
 - [x] ✅ **72.6 — DONE. Build + full suite green**, read off the JUnit XML with `> Task :test` confirmed
       **bare** rather than `FROM-CACHE`, and `tagBoundTest` attributed to the same HEAD.
       ⚠️ `cleanTest test` does **not** defeat the build cache — §70 needed `--no-build-cache`.
-- [ ] ⬜ **72.7 — propagate to the three LIVE bands** (`mc/26.2`, `mc/26.1.2`, `mc/1.21.11`) from a
+- [x] ✅ **72.7 — DONE. Propagated to the three LIVE bands** (`mc/26.2`, `mc/26.1.2`, `mc/1.21.11`) from a
       **scratch clone**, each with a `Backport-of:` trailer verified through git's own parser **and
       its control** (the source commit on `master` must return empty). ⚠️ `mc/1.21.11` is yarn-mapped,
       but this change is YAML + a test using no MC types, so no translation is expected — verify
       rather than assume. ⚠️ Archived bands get nothing.
-- [ ] ⬜ **72.8 — close the §71 carried row** with the measurement, and re-point `AGENTS.md`/memory
+- [x] ✅ **72.8 — DONE. Closed the §71 carried row** with the measurement, and re-point `AGENTS.md`/memory
       only if something generalises.
 
 
@@ -2304,6 +2304,69 @@ deleted that entry. **The caveat pass has to include the caveats your own diff i
 `/mcstats`' ranks list"* is still true — it is not a `SubSkillType` constant at all, so it never
 enters the renderer's loop, whereas the five do and render as *"Unlocked"*. That was the same before
 this change. **Recording a checked-and-correct claim is worth more than silence.**
+
+
+### ✅ 72.7 — the propagation, and the gate sweep after it
+
+`127238b80` reached all three live bands from a **scratch clone**, never this shared working copy:
+
+| Band | Tip | `Backport-of:` via git's OWN parser |
+|---|---|---|
+| `mc/26.2` | `799a3fcc7` | `127238b80` |
+| `mc/26.1.2` | `d01521372` | `127238b80` |
+| `mc/1.21.11` | `7c76e16b0` | `127238b80` |
+
+✅ **With the control:** the source commit on `master` returns **empty**, so the check is not one
+that would pass on anything.
+✅ **Zero translation needed on the yarn band, and that is MEASURED rather than assumed:** all four
+commits share one `git patch-id` (`db0e983db`), and all nine resulting blob hashes (three files
+× three bands) are identical to `master`'s. The change touches YAML, `wiki/`, and a test using only
+mod types, so no MC symbol could need re-spelling.
+✅ **The band BUILDS**, which is the only thing that settles a propagation: `mc/1.21.11` ran
+**173 classes / 1,934 tests / 0 failures**, with both new cases present and passing.
+(§71 recorded 173 / 1,933 on that band; +1 is the arithmetic, since the replaced test was one and
+the additions were two — the band does not carry `tagBoundTest`, see below.)
+
+**The four guards, real exit codes, each read directly:**
+
+| Gate | Result |
+|---|---|
+| `drift-audit.py --self-test` | **PASSED** — run FIRST, because "no drift" is also what a broken auditor prints |
+| `drift-audit.py --master master`, **fresh** clone, `--require-bands 3` | **0 MISSING** on all 3 live bands, 6 archived skipped, **exit 0** |
+| `branch-file-identity-audit.py --local` | **53 paths byte-identical** across `master` + 3 live, **exit 0** — this is the one that had to see the `wiki/` edit reach every band |
+| `manifest-identity-audit.py --local` | 4 **distinct** manifests, **exit 0** |
+| `gradle-key-identity-audit.py --local` | 12 keys, 10 SHARED / 2 DISTINCT, **exit 0** |
+
+⚠️ The drift audit was run in a **separate, fresh** clone — not the propagation clone, whose
+`origin/mc/*` are pre-propagation and which `band_branches()` would prefer, grading the work as if it
+had never happened.
+
+### ⚠️ `tagBoundTest` does NOT exist on any band — operational, not a defect
+
+`./gradlew test tagBoundTest` on `mc/1.21.11` **failed** — *"Task 'tagBoundTest' not found"*. **On a
+band, run `test` alone.** Written down because the red looked like the propagation had broken the
+band, and it had not: **a red result proves nothing until the harness is checked**, the same lesson
+§61 paid for.
+
+🔑 **And then the check has to be finished, because the first reading was WRONG.** The task is
+defined only on `master` (added by `d6761338c`, the 26.3 move) while the test class
+`SuperAbilityListenerTillingTest` exists on **all four** branches — which reads exactly like a
+version-agnostic fork-isolation fix that never propagated, in `build.gradle`, a file **neither**
+propagation guard watches. That would have been a third instance of the `mod_version` / `TODO.md`
+seam, and it is not one:
+
+- The bands carry a **different, older** copy of that test (`10e9f3bae` / `2cd2f69f4` vs master's
+  `ffacc3879`) which **does not call `bootstrapWithTags()`** — measured, 2 calls on `master`, **0** on
+  the bands. Nothing binds vanilla tags there, so there is no leak to isolate and no coin flip.
+- Master's rewrite is explicitly **26.3-shaped**: 26.3 deleted `HoeItem` outright and moved transforms
+  behind `ItemTags.HOES`, which is *why* the test now binds tags and *why* it needs its own JVM.
+- So `d6761338c`'s `Backport-not-needed:` is **correct for this file too**, and the drift audit
+  agrees — it reports that commit as the **1 waived** per band, with 0 MISSING.
+
+⚠️ One live confirmation of an already-recorded row: `%(trailers:key=Backport-not-needed)` returns
+**empty** for `d6761338c` while `drift-audit.py` reads it correctly. That is the known
+git-trailer-parser blind spot, behaving exactly as the carried row predicts. **Check against the
+auditor's regex, never git's parser.**
 
 ### What I am NOT doing
 
