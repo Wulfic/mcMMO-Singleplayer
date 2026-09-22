@@ -2847,7 +2847,7 @@ uncompiled; this one records the restore check as a step, not a habit.
 ---
 
 
-## §75 — §74's Phase 5: are the SELF-TESTS themselves falsifiable? — 🚧 IN PROGRESS (Tier 2)
+## §75 — §74's Phase 5: are the SELF-TESTS themselves falsifiable? — ✅ DONE (Tier 2; 18 floored, closes HELD until push)
 
 **Owner-chosen 2026-09-22 (§75 ruling 2)**, over the `MixinApplicationTest` hole and the
 `RankUtils.resetRankCache()` visibility ruling. §74 shipped P1–P4 and P6 and left **P5 explicitly
@@ -3193,6 +3193,90 @@ gate that has been quietly disarmed is the exact failure this whole section exis
 **Copy first, `cmp` the restore, never carry a mutation across a commit.**
 
 ---
+
+### ✅ P6 — propagation and the gate sweep, with real exit codes read directly
+
+**One commit propagates: `8e3191cb1` (`scripts/` only).** The three `docs(75)` commits are
+`TODO.md`-only and carry `Backport-not-needed:`, per the standing exclusion.
+
+| Band | Head after | `Backport-of` via git's OWN parser |
+|---|---|---|
+| `mc/26.2` | `4bfc2edb6` | `8e3191cb1` ✅ |
+| `mc/26.1.2` | `a7f524930` | `8e3191cb1` ✅ |
+| `mc/1.21.11` | `893c5d7dc` | `8e3191cb1` ✅ |
+
+⚠️ **All three applied CLEANLY, including the yarn band — the outcome the notes call DANGEROUS, not
+reassuring.** Checked rather than assumed: this commit touches `scripts/**/*.py` only, contains no
+Java and no Minecraft symbol, and a grep for official-name leakage on `mc/1.21.11` returns **0**.
+**No translation was required, and that is a measurement, not an expectation.**
+✅ The trailer was written with the **double-`\n`** form, so `git log --format='%(trailers:...)'`
+reads it — the sixteen commits of 2026-08-31 that git's parser cannot see are a known, separate row.
+
+| Check | Result |
+|---|---|
+| Suite on `master` | **174 classes / 1,948 tests / 0 failures / 0 errors**, matching the recorded baseline. ⚠️ Both tasks confirmed **bare** — not `FROM-CACHE`, not `UP-TO-DATE` — and the figure is the SUM of `test` (173/1,935) **and** `tagBoundTest` (1/13) |
+| All 22 `--self-test`s, clean state | **green**, before and after. The floors do not fire on honest runs |
+| The 39-run mutation matrix | **0 survivors** (13 collections × empty / skipped / partial) |
+| Full re-census after the fix | survivors **20 → 2**, both reclassified by reading as not case collections |
+| `drift-audit.py --self-test` | PASSED — **run FIRST**, because "no drift" is also what a broken auditor prints |
+| `drift-audit.py --master master`, **fresh clone** | **0 MISSING** on all three live bands; 6 archived skipped; exit **0** |
+| `branch-file-identity-audit.py` | **54** shared paths byte-identical; exit **0** |
+| `manifest-identity-audit.py` | every branch's manifest distinct; exit **0** |
+| `gradle-key-identity-audit.py` | shared keys agree, distinct keys differ; exit **0** |
+| The six fixed self-tests, **run on each band** | green on all three |
+| 🔑 **The floor ARMED on a band** | `MUT-B` applied to `mc/1.21.11`'s own `probe-bands.py` → `RAN 0/7 ... cases were SKIPPED`, exit **1** |
+
+🔑 **That last row is the one that matters.** A propagated self-test passing proves the file
+arrived; only a mutation on the band's own copy proves the guard is **armed** there. Identity
+guarantees the bytes, never the behaviour.
+⚠️ **`--require-bands 3`** throughout — the LIVE count from `expected_bands.py --count`, which
+subtracts the six archived bands. Exit **2** was treated as a failure everywhere, never a pass.
+⚠️ Gates 1–6 and 12 (boot, brew, gameplay, mixin-allow, manifest `--check`) were **not** run: they
+need a built jar and a live server per version, nothing in this change can affect them, and the
+push is held. **Not claimed as green — not run.**
+
+### ↩️ Blast radius and rollback — what was actually done
+
+| Step | Touched | Undo |
+|---|---|---|
+| Mutation runs (P2/P4) | `scripts/**` temporarily, ~90 mutations | byte-exact copies in `scratchpad/mut-backup-s14/` and `mut-fixed-s14/`; **`cmp`-verified after every single run**, working tree clean throughout |
+| The fix | 6 files in `scripts/` | `git revert 8e3191cb1` |
+| Propagation | 3 band heads | `scratchpad/UNDO-s14-bands.txt` — the three pre-propagation heads as ready-to-run `git branch -f` lines |
+| `TODO.md` | 3 docs commits | `scratchpad/TODO.md.bak-s14` |
+| `.agent/memory/` | appended | `scratchpad/{gotchas,decisions,state}.md.bak-s14` |
+
+✅ **Nothing pushed. Nothing deleted. No test removed, no suppression added, no `--no-verify`.**
+🔴 **One near-miss worth keeping:** a `write_text()` on `TODO.md` rewrote all 3,446 lines LF→CRLF
+while `git diff --numstat` still reported `125 0` — git's checkin normalisation **masked a
+whole-file working-tree rewrite**, and only a binary census found it. Restored from the backup and
+redone byte-wise. `scripts/*.py` are CRLF on disk, `TODO.md` is LF, and `*.sh` is pinned LF by
+`.gitattributes` — which is what keeps §66's CR hazard contained.
+
+### What §75 did NOT close — carried forward
+
+- [ ] 🔴 **The nine straight-line `check()` self-tests are UNCOUNTED.** `rename-to-official.py`
+      makes **166** `check()` calls, `mixin-target-sizer.py` 67, `branch-file-identity-audit.py` 64,
+      `derive-official-names.py` 58, `gradle-key-identity-audit.py` 46,
+      `manifest-identity-audit.py` 35, `expected_bands.py` 30, plus `drift-audit.py` and
+      `loomjar.py`. They are immune to the shape §75 fixed **because they have no collection to
+      empty — and equally no assertion that all 166 ran.** Delete one `check()` line and nothing
+      anywhere goes red. 🔑 **Immune is not safe**; it is a different shape with no detector.
+- [ ] ⬜ **S2 (one-sided) was never swept.** `probe-bands.py`'s seven cases are all positives — no
+      planted line that must FAIL to match, so an over-matching `DECL_RE` has nothing to catch it.
+      Thin rather than vacuous, so §74's rule left it alone deliberately. It is the obvious next
+      question, not an oversight.
+- [ ] ⬜ **Gates 2 and 12 have a MIS-SCOPED `--self-test`, and it needs a ruling, not a patch.**
+      `mixin-allow-audit.py --self-test` runs `selftest_jar_selection() or selftest_naming()`, both
+      imported from `loomjar.py` — real, falsifiable, and about the **jar chooser**. Nothing in it
+      touches injection-point counting. `probe-bands.py --self-test` runs a javap regex, not the
+      manifest validation. **Neither is vacuous.** But gate 3's instruction says *"`--self-test`
+      first, as with every gate"*, so following it on gates 2 and 12 returns a green that says
+      nothing about what those gates do.
+- [ ] ⬜ **The `--mutate` and other second proof modes were not audited** — `ci-watch.sh` prints
+      *"Run with `--mutate` to prove these cases can fail"*, so 22 is a floor on entry points, not
+      a census of self-proof.
+- [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **eighth** consecutive
+      session. `master` is now **47** commits ahead of `origin/master`.
 
 ## Other open work — harness and playtest
 
