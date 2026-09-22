@@ -2149,6 +2149,179 @@ That is the documented trap on this row and it is the whole reason the list gets
 
 ---
 
+## §72 — the five rank-less sub-skills: delete the dead config, re-point the vacuous guard — ✅ DONE
+
+**Closes the §71 carried row** *"Five rank-less sub-skills carry `skillranks.yml` entries the runtime
+CANNOT read"*. Tier 1. Owner ruling taken 2026-09-22 **before any edit**, alongside two others.
+
+### Three owner rulings, taken before the first command
+
+| # | Ruling |
+|---|---|
+| 1 | 🔴 **The push hold STILL STANDS.** Re-asked, not inherited — scoped "this session", and this is a new one. **FIFTH consecutive session to re-ask; same answer every time.** No push, no `mod_version` bump |
+| 2 | ✅ **Delete the five entries and follow the Mob Mastery precedent.** Not "hand each a rank" (a real gameplay change + five new plaques), not "leave the config and weaken the guard to an exemption list" |
+| 3 | ✅ **This is the session's work** — it is the only unblocked row on the list |
+
+### Re-measured here before touching anything — a carried row is a claim, not a fact
+
+Every number below was measured in this session. The §71 row is **confirmed on every point**, which
+is worth recording explicitly: re-measuring is not an accusation, and a carried row that survives it
+has earned the next reader's trust.
+
+| Claim | Instrument | Result |
+|---|---|---|
+| The set is exactly **five** | source scan of `SubSkillType.java` for a constant with **no** `(n)` arg | `ARCHERY_DAZE`, `HERBALISM_HYLIAN_LUCK`, `HERBALISM_SHROOM_THUMB`, `PARKOUR_ROLL`, `SMELTING_SECOND_SMELT` |
+| …and the count is right | **independent instrument**: `gen-milestone-advancements.sh`'s own `sed` census, quoted in §71.8b | **106 ranked + 5 rank-less = 111**, matching §68's `javap` count |
+| All five carry a live entry | `skillranks.yml` lines 120 / 161 / 556 / 907 / 912 | every one is `Rank_1: 0` in **both** modes |
+| …resolved to real addresses | the enclosing top-level key, read per line rather than assumed | `Archery.Daze`, `Parkour.Roll`, `Smelting.SecondSmelt`, `Herbalism.HylianLuck`, `Herbalism.ShroomThumb` |
+| The entries are never read | `RankConfig.checkConfig` and `fixBadEntries` both loop `x < getNumRanks()` | **zero iterations** for all five — validation does not read them either, not just the runtime |
+| Block Cracker is **not** in the set | it took a rank in §71 (`Rank_1: 50 / 500`) | correctly **excluded**; it stays |
+
+### ✅ Three ways deletion could have had a side effect — all three checked, all three inert
+
+Written down because "behaviour unchanged" is the claim the whole ruling rests on, and an unchecked
+claim of that shape is how a quiet regression ships.
+
+- **Config migration.** `SkillRenames.MOVED_CONFIG_PATHS` registers **no** `skillranks.yml` move for
+  any of the five. Roll's `Agility.Roll` → `Parkour.Roll` entry is **`advanced.yml`**, and the seven
+  re-parented sub-skills in the `skillranks.yml` loop are Dodge / Athlete / Smash / LeadLungs /
+  LakeRaider / Glide / SolarWings. ⚠️ Roll's entry was the one that had to be read rather than
+  grepped — the name matches in three files with three different meanings.
+- **Milestone plaques.** `gen-milestone-advancements.sh` parses the **enum source**, splitting ranked
+  from rank-less; the five mint no plaque today and mint none after. The datapack does **not** read
+  `skillranks.yml`, so unlike §71.8b there is nothing to regenerate here.
+- **`/mcstats`.** `SkillStatsRenderer.subSkillLine` branches on `getHighestRank(subSkill) > 1`, and
+  `getHighestRank` **is** `getNumRanks()`. `0` and `1` both fall through to the same *"Unlocked"*
+  line, so the five render identically before and after. No player-visible change, measured rather
+  than assumed.
+
+### 🔴 The caveat-expiry pass found FOUR false cells — and it is the docs shape no guard can see
+
+`wiki/Skills.md`'s **Ranks** column says **`1`** for Hylian Luck (76), Shroom Thumb (77), Daze (173)
+and Second Smelt (413). `getNumRanks()` returns **0** for all four. The claim is false today, before
+any edit — deleting the entries only makes it *visible*.
+
+🔑 **The correct rendering already exists twice in the same file** and was simply never applied to
+these four: `Roll` (291) is `—`, and Mob Mastery (266/270) is `—` with a sentence saying *"has no
+rank ladder and deliberately no `skillranks.yml` entry"*. So this is not a new convention, it is an
+unfinished application of one.
+🔑🔑 **It is byte-identical on every branch, so it is invisible to BOTH propagation guards** —
+identity passes because all the copies agree, and `drift-audit.py` does not track docs at all. The
+exact shape of the XP-bar defect. Cross-branch equality is not correctness.
+⚠️ **And one near-miss worth recording:** `wiki/Movement-Skills.md:77` reads `| Roll | 600 |`, which
+looks like an unlock level and is **not** — the table's header is `| Event | XP |`. Read the header,
+not the row. §71 made this exact mistake on `| Block Cracker | 1 |`; twice in two sessions means
+treat it as the default failure mode of a grep, not an accident.
+
+### The plan, file by file
+
+- [x] ✅ **72.1 — DONE. Five sections deleted** from `src/main/resources/skillranks.yml`
+      (`Archery.Daze`, `Parkour.Roll`, `Smelting.SecondSmelt`, `Herbalism.HylianLuck`,
+      `Herbalism.ShroomThumb`), each replaced by a one-line comment saying *why* there is no entry,
+      pointing at the Mob Mastery precedent. **Block Cracker is not touched.**
+- [x] ✅ **72.2 — DONE. Re-pointed `RankConfigTest.everySubSkillDeclaresItsUnlockLevel` into a
+      BICONDITIONAL:** a sub-skill has a `skillranks.yml` section **iff** `getNumRanks() > 0`.
+      🔑 **That is what makes it falsifiable by a rank-less sub-skill**, which the old one-directional
+      form could never be — it asserted a key at an address the runtime never visits for exactly the
+      five, and reported the family as covered. Both directions get a distinct failure message:
+      **ranked with no section** is the original #17.4 defect; **rank-less with a section** is the
+      dead config this section deletes.
+- [x] ✅ **72.3 — DONE. A second test pinning the MECHANISM**, so the deletion cannot be undone by someone
+      who believes an entry would gate: for every rank-less sub-skill, `RankUtils.getRank` returns
+      **-1** and `hasUnlockedSubskill` is **true**. Driven from `values()`, never a transcribed list.
+      ⚠️ If `values()` ever yields **no** rank-less sub-skill this test must **fail, not pass
+      vacuously** — an empty loop asserting nothing is the exact defect being closed.
+- [x] ✅ **72.4 — DONE, 5/5. MUTATION-TESTED the re-pointed guard in both directions, and COUNT which cases
+      notice.** Four mutations: (a) restore one deleted section → 72.2 reddens; (b) delete a *ranked*
+      section → 72.2 reddens; (c) give a rank-less sub-skill a rank in the enum → 72.2 reddens;
+      (d) the control — an unrelated edit → everything stays green. **A guard that is not counted is
+      not measured.**
+- [x] ✅ **72.5 — DONE. Docs.** Four `1` → `—` cells in `wiki/Skills.md`, plus one sentence per skill
+      section in the Mob Mastery voice. ⚠️ **`wiki/**` is under the R-y identity guard**, so this
+      must reach all three live bands in the same propagation or gate 9 goes red.
+- [x] ✅ **72.6 — DONE. Build + full suite green**, read off the JUnit XML with `> Task :test` confirmed
+      **bare** rather than `FROM-CACHE`, and `tagBoundTest` attributed to the same HEAD.
+      ⚠️ `cleanTest test` does **not** defeat the build cache — §70 needed `--no-build-cache`.
+- [ ] ⬜ **72.7 — propagate to the three LIVE bands** (`mc/26.2`, `mc/26.1.2`, `mc/1.21.11`) from a
+      **scratch clone**, each with a `Backport-of:` trailer verified through git's own parser **and
+      its control** (the source commit on `master` must return empty). ⚠️ `mc/1.21.11` is yarn-mapped,
+      but this change is YAML + a test using no MC types, so no translation is expected — verify
+      rather than assume. ⚠️ Archived bands get nothing.
+- [ ] ⬜ **72.8 — close the §71 carried row** with the measurement, and re-point `AGENTS.md`/memory
+      only if something generalises.
+
+
+### ✅ 72.4 — the mutation table, with a discriminating control
+
+Five mutations, each applied from a byte-verified clean base, each run read by its **real exit code**
+and its **own fresh XML** — the scorer refuses a report older than the mutation, because a stale
+report is how a mutation harness ends up measuring itself.
+
+| Mutation | Predicted | gradle | Noticed by | Message |
+|---|---|---|---|---|
+| **M1** re-add a rank-less section (`Archery.Daze`) | biconditional RED | exit 1, 1 failure | biconditional | *"dead config the runtime never consults"* |
+| **M2** delete a **ranked** section (`Parkour.SnowWalker`) | biconditional RED | exit 1, 1 failure | biconditional | *"silently unlocks at level 0 (#17.4): [PARKOUR_SNOW_WALKER]"* |
+| **M3** give ONE rank-less sub-skill a rank | biconditional RED | exit 1, 1 failure | biconditional | *"declare ranks but have no entry: [ARCHERY_DAZE]"* |
+| **M4** give **ALL FIVE** a rank | both anti-vacuity lines RED | exit 1, **2 failures** | biconditional **+** mechanism | *"asserted nothing"*, from both tests |
+| **M5** control — a comment-only edit | everything GREEN | **exit 0, 0 failures** | **NOTHING** | — |
+
+🔑 **M4 is the one that matters.** The old guard's failure was that it could not fail for a real
+reason on exactly these five; M4 removes the last rank-less sub-skill and **both** new tests refuse to
+pass quietly. A guard that reddens when it runs out of things to check is the difference between this
+and §68's version of the same fix.
+⚠️ **And the harness caught its own bug rather than scoring it as a survival.** `SubSkillType.java` is
+**CRLF** while `RankConfigTest.java` is **LF**; the first draft hardcoded an LF anchor for M3/M4 and
+**aborted** instead of applying nothing. Had it been written to skip a missed anchor, M3 and M4 would
+have run against an unmutated tree and printed *"mutation survived"* — the precise shape of the
+already-recorded *"mutation that never applied"*. **Anchor on the file's own newline, and assert.**
+
+### ✅ 72.6 — the suite, by task directory
+
+**174 classes / 1,944 tests / 0 failures / 0 errors / 0 skipped**, under `cleanTest test tagBoundTest
+--no-build-cache`, with **both** `> Task :test` and `> Task :tagBoundTest` confirmed **bare** rather
+than `FROM-CACHE`, and the XML aggregated **by task directory** (`test` 173/1,931 + `tagBoundTest`
+1/13) rather than through a partial glob.
+🔑 **The number was PREDICTED before it was read:** §71 recorded 1,943; this removes one test and
+adds two, so 1,944 is the arithmetic and not merely a green run.
+
+### ✅ Three ways deletion could have had a side effect — verified, not assumed
+
+All three were checked **before** the edit and are recorded above. The docs claim added in 72.5
+(*"gated by a chance that scales with ‹skill›"*) was then verified per sub-skill rather than inherited
+from §71's summary: all four carry both `getMaximumProbability` and `getMaxBonusLevel` in
+`AdvancedConfig`, which is a level-scaled ramp.
+
+### 🔴 The caveat-expiry pass — four FALSE cells, and one the commit itself created
+
+`wiki/Skills.md`'s **Ranks** column read **`1`** for Hylian Luck, Shroom Thumb, Daze and Second Smelt.
+`getNumRanks()` is **0** for all four, so the claim was false **before** this session touched
+anything — deleting the entries only made it visible. Corrected to `—`, the rendering the same file
+already used for Roll and Mob Mastery, each with a sentence in the Mob Mastery voice.
+➕ **And one the commit created:** Roll's own sentence (`Skills.Md:304`) said *"has no rank ladder"*
+but not *"and no `skillranks.yml` entry"* — true when written, incomplete the moment this commit
+deleted that entry. **The caveat pass has to include the caveats your own diff invalidates.**
+✅ **Checked and deliberately NOT changed:** Mob Mastery's *"the one sub-skill that doesn't appear in
+`/mcstats`' ranks list"* is still true — it is not a `SubSkillType` constant at all, so it never
+enters the renderer's loop, whereas the five do and render as *"Unlocked"*. That was the same before
+this change. **Recording a checked-and-correct claim is worth more than silence.**
+
+### What I am NOT doing
+
+- **Not** pushing, and **not** bumping `mod_version` — ruling 1, **fifth** re-ask.
+- **Not** giving any of the five a rank. That was offered and declined: it is a real gameplay change
+  and mints five milestone plaques.
+- **Not** touching `UNARMED_BLOCK_CRACKER`. §71 gave it a rank because it was the one with **no
+  probability ramp**; it is correctly out of this set.
+- **Not** deleting or weakening `everyShippedRankSectionMapsToALiveSubSkill`. It is the converse
+  guard and deletion cannot make it fail — but it is also the thing that would catch a *sixth*
+  section going stale, so it stays exactly as it is.
+- **Not** widening this into the general vacuous-guard sweep. That was offered and is a Tier 2 job of
+  its own; **vacuity #17 is closed here, the census is not.**
+- **Not** propagating `TODO.md` (excluded by design), and **not** propagating anything to the six
+  archived bands.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
@@ -2618,7 +2791,9 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
       concatenation, `var`, a raw generic. Nothing in this repo looks for that shape. It is a
       different instrument from `--receivers` and gets its own section.
 
-- [ ] ⬜ **Five rank-less sub-skills carry `skillranks.yml` entries the runtime CANNOT read — and the
+- [x] ✅ **CLOSED 2026-09-22 by §72 — the five entries are DELETED and the guard is a BICONDITIONAL, mutation-tested 5/5.** Owner ruling: follow the Mob Mastery precedent rather than hand each a rank. 🔑 **The re-pointed guard reddens when it runs out of rank-less sub-skills to check**, which is what the old one could never do. ⚠️ The pass also found the **Ranks** column in `wiki/Skills.md` claiming **1** for four of the five — false before the edit, and invisible to both propagation guards because all six copies agreed. **Original row below, kept because the reasoning is the record:**
+
+- [x] ⬜ **Five rank-less sub-skills carry `skillranks.yml` entries the runtime CANNOT read — and the
       guard that "closed" this reports them as handled.** Raised by §71 (2026-09-22), deliberately
       **not** fixed there.
       `ARCHERY_DAZE`, `PARKOUR_ROLL`, `HERBALISM_HYLIAN_LUCK`, `HERBALISM_SHROOM_THUMB`,
