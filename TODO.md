@@ -906,9 +906,13 @@ has no crash log attached** — see its row.
       too — that is the line that says what the level you are working toward actually buys.
       🧪 Tests assert the RENDERED line. A locale assertion would have passed identically before
       and after the fix, which is the whole trap.
-- [ ] ⬜ **17.4 — unlock spread is uneven on the new custom skills.** Abilities arrive too early or
-      too late, giving an uneven reward curve. Named: **Parkour, Flying, Stealth, Swimming,
-      Unarmored.**
+- [x] ✅ **17.4 — unlock spread re-spread on the five custom skills** — `742c334a2`. Abilities arrived
+      too early or too late, giving an uneven reward curve. Named: **Parkour, Flying, Stealth,
+      Swimming, Unarmored.** ⚠️ **The approved proposal was WRONG IN TWO PLACES and the tests caught
+      both** — Parkour's Fleet Footed stays at 1 (moving it to 35 would half-revert the Agility
+      retirement) and Unarmored reverted entirely (it already matched the house curve). Six
+      sub-skills also turned out to have no entry at all, now declared at 0. Full reasoning and the
+      11-failures-to-5 split in §68.A.
 - [x] ✅ **17.5 — renamed to "Hourly XP Cook Limit"** — `611bda1b3`. `wiki/Cooking.md` says why too.
       Two existing cases already asserted the old label, so their expectation moved with the rename.
 - [x] ✅ **17.6 — durations carry their unit** — `611bda1b3`. Applied in `calculateLength` via a new
@@ -928,8 +932,10 @@ has no crash log attached** — see its row.
       🧪 Two SEPARATE properties (the mirror reaches disk; the second row is gone), and mutation
       proved it: restoring the rows fails only the row case, disabling the fan-out fails only the
       mirror case. **Either test alone would have missed half the fix.**
-- [ ] ⬜ **17.9 — ability messages render too low** and get drawn over the hotbar. Move them up so
-      they do not overlap the item bar.
+- [x] 🚫 **17.9 — WON'T FIX, owner ruling 2026-09-22.** Ability messages render over the hotbar and
+      will keep doing so. **Both available answers were declined**, not deferred — see §68.A for the
+      measurement that produced the choice. Nothing to build, nothing to revisit unless the owner
+      reopens it.
 
 ### #16 — refactor and update (owner, 2026-09-20) — THREE asks, one needs a ruling
 
@@ -1036,7 +1042,11 @@ Phase E  #16.1 master -> docs-only                    LAST; re-points drift-audi
 
 ---
 
-## §68.A — Phase A, the code fixes — 🟡 SEVEN DONE, THREE OPEN
+## §68.A — Phase A, the code fixes — ✅ CODE WORK COMPLETE; one item blocked on a reporter
+
+🔑 **Read the closure state honestly: 8 shipped, 1 won't-fix, 1 blocked — not "10 done".** 17.9 was
+**declined**, not built (owner ruling 2026-09-22), and #14 is waiting on a crash log that may never
+arrive. Nothing in Phase A is waiting on this repo.
 
 ✅ **Seven sub-items shipped on `master` in six commits**, suite **174 classes / 1,935 executed /
 0 failures** (was 174 / 1,920 — +15 cases). Every guard was **mutation-tested**, and in three cases
@@ -1066,7 +1076,7 @@ are byte-identical **by rule** and four of these commits touch `wiki/**`.
 working copy — `drift-audit.py`'s `band_branches()` PREFERS REMOTE refs and would grade the stale
 remote instead.
 
-### Still open in Phase A
+### Still open in Phase A — one item, and it is not ours
 
 - [x] ✅ **17.4 — APPLIED, owner-approved, with TWO corrections the tests forced.**
       🔑 **The proposal was approved as written and it was WRONG IN TWO PLACES.** Both were caught
@@ -1170,11 +1180,17 @@ them in a normal run.
       🔑 Level 0 is probably the right value (upstream's Acrobatics Roll is free from the start),
       so this is likely a no-op in behaviour — but it is currently an *implicit* 0 that no file
       states and no test covers. **Declare it explicitly whatever the balance decision is.**
-- [ ] ⬜ **17.9 — ability messages draw over the hotbar.** 🔴 **Needs a design ruling — see below.**
+- [x] 🚫 **17.9 — WON'T FIX, owner ruling 2026-09-22.** The ruling was asked for and the answer was
+      **neither option**: accept the collision with the held-item name and close it. Phase A's code
+      work is therefore **complete**; only #14 remains, and that is not on us.
 - [ ] ⬜ **#14 — multiplayer crash.** Ruled **supported**; comment posted 2026-09-21 asking for the
       crash log. **Blocked on the reporter**, not on us.
 
-### 🔴 17.9 — why this one stopped for a ruling
+### 🚫 17.9 — the ruling, and why the measurement mattered anyway
+
+**Closed won't-fix, 2026-09-22.** Kept in full because the measurement is what made the decision
+cheap, and because *"just move the message up"* will look like a five-minute fix to the next person
+who reads the issue. It is not one.
 
 The messages are vanilla **action-bar** messages: `PlatformPlayer.sendActionBar` calls
 `sendSystemMessage(text, true)`, and Minecraft draws that just above the hotbar, where it collides
@@ -1187,8 +1203,22 @@ they are not close to equivalent:
 | **(a) Mixin `Gui`** | Shift the vanilla overlay message up | Moves **vanilla's own** action-bar messages too, not just mcMMO's. A mixin into a render method across **nine bands / 16 MC versions** — the most version-volatile surface there is, and `mixin-allow-audit.py` must pass per band |
 | **(b) Own HUD layer** | Stop using the action bar for ability messages; draw them ourselves at a configurable height | More code, but self-contained, version-portable via Fabric API's HUD callback, and gives the player an offset slider |
 
-➡️ **Recommendation: (b).** (a) is cheaper today and is the option that breaks silently on the next
-MC version, on eight branches at once, with no compiler and no test to catch it.
+➡️ **Recommendation was (b).** (a) is cheaper today and is the option that breaks silently on the
+next MC version, on eight branches at once, with no compiler and no test to catch it.
+
+🚫 **OWNER RULING 2026-09-22: NEITHER. Closed won't-fix.** The cosmetic overlap does not justify
+introducing the mod's first HUD rendering code — under either option, that code is new
+version-volatile surface carried by every band forever, to fix a collision with the held-item name
+that fades after a second and a half.
+🔑 **The reason this closure is worth writing down is that the measurement is what made it cheap.**
+The intake read *"move them up so they do not overlap the item bar"* — a one-line-looking fix. What
+the measurement found is that **the mod does not draw this text at all**; it hands the string to
+vanilla via `sendActionBar`, and vanilla chooses the position. There is no coordinate in this
+repository to change. Anyone re-reading the issue text alone will re-derive the same wrong estimate,
+which is exactly why the table above is kept rather than deleted with the item.
+⚠️ **Do not treat this as a precedent for declining HUD work generally.** It is a ruling about this
+overlap's value, not about HUD code. If a later feature needs its own HUD layer for reasons that
+carry their own weight, option (b) is still the right shape and the reasoning above still applies.
 
 ### #19 — Smelting must stop paying XP into Mining and Repair
 
