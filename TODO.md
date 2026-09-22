@@ -3254,6 +3254,12 @@ redone byte-wise. `scripts/*.py` are CRLF on disk, `TODO.md` is LF, and `*.sh` i
 
 ### What §75 did NOT close — carried forward
 
+- [x] ✅ **CLOSED by §76 (2026-09-22).** The set is **eight**, not nine, and the counts in this row
+      are superseded by the traced ones in §76 — `drift-audit.py` and `loomjar.py`, both named here,
+      have **zero** `check()` calls; `extract-mc-ids.py` has 16 and was never named; and a source
+      grep miscounts four of the eight in **both** directions. Each now asserts an **exact** executed
+      count, proved by 16 mutations with 0 survivors. Original text kept below — the diagnosis was
+      right and only its arithmetic was wrong.
 - [ ] 🔴 **The nine straight-line `check()` self-tests are UNCOUNTED.** `rename-to-official.py`
       makes **166** `check()` calls, `mixin-target-sizer.py` 67, `branch-file-identity-audit.py` 64,
       `derive-official-names.py` 58, `gradle-key-identity-audit.py` 46,
@@ -3278,7 +3284,7 @@ redone byte-wise. `scripts/*.py` are CRLF on disk, `TODO.md` is LF, and `*.sh` i
 - [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **eighth** consecutive
       session. `master` is now **49** commits ahead of `origin/master` (MEASURED after the closing commit, not predicted before it).
 
-## §76 — the uncounted `check()` family: a self-test that cannot say how much it ran — ⬜ PLAN
+## §76 — the uncounted `check()` family: a self-test that cannot say how much it ran — ✅ DONE (Tier 2; 8 scripts floored, closes HELD until push)
 
 **§75's own carried row, taken as this session's work** (owner ruling 2, 2026-09-22 s15). §75 floored
 the **collection-driven** self-tests on what RAN. The straight-line `check()` harnesses were left
@@ -3367,6 +3373,134 @@ nobody looks.
 | P3 fix | 8 files in `scripts/` | a green gate self-test turns red, or a floor that cannot fire | `git diff`; `scratchpad/TODO.md.bak-s15` for the doc |
 | **P4 mutations** | `scripts/**` **temporarily**, 16 mutations | 🔴 **a mutated script left behind disarms a SHIP GATE** — worse than a red test, because a gate that lies reads as green | byte-exact `.orig` copies in `scratchpad/mut-backup-s15/`, taken **before the first mutation**, `cmp`-verified after **every** run |
 | P6 propagation | 3 live band heads | a band left behind | pre-propagation heads frozen as ready-to-run `git branch -f` lines in `scratchpad/UNDO-s15-bands.txt` |
+
+---
+
+### ✅ P3 — the fix, in two commits
+
+| commit | what |
+|---|---|
+| `29f8993bc` `fix(guards)` | an **exact** `EXPECTED_CHECKS` floor in the seven scripts that had none |
+| `cf385f4f6` `fix(guards)` | `derive-official-names.py`'s `< 43` tightened to **exactly 58** |
+
+Separate commits because they rest on different decisions: the second one *is* the measurement that
+justifies the first, and burying it in a 7-file diff would hide the only evidence that a lower bound
+rots.
+
+🔴 **One bug in this change, caught by the floor it was adding.** The counter was first named `ran`
+— and `extract-mc-ids.py` already binds `ran` as a **loop variable** in its own §75 floor
+(`for label, ran, declared in (...)`). My counter was silently rebound to `2`, the number of
+cross-checked kinds. It went red only because 2 ≠ 16; **had the two numbers happened to agree it
+would have been a silently wrong guard that nothing could see.** Renamed `ran_checks` throughout,
+and the other four were checked for the same collision (clean). Same family as §75's *"a mutation at
+the wrong SCOPE is a different mutation"* — a name collision is that, one level up.
+
+### ✅ P4 — the proof: 16 mutations, both directions, 0 survivors
+
+Per script: delete one **executing** single-line `check()` (count falls), and duplicate it (count
+rises). A mutation counts as **caught only when the floor itself fired** — exit 1 alone is not
+evidence, which is §75's measured lesson about six of eleven "catches" being crashes.
+
+| script | control | MUT-DEL | MUT-ADD |
+|---|---|---|---|
+| `branch-file-identity-audit.py` | GREEN | CAUGHT 63≠64 | CAUGHT 65≠64 |
+| `gradle-key-identity-audit.py` | GREEN | CAUGHT 45≠46 | CAUGHT 47≠46 |
+| `manifest-identity-audit.py` | GREEN | CAUGHT 34≠35 | CAUGHT 36≠35 |
+| `extract-mc-ids.py` | GREEN | CAUGHT 15≠16 | CAUGHT 17≠16 |
+| `expected_bands.py` | GREEN | CAUGHT 37≠38 | CAUGHT 39≠38 |
+| `rename-to-official.py` | GREEN | CAUGHT 164≠165 | CAUGHT 166≠165 |
+| `mixin-target-sizer.py` | GREEN | CAUGHT 62≠63 | CAUGHT 64≠63 |
+| `derive-official-names.py` | GREEN | CAUGHT 57≠58 | CAUGHT 59≠58 |
+
+🔑 **The harness was wrong TWICE before it was right, and both wrongs are the point.**
+Its first run reported two scripts as *"exit 1 but not by the floor"* and its second reported the
+same two as **SURVIVED** — two different false answers about the same two scripts, neither of which
+was a property of the guard:
+
+1. **A mutant that does not compile is not a mutation.** The last one-line `check()` in
+   `rename-to-official.py` and `mixin-target-sizer.py` is the sole statement of an `except:` block;
+   deleting it is an `IndentationError`. The script exits 1 without the floor ever running — **a
+   crash scored as a catch.** Fixed by requiring both mutants to `compile()`.
+2. **A mutation on a line that never executes is not a mutation either.** The next candidate up is
+   the **try-arm** of a mutation pair whose *passing* path is the `except` arm, so it never runs.
+   Deleting dead code cannot move a runtime count, and the harness read the floor as blind —
+   **dead code scored as a survival.** Fixed by tracing which call sites actually execute
+   (`sys.settrace`) and mutating only those.
+
+⚠️ **The census instrument had the same disease and it nearly set a wrong constant.** The first
+tracer counted calls to any function *named* `check`, which over-reported `extract-mc-ids.py` at 16
+when its own helper ran twice — and reported `gameplay_smoke_scenario.py` at 9, where `check(log,
+profile_text)` is the **scorer**, not an assertion helper. Match on the code object's file, not on
+the name.
+
+### ✅ P5 / P6 — branch-invariance and propagation, with real exit codes
+
+**Both commits propagate** (`scripts/` only), with `Backport-of:` trailers verified through git's
+**own** parser, not by grepping the text.
+
+| Band | Head after | `Backport-of` readable |
+|---|---|---|
+| `mc/26.2` | `cc9b7e1ec` | `29f8993bc` ✅ `cf385f4f6` ✅ |
+| `mc/26.1.2` | `6e989db50` | `29f8993bc` ✅ `cf385f4f6` ✅ |
+| `mc/1.21.11` | `593c079d0` | `29f8993bc` ✅ `cf385f4f6` ✅ |
+
+⚠️ **All three applied cleanly including the yarn band — the outcome the notes call DANGEROUS.**
+Checked, not assumed: the two commits touch **`scripts/*.py` only** (no Java, no MC symbol), and a
+grep for official-name leakage on `mc/1.21.11` returns **0**. No translation was required, and that
+is a measurement.
+
+🔑 **The constant is branch-invariant, which this design REQUIRED and did not assume.** `scripts/**`
+is byte-identical on every branch (P19-1), so one literal has to be right on all of them; a count
+that differed per band would have made the whole approach unshippable. All eight self-tests exit 0
+on all three bands.
+
+| Check | Result |
+|---|---|
+| All 20 `--self-test`s on `master` (16 Python + 4 shell) | **exit 0**, before and after |
+| The 16-mutation matrix | **0 survivors**, 8 green controls |
+| 🔑 **Floor ARMED on a band** | a check deleted from `mc/1.21.11`'s **own** copy → `34 checks ran, expected exactly 35`, exit **1**. A propagated self-test passing only proves the file arrived |
+| `drift-audit.py --self-test` | PASSED — **run FIRST** |
+| `drift-audit.py --master master`, **fresh clone** | **0 MISSING** on all three live bands; 6 archived skipped; exit **0** |
+| `branch-file-identity-audit.py` | **54** paths across 4 branches byte-identical; exit **0** |
+| `manifest-identity-audit.py` / `gradle-key-identity-audit.py` | exit **0** / exit **0** |
+| Java suite on `master` | **174 classes / 1,948 tests / 0 failures / 0 errors** — matches the §75 baseline. Both tasks **bare**, and the figure is the SUM (`test` 173/1,935 **+** `tagBoundTest` 1/13) |
+| Caveat-expiry pass | `README.md` + `wiki/**` grepped for the symptom — **no hits**; nothing player-facing describes these floors |
+
+⚠️ **Gates 1–6 and 12 need a built jar and a live server per version and were NOT run.** Nothing in
+this change can affect them. **Not claimed as green — not run.**
+⚠️ **`--require-bands 3`** throughout, the LIVE count from `expected_bands.py --count`. **Exit 2 was
+treated as a failure everywhere, never a pass.**
+
+### ↩️ Blast radius and rollback — what was actually done
+
+| Step | Touched | Undo |
+|---|---|---|
+| P4 mutations | `scripts/**` temporarily, 16 mutations + 2 discarded harness attempts | byte-exact `.orig`/`.fixed` copies in `scratchpad/mut-backup-s15/`; **`cmp`-verified after every run**, and a final census asserting all 8 match at exit |
+| The fix | 8 files in `scripts/` | `git revert cf385f4f6 29f8993bc` |
+| Propagation | 3 band heads | `scratchpad/UNDO-s15-bands.txt` — the pre-propagation heads as ready-to-run `git branch -f` lines |
+| The band arming probe | 1 file on `mc/1.21.11`, temporarily | `scratchpad/band-armed.orig`, restored and `cmp`-verified, `git status` clean before checkout |
+| `TODO.md` | docs commits | `scratchpad/TODO.md.bak-s15` |
+| `.agent/memory/` | appended | `scratchpad/{gotchas,decisions,state}.md.bak-s15` |
+
+✅ **Nothing pushed. Nothing deleted. No test removed, no suppression added, no `--no-verify`.**
+
+### What §76 did NOT close — carried forward
+
+- [ ] ⬜ **The `check()` helpers are not the only assertion shape.** `extract-mc-ids.py` makes **10**
+      direct `failures.append(...)` calls that bypass `check()` entirely, so its floor of 16 counts
+      the `check()` calls and **nothing else**. Delete one of those ten and the count is unmoved.
+      Same question as this section, one layer in; no detector.
+- [ ] ⬜ **A hardcoded prose tally still rots next to the new floor.** `gradle-key-identity-audit.py`
+      prints *"3 quiet, 8 firing, 1 warning, 5 detector mutations, 1 parser case, 4 archive-filter"*
+      and `manifest-identity-audit.py` an equivalent line. Nothing asserts either. They are a
+      different unit from the check count (cases, not assertions), so the new floor does not cover
+      them — and `branch-file-identity-audit.py` already **computes** its tally from `seen` for
+      exactly this reason. The other two should follow it; left alone here on scope discipline.
+- [ ] ⬜ **Untouched §75 rows:** the S2 one-sided sweep, and the mis-scoped `--self-test` on gates 2
+      and 12 (**deferred by owner ruling** this session, not forgotten).
+- [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **ninth** consecutive
+      session. ⚠️ **The ahead-count is deliberately not recorded here** — a status row cannot count
+      the commit that records it. Run `git rev-list --left-right --count origin/master...master`.
 
 ---
 
