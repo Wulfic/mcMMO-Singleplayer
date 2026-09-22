@@ -3061,6 +3061,108 @@ Named in the plan and now settled, because "vacuous" must not do the work of "mi
 first, as with every gate"* on gates 2 and 12 returns a green that says nothing about what those
 gates do.
 
+### ⚠️ TWO CLAIMS ABOVE ARE CORRECTED HERE — both were mine, both from a mutation that lied
+
+§74's lesson 4 was that **overstating a finding is the same error as missing one.** Two of the
+survivors recorded above do not survive contact with reading, and the correction is written here
+rather than edited quietly into the table, because *how* the wrong answer was produced is the part
+worth keeping.
+
+🔴 **1. `gameplay_smoke_scenario.py`'s `pacing` is NOT a finding.** `check_double_click_pacing()`
+already carries its own floor — `if not seen:` appends *"the pacing guard measured NOTHING, which
+is not the same as the pacing being correct"*. **A floor was already there and I reported it as
+missing.** No fix was applied to it, and the fix that was applied says in a comment not to add a
+second one.
+
+🔴 **2. The "the derived floor lowers itself" claim is OVERSTATED as written, and here is the
+honest version.** The mutation behind it inserted `PHASES = []` **inside `self_test`**, which in
+Python creates a **local that shadows the module global**. `check_double_click_pacing()` reads the
+**global** at call time, so it still saw a full table and its floor never fired. I then read that
+green run as *"the derived floor lowered itself to match"*.
+
+🔑 **The faithful mutation — a module-level `PHASES = []` — does not go green. It CRASHES**
+(`IndexError` at `PHASES[-1].name`), which by this section's own classification is a **crash, not a
+guard firing**, and is at least loud. So:
+
+| Claim | Status |
+|---|---|
+| Emptying `cases` prints `self-test passed (0 cases)` at exit 0 | ✅ **TRUE, and fixed** |
+| The marker loop prints `[ok]` over zero phases when it iterates nothing | ✅ **TRUE, and fixed** |
+| The floor derives from `PHASES` and shrinks with it | ✅ true as **code**, reachable via a skipped or filtered loop |
+| *"Emptying `PHASES` makes the run pass at exit 0"* | 🔴 **FALSE for a genuinely empty `PHASES`** — it crashes first |
+
+🔑🔑 **The generalisable trap: a mutation applied at the wrong SCOPE is a different mutation.**
+Rebinding a name inside a function does not empty the global that every other function reads — it
+models *"this loop iterated nothing"*, not *"the table is empty"*. Those have different blast
+radii and, here, different verdicts. **Check which one you built before you believe the exit code.**
+
+✅ **3. `branch-file-identity-audit.py`'s `trees.values()` is NOT a finding either.** Reading it
+settles it: that loop is inside `intersect_selector`, a **deliberately-broken selector the
+self-test injects as MUTATION 3a**. Emptying it weakens the planted mutation, not the coverage.
+The census hit a helper, not a case collection.
+
+**Revised: 20 raw survivors → 18 genuine, 2 reclassified.** The count moved because each one was
+read; that is the §74 rule — *a candidate is not a finding* — applied to my own output.
+
+### ✅ P4 — THE FIX, and the proof in three directions
+
+**One idiom, applied to six scripts: count what EXECUTED, then compare it to what was DECLARED.**
+Copied from `vacuity-census.py`, the only script in `scripts/` that already had it.
+
+```
+ran = 0
+for case in CASES:
+    ran += 1
+    ...
+if ran == 0 or ran != len(CASES):
+    failures.append(f"RAN {ran}/{len(CASES)} ... -- cases were SKIPPED")
+```
+
+🔑 **Both clauses are load-bearing and that was MEASURED, not argued** — with the sibling floor
+disabled so nothing could mask the result:
+
+| Clause | Unique domain | Drop it and… |
+|---|---|---|
+| `ran == 0` | the declared list is **empty** (mutation A) | A escapes at **exit 0** |
+| `ran != len(...)` | a **PARTIAL** skip (mutation C, `cases[:1]`) | C escapes at **exit 0** |
+
+⚠️ **My first attempt to prove the second clause used the wrong mutation and "proved" the wrong
+thing.** A *total* skip is already caught by `ran == 0`, so dropping `ran != len(...)` and running
+mutation B still went red — which reads as *"the clause is redundant"*. It is not; its unique
+domain is a partial skip. **This is §74's recorded lesson landing on the session applying it:
+mutate inside the domain where the guard is the only thing that can fire.**
+
+#### The result matrix — 13 collections × 3 mutations = 39 runs, **0 survivors**
+
+| Script | Collections floored | A empty | B skipped | C partial |
+|---|---|---|---|---|
+| `extract-mc-surface.py` | 6 | caught | caught | caught |
+| `config-id-audit.py` | 4 (2 shown in matrix + 2 set-loops) | caught | caught | caught |
+| `gameplay_smoke_scenario.py` | `PHASES`, `cases`, `requires_markers` | caught | caught | caught |
+| `probe-bands.py` | `cases`, `want_supers` | caught | caught | caught |
+| `extract-mc-ids.py` | `cases`, `CROSS_CHECKED` | caught | caught | caught |
+| `expected_bands.py` | `unusable_cases` | caught | caught | caught |
+
+✅ **Full re-census after the fix: 35 loops probed, survivors 20 → 2**, and both remaining are the
+two reclassified above, which are not case collections.
+✅ **All 22 self-tests still green in the clean state** — the floors do not fire on honest runs.
+✅ **Every mutated file restored from a byte-exact copy and `cmp`-verified.** Working tree clean.
+
+#### ⚠️ What this fix does NOT cover — stated so it is not mistaken for closed
+
+- 🔴 **The nine straight-line `check()` self-tests are still uncounted.** `rename-to-official.py`
+  makes **166** `check()` calls, `mixin-target-sizer.py` 67, `branch-file-identity-audit.py` 64.
+  They have no collection to empty — and equally **no assertion that all 166 ran**. Delete one and
+  nothing anywhere goes red. That is a real shape, it is **not** this section's scope, and it is
+  carried forward as a row rather than waved at.
+- **S2 (one-sided) was not swept.** `probe-bands.py`'s seven cases are all positives: no planted
+  line that must *fail* to match, so an over-matching `DECL_RE` has nothing to catch it. Thin, not
+  vacuous, so §74's rule left it alone — but it is the obvious next question.
+- **The `--mutate` modes and other second proof modes were not audited** (`ci-watch.sh` has one).
+- **The two mis-scoped self-tests are unchanged.** Gates 2 and 12 still have a `--self-test` that
+  certifies something other than what the gate does; that is an operational finding, not a bug, and
+  it needs an owner ruling rather than a patch.
+
 ### What I am NOT doing
 
 - **Not** rewriting a self-test that is merely thin. §74's line holds: cannot-fail, or it is not
