@@ -220,6 +220,28 @@ audited deliberately.
    reach a band; that is the finding, not the obstacle. A waiver that stops excusing anything is
    reported **STALE** and must be deleted, not left to accumulate.
 
+🔴 **A `src/` back-port from `master` to a `1.21.x` band NEEDS TRANSLATION, not a cherry-pick.**
+`master` and the `26.x` bands compile against **official Minecraft names**; the `1.21.x` bands are
+**yarn-mapped**. A cherry-pick conflicts wherever the patch's *context* touches a renamed symbol —
+and the dangerous half is that it often **does not** conflict, because a hunk whose context happens
+to avoid renamed lines applies cleanly and silently. Measured 2026-09-22 propagating twelve commits:
+`mc/26.1.2` took all twelve untouched, `mc/1.21.11` took eleven and conflicted on one.
+
+- 🔴 **Never resolve such a conflict with "take master".** It writes official names into a branch
+  that cannot compile them. Translate the hunk into the band's spelling and say so in the commit.
+- 🔑 **Read the band's own file for the spellings — do not recall them.** The pairs that came up:
+  `CommandSourceStack`→`ServerCommandSource`, `Component`→`Text`, `ChatFormatting`→`Formatting`,
+  `sendFailure`→`sendError`, `sendSuccess`→`sendFeedback`,
+  `getPlayerOrException()`→`getPlayerOrThrow()`, `getUUID()`→`getUuid()`. That list is an example,
+  never a lookup table; the file on the branch is the fact.
+- ⚠️ **Grep for surviving official names in CODE only.** A check for a bare `Commands.` fires on
+  the locale key `"Commands.XPGain.Keep.On"` — strip string literals first, or a correct
+  translation gets refused and the real signal is lost in the false one.
+- ✅ **The band must BUILD.** A translation is a claim until `./gradlew test` on that branch says
+  otherwise; no identity or drift guard reads Java.
+- ⚠️ **`TODO.md` is excluded from propagation** and its conflicts are noise — band-specific notes
+  are *supposed* to live there. Restore the band's copy and carry on.
+
 ✅ **`drift-audit.py` now tracks `scripts/`-only and `.github/`-only commits** (R9a, 2026-08-13).
 Tooling is exactly what a band needs to run its own gates, and a divergent `release.yml` changes how
 a band *ships* — both used to be invisible, and the auditor reported a confident *"No drift"* either
