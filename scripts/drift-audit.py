@@ -69,6 +69,18 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# The LIVE/ARCHIVED split lives in exactly ONE place -- scripts/expected-bands.txt, parsed by
+# expected_bands.py. This imports it rather than re-deriving the set, because a second copy of
+# "which bands are archived" is a second thing to forget, and the three identity audits need
+# the same answer this one gets. See TODO.md section 69 phase D.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from expected_bands import (  # noqa: E402
+    DECLARATION,
+    DeclarationError,
+    drop_archived,
+    load_declaration,
+)
+
 TRAILER = re.compile(r"^\s*Backport-of:\s*([0-9a-fA-F]{7,40})\s*$", re.M)
 NOT_NEEDED = re.compile(r"^\s*Backport-not-needed:\s*(\S.*?)\s*$", re.M)
 
@@ -327,6 +339,31 @@ def band_branches(cwd: Path | None = None) -> list[str]:
         for line in git("branch", "--format=%(refname:short)", cwd=cwd).splitlines()
         if line.strip().startswith("mc/")
     )
+
+
+def resolve_branches(
+    discovered: list[str], archived: tuple[str, ...] | list[str]
+) -> tuple[list[str], int | None]:
+    """The bands this run will audit, and the exit code if it must refuse instead.
+
+    Returns `(branches, None)` normally, or `([], 2)` when the archive filter removed every
+    band that exists.
+
+    🔴 THE SINGLE PLACE THE PHASE-D EXIT CONTRACT LIVES, so `--self-test` can assert it
+    directly rather than through a subprocess. Phase D teaches four guards to audit FEWER
+    branches; the failure mode is a filter that removes them ALL, leaving the auditor to
+    compare nothing and print "No drift" -- which is character-for-character what a working
+    auditor prints on a clean repo. That is not a pass, it is a run that proves nothing, so
+    it is exit 2 (could not run) and never 0.
+
+    ⚠️ "No bands exist at all" is deliberately NOT this function's finding -- it stays exit 0
+    with its own message, because a repo before the first band cut is a legitimate state.
+    What is refused is bands existing and every one of them being filtered away.
+    """
+    branches = drop_archived(discovered, archived)
+    if discovered and not branches:
+        return [], 2
+    return branches, None
 
 
 def audit_band(
@@ -737,6 +774,60 @@ def self_test() -> int:
         # this whole script enforces, so it needs more proof than the rule does, not less.
         failures.extend(waiver_self_test())
 
+        # ------------------------------------------------------------------------------
+        # Phase D: the archive filter. 🔴 This is the half that WEAKENS the auditor, so it
+        # gets the same treatment as the half that strengthens it.
+        # ------------------------------------------------------------------------------
+        every = ["origin/mc/1.21.5", "origin/mc/26.2"]
+
+        kept, refusal = resolve_branches(every, ["mc/1.21.5"])
+        if kept != ["origin/mc/26.2"] or refusal is not None:
+            failures.append(
+                f"an archived band must be filtered out and the run must continue; got "
+                f"{kept!r}, refusal={refusal!r}"
+            )
+
+        kept, refusal = resolve_branches(every, [])
+        if kept != every or refusal is not None:
+            failures.append(
+                f"an empty archived set must change nothing (the pre-phase-D behaviour); got "
+                f"{kept!r}, refusal={refusal!r}"
+            )
+
+        # 🔴 THE CASE PHASE D EXISTS TO SURVIVE. Filtering every band away must EXIT 2, not 0:
+        # auditing zero branches prints "No drift", which is exactly what a clean run prints.
+        kept, refusal = resolve_branches(every, ["mc/1.21.5", "mc/26.2"])
+        if refusal != 2:
+            failures.append(
+                f"an archive filter that removes EVERY band must refuse with exit 2, not audit "
+                f"zero branches and print 'No drift'; got {kept!r}, refusal={refusal!r}"
+            )
+
+        # ...and an over-matching PATTERN must not be able to do it either. `mc/1.21` is a
+        # prefix of a real band; drop_archived matches exact names, so nothing is removed.
+        kept, refusal = resolve_branches(every, ["mc/1.21"])
+        if kept != every or refusal is not None:
+            failures.append(
+                f"a prefix of a real band name must drop NOTHING -- exact-name subtraction is "
+                f"the whole reason the filter cannot over-match; got {kept!r}"
+            )
+
+        # A band in neither declared section stays audited: fail-closed, so a band cut without
+        # a declaration cannot become invisible to this auditor.
+        kept, refusal = resolve_branches(every + ["origin/mc/9.9"], ["mc/1.21.5"])
+        if "origin/mc/9.9" not in kept:
+            failures.append(
+                f"an UNDECLARED band must still be audited, not silently skipped; got {kept!r}"
+            )
+
+        # The pre-existing "no bands exist yet" state is NOT this refusal and must stay exit 0.
+        kept, refusal = resolve_branches([], ["mc/1.21.5"])
+        if kept != [] or refusal is not None:
+            failures.append(
+                f"a repo with no bands at all must not be turned into a refusal by phase D; "
+                f"got {kept!r}, refusal={refusal!r}"
+            )
+
         if failures:
             print("SELF-TEST FAILED:", file=sys.stderr)
             for f in failures:
@@ -750,7 +841,12 @@ def self_test() -> int:
               "genuinely forgotten one is STILL reported; a waiver for a commit AFTER the cutoff "
               "is REFUSED; and a missing cutoff, a duplicate cutoff, a non-hex sha, an unknown "
               "sha, a missing reason and a duplicate entry all fail closed. A waiver that excuses "
-              "nothing -- including one the band went and back-ported -- is reported STALE.")
+              "nothing -- including one the band went and back-ported -- is reported STALE.\n"
+              "SELF-TEST PASSED (phase D archive filter): an archived band is skipped while the "
+              "run continues; an empty archived set changes nothing; a filter that removes EVERY "
+              "band REFUSES with exit 2 rather than printing 'No drift' over zero branches; a "
+              "prefix of a real band name drops nothing (exact-name subtraction, not a pattern); "
+              "an UNDECLARED band is still audited; and a repo with no bands yet is still exit 0.")
         return 0
 
 
@@ -855,12 +951,51 @@ def main() -> int:
                 file=sys.stderr,
             )
 
-    branches = args.branch or band_branches()
+    # ⚠️ `--branch` is an EXPLICIT override and deliberately bypasses the archive filter: naming
+    # an archived band is how you audit one on purpose. Only the discovered set is filtered.
+    if args.branch:
+        branches = args.branch
+    else:
+        try:
+            declaration = load_declaration(Path(__file__).resolve().parent / DECLARATION)
+        except DeclarationError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            print(
+                "The declaration is refused rather than read as 'nothing is archived'. Guessing "
+                "either way is wrong: assume none and this audits branches nobody propagates to; "
+                "assume all and it audits nothing while printing green.",
+                file=sys.stderr,
+            )
+            return 2
+
+        discovered = band_branches()
+        branches, refusal = resolve_branches(discovered, declaration.archived)
+
+        skipped = [b for b in discovered if b not in branches]
+        if skipped and refusal is None:
+            print(
+                f"Skipping {len(skipped)} archived band(s): {', '.join(sorted(skipped))}\n"
+                f"They still exist and keep their published releases; ruling 2 of TODO.md "
+                f"section 69 stops fixes propagating to them, so drift against master is "
+                f"expected there and is not a finding."
+            )
+
+        if refusal is not None:
+            print(
+                f"error: {len(discovered)} band branch(es) exist but the archive filter removed "
+                f"ALL of them: {', '.join(sorted(discovered))}. This run would have audited zero "
+                f"branches and printed 'No drift', which is exactly what a working auditor prints "
+                f"-- so it refuses instead. Check the [archived] section of {DECLARATION}.",
+                file=sys.stderr,
+            )
+            return refusal
+
     if len(branches) < args.require_bands:
         print(
             f"error: expected at least {args.require_bands} band branch(es), found "
-            f"{len(branches)}: {branches or '(none)'}. Either the branches are gone or this "
-            f"checkout cannot see them (a shallow clone hides remote refs).",
+            f"{len(branches)}: {branches or '(none)'}. Either the branches are gone, this "
+            f"checkout cannot see them (a shallow clone hides remote refs), or the [archived] "
+            f"section of {DECLARATION} now names more bands than the floor allows for.",
             file=sys.stderr,
         )
         return 2

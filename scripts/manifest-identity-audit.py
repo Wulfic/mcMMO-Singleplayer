@@ -75,6 +75,13 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# The LIVE/ARCHIVED split lives in exactly ONE place -- scripts/expected-bands.txt, parsed by
+# expected_bands.py. Importing it rather than re-deriving the set here is the point: a second
+# copy of "which bands are archived" is a second thing to forget, and drift-audit.py must get
+# the same answer this guard does. See TODO.md section 69 phase D.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from expected_bands import drop_archived, filter_to_live  # noqa: E402
+
 MANIFEST = "scripts/mc-surface.txt"
 
 
@@ -527,12 +534,49 @@ def self_test() -> int:
             "FIRING5: 1 band against a floor of 1 must exit 0",
         )
 
+
+    # -- ARCHIVE 1-4: the phase-D archive filter -------------------------------------------------
+    # 🔴 Phase D teaches this guard to audit FEWER branches, and that is the half that WEAKENS it.
+    # The failure mode is a filter matching too much: every band removed, one ref left, nothing
+    # compared -- and "no differences" over nothing is character-for-character what a clean run
+    # prints. It must read as exit 2 (could not run), never as a pass.
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = _make_repo(
+            Path(tmp), {"master": "a\n", "mc/1.21.10": "b\n", "mc/1.21.8": "c\n"}
+        )
+        refs = audit_refs(local=True, cwd=repo)
+
+        live = drop_archived(refs, ["mc/1.21.10"])
+        check(live == ["master", "mc/1.21.8"], f"ARCHIVE1: filtering one band gave {live}")
+        check(
+            exit_code(run_audit(live, cwd=repo), live, 0) == 0,
+            "ARCHIVE1: filtering ONE band must still leave a workable, clean audit",
+        )
+
+        over = drop_archived(refs, ["mc/1.21.10", "mc/1.21.8"])
+        check(over == ["master"], f"ARCHIVE2: over-filter left {over}, expected master alone")
+        check(
+            exit_code(run_audit(over, cwd=repo), over, 0) == 2,
+            "ARCHIVE2: a filter that removes EVERY band must EXIT 2, not audit nothing and pass",
+        )
+
+        check(
+            drop_archived(refs, ["mc/1.21"]) == refs,
+            "ARCHIVE3: a PREFIX of a real band name must drop NOTHING -- exact-name subtraction "
+            "is the only reason this filter cannot over-match",
+        )
+        check(
+            drop_archived(refs, ["mc/9.9"]) == refs,
+            "ARCHIVE4: a band in NEITHER declared section stays audited (fail-closed)",
+        )
+
     if failures:
         print("SELF-TEST FAILED:", file=sys.stderr)
         for f in failures:
             print(f"  - {f}", file=sys.stderr)
         return 1
-    print("self-test OK: 2 quiet, 5 firing, 1 warning, 3 detector mutations.")
+    print("self-test OK: 2 quiet, 5 firing, 1 warning, 3 detector mutations, "
+          "4 archive-filter cases (an over-matching archive EXITS 2).")
     return 0
 
 
@@ -574,7 +618,20 @@ def main() -> int:
     if args.self_test:
         return self_test()
 
-    refs = audit_refs(local=args.local)
+    # Phase D: subtract the archived bands BEFORE anything is compared. They still exist and
+    # keep their published releases -- ruling 3 is "keep the branch, stop auditing it" -- so a
+    # difference against one of them is expected and is not a finding.
+    #
+    # 🔴 No floor is applied here, deliberately. exit_code() already returns 2 below two refs,
+    # and two refs is exactly what an archive-everything filter leaves behind once `master` is
+    # the only survivor -- so over-filtering reads as "could not run", never as a clean pass.
+    refs, skipped, declaration_error = filter_to_live(audit_refs(local=args.local))
+    if declaration_error:
+        print(declaration_error, file=sys.stderr)
+        return 2
+    if skipped:
+        print(f"Skipping {len(skipped)} archived band(s): {', '.join(sorted(skipped))}")
+
     result = run_audit(refs)
     if not args.local:
         check_unpushed(result)
