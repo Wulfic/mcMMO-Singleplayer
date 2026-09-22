@@ -15,17 +15,20 @@ Install **both**: Cloth Config builds the widgets, Mod Menu provides the entry p
 
 Both mods are versioned per Minecraft release, so the pair you want depends on which mcMMO band you are running — see [Installation → Supported versions](Installation#supported-versions).
 
-| Your Minecraft | Mod Menu | Cloth Config |
-|---|---|---|
-| **26.2** | `20.0.1` | `26.2.155` |
-| **26.1 – 26.1.2** | `18.0.0` | `26.1.154` |
-| **1.21.11** | `17.0.0` | `21.11.153` |
-| **1.21.9 – 1.21.10** | `16.0.1` | `20.0.149` |
-| **1.21.6 – 1.21.8** | `15.0.2` | `19.0.147` |
-| **1.21.5** | `14.0.2` | `18.0.145` |
-| **1.21.4** | `13.0.4` | `17.0.144` |
+| Your Minecraft | Mod Menu | Cloth Config | |
+|---|---|---|---|
+| **26.3** | `21.0.0-beta.1` | `26.3.158` | current |
+| **26.2** | `20.0.1` | `26.2.155` | current |
+| **26.1 – 26.1.2** | `18.0.0` | `26.1.154` | current |
+| **1.21.11** | `17.0.0` | `21.11.153` | current |
+| **1.21.9 – 1.21.10** | `16.0.1` | `20.0.149` | **archived** |
+| **1.21.6 – 1.21.8** | `15.0.2` | `19.0.147` | **archived** |
+| **1.21.5** | `14.0.2` | `18.0.145` | **archived** |
+| **1.21.4** | `13.0.4` | `17.0.144` | **archived** |
+| **1.21.2 – 1.21.3** | `12.0.1` | `16.0.143` | **archived** |
+| **1.21 – 1.21.1** | `11.0.4` | `15.0.140` | **archived** |
 
-These are the versions each mcMMO band is built and tested against. Mod Menu's own release lines happen to draw their boundaries in the same places — 13.x advertises 1.21.4, 14.x advertises 1.21.5 and 15.x starts at 1.21.6 — which is the band split arrived at independently of mcMMO's.
+These are the versions each mcMMO band is built and tested against. The **archived** rows pair with that band's final v1.4.0 jar, which stays downloadable — see [Installation → Supported versions](Installation#supported-versions). Mod Menu's own release lines happen to draw their boundaries in the same places — 13.x advertises 1.21.4, 14.x advertises 1.21.5 and 15.x starts at 1.21.6 — which is the band split arrived at independently of mcMMO's.
 
 ### What happens with only one of them
 
