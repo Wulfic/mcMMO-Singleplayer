@@ -2636,7 +2636,206 @@ believing they agreed. **A wrong claim is worse than an absent one.**
   The server-side ones cannot see a null config **by construction** — the server loaded them.
 - **Not** propagating to the six archived bands, and **not** propagating `TODO.md`.
 
+## §74 — the vacuous-guard census: stop finding them ONE AT A TIME — ⬜ IN PROGRESS (Tier 2)
+
+**Owner-chosen 2026-09-22 (§74 ruling 2)**, over the stale-claim pass and a band drift audit. It had
+been offered in four prior sessions and never taken.
+
+### The problem, as a number
+
+**Seventeen vacuous guards have been found in this repo, every one of them by accident**, while
+working on something else. The list is in `.agent/memory/` and it spans the full range of shapes: an
+`assertFalse` over an empty slice, a self-test case comparing `2 == 2` over two literals, a mutation
+that never applied, a case passing against a function that did not exist, a guard that went green
+when it ran out of things to check, and — twice — **the mutation harness itself**.
+
+🔴 **The census exists because "found by accident" is not a detection mechanism.** Every one of those
+seventeen was green, in CI, for as long as it existed. The question this section answers is not
+*"are there more"* — of course there are — but **how many, of which shapes, and can a script find
+them without a human happening to look.**
+
+⚠️ **NO MUTATION TOOLING EXISTS IN `scripts/`.** Measured, not assumed: nothing in that directory
+does mutation. All seventeen were found with a harness rebuilt by hand each time, and in §73 that
+hand-built harness **was wrong twice before it was right** — on traps already written down in
+`gotchas.md`. That is the second thing this section fixes.
+
+### Scope — measured before it was written
+
+Ran over `src/test` (1,911 `@Test`/`@ParameterizedTest` bodies, brace-matched, not line-counted):
+
+| Shape | Candidates | What makes it vacuous |
+|---|---|---|
+| **A1** no assertion, no `verify`, no `fail` at all | **6** | Proves only *"did not throw"* while the method NAME claims a behaviour (`nullPlayerIsANoOp` asserts nothing about being a no-op) |
+| **A2** the only assertion is `assertDoesNotThrow` | **6** | Same claim gap, stated explicitly instead of implicitly |
+| **A3** assertion inside a loop over a DERIVED collection, no non-empty floor | **detector broken — see below** | Passes vacuously the moment the filter matches nothing |
+| **A4** `assertTrue`/`assertFalse` over a derived/filtered collection | **21** | Passes when the derivation breaks, not only when the property holds |
+
+🔴🔴 **A3 FIRST REPORTED ZERO, AND THE ZERO WAS A BROKEN DETECTOR.** It was tested against a planted,
+textbook-vacuous case — a `for` loop asserting over a `.stream().filter(...).toList()` — and **did not
+flag it**. Cause: it required the derivation to sit syntactically inside the `for (...)` parens, while
+the real-world shape assigns the derived collection to a **variable on the previous line** first. The
+fix is to resolve the loop variable back to its declaration within the method body.
+🔑 **This is the census finding its own instrument first, and it is the whole argument for the design
+below.** A detector reporting zero is indistinguishable from a clean codebase — which is *precisely*
+the defect being hunted, one level up. **The number 33 above is a LOWER BOUND, not a count.**
+
+### The instrument — `scripts/vacuity-census.py`
+
+Non-negotiable properties, each one paid for by a recorded past failure:
+
+1. **`--self-test` with PLANTED POSITIVE AND NEGATIVE fixtures for EVERY shape.** A shape that stops
+   detecting must redden. A positive-only self-test proves the detector can say *yes* and says
+   nothing about whether it can still say *no* — §61's recorded lesson, *"a one-sided guard pair
+   proves only that it can say NO"*, read in the other direction.
+2. **It must FAIL when it detects nothing at all** (the §72 biconditional treatment). A run that
+   matches zero fixtures is exit 2, never a green zero.
+3. **A candidate is not a finding.** The script reports CANDIDATES; a human reads each one. The
+   A4 = 21 number above will not survive triage intact and is not expected to.
+4. **Mutation-prove before and after.** For each confirmed vacuity: mutate the production behaviour
+   the guard claims to protect, show the guard **does not** notice (vacuity proven, not asserted),
+   fix the guard, re-run the same mutation and show it **does** notice. Both directions, or the fix
+   is a claim.
+   ⚠️ **Read the harness before reading the result** (§73, twice): `:test` `UP-TO-DATE` scores every
+   mutation as SURVIVED off a stale JUnit XML, and **identical counts across a mutation is the TELL,
+   not reassurance**. A mutation that does not COMPILE answers nothing.
+
+### Phases
+
+```
+P1  build scripts/vacuity-census.py + its two-sided --self-test      instrument first
+P2  fix the A3 detector; re-measure all four shapes honestly          the number moves
+P3  triage every candidate by READING it -> confirmed / false positive
+P4  mutation-prove each confirmed one, fix it, mutation-prove the fix  both directions
+P5  the Python --self-test family (15 scripts) -- assess, then scope   may defer
+P6  record: decisions.md, gotchas.md, state.md, this section
+```
+
+### What I am NOT doing
+
+- **Not** rewriting tests that are merely *thin*. A test that checks less than it could is not
+  vacuous; a test that **cannot fail** is. Only the second kind gets touched.
+- **Not** deleting a single test. If a guard is vacuous the fix is to give it a claim that can
+  fail — never to remove it. Deleting a test is on the absolute-stops list.
+- **Not** treating the static candidate count as a finding count, and **not** reporting a number
+  from the detector without having watched that detector reject a planted control.
+- **Not** touching `mod_version`, **not** pushing (ruling 1, seventh consecutive session), **not**
+  closing any GitHub issue.
+- **Not** propagating `TODO.md`; it is excluded from propagation by design.
+
+### ✅ What the census found — RESULTS (2026-09-22)
+
+**Final: 15 candidates, 4 CONFIRMED vacuous and fixed, 11 justified false positives.**
+Every fix proven in BOTH directions: mutate, watch the old guard stay green, fix it, re-run the
+SAME mutation and watch it redden.
+
+| # | Guard | The vacuity | Proof |
+|---|---|---|---|
+| **1** | `TreeFellerTraversalTest::neverReturnsDuplicateCoordinates` | looped over `collect()` output asserting each coord was new. **An empty result has no duplicates either** | `collect()` → empty list: **3 siblings reddened, this stayed GREEN**. Floored at 11 → the same mutation reddens 4 |
+| **2** | `FishingTreasureConfigTest::nonPotionEntriesCarryNoPotionData` | `allMatch(potion == null)` over every loaded reward. **`allMatch` of an EMPTY stream is true** | stop `loadRewards` adding anything: 2 siblings reddened, this stayed GREEN. Floored at **71** → now reddens |
+| **3** | `FishingTreasureConfigTest::inventoryShakeEntryIsSkipped` | `noneMatch("inventory")` over the player shake list. **An empty list satisfies it for the exact WRONG reason** — the test was happiest if the whole section failed to load | `getShakeTreasures` → empty: green before the floor, red after. Floored at **1** |
+| **4** | `NotificationManagerTest` ×3 null-player guards | claimed *"must not throw **and must not read config/player**"* and checked only the first half. `setUp` binds every config, so the second half was asserted by nothing | hoisting `getAdvancedConfig()` above the null guard — **the GitHub #14 shape** — left the class GREEN at 12/0/0. Configs unbound → reddens |
+
+🔑 **Correcting my own framing on #4: those three were never *"cannot fail"*.** Dropping the null
+check outright always reddened them — one case each, no cross-talk — because an NPE fails a test
+with no assertions just fine. **Only the CONFIG half of the claim was vacuous.** Overstating a
+finding is the same error as missing one.
+
+⚠️ **One limit found and LEFT STANDING rather than papered over.** The unlock path still cannot
+prove its config claim: `RankUtils.getRank` is null-safe, so is `SoundManager`, and **`RankUtils`
+keeps a STATIC rank cache that a sibling test warms while the configs are still bound** — so by the
+time the null-player case runs, `addRanks()` is skipped and no config read happens at all. Both a
+hoisted rank read and a hoisted sound call survive. `resetRankCache()` is package-private in another
+package. 🔑 **A test's reachability can depend on what a SIBLING test did to a static.**
+
+### 🔴🔴 The instrument found FIVE defects in ITSELF before it found anything in the codebase
+
+That is the result worth keeping, and it is why `--self-test` is two-sided and why a real run
+refuses to report until it passes.
+
+1. 🔴 **A3 reported ZERO and the zero was a BROKEN DETECTOR.** It required the derivation inside the
+   `for (...)` parens; the real shape assigns the collection to a variable on the previous line.
+   Caught only by feeding it a **planted** vacuous case. Fixed, it found a real one immediately.
+   🔑 **A detector reporting zero is indistinguishable from a clean codebase.**
+2. ⚠️ **Two fixtures were MISLABELLED as negatives.** The detector was right; the two-sided
+   self-test caught my labelling.
+3. 🔴 **`strip_noise` stripped STRING literals before CHAR literals**, so a char literal holding a
+   quote opened a span that swallowed the line and a vacuous body after it read as asserting.
+   **A genuine false negative**, now ordered and fixtured.
+4. 🔴🔴 **The self-test went GREEN with either fixture loop emptied** — it passed by *running out of
+   things to check*, the §72 defect, in the guard written to hunt that defect. Executed-fixture
+   counters now redden.
+5. ⚠️ **Two early refusal guards were measured REDUNDANT** (mutating either away changed no
+   outcome) and **removed** rather than left as decoration.
+
+⚠️⚠️ **And one guard SURVIVED a mutation while being load-bearing.** `ran_pos != len(positives)`
+looked redundant against the `== 0` check below it — replacing it with `if False:` left the
+self-test green. Its unique domain is a **PARTIAL** skip: with `positives[:1]` planted it reports
+*"RAN 1/7 ... cases were SKIPPED"* and exits 2, while disabling it lets that pass at exit 0.
+🔑 **A guard can survive a mutation because a SECOND guard masks the effect, not because it is
+vacuous. Mutate inside its unique domain.** The code carries a DO-NOT-DELETE note saying so.
+
+### The detectors got SHARPER twice, and both times the codebase taught them
+
+- 🔑 **Polarity decides vacuity (A4: 15 → 6).** Over an empty derived collection `anyMatch` is
+  false while `noneMatch`/`allMatch`/`isEmpty` are true — so `assertTrue(anyMatch)` and
+  `assertFalse(isEmpty)` are **SOUND**; they fail when the derivation breaks, which is the property
+  being asked for. Flagging them had `MixinApplicationTest` looking guilty for using the *correct*
+  idiom.
+- 🔑 **The FLOOR pattern only saw `size()` as an assertion's FIRST argument (A4: 6 → 3).** This
+  codebase writes `assertEquals(3, broken.size())`, so it missed **every real floor** in
+  `MultiBlockPlantTraversalTest` and accused three sound tests. Non-zero literals only —
+  `assertEquals(0, x.size())` asserts emptiness and is the *opposite* of a floor.
+
+### The 11 false positives, and why each is justified — not waved through
+
+- **`MixinApplicationTest` ×4** (`projectileSpawn`, `bowShoot`, `blockPlace`, `fireworkRocket`) —
+  `assertDoesNotThrow(Class.forName(...))` is the whole test **because `mcmmo.mixins.json` declares
+  `injectors.defaultRequire = 1`**, verified by reading the file: a drifted injection throws at
+  class-load. ⚠️ **Residual gap, stated:** this proves *"if the mixin is declared, its injection
+  resolves"*, never *"the mixin is declared"* — a mixin deleted from the json loads clean and passes.
+- **`PlatformPlayerTest::theMirrorEnumCoversEveryVanillaSoundCategory`** — loops `SoundSource.values()`,
+  an enum, which **cannot be empty**. `valueOf` throwing is a real assertion.
+- **`PetCombatSweepTest::theBoostIsTemporaryAndNeverPersistent`** — carries an explicit
+  `assertTrue(...anyMatch...)` **"precondition"** floor, and asserting *absence* from a permanent map
+  that is supposed to be empty is the correct claim, not a vacuous one.
+- **`NotificationManagerTest` ×3** — now A2 by construction *because* the fix made their claim
+  explicit; each is mutation-proven to redden when its null check is dropped.
+
+### ⚠️ A suite-total trap that cost this session real time, and will cost the next one more
+
+**`./gradlew test` is NOT the whole suite. There are TWO test tasks**, and the recorded baseline is
+their SUM:
+
+| task | classes | tests |
+|---|---|---|
+| `test` | 173 | 1,935 |
+| `tagBoundTest` | 1 | 13 |
+| **total** | **174** | **1,948** |
+
+🔴 **Quoting the `test` task alone reads as a 13-test REGRESSION against the recorded 1,948**, which
+is exactly what happened here and triggered a full "did I delete a test" investigation. The answer
+was no: **1,911 `@Test` annotations and 176 files at both `ee90ebf11` and HEAD**, all 174 classes
+produced XML, and `1,911 declared + 37 parameterized expansion = 1,948` — expansion being
+`ProbabilityTest` +24, `ProbabilityUtilTest` +7, `ConfigLoaderTest` +6.
+⚠️ **§73's parenthetical split `(1,944 + 4)` is WRONG** — the real split is `1,935 + 13`. Its
+**total was right**, which is why the error survived: a correct total hides a wrong decomposition.
+✅ Two back-to-back `cleanTest test --no-build-cache` runs scored **173/1,935 both times**, so the
+recorded 173↔174 / 1,911↔1,920 flake did **not** reproduce here.
+
+### Blast radius and rollback
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| New `scripts/vacuity-census.py` | a new file only | nothing | `git rm` the untracked file |
+| Test-file edits (P4) | `src/test/**` | a green guard becomes red | `git diff` is the undo; every edit is one file, committed per logical unit |
+| **Mutation runs** | production `src/**` **temporarily** | 🔴 a mutated source left behind | byte-exact `.orig` copy in `scratchpad/mut-backup-s13/` **taken before the first mutation**, restored and **verified byte-identical** after each one |
+
+🔴 **The mutation step is the only destructive one and it edits PRODUCTION source.** The guard: copy
+first, `cmp` the restore, and never leave a mutation across a commit. §73 recorded a mutation left
+uncompiled; this one records the restore check as a step, not a habit.
+
 ---
+
 
 ## Other open work — harness and playtest
 
