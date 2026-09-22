@@ -37,7 +37,7 @@ RPG skills, levelling, sub-skills and active super abilities for vanilla Minecra
 
 Everything multiplayer was **removed**, not disabled — parties, party chat, teleport, XP sharing, scoreboards, admin broadcasts, MySQL and the database conversion tooling are all gone, along with most of the command tree. What's left is the skill system itself, plus **eight primary skills upstream mcMMO does not have**: Acrobatics was replaced by three new movement skills (**Parkour**, **Swimming**, **Flying**), one per medium you travel through, and five brand-new skills were added — **Stealth**, **Unarmored**, **[Husbandry](Husbandry)** (the livestock lifecycle), **[Hunter](Hunter)** (a weapon-agnostic skill that cares only what died) and **[Cooking](Cooking)** (Smelting's other half — the food side of the furnace).
 
-The mod runs on both sides (`"environment": "*"`) and works in single-player, on LAN, and on a dedicated Fabric server — but with the multiplayer layer gone, a server install is just "everyone has their own skills."
+The mod runs on both sides (`"environment": "*"`) and is built and tested for **single-player**; with the multiplayer layer gone, a server install is just "everyone has their own skills." ⚠️ **Multiplayer is best-effort and not a tested configuration** — this line used to claim it "works on LAN and on a dedicated Fabric server", and until the fix for [#14](https://github.com/Wulfic/mcMMO-Singleplayer/issues/14) a *joining* player crashed on every right-click. See [Installation](Installation#single-player-lan-and-servers).
 
 ---
 
