@@ -220,6 +220,13 @@ class FishingTreasureConfigTest {
 
         assertNull(potionOf(config, "witch", "glass_bottle"),
                 "a non-potion shake drop must carry no potion base type");
+        // THE FLOOR IS LOAD-BEARING. allMatch over an EMPTY stream is true, so without
+        // this the claim held just as well when no fishing reward loaded at all --
+        // measured, by stopping loadRewards from adding any: two sibling cases reddened
+        // and this one stayed GREEN. 71 = the shipped Fishing section's reward count.
+        assertEquals(71, config.fishingRewards.values().stream().mapToInt(List::size).sum(),
+                "the shipped Fishing section must actually load, or the allMatch below "
+                        + "passes over nothing");
         assertTrue(config.fishingRewards.values().stream().flatMap(List::stream)
                         .allMatch(t -> t.getDrop().getPotion() == null),
                 "the shipped Fishing section has no potion rewards");
@@ -230,6 +237,13 @@ class FishingTreasureConfigTest {
         final FishingTreasureConfig config = new FishingTreasureConfig(dataFolder);
 
         // PLAYER.INVENTORY is legacy's magic-BEDROCK inventory steal — unreachable in singleplayer.
+        // Floor first: noneMatch over an EMPTY list is true, so without this the test
+        // would pass just as happily if the whole player shake section failed to load --
+        // which is the opposite of what it claims. 1 = the player entries that SHOULD
+        // survive once the INVENTORY steal is dropped.
+        assertEquals(1, config.getShakeTreasures("player").size(),
+                "the player shake section must still load its other entries; an empty "
+                        + "list would satisfy the noneMatch below for the wrong reason");
         assertTrue(config.getShakeTreasures("player").stream()
                         .noneMatch(t -> t.getDrop().getMaterialId().equals("inventory")),
                 "the INVENTORY steal entry must not load as a material");
