@@ -207,7 +207,7 @@ Experience_Bars:
     Hide_Delay_Seconds: 10
     # How many XP bars may be on screen at once. When a new skill's bar appears and this many are
     # already showing, the one you trained least recently is hidden to make room. Boss bars stack
-    # downward over the hotbar, so an unbounded number of them eventually covers the screen —
+    # downward from the top of the screen, so an unbounded number of them eventually covers it —
     # sprinting through a forest while mining can easily have five skills live at once.
     # Set to 0 for no limit.
     Max_Visible: 3
