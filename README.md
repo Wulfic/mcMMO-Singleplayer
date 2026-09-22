@@ -89,10 +89,17 @@ than carrying a table of version numbers, so a band never has to be told what it
 Optionally add **Mod Menu + Cloth Config** (in‑game settings screen) and **Advancement Plaques**
 (fancy milestone popups) — see [Optional mod integrations](#optional-mod-integrations).
 
-The mod runs on both sides (`"environment": "*"`) and works in single‑player, on LAN, and on a
-dedicated Fabric server — but the multiplayer feature set (parties, chat channels, scoreboards,
-admin broadcasts, MySQL) was **removed** during the port, so a server install is just "everyone has
-their own skills."
+The mod runs on both sides (`"environment": "*"`) and is built and tested for **single‑player**. The
+multiplayer feature set (parties, chat channels, scoreboards, admin broadcasts, MySQL) was
+**removed** during the port, so a server install is just "everyone has their own skills."
+
+> ⚠️ **Multiplayer is not a tested configuration.** This paragraph used to claim the mod "works on
+> LAN and on a dedicated Fabric server", and that was wrong: until the fix for
+> [#14](https://github.com/Wulfic/mcMMO-Singleplayer/issues/14), any player who *joined* someone
+> else's world crashed on every right‑click — placing a block, opening a crafting table, a furnace
+> or a chest. The host was always fine, which is why it went unnoticed. That crash is fixed, but the
+> mod is still only exercised in single‑player by its test suite and smoke harnesses, so treat a
+> server install as best‑effort and please report what breaks.
 
 ---
 

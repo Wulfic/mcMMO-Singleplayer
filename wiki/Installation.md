@@ -93,7 +93,16 @@ The same folder also holds `placed_blocks.dat`, the anti-exploit record of block
 
 ## Single-player, LAN and servers
 
-The mod declares `"environment": "*"` and runs on both sides, so it works in single-player, on an opened-to-LAN world, and on a dedicated Fabric server.
+The mod declares `"environment": "*"` and runs on both sides. It is built, tested and smoke-tested for **single-player**.
+
+> ⚠️ **Multiplayer is best-effort and is not a tested configuration.** This section used to state
+> plainly that the mod "works in single-player, on an opened-to-LAN world, and on a dedicated Fabric
+> server." That was wrong. Until the fix for
+> [#14](https://github.com/Wulfic/mcMMO-Singleplayer/issues/14), any player who **joined** another
+> person's world crashed the moment they interacted with anything — placing a block, opening a
+> crafting table, a furnace or a chest. The host never saw it, because hosting keeps the server in
+> the same game the client is running in. The crash is fixed, but nothing in the test suite or the
+> smoke harnesses drives a second client, so please report anything that breaks on a server.
 
 But the **multiplayer feature set was removed during the port**, not merely disabled — no parties, no party chat or teleport, no XP sharing, no scoreboards, no admin broadcast tree, no MySQL. On a server, mcMMO-SP is simply "everyone has their own skills, independently."
 

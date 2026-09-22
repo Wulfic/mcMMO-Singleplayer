@@ -1,5 +1,6 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import com.gmail.nossr50.config.GeneralConfig;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.interactions.NotificationType;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
@@ -70,6 +71,16 @@ import org.jetbrains.annotations.Nullable;
  * block-interaction packet the server side acts on. The client-side fire therefore stops at the
  * identity test ({@link #anvilKindAt} + {@link #isAnvilAction}) and never touches player state:
  * both sides gate on the same lookup, so they cannot disagree about whose click it was.
+ *
+ * <p>⚠️ <b>That last sentence holds only while both sides can perform the lookup, which means only
+ * in singleplayer.</b> The lookup reads {@code GeneralConfig}, and configs are loaded at server
+ * start — so a client that <em>joined</em> another world has none. It therefore claims nothing
+ * there and vanilla keeps the click (GitHub #14; the alternative was the
+ * {@code NullPointerException} that crashed such a client on every right-click). The server side is
+ * unaffected and still repairs, so the cost is the client briefly predicting vanilla's use-item
+ * fall-through before the server resyncs it: a visual flicker in multiplayer, which is not a
+ * declared-scope mode, rather than a crash. In singleplayer the config is always present and this
+ * paragraph changes nothing.
  *
  * <p>The pure math stays MC-free on {@link RepairManager}/{@link SalvageManager} (durability/yield
  * calculation, XP award, confirmation gate); this listener owns the MC-typed half: block/anvil
@@ -172,18 +183,37 @@ public final class RepairSalvageListener {
         }
     }
 
-    /** The mcMMO anvil at {@code pos}, or {@code null} when that block is neither anvil. */
+
+    /**
+     * The mcMMO anvil at {@code pos}, or {@code null} when that block is neither anvil.
+     *
+     * <p>⚠️ Also {@code null} when {@link GeneralConfig} never loaded, and that is not a corner case
+     * — it is the whole of GitHub #14. Configs load at server start, so a client that <em>joined</em>
+     * someone else's world has none and never will. This method runs on both logical sides
+     * <em>before</em> the {@code ServerPlayerEntity} guard, so dereferencing the config here threw a
+     * {@code NullPointerException} on every right-click of every block for that player: placing a
+     * block, opening a crafting table, a furnace, a chest. The host was always fine because an
+     * integrated server populates the statics in the same JVM its client runs in — which is exactly
+     * why the crash followed whoever was <em>joining</em>.
+     *
+     * <p>Answering "not an mcMMO anvil" is the only honest answer rather than a fallback: the data
+     * this decision needs lives on the server, so a client that guessed from its own config file
+     * would make the two sides disagree while both believed they agreed.
+     */
     private static @Nullable AnvilKind anvilKindAt(World world, BlockPos pos) {
+        final GeneralConfig config = McMMOMod.getGeneralConfig();
+        if (config == null) {
+            return null; // No world session — a joining client. mcMMO claims nothing.
+        }
+
         final Block clicked = world.getBlockState(pos).getBlock();
 
-        final Block repairAnvil = anvilBlock(
-                McMMOMod.getGeneralConfig().getRepairAnvilMaterialName());
+        final Block repairAnvil = anvilBlock(config.getRepairAnvilMaterialName());
         if (repairAnvil != null && clicked == repairAnvil) {
             return AnvilKind.REPAIR;
         }
 
-        final Block salvageAnvil = anvilBlock(
-                McMMOMod.getGeneralConfig().getSalvageAnvilMaterialName());
+        final Block salvageAnvil = anvilBlock(config.getSalvageAnvilMaterialName());
         if (salvageAnvil != null && clicked == salvageAnvil) {
             return AnvilKind.SALVAGE;
         }

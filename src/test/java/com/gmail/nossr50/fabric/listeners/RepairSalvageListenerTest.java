@@ -1,5 +1,6 @@
 package com.gmail.nossr50.fabric.listeners;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -202,6 +203,94 @@ class RepairSalvageListenerTest {
         verify(repairManager).checkConfirmation(true);
         assertEquals(ActionResult.SUCCESS, result,
                 "the click is claimed whether it repaired or merely armed");
+    }
+
+    // --- GitHub #14: a joining multiplayer client never loaded the configs ----
+
+    /**
+     * The regression guard for GitHub #14. Configs are loaded at <em>server start</em>, so a client
+     * that joined someone else's world has none — and {@code UseBlockCallback} still fires on its
+     * logical side, ahead of any {@code ServerPlayer} check. Dereferencing the config in the identity
+     * test therefore threw on every right-click of every block for that player: placing a block,
+     * opening a crafting table, a furnace, a chest. The host never saw it, because an integrated
+     * server populates these statics in the same JVM its client runs in.
+     *
+     * <p>⚠️ The fixture nulls <b>all three</b> server-start statics rather than just the config. A
+     * joining client has none of them, and a test that nulled only the one this fix touches would
+     * stop modelling the reported state the moment the dispatch reached for another.
+     */
+    @Test
+    void clientSideFireOnTheRepairAnvilPassesWhenNoWorldSessionEverLoadedTheConfigs() {
+        placeAnvil(Blocks.IRON_BLOCK);
+        simulateJoiningClientWithNoWorldSession();
+
+        final ActionResult result = assertDoesNotThrow(
+                () -> RepairSalvageListener.onUseBlock(clientPlayer(damagedChestplate()), world,
+                        Hand.MAIN_HAND, anvilHit()),
+                "a joining client has no configs; the anvil lookup must not dereference them");
+
+        assertEquals(ActionResult.PASS, result,
+                "with no config the client cannot know whose click it is, so vanilla keeps it");
+    }
+
+    /** The salvage anvil reads a second config key on the same path, so it gets the same guard. */
+    @Test
+    void clientSideFireOnTheSalvageAnvilPassesWhenNoWorldSessionEverLoadedTheConfigs() {
+        placeAnvil(Blocks.GOLD_BLOCK);
+        simulateJoiningClientWithNoWorldSession();
+
+        final ActionResult result = assertDoesNotThrow(
+                () -> RepairSalvageListener.onUseBlock(clientPlayer(damagedChestplate()), world,
+                        Hand.MAIN_HAND, anvilHit()),
+                "the salvage key is read on the same unguarded path as the repair key");
+
+        assertEquals(ActionResult.PASS, result);
+    }
+
+    /**
+     * An ordinary block with no world session — the common case for the crashing player, who was
+     * placing blocks and opening chests, not standing on an anvil. Pinned separately because the
+     * repair/salvage cases above both reach the second config read, and this one must be refused by
+     * the first.
+     */
+    @Test
+    void clientSideFireOnAnOrdinaryBlockPassesWhenNoWorldSessionEverLoadedTheConfigs() {
+        placeAnvil(Blocks.CRAFTING_TABLE);
+        simulateJoiningClientWithNoWorldSession();
+
+        final ActionResult result = assertDoesNotThrow(
+                () -> RepairSalvageListener.onUseBlock(clientPlayer(damagedChestplate()), world,
+                        Hand.MAIN_HAND, anvilHit()),
+                "this is the reported crash verbatim: right-clicking a crafting table");
+
+        assertEquals(ActionResult.PASS, result);
+    }
+
+    /**
+     * The converse, and the reason the three above cannot pass vacuously. Singleplayer keeps its
+     * configs, so the very same click on the very same block must still be <em>claimed</em>. Without
+     * this, "return null always" would satisfy every case above and silently retire the anvil.
+     *
+     * <p>{@link #clientSideFireOnTheRepairAnvilClaimsTheClick} asserts the same thing; it is restated
+     * here so the pair sits together and a future edit cannot delete one half without the other
+     * going red in the same file.
+     */
+    @Test
+    void theSameClickIsStillClaimedOnceAWorldSessionHasLoadedTheConfigs() {
+        placeAnvil(Blocks.IRON_BLOCK);
+
+        final ActionResult result = RepairSalvageListener.onUseBlock(
+                clientPlayer(damagedChestplate()), world, Hand.MAIN_HAND, anvilHit());
+
+        assertEquals(ActionResult.SUCCESS, result,
+                "singleplayer behaviour must be unchanged by the #14 guard");
+    }
+
+    /** Drop every static the server binds at start — the state a joining client is permanently in. */
+    private static void simulateJoiningClientWithNoWorldSession() {
+        McMMOMod.setGeneralConfig(null);
+        McMMOMod.setRepairableManager(null);
+        McMMOMod.setSalvageableManager(null);
     }
 
     // --- fixture -------------------------------------------------------------
