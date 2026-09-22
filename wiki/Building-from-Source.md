@@ -92,16 +92,20 @@ For registry-dependent tests, call `McTestRegistries.bootstrap()` in `@BeforeAll
 
 Each supported Minecraft version band is its own branch. `master` **is** the newest supported band; `mc/**` branches exist only for older ones.
 
-| Branch | Band |
-|---|---|
-| `master` | 26.2 |
-| `mc/26.1.2` | 26.1 – 26.1.2 |
-| `mc/1.21.11` | 1.21.11 |
-| `mc/1.21.10` | 1.21.9 – 1.21.10 |
-| `mc/1.21.8` | 1.21.6 – 1.21.8 |
-| `mc/1.21.5` | 1.21.5 |
-| `mc/1.21.4` | 1.21.4 |
-| `mc/1.21.3` | 1.21.2 – 1.21.3 |
+| Branch | Band | |
+|---|---|---|
+| `master` | 26.3 | current |
+| `mc/26.2` | 26.2 | current |
+| `mc/26.1.2` | 26.1 – 26.1.2 | current |
+| `mc/1.21.11` | 1.21.11 | current |
+| `mc/1.21.10` | 1.21.9 – 1.21.10 | **archived** |
+| `mc/1.21.8` | 1.21.6 – 1.21.8 | **archived** |
+| `mc/1.21.5` | 1.21.5 | **archived** |
+| `mc/1.21.4` | 1.21.4 | **archived** |
+| `mc/1.21.3` | 1.21.2 – 1.21.3 | **archived** |
+| `mc/1.21.1` | 1.21 – 1.21.1 | **archived** |
+
+**An archived branch is kept, not deleted**, and its published v1.4.0 release stays downloadable. What stops is propagation: fixes are no longer back-ported to it, so it will drift from `master` by design. The audit tooling knows this — `scripts/expected-bands.txt` declares the two sets and every guard below subtracts the archived ones, so their drift is not reported as a finding. A branch in **neither** section is still audited, so cutting a band without declaring it cannot hide it.
 
 A branch pins its own `minecraft_version`, its own `java_version` and its own band range in `fabric.mod.json`. Checking one out and running `./gradlew build` produces that band's jar with no further configuration — there is no preprocessor and no version switch to set. The `1.21.x` branches also pin `yarn_mappings`; the `26.x` line has no such key, because Minecraft ships unobfuscated from `26.1` and yarn publishes nothing for it.
 

@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Minecraft** | 1.21 – 1.21.11 and 26.1 – 26.3 — see [Supported versions](#supported-versions) |
+| **Minecraft** | 1.21.11 and 26.1 – 26.3 under current development; 1.21 – 1.21.10 on the **archived** v1.4.0 jars — see [Supported versions](#supported-versions) |
 | **Fabric Loader** | ≥ 0.19.3 |
 | **Fabric API** | required |
 | **Java** | 21 or newer |
@@ -19,18 +19,25 @@ mcMMO-SP ships **one build per version band**. A band is a run of Minecraft vers
 | **26.2** | `mcmmo-<version>+mc26.2.jar` | `0.158.0+26.2` | `20.0.1` | `26.2.155` |
 | **26.1 – 26.1.2** | `mcmmo-<version>+mc26.1-26.1.2.jar` | `0.155.2+26.1.2` | `18.0.0` | `26.1.154` |
 | **1.21.11** | `mcmmo-<version>+mc1.21.11.jar` | `0.141.4+1.21.11` | `17.0.0` | `21.11.153` |
-| **1.21.9 – 1.21.10** | `mcmmo-<version>+mc1.21.9-1.21.10.jar` | `0.138.4+1.21.10` | `16.0.1` | `20.0.149` |
-| **1.21.6 – 1.21.8** | `mcmmo-<version>+mc1.21.6-1.21.8.jar` | `0.136.1+1.21.8` | `15.0.2` | `19.0.147` |
-| **1.21.5** | `mcmmo-<version>+mc1.21.5.jar` | `0.128.2+1.21.5` | `14.0.2` | `18.0.145` |
-| **1.21.4** | `mcmmo-<version>+mc1.21.4.jar` | `0.119.4+1.21.4` | `13.0.4` | `17.0.144` |
-| **1.21.2 – 1.21.3** | `mcmmo-<version>+mc1.21.2-1.21.3.jar` | `0.114.1+1.21.3` | `12.0.1` | `16.0.143` |
-| **1.21 – 1.21.1** | `mcmmo-<version>+mc1.21-1.21.1.jar` | `0.116.15+1.21.1` | `11.0.4` | `15.0.140` |
+
+### Archived bands — final release **v1.4.0**
+
+These six bands are **no longer updated**, and their **jars are still published and still work**. v1.4.0 is their final release: download it from the [Releases page](https://github.com/Wulfic/mcMMO-Singleplayer/releases) exactly as before, and install it exactly as described below. What stopped is new development — later fixes and features land on the bands in the table above.
+
+| Minecraft | Jar file | Fabric API | Mod Menu | Cloth Config |
+|---|---|---|---|---|
+| **1.21.9 – 1.21.10** | `mcmmo-1.4.0+mc1.21.9-1.21.10.jar` | `0.138.4+1.21.10` | `16.0.1` | `20.0.149` |
+| **1.21.6 – 1.21.8** | `mcmmo-1.4.0+mc1.21.6-1.21.8.jar` | `0.136.1+1.21.8` | `15.0.2` | `19.0.147` |
+| **1.21.5** | `mcmmo-1.4.0+mc1.21.5.jar` | `0.128.2+1.21.5` | `14.0.2` | `18.0.145` |
+| **1.21.4** | `mcmmo-1.4.0+mc1.21.4.jar` | `0.119.4+1.21.4` | `13.0.4` | `17.0.144` |
+| **1.21.2 – 1.21.3** | `mcmmo-1.4.0+mc1.21.2-1.21.3.jar` | `0.114.1+1.21.3` | `12.0.1` | `16.0.143` |
+| **1.21 – 1.21.1** | `mcmmo-1.4.0+mc1.21-1.21.1.jar` | `0.116.15+1.21.1` | `11.0.4` | `15.0.140` |
 
 Every band needs Fabric Loader ≥ 0.19.3. The `1.21.x` bands need Java 21+; the `26.x` line needs Java 25+, because that is Minecraft's own requirement there. The `+mc…` suffix on the filename is the band that jar serves — a single version (`+mc1.21.5`) or a range written out at both ends (`+mc1.21.6-1.21.8`, which covers `1.21.7` too). On the [Releases page](https://github.com/Wulfic/mcMMO-Singleplayer/releases), pick the jar whose label contains your Minecraft version; the filename is the whole answer, so there is nothing to cross-reference.
 
 That label is only the half you read. Each jar also declares the same band as a dependency range in `fabric.mod.json`, which is the half Fabric Loader **enforces** — a mismatched install is stopped at startup with a clear message rather than misbehaving quietly. A test keeps the two in agreement, so a filename promising a version the loader would refuse fails the build instead of reaching this page.
 
-**Minecraft 1.20.6 and older are not supported**. The whole `26.x` line **is** supported: three bands in the table above cover `26.1`, `26.1.1`, `26.1.2`, `26.2` and `26.3`.
+**Minecraft 1.21.10 and older are not supported** by current development — `1.21` through `1.21.10` are served by the **archived** bands above, whose final release is v1.4.0 and whose jars stay downloadable. Below `1.21` there has never been a build. The whole `26.x` line **is** current: three bands in the first table above cover `26.1`, `26.1.1`, `26.1.2`, `26.2` and `26.3`.
 
 ### What differs between bands
 
