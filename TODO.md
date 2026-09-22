@@ -3478,7 +3478,7 @@ treated as a failure everywhere, never a pass.**
 | P4 mutations | `scripts/**` temporarily, 16 mutations + 2 discarded harness attempts | byte-exact `.orig`/`.fixed` copies in `scratchpad/mut-backup-s15/`; **`cmp`-verified after every run**, and a final census asserting all 8 match at exit |
 | The fix | 8 files in `scripts/` | `git revert cf385f4f6 29f8993bc` |
 | Propagation | 3 band heads | `scratchpad/UNDO-s15-bands.txt` — the pre-propagation heads as ready-to-run `git branch -f` lines |
-| The band arming probe | 1 file on `mc/1.21.11`, temporarily | `scratchpad/band-armed.orig`, restored and `cmp`-verified, `git status` clean before checkout |
+| The band arming probe | 1 file on `mc/1.21.11`, temporarily | `scratchpad/band-armed-s15.orig`, restored and `cmp`-verified, `git status` clean before checkout |
 | `TODO.md` | docs commits | `scratchpad/TODO.md.bak-s15` |
 | `.agent/memory/` | appended | `scratchpad/{gotchas,decisions,state}.md.bak-s15` |
 
