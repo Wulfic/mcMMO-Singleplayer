@@ -990,7 +990,9 @@ def self_test() -> int:
     failures: list[str] = []
 
     # --- nested-type spelling ---------------------------------------------------------------
+    ran_nested = ran_src = ran_pool = ran_desc = ran_diff = ran_kind = 0
     for fqn, want in NESTED_CASES:
+        ran_nested += 1
         got = normalise_nested(fqn)
         if got != want:
             failures.append(f"  [nested]   {fqn}" + '\\n' +
@@ -1018,12 +1020,14 @@ def self_test() -> int:
                         "import_map, so normalisation is not being exercised")
 
     for desc, fragment, expected in SELF_TEST_CASES:
+        ran_src += 1
         text = strip_comments(fragment, strip_strings=True)
         got = constant_refs(text, SELF_TEST_IMPORTS)
         if got != expected:
             failures.append(f"  [source]   {desc}\n    expected {sorted(expected)}\n    got      {sorted(got)}")
 
     for desc, line, expected in POOL_SELF_TEST_CASES:
+        ran_pool += 1
         got = pool_refs(line)
         if got != expected:
             failures.append(f"  [bytecode] {desc}\n    expected {sorted(expected)}\n    got      {sorted(got)}")
@@ -1038,6 +1042,7 @@ def self_test() -> int:
 
     # --- descriptors ------------------------------------------------------------------------
     for desc, line, expected in POOL_DESC_CASES:
+        ran_desc += 1
         got = pool_refs_detailed(line)
         if got != expected:
             failures.append("  [descriptor] " + desc +
@@ -1077,6 +1082,7 @@ def self_test() -> int:
     diff_cases = _diff_self_test_cases()
     generated = render_manifest(sorted(_DIFF_BASE_RECORDS))
     for desc, committed, exp_committed, exp_generated in diff_cases:
+        ran_diff += 1
         got_committed, got_generated = manifest_diff(committed, generated)
         if (got_committed, got_generated) != (exp_committed, exp_generated):
             failures.append(
@@ -1104,7 +1110,9 @@ def self_test() -> int:
         failures.append(f"  bytecode self-test is too weak: {bc_pos} positive / {bc_neg} negative")
     # Each of the three bytecode record types must be exercised, or a type could silently stop being
     # emitted and this suite would still be green.
-    for kind in ("CALLEDMETHOD", "ACCESSEDFIELD", "CALLEDCTOR"):
+    record_kinds = ("CALLEDMETHOD", "ACCESSEDFIELD", "CALLEDCTOR")
+    for kind in record_kinds:
+        ran_kind += 1
         if not any(k == kind for _, _, e in POOL_SELF_TEST_CASES for k, _ in e):
             failures.append(f"  bytecode self-test never exercises {kind}")
 
@@ -1120,6 +1128,33 @@ def self_test() -> int:
                         "direction, which is the one the Phase 15 defect took")
     if not any(g for _, _, _, g in diff_cases):
         failures.append("  manifest self-test never exercises only_generated")
+
+    # ANTI-VACUITY FLOOR, THE OTHER HALF (section 75). The floors above are real and they were
+    # measured to work -- emptying SELF_TEST_CASES, POOL_SELF_TEST_CASES, POOL_DESC_CASES or
+    # diff_cases is CAUGHT by them. But every one of those is computed over the DECLARED list
+    # (`sum(1 for _, _, e in SELF_TEST_CASES if e)`), so it counts what was written down, never
+    # what executed.
+    # 🔴 Measured: rewriting any of those six loops to iterate nothing left the declared lists at
+    # full length, every floor above still read 4 positives, and the self-test exited 0 with the
+    # loop bodies never running once. That is not a hypothetical shape -- it is what an
+    # over-matching filter or an added `continue` does, and scripts/expected-bands.txt warns in
+    # its own header that a filter matching too much is how a guard ends up auditing zero and
+    # printing green.
+    # ⚠️ NESTED_CASES had no floor of any kind and was the one collection here that survived BOTH
+    # mutations.
+    for label, ran, declared in (
+        ("nested-spelling", ran_nested, len(NESTED_CASES)),
+        ("source", ran_src, len(SELF_TEST_CASES)),
+        ("bytecode-pool", ran_pool, len(POOL_SELF_TEST_CASES)),
+        ("descriptor", ran_desc, len(POOL_DESC_CASES)),
+        ("manifest-diff", ran_diff, len(diff_cases)),
+        # DERIVED, never the constant 3: a fourth record kind must raise this floor by itself,
+        # not fail it for the wrong reason and train someone to edit the number.
+        ("record-kind", ran_kind, len(record_kinds)),
+    ):
+        if ran == 0 or ran != declared:
+            failures.append(f"  [floor]    RAN {ran}/{declared} {label} cases -- cases were "
+                            "SKIPPED; the loop body did not execute for every declared case")
 
     if failures:
         print(f"self-test: FAIL ({len(failures)} case(s))", file=sys.stderr)
