@@ -141,6 +141,36 @@ permissions:
   # ⚠️ Derived from a DECLARATION, never from the branches. Deriving the floor from the
   # same mc/** glob the audits use makes the check len(x) >= len(x) -- always true --
   # which would delete the guard while leaving it looking present.
+  #
+  # ============================================================================
+  # 🔴 TODO.md 69 D.1: THE FLOOR NOW MEANS *LIVE* BANDS, AND THE COUNTS ABOVE ARE
+  # HISTORY. Everything above this line describes a world with one band set. There
+  # are now two: scripts/expected-bands.txt declares LIVE bands and, under an
+  # [archived] header, bands that are KEPT but no longer audited (ruling 3 of
+  # section 69 -- keep the branch, stop propagating to it; the published release
+  # stays downloadable).
+  #
+  #   --count  -> LIVE ONLY. This is what steps.bands.outputs.count publishes, and
+  #               it is the right floor precisely because the four audits below now
+  #               SUBTRACT the archived bands. A floor counting archived bands would
+  #               be unreachable and every gate would exit 2 forever.
+  #   --verify -> LIVE + ARCHIVED against git, both directions. An archived branch
+  #               is still expected to EXIST, so a deleted one is still a finding.
+  #
+  # So "EIGHT bands on origin" and "8, NOT 9" above are a record of how the number
+  # was arrived at in 2026-08, not a statement of what it is now. Do not reconcile
+  # today's count against them -- read `--count`.
+  #
+  # 🔴 The filter is SET SUBTRACTION BY EXACT NAME, never a glob or prefix. A filter
+  # that matches too much leaves every audit below comparing ZERO branches and
+  # printing green, which is the same false-clean --require-bands exists for -- one
+  # level up. Each of the four guards refuses (exit 2) when the filter leaves fewer
+  # than two refs, and each has a self-test case feeding an over-matching archive set
+  # that asserts exit 2 rather than 0.
+  #
+  # ⚠️ A band in NEITHER section is still audited. Fail-closed: cutting a band and
+  # forgetting to declare it must not make it invisible to every guard at once.
+  # ============================================================================
 
 jobs:
   audit:

@@ -30,13 +30,51 @@
 #
 # To add a band: cut it per TODO.md's per-band recipe, then add its name here in the same
 # commit. To retire one: remove the line in the commit that deletes the branch.
+#
+# ===========================================================================================
+# TWO SECTIONS: LIVE AND ARCHIVED  (TODO.md section 69 phase D, owner ruling 3 of section 69)
+# ===========================================================================================
+#
+# "Archived" means KEEP THE BRANCH, STOP AUDITING IT. It does NOT mean deleted, and it does
+# not mean unreleased: every archived band keeps its published v1.4.0 release, marked final
+# in the docs. Ruling 2 says fixes propagate to the 26.x bands and mc/1.21.11 only.
+#
+# Lines before any [section] header are LIVE. That is deliberate: it is the historic format,
+# so an older copy of this file parses as all-live rather than as an empty set.
+#
+#   --count   -> LIVE ONLY. It is the --require-bands floor for audits that now skip the
+#                archived bands, and counting archived ones would make that floor unreachable.
+#   --verify  -> LIVE + ARCHIVED, both directions, against git. An archived branch is still
+#                expected to EXIST. It is simply not audited for drift.
+#   --list    -> live.  --list-archived -> archived.  --list-all -> both.
+#
+# 🔴 THE FILTER IS SET SUBTRACTION BY EXACT NAME, NEVER A PATTERN. A glob or prefix can
+# over-match, and a filter that matches too much leaves all four guards auditing ZERO
+# branches and printing green -- the vacuity family this repo has now caught sixteen times.
+# An exact-name subtraction cannot over-match: the only way to empty the audited set is a
+# declaration that visibly names every band, line by line, in this reviewed file.
+#
+# 🔴 AND A BRANCH IN NEITHER SECTION IS AUDITED, NOT SKIPPED. Fail-closed. A band cut
+# without a line here must never become invisible to every guard at once; it is reported
+# UNDECLARED by --verify and it is still audited in the meantime.
+#
+# ⚠️ An unknown [section] header is REFUSED (exit 2), so a typo cannot quietly land lines in
+# a section that means "skip me". A name in BOTH sections is refused like a duplicate.
+#
+# To archive a band: move its line below [archived], in the commit that stops propagating to
+# it. To bring one back: move it above, and propagate everything it missed in the same change.
 
+mc/1.21.11
+mc/26.1.2
+mc/26.2
+
+[archived]
+# Archived 2026-09-22, section 69 phase D. Final release: v1.4.0. The branches and their
+# published jars stay; only the auditing stops. Between them these six cover MC 1.21, 1.21.1,
+# 1.21.2, 1.21.3, 1.21.4, 1.21.5, 1.21.6, 1.21.7, 1.21.8, 1.21.9 and 1.21.10 -- 11 versions.
 mc/1.21.1
 mc/1.21.3
 mc/1.21.4
 mc/1.21.5
 mc/1.21.8
 mc/1.21.10
-mc/1.21.11
-mc/26.1.2
-mc/26.2
