@@ -479,6 +479,24 @@ The band cannot run its own gates until its tooling speaks official names.
       🔑 **Cross-branch equality is not correctness.** What the measurement does buy: declining to
       propagate a `TODO.md` edit would break a nine-way identity by OMISSION, which is this row being
       decided by default rather than at 9.5.
+      🔴🔴 **AND THAT IS EXACTLY WHAT HAPPENED. Re-measured 2026-09-22 (§70): the invariant is
+      BROKEN — `git rev-parse <b>:TODO.md` yields THREE distinct blobs, not one.**
+      `master` alone · `mc/26.2` alone · and **one shared blob on the other seven**
+      (`mc/26.1.2`, `mc/1.21.11` and all six archived bands).
+      🔑 **The row called its own ending and nothing read it back.** It named "decided by default
+      rather than at 9.5" as the failure mode, wrote that down, and then the default won — silently,
+      with no gate red, because `TODO.md` is outside gate 9 (propagation) **and** outside gate 10
+      (identity). It sits in the seam between the two guards, which is why nothing reported this.
+      ⚠️ **The 2026-09-01 line above is KEPT, not corrected in place.** It was true when measured;
+      the defect is that it was read as a standing fact for three weeks. A dated measurement is a
+      snapshot — this is the same lesson as the *"status row cannot count the commit it is written
+      in"* block at the top of this file, arriving in a second place.
+      ⬜ **Still undecided, and now urgent rather than theoretical:** does the invariant survive at
+      all? 🔑 **The honest answer is that the `26.x` split already decided it — `master` genuinely
+      does not describe the same product as `mc/1.21.11`**, so one blob on nine branches would now
+      require the document to be wrong on eight of them. **Recommendation: retire the invariant
+      explicitly** rather than leave a broken one on the books, since a guard nobody can satisfy is
+      one people learn to ignore. ⚠️ **Owner call — not taken unilaterally.**
 
 ### 🔑🔑 The five blind spots §29 – §33 found — every one read GREEN on every gate
 
@@ -870,18 +888,26 @@ has no crash log attached** — see its row.
 
 ### #19 — Smelting must stop paying XP into Mining and Repair — ✅ DONE `e77d59a2e`
 
-- [ ] ⬜ **Smelting actions must award NO XP to Mining or Repair.** Issue text: *"Smelting should not
+- [x] ✅ **Smelting actions must award NO XP to Mining or Repair.** Issue text: *"Smelting should not
       give xp to either mining or repair. gets lvled up passively"*.
       ✅ **The premise is confirmed, not assumed:** Smelting is a CHILD skill whose parents are
       `MINING` and `REPAIR` — `SkillTools.java:65-68` (`SMELTING_PARENTS`) — so its level is derived
       from the parents' mean and it does level passively. The ask is therefore about the
       **reverse** direction: a smelt must not feed XP back up into either parent.
-      ⬜ **Not yet measured:** which path, if any, actually awards parent XP on a smelt.
-      `SmeltingListener.java` contains no `applyXpGain` / `MINING` / `REPAIR` reference at all, so
-      the award — if it exists — lives somewhere else (a furnace mixin, the generic child-skill XP
-      path, or an `ExperienceConfig` row). **Find the award before writing the fix.**
-      🧪 Test that must fail if reverted: smelt with mcMMO loaded, assert Mining XP and Repair XP are
-      both unchanged while Smelting's own counter moves.
+      ✅ **MEASURED, then fixed — `e77d59a2e`.** The award did exist: the generic child-skill split,
+      not anything in `SmeltingListener.java` (which indeed holds no `applyXpGain` / `MINING` /
+      `REPAIR` reference — that absence was a red herring, not an all-clear).
+      🔑 **Being a child answers where the LEVEL comes from; whether the child pays XP back UP is a
+      separate question**, and it now has its own predicate — `SkillTools.childSkillFeedsParents`.
+      `SMELTING` returns false; **`SALVAGE` is unchanged** and still feeds Repair and Fishing.
+      ⚠️ **Gated centrally in `McMMOPlayer`, not in `SmeltingManager`**, so every route into a
+      Smelting gain obeys it — including an admin `/addxp`. **Both split sites are patched:**
+      `beginXpGain` and `applyXpGain` own independent copies, and a real smelt reaches `applyXpGain`
+      via `beginUnsharedXpGain` — so fixing one would have left every actual furnace still paying
+      the parents in full.
+      🧪 Three cases, one per entry point plus a passive-levelling case. The pre-existing
+      `childSkillGainSplitsAcrossParents` drove `SMELTING` — the behaviour this removes — so it was
+      **re-pointed to `SALVAGE` rather than deleted**.
 
 ### #17 — a handful of skill bugs (owner, 2026-09-20) — NINE separate items
 
@@ -937,7 +963,7 @@ has no crash log attached** — see its row.
       measurement that produced the choice. Nothing to build, nothing to revisit unless the owner
       reopens it.
 
-### #16 — refactor and update (owner, 2026-09-20) — THREE asks, one needs a ruling
+### #16 — refactor and update (owner, 2026-09-20) — TWO of three DONE; 16.1 still needs a ruling
 
 - [ ] 🔴 **16.1 — "no code in the main branch."** Issue text: *"Refactor the READMEs, so we have no
       code in the main branch, and each branch stays the same, maintaining its code."*
@@ -951,15 +977,22 @@ has no crash log attached** — see its row.
       ↩️ **Blast radius if done wrong:** the weekly drift leg dies — that is **R-g**, a decision this
       repo already made once and had to reverse with R-r — and every band loses its back-port
       reference point. **Do not start this as a refactor. Get the ruling first.**
-- [ ] ⬜ **16.2 — archive `1.21.10` and below**; those bands receive no further updates.
-      ⚠️ Touches the band table, plus the support-floor sentence in `README.md` and
-      `wiki/Installation.md`, which **R-x** requires to sit strictly below every version the branch
-      ships. `BandDocsMatchRealityTest` reads that sentence — it is the instrument that says whether
-      the docs still hold after the scope changes.
-- [ ] ⬜ **16.3 — bump the mod to version 26.3.** ⚠️ `mod_version` must be **identical on every
-      branch** (R-p), guarded per-key by `gradle-key-identity-audit.py` (ship gate 11). A band left
-      behind on `mod_version` **silently stops releasing** via R-t's stale-version gate.
-      🔑 Do not confuse it with `minecraft_version`, which must **differ** on every branch (R-a).
+- [x] ✅ **16.2 — archive `1.21.10` and below** — **DONE, §69 Phase D (2026-09-22).** Those bands
+      receive no further updates. Six branches — `mc/1.21.1`, `mc/1.21.3`, `mc/1.21.4`, `mc/1.21.5`,
+      `mc/1.21.8`, `mc/1.21.10` — sit under `[archived]` in `scripts/expected-bands.txt`;
+      **kept, not deleted**, and their published **v1.4.0** jars stay downloadable.
+      ✅ The band table, plus the support-floor sentence in `README.md` and `wiki/Installation.md`,
+      moved in the same change — **R-x** requires that sentence to sit strictly below every version
+      the branch ships, and `BandDocsMatchRealityTest` is the instrument that proved it still does.
+- [x] ✅ **16.3 — cut a band for 26.3** — **DONE, §69 Phase C (`d6761338c`).** 🔑 **Owner clarified
+      2026-09-22: 16.3 asked for a BAND CUT to support the new Minecraft version, not a `mod_version`
+      bump.** Under **R-a** `master` **is** the newest band, so supporting 26.3 means moving `master`
+      — and preserving 26.2 means cutting it off the previous tip first. Both happened: `mc/26.2` was
+      cut from `ce34cd2ea`, then `master` went to `minecraft_version=26.3`.
+      ⚠️ **`mod_version` was deliberately NOT touched** and is not what this item asked for — see
+      *"What I am NOT doing"* above, which already recorded that reading before the clarification.
+      🔑 Do not confuse the two: `mod_version` must be **identical** on every branch (R-p, ship gate
+      11), `minecraft_version` must **differ** (R-a).
 
 ### #15 — per-skill show/hide for the XP bar (owner, 2026-09-20)
 
@@ -1023,12 +1056,19 @@ band **against `master`**. Making `master` docs-only removes the very mechanism 
 this list needs in order to reach a band. Do 16.1 first and the remaining fixes have nowhere to land.
 
 ```
-Phase A  code fixes on master, propagate to 8 bands   #19, #17.1-.9, #15   ← UNBLOCKED, start here
-Phase B  #14 multiplayer crash                        blocked on the reporter's log
-Phase C  #16.3 band cut: mc/26.2 cut, master -> 26.3
-Phase D  #16.2 archive 1.21.10 and below              docs floor, R-x interaction
-Phase E  #16.1 master -> docs-only                    LAST; re-points drift-audit, rule 1, release.yml
+Phase A  code fixes on master, propagate                #19, #17.1-.9, #15   ✅ DONE (8 shipped,
+                                                                                1 won't-fix, 1 blocked)
+Phase B  #14 multiplayer crash                          blocked on the reporter's log   ⛔ NOT OURS
+Phase C  #16.3 band cut: mc/26.2 cut, master -> 26.3                                 ✅ DONE d6761338c
+Phase D  #16.2 archive 1.21.10 and below                docs floor, R-x interaction  ✅ DONE §69 D
+Phase E  #16.1 master -> docs-only     LAST; re-points drift-audit, rule 1, release.yml  🔴 NEEDS RULING
 ```
+
+⚠️ **"propagate to 8 bands" stood in this table until 2026-09-22 and was already false when written**
+— §69 Phase D archived six, so the propagation target is **3 live bands**, not 8. Corrected here
+rather than left, because this block is the thing a session reads to decide what to do next.
+🔴 **Phase E is the ONLY phase left, and it is the one that needs an owner ruling before any command
+runs.** A, C and D are done; B is not ours. Do not read "Phase E is next" as authorisation.
 
 ### What I am NOT doing
 
@@ -1427,13 +1467,23 @@ but a **COIN FLIP**. Owner ruled: isolate.
 ⚠️ **If you add a class that calls `bootstrapWithTags()`, add it to `tagBoundTest`'s filter in the
 same change.**
 
-### ⬜ What Phase C still owes
+### ✅ What Phase C owed — BOTH SETTLED by D.7, verified 2026-09-22 (session 09)
 
-- [ ] **Propagate `f434d7e41`** (docs + manifests) to the live bands — `mc/26.2`, `mc/26.1.2`,
-      `mc/1.21.11` — with `Backport-of:` trailers, **from a scratch clone**.
-      🔴 **Never propagate `d6761338c`** — it would break all eight other bands.
-- [ ] **The ten Phase A commits** are still unpropagated. `mc/26.2` has them by inheritance; the other
-      two live bands do not.
+- [x] ✅ **Propagate `f434d7e41`** (docs + manifests) to the live bands — `mc/26.2`, `mc/26.1.2`,
+      `mc/1.21.11` — with `Backport-of:` trailers, **from a scratch clone**. Carried by D.7's single
+      pass, per ruling 3. Verified: `git log <band> --grep='Backport-of: f434d7e41'` returns **one
+      commit on each of the three**.
+      🔴 **Never propagate `d6761338c`** — it would break all eight other bands. Still true, still a
+      standing rule: it is the 26.3 move, and `master` alone ships 26.3.
+- [x] ✅ **The ten Phase A commits** reached `mc/26.1.2` and `mc/1.21.11` in the same D.7 pass
+      (`mc/26.2` already had them by inheritance).
+      🧪 **Verified by the instrument, not by the record:** `drift-audit.py --self-test` first (it
+      passed, so "no drift" means something), then `--master master` inside
+      `git clone --local --no-hardlinks` — **0 MISSING on all three live bands**, 6 archived
+      correctly skipped, exit 0 read directly and **not through a pipe**.
+      ⚠️ **The clone is not optional.** `band_branches()` prefers remote refs and `master` is 24
+      ahead of `origin`, so a run in the working copy grades the stale remote and answers a question
+      nobody asked.
 
 ### Phase D — archive the six `1.21.x` bands below `1.21.11`
 
@@ -1624,11 +1674,22 @@ concept of an archive**, and `AGENTS.md` there still says *"propagate to every b
 🔑 Those branches are **internally consistent** at their frozen state: their `expected-bands.txt`
 has no `[archived]` section, their guards are the pre-D versions, and running them there reports
 drift against `master` — which is true. Nothing is broken; it is simply frozen.
-⬜ **Open question for the owner:** should `AGENTS.md` alone be propagated to the archived bands,
-as a documentation-only exception to ruling 2? It cannot break a band (it is not code), and the
-argument for it is the one P19-1 was made on — *a doc that tells an agent a guard does not exist
-argues against running the thing that would catch the problem.* **Not done unilaterally**, because
-ruling 2 is explicit and this is exactly the kind of edge a session should not decide for itself.
+🚫 **RULED (owner, 2026-09-22, session 09): NO — archived means archived.** `AGENTS.md` is **not**
+propagated to the six archived bands, and there is no documentation-only exception to ruling 2.
+**Reasoning on file:** those branches are frozen artifacts, not workspaces — nobody is meant to
+author on them, so a stale `AGENTS.md` there costs nothing. The P19-1 argument (*a doc that tells an
+agent a guard does not exist argues against running the thing that would catch the problem*) is
+**sound but does not apply**, because it assumes an agent doing work on that branch, which ruling 2
+has already removed.
+🔑 **Their stale copies are therefore KNOWINGLY stale, not an unnoticed defect** — that distinction
+is the whole point of writing this down. A future session that finds *"propagate to every band"* on
+`mc/1.21.5` must read it as **frozen**, not as drift to repair, and must not "fix" it.
+⚠️ **The consequence to accept out loud:** if the archive is ever REVERSED, bringing a band back
+means propagating everything it missed **in the same change** — `AGENTS.md` included, and it will be
+far behind by then. That is already the documented cost of un-archiving, not a new one.
+⚠️ **`branch-file-identity-audit.py` is unaffected**: it compares `master` + the **live** bands, so
+six frozen copies of a shared file cannot redden it. If that guard is ever widened to the archived
+set it will go red immediately and correctly — do not widen it without reversing this ruling first.
 
 ### Rollback — and why §69 is unusually safe
 
@@ -1655,6 +1716,95 @@ position this repo gets, and it is a consequence of the owner's call rather than
   and it gets its own plan.
 - **Not re-opening** 17.4's six zero-level sub-skills (ruling 6) or #19's end state (ruling 7).
 - **Not regenerating `mc-ids.txt` per band** — it is a fact about Minecraft and it cherry-picks.
+
+## §70 — the stale-checkbox pass: SIX rows this list got wrong about itself — ✅ DONE
+
+**No code shipped. `TODO.md` only, and that is the point:** every row below claimed work was
+outstanding when git said it was finished. A list that is wrong about its own state is worse than no
+list, because it is what the next session reads to decide what to build — and twice already this
+repo has had a session re-derive something that was already done.
+
+### Four owner rulings, taken 2026-09-22 before any edit
+
+| # | Ruling |
+|---|---|
+| 1 | 🔴 **The push hold STILL STANDS.** Re-asked, not inherited — it was scoped *"this session"* and this was a new one. No push, no `mod_version` bump. `master` is **24 ahead** of `origin` |
+| 2 | **The stale-checkbox pass is this session's work** — explicitly chosen over 16.3, Phase E and the #19 follow-up |
+| 3 | 🔑 **16.3 meant "cut a band for 26.3 if needed to support the new version"** — a BAND CUT, never a `mod_version` bump. Satisfied by Phase C |
+| 4 | 🚫 **`AGENTS.md` does NOT propagate to the archived bands.** Archived means archived; no docs-only exception to ruling 2. Recorded in full at §69's *"One consequence of ruling 2"* |
+
+### The five rows, each settled against git rather than against the list
+
+| Row | Claimed | Actually |
+|---|---|---|
+| **#19** Smelting | *"Not yet measured: which path awards parent XP"* | Measured **and fixed** in `e77d59a2e`; the row's own header already said DONE |
+| **16.2** archive | open | Done — §69 Phase D; six bands under `[archived]` |
+| **16.3** band cut | open, and **misread as a `mod_version` bump** | Done — Phase C cut `mc/26.2`, then moved `master` to 26.3 |
+| Phase C: propagate `f434d7e41` | open | On all three live bands — one `Backport-of:` match each |
+| Phase C: ten Phase A commits | *"still unpropagated"* | **0 MISSING**, all three live bands |
+
+### 🔴🔴 And a SIXTH, found while checking whether these edits were safe to leave on `master`
+
+**`TODO.md`'s one-blob-on-every-branch invariant is BROKEN, and has been for some time.** The row at
+*"What is genuinely missing"* recorded **📌 Measured 2026-09-01: the invariant HOLDS — one blob on
+all nine.** Re-measured today: **three distinct blobs** — `master`, `mc/26.2`, and one shared copy on
+the other seven.
+
+🔑 **The row predicted its own failure mode in writing and nothing read it back.** Its last sentence
+was *"declining to propagate a `TODO.md` edit would break a nine-way identity by OMISSION, which is
+this row being decided by default rather than at 9.5."* The default won.
+🔴 **Nothing went red, and nothing could have.** `TODO.md` is excluded from `drift-audit.py`
+(propagation) **and** absent from `branch-file-identity-audit.py`'s set (identity). It lives in the
+seam between the two guards — **the same shape as the `mod_version` gap R-w′ was built to close**,
+which is the second time this repo has found a fact falling between exactly those two instruments.
+⚠️ **This was NOT caused by this session's edits.** Measured on the **committed** blobs before
+anything was staged; my §70 edits then make `master`'s copy diverge further, which is expected and
+permitted — `AGENTS.md` excludes `TODO.md` from propagation by design.
+⬜ **Left open for the owner** with a recommendation (retire the invariant explicitly), because
+deciding it silently is precisely the failure being reported.
+
+### 🔑 What this is worth carrying
+
+1. 🔴🔴 **A row can be internally self-contradictory and survive every pass.** #19's heading read
+   **`✅ DONE e77d59a2e`** while the checkbox three lines below read *"Not yet measured"*. Both were
+   in view at once, for a day, across a caveat-expiry pass. **The heading and the box are edited by
+   different reflexes** — ticking a box is a separate motion from writing a summary line, and only
+   one of them happened. When a section's header and its boxes disagree, **git is the tie-break**.
+2. 🔑🔑 **The 16.3 correction came from ASKING, not from auditing.** Every mechanical check agreed
+   16.3 was open. The row said *"bump the mod to version 26.3"*, and I read it as `mod_version` —
+   as did whoever wrote it. One clarifying question turned it into a **fifth** finished item.
+   ⚠️ **An ambiguous row is not a small defect.** Acted on in the wrong reading it would have
+   bumped `mod_version` on four branches — the one key **R-p** requires identical everywhere and
+   whose drift **silently stops a band releasing**. The cheap question pre-empted a costly edit.
+   🔑 Note the plan's own *"What I am NOT doing"* had recorded the correct reading all along
+   (*"16.3 is a Minecraft version"*). **The right answer was already written down and the checkbox
+   still carried the wrong one** — being written down somewhere is not the same as being findable.
+3. ⚠️ **"Propagated?" has exactly one honest instrument, and it is not this file.**
+   `drift-audit.py --self-test` first (a broken auditor also prints *"No drift"*), then
+   `--master master` inside `git clone --local --no-hardlinks`, because `band_branches()` prefers
+   **remote** refs and `master` is 24 ahead of `origin` — a working-copy run grades the stale remote.
+   Exit codes read directly; **never through a pipe**, which reports `tail`'s status.
+4. ✅ **The caveat-expiry pass came back clean on the player-facing docs**, and that is a result
+   worth recording rather than silence: `README.md`, `wiki/Installation.md`,
+   `wiki/Building-from-Source.md` and `wiki/Optional-Integrations.md` all already describe the six
+   bands as **archived** with v1.4.0 final. §69 Phase D did that half correctly. The rot was
+   confined to the internal list.
+5. ⚠️ **`TODO.md` is pure CRLF — 2 216 of 2 216 lines.** Measured, not assumed, before the first
+   edit. `sed -i` would have stripped every CR and turned a five-row correction into a whole-file
+   diff, burying the change it was meant to make. `Edit` is the instrument here.
+   🔑 This is the **§66 CR-strip hazard arriving from a third direction** — §66 closed it in shell
+   scripts, §69 Phase D hit it via `read_text()`, and this is the plain-editing case.
+
+### What this pass deliberately did NOT do
+
+- **Not** touched `mod_version`, per ruling 1 — and 16.3 never asked for it (ruling 3).
+- **Not** pushed. `master` stays 24 ahead; nothing reaches the remote.
+- **Not** propagated. `TODO.md` is **excluded from propagation** by design, so these edits owe no
+  `Backport-of:` and no band is left behind by them. ⚠️ This is the one file where a docs edit is
+  correctly `master`-only — do not generalise it.
+- **Not** started Phase E. It needs ruling 4 of §68.P, which the owner has not given.
+
+---
 
 ## Other open work — harness and playtest
 
