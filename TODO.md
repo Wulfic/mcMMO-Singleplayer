@@ -4475,6 +4475,76 @@ it is **not** boot- or gameplay-smoked. Not claimed.
 
 ---
 
+
+## §82 — the seventh archive + the memory compaction — ⬜ IN PROGRESS
+
+**Owner-scoped 2026-09-23:** *"cleanup the todo list and your memory, optimize it as it has become
+large and bloated."* Measured before planning, not estimated:
+
+| artifact | before | what it is |
+|---|---|---|
+| `TODO.md` | **5,074 lines / 415 KB** | §65 – §81 are **3,844 of those lines (76%)**, every one ✅ DONE and none archived |
+| `.agent/memory/state.md` | **159 KB / 2,469 lines** | AGENTS.md calls it *"short by design"*. It is the third-largest file in the tree |
+| `.agent/memory/gotchas.md` | **437 KB / 6,142 lines** | append-only, never split |
+| `.agent/memory/decisions.md` | **304 KB / 4,149 lines** | append-only, never split |
+| auto-memory `resume-here.md` | **471 KB / 5,681 lines** | **141 stacked resume points** back to 2026-08-05; all but the newest are `(previous)` |
+| auto-memory tree | **2.3 MB / 263 files** | index `MEMORY.md` at 152 lines |
+
+**Rollback anchors, recorded before the first write:**
+- pre-§82 `master` tip: **`0626fe8e0`** · pre-§82 `TODO.md` blob: **`9e47c978f`**
+- full backup of both uncommitted memory trees + `TODO.md`:
+  **`.agent/backup-cleanup-20260923.tar.gz`** (271 entries, gitignored, checksum-verified against
+  source before any edit). `.agent/` is not committed (R-n), so git is **not** a rollback path for
+  the memory half — this tarball is the only one.
+
+🔴 **`.agent/memory/` deletion is an AGENTS.md absolute stop. Nothing in this section deletes a
+memory file.** Every compaction is a **split**: the bulk moves to a dated archive file beside it and
+the live file keeps the pointer. Byte count is preserved across the pair and asserted after each move.
+
+### What this found before writing anything
+
+- 🔴 **The `WHERE THIS STANDS RIGHT NOW` block is stale for the FIFTH time** — the exact rot it
+  warns about in its own second paragraph. It says **nine branches**, `master` at **`26.2`**, and
+  releases at **`v1.3.x`**. Measured: **ten branches** (4 live + 6 archived per
+  `scripts/expected-bands.txt`), `master` at **`26.3`**, `mod_version` **`1.5.1-SNAPSHOT`**.
+- 🔴 **`What ships today` omits `mc/26.2` entirely** and still gives `master` the `26.2` row that
+  branch now owns. The band cut (§69 Phase C) added a row and nothing added it here.
+- 🔴 **§68.P is headed ⬜ OPEN and its own body says every phase is DONE or CANCELLED.** This is the
+  **fourth** correction to that block, which is the finding its own text already names.
+- ✅ **Every "closes HELD until push" hold (§68, §73, §75 – §79) is DISCHARGED** — measured, not
+  assumed: all four live bands are `0 ahead / 0 behind` `origin`, and `gh issue list --state all`
+  returns **19 of 19 CLOSED**. Those status lines are stale, not blocking.
+- ⚠️ **The one-blob invariant is ALREADY broken — THREE distinct `TODO.md` blobs** across the four
+  live bands (`master` `9e47c978f`, `mc/26.2` `4a4fc1e2a`, `mc/26.1.2` + `mc/1.21.11` `2f1cd09b0`).
+  Known seam hazard; `TODO.md` is excluded from propagation by design. **Reported, not fixed here.**
+
+### The plan
+
+```
+1  extract §65 - §81 VERBATIM  -> plans/completed/TODO-multiversion-through-section-81.md
+2  append 17 compressed rows to the §8.3/§22-§64 archive table; retitle it §8.3, §22 - §81
+3  correctness pass on the SURVIVING live sections against measurement (the six finds above)
+4  .agent/memory/  state.md rewritten as a real snapshot; gotchas/decisions split at a date
+5  auto-memory     resume-here.md keeps the live point + recent; the 141-deep stack archived
+6  MEMORY.md index compressed
+```
+
+### What I am NOT doing
+
+- **Not deleting a single memory file, entry or TODO section.** Every byte moves to an archive that
+  sits beside the original. A `§n` reference must still resolve — that is the rule the six existing
+  archives are built on and it does not get weakened for a tidy-up.
+- **Not propagating `TODO.md` to the bands.** §65 was owner-scoped *"on all the branches"*; this one
+  was not, and `TODO.md` is deliberately outside both propagation guards. **Flagged for the owner.**
+- **Not renumbering any section.** 71 source comments cite `§n` numbers across 11 files; renumbering
+  to tidy is the one change no doc pass would catch.
+- **Not rewriting `gotchas.md`/`decisions.md` content.** They are append-only by contract. A split
+  preserves that; an edit would not.
+- **Not touching `TODO.md`'s open rows** — the live play-test, the risk register and carried debt
+  carry forward unchanged except where measurement falsified a specific claim.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
