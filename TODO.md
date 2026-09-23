@@ -623,7 +623,7 @@ this file** — the reference is in Java source that no doc pass reads.
 | **61** | one command for the declared range | ✅ `scripts/version-sweep.sh`, propagated to all eight bands (61.7 — 48/48 trailers, **master-empty control returned 0**, gate 7 clean, gate 10 at 51 shared paths). 🔑 **A busy 25565 made all three gates say THE MOD IS BAD**, and gate 5's `both` mode printed a **false ✅ about a server that never started**. The sweep's one red was the **harness, twice over** |
 | **62** | the fifth archive — the last TODO cleanup | ✅ §48 – §61 moved out; **3,654 → 1,106 lines**. Found **six** false claims, **five in the first 143 lines** — and the `v1.3.1` row had already been corrected once. 🔑 **Two guards it wrote were themselves wrong and BOTH FAILED CLOSED**, which is why they were cheap: `must_replace` refused at 2 occurrences, and a post-condition fired on §62's own *“what was false”* table. **Anchor a staleness check on the HEADING LINE, never on the substring** |
 | **63** | the `v2.2.050` tags, and a floor that rotted | ✅ provenance settled and six tags deleted: `2.2.050` **was** this repo's `mod_version` until R-s, and they sat on ordinary commits because the tag **MOVED** — force-deleted and re-pushed every push for a month. 🔑 **`git tag --list` errs in BOTH directions at once** (six the remote lacked, one it had); `git ls-remote --tags` is the instrument. **A row naming N is a lower bound, never a count** — 6 measured as 62. Its stale drift floor was **un-numbered, not re-numbered** |
-| **64** | three code items: the Loom id, the skill gate, the band floor | ✅ all three shipped and propagated. **64.1** measured `build.gradle:2` from Loom's own bytecode — bare vs qualified id is a **REQUIRED per-band difference NO gate watches**, and unifying it ships seven bands unremapped with every gate green. **64.2** closed R12 residual 1 (`UNGATED` + a partition guard over an **injected** universe) and **caught `WOODCUTTING` on its first run — 26 constants, not 25**: the last one, which every comma-anchored grep drops. **64.3** replaced four hand-kept `--require-bands` floors with `scripts/expected-bands.txt`, a **set** rather than a count. 🔑 A cross-session review found **three defects no gate caught**, the best a **tautological self-test case inside the guard written to close exactly that class** |
+| **64** | three code items: the Loom id, the skill gate, the band floor | ✅ all three shipped and propagated. **64.1** measured `build.gradle:2` from Loom's own bytecode — bare vs qualified id is a **REQUIRED per-band difference** which, *when this row was written*, **NO gate watched**; unifying it ships seven bands unremapped with every gate green. ✅ **A gate watches it now — §78's `build-gradle-identity-audit.py` (gate 13), which declares that line as its first rule.** **64.2** closed R12 residual 1 (`UNGATED` + a partition guard over an **injected** universe) and **caught `WOODCUTTING` on its first run — 26 constants, not 25**: the last one, which every comma-anchored grep drops. **64.3** replaced four hand-kept `--require-bands` floors with `scripts/expected-bands.txt`, a **set** rather than a count. 🔑 A cross-session review found **three defects no gate caught**, the best a **tautological self-test case inside the guard written to close exactly that class** |
 
 ---
 
@@ -3727,6 +3727,118 @@ documented docs-propagation seam, hit again.
       session. ⚠️ **The ahead-count is deliberately not recorded here** — a status row cannot count
       the commit that records it. Run `git rev-list --left-right --count origin/master...master`.
 
+
+---
+
+## §78 — the mixed waiver: `build.gradle` is in the seam, and the instrument is FILE STATE — ⬜ PLANNED
+
+**§77's own carried row, taken as this session's work** (owner ruling 2, 2026-09-23 s17). Rule 3's
+`Backport-not-needed:` is **commit-scoped** and cannot say *"half of this commit should propagate"*.
+`d6761338c` bundled a version-agnostic `build.gradle` change into the 26.3 conversion and waived both
+halves. §77 recorded it as **benign but undetected**.
+
+### Re-measured here before touching anything — a carried row is a claim, not a fact
+
+🔑 **The carried row understated it. The waiver population is small enough to read, and the
+`build.gradle` divergence is LIVE, not historical.**
+
+| Measured | Result |
+|---|---|
+| commits on `master` carrying `Backport-not-needed:` | **58** |
+| ...of those, **propagatable** (i.e. that actually reach the waiver branch) | **14**. The other 44 are `docs(...)` and never get past `if not c.propagatable: continue` |
+| `build.gradle` blobs across the four live branches | **THREE distinct**: `master`, (`mc/26.2` = `mc/26.1.2`), `mc/1.21.11` |
+| `settings.gradle` blobs | **ONE** — identical on all four. Already effectively invariant, and nothing enforces it |
+| `master` vs `mc/26.2` `build.gradle` | **exactly the `d6761338c` waived half** — the `test {` → `tasks.withType(Test).configureEach {` refactor plus the whole `tagBoundTest` block. Nothing else |
+| `mc/26.2` vs `mc/1.21.11` `build.gradle` | the Loom plugin id (`net.fabricmc.fabric-loom` vs `fabric-loom`) and the yarn `mappings` / `mod*` configuration block — **REQUIRED** per-band differences |
+
+⚠️ **And three of the 14 waiver reasons do not say "not needed" at all** — they say *needed,
+discharged by another route*, which nothing checks:
+
+- `4f4e4d8bb` `scripts/mixin-allow-audit.py` — *"propagated by hand in the section 37 sweep"*
+- `ec9b497f7` `scripts/gameplay_smoke_scenario.py` — *"each band gets its own cherry-pick"*
+- `0e5ba811e` `scripts/drift-audit.py` — *"tooling under `scripts/`, not shipped code; master-only"*.
+  🔴 That premise was **made false by R9** three months later, and the waiver was never revisited.
+
+✅ **All three are nonetheless harmless TODAY, and the reason matters:** `scripts/**` is in the
+**identity guard's** `INCLUDE` set (R9a), so gate 9 forces those files byte-identical regardless of
+what any waiver claims. A waiver over an identity-guarded path can only ever be **stale**, never
+load-bearing — which is why the detector below does **not** target them.
+
+### 🔑 The design turn — why a commit-scoped detector is the WRONG instrument
+
+The obvious reading of the carried row is *"detect a mixed commit"*. **That cannot be done**, and
+attempting it is how this session would ship decoration:
+
+- Classifying `src/**.java` as version-specific vs version-agnostic requires reading intent. In a
+  port commit every one of those files is legitimately version-specific; in a fix commit none is.
+  A path rule flags **13 of the 14** — and a guard red for an expected reason is one people stop
+  reading, which AGENTS.md says in its own words.
+- For the paths where content IS decidable (`scripts/**`, `.github/workflows/*.yml`), **gate 9 is
+  already strictly stronger.** A second detector there adds diagnosis, not detection.
+
+🔑 **This repo has already learned the right instrument once:** a back-port is **FILE STATE, not a
+commit** (§8.3's tail). The mixture is invisible in the commit and plainly visible in the file. So
+§78 stops auditing the waiver and audits **the file the waiver let drift**.
+
+🔑 **And `build.gradle` has EXACTLY gate 11's shape**, which is why the precedent is load-bearing
+rather than decorative. `gradle.properties` needs `mod_version` identical (R-p) and
+`minecraft_version` different (R-a), so `drift-audit.py` excludes it and the identity guard cannot
+demand it — a gap one key wide, closed by the **per-KEY** audit (R-w′). `build.gradle` needs its
+Loom plugin id and mappings block **different** (the remap switch) and everything else **identical**
+— a gap the **whole file** wide, and §64's own row in this file records that *"`build.gradle:2`'s
+bare vs qualified id is a **REQUIRED per-band difference NO gate watches**"*. It is the third
+instance of the seam shape, after `mod_version` and `TODO.md`.
+⚠️ **This sentence said "AGENTS.md already records" when it was first written, and that was FALSE
+— `AGENTS.md` does not contain the string `build.gradle` at all.** Caught by grepping for the claim
+instead of trusting it, in the same pass that was supposed to be checking someone else's wording.
+
+### The pieces — file by file
+
+| # | File | Change |
+|---|---|---|
+| 78.1 | `scripts/build-gradle-identity-audit.py` | **NEW.** Ship gate **13**. Requires `build.gradle` + `settings.gradle` identical across the live bands **except** differences matched by a declared, reasoned classification table. **Fails closed on an unclassified DIFFERING line** — never on an unclassified line that agrees, per gate 11's rule that a table demanding every knob be classified is one nobody maintains |
+| 78.2 | same | `--self-test`, **two-sided** and **floored on what RAN**, per §75/§76: an exact executed-case count, a quiet case that must stay green, a firing case that must go red, a parser case, and a refusal case. ⚠️ **Exit 2 is not a pass** — fewer than two branches compared nothing |
+| 78.3 | the `tagBoundTest` finding | The guard goes red on the `master`-only block on its first run. That is a **live finding, not an obstacle**: resolve it by classifying it with a measured reason (`bootstrapWithTags()` does not exist on any band, so the task cannot be registered there) — **not** by widening the rule |
+| 78.4 | `AGENTS.md` | Add gate 13 to the tooling table; correct the §64 sentence saying no gate watches `build.gradle:2`. ⚠️ Byte-identical on every branch (P19-1) — propagate, or gate 9 goes red |
+| 78.5 | gates 2 and 12 | **Owner ruling 3 this session: RE-SCOPE, not defer.** `mixin-allow-audit.py --self-test` must exercise injection-point counting, `probe-bands.py --self-test` the manifest validation. Keep the borrowed `loomjar.py` cases as well — they are real, just about something else |
+
+### Verification — nothing is "done" on a printed PASS
+
+- ⚠️ **`--self-test` FIRST**, before any real run, on every gate touched.
+- **Mutation matrix** for 78.1: one mutation per declared classification entry plus one per refusal
+  path, each scored **CAUGHT by a named case**, against a **green control**. ⚠️ A uniformly bad
+  matrix is a **harness hypothesis first** (§77 lesson 3) — check the harness before the guard.
+- ⚠️ **Gates prefer REMOTE refs**, and `master` is unpushed. The honest run is inside
+  `git clone --local --no-hardlinks . <scratch>`.
+- Full Java suite must stay green. ⚠️ **TWO tasks** — the baseline is `test` + `tagBoundTest`
+  **summed**; quoting one reads as a 13-test regression that does not exist.
+- Gate sweep 9/10/11 after propagation, not just before.
+- Caveat-expiry pass: grep `README.md` + `wiki/**` for the **symptom**, not the file edited.
+
+### What I am NOT doing
+
+- ❌ **Not building a mixed-commit detector.** Reasoned above; it cannot be done from the commit and
+  the path-rule version is noise. The carried row is closed by a different instrument, and the row
+  itself is rewritten to say so rather than ticked.
+- ❌ **Not touching `drift-audit.py`'s waiver branch.** `if c.not_needed: waived += 1` stays. Rule 3
+  is not being amended, and no new escape hatch is created.
+- ❌ **Not retroactively re-waiving the 14.** They are measured harmless today; three carry stale
+  reasons, and that is recorded here rather than "fixed" by rewriting published commits.
+- ❌ **Not putting `build.gradle` into the identity guard's `INCLUDE`.** It MUST differ per band;
+  that would make the repo unshippable — the same collision `mc-surface.txt`'s exclusion note warns
+  about, in the opposite direction.
+- ❌ **Not pushing, not bumping `mod_version`, not closing an issue** — ruling 1, eleventh session.
+- ❌ **Not** the §76 `failures.append()` rows, the §75 S2 one-sided sweep, or the `--mutate` audit.
+
+### Rollback
+
+| Step | Touched | Undo |
+|---|---|---|
+| The plan + close | `TODO.md` | `scratchpad/TODO.md.bak-s17` |
+| Memory | `.agent/memory/{state,decisions,gotchas}.md` | `scratchpad/{state,decisions,gotchas}.md.bak-s17` |
+| The guard | new `scripts/` file, `AGENTS.md` | `git revert <sha>` — all new work, nothing overwritten |
+| Mutation runs | `build.gradle` and `scripts/` copies **temporarily** | `.orig` copies in `scratchpad/`, **`cmp`-verified after every run**, census at exit |
+| Propagation | 3 live band heads | `scratchpad/UNDO-s17-bands.txt` — pre-propagation heads as ready-to-run `git branch -f` lines |
 
 ---
 
