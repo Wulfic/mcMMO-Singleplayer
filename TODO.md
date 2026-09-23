@@ -4303,7 +4303,7 @@ version. `v1.5.0` is built, released and structurally verified; it is **not** bo
 gameplay-smoked. Not claimed. That is the honest state of the ship.
 
 
-## §81 — `/mcstats <skill> keep` floods chat: cumulate, flush every 5s — ⬜ IN PROGRESS
+## §81 — `/mcstats <skill> keep` floods chat: cumulate, flush every 5s — ✅ DONE (v1.5.1 SHIPPED)
 
 **Tier 1.** Owner report (2026-09-23): *"the /mcstats ability keep prints every single xp gain, lets
 instead cumulate and print every 5 seconds"*. Then bump to `1.5.1` and push for a fresh release.
@@ -4365,6 +4365,113 @@ A patch bump: one behaviour fix, no new surface. Same four LIVE bands (`master` 
 🔴 **The `src/` change needs TRANSLATION for `mc/1.21.11`**, which is yarn-mapped. `McMMOMod.java`
 and the new task touch no renamed MC symbol, but the cherry-pick is verified by **building** the
 band, not by a clean apply.
+
+### §81 — what happened, measured
+
+✅ **SHIPPED. `v1.5.1` on all four live bands**, four release runs green by exit code **and** by
+per-step conclusion, release state read back rather than inferred.
+
+| | |
+|---|---|
+| releases now | **10**: 4 live at `v1.5.1` + **6 archived surviving at `v1.4.0`**, zero drafts |
+| reaped | the four lines' own `v1.5.0`, superseded in place |
+| suite (master) | **176 classes / 1,957 tests / 0 failures** — the SUM of `test` (175/1944) + `tagBoundTest` (1/13). Exactly **+1 class, +6 tests** against §80's 175/1,951 |
+| bands built | all three, each with the six new tests **present and passing** — not assumed from a clean cherry-pick |
+
+🔴🔴 **THE `Latest` BADGE RACE FIRED AGAIN, AND WORSE.** §80 recorded it as a known open cause and
+this release proved it is not self-correcting: `mc1.21.11-v1.5.1` published **32 seconds** after
+`mc26.3` and took `isLatest`, so `/releases/latest` was handing every player the **oldest** band's
+jar — 1.21.11, four bands back. Last time the winner was one band off; this time it was the worst
+possible one. Symptom fixed again by hand (`gh release edit mc26.3-v1.5.1 --latest`, then re-read).
+🔑 **A symptom fixed twice is a cause that must be fixed.** The §80 row is no longer "known
+open" — it is now **recurring and measured**, and the next release will do the same thing.
+
+🔴 **`extract-mc-surface.py --check` was RED on `master`, and `v1.5.0` SHIPPED THAT WAY.**
+`a790720a6` (the #14 fix) added `Blocks.CRAFTING_TABLE`; the manifest was last regenerated at
+`d6761338c`, which `git merge-base --is-ancestor` proves is an **ancestor** of that fix. So the two
+records were never captured. Regenerated here — the diff is exactly the delta `--check` predicted,
++2 records, 0 removed, nothing else moved. ⚠️ **The gate was not in §80's run list**, which is the
+whole reason nothing reported it: a gate nobody runs is not a gate.
+⚠️ **The three live bands are red on this gate for the same reason** and each needs its **own**
+regeneration — `mc-surface.txt` is a per-band generated fact, so it must NOT be cherry-picked and
+gate 10 exists to catch exactly that. Carried below; it needs a build per band.
+
+⚠️ **`extract-mc-surface.py` warns `expected 42 mixin files, found 41`.** The `42` was hardcoded in
+`6be971951`, the first probe-tooling commit; `d6761338c` deleted a mixin in the 26.3 move. It is a
+WARN, not a failure, and it has been crying wolf ever since. ⚠️ A hardcoded count is the wrong shape
+here anyway — a band may legitimately carry a different number.
+
+### 🔑 The mutation harness found TWO of my own tests wrong, and review had not
+
+Neither was caught by reading. Both were caught by mutating the shipping code and **counting which
+tests noticed** — and both are the same shape: **two guards masking each other**.
+
+1. **`togglingOff…` flushed between the two toggles.** The flush clears unconditionally, so the
+   flush in the middle cleared the window by itself and the case passed against a `toggleXpChat`
+   that discards **nothing**. Off-then-on **inside one window** — no flush between — is the only
+   sequence where the discard is load-bearing. That is also the sequence a player produces by
+   running the command twice to check it took.
+2. **`aZeroTotalIsNotPrinted` drove a PVE zero, which is not zero.** The early-game boost is a flat
+   top-up, so `applyXpGain(MINING, 0f, PVE, …)` arrives as **`+51.0`**. The case was asserting the
+   guard from an input the guard never sees. It now goes through `XPGainReason.COMMAND` — the one
+   reason the modifiers leave untouched — **with the arrival asserted as zero**, so it cannot go
+   vacuous again.
+
+🔑 **And one guard was DELETED rather than kept.** A flush-time `isXpChatEnabled` re-check was
+written; the mutation showed **no test could see its removal**, because an entry only exists for a
+skill that was kept when the XP landed and `toggleXpChat` deletes it on the way off. It is
+unreachable. Kept, it would have been decoration — refactored away later with nothing going red.
+
+⚠️⚠️ **The harness lied first, and the lie read as five survivors.** Its XML scraper used
+`<testcase …>(.*?)</testcase>`, but a **passing** testcase is written **self-closing** with no
+closing tag — so each passing case greedily swallowed every element up to the next failing one. The
+control (all passing, no `</testcase>` anywhere in the file) backtracked correctly and read **52**,
+while every mutation run under-counted and five genuine catches were scored **SURVIVED**. 🔑 **The
+count-mismatch check is what caught it**, not the survivor list: the counts came back 8, 18, 6, 25,
+19 against a control of 52, and a harness whose test count moves under mutation is reporting on
+something other than the mutation. Replaced with `xml.etree`.
+
+⚠️ **`tagBoundTest` does not exist outside `master`** — it is a declared per-band `build.gradle`
+difference under gate 13. On a band, `test` **is** the whole suite, and `cleanTagBoundTest` fails
+with *"Task not found"*. That is not a red band.
+
+### §81 — gates run
+
+| Gate | Result |
+|---|---|
+| Self-tests | **5 of 5 exit 0**, run FIRST |
+| 2 `mixin-allow-audit --check` | exit 0, `SLICE=1 OK=60`, no injector resolves to 0 sites |
+| `extract-mc-surface --check` | **RED → regenerated → exit 0.** See above |
+| 7 `drift-audit` | exit 0, **0 MISSING** on all three live bands; 6 archived correctly skipped |
+| 9 `branch-file-identity` | exit 0, **55 shared paths across 4 branches** |
+| 10 `manifest-identity` | exit 0, all four manifests distinct |
+| 11 `gradle-key-identity` | exit 0 — four live refs agree on `1.5.1-SNAPSHOT`, `minecraft_version` distinct on every one |
+| 12 `probe-bands --check` | exit 0, 1466 records resolve on 26.3 |
+| 13 `build-gradle-identity` | exit 0, residue 427 |
+| Java suite | 176 classes / 1,957 tests / 0 failures on `master`; all three bands green with the new tests present |
+| Caveat-expiry | `wiki/Commands.md` said *"a running chat readout"*, which reads as **broken** at one line per five seconds. Now states the cadence. It is under the identity guard, so it propagated with the fix |
+
+⚠️ **Every cross-branch gate compared FOUR branches and none exited 2**, run inside
+`git clone --local --no-hardlinks` so the remote-preferring ones graded these commits and not the
+stale `origin`. ⚠️ **Gates 1, 3, 4, 5, 6 were NOT run** — they need a jar and a live server per
+version. `v1.5.1` is built, released, suite-green on all four branches and structurally verified;
+it is **not** boot- or gameplay-smoked. Not claimed.
+
+### What §81 did NOT close — carried forward
+
+- [ ] 🔴🔴 **`release.yml`'s `make_latest`** — **recurring, no longer merely known.** Twice now the
+      badge has gone to the wrong band, the second time to the oldest one. Still costly to fix:
+      `release.yml` is inside its own `paths:` filter and under gate 9, so the change fires four
+      release runs and must reach three bands.
+- [ ] 🔴 **The three live bands' `mc-surface.txt` are stale** — same `CRAFTING_TABLE` cause. Needs a
+      build per band; must be regenerated **per band**, never cherry-picked.
+- [ ] ⚠️ **`extract-mc-surface.py`'s hardcoded `expected 42 mixin files`** — stale since the 26.3
+      move, and the wrong shape for a per-band fact.
+- [ ] 🔴 **THE LIVE PLAY-TEST — owner only.** Still the oldest debt.
+- [ ] 🔴 **`disassemble()` / `javap_all` still uncovered** — unchanged from §79.
+- [ ] 🔴 **A waiver's stated REASON is never re-checked** — unchanged from §78.
+- [ ] ⬜ **`src/**` and the mixed commit remain undecidable** — unchanged from §78.
+- [ ] ⬜ **Untouched §75/§76 rows** — unchanged.
 
 ---
 
