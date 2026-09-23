@@ -4098,7 +4098,7 @@ ever mis-labelled as certifying the gate.
 
 ---
 
-## §80 — THE PUSH: `v1.5.0` to every live band — ⬜ IN PROGRESS
+## §80 — THE PUSH: `v1.5.0` to every live band — ✅ DONE
 
 🔴 **The twelve-session push hold is LIFTED** (owner, 2026-09-23, §80 ruling 1). It was re-asked a
 **thirteenth** time and the answer changed, on a stated condition the owner set and this plan
@@ -4302,6 +4302,69 @@ deliberate `Closes #N` trailer.
 version. `v1.5.0` is built, released and structurally verified; it is **not** boot- or
 gameplay-smoked. Not claimed. That is the honest state of the ship.
 
+
+## §81 — `/mcstats <skill> keep` floods chat: cumulate, flush every 5s — ⬜ IN PROGRESS
+
+**Tier 1.** Owner report (2026-09-23): *"the /mcstats ability keep prints every single xp gain, lets
+instead cumulate and print every 5 seconds"*. Then bump to `1.5.1` and push for a fresh release.
+
+### The defect
+
+`McMMOPlayer#applyXpGain` calls `sendXpChatUpdate` on **every** gain. Mining is one gain per block,
+combat is one gain **per hit** (see `combat-xp-model-decision`), so a kept skill emits a chat line
+several times a second. The feature is unusable for exactly the skills a player would turn it on for.
+
+### The change
+
+| file | change |
+|---|---|
+| `datatypes/player/McMMOPlayer.java` | `applyXpGain` merges the gain into a per-skill `EnumMap` instead of sending; new `flushXpChat()` emits **one line per skill** and clears; `toggleXpChat` OFF **drops** that skill's pending |
+| `runnables/player/XpChatFlushTask.java` (new) | fan `flushXpChat()` across `UserManager.getPlayers()` — same shape as `ClearRegisteredXPGainTask` |
+| `fabric/McMMOMod.java` | `scheduler.runTimer(new XpChatFlushTask(), 100, 100)` — 100 ticks = 5 s at 20 tps, named constant, cancelled by the existing `cancelAll()` |
+
+🔑 **A scheduler task, not a lazy "has 5 s passed?" check on the next gain.** A lazy check cannot
+flush the **last** window: a player who mines for three seconds and stops would never see those
+gains at all. The tail is precisely the case a player watches for.
+
+🔑 **The locale string is unchanged.** `Commands.XPGain.Keep=&6{0} &a+{1} XP &7({2}/{3}) &eLv.{4}`
+already reads correctly for a window total, and the trailing three placeholders are read off the
+profile **at flush time**, so the line still agrees with `/mcstats` rather than leading it.
+
+⚠️ **Toggling OFF discards, it does not flush.** A line arriving *after* `Commands.XPGain.Keep.Off`
+said "stopped printing" would read as a bug. Tested.
+
+⚠️ **An empty window sends nothing.** A task that fires every 5 s and prints `+0.0 XP` forever is a
+worse flood than the one being fixed. Tested.
+
+### Tests — each fails if the change is reverted
+
+- `keepCumulatesAndPrintsOneLinePerFlush` — three gains, `verify(never()).sendMessage` **before**
+  the flush (this is the assertion the old per-gain code fails), then exactly **one** line whose
+  `+N` equals the profile's stored delta. The delta is **measured**, not hardcoded: the early-game
+  boost and the config multipliers land before storage, so a literal would assert the wrong number.
+- `togglingOffDropsThePendingWindow` — gain, toggle off, flush → silent.
+- `flushWithNothingPendingSaysNothing` — flush twice → one line, then silence.
+- `XpChatFlushTaskTest#flushesEveryTrackedPlayer` — the fan-out, mirroring
+  `ClearRegisteredXPGainTaskTest`.
+
+### What I am NOT doing
+
+- **Not** making the interval configurable. One number, one constant; a knob nobody asked for is a
+  knob nobody tunes.
+- **Not** touching the XP bar, the boss bar, or the notification path — `keep` is the only flood.
+- **Not** persisting the toggle (unchanged from #17.1's reasoning).
+- **Not** touching `release.yml`'s `make_latest` (§80's carried row). ⚠️ That means this release
+  **inherits the same race** — the `Latest` badge must be re-read after the runs and corrected by
+  hand if it lands on the wrong band.
+
+### The release — `1.5.1`, patch
+
+A patch bump: one behaviour fix, no new surface. Same four LIVE bands (`master` 26.3, `mc/26.2`,
+`mc/26.1.2`, `mc/1.21.11`), same R10 ordering discipline, six archived bands untouched at `v1.4.0`.
+
+🔴 **The `src/` change needs TRANSLATION for `mc/1.21.11`**, which is yarn-mapped. `McMMOMod.java`
+and the new task touch no renamed MC symbol, but the cherry-pick is verified by **building** the
+band, not by a clean apply.
 
 ---
 
