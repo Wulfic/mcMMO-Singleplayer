@@ -568,6 +568,260 @@ def control_versions(explicit: str) -> list[str]:
     return [primary] + [v for v in declared if v != primary]
 
 
+
+# --------------------------------------------------------------------------------------------
+# Self-test: prove the RESOLVER resolves, and say HOW MUCH of it ran
+#
+# 🔴 SECTION 79 -- WHY THIS EXISTS, WHEN --self-test ALREADY PASSED.
+# `selftest_decl_parsing()` above is real, two-sided and floored, and it covers exactly one regex
+# on exactly one line shape. `--check` does something much larger: for every record in
+# `mc-surface.txt`, work out which class owns it, which member must exist, and walk the whole
+# supertype closure looking for that member on every version the branch declares it ships to.
+# None of that had a single case.
+#
+# 🔑 The asymmetry is the finding. DECL_RE got a self-test because it FAILED VISIBLY once -- the
+# 26.2 Entity defect, 40+ ABSENT rows. The resolver's failures look identical to a real API
+# removal, which is why its three documented false-ABSENT bugs (java.lang.Enum#ordinal,
+# Object#equals, Iterable#iterator, all fixed 2026-08-12) were each found by a human reading a
+# report rather than by anything mechanical. A gate whose wrong answers are indistinguishable
+# from its right ones is the one that most needs cases.
+#
+# Everything below runs OFFLINE: `find_member` only spawns javap on a dict MISS, so a fully
+# pre-seeded `members` exercises the real walk without a jar. The one case that deliberately
+# misses substitutes a counting stub, which is how the negative cache is asserted at all.
+# --------------------------------------------------------------------------------------------
+_CHECKS = 0
+_FAILURES: list[str] = []
+_BY_KIND: dict[str, int] = {}
+
+
+def check(condition: bool, label: str) -> None:
+    """Every assertion below goes through here, so the count cannot drift from reality.
+
+    The per-kind tally is DERIVED from the label prefix, never written into the PASS line by hand.
+    Same funnel as `build-gradle-identity-audit.py` (section 78) and `mixin-allow-audit.py`.
+    """
+    global _CHECKS
+    _CHECKS += 1
+    kind = {"Q": "quiet", "F": "firing", "R": "refusal", "M": "detector-mutation"}.get(
+        label[:1], "other"
+    )
+    _BY_KIND[kind] = _BY_KIND.get(kind, 0) + 1
+    if not condition:
+        _FAILURES.append(label)
+
+
+def selftest_resolution() -> int:
+    saved_kinds = tuple(MEMBER_KINDS)
+
+    # -- owner_of / member_of: which class, and which member, a record demands -------------------
+    check(owner_of("CLASS", "net.minecraft.world.entity.Wolf") == "net.minecraft.world.entity.Wolf",
+          "Q1 a CLASS record owns itself")
+    check(owner_of("MIXINCLASS", "net.minecraft.server.level.ServerPlayer")
+          == "net.minecraft.server.level.ServerPlayer",
+          "Q2 a MIXINCLASS record owns itself")
+    check(owner_of("ATTARGET", "Lnet/minecraft/world/entity/Wolf;setTamed(Z)V")
+          == "net.minecraft.world.entity.Wolf",
+          "Q3 an ATTARGET descriptor yields a dotted owner")
+    check(member_of("ATTARGET", "Lnet/minecraft/world/entity/Wolf;setTamed(Z)V") == "setTamed",
+          "Q4 an ATTARGET descriptor yields the member name without its signature")
+    check(member_of("METHOD", "a.b.C#foo(I)V") == "foo",
+          "Q5 a member name stops at '(' -- the signature is not part of it")
+    check(member_of("METHOD", "a.b.C#foo<T>") == "foo",
+          "Q6 a member name stops at '<' -- a generic witness is not part of it")
+    check(member_of("CLASS", "a.b.C") is None,
+          "Q7 a CLASS record demands no member")
+
+    # 🔑 Over the REAL constant, not a copy of it. `MEMBER_KINDS` is the single list that decides
+    # which record families get validated at all, and this repo has twice shipped a record kind
+    # that sat in NEITHER half of a gate (config.yml in section 50, entity ids in section 52). The
+    # loop counts EXECUTED iterations so an emptied constant reddens here rather than going quiet.
+    ran_kinds = 0
+    bad_kinds: list[str] = []
+    for kind in MEMBER_KINDS:
+        ran_kinds += 1
+        if owner_of(kind, "a.b.C#d") != "a.b.C" or member_of(kind, "a.b.C#d") != "d":
+            bad_kinds.append(kind)
+    # Funnelled through check() deliberately: an assertion that appends straight to _FAILURES is
+    # invisible to the counter, which is the section 76 shape still open in extract-mc-ids.py.
+    check(not bad_kinds and ran_kinds == len(MEMBER_KINDS) and ran_kinds > 0,
+          "Q8 every declared member kind splits owner#member, and the loop actually ran")
+
+    # 🔴 THE FIRING HALF. A kind nobody classified resolves to None -- meaning the record is never
+    # validated by anything. That is not a hypothetical: it is the exact shape of the two defects
+    # named above. This case fixes the behaviour in place so a new kind cannot be added to the
+    # manifest and silently skipped.
+    check(owner_of("SOMENEWKIND", "a.b.C#d") is None,
+          "F1 an unclassified record kind resolves to NO owner rather than a plausible one")
+    check(member_of("SOMENEWKIND", "a.b.C#d") is None,
+          "F2 an unclassified record kind demands NO member rather than a plausible one")
+    check(owner_of("ATTARGET", "not-a-descriptor") is None,
+          "F3 a malformed ATTARGET yields None, not a mangled class name")
+
+    # -- name_candidates: the JVM binary names a dotted source name could mean -------------------
+    check(name_candidates("a.b.C") == ["a.b.C"],
+          "Q9 a plain top-level name has exactly one spelling")
+    cands = name_candidates("net.minecraft.entity.attribute.EntityAttributeModifier.Operation")
+    check("net.minecraft.entity.attribute.EntityAttributeModifier$Operation" in cands,
+          "Q10 a nested type gains its $-spelled binary name")
+    check(cands[0] == "net.minecraft.entity.attribute.EntityAttributeModifier.Operation",
+          "Q11 the plain name is tried FIRST, before any $ rewrite")
+    deep = name_candidates("a.b.C.D.E")
+    check("a.b.C$D$E" in deep and "a.b.C.D$E" in deep,
+          "Q12 deeper nesting yields every split, not just the outermost")
+    check(name_candidates("a.b.C$D") == ["a.b.C$D"],
+          "F4 an already-$-spelled name is not rewritten a second time")
+
+    # -- _split_types: supertype lists, where a comma inside generics must not split --------------
+    check(_split_types("java.lang.Iterable<Foo<?>>, a.b.Bar") == ["java.lang.Iterable", "a.b.Bar"],
+          "Q13 generics are stripped from each supertype")
+    check(_split_types("java.util.Map<A,B>, a.b.Bar") == ["java.util.Map", "a.b.Bar"],
+          "Q14 a comma INSIDE generics does not split the list")
+    check(_split_types(None) == [] and _split_types("") == [],
+          "F5 an absent supertype list is empty, not a one-element list of nothing")
+
+    # -- find_member: the supertype closure, fully seeded so javap is never spawned ---------------
+    # The four shapes its docstring records, three of which shipped as false ABSENTs until
+    # 2026-08-12: a direct hit, an MC supertype, java.lang.Enum, and java.lang.Object -- which
+    # javap NEVER prints as a supertype, so the walk has to add it by itself.
+    members = {
+        "net.minecraft.world.entity.Wolf": ["  public void setTamed(boolean);"],
+        "net.minecraft.world.entity.Animal": ["  public boolean isBaby();"],
+        "net.minecraft.world.entity.SpawnReason": [],
+        "java.lang.Enum": ["  public final int ordinal();"],
+        "java.lang.Object": ["  public boolean equals(java.lang.Object);"],
+        "java.lang.Iterable": ["  public java.util.Iterator iterator();"],
+        "net.minecraft.core.DefaultedRegistry": [],
+    }
+    supers = {
+        "net.minecraft.world.entity.Wolf": ["net.minecraft.world.entity.Animal"],
+        "net.minecraft.world.entity.SpawnReason": ["java.lang.Enum"],
+        "net.minecraft.core.DefaultedRegistry": ["java.lang.Iterable"],
+    }
+    W = "net.minecraft.world.entity.Wolf"
+    check(bool(find_member(W, "setTamed", dict(members), dict(supers), "nojar")),
+          "Q15 a member declared on the owner itself resolves")
+    check(bool(find_member(W, "isBaby", dict(members), dict(supers), "nojar")),
+          "Q16 a member inherited from an MC supertype resolves -- javap lists only declared ones")
+    check(bool(find_member("net.minecraft.world.entity.SpawnReason", "ordinal",
+                           dict(members), dict(supers), "nojar")),
+          "Q17 java.lang.Enum#ordinal resolves -- the closure does not stop at net.minecraft")
+    check(bool(find_member("net.minecraft.core.DefaultedRegistry", "iterator",
+                           dict(members), dict(supers), "nojar")),
+          "Q18 a non-MC INTERFACE supertype resolves")
+    # 🔑 Object is seeded by the walk itself, never by `supers` -- javap does not print it.
+    check(bool(find_member(W, "equals", dict(members), dict(supers), "nojar")),
+          "Q19 java.lang.Object#equals resolves although nothing declares Object a supertype")
+    check(find_member(W, "noSuchMemberAnywhere", dict(members), dict(supers), "nojar") == [],
+          "F6 a member on no class in the closure resolves EMPTY -- the ABSENT --check reports")
+
+    # 🔴 THE NEGATIVE CACHE. An unresolvable class must be asked about ONCE. Unfixed, this turned a
+    # 20-minute probe into a >90-minute one, all of it re-asking a question already answered "no" --
+    # and a performance bug in a gate is a gate people stop running. Asserted by substituting a
+    # COUNTING stub for javap_all at MODULE scope, which is where find_member resolves the name;
+    # a local rebind would shadow it and measure nothing.
+    calls: list[str] = []
+
+    def _counting_javap(jar, classes):
+        calls.extend(classes)
+        return {}, {}
+
+    saved_javap = globals()["javap_all"]
+    globals()["javap_all"] = _counting_javap
+    try:
+        m2 = {W: ["  public void setTamed(boolean);"]}
+        s2 = {W: ["net.minecraft.world.entity.Ghost"]}
+        find_member(W, "nope", m2, s2, "nojar")
+        first = len([c for c in calls if c == "net.minecraft.world.entity.Ghost"])
+        find_member(W, "alsoNope", m2, s2, "nojar")
+        second = len([c for c in calls if c == "net.minecraft.world.entity.Ghost"])
+        check(first == 1, "Q20 an unresolvable supertype is looked up exactly once")
+        check(second == 1, "F7 the MISS is negative-cached -- a second record does not re-spawn javap")
+    finally:
+        globals()["javap_all"] = saved_javap
+    check(globals()["javap_all"] is saved_javap, "M1 javap_all is restored after the stub")
+
+    # -- control_versions: section 56.4's range logic, and the refusal that guards it -------------
+    check(control_versions("26.1, 26.1.1 ,26.1.2") == ["26.1", "26.1.1", "26.1.2"],
+          "Q21 an explicit control list is split and stripped")
+
+    # The gradle readers are module globals, so substituting them here reaches the production
+    # function. They are restored in the `finally` below and the restoration is itself asserted.
+    saved_prop = globals()["gradle_prop"]
+    saved_opt = globals()["gradle_prop_opt"]
+    try:
+        globals()["gradle_prop"] = lambda n: "26.1.2"
+        globals()["gradle_prop_opt"] = lambda n: "26.1,26.1.1,26.1.2"
+        got = control_versions("")
+        check(got == ["26.1.2", "26.1", "26.1.1"],
+              "Q22 the PRIMARY leads and the rest follow -- an ABSENT on it means something else")
+        check(set(got) == {"26.1", "26.1.1", "26.1.2"},
+              "Q23 every declared version is validated, not just the primary (section 56.4)")
+
+        globals()["gradle_prop_opt"] = lambda n: ""
+        check(control_versions("") == ["26.1.2"],
+              "Q24 a branch declaring no range validates its primary alone")
+
+        # 🔴 THE REFUSAL. A primary outside the declared range means the branch compiles against a
+        # version it does not claim to ship to. Repairing that silently would leave every secondary
+        # graded against a manifest nobody validates, so it must REFUSE.
+        globals()["gradle_prop_opt"] = lambda n: "26.1,26.1.1"
+        refused = False
+        try:
+            control_versions("")
+        except SystemExit:
+            refused = True
+        check(refused, "R1 a primary outside supported_minecraft_versions REFUSES, never prepends")
+    finally:
+        globals()["gradle_prop"] = saved_prop
+        globals()["gradle_prop_opt"] = saved_opt
+    check(globals()["gradle_prop"] is saved_prop and globals()["gradle_prop_opt"] is saved_opt,
+          "M2 the gradle readers are restored after the substitution")
+
+    # -- DETECTOR MUTATION: prove the Q8 loop reads the real constant ------------------------------
+    # 🔴 MUTATE AT THE SCOPE THE PRODUCTION CODE READS. `owner_of` resolves MEMBER_KINDS as a module
+    # global; a rebind inside this function would shadow it and the mutation would never land.
+    globals()["MEMBER_KINDS"] = ("METHOD",)
+    check(owner_of("ACCESSOR", "a.b.C#d") is None,
+          "M3 shrinking the kind table must strand a kind -- Q8 reads the real constant")
+    globals()["MEMBER_KINDS"] = saved_kinds
+    check(owner_of("ACCESSOR", "a.b.C#d") == "a.b.C",
+          "M4 the kind table is restored, and the kind resolves again")
+    check(tuple(MEMBER_KINDS) == saved_kinds, "M5 the kind table is identical after the mutation")
+
+    # -- THE FLOOR ON WHAT RAN ----------------------------------------------------------------------
+    # 🔴 An EXACT count of checks that EXECUTED. `len(cases)` counts a list; this counts the run.
+    # 🔑 37 is MEASURED. The first cut of this line predicted 40 and the floor rejected the run --
+    # the arithmetic was wrong, not the harness. A floor that has refused its own author is the
+    # only kind with any evidence it would refuse anyone else.
+    expected = 37
+    if _CHECKS != expected:
+        print(
+            "SELF-TEST BROKEN: " + str(_CHECKS) + " checks executed, expected exactly "
+            + str(expected) + ". A case was added, deleted, or never reached -- fix the count "
+            "deliberately.",
+            file=sys.stderr,
+        )
+        return 1
+    if _FAILURES:
+        print(f"SELF-TEST FAILED: {len(_FAILURES)} of {_CHECKS} checks", file=sys.stderr)
+        for f in _FAILURES:
+            print(f"    {f}", file=sys.stderr)
+        return 1
+    for required in ("quiet", "firing", "refusal", "detector-mutation"):
+        if _BY_KIND.get(required, 0) == 0:
+            print(f"SELF-TEST BROKEN: zero {required} checks executed.", file=sys.stderr)
+            return 1
+    tally = ", ".join(f"{n} {kind}" for kind, n in sorted(_BY_KIND.items()))
+    print("=== SELF-TEST: manifest record resolution ===")
+    print(
+        f"  PASS -- {_CHECKS} checks executed ({tally}): records resolve to an owner and a\n"
+        f"          member, the supertype closure reaches past net.minecraft, an unresolvable\n"
+        f"          class is asked about once, and the declared RANGE is what gets validated."
+    )
+    return 0
+
+
 def main() -> int:
     # ⚠️⚠️ Windows consoles default to cp1252, which cannot encode this script's report
     # glyphs -- and every one of them is on a FAILURE path. The control check's "probe trusted"
@@ -605,7 +859,7 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.self_test:
-        return selftest_decl_parsing()
+        return selftest_decl_parsing() or selftest_resolution()
 
     # 🔴 A gate that can be told to pass is not a gate. `--allow-control-failures` exists to debug
     # the probe, and the debugging flag silently disarming the ship gate is exactly how a guard
