@@ -669,7 +669,7 @@ this file** — the reference is in Java source that no doc pass reads.
 ---
 
 
-## §82 — the seventh archive + the memory compaction — ⬜ IN PROGRESS
+## §82 — the seventh archive + the memory compaction — ✅ DONE
 
 **Owner-scoped 2026-09-23:** *"cleanup the todo list and your memory, optimize it as it has become
 large and bloated."* Measured before planning, not estimated:
@@ -735,6 +735,61 @@ the live file keeps the pointer. Byte count is preserved across the pair and ass
   preserves that; an edit would not.
 - **Not touching `TODO.md`'s open rows** — the live play-test, the risk register and carried debt
   carry forward unchanged except where measurement falsified a specific claim.
+
+### ✅ RESULT — measured after, not estimated
+
+| artifact | before | after | |
+|---|---|---|---|
+| `TODO.md` | 5,074 lines / 415 KB | **1,337 lines / 140 KB** | §65 – §81 verbatim in the seventh archive |
+| `.agent/memory/state.md` | 159 KB / 29 session blocks | **15 KB / 3 blocks** | 26 blocks verbatim in `state-archive-through-session-17.md` |
+| `.agent/memory/gotchas.md` | 437 KB / 322 entries | **147 KB / 113** | 209 August entries in `gotchas-archive-2026-08.md` |
+| `.agent/memory/decisions.md` | 304 KB / 168 entries | **87 KB / 51** | 117 August entries in `decisions-archive-2026-08.md` |
+| auto-memory `resume-here.md` | 471 KB / 118 resume points | **7 KB / 3** | 115 verbatim in `resume-archive.md` |
+| auto-memory `MEMORY.md` | 25.0 KB | **22.6 KB** | only 10% — see below |
+
+**What a session actually reads first went `.agent/memory/` 900 KB → 249 KB and auto-memory
+494 KB → 30 KB.** Total bytes on disk are **unchanged**: every split was verified by asserting the
+moved blocks still appear verbatim in the archive **and** in the live file before the replace landed.
+
+⚠️ **`MEMORY.md` only came down 10%, and that is the honest ceiling.** It is 263 pointers; the link
+text *is* the file. Buying more would mean dropping pointers, which is the one thing an index must
+not do. **The win was never there** — it was in `resume-here.md`, which is loaded beside it every
+session and was **21× larger than the index it supplements.**
+
+### 🔑 What this pass is worth carrying
+
+1. 🔴 **The two biggest files were both a POINTER that had become a LOG.** `state.md` (*"short by
+   design"*, per AGENTS.md, and the **first** thing read at session start) held 29 stacked session
+   blocks; `resume-here.md` (*"exact next actions"*) held 118 stacked resume points. Neither had a
+   rule saying *"replace"*, so *"prepend, leave the rest intact"* became the convention — and each
+   grew without any single commit doing anything wrong. **A file whose job is to say WHERE TO START
+   must have a bound, or it becomes the thing you have to read before you can start.**
+2. 🔴 **Dropping a rotting NUMBER does not protect a rotting SHAPE.** *What ships today* had learned
+   the hard-won lesson and dropped its version cells — then **omitted `mc/26.2` entirely** when §69
+   Phase C cut the band. The remedy that saves a cell cannot save a **missing row**, because nothing
+   counts the rows. Same for the header archive list: it said *"five files"* while six existed.
+3. ⚠️ **A status block that warns about its own staleness still goes stale.** `WHERE THIS STANDS`
+   opened by naming the cause — *a status sentence is never updated by the commit that changes the
+   status* — in its **fourth** edition, and was wrong again by its fifth. Naming a failure mode in
+   prose does not install a guard against it. **It now carries the command, not the value.**
+4. 🔑 **Archiving is the only compaction that is safe to do unattended.** Every step here was a
+   **split with a verbatim assertion**, never an edit or a summary. That is what made a 1.1 MB
+   reduction reviewable in one pass — and it is why `gotchas.md`/`decisions.md` stayed append-only
+   in fact as well as in name.
+
+### ⬜ Carried out of this section
+
+- [ ] ⚠️ **`TODO.md` is NOT propagated to the bands, and its blob is already THREE-WAY split**
+      (`master`, `mc/26.2`, and `mc/26.1.2` = `mc/1.21.11`). §71 ruling 2 retired the one-blob
+      invariant deliberately, so this is not a defect — but a band reading its own copy is now
+      reading a **5,000-line pre-§82 file**. **Owner call: propagate this cleanup, or let the bands
+      keep their own?** §65 was explicitly scoped *"on all the branches"*; §82 was not.
+- [ ] 🔴 **`extract-mc-surface.py --check` is RED on the three non-`master` live bands** — carried in
+      from §81 and **not touched here**. `master` was regenerated; the bands were not.
+- [ ] 🔴 **The `Latest` badge race** — won by the wrong band twice (§80, §81). Still a manual fix.
+
+---
+
 
 ---
 
