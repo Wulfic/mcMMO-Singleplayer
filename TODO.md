@@ -2915,6 +2915,12 @@ a test that CANNOT FAIL is vacuous. Only the second kind gets touched.**
 | **S4** | **Asserts only "does not throw"** | No claim about the result |
 | **S5** | **Borrowed** | The self-test exercises a *different* instrument than the gate it certifies. ⚠️ **This one is a CANDIDATE CLASS, not automatically a finding** — a borrowed self-test can fail, so by §74's definition it is thin, not vacuous. It is listed because the *gate* it certifies is left unproven, which is a real defect of a different name. **Say which of the two it is; do not let "vacuous" do the work of "mis-scoped".** |
 
+✅ **CLOSED BY §79 (2026-09-23) — both were confirmed S5, and both are now re-scoped.** The
+paragraph below is left exactly as §74 wrote it, because it is the record of a correct suspicion:
+both were read, both were mutation-proven, and both turned out to be mis-scoped rather than
+vacuous — the distinction §74 insisted on, vindicated. Gate 2 now carries 34 checks over the
+counter and gate 12 carries 37 over the resolver. **The present tense below is historical.**
+
 🔴 **S5 is already suspected in two places and NEITHER is confirmed yet:**
 `mixin-allow-audit.py --self-test` returns `selftest_jar_selection() or selftest_naming()` — both
 imported from `loomjar.py` — so **nothing in it exercises injection-point counting**, which is the
@@ -3065,6 +3071,10 @@ Named in the plan and now settled, because "vacuous" must not do the work of "mi
   exercises nothing in injection-point counting, which is the whole job of ship gate 2.**
 - `probe-bands.py --self-test` runs `selftest_decl_parsing()` alone — a javap regex, not the
   manifest validation that is gate 12. *(Its one case loop is separately vacuous, above.)*
+
+✅ **RE-SCOPED BY §79 (2026-09-23).** The two bullets above described the state until §79; the
+borrowed `loomjar.py` and `DECL_RE` cases were kept (they certify something real) and cases over
+the gates' own computations were added beside them. Read the bullets as history.
 
 **Neither is a vacuity finding.** Both mean the same operational thing: running *"`--self-test`
 first, as with every gate"* on gates 2 and 12 returns a green that says nothing about what those
@@ -3280,7 +3290,13 @@ redone byte-wise. `scripts/*.py` are CRLF on disk, `TODO.md` is LF, and `*.sh` i
       planted line that must FAIL to match, so an over-matching `DECL_RE` has nothing to catch it.
       Thin rather than vacuous, so §74's rule left it alone deliberately. It is the obvious next
       question, not an oversight.
-- [ ] ⬜ **Gates 2 and 12 have a MIS-SCOPED `--self-test`, and it needs a ruling, not a patch.**
+- [x] ✅ **CLOSED BY §79 (2026-09-23). The ruling came 2026-09-23 (§78 ruling 3) and §79 executed
+      it.** Gate 2 gained 34 checks over `count_points` / `normalise_ref` / `select_methods` /
+      `Result.status`; gate 12 gained 37 over `owner_of` / `member_of` / `name_candidates` /
+      `find_member`'s supertype closure / `control_versions`' range logic. Both keep their borrowed
+      cases. 10/10 and 12/12 mutations caught and **attributed to the specific check**, armed on the
+      yarn band's own copies. The original row:
+- [x] ⬜ **Gates 2 and 12 have a MIS-SCOPED `--self-test`, and it needs a ruling, not a patch.**
       `mixin-allow-audit.py --self-test` runs `selftest_jar_selection() or selftest_naming()`, both
       imported from `loomjar.py` — real, falsifiable, and about the **jar chooser**. Nothing in it
       touches injection-point counting. `probe-bands.py --self-test` runs a javap regex, not the
@@ -3900,7 +3916,8 @@ instead of trusting it, in the same pass that was supposed to be checking someon
       Gate 13 covers `build.gradle` + `settings.gradle`; a commit mixing version-specific and
       version-agnostic `src/` work still waives both halves with gate 7 green. That is not a gap
       this section failed to close — it is one no commit-scoped instrument can.
-- [ ] ⬜ **Gates 2 and 12: owner RULED to RE-SCOPE (2026-09-23), NOT DONE this session.**
+- [x] ✅ **DONE by §79 (2026-09-23), the session after the ruling.** The original row:
+- [x] ⬜ **Gates 2 and 12: owner RULED to RE-SCOPE (2026-09-23), NOT DONE this session.**
       `mixin-allow-audit.py --self-test` must exercise injection-point counting and
       `probe-bands.py --self-test` the manifest validation; the borrowed `loomjar.py` and `DECL_RE`
       cases stay as well. ⚠️ **This is a ruling carried as an open item, which is different from a
@@ -3920,7 +3937,7 @@ instead of trusting it, in the same pass that was supposed to be checking someon
 
 ---
 
-## §79 — gates 2 and 12: a self-test that exercises the GATE, not the borrowed helper — ⬜ IN PROGRESS
+## §79 — gates 2 and 12: a self-test that exercises the GATE, not the borrowed helper — ✅ DONE (Tier 2; both re-scoped, closes HELD until push)
 
 **Tier 2.** Two shared `scripts/` files under the identity guard, a ship gate each, propagation to
 three live bands. The ruling was taken on **2026-09-23 (§78, ruling 3)** and carried unexecuted;
@@ -3962,9 +3979,9 @@ self-test has ever exercised**.
 
 ### Phases
 
-- [ ] **P0 — baseline, before any edit.** Both self-tests exit 0; record what each covers. Back up
+- [x] ✅ **P0 — baseline, before any edit.** Both self-tests exit 0; record what each covers. Back up
       `TODO.md`, the two scripts and the three memory files to `scratchpad/*.bak-s18`. ✅ **DONE.**
-- [ ] **P1 — gate 2 gains injection-point cases.** Adopt §78's `check()` funnel verbatim: one
+- [x] ✅ **P1 — gate 2 gains injection-point cases.** 34 checks, floor matched first cut. Adopt §78's `check()` funnel verbatim: one
       counter, per-kind tally **derived from the label prefix**, exact **executed** floor, and a
       refusal if any category ran zero. Cases over `count_points` (HEAD/TAIL/RETURN/INVOKE/FIELD/
       NEW, `ordinal`, the unsupported-`@At` MANUAL path, target exact vs prefix vs near-miss),
@@ -3972,24 +3989,24 @@ self-test has ever exercised**.
       including the owner-elision case its own ⚠️ calls the one that bites), `select_methods`
       (name-only matches every overload; descriptor matches by prefix) and `Result.status`' ladder.
       Every quiet case paired with a firing one.
-- [ ] **P2 — gate 12 gains manifest-validation cases.** Same funnel. `owner_of`/`member_of` across
+- [x] ✅ **P2 — gate 12 gains manifest-validation cases.** 37 checks; the floor REJECTED a predicted 40. Same funnel. `owner_of`/`member_of` across
       all three record families and the `None` fall-through; `name_candidates`' `$`-nesting;
       `find_member`'s supertype closure with **every class pre-seeded so javap is never spawned** —
       which is itself the assertion that the walk resolves through `java.lang.Enum`,
       `java.lang.Object` and a non-MC interface, the three false-ABSENT shapes its docstring
       records; `control_versions`' §56.4 range logic **and its refusal** when the primary is not in
       `supported_minecraft_versions`.
-- [ ] **P3 — the mutation matrix. TWO-SIDED, with per-case ATTRIBUTION.** Every new case mutated at
+- [x] ✅ **P3 — the mutation matrix. TWO-SIDED, with per-case ATTRIBUTION.** 10/10 and 12/12. Every new case mutated at
       the **module scope the production code reads** (a rebind inside a function shadows the global
       — measured, §75), against a **green control**, reading **exit codes** not output. 🔴 **Record
       WHICH check went red, not just that the run did** — a mutation caught by the floor instead of
       the case it targets is the third-time-in-this-repo failure §78 hit.
-- [ ] **P4 — verify.** Both `--self-test`s exit 0; all 16 other Python `--self-test`s still exit 0;
+- [x] ✅ **P4 — verify.** 17 self-tests, 175/1,951/0, gates 7/9/10/11/13 in a fresh clone. Both `--self-test`s exit 0; all 16 other Python `--self-test`s still exit 0;
       `./gradlew test` **and** `tagBoundTest` (the baseline is the SUM, both **bare**); gates
       7/9/10/11/13 in a **fresh local clone** (they prefer remote refs).
-- [ ] **P5 — propagate to the three live bands**, `Backport-of:` trailer each. 🔑 **Arm the new
+- [x] ✅ **P5 — propagated to the three live bands**, `Backport-of:` trailer each. 🔑 **Arm the new
       cases on `mc/1.21.11`'s OWN copy** — a propagated guard passing only proves the file arrived.
-- [ ] **P6 — caveat-expiry, memory, close.** Grep `README.md` + `wiki/**` for the **symptom**
+- [x] ✅ **P6 — caveat-expiry, memory, close.** The pass found FOUR falsified claims, all in `TODO.md`. Grep `README.md` + `wiki/**` for the **symptom**
       (*"self-test proves the gate"*), not the files edited.
 
 ### Rollback
@@ -4001,6 +4018,83 @@ self-test has ever exercised**.
 | Memory | `scratchpad/{state,decisions,gotchas}.md.bak-s18` |
 | Mutation runs | `.orig` copies in `scratchpad/`, `cmp`-verified after every run |
 | Propagation | `scratchpad/UNDO-s18-bands.txt` — pre-propagation heads as `git branch -f` lines |
+
+---
+
+### §79 — what it closed, measured
+
+✅ **Both gates re-scoped. The ruling carried from §78 is discharged.**
+
+| Gate | before | after |
+|---|---|---|
+| **2** `mixin-allow-audit.py` | 11 cases, all `loomjar.py` | **+34 checks** over `count_points`, `normalise_ref`, `select_methods`, `Result.status` — 21 quiet, 10 firing, 3 detector-mutation |
+| **12** `probe-bands.py` | 7 cases, all `DECL_RE` | **+37 checks** over `owner_of`, `member_of`, `name_candidates`, `find_member`'s closure, `control_versions` — 24 quiet, 7 firing, 1 refusal, 5 detector-mutation |
+
+⚠️ **The borrowed cases were KEPT, per the ruling.** They are real and falsifiable; they were only
+ever mis-labelled as certifying the gate.
+
+### ✅ Verification — real exit codes, read directly
+
+| Check | Result |
+|---|---|
+| Gate 2 `--self-test` | **exit 0**, 34 checks, every category non-zero |
+| Gate 12 `--self-test` | **exit 0**, 37 checks, **0.2s — no javap spawned**, proving the closure walk runs fully offline |
+| Gate 2 mutation matrix | **10 mutations, 10 CAUGHT**, each attributed to its own named check, green control before and after |
+| Gate 12 mutation matrix | **12 mutations, 12 CAUGHT**, same discipline |
+| 🔑 **ARMED ON THE YARN BAND** | both guards mutated on `mc/1.21.11`'s OWN copies → **both RED**, restored and `cmp`-verified, band tree clean |
+| Both gates, for real | gate 2 `--check` **OK=60 SLICE=1 ZERO=0**; gate 12 `--check` **1466 records resolve on 26.3**. Verdicts UNCHANGED — the self-test moved, the gate did not |
+| All Python `--self-test`s | **17 of 17 exit 0** (16 in §77; gate 13 added the 17th in §78) |
+| Java suite | **175 classes / 1,951 tests / 0 failures / 0 errors**, both tasks **bare**, both producing XML. Identical to §78 — this change touches zero Java |
+| Gate sweep, **fresh local clone** | self-tests first (all exit 0), then gates **7 / 9 / 10 / 11 / 13** all **exit 0**. Gate 7: **0 MISSING** on all three live bands |
+| Caveat-expiry | `README.md` + `wiki/**` **clean** — neither mentions a self-test. The pass found **four** falsified claims, all in `TODO.md`, all annotated above rather than deleted |
+
+### 🔑 What §79 is worth carrying
+
+1. 🔴🔴 **A self-test can be two-sided, floored, mutation-proven — and still certify the wrong
+   thing.** Both of these passed every quality bar §75 and §76 established, and neither touched the
+   computation its gate exists to perform. **The floor was applied to the wrong surface**, and no
+   instrument in this repo could see that, because every instrument asks *"can this fail?"* and
+   none asks *"fail at WHAT?"*. That is why the ruling had to come from reading, not from a gate.
+2. 🔴 **A mutation that CRASHES the harness is not a catch.** M08's first cut deleted
+   `members.setdefault(cls, [])`, which does not disable the negative cache — it makes the next
+   line raise `KeyError`. The run went red at exit 1 **with the target check never executed**.
+   Reading the exit code alone would have scored it CAUGHT. **The attribution column is what
+   caught it**, and it is the fourth time in this repo a mutation has scored against the wrong
+   mechanism.
+3. ⚠️⚠️ **The documented remedy was written down and I still reproduced the defect.** The
+   `Backport-of:` trailer needs a **double** `\n` because `$(...)` strips `%B`'s trailing newline —
+   a row in this very file says so, naming the sixteen commits it already cost. The first
+   propagation used one `\n`, and git's own parser returned **empty** on all six new band commits.
+   Caught by verifying with `%(trailers:...)` **plus the control** that master's source commits
+   return empty. 🔑 **Reading a remedy is not applying it** — the same shape as §78's
+   *"AGENTS.md records X"* written three times.
+4. 🔑 **The floor refused its own author again.** Gate 12's first cut predicted **40** checks; the
+   real executed count is **37**. §78 recorded the identical event at 22-vs-21. A floor that has
+   rejected the person who wrote it is the only kind with evidence it would reject anyone else.
+5. ⚠️ **Official-name fixtures are safe on a yarn band, and that was MEASURED.** Both new case sets
+   carry `net.minecraft...` strings while `mc/1.21.11` is yarn-mapped. They are string fixtures,
+   not resolved symbols, so no translation was required — but a clean cherry-pick onto the yarn
+   band is the **dangerous** outcome, so it was armed rather than assumed.
+6. ⚠️ **The kind loop funnels through `check()` on purpose.** Appending straight to `_FAILURES` is
+   invisible to the counter — the §76 shape still open in `extract-mc-ids.py`. This work did not
+   add a fourth instance of it.
+
+### What §79 did NOT close — carried forward
+
+- [ ] 🔴 **`disassemble()` is still uncovered.** It shells out to javap, so the javap-output PARSER
+      — the thing that turns real bytecode into the `Method` objects the new cases hand-build — has
+      no case at all. Refactoring shipped gate code to suit its test was **declined, not
+      forgotten**. 🔑 The same limit applies to `javap_all` in gate 12. **A hand-built fixture
+      proves the logic, never the reading.**
+- [ ] 🔴 **A waiver's stated REASON is never re-checked** — unchanged from §78.
+- [ ] ⬜ **`src/**` and the mixed commit remain undecidable** — unchanged from §78.
+- [ ] ⬜ **Untouched §76 rows:** the `failures.append()` assertions that bypass `check()` in
+      `extract-mc-ids.py`, and the unasserted prose tally in `gradle-key-identity-audit.py` /
+      `manifest-identity-audit.py`. ✅ §79 **avoided** the shape rather than fixing it.
+- [ ] ⬜ **Untouched §75 rows:** the S2 one-sided sweep, and the `--mutate` second-proof audit.
+- [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **twelfth** consecutive
+      session. ⚠️ **The ahead-count is deliberately not recorded here** — a status row cannot count
+      the commit that records it. Run `git rev-list --left-right --count origin/master...master`.
 
 ---
 
