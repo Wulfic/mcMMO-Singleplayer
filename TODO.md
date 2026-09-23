@@ -4156,25 +4156,152 @@ its release rather than removing it, and a same-tag draft is the orphan §67 spe
 - **Not** touching `src/`. This session ships what is already written and verified.
 - **Not** taking a carried guard row (§75/§76/§78/§79). All of them stay open.
 
+### §80 — verification, measured before the push
+
+✅ **All of this ran BEFORE the push, and every number is read off an artifact, not a summary line.**
+
+| Check | Result |
+|---|---|
+| Java suite | **175 classes / 1,951 tests / 0 failures / 0 errors / 0 skipped** — the SUM of both tasks (`test` 174/1938 + `tagBoundTest` 1/13), read off the JUnit XML. Identical to §79; zero `src/` touched |
+| ⚠️ **`tagBoundTest`'s XML was 29 min STALE** | `./gradlew cleanTest test` runs `:test` **only** — it does not clean or re-run the second task. Caught by reading each file's **mtime**, not its contents: a stale green XML is indistinguishable from a fresh one by counts alone. Re-run bare with `cleanTagBoundTest tagBoundTest` |
+| ⚠️ **My own `EXIT=$?` was wrong** | it captured `tail`'s status through a pipe, not gradle's. The suite verdict comes from the XML and `BUILD SUCCESSFUL`, never from that variable |
+| Python `--self-test` | **17 of 17 exit 0**, run FIRST — "no drift" is also what a broken auditor prints |
+| Gate 2 `mixin-allow-audit --check` | **exit 0, OK=60 SLICE=1**, no injector resolves to 0 sites. Unchanged from §79 |
+| Gate 7 `drift-audit` | **exit 0, 0 MISSING** on all three live bands; 6 archived correctly skipped |
+| Gate 9 `branch-file-identity` | **exit 0, 55 shared paths across 4 branches** |
+| Gate 10 `manifest-identity` | **exit 0**, all four manifests distinct |
+| Gate 11 `gradle-key-identity` | **exit 0** — four live refs agree on `1.5.0-SNAPSHOT`, `minecraft_version` **distinct on every one** |
+| Gate 12 `probe-bands --check` | **exit 0**, 1466 records resolve on 26.3 |
+| Gate 13 `build-gradle-identity` | **exit 0**, residue 427 on all four |
+| Build | **BUILD SUCCESSFUL**, `mcmmo-1.5.0-SNAPSHOT+mc26.3.jar` produced |
+| Caveat-expiry | **clean, no edit needed.** All 22 `v1.4.0` mentions in `README.md`/`wiki/` describe the **archived** bands, whose final release genuinely IS v1.4.0. The live table uses `mcmmo-<version>+mc26.3.jar` — the version-free placeholder this repo already arrived at, so a bump rots nothing |
+
+⚠️ **Gates 1, 3, 4, 5, 6 were NOT run** — they need a jar and a live server per version. Not claimed.
+⚠️ **Every gate above compared FOUR branches.** None exited 2, and exit 2 is not a pass.
+
+### The push — `master` FIRST, and the precondition RE-READ on the remote
+
+`git push --dry-run` first: four fast-forwards, no force, `mc/26.2` new. Then **`master` alone**,
+then `origin/master` was **re-read** (`git show origin/master:gradle.properties`) to confirm it
+reported `26.3` — the R10 precondition **measured on the remote**, not inferred from having just
+pushed it. Only then did the three bands go.
+
+```
+cee957c16..f65ee3bbc  master      (+69)
+ * [new branch]       mc/26.2
+ec07d2ab9..bce931ad4  mc/26.1.2   (+32)
+06a5c1430..a0f3e261e  mc/1.21.11  (+32)
+```
+
+✅ **The bump was NECESSARY, and CI proved it rather than the argument doing so:** master's run
+shows **`Refuse a stale mod_version` → success**. At `1.4.0-SNAPSHOT` that step refuses, and all
+four runs would have died there exactly as §44's did.
+
+🔴 **Three issues auto-closed ON PUSH, and only two of them meant to.** #15 and #19 closed on a
+deliberate `Closes #N` trailer in their own fix commit. **#14 did not** — its fix `a790720a6`
+carries no closing keyword. It was closed by `025588517`, a `docs(74)` commit whose body says
+*"§73 **fixed #14** the same day"*. GitHub matches closing keywords **anywhere in a commit body**,
+including prose describing history in the past tense — and this repo's commit bodies are
+narrative by convention, so the construction recurs. The outcome matched the §73 ruling-3 intent,
+so nothing was reverted; the hazard is in `.agent/memory/gotchas.md` and the owed reply was posted
+by hand. 🔑 **The tell is that the close is attributed to a commit unrelated to the fix.**
+
 ### The steps
 
-- [ ] **80.1** Bump `mod_version` → `1.5.0-SNAPSHOT` on `master`; commit alone.
-- [ ] **80.2** Propagate 80.1 to `mc/26.2`, `mc/26.1.2`, `mc/1.21.11` with a `Backport-of:` trailer.
+- [x] **80.1** Bump `mod_version` → `1.5.0-SNAPSHOT` on `master`; commit alone.
+- [x] **80.2** Propagate 80.1 to `mc/26.2`, `mc/26.1.2`, `mc/1.21.11` with a `Backport-of:` trailer.
       ⚠️ **The trailer needs a DOUBLE `\n`** — `$(...)` strips `%B`'s trailing newline and §79
       reproduced that defect *after reading the remedy*. Verify with `%(trailers:...)`, **plus the
       control** that master's own commit returns empty.
-- [ ] **80.3** Build + full suite on `master`. Baseline to beat: **175 classes / 1,951 tests / 0
+- [x] **80.3** Build + full suite on `master`. Baseline to beat: **175 classes / 1,951 tests / 0
       failures**, both test tasks bare. ⚠️ `./gradlew test` is TWO tasks — the total is the SUM.
-- [ ] **80.4** All Python `--self-test`s (17 expected, exit 0 each) — **run these FIRST**, because
+- [x] **80.4** All Python `--self-test`s (17 expected, exit 0 each) — **run these FIRST**, because
       "no drift" is also what a broken auditor prints.
-- [ ] **80.5** Gates 7 / 9 / 10 / 11 / 13 in a **fresh local clone**. ⚠️ All of them prefer
+- [x] **80.5** Gates 7 / 9 / 10 / 11 / 13 in a **fresh local clone**. ⚠️ All of them prefer
       **remote** refs, so a pre-push run in this working copy grades the stale remote.
-- [ ] **80.6** 🔴 Push `master` FIRST (R10), then `mc/26.2`, `mc/26.1.2`, `mc/1.21.11`.
-- [ ] **80.7** Watch all four release runs to green. ⚠️ `github` MCP is **down this session**; the
+- [x] **80.6** 🔴 Push `master` FIRST (R10), then `mc/26.2`, `mc/26.1.2`, `mc/1.21.11`.
+- [x] **80.7** Watch all four release runs to green. ⚠️ `github` MCP is **down this session**; the
       `gh` CLI does the work — **say which path ran**.
-- [ ] **80.8** Close #14, #15, #16, #17, #19 once their runs are green. #14 also owes its reporter a
+- [x] **80.8** Close #14, #15, #16, #17, #19 once their runs are green. #14 also owes its reporter a
       reply — it is the only outside bug report of the five.
-- [ ] **80.9** Caveat-expiry pass, `.agent/memory/`, and close this section with the proof matrix.
+- [x] **80.9** Caveat-expiry pass, `.agent/memory/`, and close this section with the proof matrix.
+
+### §80 — CLOSED. `v1.5.0` is live on all four live bands
+
+✅ **All four release runs GREEN**, confirmed two ways (four `gh run watch --exit-status` exit
+codes, then a fresh `gh run list`). Per-run step conclusions read directly, not inferred from the
+run's overall verdict:
+
+| branch | stale-version gate | publish | sweep | R10 collision check |
+|---|---|---|---|---|
+| `master` (26.3) | ✅ success | ✅ | ✅ | ✅ |
+| `mc/26.2` | ✅ success | ✅ | ✅ | ✅ |
+| `mc/26.1.2` | ✅ success | ✅ | ✅ | ✅ |
+| `mc/1.21.11` | ✅ success | ✅ | ✅ | ✅ |
+
+**The release state matches the blast-radius table exactly — measured, not assumed:**
+
+- **4 new** at `v1.5.0`: `mc26.3`, `mc26.2`, `mc26.1.2`, `mc1.21.11`, each carrying **both** the
+  mod jar and its sources jar.
+- **6 archived SURVIVED at `v1.4.0`**: `mc1.21.1`, `mc1.21.3`, `mc1.21.4`, `mc1.21.5`, `mc1.21.8`,
+  `mc1.21.10` — untouched, because they were never pushed. Exactly the §69 Phase D contract.
+- **3 superseded reaped**: the live bands' old `v1.4.0` releases are gone, replaced in place.
+- **ZERO drafts.** `isDraft=false` on all ten — the §67 same-tag orphan did not recur.
+
+**Issue queue: EMPTY.** #14, #15, #16, #19 and #17 all closed. #16 and #17 were closed with their
+**won't-fix** parts stated in the comment (16.1 `master`-to-docs, cancelled under R-a; 17.9 hotbar
+overlap) rather than left looking uniformly done. #14's reporter got the reply your 2026-09-21
+comment promised — they are on `1.21.11`, a live band, so `v1.5.0` reaches them.
+
+### 🔴 NEW DEFECT, found only because the release state was read rather than trusted
+
+**The "Latest" badge is assigned by a RACE.** After the four parallel runs, `mc26.2-v1.5.0` held
+`isLatest=true` and `mc26.3-v1.5.0` did not — **the second-newest band was the headline release.**
+`release.yml` never sets `make_latest`, so GitHub falls back to *"latest = most recently
+published"*. Measured: `26.3` published at `07:21:12`, `26.2` at `07:21:23`. **Eleven seconds
+decided which jar the Releases page offers**, and `/releases/latest` is a real URL players follow.
+
+🔑 **This is the repo's signature shape: a player-facing wrong answer that EVERY structural gate
+calls green.** All four runs succeeded, gates 2/7/9/10/11/12/13 all exited 0, and **nothing in
+this repo reads release metadata at all.**
+
+- ✅ **Symptom fixed now:** `gh release edit mc26.3-v1.5.0 --latest`.
+- [ ] 🔴 **Cause NOT fixed, deliberately.** `release.yml` needs `make_latest` pinned to the newest
+      band — but that file sits **inside its own `paths:` filter** and under gate 9's byte-identity
+      rule, so the change fires four more release runs and must reach three bands. It is its own
+      piece of work, not a tail-end edit after a ship.
+- [ ] ⬜ **Add to the release procedure:** `gh release list --json tagName,isLatest` after every
+      multi-band push. One command, and no gate performs it.
+
+### 🔴 The other new hazard — an issue closed by PROSE
+
+#15 and #19 closed on a deliberate `Closes #N` trailer in their own fix commit. **#14 did not** —
+its fix `a790720a6` carries no closing keyword. It was closed by `025588517`, a `docs(74)` commit
+whose body reads *"§73 **fixed #14** the same day"*. GitHub matches closing keywords **anywhere in
+a commit body**, including a past-tense sentence describing history — and narrative commit bodies
+are this repo's house style, so the construction will recur.
+🔑 **The tell: the close is attributed to a commit that has nothing to do with the fix.**
+`gh api repos/<r>/issues/<n>/timeline --jq '[.[]|select(.event=="closed")][-1].commit_id'`
+**Convention going forward:** write `issue 14` or `GH-14` in narrative prose; reserve `#N` for the
+deliberate `Closes #N` trailer.
+
+### What §80 did NOT close — carried forward
+
+- [ ] 🔴 **`release.yml`'s `make_latest`** — the new row above.
+- [ ] 🔴 **`disassemble()` / `javap_all` are still uncovered** — unchanged from §79.
+- [ ] 🔴 **A waiver's stated REASON is never re-checked** — unchanged from §78.
+- [ ] ⬜ **`src/**` and the mixed commit remain undecidable** — unchanged from §78.
+- [ ] ⬜ **Untouched §76 rows:** the `failures.append()` assertions that bypass `check()`, and the
+      unasserted prose tallies.
+- [ ] ⬜ **Untouched §75 rows:** the S2 one-sided sweep, and the `--mutate` second-proof audit.
+- [ ] 🔴 **THE LIVE PLAY-TEST — owner only. Now the oldest debt by a wide margin**, and for the
+      first time there is no push hold standing in front of it.
+- ✅ **The push hold row is GONE from this list.** Thirteen sessions, lifted 2026-09-23.
+
+⚠️ **Gates 1, 3, 4, 5, 6 were NOT run this session** — they need a jar and a live server per
+version. `v1.5.0` is built, released and structurally verified; it is **not** boot- or
+gameplay-smoked. Not claimed. That is the honest state of the ship.
+
 
 ---
 
