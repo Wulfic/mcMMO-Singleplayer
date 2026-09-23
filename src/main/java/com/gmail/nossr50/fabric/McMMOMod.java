@@ -36,6 +36,7 @@ import com.gmail.nossr50.skills.salvage.salvageables.SalvageableManager;
 import com.gmail.nossr50.skills.taming.CallOfTheWild;
 import com.gmail.nossr50.runnables.SaveTimerTask;
 import com.gmail.nossr50.runnables.player.ClearRegisteredXPGainTask;
+import com.gmail.nossr50.runnables.player.XpChatFlushTask;
 import com.gmail.nossr50.util.experience.FormulaManager;
 import com.gmail.nossr50.util.MaterialMapStore;
 import com.gmail.nossr50.util.PlacedBlockTracker;
@@ -126,6 +127,15 @@ public class McMMOMod implements ModInitializer {
 
     /** Ticks in one real-time minute (20 tps × 60 s). Autosave interval is configured in minutes. */
     private static final long TICKS_PER_MINUTE = 20L * 60L;
+
+    /**
+     * §81. How often the {@code /mcstats <skill> keep} chat echo is flushed — 100 ticks, five
+     * seconds at the server's fixed 20 tps.
+     *
+     * <p>Deliberately NOT a config knob: it is one number with one sensible value, and a tuning knob
+     * nobody asked for is a knob nobody maintains.
+     */
+    private static final long XP_CHAT_FLUSH_TICKS = 100L;
 
     /**
      * Skill metadata/relationship registry (subskill↔parent, super-ability↔skill, tool maps,
@@ -316,6 +326,10 @@ public class McMMOMod implements ModInitializer {
             // Phase 11: expire stale diminished-returns XP records every 60 ticks (matches legacy),
             // so the rolling per-skill XP totals don't grow unbounded. Cancelled in onServerStopping.
             scheduler.runTimer(new ClearRegisteredXPGainTask(), 60, 60);
+            // §81: flush the `/mcstats <skill> keep` chat echo every 5s, turning a window of gains
+            // into ONE line instead of one line per block broken or per hit landed. Cancelled in
+            // onServerStopping with everything else.
+            scheduler.runTimer(new XpChatFlushTask(), XP_CHAT_FLUSH_TICKS, XP_CHAT_FLUSH_TICKS);
         } catch (Throwable t) {
             LOGGER.error("Error while enabling mcMMO for the server session", t);
         }

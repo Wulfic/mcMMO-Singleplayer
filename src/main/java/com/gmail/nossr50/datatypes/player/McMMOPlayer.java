@@ -394,10 +394,11 @@ public class McMMOPlayer {
      * @param xp Experience amount to process
      */
     /**
-     * One line of {@code /mcstats <skill> keep} output: what was gained, and where that leaves you.
+     * One line of {@code /mcstats <skill> keep} output: what was gained across the window that just
+     * closed, and where that leaves you.
      *
-     * <p>Quotes the post-gain stored values, so it agrees with {@code /mcstats} rather than leading
-     * it by one gain.
+     * <p>Quotes the stored values as they are at FLUSH time, so the line agrees with
+     * {@code /mcstats} rather than leading or lagging it.
      */
     private void sendXpChatUpdate(@NotNull PrimarySkillType skill, float gained) {
         player.sendMessage(LocaleLoader.getString("Commands.XPGain.Keep",
@@ -418,6 +419,19 @@ public class McMMOPlayer {
     private final Set<PrimarySkillType> xpChatSkills = EnumSet.noneOf(PrimarySkillType.class);
 
     /**
+     * XP earned on a kept skill since the last flush, awaiting one summary line.
+     *
+     * <p>§81. The echo used to send a line per gain, which is a line per block mined and a line
+     * per HIT landed — several a second on exactly the skills a player turns this on for. Gains
+     * accumulate here instead and {@link #flushXpChat()} empties the map on a timer.
+     *
+     * <p>An {@link EnumMap} rather than a hash map so the flush order is the enum's order: a player
+     * keeping two skills sees them in a stable order rather than a shuffled one.
+     */
+    private final Map<PrimarySkillType, Float> pendingXpChat =
+            new EnumMap<>(PrimarySkillType.class);
+
+    /**
      * Toggles the chat echo for {@code skill}.
      *
      * @return {@code true} if the echo is now ON
@@ -425,6 +439,10 @@ public class McMMOPlayer {
     public boolean toggleXpChat(@NotNull PrimarySkillType skill) {
         if (!xpChatSkills.add(skill)) {
             xpChatSkills.remove(skill);
+            // §81. DISCARD the half-filled window rather than flushing it. The command answers
+            // "Stopped printing <skill> XP gains" immediately, so a summary line arriving up to five
+            // seconds later would read as the toggle having failed.
+            pendingXpChat.remove(skill);
             return false;
         }
         return true;
@@ -432,6 +450,41 @@ public class McMMOPlayer {
 
     public boolean isXpChatEnabled(@NotNull PrimarySkillType skill) {
         return xpChatSkills.contains(skill);
+    }
+
+    /**
+     * §81. Emits one summary line per kept skill that earned XP since the last call, then
+     * empties the window. Driven on a fixed tick interval by
+     * {@link com.gmail.nossr50.runnables.player.XpChatFlushTask}.
+     *
+     * <p>A timer rather than a "have five seconds passed?" check on the next gain: the lazy form can
+     * never flush the LAST window, so a player who mines for three seconds and stops would see
+     * nothing at all — and the tail is precisely what they switched the echo on to watch.
+     *
+     * <p>Sends NOTHING when no kept skill gained. A task that fires every five seconds and prints
+     * {@code +0.0 XP} forever would be a worse flood than the one this replaces.
+     *
+     * <p>⚠️ It does NOT re-check {@link #isXpChatEnabled}. An entry only exists here for a skill
+     * that was kept when the XP landed, and {@link #toggleXpChat} deletes the entry on the way off,
+     * so a disabled skill can never reach this loop. That re-check WAS written, and a mutation
+     * measured it: deleting it broke no test, because it is unreachable. An unreachable guard is
+     * decoration — it gets refactored away later and nothing goes red.
+     */
+    public void flushXpChat() {
+        if (pendingXpChat.isEmpty()) {
+            return;
+        }
+
+        for (var entry : pendingXpChat.entrySet()) {
+            // A non-positive total would print "+0.0 XP" on a timer. Reachable two ways, neither
+            // hypothetical: applyXpGain is a public entry point that does NOT share beginXpGain's
+            // xp <= 0 gate (an admin `/addxp <skill> 0` lands here unmodified), and the
+            // diminished-returns throttle returns 0 for a gain it reduces to nothing.
+            if (entry.getValue() > 0f) {
+                sendXpChatUpdate(entry.getKey(), entry.getValue());
+            }
+        }
+        pendingXpChat.clear();
     }
 
     public void beginXpGain(PrimarySkillType skill, float xp, XPGainReason xpGainReason,
@@ -552,8 +605,11 @@ public class McMMOPlayer {
         // Placed on the same tail as the bar refresh, and for the same reason -- this is the point
         // where the gain has actually reached the profile, so the numbers quoted are the stored ones
         // rather than the ones that were about to be stored.
+        //
+        // §81: ACCUMULATED here, never sent here. The line goes out on the flush task's tick; see
+        // flushXpChat() for why that is a timer and not a "have five seconds passed?" check.
         if (isXpChatEnabled(primarySkillType)) {
-            sendXpChatUpdate(primarySkillType, finalXp);
+            pendingXpChat.merge(primarySkillType, finalXp, Float::sum);
         }
 
         // PORT Phase 11 (now wired): the deferred processPostXpEvent — refresh the on-screen XP bar
