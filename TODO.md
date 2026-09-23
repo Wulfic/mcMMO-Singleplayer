@@ -740,14 +740,20 @@ the live file keeps the pointer. Byte count is preserved across the pair and ass
 
 | artifact | before | after | |
 |---|---|---|---|
-| `TODO.md` | 5,074 lines / 415 KB | **1,337 lines / 140 KB** | §65 – §81 verbatim in the seventh archive |
+| `TODO.md` | 5,074 lines / 415 KB | **~1,390 lines / ~144 KB** | §65 – §81 verbatim in the seventh archive |
 | `.agent/memory/state.md` | 159 KB / 29 session blocks | **15 KB / 3 blocks** | 26 blocks verbatim in `state-archive-through-session-17.md` |
 | `.agent/memory/gotchas.md` | 437 KB / 322 entries | **147 KB / 113** | 209 August entries in `gotchas-archive-2026-08.md` |
 | `.agent/memory/decisions.md` | 304 KB / 168 entries | **87 KB / 51** | 117 August entries in `decisions-archive-2026-08.md` |
 | auto-memory `resume-here.md` | 471 KB / 118 resume points | **7 KB / 3** | 115 verbatim in `resume-archive.md` |
 | auto-memory `MEMORY.md` | 25.0 KB | **22.6 KB** | only 10% — see below |
 
-**What a session actually reads first went `.agent/memory/` 900 KB → 249 KB and auto-memory
+⚠️ **That first row is APPROXIMATE ON PURPOSE, and the reason is this section.** It first read
+*"1,337 lines"* — measured correctly, and made wrong by the act of writing this results block into
+the file it was measuring. **A status row cannot count the commit it is written in**, which is the
+lesson the `vs origin` row learned three corrections ago; §82 managed to re-discover it in its own
+closing table. `wc -l TODO.md` is the answer, and it always will be.
+
+**What a session actually reads first went `.agent/memory/` 900 KB → 254 KB and auto-memory
 494 KB → 30 KB.** Total bytes on disk are **unchanged**: every split was verified by asserting the
 moved blocks still appear verbatim in the archive **and** in the live file before the replace landed.
 
