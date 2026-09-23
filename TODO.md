@@ -2750,6 +2750,8 @@ check outright always reddened them — one case each, no cross-talk — because
 with no assertions just fine. **Only the CONFIG half of the claim was vacuous.** Overstating a
 finding is the same error as missing one.
 
+✅ **CLOSED BY §77 (2026-09-22) — the rank half. Original text kept because the reasoning is the record.** `RankCacheTestSupport.resetRankCache()` in `setUp` makes the cache cold, and the hoisted rank read now reddens; proven both ways, including a full-task run WITHOUT the reset that stayed green with the defect live. ⚠️ **The SOUND half is NOT closed and is not a defect** — a hoisted `sendCategorizedSound(null, …)` survives because `readyConfig` null-guards itself, which is defence in depth working.
+
 ⚠️ **One limit found and LEFT STANDING rather than papered over.** The unlock path still cannot
 prove its config claim: `RankUtils.getRank` is null-safe, so is `SoundManager`, and **`RankUtils`
 keeps a STATIC rank cache that a sibling test warms while the configs are still bound** — so by the
@@ -2801,8 +2803,11 @@ vacuous. Mutate inside its unique domain.** The code carries a DO-NOT-DELETE not
 - **`MixinApplicationTest` ×4** (`projectileSpawn`, `bowShoot`, `blockPlace`, `fireworkRocket`) —
   `assertDoesNotThrow(Class.forName(...))` is the whole test **because `mcmmo.mixins.json` declares
   `injectors.defaultRequire = 1`**, verified by reading the file: a drifted injection throws at
-  class-load. ⚠️ **Residual gap, stated:** this proves *"if the mixin is declared, its injection
-  resolves"*, never *"the mixin is declared"* — a mixin deleted from the json loads clean and passes.
+  class-load. ✅ **Residual gap — CLOSED BY §77 (2026-09-22) as `MixinManifestDeclarationTest`.** It proved
+  *"if the mixin is declared, its injection resolves"*, never *"the mixin is declared"*. §77 MEASURED the
+  cost: a mixin deleted from the json left the whole suite at **174 classes / 1,948 tests / 0 failures**,
+  the exact green baseline. `defaultRequire = 1` fires on an injection Mixin **tries** to apply; an
+  undeclared mixin is never tried.
 - **`PlatformPlayerTest::theMirrorEnumCoversEveryVanillaSoundCategory`** — loops `SoundSource.values()`,
   an enum, which **cannot be empty**. `valueOf` throwing is a real assertion.
 - **`PetCombatSweepTest::theBoostIsTemporaryAndNeverPersistent`** — carries an explicit
@@ -3504,7 +3509,7 @@ treated as a failure everywhere, never a pass.**
 
 ---
 
-## §77 — §74's two carried items: the undeclared mixin, and the cache that hid a config read — ⬜ IN PROGRESS
+## §77 — §74's two carried items: the undeclared mixin, and the cache that hid a config read — ✅ DONE (Tier 2; both closed, closes HELD until push)
 
 **Owner-chosen 2026-09-22 (session 16)**, over the §76 `failures.append()` follow-up, the §75 S2
 one-sided sweep, and gates 2/12's mis-scoped `--self-test`. Tier **2** — a new guard, a production
@@ -3589,6 +3594,139 @@ is already a latent flake under fork assignment; this makes it deterministic rat
 ⚠️ **`TODO.md` is 100% CRLF in this working copy** (censused: 4103 CRLF, 0 bare LF). §76 recorded
 `git diff --numstat` masking a CRLF/LF mix **twice in two sessions** — census the bytes before and
 after every programmatic write, and re-read the file's own ending each time rather than recalling it.
+
+### ✅ Results — both §74 items closed
+
+**A — the undeclared mixin.** `MixinManifestDeclarationTest`, three tests, every assertion with a
+proven unique domain.
+
+| Mutation | Result |
+|---|---|
+| a declared mixin dropped | **CAUGHT** by `everyMixinSourceFileIsDeclaredInTheManifest` |
+| `injectors.defaultRequire` lowered to 0 | **CAUGHT** by `theInjectorDefaultRequireIsStillOne` |
+| `scripts/mc-surface.txt` MIXINCLASS records truncated | **CAUGHT** by `theScanFoundARealMixinPopulation` |
+| the `@Mixin` source walk made to match nothing | **CAUGHT** by `theScanFoundARealMixinPopulation` |
+| control, unmutated | **green at 3 tests** |
+
+🔑 **That last case is why the floor exists.** With the walk empty the set difference is
+`{} - declared = {}`, so the main test **passes vacuously** on an empty derived collection — the §74
+shape — and only the floor notices.
+
+**B — the cache that hid a config read.** Proven **both ways**, because one direction proves nothing:
+
+| | |
+|---|---|
+| hoist `RankUtils.getRank()` above the null guard, reset **PRESENT** | `unlockNotificationIsNoOpForNullPlayer` **FAILED**, 11 siblings green |
+| same hoist, reset **REMOVED**, whole `test` task | **BUILD SUCCESSFUL** — that class 12/0/0, **174 classes / 1,938 tests / 0 failures**. The defect is live and the suite cannot see it |
+
+### 🔴🔴 The measurement that justified the whole section
+
+Before a line of the guard was written: `"SnowGolemTrailMixin"` deleted from the manifest, whole
+suite run, **both tasks** — **174 classes / 1,948 tests / 0 failures / 0 errors**, byte-for-byte the
+recorded green baseline. The mutation reached the runtime (`build/resources/main` contained zero
+occurrences), so it is a real blind spot and not a stale build. **One mixin switched off, and
+nothing in this repo could tell.**
+
+### 🔴🔴 TWO assertions written, measured UNFALSIFIABLE, and DELETED
+
+*"every declaration has a source file"* and *"the declared package is where the sources live"* both
+looked obviously right and both **can never fail**. Mixin refuses to transform **any** class under a
+config it cannot resolve, so each mutation killed the fork with *"Mixin transformation of
+MixinManifestDeclarationTest failed"* **before the test class loaded** — `exit=1` with **zero JUnit
+XML**. Not redundant: **unreachable**.
+🔑 **An exit code is not a result.** A harness scoring `exit != 0` as CAUGHT would have certified two
+pieces of decoration as mutation-proven guards. Both conditions *are* enforced, loudly, by Mixin
+itself at fork startup.
+⚠️ A symmetric manifest-side floor was deleted for the weaker reason: it can never fire **alone**.
+
+### ⚠️⚠️ The harness lied before the guard did — twice, again
+
+1. JUnit XML `testcase name` attributes carry `()`. Matching bare method names scored **three genuine
+   catches as MIS-ATTRIBUTED**. A uniformly-bad matrix is a harness hypothesis first.
+2. The first band run's tally read **stale XML from the previous `master` run** and printed a
+   confident `175 classes / 1,951 tests / 0 failures` underneath a **`BUILD FAILED`**. Read the
+   failure text, not the leftover artefacts.
+
+### ✅ NEGATIVE RESULT — `tagBoundTest` missing on every band is CORRECT
+
+`./gradlew test tagBoundTest` failed on `mc/26.2` with *"Task 'tagBoundTest' not found"*. It fits
+this repo's favourite failure shape exactly: a **version-agnostic** build change (the task split
+that stops `SuperAbilityListenerTillingTest` binding tags into a fork shared with `BlockUtilsTest`)
+bundled into `d6761338c feat(26.3)`, whose `Backport-not-needed:` then waived the **whole commit**.
+`build.gradle` **is** a `PROPAGATABLE_PREFIX`, so gate 7 could have seen it.
+
+**Measured instead of reported:** `McTestRegistries.bootstrapWithTags()` **does not exist on any
+band** — `d6761338c` introduced it. No band binds tags, so there is no race and the task is correctly
+absent. **The opt-out was right.** The band baseline is `./gradlew test` alone.
+
+🔴 **The shape behind the false alarm is real and stays open:** rule 3's opt-out is **commit-scoped**
+and cannot express *"half of this commit should propagate"*. A commit mixing version-specific and
+version-agnostic work waives both halves with gate 7 green. **No detector.**
+
+### ✅ Verification, real exit codes, read directly
+
+| Check | Result |
+|---|---|
+| Java suite on `master` | **175 classes / 1,951 tests / 0 failures / 0 errors** — delta vs §76 is exactly **+1 class / +3 tests**, the new guard. Both tasks **bare**; the figure is the SUM (`test` 174/1,938 **+** `tagBoundTest` 1/13) |
+| Band suites | `mc/26.2` **175 / 1,947**, `mc/26.1.2` **175 / 1,947**, `mc/1.21.11` **174 / 1,941** — all 0 failures / 0 errors |
+| 🔑 **ARMED ON THE YARN BAND** | both guards mutated on `mc/1.21.11`'s **own** files → both **RED**. A propagated test passing only proves the file arrived |
+| All 16 Python `--self-test`s | exit **0** — run **after** the matrix, which mutates `scripts/mc-surface.txt` |
+| `drift-audit.py --self-test` | PASSED — **run FIRST** |
+| `drift-audit.py --master master`, **fresh clone** | **0 MISSING** on all 3 live bands, 6 archived skipped, exit **0** |
+| Gates 9 / 10 / 11 | exit **0 / 0 / 0**, re-run **after** the wiki propagation |
+| Caveat-expiry pass | found a real **gap**, not a stale claim: `wiki/Building-from-Source.md` said *"Two hard-won rules"* about mixins and neither was this one. Now three |
+
+⚠️ **Gates 1–6 and 12 need a built jar and a live server per version and were NOT run.** Nothing in
+this change can affect them. **Not claimed as green — not run.**
+⚠️ **`--require-bands 3`** throughout. **Exit 2 was treated as a failure everywhere, never a pass.**
+
+### 🔁 Propagation
+
+| Band | Head after | `Backport-of` readable by git's own parser |
+|---|---|---|
+| `mc/26.2` | `4af909e39` | `2190b326b` ✅ `1e765e193` ✅ `81f07c501` ✅ |
+| `mc/26.1.2` | `ac990fd07` | `2190b326b` ✅ `1e765e193` ✅ `81f07c501` ✅ |
+| `mc/1.21.11` | `3735e0714` | `2190b326b` ✅ `1e765e193` ✅ `81f07c501` ✅ |
+
+⚠️ **All three applied cleanly including the yarn band — the outcome the notes call DANGEROUS.**
+Checked, not assumed: the two new files carry **0** `net.minecraft` references, the
+`NotificationManagerTest` hunk is a comment + an import + one call, and the band's own
+`import net.minecraft.text.Text` is untouched. No translation was required, and that is a measurement.
+⚠️ **`wiki/**` needed HAND propagation.** `drift-audit.py` does not track docs but the identity guard
+(R-y) does, so a wiki-only commit on `master` leaves gate 9 red while gate 7 stays green. The
+documented docs-propagation seam, hit again.
+
+### ↩️ Blast radius and rollback — what was actually done
+
+| Step | Touched | Undo |
+|---|---|---|
+| Hole-A proof + mutation matrix | `src/main/resources/mcmmo.mixins.json` and `scripts/mc-surface.txt` **temporarily** | `scratchpad/mixins-json-s16.orig`, `scratchpad/mc-surface-s16.orig`; **`cmp`-verified after every run**, with a census at exit |
+| Hole-B mutation | `src/main/java/.../NotificationManager.java` **temporarily** | `scratchpad/NotificationManager.java.orig`, same discipline |
+| The band arming probes | 2 files on `mc/1.21.11`, temporarily | `scratchpad/band-{mixins,notifmgr}-s16.orig`, restored and `cmp`-verified, `git status` clean before checkout |
+| The work | 2 new `src/test` files, 1 edited, 1 wiki line | `git revert 81f07c501 1e765e193 2190b326b` |
+| Propagation | 3 band heads | `scratchpad/UNDO-s16-bands.txt` — pre-propagation heads as ready-to-run `git branch -f` lines |
+| `TODO.md` / `wiki/` / `.agent/memory/` | docs | `scratchpad/TODO.md.bak-s16`, `scratchpad/Building-from-Source.md.bak-s16`, `scratchpad/{gotchas,decisions,state}.md.bak-s16` |
+
+✅ **Nothing pushed. Nothing deleted from history. No existing test removed, no suppression added, no
+`--no-verify`.** The two deleted assertions were written in this section and never committed.
+
+### What §77 did NOT close — carried forward
+
+- [ ] 🔴 **Rule 3's `Backport-not-needed:` is COMMIT-SCOPED** and cannot say *"half of this commit
+      should propagate"*. `d6761338c` bundled a version-agnostic `build.gradle` change into the 26.3
+      conversion and waived both halves; that instance was **benign** (measured), but nothing detects
+      the mixture and `build.gradle` is a tracked propagatable prefix. **No detector.**
+- [ ] ⬜ **The SoundManager half of §74's limit** stays open *as a non-defect*: a hoisted
+      `sendCategorizedSound(null, …)` survives because `readyConfig` null-guards itself. Recorded so
+      nobody "fixes" defence in depth.
+- [ ] ⬜ **Untouched §76 rows:** the `failures.append()` assertions that bypass `check()`, and the two
+      unasserted prose tallies.
+- [ ] ⬜ **Untouched §75 rows:** the S2 one-sided sweep, the mis-scoped `--self-test` on gates 2 and
+      12, and the `--mutate` second-proof audit.
+- [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **tenth** consecutive
+      session. ⚠️ **The ahead-count is deliberately not recorded here** — a status row cannot count
+      the commit that records it. Run `git rev-list --left-right --count origin/master...master`.
+
 
 ---
 
