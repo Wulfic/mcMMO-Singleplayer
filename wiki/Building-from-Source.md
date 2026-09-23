@@ -55,10 +55,11 @@ Skill logic is kept **free of `net.minecraft` types** wherever possible, with Mi
 
 ### Mixins
 
-Some behaviour needs a mixin because Fabric has no event for it. Two hard-won rules:
+Some behaviour needs a mixin because Fabric has no event for it. Three hard-won rules:
 
 - **An unresolvable `@Slice` is silently dropped, not raised** — and the injector then binds *everywhere* in the method. `defaultRequire=1` will not catch this, because `require` is a *minimum*. **Always add `allow = N` to a slice-anchored injector.**
 - `assertDoesNotThrow(Class.forName(...))` proves nothing for a class the test harness already loads. Assert a structural marker instead — an `@Unique` field, or the handler method in `getDeclaredMethods()`.
+- **A mixin that is never *declared* is invisible to every test you have.** Deleting one name from `src/main/resources/mcmmo.mixins.json` was measured against the whole suite and scored **0 failures, 0 errors** — `defaultRequire=1` only fires when Mixin *tries* to apply an injection and fails, and an undeclared mixin is never tried. The target class loads perfectly, and the gameplay that mixin implements silently stops happening. **A new mixin needs its source file *and* its manifest entry**; `MixinManifestDeclarationTest` is what now says so.
 
 ### Enum names are save keys
 
