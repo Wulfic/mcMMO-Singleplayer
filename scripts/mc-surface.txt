@@ -285,6 +285,7 @@ ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#CLAY
 ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#COARSE_DIRT
 ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#COBBLESTONE
 ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#COCOA
+ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#CRAFTING_TABLE
 ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#DEAD_BUSH
 ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#DIRT
 ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#DIRT_PATH
@@ -1436,6 +1437,7 @@ STATICFIELD	net.minecraft.world.level.block.Blocks#CLAY
 STATICFIELD	net.minecraft.world.level.block.Blocks#COARSE_DIRT
 STATICFIELD	net.minecraft.world.level.block.Blocks#COBBLESTONE
 STATICFIELD	net.minecraft.world.level.block.Blocks#COCOA
+STATICFIELD	net.minecraft.world.level.block.Blocks#CRAFTING_TABLE
 STATICFIELD	net.minecraft.world.level.block.Blocks#DEAD_BUSH
 STATICFIELD	net.minecraft.world.level.block.Blocks#DIRT
 STATICFIELD	net.minecraft.world.level.block.Blocks#DIRT_PATH
