@@ -3920,6 +3920,90 @@ instead of trusting it, in the same pass that was supposed to be checking someon
 
 ---
 
+## §79 — gates 2 and 12: a self-test that exercises the GATE, not the borrowed helper — ⬜ IN PROGRESS
+
+**Tier 2.** Two shared `scripts/` files under the identity guard, a ship gate each, propagation to
+three live bands. The ruling was taken on **2026-09-23 (§78, ruling 3)** and carried unexecuted;
+this section executes it. **A ruling carried as work is not a deferral to re-decide.**
+
+### The defect, measured before touching anything (2026-09-23, session 18)
+
+Both gates self-test a **borrowed helper** and call it proof of the gate.
+
+| Gate | `--self-test` prints | what it actually exercises | what the GATE computes |
+|---|---|---|---|
+| **2** `mixin-allow-audit.py` | `8 cases` + `3 cases` | `loomjar.py`'s jar selection and naming classification | **injection-point counting** from bytecode — `count_points`, `normalise_ref`, `select_methods`, `Result.status`. **ZERO cases** |
+| **12** `probe-bands.py` | `7 real javap declaration lines parse` | `DECL_RE`, one regex on one line shape | **manifest validation** — `owner_of`, `member_of`, `name_candidates`, `resolve_owner`, `find_member`'s supertype closure, `control_versions`' range logic. **ZERO cases** |
+
+🔑 **Neither self-test is WRONG, and that is why this sat for three sessions.** Both pass, both are
+two-sided, both were floored in §75/§76 — and both certify a component the gate *uses* rather than
+the computation the gate *is*. A jar selector proving it picks the right jar says nothing about
+whether the thing that reads the jar can count. **The floor was applied to the wrong surface.**
+
+🔴 **The blast radius is the same shape gate 2 exists to catch.** `count_points` returning a wrong
+number is `allow = N` grading itself against a broken counter — and §32 already recorded a mixin
+bound to the *wrong live method* with every structural gate green. `--check`'s own docstring says a
+MISMATCH *"means THIS SCRIPT is wrong, not Minecraft"*, which is a claim about a counter that **no
+self-test has ever exercised**.
+
+### What §79 is NOT doing — stated, so it cannot creep
+
+- ❌ **Not pushing, not bumping `mod_version`, not closing an issue.** Ruling 1 stands — **twelfth**
+  consecutive session.
+- ❌ **Not changing what either gate CHECKS.** Only what its `--self-test` proves. A gate whose
+  verdict moves in the same commit as its self-test cannot be graded by that self-test.
+- ❌ **Not refactoring `disassemble()` to drop its `subprocess` call.** Making production code
+  testable is a real change to a shipped gate; the offline-constructible surface below is large
+  enough without it. Recorded as a limit, not closed.
+- ❌ **Not deleting the existing `loomjar.py` / `DECL_RE` cases.** The ruling says they stay. They
+  certify something real; they were only ever mis-labelled as certifying the gate.
+- ❌ **Not touching §76's `failures.append()` rows, §75's S2 sweep, or §78's waiver-reason row.**
+  All three stay open.
+
+### Phases
+
+- [ ] **P0 — baseline, before any edit.** Both self-tests exit 0; record what each covers. Back up
+      `TODO.md`, the two scripts and the three memory files to `scratchpad/*.bak-s18`. ✅ **DONE.**
+- [ ] **P1 — gate 2 gains injection-point cases.** Adopt §78's `check()` funnel verbatim: one
+      counter, per-kind tally **derived from the label prefix**, exact **executed** floor, and a
+      refusal if any category ran zero. Cases over `count_points` (HEAD/TAIL/RETURN/INVOKE/FIELD/
+      NEW, `ordinal`, the unsupported-`@At` MANUAL path, target exact vs prefix vs near-miss),
+      `normalise_ref` (**its docstring already tabulates six mappings that nothing asserts** —
+      including the owner-elision case its own ⚠️ calls the one that bites), `select_methods`
+      (name-only matches every overload; descriptor matches by prefix) and `Result.status`' ladder.
+      Every quiet case paired with a firing one.
+- [ ] **P2 — gate 12 gains manifest-validation cases.** Same funnel. `owner_of`/`member_of` across
+      all three record families and the `None` fall-through; `name_candidates`' `$`-nesting;
+      `find_member`'s supertype closure with **every class pre-seeded so javap is never spawned** —
+      which is itself the assertion that the walk resolves through `java.lang.Enum`,
+      `java.lang.Object` and a non-MC interface, the three false-ABSENT shapes its docstring
+      records; `control_versions`' §56.4 range logic **and its refusal** when the primary is not in
+      `supported_minecraft_versions`.
+- [ ] **P3 — the mutation matrix. TWO-SIDED, with per-case ATTRIBUTION.** Every new case mutated at
+      the **module scope the production code reads** (a rebind inside a function shadows the global
+      — measured, §75), against a **green control**, reading **exit codes** not output. 🔴 **Record
+      WHICH check went red, not just that the run did** — a mutation caught by the floor instead of
+      the case it targets is the third-time-in-this-repo failure §78 hit.
+- [ ] **P4 — verify.** Both `--self-test`s exit 0; all 16 other Python `--self-test`s still exit 0;
+      `./gradlew test` **and** `tagBoundTest` (the baseline is the SUM, both **bare**); gates
+      7/9/10/11/13 in a **fresh local clone** (they prefer remote refs).
+- [ ] **P5 — propagate to the three live bands**, `Backport-of:` trailer each. 🔑 **Arm the new
+      cases on `mc/1.21.11`'s OWN copy** — a propagated guard passing only proves the file arrived.
+- [ ] **P6 — caveat-expiry, memory, close.** Grep `README.md` + `wiki/**` for the **symptom**
+      (*"self-test proves the gate"*), not the files edited.
+
+### Rollback
+
+| What | Undo |
+|---|---|
+| The plan + close | `scratchpad/TODO.md.bak-s18` |
+| The two scripts | `scratchpad/{mixin-allow-audit,probe-bands}.py.bak-s18`, and `git revert <sha>` |
+| Memory | `scratchpad/{state,decisions,gotchas}.md.bak-s18` |
+| Mutation runs | `.orig` copies in `scratchpad/`, `cmp`-verified after every run |
+| Propagation | `scratchpad/UNDO-s18-bands.txt` — pre-propagation heads as `git branch -f` lines |
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
