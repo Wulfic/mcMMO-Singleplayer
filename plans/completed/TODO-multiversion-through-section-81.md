@@ -1,0 +1,3857 @@
+# TODO — the multi-version archive, §65 – §81
+
+**Verbatim copy, moved out of `TODO.md` by §82 (2026-09-23).** The live file was 5,074 lines and
+these seventeen sections were 3,841 of them. Every section here is ✅ CLOSED; the one-line outcome
+for each is in `TODO.md`'s *§8.3, §22 – §81* table, and this file is where the reasoning lives.
+
+**Provenance:** cut from `TODO.md` blob `9e47c978f` at `master` tip `0626fe8e0`.
+Nothing was edited on the way in — if a claim here is stale, the correction is in `TODO.md`, not here.
+
+⚠️ **Several headings below carry a status that was true when written and is now discharged.**
+§68, §73 and §75 – §79 each read *"closes HELD until push"*. §82 measured all four live bands at
+`0 ahead / 0 behind origin` and all 19 GitHub issues CLOSED, so every one of those holds is spent.
+§68.P is headed ⬜ OPEN and its own body says every phase is DONE or CANCELLED. **Preserved as
+written**, for the same reason the older archives preserve their stale wording: the rot is the record.
+
+---
+## §65 — the sixth archive: §62 – §64 out, and two claims that measurement falsified — ✅ DONE
+
+**Owner-scoped 2026-09-14:** *"cleanup the todo list on all the branches"*, with the scope picked
+explicitly from three **measured** options rather than guessed. The push stays **HELD**.
+
+**Rollback anchors, recorded before the first write and RE-VERIFIED at it:**
+- pre-§65 `master` tip: **`c1a07f64d`** · pre-§65 `TODO.md` blob: **`32c8dbbab`**, one blob on all nine
+- pre-§65 size: **1,573 lines / 148,775 bytes**, and **1,573 CRLF / 0 bare LF** — a *binary* census,
+  because MSYS `grep`/`sed`/`awk` strip the trailing CR they emit and will report LF about a CRLF file
+- undo, while unpushed: `git checkout c1a07f64d -- TODO.md` **and**
+  `rm plans/completed/TODO-multiversion-through-section-64.md` (a new file, so a revert removes it)
+
+### What moved, and what the condition actually was
+
+§62, §63 and §64 — **442 lines, zero `^- \[ \]` boxes in range**, measured before the cut rather than
+assumed. Every other closed-looking section was measured too, and **one failed the test**: §9 is
+headed *"✅ CLOSED"* and still carries a live box (the one-blob invariant, deferred to 9.5). It stayed.
+🔑 **A `✅ CLOSED` heading is not evidence a section is closed** — §62 learned this from the opposite
+direction, when *"if the todo list has been completed"* turned out to be **no**.
+
+⚠️ **Anchored `^- \[ \]`, never bare `- [ ]`.** §62 recorded the false positive this generates and it
+is still live: the unanchored form matches a **code span inside a sentence** that describes the check.
+The count also moved **18 → 19 → 18** during §64 alone, so it is re-derived at the moment of use:
+`grep -c '^- \[ \]' TODO.md`.
+
+### §64 was verified, not accepted
+
+§64 landed from a second live session in this same working copy. *"Committed"* is not
+*"propagated and gated"*, so every claim was re-derived here rather than quoted:
+
+- nine-way `TODO.md` blob = **1** (`32c8dbbab`) — verified **directly**, because
+  ⚠️ **`TODO.md` is NOT in gate 10's 53-path set**; no propagation gate reads it
+- gates **7, 9, 10, 11 all exit 0** inside `git clone --local --no-hardlinks`, gate 7 **0 MISSING**
+  on all eight bands. 🔴 A default run in the main checkout grades a **39-stale `origin`** and is
+  zero evidence, not weak evidence
+- gate 10 was inspected for **coverage, not just colour**: `scripts/expected_bands.py` and
+  `scripts/expected-bands.txt` are **inside** the audited set at 1 blob across 9 branches. A green
+  gate over a set that excludes the new file proves nothing
+
+🔑 **Read the script's exit code, never the pipeline's.** `python … | tail` returns *tail's* status;
+gate 7 was re-run capturing the real one. This is gate 1's recorded `cmd | tail` trap, arriving at a
+different gate.
+
+### Two claims measurement falsified
+
+- **`TODO.md:114` said *"the eleven gates"*. There are twelve.** §56.4 added gate 12 and the sentence
+  did not move with it. 🔑 **The countermeasure was already there and failed**: the ship-gate section
+  says *"nothing else counts them"* — but something else did, 915 lines earlier. The warning was
+  attached to the list, not to the number that rots. The claim itself was **true** (no gate reads the
+  remote tag list, gate 12 included), which is precisely why it survived review: read it carefully and
+  you still agree with it. **Only the count was wrong, and a true sentence is the best hiding place a
+  stale number has.**
+- **The `build.gradle:2` box was closed by §64.1 and still read *"inferred, not measured"*.** That is
+  the **second** commit in one section claiming a closure the file did not show — the `--require-bands`
+  row was the first. 🔑 **Commit messages and the box list are two records of one fact, and only one
+  of them gets updated.** §62 had frozen this row's wording deliberately, *"including wording I think
+  is now wrong"*, because it had not measured it; **measuring is the event that earns the rewrite.**
+
+### What I am NOT doing
+
+- **Not pushing.** The hold stands; `master` and the eight bands stay ahead of `origin`.
+- **Not deleting anything.** Every moved line is in the sixth archive, verbatim.
+- **Not touching §9**, the per-band recipe's ten template boxes, or any open row.
+- **Not re-litigating an archived call** — the index table below is the one-line record.
+
+---
+
+## §66 — the CR-strip hazard: the immune form, and the guard that was never there — ✅ DONE
+
+**Closes the `gameplay-smoke.sh:466` row in *Carried debt*.** Raised by §63 (2026-09-10) jointly
+with a peer session as a **latent hazard, not a defect** — the shipped code is correct today and
+this section does not fix a bug. It fixes the fact that **nothing would notice if it stopped being
+correct.**
+
+### Re-measured here before touching anything — a carried row is a claim, not a fact
+
+§63's measurement was reproduced on this machine (`od -An -tx1` over the real expansions), and the
+row is accurate in every direction, including the direction that says *do not touch `ci-watch.sh`*:
+
+| construct | at top level | inside `$( )` |
+|---|---|---|
+| `${line%$'\r'}` — **the shipped CR strip** | `73 74 6f 70` — strips | `73 74 6f 70 0d` — **silent no-op** |
+| `CR=$(printf '\r'); ${line%"$CR"}` — the immune form | strips | `73 74 6f 70` — **strips** |
+| `${match%%$'\t'*}` — `ci-watch.sh:423-425` | `field` | `field` — **TAB survives the re-lex** |
+
+🔑 **Only CR is discarded**, because an unquoted `$'\r'` re-lexes to an empty word inside a command
+substitution and `${line%}` then strips an empty suffix. Same syntax, same exit status, no error.
+**`ci-watch.sh` is therefore NOT to be "fixed"** — its three TAB expansions are correct in both
+positions, and editing them would be churn on a file under the cross-branch identity guard.
+
+### Why this is worth a section and not a one-line edit
+
+The symptom is the documented catastrophic one. `gameplay-smoke.sh:466`'s own comment records that
+the harness's first run **lost every `gamerule`, every `mine continuous` and every `attack
+continuous`** — brigadier reads `false\r` as an invalid boolean — while commands with a greedy last
+argument still went through. **A green-ish smoke run is the failure mode**, not a red one, and the
+smoke harness is the instrument nine branches are shipped on.
+
+🔴 **The real finding is the absence, not the syntax.** Nothing in this repo asserts that the strip
+strips: no test, no gate, no self-test case. Tidying that line into a shared helper called through
+`$( )` is an ordinary, well-intentioned refactor, and **every instrument in the repo would stay
+green** while the harness quietly went back to scoring a broken pipe as a partial pass.
+
+### The three pieces
+
+- [x] ✅ **66.1 — both CR sites move to the immune form.** `scripts/gameplay-smoke.sh:466` and
+      `scripts/gen-milestone-advancements.sh:272`, the only two the census finds
+      (`grep -rn -F "%\$'" scripts/` returns five sites; the other three are `ci-watch.sh`'s TAB).
+      The form is `CR=$(printf '\r')` once, then `${line%"$CR"}` — measured correct **nested and at
+      top level**, so the construct survives being moved rather than depending on where it sits.
+- [x] ✅ **66.2 — a static guard: `ShellCrStripHazardTest`.** Refuses the hazardous
+      `$'\r'`-in-a-suffix-expansion form anywhere under `scripts/**/*.sh`. It lives in the **JUnit
+      suite**, not in a script, deliberately: a script is *"somebody remembers to run it"*, which is
+      the R8/R11 failure mode this repo keeps paying for, whereas the suite runs unattended on every
+      push. Carries its own converse checks and a **reach** check — a guard that scans zero files
+      passes forever.
+- [x] ✅ **66.3 — a behavioural case in `gameplay-smoke.sh --self-test`.** 66.2 asserts the *shape*;
+      this asserts the *behaviour*, and asserts it **nested**, which is the whole hazard. Feeds a
+      real CRLF line through the shipped construct and fails if the CR survives.
+
+
+### What the measurement found — all of it converse-checked
+
+✅ **The hazard reproduces exactly as §63 recorded it**, `od`-verified here before any edit:
+`${line%$'\r'}` strips at top level and is a **silent no-op** inside `$( )`, while the
+`CR=$(printf '\r')` form is correct in **both** positions. ⚠️ **Wider than the row said**, measured
+while scoping the guard: a bare `$'\r'` loses its CR inside `$( )` **anywhere**, not only in a
+parameter expansion — as a bare argument and in a concatenation too. `$'\t'` survives all of it, so
+`ci-watch.sh` is confirmed untouchable for the second time by a second session.
+
+🔴🔴 **The sharpest finding is in `build.gradle`, and it is a NEAR MISS.** A guard that reads a file
+Gradle has not been told about is served a **cached pass** — `org.gradle.caching=true` here. Measured
+in two steps, because build.gradle is itself a declared input and editing it masks the effect:
+remove the `inputs.files(fileTree('scripts'))` entry, run green, then mutate **only** a shell script
+— `:test` does not re-run and the real violation scores **NOT CAUGHT**. With the entry, the same
+mutation reddens 2 of 5. **Without that one line the entire section would have been decoration.**
+
+✅ **Mutation scores — every case converse-checked against a green control:**
+
+| mutation | reddened |
+|---|---|
+| a real script regains the bare form | 2/5 |
+| the detector is dead (`violations()` empty) | 1/5 |
+| the scan reads nothing (`shellScripts()` empty) | 1/5 |
+| full-line-comment handling removed | 2/5 |
+| scope widened to TAB | 2/5 |
+| the strip is dead (`CR` empty) — self-test | 2/7 |
+| the strip is over-eager (`CR=p`) — self-test | 3/7 |
+| `CR` is a literal backslash-r — self-test | 2/7 |
+| a real advancement file gains a bare CR | 2/8 |
+| the byte / parsed-string detectors are dead | 1/8 each |
+
+🔑 **The over-eager mutation is why the "a line with no CR is passed through untouched" case
+exists** — it is the **only** case that catches it. A strip that chewed the last character off every
+command would satisfy every other case perfectly.
+
+⚠️ **The generated datapack was MEASURED, not assumed: 335 files parsed, ZERO string values carry a
+CR or LF.** Six files are CRLF and 329 are LF, which is an editor artefact and explicitly **not**
+this defect — `noGeneratedAdvancementCarriesAStrayCarriageReturn` refuses a **bare** CR and leaves
+line endings alone, so it cannot acquire a second job and a reason to be relaxed later.
+
+⚠️ **My own fix made the guard's comment-stripping load-bearing.** The comment that explains the
+hazard quotes it verbatim, so a grep-shaped guard reads the explanation as a violation — the exact
+inverse of `MixinAllowCoverageTest`, where a javadoc sentence read as compliance. The planned
+unscored diagnostic line in the self-test was **dropped for the same reason**: it would have had to
+write the bare form in code, and carving an exemption is how a guard starts rotting.
+
+⚠️ **Two harness defects of my own, both found by a control rather than by reasoning.** The first
+mutation run scored **all five "NOT CAUGHT"** — `cmd /c gradlew.bat` never resolved, so Gradle never
+ran and a **stale XML** read as a pass. The second scored zero because a bash heredoc collapsed the
+backslash in `'\r'` and the anchor matched nothing. 🔑 **A harness with no positive control and no
+exit-code check cannot tell "the guard is vacuous" from "I never ran it"**, and both times the
+answer it printed was the alarming one.
+
+Suite: **173 classes / 1,911 executed / 0 failures** (was 172 / 1,904).
+
+### What I am NOT doing
+
+- **Not touching `ci-watch.sh:423-425`.** Measured immune in both positions, twice, by two sessions.
+- **Not refactoring the strip into a shared helper.** That is the hazard, not the remedy.
+- **Not pushing.** The hold stands; `master` and the eight bands stay ahead of `origin`.
+- **Not widening to `.github/workflows/*.yml`.** Those carry bash too, but they are `master`-only
+  under R-g and the guard's scope claim should match what it actually scans. Stated, not skipped.
+
+---
+
+## §67 — the release: v1.4.0 on all nine, and the workflow that could not start — ✅ DONE
+
+🎉🎉 **THE PUSH IS NO LONGER HELD.** It had stood for 44 commits across §62—§66. `master` and the
+eight bands are at `ahead=0 behind=0`, and **v1.4.0 is published on all nine** — the full declared
+16-version scope, downloadable. Owner picked `1.4.0` over `1.3.5` when told the 44 commits carry
+**no player-facing change**: the one `src/main` edit in them (§64.2's `SkillAvailability.UNGATED`)
+states in its own javadoc that it carries no runtime behaviour.
+
+🔴🔴 **Why the bump was not optional.** `mod_version` was `1.3.4-SNAPSHOT` while nine
+`mc<VER>-v1.3.4` tags already sat on origin, so a push would have hit R-t's stale-version gate on
+**every one of the nine** and built **zero jars**. The owner asked to push *to get new jars*; the
+push alone would not have produced one. 🔑 **"Push" and "release" are different questions in this
+repo, and only one of them was asked out loud.**
+
+### 67.1 — an `env:` header left with nothing under it killed the weekly drift audit
+
+🔴🔴 **`ccb97fc4e` (§64.3) broke `drift-audit.yml` and it stayed broken through a full
+section.** It moved the band floor to `scripts/expected-bands.txt` — correct — and deleted the
+`BAND_COUNT` **entry** while leaving the `env:` **header**. A YAML mapping key with no entries
+parses as **null**, GitHub refuses the whole file, and every run ends in `startup_failure` at
+**0s**. Nine such runs fired on the v1.4.0 push, one per branch.
+
+🔴 **Every guard in this repo was green on it, and each for a different reason.** The YAML is
+well-formed, so no parser objects. Gate 10 compares the file across branches byte-for-byte and is
+**satisfied when all nine carry the same broken copy** — *identical is not correct*, stated in
+that gate's own warning and demonstrated here. And the drift audit is **itself** the thing that
+stopped running, so it cannot report its own death — to a tab nobody opens (**R11**).
+🔑🔑 **The weekly run is the ONLY unattended leg of R8.** From the next Monday it was dead, and
+nothing local would ever have said so.
+
+✅ **Guard: `WorkflowYamlWellFormedTest`** (9 cases). Two quiet — a valid workflow, and an
+**ABSENT** key, because deleting a block *entirely* is the correct way to remove one and must not
+be punished; three firing — top-level, job-level, and an empty job body; plus a detector case
+separating null from populated **inside one document**, so a detector keyed on something
+incidental to the fixtures cannot pass. 🔑 **The controls call the same `nullValuedKeys()` the
+scan does**, not a re-implementation of it. It also **fails closed on an empty file set**.
+
+⚠⚠ **`build.gradle`'s `:test` input was widened from `release.yml` alone to the whole
+`.github/workflows` tree.** Without it the guard is decoration: `org.gradle.caching=true`, and
+`drift-audit.yml` was an input to `:test` by **no route at all**. This is §66.2's lesson recurring
+one section later — and note the shape: declaring only the one workflow a guard *happened to
+read first* reproduces the same blind spot for every other file beside it.
+
+✅ **Verified by mutation**, not by reasoning: re-inserting the bare `env:` reddens
+`noWorkflowCarriesAKeyWithNothingUnderIt` with `> Task :test` **bare**; restoring returns the file
+to sha256 `8935ad28`. And end-to-end on GitHub — `gh workflow run drift-audit.yml` now completes
+**success in 18s**, where the same workflow scored **failure at 0s** an hour earlier.
+
+### What §67 measured that a green gate would have hidden
+
+⚠⚠ **`mc/26.1.2`'s release failed, and it was ENVIRONMENT.** Maven Central returned
+**403 Forbidden** on a HEAD for `asm-tree-9.10.1.pom`. Re-run: success in 2m16s, same commit. 🔑 A
+band release going red is exactly **R11**, so the reflex is to believe it — **read WHY it failed**.
+This repo has now recorded that lesson for gates 3, 5, 6 and a release run.
+
+⚠ **A suite run failed once at 174 classes minus one, and it was NOT the version bump.** The
+first `--no-build-cache cleanTest build` after the bump reported `:test FAILED` with **172 classes /
+1,909 executed and 0 failures in the XML** — a class that never wrote its XML. Three subsequent
+runs of the **identical** command scored 173/1,911/0 and 174/1,920/0. 🔴 **The culprit is NOT
+proven**: the XML was overwritten before it could be read. `TestModsDirectoryTest` is the only
+candidate matching both the arithmetic (exactly 2 tests) and a known race in this repo
+(`15e8e0ed3`, four forks racing fabric-loader on the mods directory). **Recorded as unproven
+rather than diagnosed** — if it recurs, copy `build/test-results/` BEFORE re-running.
+
+⚠ **Gate 8 (`ci-watch.sh`) was NOT run, deliberately.** The second push — the 67.1 fix — fires
+`release.yml` on all nine (it touches `build.gradle` and `src/**`, both in that workflow's `paths:`
+filter) and every run **correctly refuses** at *Refuse a stale mod_version*, v1.4.0 having just
+shipped. Nine red runs is the **guard working**, not a regression, and a gate whose job is to read
+CI colour cannot say anything useful about a red that was predicted. Verified instead by reading
+the failing step name directly, and by confirming **all nine v1.4.0 tags and releases survived**
+(the failure precedes *Create and push tag*, so *Clean up tag on failure* had nothing to remove).
+
+🔑 **The band table and the shipped-scope rows lost their version number.** `v1.3.4` sat in nine
+table cells plus three prose rows, and that table had **already gone three bumps stale once**. It
+is now `mc<VER>-v<mod_version>` plus the command — the same remedy the `vs origin` and `releases`
+rows each reached on their own. **A number no gate reads is a number that rots.**
+
+---
+
+## §68 — the GitHub issue queue, pulled 2026-09-21 — ✅ ALL FIVE FIXED; closes HELD until push
+
+🔴 **"Fixed" and "closed" are different states, and this header states both on purpose.** All five
+issues (#14, #15, #16, #17, #19) are fixed on `master` and propagated to the three live bands. **None
+is closed on GitHub**, by owner ruling (2026-09-22, §73 ruling 3): they close **at push time**, when
+their fixes have actually reached a player — a closed issue whose fix sits in an unpushed commit is
+a lie to the reporter. The push itself is held by a separate standing ruling, re-asked and upheld
+**seven consecutive sessions**.
+⚠️ **This header read *"five open issues — ⬜ OPEN"* until §74.** It was the literal truth about
+GitHub and a false signal about this repo — a session reading it re-derives work that is already
+done. Header fixed by owner ruling rather than by my reading of it.
+
+**This is INTAKE, not a plan.** Pulled on 2026-09-21 from
+<https://github.com/Wulfic/mcMMO-Singleplayer/issues> with `gh issue list --state open --limit 100`
+(the `github` MCP was down that session; the `gh` CLI did the work — say which path ran, always).
+Every row below is the owner's words restated, **not diagnosed, not reproduced, not scoped**. A box
+here means *"this was asked for"*; it does not mean the cause is known or that a named file is the fix.
+
+🔑 **Rule 1 applies to all five.** Fixes land on `master` FIRST, then propagate with a
+`Backport-of:` trailer. AGENTS.md records that **11 of the last 12 issue fixes were version-agnostic
+logic bugs** — the exact shape that lands on `master`, is forgotten on eight bands, and comes back
+months later as a user report. Assume every row here is version-agnostic until measured otherwise.
+
+⚠️ **Four of the five are owner-authored UX/feature asks. #14 is the only outside bug report, and it
+has no crash log attached** — see its row.
+
+### #19 — Smelting must stop paying XP into Mining and Repair — ✅ DONE `e77d59a2e`
+
+- [x] ✅ **Smelting actions must award NO XP to Mining or Repair.** Issue text: *"Smelting should not
+      give xp to either mining or repair. gets lvled up passively"*.
+      ✅ **The premise is confirmed, not assumed:** Smelting is a CHILD skill whose parents are
+      `MINING` and `REPAIR` — `SkillTools.java:65-68` (`SMELTING_PARENTS`) — so its level is derived
+      from the parents' mean and it does level passively. The ask is therefore about the
+      **reverse** direction: a smelt must not feed XP back up into either parent.
+      ✅ **MEASURED, then fixed — `e77d59a2e`.** The award did exist: the generic child-skill split,
+      not anything in `SmeltingListener.java` (which indeed holds no `applyXpGain` / `MINING` /
+      `REPAIR` reference — that absence was a red herring, not an all-clear).
+      🔑 **Being a child answers where the LEVEL comes from; whether the child pays XP back UP is a
+      separate question**, and it now has its own predicate — `SkillTools.childSkillFeedsParents`.
+      `SMELTING` returns false; **`SALVAGE` is unchanged** and still feeds Repair and Fishing.
+      ⚠️ **Gated centrally in `McMMOPlayer`, not in `SmeltingManager`**, so every route into a
+      Smelting gain obeys it — including an admin `/addxp`. **Both split sites are patched:**
+      `beginXpGain` and `applyXpGain` own independent copies, and a real smelt reaches `applyXpGain`
+      via `beginUnsharedXpGain` — so fixing one would have left every actual furnace still paying
+      the parents in full.
+      🧪 Three cases, one per entry point plus a passive-levelling case. The pre-existing
+      `childSkillGainSplitsAcrossParents` drove `SMELTING` — the behaviour this removes — so it was
+      **re-pointed to `SALVAGE` rather than deleted**.
+
+### #17 — a handful of skill bugs (owner, 2026-09-20) — NINE separate items
+
+⚠️ **Nine sub-items, and they are not one commit.** 17.1, 17.3, 17.4 and 17.9 are behaviour; 17.2,
+17.5, 17.6, 17.7 and 17.8 are display strings and menu wiring. **17.4 is the only balance change.**
+
+- [x] ✅ **17.1 — `/mcstats <skill> keep`** — `b638318ad`. A sub-literal under the existing skill
+      argument, so it is discoverable from the command already being typed. Toggles; refuses a
+      disabled skill; **not persisted** (a view, not a setting). Echo sits on the same tail as the
+      XP-bar refresh, so the numbers quoted are the STORED ones.
+      🧪 Asserted through the player handle, not the flag. Mutation-tested both ways.
+- [x] ✅ **17.2 — ingredient dump HIDDEN** — `611bda1b3`. Owner chose hide over explain. The
+      Concoctions rank line stays and the in-game guide still lists every tier's ingredients, so the
+      information moved rather than went away. Locale key kept and marked unused.
+- [x] ✅ **17.3 — the descriptions ALREADY EXISTED; the screen never printed them** — `55dde7e0d`.
+      🔑 **The premise was false, and measuring it first changed the entire fix.** Every
+      `SubSkillType` already carries a one-sentence `.Description`, and
+      `SkillLocaleCompletenessTest` has been asserting exactly that all along. `/mcstats <skill>`
+      showed name + rank only, so the text existed where no player could read it — in game they
+      genuinely were missing, which is the only place that counts.
+      ✅ So: render what is written, rather than write 111 new sentences. Shown for LOCKED sub-skills
+      too — that is the line that says what the level you are working toward actually buys.
+      🧪 Tests assert the RENDERED line. A locale assertion would have passed identically before
+      and after the fix, which is the whole trap.
+- [x] ✅ **17.4 — unlock spread re-spread on the five custom skills** — `742c334a2`. Abilities arrived
+      too early or too late, giving an uneven reward curve. Named: **Parkour, Flying, Stealth,
+      Swimming, Unarmored.** ⚠️ **The approved proposal was WRONG IN TWO PLACES and the tests caught
+      both** — Parkour's Fleet Footed stays at 1 (moving it to 35 would half-revert the Agility
+      retirement) and Unarmored reverted entirely (it already matched the house curve). Six
+      sub-skills also turned out to have no entry at all, now declared at 0. Full reasoning and the
+      11-failures-to-5 split in §68.A.
+- [x] ✅ **17.5 — renamed to "Hourly XP Cook Limit"** — `611bda1b3`. `wiki/Cooking.md` says why too.
+      Two existing cases already asserted the old label, so their expectation moved with the rename.
+- [x] ✅ **17.6 — durations carry their unit** — `611bda1b3`. Applied in `calculateLength` via a new
+      `Ability.Generic.Template.Seconds` locale key: **all ten callers are super-ability lengths in
+      seconds**, so the unit is stated once and stays translatable instead of being baked into ten
+      `.Stat` labels.
+- [x] ✅ **17.7 — redundant line dropped** — `611bda1b3`. The dead field, its computation and two
+      imports went with it.
+      ⚠️ **This is the DISPLAY half of GitHub #5**, checked before removing. #5's complaint was about
+      the MECHANIC, which is untouched — Super Breaker still multiplies the bonus-drop chance while
+      it runs, from the same config value. Stated in the code, the javadoc and the commit so nobody
+      re-derives it.
+- [x] ✅ **17.8 — one "Super Ability Fireworks" control** — `9b184f328`. `ConfigSetting` gained a
+      `mirrors` list (further keys written with the primary); reads still come from `path()` alone.
+      ⚠️ **Both config keys survive** and `GeneralConfig` still reads them independently — only the
+      SCREEN collapsed, so a hand-editor keeps green-on-without-red-off.
+      🧪 Two SEPARATE properties (the mirror reaches disk; the second row is gone), and mutation
+      proved it: restoring the rows fails only the row case, disabling the fan-out fails only the
+      mirror case. **Either test alone would have missed half the fix.**
+- [x] 🚫 **17.9 — WON'T FIX, owner ruling 2026-09-22.** Ability messages render over the hotbar and
+      will keep doing so. **Both available answers were declined**, not deferred — see §68.A for the
+      measurement that produced the choice. Nothing to build, nothing to revisit unless the owner
+      reopens it.
+
+### #16 — refactor and update (owner, 2026-09-20) — TWO of three DONE; 16.1 still needs a ruling
+
+- [x] 🚫 **16.1 — CLOSED WON'T FIX, owner ruling 2026-09-22 (§71, ruling 3). Phase E is cancelled,
+      not deferred — there is no remaining phase in §69.**
+      **The ruling:** *"Decline — incompatible with R-a."* Asked with the full blast radius on the
+      table; the answer was to close it rather than reinterpret it.
+      🔑 **Why it cannot be done as written, in one line:** under **R-a** `master` **is** the newest
+      supported band. It is not a landing page that happens to hold code — it is the band the newest
+      Minecraft version ships from, the reference every band is graded against, and the only ref
+      GitHub fires `schedule` from. *"No code in the main branch"* removes all three at once.
+      ↩️ **What it would have cost, stated so nobody re-opens it as a five-minute refactor:**
+
+      | Load-bearing thing | What a docs-only `master` does to it |
+      |---|---|
+      | **R-a** — `master` IS the newest band | Gone. 26.3 would need a band branch of its own, and every reference to *"land it on `master` first"* becomes meaningless |
+      | Rule 1 — fixes land on `master` FIRST | Gone. There is no `master` to land them on, so the back-port reference point disappears for every band |
+      | `drift-audit.py` | Grades each band **against `master`**. With no code there, gate 7 compares against nothing |
+      | `.github/workflows/drift-audit.yml` | GitHub fires `schedule` from the **default branch and nowhere else**. This is **R-g** — a decision this repo already made once and had to reverse with **R-r** |
+      | `branch-file-identity-audit.py` | `AGENTS.md`, `scripts/**`, `README.md`, `wiki/**` are byte-identical **by rule** (P19-1, R-y); the guard's whole premise is that every branch carries the same shared layer |
+
+      ✅ **The issue's underlying want is already satisfied**, which is why declining costs nothing:
+      *"each branch stays the same, maintaining its code"* is exactly what branch-per-band already
+      does, and 16.2 (the six-band archive) and 16.3 (the 26.3 cut) — the other two thirds of #16 —
+      both shipped in §69.
+      ⚠️ **If it is ever re-opened, it is a Tier 2 with a written plan first**, and the plan must name
+      the replacement for the drift reference point **and** for the `schedule` leg **before** any
+      command runs. Do not start it as a refactor.
+
+      **Original issue text, kept for the record:** *"Refactor the READMEs, so we have no
+      code in the main branch, and each branch stays the same, maintaining its code."*
+      🔴 **STOP — this collides head-on with ruling R-a, and needs an explicit owner decision before
+      any command runs.** `master` **is** the newest supported band and carries its code; nine
+      branches release from it; `drift-audit.py` grades every band **against `master`**; and rule 1
+      says fixes land there FIRST. A docs-only `master` invalidates all of that at once.
+      ⚠️ It also breaks the identity guard's load-bearing case: `AGENTS.md`, `scripts/**`,
+      `README.md` and `wiki/**` are byte-identical across branches **by rule** (P19-1, R-y), and
+      `.github/workflows/*` fires `schedule` from the default branch **and nowhere else**.
+      ↩️ **Blast radius if done wrong:** the weekly drift leg dies — that is **R-g**, a decision this
+      repo already made once and had to reverse with R-r — and every band loses its back-port
+      reference point. **Do not start this as a refactor. Get the ruling first.**
+- [x] ✅ **16.2 — archive `1.21.10` and below** — **DONE, §69 Phase D (2026-09-22).** Those bands
+      receive no further updates. Six branches — `mc/1.21.1`, `mc/1.21.3`, `mc/1.21.4`, `mc/1.21.5`,
+      `mc/1.21.8`, `mc/1.21.10` — sit under `[archived]` in `scripts/expected-bands.txt`;
+      **kept, not deleted**, and their published **v1.4.0** jars stay downloadable.
+      ✅ The band table, plus the support-floor sentence in `README.md` and `wiki/Installation.md`,
+      moved in the same change — **R-x** requires that sentence to sit strictly below every version
+      the branch ships, and `BandDocsMatchRealityTest` is the instrument that proved it still does.
+- [x] ✅ **16.3 — cut a band for 26.3** — **DONE, §69 Phase C (`d6761338c`).** 🔑 **Owner clarified
+      2026-09-22: 16.3 asked for a BAND CUT to support the new Minecraft version, not a `mod_version`
+      bump.** Under **R-a** `master` **is** the newest band, so supporting 26.3 means moving `master`
+      — and preserving 26.2 means cutting it off the previous tip first. Both happened: `mc/26.2` was
+      cut from `ce34cd2ea`, then `master` went to `minecraft_version=26.3`.
+      ⚠️ **`mod_version` was deliberately NOT touched** and is not what this item asked for — see
+      *"What I am NOT doing"* above, which already recorded that reading before the clarification.
+      🔑 Do not confuse the two: `mod_version` must be **identical** on every branch (R-p, ship gate
+      11), `minecraft_version` must **differ** (R-a).
+
+### #15 — per-skill show/hide for the XP bar (owner, 2026-09-20)
+
+- [x] ✅ **DONE** — `bcdac5386`, and it was the #10 gap again, not new plumbing.
+      `experience.yml` has carried `Experience_Bars.<Skill>.Enable` all along and
+      `ExperienceBarManager` has always enforced it — the only way to reach it was hand-editing YAML.
+      ✅ Key comes from `ExperienceConfig.experienceBarEnabledPath`, newly extracted as a static, so
+      the catalogue and the reader cannot disagree about where the value lives.
+      ⚠️ **Child skills SKIPPED on purpose.** Salvage and Smelting sit in `disabledBars` and their
+      bars are suppressed before this key is read — a row would be a switch that does nothing, the
+      dead-knob class this catalogue has already shipped twice.
+      🧪 Test iterates `PrimarySkillType.values()` and asserts presence for non-child skills and
+      **ABSENCE for child skills**.
+
+### #14 — crashes in multiplayer (HobraTacobra, 2026-09-15) — the only outside report
+
+- [x] ✅ **A non-host client crashes on world interaction in multiplayer — FIXED by §73
+      (`a790720a6`), 2026-09-22.** Reported on **MC
+      1.21.11**, installed through the CurseForge client. The crash fires immediately on placing a
+      block or using a crafting table, furnace or chest. **It is symmetric:** the host is always
+      fine and the joining client always crashes — reporter hosting is clean, reporter joining
+      someone else crashes, and the same holds in reverse for their friends.
+      🔑 **Every word of that description turned out to be load-bearing**, including the one thing it
+      does *not* list: breaking a block. Cause was `RepairSalvageListener.anvilKindAt` dereferencing
+      `GeneralConfig` — bound at server start, so `null` forever on a joining client — on the
+      `UseBlockCallback` path, ahead of the `ServerPlayer` guard. Full reasoning in §73.
+      🔴 **FIRST ACTION IS NOT A FIX — there is no crash log on the issue.** Ask for the
+      `crash-reports/` file or `logs/latest.log` from the crashing client. A symmetric
+      host-fine/client-crashes split is the classic logical-side signature (client code touching
+      server-only state, or a mixin applied on the wrong side), but **that is a hypothesis, not a
+      diagnosis**, and guessing before reading the failure has already cost this repo sessions.
+      ⚠️ **Scope is an owner call.** The mod is named *Singleplayer*, multiplayer is not in the
+      declared scope, and the reporter says so themselves. Decide **supported / best-effort /
+      won't-fix** and post it on the issue — an outside reporter left waiting is worse than a
+      documented no.
+      🔑 **If it is fixed: `master` first, then `Backport-of:` to `mc/1.21.11`** — the band the
+      reporter actually runs. A fix that stops at `master` never reaches them.
+
+---
+
+## §68.P — the execution plan + the four owner rulings — ⬜ OPEN
+
+**Rulings taken from the owner 2026-09-21, before any code.** All four were put as questions with
+the collision named; these are the answers, not my reading of them.
+
+| # | Question | **Ruling** |
+|---|---|---|
+| 16.1 | `master` docs-only vs ruling R-a | 🔴 **DO IT** — cut `mc/26.2`, then strip `master` to docs |
+| 16.3 | "version 26.3" = mod or Minecraft? | **Minecraft.** Support MC 26.3; `mod_version` stays on its own 1.x line (R-s/R-p) |
+| 14 | multiplayer scope | **Supported.** Treat the crash as a real bug; log requested first |
+| 17.2 | alchemy ingredient list | **Hide it** |
+
+🔑 **MC 26.3 exists and is stable** — measured, not assumed:
+`curl -s https://meta.fabricmc.net/v2/versions/game` lists `26.3` as the newest stable. That is what
+makes 16.3 a band cut rather than a typo.
+
+⚠️ **16.1 was recommended AGAINST and the owner chose it anyway.** That is their call and it
+proceeds — but it proceeds with a written plan and a verified rollback, because it re-points every
+mechanism this repo uses to keep nine branches honest. It is **not** a README edit.
+
+### Order of operations — this is the load-bearing part
+
+🔴 **16.1 must go LAST, and the reason is mechanical, not stylistic.** Rule 1 says every fix
+lands on `master` FIRST and propagates with a `Backport-of:` trailer; `drift-audit.py` grades each
+band **against `master`**. Making `master` docs-only removes the very mechanism every other item on
+this list needs in order to reach a band. Do 16.1 first and the remaining fixes have nowhere to land.
+
+```
+Phase A  code fixes on master, propagate                #19, #17.1-.9, #15   ✅ DONE (9 shipped,
+                                                                                1 won't-fix)
+Phase B  #14 multiplayer crash          ✅ DONE a790720a6 (§73) - diagnosed WITHOUT the crash log
+Phase C  #16.3 band cut: mc/26.2 cut, master -> 26.3                                 ✅ DONE d6761338c
+Phase D  #16.2 archive 1.21.10 and below                docs floor, R-x interaction  ✅ DONE §69 D
+Phase E  #16.1 master -> docs-only      🚫 CANCELLED - §71 ruling 3, WON'T FIX (incompatible w/ R-a)
+```
+
+⚠️ **"propagate to 8 bands" stood in this table until 2026-09-22 and was already false when written**
+— §69 Phase D archived six, so the propagation target is **3 live bands**, not 8. Corrected here
+rather than left, because this block is the thing a session reads to decide what to do next.
+🔴🔴 **AND IT WENT STALE AGAIN THE VERY NEXT DAY, IN TWO ROWS AT ONCE — corrected 2026-09-22 (§74).**
+The block said **Phase B was blocked on the reporter's log and "NOT OURS"** (§73 fixed it that same
+day, `a790720a6`, propagated to all three live bands) and **Phase E "NEEDS RULING"** (§71 ruling 3
+had already closed 16.1 WON'T FIX — *cancelled, not deferred*). The prose beneath it repeated both.
+🔑 **Every phase is now closed and NO phase is "next".** The sentence that stood here — *"Phase E is
+the ONLY phase left … A, C and D are done; B is not ours"* — was false in both of its clauses.
+🔴 **This is the third correction to this one block, and the pattern is the finding:** a block whose
+job is *"read me to decide what to do next"* is updated by the sections that supersede it and never
+by the block itself, so it rots one section behind reality every time. §73 wrote the #14 fix into
+§68.A at line ~1317 and left this table alone; §71 wrote the 16.1 ruling into §68 and left it alone.
+**When a section closes a phase, correct THIS TABLE in the same commit** — the sections are the
+record, but this table is the thing that gets acted on.
+
+### What I am NOT doing
+
+- **Not** touching `mod_version`. 16.3 is a Minecraft version; R-s restarted the fork's line at
+  `1.0.0` precisely so the two stop being compared. Ruling confirms Minecraft.
+- **Not** starting Phase E as a refactor. It gets its own plan, its own decision record, and a
+  rollback that has been run — not assumed — before the first destructive command.
+  ↩️ **MOOT as of §71 ruling 3 — Phase E is cancelled, so there is no refactor to not-start.**
+  Kept because the reasoning is the record.
+- **Not** fixing #14 from the symmetry alone. Host-fine/client-crashes is a *hypothesis* about
+  logical side; the stack trace is the diagnosis. Comment posted 2026-09-21 asking for it.
+  🔑 **This line was RIGHT about the principle and WRONG about the only route to it — see §73.**
+  The fix did not come from the symmetry, and it did not need the stack trace either: it came from
+  what the symptom list **omitted**. A diagnosis is still required; a *reporter* is not the only
+  thing that can supply one.
+- **Not** changing SALVAGE. #19 names Smelting only; Salvage keeps feeding its parents.
+
+---
+
+## §68.A — Phase A, the code fixes — ✅ CODE WORK COMPLETE
+
+🔑 **Read the closure state honestly: 9 shipped, 1 won't-fix — not "10 done".** 17.9 was
+**declined**, not built (owner ruling 2026-09-22). Nothing in Phase A is waiting on this repo.
+⚠️ **This header said *"one item blocked on a reporter"* and the body said #14 *"is waiting on a
+crash log that may never arrive"* — both FALSE from `a790720a6` (§73) onward**, corrected §74. The
+row two hundred lines below already recorded the fix; the summary above it did not move. **A
+section's own header is the last thing to get corrected and the first thing to get read.**
+
+### 🔴 The caveat-expiry pass for 17.9 found a defect no guard could see — `fbcd3d492`
+
+17.9 shipped **no code**, and the pass still paid for itself. Grepping the **symptom** (`hotbar`)
+rather than the files the item touched turned up **five spots** — `README.md`,
+`wiki/XP-and-Levelling.md` ×2, and the `experience.yml` comment **shipped inside the jar** — all
+claiming the per-skill XP bar *"appears above the hotbar"* and that bars *"stack downward over the
+hotbar"*.
+
+**Both halves are false.** `ExperienceBarWrapper` builds a vanilla `ServerBossEvent`, and Minecraft
+draws boss bars at the **top centre** of the screen. The text contradicted **itself** two lines
+later: bars that stack *downward* and *"eventually cover the screen"* are not bars above the hotbar.
+
+🔑 **Why it survived every previous pass — and this is the part to carry.** The copies were
+**byte-identical on every branch and identically wrong**, so `branch-file-identity-audit.py` was
+green. Its own output says exactly this: *"identical is not correct — six copies of a wrong file
+pass."* No test asserted the wording either (`grep -rn hotbar src/test/` → nothing). **A doc defect
+that is consistent across all branches is invisible to every equality guard in this repo**; only
+reading the code that produces the behaviour finds it — here, one import.
+
+✅ Propagated to all three live bands in the same pass (R-y: `README.md` and `wiki/**` are
+byte-identical by rule). All four guards exit 0 afterwards.
+⚠️ **Exit codes were captured directly, not through a pipe** — `python … | tail` reports **tail's**
+status, and `drift-audit.py` has **no `--local` flag**: it errored outright while the piped exit
+still read `0`.
+
+✅ **Seven sub-items shipped on `master` in six commits**, suite **174 classes / 1,935 executed /
+0 failures** (was 174 / 1,920 — +15 cases). Every guard was **mutation-tested**, and in three cases
+the mutation is what proved a second test was load-bearing rather than decorative.
+
+| Commit | Item |
+|---|---|
+| `e77d59a2e` | **#19** smelting stops paying Mining/Repair |
+| `611bda1b3` | **17.2 / 17.5 / 17.6 / 17.7** the `/mcstats` display pass |
+| `9b184f328` | **17.8** one firework control |
+| `55dde7e0d` | **17.3** print the descriptions that already existed |
+| `bcdac5386` | **#15** per-skill XP-bar show/hide |
+| `b638318ad` | **17.1** `/mcstats <skill> keep` |
+
+🔴 **DO NOT PUSH YET — measured, not assumed.** `mod_version` is **`1.4.0-SNAPSHOT`**,
+`release.yml` strips `-SNAPSHOT` and releases `1.4.0`, and **nine `v1.4.0` tags are already on
+origin** (`git ls-remote --tags origin | grep -c v1.4.0` → 9). Pushing as-is trips **R-t**'s
+stale-version gate: nine RED release runs and **zero jars**. `master` is **7 ahead, 0 behind**.
+➡️ **Bump `mod_version` first** — and it is R-p, so the bump is identical on all nine branches.
+⚠️ This is the SAME blocker §67 hit. It recurs after every release and nothing warns before the push.
+
+🔴 **NOT YET PROPAGATED.** All six commits are `master`-only. Rule 1 is satisfied (they landed
+there first); the `Backport-of:` propagation to the eight bands is still owed, and
+`branch-file-identity-audit.py` will fail until it happens — `README.md`, `wiki/**` and `AGENTS.md`
+are byte-identical **by rule** and four of these commits touch `wiki/**`.
+⚠️ Propagate from a **scratch clone** (`git clone --local --no-hardlinks . <dir>`), never this
+working copy — `drift-audit.py`'s `band_branches()` PREFERS REMOTE refs and would grade the stale
+remote instead.
+
+### Phase A — ✅ NOTHING STILL OPEN (this heading read *"one item, and it is not ours"* until §74)
+
+⚠️ The one item was #14, fixed `a790720a6` (§73). **A heading is a claim and it expires like any
+other** — this one outlived its defect by a day and sat directly above the rows that disprove it.
+
+- [x] ✅ **17.4 — APPLIED, owner-approved, with TWO corrections the tests forced.**
+      🔑 **The proposal was approved as written and it was WRONG IN TWO PLACES.** Both were caught
+      by existing tests the moment it was applied, and both are recorded below rather than quietly
+      amended — the approved table is not what shipped.
+
+**Correction 1 — Parkour Fleet Footed stays at 1, not 35.**
+`MovementTravelTest.fleetFootedUnlocksInEveryMediumAtLevelOneOfThatMediumsSkill` guards a deliberate
+design from the **Agility retirement (2026-08-17)**: Fleet Footed unlocks at 1 in *each* medium so
+that training one medium never gates another. That test exists because the old mean-of-three gate
+denied a pure swimmer their water bonus. Moving Parkour's copy to 35 would have **half-reverted that
+fix**, asymmetrically, on the one medium. Snow Walker took the vacated mid-ladder slot (45).
+
+**Correction 2 — Unarmored reverted to its shipped values entirely.**
+It was the one of the five that was **not broken**: it already spanned 10→100, the house curve.
+Moving Iron Skin rank 1 from 10 to 1 would hand a brand-new unarmoured player **7 armour points
+immediately** — a buff, and the opposite of the "arrives too late" complaint. `UnarmoredManagerTest`
+failing on four cases is what prompted re-reading it.
+
+🔑 **11 failures on first application → 5 after the corrections.** The six that disappeared were
+my errors; the five that remained were expectations that legitimately moved. **That split is the
+signal** — without it, "update the failing tests" would have buried a real regression in a batch of
+routine expectation churn.
+
+#### The complaint is real, and here it is as a number
+
+Every one of the **eight established skills** spreads its unlocks across the full range and ends at
+**100** (Taming stops at 75). The five named skills do not:
+
+| Skill | sub-skills | unlocks span | dead range |
+|---|---|---|---|
+| Mining *(reference)* | 6 | 1 → **100** | — |
+| Swords *(reference)* | 5 | 1 → **100** | — |
+| **Parkour** | 7 | 1 → **25** | 🔴 **levels 26–100 pay NOTHING** |
+| **Stealth** | 3 | 1 → **25** | 🔴 **levels 26–100 pay NOTHING** |
+| **Swimming** | 4 | 1 → **50** | 🔴 levels 51–100 pay nothing; two unlocks collide on 25 |
+| **Flying** | 4 | 1 → 75 | 🟡 thin, but reaches most of the range |
+| **Unarmored** | 2 | 10 → **100** | ✅ already matches the house curve |
+
+🔑 **The house curve, read off the eight established skills:** basic passive at **1**, super
+ability at **5** (Mining, Woodcutting, Excavation, Swords, Axes and Herbalism ALL put their super at
+exactly 5), then a ladder to a **capstone at 100**.
+🔴 **Second Wind is at 25 on all three movement skills** — five times later than every other
+super ability in the mod. That single value is most of the "too late" half of the complaint.
+
+#### Proposed (Standard mode)
+
+| Skill | Sub-skill | Now | **Proposed** | Why |
+|---|---|---|---|---|
+| Parkour | Roll | *(undeclared → 0)* | **0, declared** | see defect below |
+| Parkour | Dodge | 1 | **1** | basic passive, house convention |
+| Parkour | Second Wind | 25 | **5** | supers unlock at 5 everywhere else |
+| Parkour | Athlete | 5 | **15** | |
+| Parkour | Fleet Footed | 1 | ~~35~~ → **1 (unchanged)** | 🔴 correction 1 — medium symmetry |
+| Parkour | Snow Walker | 10 | **45** | took the slot Fleet Footed vacated |
+| Parkour | Smash | 15 | **100** | capstone — the strongest effect it has |
+| Flying | Fleet Footed | 1 | **1** | |
+| Flying | Second Wind | 25 | **5** | |
+| Flying | Glide | 35 | **30** | |
+| Flying | Solar Wings | 75 | **100** | capstone |
+| Stealth | Padfoot | 1 | **1** | |
+| Stealth | Assassin | 15 | **40** | |
+| Stealth | Smoke Bomb | 25 | **100** | capstone (Stealth has no super ability) |
+| Swimming | Fleet Footed | 1 | **1** | |
+| Swimming | Second Wind | 25 | **5** | |
+| Swimming | Lead Lungs | 25 | **30** | breaks the collision on 25 |
+| Swimming | Lake Raider | 50 | **100** | capstone |
+| Unarmored | Iron Skin R1–R4 | 10/20/50/100 | ~~1/25/60/100~~ → **unchanged** | 🔴 correction 2 |
+| Unarmored | Thorny Skin | 35 | ~~40~~ → **unchanged** | 🔴 correction 2 |
+
+⚠️ **RetroMode = 10× Standard, with ONE documented exception that I nearly "fixed" wrongly.**
+A `Standard: 1` unlock is `RetroMode: 1`, **not 10** — measured across the whole file: **27 of 27**
+such entries use 1 in both. It means "available from the start" and is deliberate. A first pass
+flagged those as mismatches; they are the house convention. `0` likewise stays `0`.
+
+#### 🔴 Defect found while measuring, independent of the balance question
+
+- [x] ✅ **SIX sub-skills had no entry, not one — all now declared at 0, behaviour unchanged.**
+      `PARKOUR_ROLL`, `ARCHERY_DAZE`, `HERBALISM_HYLIAN_LUCK`, `HERBALISM_SHROOM_THUMB`,
+      `SMELTING_SECOND_SMELT`, `UNARMED_BLOCK_CRACKER`. **All 111 `SubSkillType` constants are now
+      declared** (count taken from `javap` over the compiled enum, not a regex over source — this
+      repo has had two sessions get that wrong the same way).
+      🧪 `RankConfigTest.everySubSkillDeclaresItsUnlockLevel` stops the next one recurring, plus
+      `theRespreadSkillsReachTheTopOfTheRange` and
+      `retroModeIsTenTimesStandardExceptForImmediateUnlocks`. Each mutation-tested and each caught by
+      **exactly one** case, no cross-talk.
+      ✅ **RESOLVED by §71 (2026-09-22) — owner ruling 6, and the reason is MEASURED, not deferred.**
+      The five keep `0`: `ARCHERY_DAZE`, `PARKOUR_ROLL`, `HERBALISM_HYLIAN_LUCK`,
+      `HERBALISM_SHROOM_THUMB`, `SMELTING_SECOND_SMELT`. Each is **probability-ramped** — its chance
+      derives from skill level against `getMaxBonusLevel`/`getMaximumProbability`, so at level 0 the
+      chance **is** 0% and it scales up from there. The ramp is the gate. **Unlocking at 0 costs
+      nothing.**
+      🔴 **The old text above was a suspicion pointing AWAY from the defect, and is kept to show
+      that.** It named Hylian Luck and Second Smelt as *"looks unintended"*; both are ramped and
+      harmless. The one that was genuinely broken — `UNARMED_BLOCK_CRACKER`, the sixth — **was not on
+      the list**, because it is the only one with **no ramp** behind the gate. **A carried suspicion
+      is a hypothesis, not a finding.**
+      🔴🔴 **And the deeper correction: all six have `numRanks = 0`, so the entries this row added
+      are DEAD CONFIG the runtime never reads** — see §71, *"The config edit was not the fix"*.
+      The behaviour claim (*"declaring 0 changed nothing"*) is true; the stated reason was wrong.
+      ⚠️ `RankConfigTest.everySubSkillDeclaresItsUnlockLevel` is therefore **vacuous for these six**.
+      Block Cracker was fixed by giving it a rank; the remaining five are logged as carried debt.
+
+✅ **27 doc corrections** across `wiki/Skills.md`, `wiki/Movement-Skills.md`, `wiki/Stealth.md`,
+`wiki/Super-Abilities.md` and `README.md` — including an **anchor link**
+(`Stealth#smoke-bomb--unlocks-at-250`) that would have silently stopped resolving. Doc guards run
+explicitly (`BandDocsMatchRealityTest` 5/0, `ConfigDocsMatchLoaderTest` 2/0) because Gradle skips
+them in a normal run.
+
+- [ ] ⬜ **OLD, now superseded — kept for the record:** `PARKOUR_ROLL` has NO entry. It is the only sub-skill of these five
+      missing from the file. `RankConfig.getSubSkillUnlockLevel` resolves a missing key through
+      `config.getInt(key, defaultConfig.getInt(key))`, and a missing key answers **0** — so Roll is
+      free from level 0 by ACCIDENT of a missing entry rather than by declaration.
+      🔑 Level 0 is probably the right value (upstream's Acrobatics Roll is free from the start),
+      so this is likely a no-op in behaviour — but it is currently an *implicit* 0 that no file
+      states and no test covers. **Declare it explicitly whatever the balance decision is.**
+- [x] 🚫 **17.9 — WON'T FIX, owner ruling 2026-09-22.** The ruling was asked for and the answer was
+      **neither option**: accept the collision with the held-item name and close it. Phase A's code
+      work is therefore **complete**. ⚠️ This row ended *"only #14 remains, and that is not on us"*
+      — true when written, false the next day; the row directly below is the fix, and §74 corrected
+      this sentence rather than leaving two adjacent rows contradicting each other.
+- [x] ✅ **#14 — multiplayer crash — DIAGNOSED AND FIXED 2026-09-22 (§73), without the crash log.**
+      `a790720a6`, propagated to all three live bands. 🔑 **The row below was right that a fix must
+      not precede a diagnosis, and wrong that the diagnosis needed the reporter.** The symptom list
+      was the evidence: four right-click actions and *no* left-click, which separates
+      `UseBlockCallback` from `AttackBlockCallback` and lands on the one client-reachable config
+      dereference that runs before a side guard. **Still blocked on the reporter for
+      CONFIRMATION** — and the issue stays open until the fix is pushed and released. See §73.
+
+### 🚫 17.9 — the ruling, and why the measurement mattered anyway
+
+**Closed won't-fix, 2026-09-22.** Kept in full because the measurement is what made the decision
+cheap, and because *"just move the message up"* will look like a five-minute fix to the next person
+who reads the issue. It is not one.
+
+The messages are vanilla **action-bar** messages: `PlatformPlayer.sendActionBar` calls
+`sendSystemMessage(text, true)`, and Minecraft draws that just above the hotbar, where it collides
+with the held-item name. **There is no HUD rendering code in this mod at all** — `fabric/client/`
+contains only the ModMenu integration — so either answer means introducing some. Two options, and
+they are not close to equivalent:
+
+| | What it does | Cost |
+|---|---|---|
+| **(a) Mixin `Gui`** | Shift the vanilla overlay message up | Moves **vanilla's own** action-bar messages too, not just mcMMO's. A mixin into a render method across **nine bands / 16 MC versions** — the most version-volatile surface there is, and `mixin-allow-audit.py` must pass per band |
+| **(b) Own HUD layer** | Stop using the action bar for ability messages; draw them ourselves at a configurable height | More code, but self-contained, version-portable via Fabric API's HUD callback, and gives the player an offset slider |
+
+➡️ **Recommendation was (b).** (a) is cheaper today and is the option that breaks silently on the
+next MC version, on eight branches at once, with no compiler and no test to catch it.
+
+🚫 **OWNER RULING 2026-09-22: NEITHER. Closed won't-fix.** The cosmetic overlap does not justify
+introducing the mod's first HUD rendering code — under either option, that code is new
+version-volatile surface carried by every band forever, to fix a collision with the held-item name
+that fades after a second and a half.
+🔑 **The reason this closure is worth writing down is that the measurement is what made it cheap.**
+The intake read *"move them up so they do not overlap the item bar"* — a one-line-looking fix. What
+the measurement found is that **the mod does not draw this text at all**; it hands the string to
+vanilla via `sendActionBar`, and vanilla chooses the position. There is no coordinate in this
+repository to change. Anyone re-reading the issue text alone will re-derive the same wrong estimate,
+which is exactly why the table above is kept rather than deleted with the item.
+⚠️ **Do not treat this as a precedent for declining HUD work generally.** It is a ruling about this
+overlap's value, not about HUD code. If a later feature needs its own HUD layer for reasons that
+carry their own weight, option (b) is still the right shape and the reasoning above still applies.
+
+### #19 — Smelting must stop paying XP into Mining and Repair
+
+✅ **The award path is FOUND and it is not where the intake guessed.** `SmeltingListener` was a
+red herring: the award is `SmeltingManager.java:52`, `applyXpGain(xp, PVE, SELF)` for
+`PrimarySkillType.SMELTING` — and **the split into Mining and Repair happens generically**, in
+`McMMOPlayer`, because Smelting is a child skill:
+
+- `McMMOPlayer.java:410-419` (`beginXpGain`) — splits a child gain across its parents, recursing
+- `McMMOPlayer.java:466-473` (`applyXpGain`) — **a second, independent copy of the same split**
+
+🔑 **Both copies are load-bearing and both must be fixed.** The file says so in its own
+comments and GitHub #10 already proved it with a test: they are two public entry points that each own
+a copy of the split, so patching one leaves the other paying the parents in full.
+
+- [x] ✅ **`SkillTools.childSkillFeedsParents(child)` added** — `SMELTING → false`,
+      `SALVAGE → true` — and consulted at **both** split sites
+      (`McMMOPlayer.beginXpGain`, `McMMOPlayer.applyXpGain`). A Smelting gain is dropped rather than
+      divided; Smelting keeps levelling passively off the parents' mean.
+      🔑 Gated CENTRALLY, not in `SmeltingManager`: an admin `/addxp smelting` and any future
+      caller reach the same rule. A fix in the manager alone would have left those routes splitting.
+- [x] ✅ 🧪 **Four cases, and the guard was MUTATION-TESTED in both directions** — the
+      pass alone proves nothing, so which cases notice was measured, not assumed:
+      | Mutation | Expected to notice | Result |
+      |---|---|---|
+      | revert the fix (`default -> true`) | the two #19 cases | ✅ **both FAILED**, control passed |
+      | over-apply it (`default -> false`) | the SALVAGE control | ✅ **control FAILED**, #19 cases passed |
+      ⚠️ **The pre-existing `childSkillGainSplitsAcrossParents` drove SMELTING** — exactly the
+      behaviour #19 removes. It was **re-pointed to SALVAGE, not deleted**: without it, the #19 cases
+      pass just as happily against a predicate that returns `false` for everything, and the split
+      would be dead for Salvage too with nothing failing. That is the case mutation 2 catches.
+- [x] ✅ Suite **174 classes / 1,923 executed / 0 failures** (was 174 / 1,920 — +3 new cases;
+      the fourth is the re-pointed existing one). Counted from the XML, not read off `BUILD SUCCESSFUL`.
+- [x] ✅ Caveat-expiry pass done — `wiki/Skills.md` (Smelting section) and
+      `wiki/XP-and-Levelling.md` (the child-bar note) now state that Salvage and Smelting differ in
+      where their XP goes. ⚠️ Both are under the R-y identity guard, so they propagate with the fix.
+
+🔴 **CONSEQUENCE THE OWNER SHOULD SEE: the 24-row `Smelting:` XP table in `experience.yml` is
+now INERT.** Every row is still read and then discarded, because nothing else consumes a Smelting XP
+value. This follows unavoidably from the ruling — a child skill has no XP of its own to hold — but it
+means smelting an ore now advances **nothing at all**: not Mining, not Repair, not Smelting. Smelting
+still rises as you mine and repair, and every sub-skill (Second Smelt, Fuel Efficiency, Understanding
+the Art) is unaffected.
+✅ **The table is KEPT and marked inert in place**, not deleted — deleting a player-facing price list
+to silence a dead knob loses tuning that cannot be reconstructed, and it is exactly what Smelting
+would need if it ever earns XP of its own.
+- [x] ✅ **ANSWERED 2026-09-22 (§71, ruling 4) — and the QUESTION contained a false premise.**
+      Owner: *"smelting is fine with the changes we made already, we just didn't want to gain xp from
+      smelting, but rather have that skill lvl up passively from mining and repair."*
+      🔑 **"Smelting trains nothing" was never true.** Smelting is a **child skill**: its level is the
+      **mean of Mining and Repair**, so it levels passively exactly as the owner describes, without a
+      single smelt. What #19 removed was the *reverse* flow — a smelt paying XP **up** into Mining and
+      Repair, which levelled two skills the player never used. Both halves are what was wanted.
+      ✅ **Verified in code before closing, not taken on the javadoc's word:**
+      `SkillTools.childSkillFeedsParents(SMELTING)` → `false`, gated at **both** entry points
+      (`McMMOPlayer.beginXpGain` *and* `applyXpGain` — neither is redundant);
+      `PlayerProfile.getChildSkillLevel` → `sum / parents.size()` over `[MINING, REPAIR]`; and
+      `McMMOPlayerTest.smeltingStillLevelsPassivelyFromItsParents` already fails if either half
+      regresses (Mining 10 + Repair 20 → Smelting **15**). **#19 owed no code, only a closed row.**
+      🔑 **Second session running where asking beat auditing** (§70's 16.3 was the first). Every
+      mechanical check happily answers a question whose premise is wrong.
+
+- [x] ⬜ **Superseded — the original wording, kept because the false premise is the lesson:**
+      is "smelting trains nothing" the intended end state, or
+      should Smelting hold its own XP (a real change to the child-skill model)? The issue's wording
+      — *"gets lvled up passively"* — reads as the former, which is what shipped.
+
+## §69 — the topology change: MC 26.3 first, then the six-band archive — ✅ C AND D DONE
+
+**THE PLAN, written before any code (Tier 2).** Six owner rulings taken 2026-09-21, each put as a
+question with its collision named; all are in `.agent/memory/decisions.md` under
+*"§69: SIX owner rulings that re-shape the branch topology"*. This section is the execution plan,
+not the intake.
+
+| # | Ruling |
+|---|---|
+| 1 | 🔴 **HOLD THE PUSH ENTIRELY.** No `mod_version` bump, no push, this session |
+| 2 | Fixes propagate to the **`26.x` bands and `mc/1.21.11` only**; everything else is archived |
+| 3 | "Archived" = **keep the branches, teach the guards to skip them.** NOT deletion |
+| 4 | The six archived bands **keep their published releases**, marked final in the docs |
+| 5 | 🔴 **26.3 FIRST, archive after** |
+| 6 | 17.4's six sub-skills stay at **0**, recorded as accepted — ✅ done, see §68.A |
+| 7 | #19's end state (a smelt trains nothing) is **intended** — ✅ done, see §68.A |
+
+🔑 **Ruling 5 keeps §68.P's C-before-D order, but ruling 1 removed the ship that preceded both.**
+§68.P had Phase A ship → C → D → E. What runs now is C → D, with ten commits still sitting
+unpropagated on `master`.
+
+🔴 **The consequence, stated rather than discovered later:** `mc/26.2` is cut from a `master` that
+is **10 ahead of `origin/master`**, and every guard in this repo PREFERS REMOTE REFS. A green gate
+run during §69 grades a tree the remote does not have. **Re-run gates 7/9/10/11 after the eventual
+push** — nothing measured in §69 is evidence about what shipped.
+
+### Go / no-go for 26.3 — measured 2026-09-21, not assumed
+
+| Component | Pin | Source |
+|---|---|---|
+| `minecraft_version` | **26.3** | `meta.fabricmc.net/v2/versions/game` — `stable: true` |
+| `loader_version` | **0.19.5** | newest stable (master is on `0.19.3`) |
+| `fabric_version` | **0.161.0+26.3** | Modrinth, release channel |
+| `cloth_config_version` | **26.3.158+fabric** | Modrinth, release |
+| `modmenu_version` | ⚠️ **21.0.0-beta.1** | **the only 26.3 build — a beta** |
+| mappings | **none** | unchanged; 26.x ships unobfuscated and yarn publishes nothing |
+| `java_version` | **25 — MEASURED** | Mojang manifest for 26.3: `javaVersion.majorVersion = 25` |
+
+⚠️ **`java_version` was NOT carried over from 26.2.** `gradle.properties` states the boundary is
+read from Mojang's own manifest, and assuming it is exactly how a band compiles against the wrong
+release with nothing to report it. It happens to be 25 — that is a measurement, not an inheritance.
+⚠️ **The ModMenu beta is a narrow, deliberate acceptance.** ModMenu and Cloth are *"dev classpath
+only; never bundled"*, so a beta cannot reach a player through our jar. If it breaks the dev build,
+drop the integration for the band rather than pinning `master` to a ModMenu that does not know 26.3.
+
+### Phase C — cut `mc/26.2`, move `master` to 26.3 — ✅ DONE ON `master`, ⬜ NOT PROPAGATED
+
+✅ **Shipped in two commits, deliberately split**: `f434d7e41` (docs + manifests, **propagates**) and
+`d6761338c` (the port, **does not**). They could not be one commit: `README.md`, `wiki/**` and
+`scripts/**` are byte-identical across branches **by rule** (R-y, P19-1), while the port breaks every
+band that is not 26.3. A single commit could not have taken either trailer honestly.
+
+🔑 **The plan called this "a band cut". It was a PORT.** 26.3 did not rename API, it **deleted**
+classes this mod is built on. That is the one prediction in §69's go/no-go that was wrong, and it was
+wrong in the expensive direction.
+
+- [x] **C.1** `mc/26.2` cut off `master` at `ce34cd2ea`. ✅ **It needed NO commit of its own** —
+      the inversion §69 predicted held: `minecraft_version=26.2` and `supported_minecraft_versions=26.2`
+      were already correct, so the band inherits them and the re-pin lands on `master` instead.
+      🔑 **Cutting it from the current tip IS the propagation for that band**: it carries all ten
+      Phase A commits already, so no cherry-pick is owed to `mc/26.2` for them.
+- [x] **C.2** `.github` inheritance verified: exactly three paths.
+- [x] **C.3/C.4** `gradle.properties` + `fabric.mod.json` re-pinned. **Every pin verified by fetching
+      its POM**, which is how the one bad value was caught — see the gotcha below.
+- [x] **C.5** Compiles. **Seven API breaks**, all resolved against the Loom-cached merged jar:
+
+      | Break | 26.3 answer |
+      |---|---|
+      | `EnderMan` | → `Enderman` (capitalisation, same package) |
+      | `net.minecraft.Util` | → `net.minecraft.util.Util`; `OS.openUri` **gone** → `Blaze3D.openPath` |
+      | `ServerPlayer.drop(stack, bool)` | gained a **`Prediction`** arg (`SERVER_ONLY`) |
+      | `VanillaRegistries.createLookup` | → `createWorldLookup` |
+      | **`PotionBrewing`** | **DELETED**; `isBrewable`/`doBrew`/`serverTick` all changed shape and no longer receive the slots |
+      | **`HoeItem`** | **DELETED**, with `AxeItem` and `ShovelItem` — the whole per-tool hierarchy |
+      | `LavaFluid.spreadTo`'s `setBlock` | → `setBlockAndUpdate` |
+
+      🔴 **TWO OF THOSE COMPILED PERFECTLY AND BOUND TO NOTHING** — the lava-generator gate and Fuel
+      Efficiency. `allow = 1` is the only reason they were loud instead of silently dead. This is the
+      §42 shape again, and it is why recipe x.7 puts gate 2 **before** gate 1.
+- [x] **C.6** `mc-surface.txt` regenerated (**`MIXINCLASS 36`**, was 37), `mc-ids.txt` given a 26.3
+      section (17 versions, 46 489 ids), `probe-bands.py --check` **green: 1466 records resolve on
+      26.3**, control trusted.
+- [x] **C.7** Gate 2 **`ZERO=0 SLICE=1 OK=60`** — the same state it held on 26.2.
+- [x] **C.8** `mc/26.2` declared in `expected-bands.txt`; `--self-test` passes and `--verify --local`
+      reports 9 declared, none undeclared. ⬜ **Owed to the live bands** — see D.7.
+- [x] **C.9** Suite **174 classes / 1 942 tests / 0 failures** (`test` 1 929 + `tagBoundTest` 13),
+      counted from the JUnit XML with the task **confirmed executed, not restored from the build
+      cache**. Gate 4 exits 0 — its 3 absent ids on 26.3 are the same 3 already absent on 26.2, so
+      the move introduced no new drift.
+
+#### 🔑 Tilling was REDESIGNED, and the danger moved with it
+
+`isTillAction` — the **GitHub #1** gate that stops a till from also re-readying the hoe — read
+`HoeItem#TILLABLES` through an accessor mixin. **That map does not exist anywhere in the 26.3 jar.**
+Tool/block interaction is now the `BLOCK_TRANSFORMER` data component.
+
+✅ It now reproduces **vanilla's own loop** from `BlockTransformer#transformBlock` (bytecode-read):
+skip a transform whose `disallowedFaces` holds the clicked face, then ask its `BlockStateProvider`
+for a state — **a `null` return is vanilla's "does not apply here"**.
+✅ **`HoeTillingActionsAccessor` is DELETED** — the component is public API, so this is **one fewer
+injection to audit per band**.
+⚠️ Queried with a **throwaway `RandomSource`**: a weighted provider would otherwise perturb world RNG
+to answer a question whose answer does not depend on the draw.
+
+🔴 **The held-item gate got MORE load-bearing, not less — and this is the trap to remember.** The old
+table belonged to `HoeItem`, so *"is it a hoe"* was implied by reaching it at all. **Axes and shovels
+carry `BLOCK_TRANSFORMER` too**, so a component-only test calls an axe on a log and a shovel on grass
+a *till* and suppresses readying for **Woodcutting** and **Excavation**. `ItemTags.HOES` is the
+replacement gate, and both pairs now have a test **with a premise check** proving the pair really does
+match — otherwise `assertFalse` would prove nothing.
+
+🧪 **Mutation-tested in three directions, each caught by a DISJOINT set:** removing the hoe gate fails
+exactly the **3** over-suppression guards; inverting the transform match fails **4** negative cases;
+never returning true fails the **4** positive ones.
+
+#### 🔴 `tagBoundTest` — a new Gradle task, and why it is not optional
+
+`isTillAction` reads `ItemTags.HOES`, and the transform's own predicate is a
+`MatchingBlockTagPredicate`. **`Bootstrap.bootStrap()` binds neither**, and an unbound tag does not
+read as empty — it **throws**. `McTestRegistries` can now bind vanilla item *and* block tags, read out
+of the jar with `#tag` references **resolved rather than skipped** (skipping under-populates a tag,
+and an under-populated tag answers `false`, which reads as a clean *"not a till"*).
+🔑 **`bindTags()` alone is not enough** — it fills the registry's tag map but never the **holders**;
+`freeze()` is the public call that refreshes them.
+
+🔴 **The binding is opt-in and its one caller runs in its own JVM.** `BlockUtilsTest` asserts tags are
+**UNBOUND** — its Hylian assertions only prove the suppliers are lazy if evaluating one would throw —
+and **its javadoc predicted this exact day**. `test` runs `maxParallelForks = 4` with
+**non-deterministic** class assignment, so leaving both in one task would not have produced a failure
+but a **COIN FLIP**. Owner ruled: isolate.
+⚠️ **If you add a class that calls `bootstrapWithTags()`, add it to `tagBoundTest`'s filter in the
+same change.**
+
+### ✅ What Phase C owed — BOTH SETTLED by D.7, verified 2026-09-22 (session 09)
+
+- [x] ✅ **Propagate `f434d7e41`** (docs + manifests) to the live bands — `mc/26.2`, `mc/26.1.2`,
+      `mc/1.21.11` — with `Backport-of:` trailers, **from a scratch clone**. Carried by D.7's single
+      pass, per ruling 3. Verified: `git log <band> --grep='Backport-of: f434d7e41'` returns **one
+      commit on each of the three**.
+      🔴 **Never propagate `d6761338c`** — it would break all eight other bands. Still true, still a
+      standing rule: it is the 26.3 move, and `master` alone ships 26.3.
+- [x] ✅ **The ten Phase A commits** reached `mc/26.1.2` and `mc/1.21.11` in the same D.7 pass
+      (`mc/26.2` already had them by inheritance).
+      🧪 **Verified by the instrument, not by the record:** `drift-audit.py --self-test` first (it
+      passed, so "no drift" means something), then `--master master` inside
+      `git clone --local --no-hardlinks` — **0 MISSING on all three live bands**, 6 archived
+      correctly skipped, exit 0 read directly and **not through a pipe**.
+      ⚠️ **The clone is not optional.** `band_branches()` prefers remote refs and `master` is 24
+      ahead of `origin`, so a run in the working copy grades the stale remote and answers a question
+      nobody asked.
+
+### Phase D — archive the six `1.21.x` bands below `1.21.11`
+
+**The set is exactly:** `mc/1.21.1`, `mc/1.21.3`, `mc/1.21.4`, `mc/1.21.5`, `mc/1.21.8`,
+`mc/1.21.10` — covering MC `1.21`, `1.21.1`, `1.21.2`, `1.21.3`, `1.21.4`, `1.21.5`, `1.21.6`,
+`1.21.7`, `1.21.8`, `1.21.9`, `1.21.10` (**11 versions**).
+**Live after §69:** `master` (26.3), `mc/26.2`, `mc/26.1.2` (26.1 / 26.1.1 / 26.1.2), `mc/1.21.11`
+— **6 versions**. 11 + 6 = 17 = the declared 16 plus 26.3. The numbers reconcile; check them again
+if they stop doing so.
+
+🔴 **Why this cannot be a docs edit.** `scripts/expected-bands.txt` says in its own header: *"To
+retire one: remove the line in the commit that deletes the branch."* Every guard enumerates from
+git refs (`origin/mc/.+`). Remove six lines while the six branches still exist and
+`expected_bands.py --verify` reports six **undeclared** bands — exit 1 — so ship gates 9/10/11 go
+**red permanently**. Ruling 3 keeps the branches, so the tooling has to learn the concept.
+
+### Phase D — the measured design, written 2026-09-22 before the first edit
+
+**Three owner rulings opened this session** (`decisions.md`, *"§69 Phase D: three owner rulings"*):
+the **push hold STAYS** (no push, no `mod_version` bump); **Phase D is the work**; and §69's
+self-contradiction on propagation is resolved in favour of **D.7 — ONE pass, after D**. The
+separate *"propagate `f434d7e41` now"* step under *"What Phase C still owes"* is therefore **folded
+into D.7**, not dropped.
+
+🔑 **The whole risk of Phase D is one sentence:** four guards are being taught to audit FEWER
+branches, and a filter that matches too much leaves all four auditing **zero** branches and printing
+green. Every design choice below exists to make that impossible *by construction* rather than by
+care taken here.
+
+**The mechanism — set subtraction by exact declared name, never a pattern:**
+
+| Rule | Why it is this way |
+|---|---|
+| The archived set is an **explicit list of exact branch names** under an `[archived]` header in `scripts/expected-bands.txt` | A glob, prefix or regex can over-match. An exact-name subtraction cannot — the only way to empty the audited set is a declaration that visibly names every band, line by line, in a reviewed file |
+| A ref in **NEITHER** declared set is **KEPT and audited** | 🔴 Fail-closed. An undeclared band must never be silently skipped — that is exactly how a band cut without a declaration escapes every guard at once |
+| A missing or unparseable declaration → each guard **exits 2** | Not *"assume nothing is archived"*, not *"assume everything is"*. Exit 2 is the honest answer and this repo's existing convention for *could not run* |
+| An unknown `[section]` header is **refused** | A typo must not land lines in a section that silently means *skip me* |
+| Lines before any header are **LIVE** | The historic file format keeps its historic meaning, so the old declaration parses as all-live rather than as an empty set |
+| `master` stays refused in both sections | `BAND_NAME` already rejects it; it lives outside `mc/**` and is audited by every guard unconditionally |
+
+⚠️ **Measured, not assumed — D.5's collision is NOT where §69 predicted.**
+`BandDocsMatchRealityTest` carries a **hardcoded literal** in
+`theDetectorFiresOnADocThatDeniesThisBand`: `assertTrue(compare("1.20.6", oldest) < 0, …)`. That is
+a *floor-accepted* case, not the floor itself, and it stays green on every live branch (`1.20.6` is
+below `1.21.11`, `26.1`, `26.2`, `26.3`). **Moving the documented floor to `1.21.10` does not touch
+it.** Verified against the assertions, per D.5's own instruction.
+
+✅ **The proposed floor `1.21.10` is strictly below every version each LIVE branch ships** —
+`master` 26.3 · `mc/26.2` 26.2 · `mc/26.1.2` 26.1 · `mc/1.21.11` 1.21.11 — using the test's own
+numeric dotted compare, where `[1,21,10] < [1,21,11]`. A string compare gets that pair wrong; the
+test does not.
+
+### Phase D — RESULTS, measured 2026-09-22
+
+✅ **D.1 – D.6 DONE.** ⬜ **D.7 (the propagation pass) is the only item left open.**
+
+| Measurement | Value |
+|---|---|
+| `expected_bands.py --self-test` | **37 cases**, all green |
+| its own mutation harness | **9/9 caught, 0 silent** (M1 and M8 are each caught by exactly ONE case, so neither is decorative) |
+| cross-guard mutation, 5 modules | **7/7 caught, 0 silent** |
+| end-to-end refusal paths | **0 failures** across all four guards × four declarations |
+| `--count` (live) / `--verify` (live ∪ archived) | **3** / **9** |
+| Java suite | **174 classes / 1 942 tests / 0 failures**, both test tasks CONFIRMED EXECUTED (XML mtimes 17s and 66s), matching the phase-C baseline exactly |
+
+- [x] **D.1** `scripts/expected-bands.txt` has an `[archived]` section naming the six;
+      `expected_bands.py` parses both sets. `--count` → live only, `--verify` → live ∪ archived,
+      `--list-archived` / `--list-all` added, plus `drop_archived()` and `filter_to_live()`.
+      Refusals: unknown `[section]`, a name in both sections, an **empty LIVE set**, and the
+      pre-existing missing/duplicate/malformed cases.
+- [x] **D.2** All four guards subtract the archived set through the ONE filter.
+      `drift-audit.py` gained **`resolve_branches()`** so its exit contract is directly
+      assertable from `--self-test` rather than buried in `main()`; the other three filter in
+      `main()` and lean on the existing `exit_code()` (`len(refs) < 2 → 2`).
+      `--branch` stays an explicit override that bypasses the filter, so an archived band can
+      still be audited deliberately.
+- [x] **D.3** Mutation-tested in two layers, and **counted**, never just run:
+      - within `expected_bands.py`: **9/9**. 🔑 M1 (prefix instead of exact) and M8 (`--count`
+        returning everything) are each caught by **exactly one** case — proof those two cases
+        carry their own weight
+      - across all five modules: **7/7**. X1–X3 (the filter itself) are caught by **5/5**;
+        X4–X7 by `expected_bands.py` **alone**, which is correct — that is where those
+        behaviours live and where their cases are
+      - end to end, in a scratch clone: the real declaration **skips 6 and still compares the
+        remaining 4**; a missing declaration, an unknown `[section]`, and an
+        archive-everything declaration each **exit 2** on all four guards
+- [x] **D.4** `README.md`, `wiki/Installation.md` (archived band tables, final release v1.4.0),
+      `wiki/Building-from-Source.md` (branch table) and `wiki/Optional-Integrations.md`.
+- [x] **D.5** Floor moved **1.20.6 → 1.21.10** in `README.md` and `wiki/Installation.md`,
+      worded as *archived / final release* rather than a bare "not supported".
+      ✅ `BandDocsMatchRealityTest` ran **all 5 cases against the new floor** and passed.
+- [x] **D.6** MEASURED, not assumed: `branch-file-identity-audit.py --local` prints
+      *"Skipping 6 archived band(s)"* and audits **53 paths across 4 branches**. The union IS
+      taken over the audited refs only, so `README.md` and `wiki/**` simply stop being compared
+      against the archived six.
+
+#### 🔴 THREE DEFECTS THIS PHASE FOUND IN ITS OWN VERIFICATION
+
+1. 🔴🔴 **D.5 WAS UNGATED AND WOULD HAVE SHIPPED THAT WAY.** `build.gradle` declared
+   `.github/workflows`, itself, and `scripts/**/*.sh` as `:test` inputs — each with a comment
+   saying *"a file a guard reads is a file the guard must re-run for"* — but **not `README.md`,
+   not `wiki/**`, not `gradle.properties`**. `BandDocsMatchRealityTest` reads all three through
+   `Path.of(...)`, so moving the floor sentence changed **no declared input**, left `:test`
+   UP-TO-DATE, and the one guard that polices that sentence would never have run.
+   Recorded in `gotchas.md` on 2026-08-19 and still live. Now declared — and the widened
+   `scripts/**` also un-caches `scripts/mc-ids.txt`, which a guard reads and the `.sh` filter
+   had left out.
+2. 🔴🔴 **The fix for (1) then broke the only instrument that can detect (1).** Including
+   `scripts/` wholesale pulled in **`scripts/__pycache__`**, which Python rewrites on every run
+   of every guard — so `:test` could never reach UP-TO-DATE again. Proving a file is a declared
+   input needs a **two-step** experiment (untouched → CACHED, edited → RE-RUN), and a task that
+   always re-runs makes step one impossible. The probe reported `:test` executing in **both**
+   steps, which reads like a pass and proves nothing. `__pycache__/**` and `*.pyc` are excluded.
+   ⚠️ It is **gitignored**, so CI would never have seen it and this was local-only — which is
+   worse, not better: the instrument would have been dead on exactly the machine that uses it.
+3. ⚠️ **The first cross-guard harness reported 2 SILENT mutations and 4 end-to-end failures,
+   and ALL SIX were defects in the HARNESS.** It excluded `expected_bands.py` from the audited
+   set — the module that owns the mutated code and holds its cases — and it passed `--local`
+   inside a fresh clone, which has exactly **one** local branch. 🔑 A red result is a claim
+   about the harness until the harness has been checked too.
+
+- [x] **D.7 ✅ DONE — the ONE propagation pass (ruling 3).** To the live bands only.
+      **13 commits** propagated, **0 MISSING** on all three, every new commit carrying a
+      `Backport-of:` trailer. Done from a `git clone --local --no-hardlinks` scratch clone and
+      fetched back as strict fast-forwards (+6, +13, +13), so the shared working copy was never
+      left sitting on a band branch.
+
+      | Band | Applied | Note |
+      |---|---|---|
+      | `mc/26.2` | **+6** | Already had the seven phase-A commits by inheritance (cut at `ce34cd2ea`) |
+      | `mc/26.1.2` | **+13** | Every one applied untouched |
+      | `mc/1.21.11` | **+13** | **One needed hand translation** — see below |
+
+      🔴 **`d6761338c` was NOT propagated** — the 26.3 port breaks every band that is not 26.3.
+      ⬜ **Six TODO-only commits were deliberately not propagated.** `TODO.md` sits outside the
+      R-y identity set and outside `drift-audit.py`'s path list, and **AGENTS.md says band-specific
+      notes belong there**, so it is legitimately per-band. It was the only conflicted path on the
+      first `mc/26.1.2` attempt; excluding it made all twelve apply cleanly.
+
+#### 🔴 A `src/` BACK-PORT TO A `1.21.x` BAND NEEDS TRANSLATION, NOT A CHERRY-PICK
+
+`master` and the `26.x` bands compile against **official Minecraft names**; the `1.21.x` bands are
+**yarn-mapped**. `mc/26.1.2` took all thirteen untouched; `mc/1.21.11` conflicted on
+`McMMOCommands.java`, where the inserted `keepXpUpdates` method's anchor line differed **only by a
+type name**.
+
+🔑 **The conflict is not the danger — the clean applies are.** A hunk whose context happens to
+avoid renamed lines applies silently, so *"it cherry-picked without complaining"* is not evidence
+the band is correct. Only a build is. **Eleven of the twelve applied clean on that band.**
+
+Resolved by translating, with every pair read out of **the band's own copy of the file** rather
+than recalled: `CommandSourceStack`→`ServerCommandSource`, `Component`→`Text`,
+`sendFailure`→`sendError`, `sendSuccess`→`sendFeedback`,
+`getPlayerOrException()`→`getPlayerOrThrow()`, `getUUID()`→`getUuid()`. The commit carries a
+`Band-note:` trailer saying so.
+⚠️ **The leftover-check refused a CORRECT translation first.** A bare `Commands.` search fired on
+the locale key `"Commands.XPGain.Keep.On"` — a property key, not the `net.minecraft.commands`
+class. Strip string literals and check **code only**, or the real signal drowns in the false one.
+✅ **Verified by building the band, because no identity or drift guard reads Java:**
+`mc/1.21.11` → `BUILD SUCCESSFUL`, **5 actionable tasks, 5 executed**, **173 classes / 1 932 tests
+/ 0 failures**, and `BandDocsMatchRealityTest` **5/5** — which is also the proof that the new
+`1.21.10` floor is correct for a band shipping `1.21.11`.
+✅ Recorded in **AGENTS.md** (`da4b42c3b`), not just here: it will recur on every future `src/`
+back-port, and the agent who needs it is the one working on the band.
+
+### ✅ Gate sweep after D.7 — all four green, in the working copy
+
+| Guard | Before D.7 | After |
+|---|---|---|
+| `branch-file-identity-audit.py` | **exit 1** — `README.md` in **3 distinct versions** | **exit 0** — 53 paths byte-identical across `master` + 3 live bands |
+| `drift-audit.py` | 17 commits had not reached a band | **exit 0** — **0 MISSING** on all three |
+| `manifest-identity-audit.py` | exit 0 | **exit 0** — 4 distinct manifests (`mc-surface.txt` correctly still per-band) |
+| `gradle-key-identity-audit.py` | exit 0 | **exit 0** — 10 shared keys agree, 2 distinct differ |
+| `expected_bands.py --verify --local` | — | **exit 0** — 9 declared (3 live, 6 archived), none undeclared |
+
+⚠️ **All `--local`.** `--verify` against **`origin/**`** still reports `mc/26.2` **MISSING**, and
+that is correct: the branch has never been pushed. Ruling 1 holds the push, so every result above
+is about local refs and says nothing about what is on the remote.
+⚠️ **At push time the CI floor becomes reachable only once `mc/26.2` is on origin.** `--count` is
+now **3**, and origin currently carries two of the three live bands, so a scheduled run today
+would exit 2 at the verify step. That is a consequence of the held push, not of phase D.
+
+### ⚠️ One consequence of ruling 2, stated rather than discovered later
+
+The six archived branches keep their **pre-phase-D** `AGENTS.md`, `scripts/**` and docs — ruling 2
+says do not propagate to them. So an agent checking one out is handed a guard system with **no
+concept of an archive**, and `AGENTS.md` there still says *"propagate to every band"*.
+🔑 Those branches are **internally consistent** at their frozen state: their `expected-bands.txt`
+has no `[archived]` section, their guards are the pre-D versions, and running them there reports
+drift against `master` — which is true. Nothing is broken; it is simply frozen.
+🚫 **RULED (owner, 2026-09-22, session 09): NO — archived means archived.** `AGENTS.md` is **not**
+propagated to the six archived bands, and there is no documentation-only exception to ruling 2.
+**Reasoning on file:** those branches are frozen artifacts, not workspaces — nobody is meant to
+author on them, so a stale `AGENTS.md` there costs nothing. The P19-1 argument (*a doc that tells an
+agent a guard does not exist argues against running the thing that would catch the problem*) is
+**sound but does not apply**, because it assumes an agent doing work on that branch, which ruling 2
+has already removed.
+🔑 **Their stale copies are therefore KNOWINGLY stale, not an unnoticed defect** — that distinction
+is the whole point of writing this down. A future session that finds *"propagate to every band"* on
+`mc/1.21.5` must read it as **frozen**, not as drift to repair, and must not "fix" it.
+⚠️ **The consequence to accept out loud:** if the archive is ever REVERSED, bringing a band back
+means propagating everything it missed **in the same change** — `AGENTS.md` included, and it will be
+far behind by then. That is already the documented cost of un-archiving, not a new one.
+⚠️ **`branch-file-identity-audit.py` is unaffected**: it compares `master` + the **live** bands, so
+six frozen copies of a shared file cannot redden it. If that guard is ever widened to the archived
+set it will go red immediately and correctly — do not widen it without reversing this ruling first.
+
+### Rollback — and why §69 is unusually safe
+
+✅ **Ruling 1 (hold the push) makes EVERY step below local and fully reversible.** Nothing reaches
+the remote, no tag moves, no release changes, no player is affected. This is the strongest rollback
+position this repo gets, and it is a consequence of the owner's call rather than of care taken here.
+
+- **Anchor, recorded before the first command:** `master` at **`742c334a2`**, tree clean, 10 ahead
+  of `origin/master`. Written to `scratchpad/UNDO-69.txt` **before** Phase C starts.
+- **Undo Phase C:** `git switch master && git reset --hard 742c334a2`, then
+  `git branch -D mc/26.2`. That branch is a pointer to a commit which stays reachable from
+  `master`, so deleting it loses nothing.
+- **Undo Phase D:** the same anchor; `expected-bands.txt` and the four scripts are tracked files.
+- **What is NOT reversible this way:** nothing, today. If any step grows a push, a tag or a
+  release, it stops and gets its own blast-radius line first.
+
+### What I am NOT doing
+
+- **Not pushing**, and **not bumping `mod_version`** (ruling 1). The nine `v1.4.0` tags on origin
+  still make a push produce nine red runs and zero jars — that blocker is untouched, not solved.
+- **Not deleting any branch, tag or release** (rulings 3 and 4).
+- **Not propagating to the six archived bands** (ruling 2) — that is the point of the archive.
+- **Not starting Phase E** (#16.1, docs-only `master`). It re-points every mechanism §69 relies on,
+  and it gets its own plan.
+  📌 **Superseded the next day:** §71 ruling 3 **declined** Phase E outright — it gets no plan,
+  because it is cancelled, not deferred. Kept as written; the correction lives forward.
+- **Not re-opening** 17.4's six zero-level sub-skills (ruling 6) or #19's end state (ruling 7).
+- **Not regenerating `mc-ids.txt` per band** — it is a fact about Minecraft and it cherry-picks.
+
+## §70 — the stale-checkbox pass: SIX rows this list got wrong about itself — ✅ DONE
+
+**No code shipped. `TODO.md` only, and that is the point:** every row below claimed work was
+outstanding when git said it was finished. A list that is wrong about its own state is worse than no
+list, because it is what the next session reads to decide what to build — and twice already this
+repo has had a session re-derive something that was already done.
+
+### Four owner rulings, taken 2026-09-22 before any edit
+
+| # | Ruling |
+|---|---|
+| 1 | 🔴 **The push hold STILL STANDS.** Re-asked, not inherited — it was scoped *"this session"* and this was a new one. No push, no `mod_version` bump. `master` is **24 ahead** of `origin` |
+| 2 | **The stale-checkbox pass is this session's work** — explicitly chosen over 16.3, Phase E and the #19 follow-up |
+| 3 | 🔑 **16.3 meant "cut a band for 26.3 if needed to support the new version"** — a BAND CUT, never a `mod_version` bump. Satisfied by Phase C |
+| 4 | 🚫 **`AGENTS.md` does NOT propagate to the archived bands.** Archived means archived; no docs-only exception to ruling 2. Recorded in full at §69's *"One consequence of ruling 2"* |
+
+### The five rows, each settled against git rather than against the list
+
+| Row | Claimed | Actually |
+|---|---|---|
+| **#19** Smelting | *"Not yet measured: which path awards parent XP"* | Measured **and fixed** in `e77d59a2e`; the row's own header already said DONE |
+| **16.2** archive | open | Done — §69 Phase D; six bands under `[archived]` |
+| **16.3** band cut | open, and **misread as a `mod_version` bump** | Done — Phase C cut `mc/26.2`, then moved `master` to 26.3 |
+| Phase C: propagate `f434d7e41` | open | On all three live bands — one `Backport-of:` match each |
+| Phase C: ten Phase A commits | *"still unpropagated"* | **0 MISSING**, all three live bands |
+
+### 🔴🔴 And a SIXTH, found while checking whether these edits were safe to leave on `master`
+
+**`TODO.md`'s one-blob-on-every-branch invariant is BROKEN, and has been for some time.** The row at
+*"What is genuinely missing"* recorded **📌 Measured 2026-09-01: the invariant HOLDS — one blob on
+all nine.** Re-measured today: **three distinct blobs** — `master`, `mc/26.2`, and one shared copy on
+the other seven.
+
+🔑 **The row predicted its own failure mode in writing and nothing read it back.** Its last sentence
+was *"declining to propagate a `TODO.md` edit would break a nine-way identity by OMISSION, which is
+this row being decided by default rather than at 9.5."* The default won.
+🔴 **Nothing went red, and nothing could have.** `TODO.md` is excluded from `drift-audit.py`
+(propagation) **and** absent from `branch-file-identity-audit.py`'s set (identity). It lives in the
+seam between the two guards — **the same shape as the `mod_version` gap R-w′ was built to close**,
+which is the second time this repo has found a fact falling between exactly those two instruments.
+⚠️ **This was NOT caused by this session's edits.** Measured on the **committed** blobs before
+anything was staged; my §70 edits then make `master`'s copy diverge further, which is expected and
+permitted — `AGENTS.md` excludes `TODO.md` from propagation by design.
+⬜ **Left open for the owner** with a recommendation (retire the invariant explicitly), because
+deciding it silently is precisely the failure being reported.
+
+### 🔑 What this is worth carrying
+
+1. 🔴🔴 **A row can be internally self-contradictory and survive every pass.** #19's heading read
+   **`✅ DONE e77d59a2e`** while the checkbox three lines below read *"Not yet measured"*. Both were
+   in view at once, for a day, across a caveat-expiry pass. **The heading and the box are edited by
+   different reflexes** — ticking a box is a separate motion from writing a summary line, and only
+   one of them happened. When a section's header and its boxes disagree, **git is the tie-break**.
+2. 🔑🔑 **The 16.3 correction came from ASKING, not from auditing.** Every mechanical check agreed
+   16.3 was open. The row said *"bump the mod to version 26.3"*, and I read it as `mod_version` —
+   as did whoever wrote it. One clarifying question turned it into a **fifth** finished item.
+   ⚠️ **An ambiguous row is not a small defect.** Acted on in the wrong reading it would have
+   bumped `mod_version` on four branches — the one key **R-p** requires identical everywhere and
+   whose drift **silently stops a band releasing**. The cheap question pre-empted a costly edit.
+   🔑 Note the plan's own *"What I am NOT doing"* had recorded the correct reading all along
+   (*"16.3 is a Minecraft version"*). **The right answer was already written down and the checkbox
+   still carried the wrong one** — being written down somewhere is not the same as being findable.
+3. ⚠️ **"Propagated?" has exactly one honest instrument, and it is not this file.**
+   `drift-audit.py --self-test` first (a broken auditor also prints *"No drift"*), then
+   `--master master` inside `git clone --local --no-hardlinks`, because `band_branches()` prefers
+   **remote** refs and `master` is 24 ahead of `origin` — a working-copy run grades the stale remote.
+   Exit codes read directly; **never through a pipe**, which reports `tail`'s status.
+4. ✅ **The caveat-expiry pass came back clean on the player-facing docs**, and that is a result
+   worth recording rather than silence: `README.md`, `wiki/Installation.md`,
+   `wiki/Building-from-Source.md` and `wiki/Optional-Integrations.md` all already describe the six
+   bands as **archived** with v1.4.0 final. §69 Phase D did that half correctly. The rot was
+   confined to the internal list.
+5. ⚠️ **`TODO.md` is pure CRLF — 2 216 of 2 216 lines.** Measured, not assumed, before the first
+   edit. `sed -i` would have stripped every CR and turned a five-row correction into a whole-file
+   diff, burying the change it was meant to make. `Edit` is the instrument here.
+   🔑 This is the **§66 CR-strip hazard arriving from a third direction** — §66 closed it in shell
+   scripts, §69 Phase D hit it via `read_text()`, and this is the plain-editing case.
+
+### What this pass deliberately did NOT do
+
+- **Not** touched `mod_version`, per ruling 1 — and 16.3 never asked for it (ruling 3).
+- **Not** pushed. `master` stays 24 ahead; nothing reaches the remote.
+- **Not** propagated. `TODO.md` is **excluded from propagation** by design, so these edits owe no
+  `Backport-of:` and no band is left behind by them. ⚠️ This is the one file where a docs edit is
+  correctly `master`-only — do not generalise it.
+- **Not** started Phase E. It needs ruling 4 of §68.P, which the owner has not given.
+  📌 **Superseded the next day:** §71 ruling 3 gave that ruling — **declined**. Kept as written
+  because it was true when written; the correction lives forward, not in place.
+
+---
+
+## §71 — six rulings executed: the invariant retired, 16.1 declined, Block Cracker gated — ✅ DONE
+
+**Written before the first edit**, per the Tier 2 rule. All six rulings were taken before any
+command ran, and two of them were only reachable by asking — see *"What asking bought"* below.
+
+### The six owner rulings, taken 2026-09-22 before any edit
+
+| # | Ruling |
+|---|---|
+| 1 | 🔴 **The push hold STILL STANDS.** Re-asked, not inherited — it is scoped *"this session"* and this is a new one. **FOURTH consecutive session to re-ask; same answer every time.** No push, no `mod_version` bump |
+| 2 | ✅ **Retire the one-blob `TODO.md` invariant explicitly.** The recommendation standing on the row was taken |
+| 3 | 🚫 **#16.1 / Phase E — DECLINED, incompatible with R-a.** Close won't-fix with the blast radius written down, so the next reader does not re-open it as a five-minute refactor |
+| 4 | ✅ **#19 is CLOSED and what ships is already right.** Owner: *"smelting is fine with the changes we made already, we just didn't want to gain xp from smelting, but rather have that skill lvl up passively from mining and repair"* |
+| 5 | **`UNARMED_BLOCK_CRACKER` unlocks at 50** (Standard) / **500** (RetroMode) |
+| 6 | **The other five level-0 sub-skills STAY at 0**, with the reason recorded so the row closes rather than re-opening at every audit |
+
+### 🔑 What asking bought — measured, not assumed
+
+**Ruling 4 arrived as a correction to my own framing.** The carried row asked *"is 'Smelting trains
+nothing' the intended end state?"* and that question contains a false premise: Smelting is **not**
+trained by smelting and is **not** untrained. It is a **child skill** whose level is the mean of
+Mining and Repair, exactly as the owner described. Verified in code before writing this, not taken
+on the javadoc's word:
+
+| Claim | Instrument | Result |
+|---|---|---|
+| A smelt pays nothing to either parent | `SkillTools.childSkillFeedsParents(SMELTING)` → `false`, gated at **both** entry points (`McMMOPlayer.beginXpGain` **and** `applyXpGain`) | ✅ holds |
+| Smelting's level is the parents' mean | `PlayerProfile.getChildSkillLevel` → `sum / parents.size()` over `SMELTING_PARENTS = [MINING, REPAIR]` | ✅ holds |
+| A test fails if either half regresses | `McMMOPlayerTest.smeltingStillLevelsPassivelyFromItsParents` (10 + 20 → **15**), plus one test per entry point | ✅ already present |
+
+🔑 **So #19 owes no code.** It owes a closed row. **A row phrased as a question can encode a wrong
+premise, and every mechanical check will happily answer the wrong question** — the same shape §70
+hit with 16.3, one session earlier, and the second time in two sessions that asking beat auditing.
+
+**Ruling 5 came out of measuring the thing nobody had measured.** The carried row said *"whether 0 is
+the RIGHT level for those five is still an open balance question"* and singled out Hylian Luck and
+Second Smelt as *"looks unintended"*. Measuring inverted that:
+
+- **Five of the six are probability-ramped.** Chance is derived from level against
+  `getMaxBonusLevel` / `getMaximumProbability`, so at level 0 the chance **is** 0%. Unlocking at 0
+  costs nothing in balance; it only lists them in `/mcstats` at `0.00%`. **The two rows flagged as
+  suspicious are the harmless ones.**
+- 🔴 **`UNARMED_BLOCK_CRACKER` is the one that is not, and it was not on the suspicion list.**
+  `UnarmedManager.rollBlockCracker` calls `ProbabilityUtil.isNonRNGSkillActivationSuccessful`, which
+  this port **hard-returns `true`** (`ProbabilityUtil:277-282`) because the Bukkit event hook it used
+  to wrap was dropped in Phase 10.2. There is no ramp. Unlock level 0 means **always on**.
+
+🔑 **The named suspects were innocent and the real defect was the unnamed row.** A carried suspicion
+is a hypothesis, not a finding — and this one pointed away from the defect for weeks.
+
+⚠️ **Effective gate today is 5, not 0**, and that is why this is a balance change rather than a bug
+fix: Block Cracker only fires inside **Berserk** (`SuperAbilityListener.processBlockCracker`), which
+unlocks at 5. Stated so nobody later reads *"always on from 0"* as *"active before Berserk exists"*.
+
+### ⚠️ A docs defect I claimed and then falsified — corrected here rather than quietly dropped
+
+**The first draft of this plan asserted that `wiki/Skills.md:165` documented Block Cracker's unlock
+level as `1` while the config said `0`, and called it a pre-existing lie. That claim was FALSE, and
+it was mine.** The Unarmed table's header is `| Sub-skill | Ranks | Effect |` — the `1` is Block
+Cracker's **rank count**, which is correct (it has exactly one rank). I read a column by its contents
+and never checked its heading.
+
+🔑 **Worth keeping because of what it nearly cost.** Acting on it would have rewritten a *correct*
+rank count to `50`, silently breaking the one column in that table that was right, in the name of
+fixing a docs lie. **A grep result is a string, not a fact about the field it sits in** — and this
+repo's whole docs-defect family is *"a true-looking number in the wrong frame"*. I reproduced the
+defect I was hunting.
+
+**The real docs gap, measured after the correction:** the Unarmed table carries **no unlock levels at
+all**, so nothing in it is false — but a player cannot learn that Block Cracker now needs 50. The
+house pattern for exactly this already exists two dozen lines up (`wiki/Skills.md:48`, Mother Lode:
+*"**Unlocks at Mining 1000**"*), so 71.3 follows it rather than inventing a column.
+
+### 🔴🔴 The config edit was not the fix — `numRanks = 0` made the unlock level UNREADABLE
+
+**71.1 was applied, the suite was green, and the new test still FAILED at level 499.** The config
+was correct and the gate ignored it. The mechanism:
+
+```
+SubSkillType.UNARMED_BLOCK_CRACKER      // no-arg ctor  -> numRanks = 0
+RankUtils.getRank(...)                  // if (numRanks == 0) return -1;   <-- never reads the level
+RankUtils.hasUnlockedSubskill(...)      // return curRank == -1 || curRank >= 1;   <-- -1 = ALWAYS UNLOCKED
+```
+
+🔑 **A sub-skill declared with no rank count can never be level-gated, whatever `skillranks.yml`
+says.** Its entry there is **dead config**: parsed, validated, and never consulted. `skillranks.yml`'s
+own header says so in the first two lines — *"You cannot alter how many ranks a skill has, that is
+coded into mcMMO directly"* — which is the fact, stated in the file, that nobody had connected to
+the level-0 rows.
+
+🔴 **This retroactively reframes §68's fix, and the reframing is the important part.** §68 closed
+*"six sub-skills silently unlock at level 0"* by **adding `Rank_1: 0` entries** for all six and
+guarding it with `RankConfigTest.everySubSkillDeclaresItsUnlockLevel`. All six have `numRanks = 0`.
+So:
+
+- the six entries §68 added are **unreadable by the runtime** — every one of them;
+- ✅ **the row's stated claim is still true** — declaring `0` changed no behaviour — but it is true
+  for the **wrong reason**: not "0 was already the effective value" but *"nothing there is read at all"*;
+- 🔴 **`everySubSkillDeclaresItsUnlockLevel` is VACUOUS for exactly these six.** It asserts a YAML key
+  exists at an address the runtime never visits for a rank-less sub-skill. It cannot fail for a real
+  reason on them, and it reports the family as *handled*. **Vacuity #17**, and it was written by the
+  very pass that was closing a vacuity.
+
+⚠️ **The other five are still fine to leave at 0** (ruling 6) — but now for a **measured** reason
+rather than the one on file: their gate is always-open, and what actually limits them is the
+**probability ramp**, which reads the level directly and yields ~0% early. **Block Cracker was the
+only one of the six with no ramp behind the always-open gate**, which is precisely why it was the
+only one that mattered.
+
+✅ **The precedent for a rank-less sub-skill is already documented and was followed correctly
+elsewhere:** `wiki/Skills.md:270` — Mob Mastery *"has no rank ladder and deliberately no
+`skillranks.yml` entry"*, because a rank display for it would lie. **That is the shape the six should
+have had.**
+
+⬜ **Left open deliberately, NOT fixed here:** whether the other five rank-less sub-skills should
+lose their unreadable `skillranks.yml` entries, or gain a rank each. Both are real changes with
+balance consequences, neither is needed for ruling 5, and quietly widening this item into a
+five-skill rebalance is the scope creep the Tier 2 rules exist to stop. **It is written down in the
+carried-debt list instead.**
+
+### The plan, file by file
+
+**Order is deliberate: docs and config first, the destructive step LAST and on its own.**
+
+- [x] ✅ **71.1 — Block Cracker to 50.** `src/main/resources/skillranks.yml` — `Unarmed.BlockCracker`
+      `Standard.Rank_1` `0` → **50**, `RetroMode.Rank_1` `0` → **500**.
+      🔴 **AND `SubSkillType.UNARMED_BLOCK_CRACKER` → `UNARMED_BLOCK_CRACKER(1)`, without which 71.1
+      CHANGES NOTHING.** See *"The config edit was not the fix"* below — this is the session's real
+      finding and it was not in the plan, because nobody had measured it.
+- [x] ✅ **71.2 — a test that fails if 71.1 is reverted.** `UnarmedManagerTest.blockCrackerGateNeedsUnlock`,
+      asserting through `UnarmedManager.canUseBlockCracker` — the seam gameplay actually crosses —
+      at the **499 / 500** boundary, matching the existing `arrowDeflectGateNeedsUnlock` pattern.
+      ✅ **Mutation-checked BOTH ways, because the fix has two halves and either alone is inert:**
+
+      | Mutation | Result |
+      |---|---|
+      | `skillranks.yml` Rank_1 back to `0` (keep the rank) | `blockCrackerGateNeedsUnlock` **RED**, other 5 Unarmed cases green |
+      | `UNARMED_BLOCK_CRACKER(1)` back to no-arg (keep the level) | `blockCrackerGateNeedsUnlock` **RED**, other 5 green |
+
+      🔑 **Exactly one case red each time, no cross-talk** — so the boundary is load-bearing and the
+      test is not passing for an unrelated reason. Files restored from `scratchpad/*.mutbak` and
+      `cmp`-verified byte-identical afterwards.
+      ⚠️ `python … | grep` / `| tail` reports the **PIPE's** exit code. Read the `BUILD FAILED` line.
+- [x] ✅ **71.3 — docs.** `wiki/Skills.md:165` Block Cracker **Effect** cell now carries
+      *"**Unlocks at Unarmed 500**, and it only fires while Berserk is active"*, following the Mother
+      Lode pattern on line 48. The `Ranks` column was **not** touched — it was already correct.
+      🔴 **500, not 50: the wiki documents RETROMODE numbers**, and `config.yml` ships
+      `RetroMode.Enabled: true`. Verified against two existing rows rather than assumed — Mother Lode
+      is Standard 100 and the wiki says *"Mining 1000"*; Second Wind is Standard 5 and
+      `wiki/Movement-Skills.md:104` says *"moved … to 50"*. **My first edit said 50 and was wrong.**
+      ✅ **Caveat-expiry pass CLEAN.** Grepped the symptom (`Block Cracker`, `always on`, `level 0`,
+      `from the start`) across `README.md` and all of `wiki/**`: the corrected line is the **only**
+      mention of Block Cracker anywhere in player-facing docs. Recording a clean result rather than
+      staying silent, per §70.
+- [x] ✅ **71.4 — recorded why the other five stay at 0**, in the carried row, with the ramp measurement.
+      A row closed with *"owner said so"* and no mechanism re-opens at the next audit.
+- [x] ✅ **71.5 — retired the one-blob `TODO.md` invariant** (ruling 2), in the row itself, with the
+      reasoning and the seam it sat in.
+- [x] ✅ **71.6 — closed #16.1 won't-fix** (ruling 3) with the R-a collision and blast radius stated.
+- [x] ✅ **71.7 — closed #19** (ruling 4) with the three verified claims above.
+- [x] ✅ **71.8 — build + full suite green.** **174 classes / 1,943 tests / 0 failures / 0 errors /
+      0 skipped** (was 174 / 1,942 — exactly the one case 71.2 adds).
+      ✅ Both tasks attributable to this HEAD: a bare `> Task :test` (not FROM-CACHE) under
+      `--no-build-cache`, and `tagBoundTest` run separately. Counted by globbing the XML
+      **recursively and splitting by task directory** — `test` 173/1,930, `tagBoundTest` 1/13.
+      ✅ **The doc guards DID run this time** (`BandDocsMatchRealityTest`, `ConfigDocsMatchLoaderTest`
+      both present in `build/test-results/test/`), because §69's `f5da6bb9d` declared the repo files
+      they read as `:test` inputs and the resource change invalidated them. **That fix is working** —
+      the standing *"Gradle skips the doc guards"* warning did not apply here. Verified by listing
+      the results, not by assuming.
+- [x] ✅ **71.8b — UNPLANNED: the rank plaque datapack had to be regenerated.** Giving Block Cracker
+      a rank made it eligible for a milestone advancement, and four `MilestoneAdvancementResourcesTest`
+      cases went red naming the exact remedy (*"re-run scripts/gen-milestone-advancements.sh"*).
+      **A guard that names its own fix is worth the line it costs.**
+      ↩️ `gen-milestone-advancements.sh` does `rm -rf "$ROOT"`, so the five gates were run before it:
+      `$ROOT` resolved to the one generated dir (335 files, **all tracked, zero uncommitted**), undo
+      written to `scratchpad/UNDO-s10.txt` **first**, scope is that directory only, and its
+      zero-sub-skills guard fails closed.
+      ✅ **The enum-parse off-by-one this repo has hit twice was checked, not assumed:** the script's
+      `sed` regex yields **106** ranked + **5** rank-less = **111**, matching §68's `javap` count
+      exactly, and the final constant (`WOODCUTTING_CLEAN_CUTS`, terminated by `;` not `,`) **is**
+      captured. Generated **336** files = 335 + 1.
+      ⚠️ **Six files then showed as modified with an EMPTY `git diff`** — the generator writes LF
+      where the working copy had CRLF. Confirmed **zero content change** on all six via
+      `git diff --numstat`, then restored them, so the commit carries **one added file and nothing
+      else**. A line-ending-only diff on six untouched plaques would have been noise in a review and
+      a false positive for the identity guard.
+- [x] ✅ **71.9 — DONE. `762f47b1e` propagated to all three live bands** from a scratch clone:
+      `mc/26.2` → `cfa2c0a96`, `mc/26.1.2` → `6e5e7893e`, `mc/1.21.11` → `2a61a8e1d`. All three
+      applied **cleanly**, all three fast-forwarded back into this working copy.
+      ✅ **Trailer verified through git's OWN parser**, not by eyeballing the message — and with the
+      control: `%(trailers:key=Backport-of,valueonly)` returns the source sha on each band and
+      **EMPTY on `762f47b1e` itself**. A check asserting non-empty everywhere would pass a trailer
+      wrongly applied to the source. The double-`\n` `printf` form was used.
+      ✅ **The yarn band's clean apply was NOT taken on trust** — AGENTS.md is explicit that the clean
+      applies are the danger. Two checks: the added Java lines (string literals stripped) contain
+      **no** official-name symbols, and `mc/1.21.11` **BUILDS** — suite **173 classes / 1,933 tests /
+      0 failures**, with `blockCrackerGateNeedsUnlock` present and passing **on the band**.
+      🔑 The change is mapping-agnostic by construction (an enum constant, comments, a test and two
+      resources), which is *why* it needed no translation — stated as the reason, not as luck.
+      ✅ **All four guards exit 0 afterwards** (read directly, never through a pipe), self-test FIRST:
+      `drift-audit.py --self-test` PASSED · `--master master` in a **fresh** clone → **0 MISSING** on
+      all three live bands, 6 archived skipped · identity **53 paths** byte-identical ·
+      manifest **4 distinct** · gradle-key **12 keys, 10 SHARED / 2 DISTINCT**.
+      ⚠️ **The propagation clone was stale for the audit** — its `origin/mc/*` still pointed at the
+      pre-propagation tips — so gate 7 was re-run in a **second, fresh** clone. Reusing the first one
+      would have graded the work as though it had never happened.
+      ⚠️ `skillranks.yml` and `wiki/**` are shared; `TODO.md` is **excluded** and stays `master`-only.
+      ⚠️ Propagate from a **scratch clone** (`git clone --local --no-hardlinks . <dir>`) —
+      `drift-audit.py`'s `band_branches()` PREFERS REMOTE refs and would grade the stale remote.
+      ⚠️ `mc/1.21.11` is **yarn-mapped**; a `src/` hunk needs **translation**, never "take master".
+      71.1/71.3 are resources and docs, so this should be clean — **verify, do not assume**.
+- [x] ✅ **71.10 — DONE, owner-authorised in the moment. 65 stale local-only tags deleted; 0 errors.**
+      Local went **75 → 10**, and the local set now **equals** the remote set exactly (`comm` both
+      directions → 0). All 65 were superseded release tags `v1.0.0`–`v1.3.4`.
+      🔴🔴 **THE ROW SAID 56. THE MEASUREMENT SAID 65.** Local was 75, not the 71 on file. **This is
+      the third time this exact row has been a lower bound** — 6 → 62 → 56 → **65** — and the row
+      two entries down already states the lesson: *a carried row naming a specific defect is a lower
+      bound, never a count.* It was re-measured before asking, and the owner was asked with **65**,
+      not with the number on the page.
+      ✅ **Five gates, all of them, before the command:** list **frozen to a file** (never a live
+      re-query); remote reply asserted **non-empty** first, because an empty answer is the fail-open
+      trap; all 65 commits **reachability-checked** against live branches (**0 unreachable**);
+      `scratchpad/UNDO-s10-tags.txt` written with **65 exact `git tag <name> <sha>` lines BEFORE the
+      first delete**; control confirmed **none** of the 10 remote-backed tags were in scope; and the
+      owner confirmed the count and blast radius in the moment rather than by inheritance.
+      🔴 **`git fetch --prune --prune-tags` was NOT used and must never be** — it re-queries the
+      remote and deletes whatever is absent from the answer, so one empty reply takes **all 75**.
+      Deleting from a frozen file is the whole defence.
+      ⚠️ **Nothing outward-facing.** These were local-only by definition; origin was never written to.
+
+      **Original row text:** the 56 stale local-only tags.
+      See the blast-radius block below. **Nothing else in this section depends on it**, so it can be
+      abandoned without unwinding 71.1–71.9.
+
+### ↩️ Blast radius for 71.10 — the only destructive step
+
+| Gate | Answer |
+|---|---|
+| **1. Resolve the target** | Freeze the list to a file first: `comm -23 <(git tag -l \| sort) <(git ls-remote --tags origin \| sed 's\|.*refs/tags/\|\|' \| grep -v '\^{}' \| sort -u) > scratchpad/stale-tags.txt`. **Delete from the frozen file, never from a live re-query.** |
+| **2. Prove it's recoverable** | Every tag's commit must be reachable from a live branch — §63 verified all 62, **re-verify, do not quote**. The undo is `git tag <name> <sha>`, written to `scratchpad/UNDO-s10-tags.txt` **before** the first delete |
+| **3. Dry-run** | Print the frozen list with each tag's sha and reachability. Read it. |
+| **4. Narrow** | Local tags only. **Nothing touches origin** — these are local-only by definition, and the remote is already correct |
+| **5. Undo + confirm** | Quote the count and the exact command to the owner before running it |
+
+🔴 **NEVER `git fetch --prune --prune-tags`.** It re-queries the remote and deletes whatever is not
+in the answer, so a network hiccup returning an empty tag list deletes **all 71** — it **fails open**.
+That is the documented trap on this row and it is the whole reason the list gets frozen to a file.
+
+### What I am NOT doing
+
+- **Not** pushing, and **not** bumping `mod_version` — ruling 1, fourth re-ask.
+- **Not** touching the five level-0 rows — ruling 6. They are measured harmless; the row gets the
+  measurement, not an edit.
+- **Not** starting Phase E as a refactor. Ruling 3 **declined** it; the work is to close it.
+- **Not** propagating `TODO.md`. It is excluded by design — and §70 found that this is precisely the
+  seam the one-blob invariant died in, which 71.5 now retires rather than re-opens.
+- **Not** propagating anything to the six **archived** bands. Archived means archived (§70 ruling 4).
+- **Not** deleting a single tag until 71.1–71.9 are committed and green. A destructive step riding
+  along with feature work is how a bad rollback becomes unattributable.
+
+---
+
+## §72 — the five rank-less sub-skills: delete the dead config, re-point the vacuous guard — ✅ DONE
+
+**Closes the §71 carried row** *"Five rank-less sub-skills carry `skillranks.yml` entries the runtime
+CANNOT read"*. Tier 1. Owner ruling taken 2026-09-22 **before any edit**, alongside two others.
+
+### Three owner rulings, taken before the first command
+
+| # | Ruling |
+|---|---|
+| 1 | 🔴 **The push hold STILL STANDS.** Re-asked, not inherited — scoped "this session", and this is a new one. **FIFTH consecutive session to re-ask; same answer every time.** No push, no `mod_version` bump |
+| 2 | ✅ **Delete the five entries and follow the Mob Mastery precedent.** Not "hand each a rank" (a real gameplay change + five new plaques), not "leave the config and weaken the guard to an exemption list" |
+| 3 | ✅ **This is the session's work** — it is the only unblocked row on the list |
+
+### Re-measured here before touching anything — a carried row is a claim, not a fact
+
+Every number below was measured in this session. The §71 row is **confirmed on every point**, which
+is worth recording explicitly: re-measuring is not an accusation, and a carried row that survives it
+has earned the next reader's trust.
+
+| Claim | Instrument | Result |
+|---|---|---|
+| The set is exactly **five** | source scan of `SubSkillType.java` for a constant with **no** `(n)` arg | `ARCHERY_DAZE`, `HERBALISM_HYLIAN_LUCK`, `HERBALISM_SHROOM_THUMB`, `PARKOUR_ROLL`, `SMELTING_SECOND_SMELT` |
+| …and the count is right | **independent instrument**: `gen-milestone-advancements.sh`'s own `sed` census, quoted in §71.8b | **106 ranked + 5 rank-less = 111**, matching §68's `javap` count |
+| All five carry a live entry | `skillranks.yml` lines 120 / 161 / 556 / 907 / 912 | every one is `Rank_1: 0` in **both** modes |
+| …resolved to real addresses | the enclosing top-level key, read per line rather than assumed | `Archery.Daze`, `Parkour.Roll`, `Smelting.SecondSmelt`, `Herbalism.HylianLuck`, `Herbalism.ShroomThumb` |
+| The entries are never read | `RankConfig.checkConfig` and `fixBadEntries` both loop `x < getNumRanks()` | **zero iterations** for all five — validation does not read them either, not just the runtime |
+| Block Cracker is **not** in the set | it took a rank in §71 (`Rank_1: 50 / 500`) | correctly **excluded**; it stays |
+
+### ✅ Three ways deletion could have had a side effect — all three checked, all three inert
+
+Written down because "behaviour unchanged" is the claim the whole ruling rests on, and an unchecked
+claim of that shape is how a quiet regression ships.
+
+- **Config migration.** `SkillRenames.MOVED_CONFIG_PATHS` registers **no** `skillranks.yml` move for
+  any of the five. Roll's `Agility.Roll` → `Parkour.Roll` entry is **`advanced.yml`**, and the seven
+  re-parented sub-skills in the `skillranks.yml` loop are Dodge / Athlete / Smash / LeadLungs /
+  LakeRaider / Glide / SolarWings. ⚠️ Roll's entry was the one that had to be read rather than
+  grepped — the name matches in three files with three different meanings.
+- **Milestone plaques.** `gen-milestone-advancements.sh` parses the **enum source**, splitting ranked
+  from rank-less; the five mint no plaque today and mint none after. The datapack does **not** read
+  `skillranks.yml`, so unlike §71.8b there is nothing to regenerate here.
+- **`/mcstats`.** `SkillStatsRenderer.subSkillLine` branches on `getHighestRank(subSkill) > 1`, and
+  `getHighestRank` **is** `getNumRanks()`. `0` and `1` both fall through to the same *"Unlocked"*
+  line, so the five render identically before and after. No player-visible change, measured rather
+  than assumed.
+
+### 🔴 The caveat-expiry pass found FOUR false cells — and it is the docs shape no guard can see
+
+`wiki/Skills.md`'s **Ranks** column says **`1`** for Hylian Luck (76), Shroom Thumb (77), Daze (173)
+and Second Smelt (413). `getNumRanks()` returns **0** for all four. The claim is false today, before
+any edit — deleting the entries only makes it *visible*.
+
+🔑 **The correct rendering already exists twice in the same file** and was simply never applied to
+these four: `Roll` (291) is `—`, and Mob Mastery (266/270) is `—` with a sentence saying *"has no
+rank ladder and deliberately no `skillranks.yml` entry"*. So this is not a new convention, it is an
+unfinished application of one.
+🔑🔑 **It is byte-identical on every branch, so it is invisible to BOTH propagation guards** —
+identity passes because all the copies agree, and `drift-audit.py` does not track docs at all. The
+exact shape of the XP-bar defect. Cross-branch equality is not correctness.
+⚠️ **And one near-miss worth recording:** `wiki/Movement-Skills.md:77` reads `| Roll | 600 |`, which
+looks like an unlock level and is **not** — the table's header is `| Event | XP |`. Read the header,
+not the row. §71 made this exact mistake on `| Block Cracker | 1 |`; twice in two sessions means
+treat it as the default failure mode of a grep, not an accident.
+
+### The plan, file by file
+
+- [x] ✅ **72.1 — DONE. Five sections deleted** from `src/main/resources/skillranks.yml`
+      (`Archery.Daze`, `Parkour.Roll`, `Smelting.SecondSmelt`, `Herbalism.HylianLuck`,
+      `Herbalism.ShroomThumb`), each replaced by a one-line comment saying *why* there is no entry,
+      pointing at the Mob Mastery precedent. **Block Cracker is not touched.**
+- [x] ✅ **72.2 — DONE. Re-pointed `RankConfigTest.everySubSkillDeclaresItsUnlockLevel` into a
+      BICONDITIONAL:** a sub-skill has a `skillranks.yml` section **iff** `getNumRanks() > 0`.
+      🔑 **That is what makes it falsifiable by a rank-less sub-skill**, which the old one-directional
+      form could never be — it asserted a key at an address the runtime never visits for exactly the
+      five, and reported the family as covered. Both directions get a distinct failure message:
+      **ranked with no section** is the original #17.4 defect; **rank-less with a section** is the
+      dead config this section deletes.
+- [x] ✅ **72.3 — DONE. A second test pinning the MECHANISM**, so the deletion cannot be undone by someone
+      who believes an entry would gate: for every rank-less sub-skill, `RankUtils.getRank` returns
+      **-1** and `hasUnlockedSubskill` is **true**. Driven from `values()`, never a transcribed list.
+      ⚠️ If `values()` ever yields **no** rank-less sub-skill this test must **fail, not pass
+      vacuously** — an empty loop asserting nothing is the exact defect being closed.
+- [x] ✅ **72.4 — DONE, 5/5. MUTATION-TESTED the re-pointed guard in both directions, and COUNT which cases
+      notice.** Four mutations: (a) restore one deleted section → 72.2 reddens; (b) delete a *ranked*
+      section → 72.2 reddens; (c) give a rank-less sub-skill a rank in the enum → 72.2 reddens;
+      (d) the control — an unrelated edit → everything stays green. **A guard that is not counted is
+      not measured.**
+- [x] ✅ **72.5 — DONE. Docs.** Four `1` → `—` cells in `wiki/Skills.md`, plus one sentence per skill
+      section in the Mob Mastery voice. ⚠️ **`wiki/**` is under the R-y identity guard**, so this
+      must reach all three live bands in the same propagation or gate 9 goes red.
+- [x] ✅ **72.6 — DONE. Build + full suite green**, read off the JUnit XML with `> Task :test` confirmed
+      **bare** rather than `FROM-CACHE`, and `tagBoundTest` attributed to the same HEAD.
+      ⚠️ `cleanTest test` does **not** defeat the build cache — §70 needed `--no-build-cache`.
+- [x] ✅ **72.7 — DONE. Propagated to the three LIVE bands** (`mc/26.2`, `mc/26.1.2`, `mc/1.21.11`) from a
+      **scratch clone**, each with a `Backport-of:` trailer verified through git's own parser **and
+      its control** (the source commit on `master` must return empty). ⚠️ `mc/1.21.11` is yarn-mapped,
+      but this change is YAML + a test using no MC types, so no translation is expected — verify
+      rather than assume. ⚠️ Archived bands get nothing.
+- [x] ✅ **72.8 — DONE. Closed the §71 carried row** with the measurement, and re-point `AGENTS.md`/memory
+      only if something generalises.
+
+
+### ✅ 72.4 — the mutation table, with a discriminating control
+
+Five mutations, each applied from a byte-verified clean base, each run read by its **real exit code**
+and its **own fresh XML** — the scorer refuses a report older than the mutation, because a stale
+report is how a mutation harness ends up measuring itself.
+
+| Mutation | Predicted | gradle | Noticed by | Message |
+|---|---|---|---|---|
+| **M1** re-add a rank-less section (`Archery.Daze`) | biconditional RED | exit 1, 1 failure | biconditional | *"dead config the runtime never consults"* |
+| **M2** delete a **ranked** section (`Parkour.SnowWalker`) | biconditional RED | exit 1, 1 failure | biconditional | *"silently unlocks at level 0 (#17.4): [PARKOUR_SNOW_WALKER]"* |
+| **M3** give ONE rank-less sub-skill a rank | biconditional RED | exit 1, 1 failure | biconditional | *"declare ranks but have no entry: [ARCHERY_DAZE]"* |
+| **M4** give **ALL FIVE** a rank | both anti-vacuity lines RED | exit 1, **2 failures** | biconditional **+** mechanism | *"asserted nothing"*, from both tests |
+| **M5** control — a comment-only edit | everything GREEN | **exit 0, 0 failures** | **NOTHING** | — |
+
+🔑 **M4 is the one that matters.** The old guard's failure was that it could not fail for a real
+reason on exactly these five; M4 removes the last rank-less sub-skill and **both** new tests refuse to
+pass quietly. A guard that reddens when it runs out of things to check is the difference between this
+and §68's version of the same fix.
+⚠️ **And the harness caught its own bug rather than scoring it as a survival.** `SubSkillType.java` is
+**CRLF** while `RankConfigTest.java` is **LF**; the first draft hardcoded an LF anchor for M3/M4 and
+**aborted** instead of applying nothing. Had it been written to skip a missed anchor, M3 and M4 would
+have run against an unmutated tree and printed *"mutation survived"* — the precise shape of the
+already-recorded *"mutation that never applied"*. **Anchor on the file's own newline, and assert.**
+
+### ✅ 72.6 — the suite, by task directory
+
+**174 classes / 1,944 tests / 0 failures / 0 errors / 0 skipped**, under `cleanTest test tagBoundTest
+--no-build-cache`, with **both** `> Task :test` and `> Task :tagBoundTest` confirmed **bare** rather
+than `FROM-CACHE`, and the XML aggregated **by task directory** (`test` 173/1,931 + `tagBoundTest`
+1/13) rather than through a partial glob.
+🔑 **The number was PREDICTED before it was read:** §71 recorded 1,943; this removes one test and
+adds two, so 1,944 is the arithmetic and not merely a green run.
+
+### ✅ Three ways deletion could have had a side effect — verified, not assumed
+
+All three were checked **before** the edit and are recorded above. The docs claim added in 72.5
+(*"gated by a chance that scales with ‹skill›"*) was then verified per sub-skill rather than inherited
+from §71's summary: all four carry both `getMaximumProbability` and `getMaxBonusLevel` in
+`AdvancedConfig`, which is a level-scaled ramp.
+
+### 🔴 The caveat-expiry pass — four FALSE cells, and one the commit itself created
+
+`wiki/Skills.md`'s **Ranks** column read **`1`** for Hylian Luck, Shroom Thumb, Daze and Second Smelt.
+`getNumRanks()` is **0** for all four, so the claim was false **before** this session touched
+anything — deleting the entries only made it visible. Corrected to `—`, the rendering the same file
+already used for Roll and Mob Mastery, each with a sentence in the Mob Mastery voice.
+➕ **And one the commit created:** Roll's own sentence (`Skills.Md:304`) said *"has no rank ladder"*
+but not *"and no `skillranks.yml` entry"* — true when written, incomplete the moment this commit
+deleted that entry. **The caveat pass has to include the caveats your own diff invalidates.**
+✅ **Checked and deliberately NOT changed:** Mob Mastery's *"the one sub-skill that doesn't appear in
+`/mcstats`' ranks list"* is still true — it is not a `SubSkillType` constant at all, so it never
+enters the renderer's loop, whereas the five do and render as *"Unlocked"*. That was the same before
+this change. **Recording a checked-and-correct claim is worth more than silence.**
+
+
+### ✅ 72.7 — the propagation, and the gate sweep after it
+
+`127238b80` reached all three live bands from a **scratch clone**, never this shared working copy:
+
+| Band | Tip | `Backport-of:` via git's OWN parser |
+|---|---|---|
+| `mc/26.2` | `799a3fcc7` | `127238b80` |
+| `mc/26.1.2` | `d01521372` | `127238b80` |
+| `mc/1.21.11` | `7c76e16b0` | `127238b80` |
+
+✅ **With the control:** the source commit on `master` returns **empty**, so the check is not one
+that would pass on anything.
+✅ **Zero translation needed on the yarn band, and that is MEASURED rather than assumed:** all four
+commits share one `git patch-id` (`db0e983db`), and all nine resulting blob hashes (three files
+× three bands) are identical to `master`'s. The change touches YAML, `wiki/`, and a test using only
+mod types, so no MC symbol could need re-spelling.
+✅ **The band BUILDS**, which is the only thing that settles a propagation: `mc/1.21.11` ran
+**173 classes / 1,934 tests / 0 failures**, with both new cases present and passing.
+(§71 recorded 173 / 1,933 on that band; +1 is the arithmetic, since the replaced test was one and
+the additions were two — the band does not carry `tagBoundTest`, see below.)
+
+**The four guards, real exit codes, each read directly:**
+
+| Gate | Result |
+|---|---|
+| `drift-audit.py --self-test` | **PASSED** — run FIRST, because "no drift" is also what a broken auditor prints |
+| `drift-audit.py --master master`, **fresh** clone, `--require-bands 3` | **0 MISSING** on all 3 live bands, 6 archived skipped, **exit 0** |
+| `branch-file-identity-audit.py --local` | **53 paths byte-identical** across `master` + 3 live, **exit 0** — this is the one that had to see the `wiki/` edit reach every band |
+| `manifest-identity-audit.py --local` | 4 **distinct** manifests, **exit 0** |
+| `gradle-key-identity-audit.py --local` | 12 keys, 10 SHARED / 2 DISTINCT, **exit 0** |
+
+⚠️ The drift audit was run in a **separate, fresh** clone — not the propagation clone, whose
+`origin/mc/*` are pre-propagation and which `band_branches()` would prefer, grading the work as if it
+had never happened.
+
+### ⚠️ `tagBoundTest` does NOT exist on any band — operational, not a defect
+
+`./gradlew test tagBoundTest` on `mc/1.21.11` **failed** — *"Task 'tagBoundTest' not found"*. **On a
+band, run `test` alone.** Written down because the red looked like the propagation had broken the
+band, and it had not: **a red result proves nothing until the harness is checked**, the same lesson
+§61 paid for.
+
+🔑 **And then the check has to be finished, because the first reading was WRONG.** The task is
+defined only on `master` (added by `d6761338c`, the 26.3 move) while the test class
+`SuperAbilityListenerTillingTest` exists on **all four** branches — which reads exactly like a
+version-agnostic fork-isolation fix that never propagated, in `build.gradle`, a file **neither**
+propagation guard watches. That would have been a third instance of the `mod_version` / `TODO.md`
+seam, and it is not one:
+
+- The bands carry a **different, older** copy of that test (`10e9f3bae` / `2cd2f69f4` vs master's
+  `ffacc3879`) which **does not call `bootstrapWithTags()`** — measured, 2 calls on `master`, **0** on
+  the bands. Nothing binds vanilla tags there, so there is no leak to isolate and no coin flip.
+- Master's rewrite is explicitly **26.3-shaped**: 26.3 deleted `HoeItem` outright and moved transforms
+  behind `ItemTags.HOES`, which is *why* the test now binds tags and *why* it needs its own JVM.
+- So `d6761338c`'s `Backport-not-needed:` is **correct for this file too**, and the drift audit
+  agrees — it reports that commit as the **1 waived** per band, with 0 MISSING.
+
+⚠️ One live confirmation of an already-recorded row: `%(trailers:key=Backport-not-needed)` returns
+**empty** for `d6761338c` while `drift-audit.py` reads it correctly. That is the known
+git-trailer-parser blind spot, behaving exactly as the carried row predicts. **Check against the
+auditor's regex, never git's parser.**
+
+
+### ↩️ Blast radius for 72.4 — the only destructive step
+
+The mutation harness **overwrites three tracked files in place, five times**, and all three were
+**modified and UNCOMMITTED** when it ran. That is the dangerous combination: `git checkout --` would
+have destroyed the session's work rather than restoring it, so **restore is from
+`scratchpad/mut-backup/`, never from git** — stated in the harness's own docstring, not just here.
+
+| | |
+|---|---|
+| **Touches** | `src/main/resources/skillranks.yml`, `src/test/…/RankConfigTest.java`, `src/main/java/…/SubSkillType.java` |
+| **Lost if wrong** | this session's uncommitted edits — nothing else; no branch, tag, remote or shared state is involved |
+| **Comes back from** | `scratchpad/mut-backup/`, byte-exact copies taken **before** the first mutation, with their sha256 printed at capture |
+| **Verified** | every restore re-hashes all three files against the backup and **asserts equality** — the harness prints *"restored 3 files, all byte-identical to backup"* or raises |
+| **Scope** | one mutation per invocation, each preceded by a full restore, so no two mutations can compound |
+| **Undo note** | `scratchpad/UNDO-s11.txt`, written **before** the first mutation |
+
+✅ **And the guard fired for real:** M3's first run aborted on a missing anchor and applied **nothing**,
+leaving the tree untouched — a harness that swallowed that would have scored two mutations against an
+unmutated tree as *"survived"*. **Fail closed, then restore, then re-run.**
+
+### What I am NOT doing
+
+- **Not** pushing, and **not** bumping `mod_version` — ruling 1, **fifth** re-ask.
+- **Not** giving any of the five a rank. That was offered and declined: it is a real gameplay change
+  and mints five milestone plaques.
+- **Not** touching `UNARMED_BLOCK_CRACKER`. §71 gave it a rank because it was the one with **no
+  probability ramp**; it is correctly out of this set.
+- **Not** deleting or weakening `everyShippedRankSectionMapsToALiveSubSkill`. It is the converse
+  guard and deletion cannot make it fail — but it is also the thing that would catch a *sixth*
+  section going stale, so it stays exactly as it is.
+- **Not** widening this into the general vacuous-guard sweep. That was offered and is a Tier 2 job of
+  its own; **vacuity #17 is closed here, the census is not.**
+  ↙️ **The census WAS taken the next day (§74, owner ruling 2)** and is now an instrument,
+  `scripts/vacuity-census.py`. It found four more vacuities and **five in itself**. This line stays
+  because it was true when written, and it is the row that carried the job forward.
+- **Not** propagating `TODO.md` (excluded by design), and **not** propagating anything to the six
+  archived bands.
+
+---
+
+## §73 — GitHub #14: the multiplayer client crash — ✅ DONE (not pushed; #14 stays open until it is)
+
+**Issue:** *"Crashes when playing with friends"* (HobraTacobra, 2026-09-15), MC **1.21.11**, CurseForge
+client. Ruled **supported** in §68. Owner ruling 2026-09-22: **work it statically anyway** — the crash
+log was asked for on 2026-09-21 and the reporter has not replied.
+
+### Re-measured here before touching anything — a carried row is a claim, not a fact
+
+| Claim | Measured |
+|---|---|
+| *"blocked on the reporter"* | **True but not blocking a diagnosis.** `gh issue view 14` — 1 comment, ours, no reply |
+| *"no crash log"* | **True.** Nothing attached, nothing pasted |
+| the fix must reach the reporter's band | **`mc/1.21.11` is LIVE** (`expected_bands.py --count` → 3), so it is propagated to, not archived |
+
+### 🔑 The diagnosis, reached without the crash log — and the symptom list is what proves it
+
+**The reporter's own words are the discriminator, and the TODO paraphrase had lost it.** They list
+*placing a block, crafting tables, furnaces, chests* — **every one a right-click on a block** — and
+they do **not** list breaking a block. That splits `UseBlockCallback` from `AttackBlockCallback`
+cleanly, and the code agrees: the attack path resolves through `resolve(player)` → `null` on a client
+and never reads a config, so it cannot throw. **A symptom list is evidence in what it omits.**
+
+🔴 **The defect: `RepairSalvageListener.anvilKindAt` dereferences a `@Nullable` config on a path that
+runs on the logical CLIENT, before any side guard.**
+
+```java
+final Block repairAnvil = anvilBlock(McMMOMod.getGeneralConfig().getRepairAnvilMaterialName());
+```
+
+- `UseBlockCallback` fires on **both** logical sides — the listener's own javadoc says so, and the
+  claim-on-both-sides behaviour is deliberate (it is what stopped vanilla equipping the armour
+  mid-repair, the bug that listener was written for).
+- `onUseBlock` runs `anvilKindAt(world, pos)` **before** its `instanceof ServerPlayer` check, because
+  the identity test is supposed to be side-agnostic.
+- **Configs are loaded at `onServerStarting`, not `onInitialize`** — `McMMOMod.getGeneralConfig()` is
+  declared `@Nullable` and its field javadoc says *"null before then"*.
+- A **joining** client never starts a server ⇒ `generalConfig == null` ⇒ **NPE on every right-click of
+  any block.**
+
+🔑 **That is the whole symmetry, and it is why the host is always fine.** An integrated-server host
+runs the server in the *same JVM*, so the config statics are populated for its client too. The joining
+client's JVM has no server and never will. Swap who hosts and the crash swaps with them — exactly as
+reported, in both directions.
+
+### ✅ It is the INSTANCE, and the class was swept — 176 sites, one defect
+
+Fixing an instrument does not fix the class, so the client-reachable surface was enumerated rather
+than sampled. **There is no custom networking and the client package is ModMenu screens only**, so the
+surface is exactly: 6 `UseBlockCallback` + 4 `UseItemCallback` + 1 `UseEntityCallback` +
+1 `AttackBlockCallback` + the 42 mixins in the **common** config (`mcmmo.client.mixins.json` is
+`"client": []` — every mixin applies on both sides).
+
+| Entry point | Verdict |
+|---|---|
+| `SuperAbility` (use/attack block, use item) | safe — `resolve()` returns `null` for a non-`ServerPlayer` |
+| `Alchemy`, `Cooking`, `Smelting` use-block | safe — `instanceof ServerPlayer` is the **first** statement |
+| `SecondWind`, `SmokeBomb`, `HerdsmansCall` | safe — `world.isClientSide() \|\| !(player instanceof ServerPlayer)` first |
+| `PetCombatMode` use-entity | ✅ **safe, and it is the precedent** — same claim-on-both-sides shape, and it *does* null-check: `getGeneralConfig() == null ? "BONE" : ...` |
+| 42 mixin delegates | safe — each bails on `instanceof ServerPlayer` or resolves through `UserManager`, which is **empty** on a remote client |
+| **`RepairSalvage` use-block** | 🔴 **the defect** |
+
+🔑🔑 **The pattern was understood and applied one listener over.** `PetCombatModeListener` guards the
+identical shape with a default; `anvilKindAt` does not. And `RepairSalvageListener`'s *own* second-level
+helpers `repairableInHand`/`salvageableInHand` **do** null-check their managers, with a javadoc naming
+*"configs that never loaded (no world session)"* — so the state was known, guarded at depth 2, and
+missed at depth 1, which is the only depth that runs first.
+
+### 🔴 The existing test covers the client side and could never have caught this
+
+`RepairSalvageListenerTest` already drives `onUseBlock` with a `clientPlayer(...)` — the client-side
+fire **is** tested. Its fixture sets a mocked `generalConfig` in `@BeforeEach` and its own comment says
+why: *"resolving the anvil is the first thing the dispatch does, so a fixture that left them unset
+would test nothing at all."* **True, and it is also exactly what left the multiplayer state
+unreachable.** `tearDown` sets the field back to `null`, so the null state is representable — it was
+simply never the state under test. The axis tested was *which side*; the axis that crashes is
+*is there a world session*, and the two are independent.
+
+### The plan, file by file
+
+- [x] ✅ **73.1 — DONE.** `RepairSalvageListener.anvilKindAt` reads `McMMOMod.getGeneralConfig()` once
+      into a local and returns `null` when it is absent. Follows `PetCombatModeListener`'s form;
+      `null` already means *"not an mcMMO anvil"* and `onUseBlock` already answers `PASS` to it.
+- [x] ✅ **73.2 — DONE, four cases, and the axis is covered in BOTH directions.** Three assert the
+      no-world-session state (repair anvil, salvage anvil, and a **crafting table** — the reported
+      crash verbatim) answers `PASS` and does not throw; the fourth asserts the same click is still
+      **claimed** once configs exist, so *"return null always"* cannot satisfy the set.
+      🔑 The fixture nulls **all three** server-start statics, not just the one this fix reads — a
+      joining client has none of them, and nulling only `generalConfig` would stop modelling the
+      reported state the moment the dispatch reached for another.
+- [x] ✅ **73.3 — DONE, and the caveat pass found the real docs defect on pages the fix never
+      touched.** The class javadoc's *"they cannot disagree about whose click it was"* is now scoped
+      to singleplayer. 🔴 **Then the symptom grep found the claim that actually mattered, in THREE
+      places:** `README.md:92`, `wiki/Home.md:40` and `wiki/Installation.md:96` each told players the
+      mod *"works in single-player, on LAN, and on a dedicated Fabric server."* **That was false the
+      whole time #14 was open** — a joining player crashed on every right-click. All three now say
+      multiplayer is best-effort and untested, and name the issue.
+      🔑🔑 **Three byte-identical copies of one false sentence: invisible to BOTH guards by
+      construction.** The identity guard is green *because* they agree, and `BandDocsMatchRealityTest`
+      asks only whether the support floor is right. This is the [[identical-docs-lie-invisible-to-guards]]
+      shape again, and only a human reading for *truth* finds it.
+- [x] ✅ **73.4 — DONE. `a790720a6` on `master`, propagated to all three live bands**
+      (`mc/26.2` → `032f1cc47`, `mc/26.1.2` → `d6095c50d`, `mc/1.21.11` → `96a150514`), each with a
+      `Backport-of:` trailer **git's own parser reads** (the double-`\n` remedy), and the control
+      holds: the source commit on `master` returns empty. `627d8818d` is `TODO.md` only and carries
+      `Backport-not-needed:`.
+      **Suites — each number predicted from the previous session's before it was read:** `master`
+      174 classes / **1,948** (1,944 + 4), `mc/1.21.11` 173 / **1,938** (1,934 + 4). 0 failures,
+      0 errors, 0 skipped on both.
+      🔴🔴 **The yarn band conflicted on `anvilKindAt`, and the conflict was the SAFE half.** It was
+      resolved into the band's own spellings (`World`, `ServerPlayerEntity`) read off the band's file,
+      never recalled. **The dangerous half auto-merged with no conflict at all:**
+      `RepairSalvageListenerTest.java` took master's `InteractionResult`/`InteractionHand` **silently**
+      — 12 occurrences — because the hunks' context happened to avoid renamed lines. Exactly the
+      failure mode AGENTS.md describes, caught by grepping for official names in **code** with
+      comments and string literals stripped, not by the merge. The band then **built**, which is the
+      only thing that turns a translation from a claim into a fact.
+- [x] ✅ **73.5 — DONE, all four gates exit 0 in a fresh `git clone --local --no-hardlinks`** (they
+      prefer remote refs, so the working copy would have graded a stale origin):
+      gate 7 `drift-audit.py` **`--self-test` first**, then **0 MISSING** on all three live bands with
+      the 6 archived correctly skipped · gate 9 **53 shared paths byte-identical** across `master` +
+      3 live — which is also what proves the three docs edits landed identically · gate 10 **4
+      distinct manifests** · gate 11 **12 keys, 10 SHARED / 2 DISTINCT**. None exited 2.
+
+### 🔴🔴 The mutation harness was wrong TWICE, and both were traps already written down here
+
+**The first run reported `M1 SURVIVED, M2 SURVIVED`, 0 cases noticed, and it was entirely false.**
+Both defects are ones this repo has already paid for once, which is the point worth carrying: a
+lesson on file is not a lesson applied.
+
+1. **`> Task :test UP-TO-DATE` — the harness never re-ran.** It mutated the source, invoked Gradle,
+   and then parsed the JUnit XML *from the control run*, whose numbers were therefore byte-identical
+   to the control. 🔑 **Identical counts across a mutation are the tell, not a reassurance.** The fix
+   is three assertions the harness now makes: delete the XML first, check the subprocess exit code,
+   and **abort** if the XML is not newer than the run — never score an absent result as a survival.
+   ⚠️ `cleanTest test` alone is not enough (§70); `--no-build-cache` is also required.
+2. **The red-case regex mis-scored passes** — [[junit-xml-regex-misattribution]] verbatim. A passing
+   case is `<testcase .../>`, self-closing, so a pattern scanning forward to the next `</testcase>`
+   attributes a **later** failure to an **earlier** passing case. That is why the second run's red
+   set was incoherent (M2 listing `clientSideFireWithAnEmptyHandPasses` while omitting the two
+   `ClaimsTheClick` cases it must break). Now parsed with `ElementTree`, and the per-case count is
+   cross-checked against the suite header's `failures` + `errors` so a parse that drifts **aborts**.
+
+🔑 **A third, subtler one: M1 did not compile, and a compile error is not an answer.** Deleting the
+guard while leaving `config.` behind is not the pre-fix code — it is uncompilable code, and it
+cannot tell you whether the new tests fail *when the fix is reverted*. **A mutation has to reach the
+tests to be worth anything.** M1 is now the verbatim pre-fix body: guard removed *and* both reads
+put back through `McMMOMod.getGeneralConfig()`.
+
+✅ **What the corrected harness actually measured** — control green, 11 cases parsed every run,
+source restored byte-exact:
+
+| Mutation | Red cases | Reading |
+|---|---|---|
+| **M1** the verbatim pre-fix body | **3** — exactly the new no-world-session cases | the fix is what they test |
+| **M2** `anvilKindAt` always `null` | **4** — exactly the claim cases, none of the new three | the new tests cannot be satisfied by gutting the anvil |
+| **M3** salvage key read from the repair getter | **1** — the salvage claim case | the two keys are told apart |
+
+**M1 and M2 are disjoint and together cover all seven**, which is the biconditional shape §72 landed
+on: one direction proves the guard fires, the other proves it does not fire always.
+
+### ⚠️ The behavioural consequence, stated rather than discovered later
+
+On a **remote client** mcMMO can no longer claim the anvil click, because it genuinely does not have
+the data to decide — the configs live on the server. So the client predicts vanilla's use-item
+fall-through and the server corrects it on the next sync: a **visual flicker in multiplayer**, in
+exchange for not crashing. **Singleplayer behaviour is unchanged byte for byte** — `generalConfig` is
+non-null there, so the new branch is never taken, and that is the invariant the tests pin.
+
+🔴 **Loading the configs client-side is the WRONG fix and is not being done.** It would restore the
+symmetric claim only by making the client decide from *its own* config file, which on a remote server
+is a different machine's — so the two sides would disagree about whose click it was while both
+believing they agreed. **A wrong claim is worse than an absent one.**
+
+### What I am NOT doing
+
+- **Not** pushing, and **not** bumping `mod_version` — the hold was re-asked this session (**sixth**)
+  and stands.
+- **Not** closing #14, #15, #16, #17 or #19. Owner ruled **close at push time**; the fixes are in 32
+  unpushed commits and have reached no player.
+- **Not** taking multiplayer into declared scope. This fixes a crash; it does not promise a mode.
+- **Not** auditing the other 176 `@Nullable`-getter dereferences beyond the client-reachable surface.
+  The server-side ones cannot see a null config **by construction** — the server loaded them.
+- **Not** propagating to the six archived bands, and **not** propagating `TODO.md`.
+
+## §74 — the vacuous-guard census: stop finding them ONE AT A TIME — ✅ DONE (Tier 2; P5 NOT reached)
+
+**Owner-chosen 2026-09-22 (§74 ruling 2)**, over the stale-claim pass and a band drift audit. It had
+been offered in four prior sessions and never taken.
+
+### The problem, as a number
+
+**Seventeen vacuous guards have been found in this repo, every one of them by accident**, while
+working on something else. The list is in `.agent/memory/` and it spans the full range of shapes: an
+`assertFalse` over an empty slice, a self-test case comparing `2 == 2` over two literals, a mutation
+that never applied, a case passing against a function that did not exist, a guard that went green
+when it ran out of things to check, and — twice — **the mutation harness itself**.
+
+🔴 **The census exists because "found by accident" is not a detection mechanism.** Every one of those
+seventeen was green, in CI, for as long as it existed. The question this section answers is not
+*"are there more"* — of course there are — but **how many, of which shapes, and can a script find
+them without a human happening to look.**
+
+⚠️ **NO MUTATION TOOLING EXISTS IN `scripts/`.** Measured, not assumed: nothing in that directory
+does mutation. All seventeen were found with a harness rebuilt by hand each time, and in §73 that
+hand-built harness **was wrong twice before it was right** — on traps already written down in
+`gotchas.md`. That is the second thing this section fixes.
+
+### Scope — measured before it was written
+
+Ran over `src/test` (1,911 `@Test`/`@ParameterizedTest` bodies, brace-matched, not line-counted):
+
+| Shape | Candidates | What makes it vacuous |
+|---|---|---|
+| **A1** no assertion, no `verify`, no `fail` at all | **6** | Proves only *"did not throw"* while the method NAME claims a behaviour (`nullPlayerIsANoOp` asserts nothing about being a no-op) |
+| **A2** the only assertion is `assertDoesNotThrow` | **6** | Same claim gap, stated explicitly instead of implicitly |
+| **A3** assertion inside a loop over a DERIVED collection, no non-empty floor | **detector broken — see below** | Passes vacuously the moment the filter matches nothing |
+| **A4** `assertTrue`/`assertFalse` over a derived/filtered collection | **21** | Passes when the derivation breaks, not only when the property holds |
+
+🔴🔴 **A3 FIRST REPORTED ZERO, AND THE ZERO WAS A BROKEN DETECTOR.** It was tested against a planted,
+textbook-vacuous case — a `for` loop asserting over a `.stream().filter(...).toList()` — and **did not
+flag it**. Cause: it required the derivation to sit syntactically inside the `for (...)` parens, while
+the real-world shape assigns the derived collection to a **variable on the previous line** first. The
+fix is to resolve the loop variable back to its declaration within the method body.
+🔑 **This is the census finding its own instrument first, and it is the whole argument for the design
+below.** A detector reporting zero is indistinguishable from a clean codebase — which is *precisely*
+the defect being hunted, one level up. **The number 33 above is a LOWER BOUND, not a count.**
+
+### The instrument — `scripts/vacuity-census.py`
+
+Non-negotiable properties, each one paid for by a recorded past failure:
+
+1. **`--self-test` with PLANTED POSITIVE AND NEGATIVE fixtures for EVERY shape.** A shape that stops
+   detecting must redden. A positive-only self-test proves the detector can say *yes* and says
+   nothing about whether it can still say *no* — §61's recorded lesson, *"a one-sided guard pair
+   proves only that it can say NO"*, read in the other direction.
+2. **It must FAIL when it detects nothing at all** (the §72 biconditional treatment). A run that
+   matches zero fixtures is exit 2, never a green zero.
+3. **A candidate is not a finding.** The script reports CANDIDATES; a human reads each one. The
+   A4 = 21 number above will not survive triage intact and is not expected to.
+4. **Mutation-prove before and after.** For each confirmed vacuity: mutate the production behaviour
+   the guard claims to protect, show the guard **does not** notice (vacuity proven, not asserted),
+   fix the guard, re-run the same mutation and show it **does** notice. Both directions, or the fix
+   is a claim.
+   ⚠️ **Read the harness before reading the result** (§73, twice): `:test` `UP-TO-DATE` scores every
+   mutation as SURVIVED off a stale JUnit XML, and **identical counts across a mutation is the TELL,
+   not reassurance**. A mutation that does not COMPILE answers nothing.
+
+### Phases
+
+```
+P1  build scripts/vacuity-census.py + its two-sided --self-test      instrument first
+P2  fix the A3 detector; re-measure all four shapes honestly          the number moves
+P3  triage every candidate by READING it -> confirmed / false positive
+P4  mutation-prove each confirmed one, fix it, mutation-prove the fix  both directions
+P5  the Python --self-test family (15 scripts) -- assess, then scope   NOT REACHED
+P6  record: decisions.md, gotchas.md, state.md, this section
+```
+
+✅ **P1-P4 and P6 are DONE. 🔴 P5 was NOT REACHED and is the one open thing here** — the 15
+`--self-test` modes in `scripts/` have **never been audited for vacuity as a group**, which is
+exactly the meta-layer argument this section opens with. It is a Tier 1 job on its own.
+⚠️ **And the census covers shapes A1–A4 only.** It is a **floor on what is detectable, not a
+ceiling** — a vacuity in a shape nobody has written a detector for is still invisible, and this
+script going green is not evidence that none exist.
+
+### What I am NOT doing
+
+- **Not** rewriting tests that are merely *thin*. A test that checks less than it could is not
+  vacuous; a test that **cannot fail** is. Only the second kind gets touched.
+- **Not** deleting a single test. If a guard is vacuous the fix is to give it a claim that can
+  fail — never to remove it. Deleting a test is on the absolute-stops list.
+- **Not** treating the static candidate count as a finding count, and **not** reporting a number
+  from the detector without having watched that detector reject a planted control.
+- **Not** touching `mod_version`, **not** pushing (ruling 1, seventh consecutive session), **not**
+  closing any GitHub issue.
+- **Not** propagating `TODO.md`; it is excluded from propagation by design.
+
+### ✅ What the census found — RESULTS (2026-09-22)
+
+**Final: 15 candidates, 4 CONFIRMED vacuous and fixed, 11 justified false positives.**
+Every fix proven in BOTH directions: mutate, watch the old guard stay green, fix it, re-run the
+SAME mutation and watch it redden.
+
+| # | Guard | The vacuity | Proof |
+|---|---|---|---|
+| **1** | `TreeFellerTraversalTest::neverReturnsDuplicateCoordinates` | looped over `collect()` output asserting each coord was new. **An empty result has no duplicates either** | `collect()` → empty list: **3 siblings reddened, this stayed GREEN**. Floored at 11 → the same mutation reddens 4 |
+| **2** | `FishingTreasureConfigTest::nonPotionEntriesCarryNoPotionData` | `allMatch(potion == null)` over every loaded reward. **`allMatch` of an EMPTY stream is true** | stop `loadRewards` adding anything: 2 siblings reddened, this stayed GREEN. Floored at **71** → now reddens |
+| **3** | `FishingTreasureConfigTest::inventoryShakeEntryIsSkipped` | `noneMatch("inventory")` over the player shake list. **An empty list satisfies it for the exact WRONG reason** — the test was happiest if the whole section failed to load | `getShakeTreasures` → empty: green before the floor, red after. Floored at **1** |
+| **4** | `NotificationManagerTest` ×3 null-player guards | claimed *"must not throw **and must not read config/player**"* and checked only the first half. `setUp` binds every config, so the second half was asserted by nothing | hoisting `getAdvancedConfig()` above the null guard — **the GitHub #14 shape** — left the class GREEN at 12/0/0. Configs unbound → reddens |
+
+🔑 **Correcting my own framing on #4: those three were never *"cannot fail"*.** Dropping the null
+check outright always reddened them — one case each, no cross-talk — because an NPE fails a test
+with no assertions just fine. **Only the CONFIG half of the claim was vacuous.** Overstating a
+finding is the same error as missing one.
+
+✅ **CLOSED BY §77 (2026-09-22) — the rank half. Original text kept because the reasoning is the record.** `RankCacheTestSupport.resetRankCache()` in `setUp` makes the cache cold, and the hoisted rank read now reddens; proven both ways, including a full-task run WITHOUT the reset that stayed green with the defect live. ⚠️ **The SOUND half is NOT closed and is not a defect** — a hoisted `sendCategorizedSound(null, …)` survives because `readyConfig` null-guards itself, which is defence in depth working.
+
+⚠️ **One limit found and LEFT STANDING rather than papered over.** The unlock path still cannot
+prove its config claim: `RankUtils.getRank` is null-safe, so is `SoundManager`, and **`RankUtils`
+keeps a STATIC rank cache that a sibling test warms while the configs are still bound** — so by the
+time the null-player case runs, `addRanks()` is skipped and no config read happens at all. Both a
+hoisted rank read and a hoisted sound call survive. `resetRankCache()` is package-private in another
+package. 🔑 **A test's reachability can depend on what a SIBLING test did to a static.**
+
+### 🔴🔴 The instrument found FIVE defects in ITSELF before it found anything in the codebase
+
+That is the result worth keeping, and it is why `--self-test` is two-sided and why a real run
+refuses to report until it passes.
+
+1. 🔴 **A3 reported ZERO and the zero was a BROKEN DETECTOR.** It required the derivation inside the
+   `for (...)` parens; the real shape assigns the collection to a variable on the previous line.
+   Caught only by feeding it a **planted** vacuous case. Fixed, it found a real one immediately.
+   🔑 **A detector reporting zero is indistinguishable from a clean codebase.**
+2. ⚠️ **Two fixtures were MISLABELLED as negatives.** The detector was right; the two-sided
+   self-test caught my labelling.
+3. 🔴 **`strip_noise` stripped STRING literals before CHAR literals**, so a char literal holding a
+   quote opened a span that swallowed the line and a vacuous body after it read as asserting.
+   **A genuine false negative**, now ordered and fixtured.
+4. 🔴🔴 **The self-test went GREEN with either fixture loop emptied** — it passed by *running out of
+   things to check*, the §72 defect, in the guard written to hunt that defect. Executed-fixture
+   counters now redden.
+5. ⚠️ **Two early refusal guards were measured REDUNDANT** (mutating either away changed no
+   outcome) and **removed** rather than left as decoration.
+
+⚠️⚠️ **And one guard SURVIVED a mutation while being load-bearing.** `ran_pos != len(positives)`
+looked redundant against the `== 0` check below it — replacing it with `if False:` left the
+self-test green. Its unique domain is a **PARTIAL** skip: with `positives[:1]` planted it reports
+*"RAN 1/7 ... cases were SKIPPED"* and exits 2, while disabling it lets that pass at exit 0.
+🔑 **A guard can survive a mutation because a SECOND guard masks the effect, not because it is
+vacuous. Mutate inside its unique domain.** The code carries a DO-NOT-DELETE note saying so.
+
+### The detectors got SHARPER twice, and both times the codebase taught them
+
+- 🔑 **Polarity decides vacuity (A4: 15 → 6).** Over an empty derived collection `anyMatch` is
+  false while `noneMatch`/`allMatch`/`isEmpty` are true — so `assertTrue(anyMatch)` and
+  `assertFalse(isEmpty)` are **SOUND**; they fail when the derivation breaks, which is the property
+  being asked for. Flagging them had `MixinApplicationTest` looking guilty for using the *correct*
+  idiom.
+- 🔑 **The FLOOR pattern only saw `size()` as an assertion's FIRST argument (A4: 6 → 3).** This
+  codebase writes `assertEquals(3, broken.size())`, so it missed **every real floor** in
+  `MultiBlockPlantTraversalTest` and accused three sound tests. Non-zero literals only —
+  `assertEquals(0, x.size())` asserts emptiness and is the *opposite* of a floor.
+
+### The 11 false positives, and why each is justified — not waved through
+
+- **`MixinApplicationTest` ×4** (`projectileSpawn`, `bowShoot`, `blockPlace`, `fireworkRocket`) —
+  `assertDoesNotThrow(Class.forName(...))` is the whole test **because `mcmmo.mixins.json` declares
+  `injectors.defaultRequire = 1`**, verified by reading the file: a drifted injection throws at
+  class-load. ✅ **Residual gap — CLOSED BY §77 (2026-09-22) as `MixinManifestDeclarationTest`.** It proved
+  *"if the mixin is declared, its injection resolves"*, never *"the mixin is declared"*. §77 MEASURED the
+  cost: a mixin deleted from the json left the whole suite at **174 classes / 1,948 tests / 0 failures**,
+  the exact green baseline. `defaultRequire = 1` fires on an injection Mixin **tries** to apply; an
+  undeclared mixin is never tried.
+- **`PlatformPlayerTest::theMirrorEnumCoversEveryVanillaSoundCategory`** — loops `SoundSource.values()`,
+  an enum, which **cannot be empty**. `valueOf` throwing is a real assertion.
+- **`PetCombatSweepTest::theBoostIsTemporaryAndNeverPersistent`** — carries an explicit
+  `assertTrue(...anyMatch...)` **"precondition"** floor, and asserting *absence* from a permanent map
+  that is supposed to be empty is the correct claim, not a vacuous one.
+- **`NotificationManagerTest` ×3** — now A2 by construction *because* the fix made their claim
+  explicit; each is mutation-proven to redden when its null check is dropped.
+
+### ⚠️ A suite-total trap that cost this session real time, and will cost the next one more
+
+**`./gradlew test` is NOT the whole suite. There are TWO test tasks**, and the recorded baseline is
+their SUM:
+
+| task | classes | tests |
+|---|---|---|
+| `test` | 173 | 1,935 |
+| `tagBoundTest` | 1 | 13 |
+| **total** | **174** | **1,948** |
+
+🔴 **Quoting the `test` task alone reads as a 13-test REGRESSION against the recorded 1,948**, which
+is exactly what happened here and triggered a full "did I delete a test" investigation. The answer
+was no: **1,911 `@Test` annotations and 176 files at both `ee90ebf11` and HEAD**, all 174 classes
+produced XML, and `1,911 declared + 37 parameterized expansion = 1,948` — expansion being
+`ProbabilityTest` +24, `ProbabilityUtilTest` +7, `ConfigLoaderTest` +6.
+⚠️ **§73's parenthetical split `(1,944 + 4)` is WRONG** — the real split is `1,935 + 13`. Its
+**total was right**, which is why the error survived: a correct total hides a wrong decomposition.
+✅ Two back-to-back `cleanTest test --no-build-cache` runs scored **173/1,935 both times**, so the
+recorded 173↔174 / 1,911↔1,920 flake did **not** reproduce here.
+
+### Blast radius and rollback
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| New `scripts/vacuity-census.py` | a new file only | nothing | `git rm` the untracked file |
+| Test-file edits (P4) | `src/test/**` | a green guard becomes red | `git diff` is the undo; every edit is one file, committed per logical unit |
+| **Mutation runs** | production `src/**` **temporarily** | 🔴 a mutated source left behind | byte-exact `.orig` copy in `scratchpad/mut-backup-s13/` **taken before the first mutation**, restored and **verified byte-identical** after each one |
+
+🔴 **The mutation step is the only destructive one and it edits PRODUCTION source.** The guard: copy
+first, `cmp` the restore, and never leave a mutation across a commit. §73 recorded a mutation left
+uncompiled; this one records the restore check as a step, not a habit.
+
+---
+
+
+## §75 — §74's Phase 5: are the SELF-TESTS themselves falsifiable? — ✅ DONE (Tier 2; 18 floored, closes HELD until push)
+
+**Owner-chosen 2026-09-22 (§75 ruling 2)**, over the `MixinApplicationTest` hole and the
+`RankUtils.resetRankCache()` visibility ruling. §74 shipped P1–P4 and P6 and left **P5 explicitly
+NOT REACHED**, calling it *"a Tier 1 job on its own"*.
+
+### 🔴 Why this is the meta-layer, and why it is not optional
+
+Every ship gate in this repo is certified by its own `--self-test`. Gate 3's entry says
+*"`--self-test` first, **as with every gate**"*. So the self-tests are the bottom turtle: if one of
+them cannot fail, then the gate above it reports green on no evidence, and **every result that gate
+has ever produced is unproven** — not wrong, unproven, which is worse because nothing distinguishes
+the two. §74's central finding was that **a detector reporting zero is indistinguishable from a
+clean codebase**. This section asks that question of the detectors' own proofs.
+
+### Scope — measured before it was written, and §74's row UNDERSTATED it
+
+🔴 **§74's row says "the Python `--self-test` family (15 scripts)". Both halves are wrong.**
+
+| | §74's row | Measured 2026-09-22 |
+|---|---|---|
+| Python scripts carrying `--self-test` | 15 | **16** (`vacuity-census.py` was added *by* §74, after the row was written) |
+| Shell scripts carrying `--self-test` | not counted at all | **6** (`boot-check`, `brew-smoke`, `ci-watch`, `gameplay-smoke`, `javap-mc`, `version-sweep`) |
+| **Total self-test entry points** | — | **22** |
+| Distinct self-test *functions* (Python) | — | **20** — `loomjar.py` has three, `drift-audit.py` two |
+
+🔑 **This is the repo's own "a row naming N is a LOWER BOUND, never a count" lesson, and the row
+that understated it was written by the session that coined it.** Reading the rule is not applying
+it. Re-measure, always.
+
+⚠️ **`--self-test` is not the only self-proof mode in `scripts/`.** `ci-watch.sh` prints
+*"Run with `--mutate` to prove these cases can fail"*, so at least one script carries a second,
+separately-invoked proof mode. **The 22 is a floor on entry points, not a census of self-proof.**
+
+### Baseline — all 22 are GREEN, which is exactly why the question is worth asking
+
+All 16 Python and all 6 shell self-tests were run and every one exited **0**. A uniformly green
+population is the *starting* condition of this investigation, never its conclusion.
+
+### ✅ One shape is already CLOSED by measurement — exit-code propagation
+
+The cheapest total vacuity is a self-test whose non-zero return is dropped on the floor by `main()`.
+**Checked all 16 Python scripts: every one does `return self_test()` from `main()`, and every one
+ends in `sys.exit(main())` or `raise SystemExit(main())`.** No script swallows its own verdict.
+🔑 Recorded as a *negative* result on purpose: the next session should not re-derive it.
+
+### The shapes being hunted — and what does NOT count
+
+§74's definition governs and is deliberately narrow: **a test that checks less than it could is thin;
+a test that CANNOT FAIL is vacuous. Only the second kind gets touched.**
+
+| # | Shape | Why it cannot fail |
+|---|---|---|
+| **S1** | **No floor on what executed** | The self-test loops a case list and prints PASS without asserting how many cases *ran*. Empty the list and it goes green **by running out of things to check** — the §72 defect, which §74 then found *inside the guard built to hunt it* |
+| **S2** | **One-sided** | Only positive fixtures (the detector can say YES) with no planted clean control, or only negatives. Proves the detector fires, never that it can stay quiet |
+| **S3** | **Self-grading** | The expected value is derived from the same code under test, so the comparison is a tautology. Precedent: P16-1, where `--check` regenerated the manifest and then graded its own output |
+| **S4** | **Asserts only "does not throw"** | No claim about the result |
+| **S5** | **Borrowed** | The self-test exercises a *different* instrument than the gate it certifies. ⚠️ **This one is a CANDIDATE CLASS, not automatically a finding** — a borrowed self-test can fail, so by §74's definition it is thin, not vacuous. It is listed because the *gate* it certifies is left unproven, which is a real defect of a different name. **Say which of the two it is; do not let "vacuous" do the work of "mis-scoped".** |
+
+✅ **CLOSED BY §79 (2026-09-23) — both were confirmed S5, and both are now re-scoped.** The
+paragraph below is left exactly as §74 wrote it, because it is the record of a correct suspicion:
+both were read, both were mutation-proven, and both turned out to be mis-scoped rather than
+vacuous — the distinction §74 insisted on, vindicated. Gate 2 now carries 34 checks over the
+counter and gate 12 carries 37 over the resolver. **The present tense below is historical.**
+
+🔴 **S5 is already suspected in two places and NEITHER is confirmed yet:**
+`mixin-allow-audit.py --self-test` returns `selftest_jar_selection() or selftest_naming()` — both
+imported from `loomjar.py` — so **nothing in it exercises injection-point counting**, which is the
+whole job of ship gate 2. `probe-bands.py --self-test` runs `selftest_decl_parsing()` alone: a javap
+parser, not the manifest validation that is ship gate 12. **Both must be read and mutation-proven
+before either is called anything.**
+
+### 🔴 The instrument must be mutation, NOT a regex over the source
+
+A first heuristic pass was written and **thrown away, deliberately, before it produced a number.**
+It scored "has a zero floor" by matching `== 0` and the string `REFUS` inside each self-test body,
+and it was wrong in **both** directions: it fires on *refusal cases* (the self-test proving the TOOL
+refuses bad input) which are not floors at all, and it cannot see a floor written as a comparison
+against a declared length. §74 measured this exact failure — its crude pass produced 343 and 199
+candidates, nearly all noise.
+
+**The direct measurement is available and cheap here, so the proxy has no excuse:** break the thing
+the self-test claims to prove, re-run it, and read the exit code. 22 is a small enough population to
+do that to every member.
+
+### Phases
+
+```
+P1  characterise all 22: case count, directions, floor, what it certifies   READ, do not grep
+P2  the universal probe -- empty each case set, assert the self-test REFUSES  S1, mechanical
+P3  triage every hit by READING it -> confirmed vacuous / thin / justified
+P4  mutation-prove each confirmed one, fix it, re-run the SAME mutation       both directions
+P5  the two S5 suspects: decide vacuous vs mis-scoped, and say which
+P6  propagate to the 3 live bands + gate sweep; record decisions/gotchas/state
+```
+
+⚠️ **P2 is a probe of the SELF-TEST, so it mutates the self-test's own fixture list — not production
+source.** That is a smaller blast radius than §74's, and it is still a mutation: same backup-and-`cmp`
+discipline, no exceptions.
+
+### ✅ P1–P3 RESULTS (2026-09-22) — 31 loops probed, **20 SURVIVED**
+
+⚠️ **Read the method before the number.** Every figure below comes from a mutation that was
+**verified to land byte-wise** and **verified to still parse**, with a control that discriminates.
+Files were restored from byte-exact copies and `cmp`-checked after every single run.
+
+#### 🔴🔴 THE HEADLINE: there are TWO ways a case loop goes quiet, and this repo only defends one
+
+The sweep was run twice with what looked like the same mutation, and the two disagreed. That
+disagreement is the finding:
+
+| | Mutation **A** — *the data is gone* | Mutation **B** — *the loop did not run* |
+|---|---|---|
+| How | rebind the collection: `CASES = []` before the loop | rewrite the loop: `for c in []:` |
+| Models | a fixture list emptied, a discovery that found nothing | **an over-matching filter, a `continue` guard, a comprehension that selected nothing** |
+| `extract-mc-surface.py` (4 floored collections) | ✅ **CAUGHT** | 🔴 **SURVIVED — all six** |
+| `vacuity-census.py` (the control) | ✅ CAUGHT rc=2 | ✅ **CAUGHT rc=2** |
+
+🔑 **Why:** every floor in this repo but one is a **DECLARED-LENGTH floor** —
+`positives = sum(1 for _, _, e in SELF_TEST_CASES if e)` counts the *list*. Mutation B never
+touches the list, so the floor still reads 4 positives while the loop body executed **zero times**.
+**A floor over the declared collection cannot see a loop that did not execute.**
+
+✅ **`vacuity-census.py` is the ONLY script in `scripts/` that counts what actually RAN**
+(`ran_pos += 1` … `if ran_pos != len(shape.positives)`), which is why it is the only one that
+catches both. §74 built those counters after measuring this exact failure and wrote the reason into
+the code — *"COUNT what actually executed, per direction"*. **That idiom never propagated to the
+other nineteen self-tests**, and P5 is where that shows up.
+
+🔴 **Mutation B is not the artificial one — it is this repo's own most-feared failure mode.**
+`scripts/expected-bands.txt` warns in its own header that *"a filter that matches too much leaves
+all four guards auditing ZERO branches and printing green."* That is mutation B exactly, and the
+self-tests certifying those guards cannot detect it.
+
+#### 🔴 The count was ALREADY PRINTED. Nothing asserted it.
+
+The most uncomfortable part is that several of these print the evidence in their own PASS line:
+
+| Script | What it prints with the collection emptied | Exit |
+|---|---|---|
+| `probe-bands.py` (**ship gate 12**) | `PASS -- 0 real javap declaration lines parse` | **0** |
+| `gameplay_smoke_scenario.py` (**gate 6**'s scorer) | `=== self-test passed (0 cases)` | **0** |
+| `config-id-audit.py` (**gate 4**) | `PASS -- 0 normalisation cases correct` | **0** |
+
+**The number is right there in the output and nothing compares it to anything.** A printed count is
+not a floor; it is a decoration that reads like one, which is worse than no count at all.
+
+#### 🔴 `gameplay_smoke_scenario.py` — the anti-vacuity floor is INSIDE the loop it protects
+
+This one is worth its own row, because it is the subtlest shape found.
+
+Its per-case floor is the one `TODO.md` already praises as **derived, not constant** —
+`expected = 3 + len(gates) + sum(len(p.up) + len(p.flat) for p in PHASES)`. Two defects:
+
+1. **Zero iterations run zero floor checks.** The floor lives in the loop body, so emptying `cases`
+   skips the anti-vacuity machinery entirely rather than tripping it.
+2. 🔴 **The floor is DERIVED FROM THE TABLE WHOSE EMPTINESS IT SHOULD CATCH.** Empty `PHASES` and
+   the `sum(...)` term goes to 0 — **the floor lowers itself to match**. A derived floor is a real
+   improvement over a constant *and* it inherits the vacuity of whatever it derives from. Measured:
+   with `PHASES` emptied the self-test still printed `passed (9 cases)` and exited **0**, including
+   a cheerful `[ok] every required marker is emitted by a command in its own phase` — asserted over
+   **zero phases**.
+
+#### The 20 survivors, by what they certify
+
+| Script | Collections that survived | Certifies |
+|---|---|---|
+| `extract-mc-surface.py` | 6 (incl. `NESTED_CASES`, which has no floor at all) | the MC contact-surface manifest |
+| `config-id-audit.py` | 4 — `SELF_TEST_MUST_FIND`, `SELF_TEST_MUST_NOT_FIND`, `checks`, `entity_cases` | **ship gate 4** |
+| `gameplay_smoke_scenario.py` | 4 — `PHASES`, `cases`, `pacing`, `phase.requires_markers` | **ship gate 6**'s scorer |
+| `probe-bands.py` | 2 — `cases`, `want_supers` | **ship gate 12** |
+| `extract-mc-ids.py` | 2 — `cases`, `sorted(CROSS_CHECKED)` | `mc-ids.txt`, which gate 4 reads |
+| `branch-file-identity-audit.py` | 1 — `trees.values()` (a **discovered** collection) | the shared-file identity guard |
+| `expected_bands.py` | 1 | the `--require-bands` floor itself |
+
+#### ⚠️ Eleven loops were "caught" and SIX of those catches are NOT evidence of a floor
+
+§74's lesson 4 was that overstating a finding is the same error as missing one, so these are
+classified rather than counted:
+
+- **Caught by a real assertion (5):** `vacuity-census.py` ×3 (the control, rc=2),
+  `gradle-key-identity-audit.py` ×1 (a named `FIRING2` check fired), and the mutation-A run of
+  `extract-mc-surface.py` ×4.
+- 🔴 **Caught by a CRASH, which proves nothing (6):** `config-id-audit.py`'s
+  `SELF_TEST_FILES.items()` ×2 and `rename-to-official.py` ×4 are **setup loops**, not case
+  collections — emptying them breaks the fixture machinery and the script dies with
+  `FileNotFoundError`. **A crash is not a guard firing.** Counting these as catches would have
+  turned a 20-survivor result into a tidier and wronger one.
+- **1 VOID:** `derive-official-names.py`'s multi-line `for` tuple did not survive the rewrite and
+  was not probed.
+
+#### ✅ Negative results, recorded so the next session does not re-derive them
+
+- **Exit-code propagation is clean on all 16.** Every script does `return self_test()` from `main()`
+  and ends in `sys.exit(main())` / `raise SystemExit(main())`. No script swallows its verdict.
+- **Nine self-tests are STRUCTURALLY IMMUNE to this shape** because they are straight-line `check()`
+  calls with no case collection at all: `rename-to-official.py` (166 checks),
+  `mixin-target-sizer.py` (67), `branch-file-identity-audit.py` (64),
+  `derive-official-names.py` (58), `gradle-key-identity-audit.py` (46),
+  `manifest-identity-audit.py` (35), `expected_bands.py` (30), `drift-audit.py`, `loomjar.py`.
+  🔑 **Immune to S1 is not "safe"** — they trade an emptiable list for 166 statements nobody counts.
+  A deleted `check()` line is invisible to every one of them. That is a different shape and it is
+  **not in this section's scope**; it is recorded here so it is not mistaken for covered.
+- **All 22 self-tests exit 0 in their shipped state.** The baseline was green before any of this,
+  which is the entire reason the question needed asking.
+
+#### ⚠️ The two S5 suspects — both are MIS-SCOPED, neither is vacuous
+
+Named in the plan and now settled, because "vacuous" must not do the work of "mis-scoped":
+
+- `mixin-allow-audit.py --self-test` returns `selftest_jar_selection() or selftest_naming()`, both
+  imported from `loomjar.py`. It is a **real, falsifiable** self-test — of the jar chooser. **It
+  exercises nothing in injection-point counting, which is the whole job of ship gate 2.**
+- `probe-bands.py --self-test` runs `selftest_decl_parsing()` alone — a javap regex, not the
+  manifest validation that is gate 12. *(Its one case loop is separately vacuous, above.)*
+
+✅ **RE-SCOPED BY §79 (2026-09-23).** The two bullets above described the state until §79; the
+borrowed `loomjar.py` and `DECL_RE` cases were kept (they certify something real) and cases over
+the gates' own computations were added beside them. Read the bullets as history.
+
+**Neither is a vacuity finding.** Both mean the same operational thing: running *"`--self-test`
+first, as with every gate"* on gates 2 and 12 returns a green that says nothing about what those
+gates do.
+
+### ⚠️ TWO CLAIMS ABOVE ARE CORRECTED HERE — both were mine, both from a mutation that lied
+
+§74's lesson 4 was that **overstating a finding is the same error as missing one.** Two of the
+survivors recorded above do not survive contact with reading, and the correction is written here
+rather than edited quietly into the table, because *how* the wrong answer was produced is the part
+worth keeping.
+
+🔴 **1. `gameplay_smoke_scenario.py`'s `pacing` is NOT a finding.** `check_double_click_pacing()`
+already carries its own floor — `if not seen:` appends *"the pacing guard measured NOTHING, which
+is not the same as the pacing being correct"*. **A floor was already there and I reported it as
+missing.** No fix was applied to it, and the fix that was applied says in a comment not to add a
+second one.
+
+🔴 **2. The "the derived floor lowers itself" claim is OVERSTATED as written, and here is the
+honest version.** The mutation behind it inserted `PHASES = []` **inside `self_test`**, which in
+Python creates a **local that shadows the module global**. `check_double_click_pacing()` reads the
+**global** at call time, so it still saw a full table and its floor never fired. I then read that
+green run as *"the derived floor lowered itself to match"*.
+
+🔑 **The faithful mutation — a module-level `PHASES = []` — does not go green. It CRASHES**
+(`IndexError` at `PHASES[-1].name`), which by this section's own classification is a **crash, not a
+guard firing**, and is at least loud. So:
+
+| Claim | Status |
+|---|---|
+| Emptying `cases` prints `self-test passed (0 cases)` at exit 0 | ✅ **TRUE, and fixed** |
+| The marker loop prints `[ok]` over zero phases when it iterates nothing | ✅ **TRUE, and fixed** |
+| The floor derives from `PHASES` and shrinks with it | ✅ true as **code**, reachable via a skipped or filtered loop |
+| *"Emptying `PHASES` makes the run pass at exit 0"* | 🔴 **FALSE for a genuinely empty `PHASES`** — it crashes first |
+
+🔑🔑 **The generalisable trap: a mutation applied at the wrong SCOPE is a different mutation.**
+Rebinding a name inside a function does not empty the global that every other function reads — it
+models *"this loop iterated nothing"*, not *"the table is empty"*. Those have different blast
+radii and, here, different verdicts. **Check which one you built before you believe the exit code.**
+
+✅ **3. `branch-file-identity-audit.py`'s `trees.values()` is NOT a finding either.** Reading it
+settles it: that loop is inside `intersect_selector`, a **deliberately-broken selector the
+self-test injects as MUTATION 3a**. Emptying it weakens the planted mutation, not the coverage.
+The census hit a helper, not a case collection.
+
+**Revised: 20 raw survivors → 18 genuine, 2 reclassified.** The count moved because each one was
+read; that is the §74 rule — *a candidate is not a finding* — applied to my own output.
+
+### ✅ P4 — THE FIX, and the proof in three directions
+
+**One idiom, applied to six scripts: count what EXECUTED, then compare it to what was DECLARED.**
+Copied from `vacuity-census.py`, the only script in `scripts/` that already had it.
+
+```
+ran = 0
+for case in CASES:
+    ran += 1
+    ...
+if ran == 0 or ran != len(CASES):
+    failures.append(f"RAN {ran}/{len(CASES)} ... -- cases were SKIPPED")
+```
+
+🔑 **Both clauses are load-bearing and that was MEASURED, not argued** — with the sibling floor
+disabled so nothing could mask the result:
+
+| Clause | Unique domain | Drop it and… |
+|---|---|---|
+| `ran == 0` | the declared list is **empty** (mutation A) | A escapes at **exit 0** |
+| `ran != len(...)` | a **PARTIAL** skip (mutation C, `cases[:1]`) | C escapes at **exit 0** |
+
+⚠️ **My first attempt to prove the second clause used the wrong mutation and "proved" the wrong
+thing.** A *total* skip is already caught by `ran == 0`, so dropping `ran != len(...)` and running
+mutation B still went red — which reads as *"the clause is redundant"*. It is not; its unique
+domain is a partial skip. **This is §74's recorded lesson landing on the session applying it:
+mutate inside the domain where the guard is the only thing that can fire.**
+
+#### The result matrix — 13 collections × 3 mutations = 39 runs, **0 survivors**
+
+| Script | Collections floored | A empty | B skipped | C partial |
+|---|---|---|---|---|
+| `extract-mc-surface.py` | 6 | caught | caught | caught |
+| `config-id-audit.py` | 4 (2 shown in matrix + 2 set-loops) | caught | caught | caught |
+| `gameplay_smoke_scenario.py` | `PHASES`, `cases`, `requires_markers` | caught | caught | caught |
+| `probe-bands.py` | `cases`, `want_supers` | caught | caught | caught |
+| `extract-mc-ids.py` | `cases`, `CROSS_CHECKED` | caught | caught | caught |
+| `expected_bands.py` | `unusable_cases` | caught | caught | caught |
+
+✅ **Full re-census after the fix: 35 loops probed, survivors 20 → 2**, and both remaining are the
+two reclassified above, which are not case collections.
+✅ **All 22 self-tests still green in the clean state** — the floors do not fire on honest runs.
+✅ **Every mutated file restored from a byte-exact copy and `cmp`-verified.** Working tree clean.
+
+#### ⚠️ What this fix does NOT cover — stated so it is not mistaken for closed
+
+- 🔴 **The nine straight-line `check()` self-tests are still uncounted.** `rename-to-official.py`
+  makes **166** `check()` calls, `mixin-target-sizer.py` 67, `branch-file-identity-audit.py` 64.
+  They have no collection to empty — and equally **no assertion that all 166 ran**. Delete one and
+  nothing anywhere goes red. That is a real shape, it is **not** this section's scope, and it is
+  carried forward as a row rather than waved at.
+- **S2 (one-sided) was not swept.** `probe-bands.py`'s seven cases are all positives: no planted
+  line that must *fail* to match, so an over-matching `DECL_RE` has nothing to catch it. Thin, not
+  vacuous, so §74's rule left it alone — but it is the obvious next question.
+- **The `--mutate` modes and other second proof modes were not audited** (`ci-watch.sh` has one).
+- **The two mis-scoped self-tests are unchanged.** Gates 2 and 12 still have a `--self-test` that
+  certifies something other than what the gate does; that is an operational finding, not a bug, and
+  it needs an owner ruling rather than a patch.
+
+### What I am NOT doing
+
+- **Not** rewriting a self-test that is merely thin. §74's line holds: cannot-fail, or it is not
+  touched.
+- **Not** deleting a single self-test case. A vacuous proof is given a claim that can fail; it is
+  never removed.
+- **Not** reporting a count from a detector that has not rejected a planted control first.
+- **Not** letting "vacuous" stand in for "mis-scoped" on the two S5 suspects — the finding names
+  which one it is, or it is not a finding.
+- **Not** touching `mod_version`, **not** pushing (ruling 1, **eighth** consecutive session), **not**
+  closing any GitHub issue.
+- **Not** auditing the `--mutate` modes or any other second proof mode. The 22 `--self-test` entry
+  points are this section's scope; the wider set is named above so it is not lost.
+- **Not** propagating `TODO.md`; it is excluded from propagation by design.
+
+### Blast radius and rollback
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| P1 characterisation | nothing — reading only | nothing | n/a |
+| **P2/P4 mutation runs** | `scripts/**` **temporarily** | 🔴 a mutated script left behind, which would make a *gate* lie, not just a test | byte-exact `.orig` copies in `scratchpad/mut-backup-s14/`, taken **before the first mutation**, restored and **`cmp`-verified** after each |
+| P4 fixes | `scripts/**` | a green self-test becomes red | `git diff` is the undo; one file per logical unit, committed separately |
+| P6 propagation | 3 live band branches | a band left behind | pre-propagation band heads frozen as ready-to-run `git branch -f` lines in `scratchpad/UNDO-s14-bands.txt` |
+
+🔴 **A mutation left behind in `scripts/` is worse than §74's.** §74 mutated `src/**`, where the
+suite would eventually notice. A corrupted self-test in `scripts/` is read by a **ship gate**, and a
+gate that has been quietly disarmed is the exact failure this whole section exists to detect.
+**Copy first, `cmp` the restore, never carry a mutation across a commit.**
+
+---
+
+### ✅ P6 — propagation and the gate sweep, with real exit codes read directly
+
+**One commit propagates: `8e3191cb1` (`scripts/` only).** The three `docs(75)` commits are
+`TODO.md`-only and carry `Backport-not-needed:`, per the standing exclusion.
+
+| Band | Head after | `Backport-of` via git's OWN parser |
+|---|---|---|
+| `mc/26.2` | `4bfc2edb6` | `8e3191cb1` ✅ |
+| `mc/26.1.2` | `a7f524930` | `8e3191cb1` ✅ |
+| `mc/1.21.11` | `893c5d7dc` | `8e3191cb1` ✅ |
+
+⚠️ **All three applied CLEANLY, including the yarn band — the outcome the notes call DANGEROUS, not
+reassuring.** Checked rather than assumed: this commit touches `scripts/**/*.py` only, contains no
+Java and no Minecraft symbol, and a grep for official-name leakage on `mc/1.21.11` returns **0**.
+**No translation was required, and that is a measurement, not an expectation.**
+✅ The trailer was written with the **double-`\n`** form, so `git log --format='%(trailers:...)'`
+reads it — the sixteen commits of 2026-08-31 that git's parser cannot see are a known, separate row.
+
+| Check | Result |
+|---|---|
+| Suite on `master` | **174 classes / 1,948 tests / 0 failures / 0 errors**, matching the recorded baseline. ⚠️ Both tasks confirmed **bare** — not `FROM-CACHE`, not `UP-TO-DATE` — and the figure is the SUM of `test` (173/1,935) **and** `tagBoundTest` (1/13) |
+| All 22 `--self-test`s, clean state | **green**, before and after. The floors do not fire on honest runs |
+| The 39-run mutation matrix | **0 survivors** (13 collections × empty / skipped / partial) |
+| Full re-census after the fix | survivors **20 → 2**, both reclassified by reading as not case collections |
+| `drift-audit.py --self-test` | PASSED — **run FIRST**, because "no drift" is also what a broken auditor prints |
+| `drift-audit.py --master master`, **fresh clone** | **0 MISSING** on all three live bands; 6 archived skipped; exit **0** |
+| `branch-file-identity-audit.py` | **54** shared paths byte-identical; exit **0** |
+| `manifest-identity-audit.py` | every branch's manifest distinct; exit **0** |
+| `gradle-key-identity-audit.py` | shared keys agree, distinct keys differ; exit **0** |
+| The six fixed self-tests, **run on each band** | green on all three |
+| 🔑 **The floor ARMED on a band** | `MUT-B` applied to `mc/1.21.11`'s own `probe-bands.py` → `RAN 0/7 ... cases were SKIPPED`, exit **1** |
+
+🔑 **That last row is the one that matters.** A propagated self-test passing proves the file
+arrived; only a mutation on the band's own copy proves the guard is **armed** there. Identity
+guarantees the bytes, never the behaviour.
+⚠️ **`--require-bands 3`** throughout — the LIVE count from `expected_bands.py --count`, which
+subtracts the six archived bands. Exit **2** was treated as a failure everywhere, never a pass.
+⚠️ Gates 1–6 and 12 (boot, brew, gameplay, mixin-allow, manifest `--check`) were **not** run: they
+need a built jar and a live server per version, nothing in this change can affect them, and the
+push is held. **Not claimed as green — not run.**
+
+### ↩️ Blast radius and rollback — what was actually done
+
+| Step | Touched | Undo |
+|---|---|---|
+| Mutation runs (P2/P4) | `scripts/**` temporarily, ~90 mutations | byte-exact copies in `scratchpad/mut-backup-s14/` and `mut-fixed-s14/`; **`cmp`-verified after every single run**, working tree clean throughout |
+| The fix | 6 files in `scripts/` | `git revert 8e3191cb1` |
+| Propagation | 3 band heads | `scratchpad/UNDO-s14-bands.txt` — the three pre-propagation heads as ready-to-run `git branch -f` lines |
+| `TODO.md` | 3 docs commits | `scratchpad/TODO.md.bak-s14` |
+| `.agent/memory/` | appended | `scratchpad/{gotchas,decisions,state}.md.bak-s14` |
+
+✅ **Nothing pushed. Nothing deleted. No test removed, no suppression added, no `--no-verify`.**
+🔴 **One near-miss worth keeping:** a `write_text()` on `TODO.md` rewrote all 3,446 lines LF→CRLF
+while `git diff --numstat` still reported `125 0` — git's checkin normalisation **masked a
+whole-file working-tree rewrite**, and only a binary census found it. Restored from the backup and
+redone byte-wise. `scripts/*.py` are CRLF on disk, `TODO.md` is LF, and `*.sh` is pinned LF by
+`.gitattributes` — which is what keeps §66's CR hazard contained.
+
+### What §75 did NOT close — carried forward
+
+- [x] ✅ **CLOSED by §76 (2026-09-22).** The set is **eight**, not nine, and the counts in this row
+      are superseded by the traced ones in §76 — `drift-audit.py` and `loomjar.py`, both named here,
+      have **zero** `check()` calls; `extract-mc-ids.py` has 16 and was never named; and a source
+      grep miscounts four of the eight in **both** directions. Each now asserts an **exact** executed
+      count, proved by 16 mutations with 0 survivors. Original text kept below — the diagnosis was
+      right and only its arithmetic was wrong.
+- [ ] 🔴 **The nine straight-line `check()` self-tests are UNCOUNTED.** `rename-to-official.py`
+      makes **166** `check()` calls, `mixin-target-sizer.py` 67, `branch-file-identity-audit.py` 64,
+      `derive-official-names.py` 58, `gradle-key-identity-audit.py` 46,
+      `manifest-identity-audit.py` 35, `expected_bands.py` 30, plus `drift-audit.py` and
+      `loomjar.py`. They are immune to the shape §75 fixed **because they have no collection to
+      empty — and equally no assertion that all 166 ran.** Delete one `check()` line and nothing
+      anywhere goes red. 🔑 **Immune is not safe**; it is a different shape with no detector.
+- [ ] ⬜ **S2 (one-sided) was never swept.** `probe-bands.py`'s seven cases are all positives — no
+      planted line that must FAIL to match, so an over-matching `DECL_RE` has nothing to catch it.
+      Thin rather than vacuous, so §74's rule left it alone deliberately. It is the obvious next
+      question, not an oversight.
+- [x] ✅ **CLOSED BY §79 (2026-09-23). The ruling came 2026-09-23 (§78 ruling 3) and §79 executed
+      it.** Gate 2 gained 34 checks over `count_points` / `normalise_ref` / `select_methods` /
+      `Result.status`; gate 12 gained 37 over `owner_of` / `member_of` / `name_candidates` /
+      `find_member`'s supertype closure / `control_versions`' range logic. Both keep their borrowed
+      cases. 10/10 and 12/12 mutations caught and **attributed to the specific check**, armed on the
+      yarn band's own copies. The original row:
+- [x] ⬜ **Gates 2 and 12 have a MIS-SCOPED `--self-test`, and it needs a ruling, not a patch.**
+      `mixin-allow-audit.py --self-test` runs `selftest_jar_selection() or selftest_naming()`, both
+      imported from `loomjar.py` — real, falsifiable, and about the **jar chooser**. Nothing in it
+      touches injection-point counting. `probe-bands.py --self-test` runs a javap regex, not the
+      manifest validation. **Neither is vacuous.** But gate 3's instruction says *"`--self-test`
+      first, as with every gate"*, so following it on gates 2 and 12 returns a green that says
+      nothing about what those gates do.
+- [ ] ⬜ **The `--mutate` and other second proof modes were not audited** — `ci-watch.sh` prints
+      *"Run with `--mutate` to prove these cases can fail"*, so 22 is a floor on entry points, not
+      a census of self-proof.
+- [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **eighth** consecutive
+      session. `master` is now **49** commits ahead of `origin/master` (MEASURED after the closing commit, not predicted before it).
+
+## §76 — the uncounted `check()` family: a self-test that cannot say how much it ran — ✅ DONE (Tier 2; 8 scripts floored, closes HELD until push)
+
+**§75's own carried row, taken as this session's work** (owner ruling 2, 2026-09-22 s15). §75 floored
+the **collection-driven** self-tests on what RAN. The straight-line `check()` harnesses were left
+open because they are *immune to that shape* — there is no collection to empty — and **immune is not
+safe**: delete any one of ~400 `check()` lines and nothing anywhere goes red.
+
+🔴 **It is §75's defect one level up, and the tell is identical.** `rename-to-official.py` ends its
+self-test with `print(f"\n  {checks} checks, {failures} failed")` and `return 1 if failures else 0`.
+**The count is printed and nothing asserts it.** `0 checks, 0 failed` exits 0 and reads as a pass —
+the exact sentence §75 wrote about gates 4, 6 and 12.
+
+### P1 — the census, MEASURED (✅ done)
+
+⚠️ **Counted by `sys.settrace` over the live `self_test()`, not by grepping `check(`** — and the two
+disagree in **both directions on four of eight scripts**, so a source-derived number would have been
+wrong before it was committed. This is the repo's twice-recorded *"a regex over source"* trap, hit a
+third time and caught this time by using the right instrument.
+
+| script | source grep | **runtime** | why they differ | floor today |
+|---|---|---|---|---|
+| `rename-to-official.py` | 166 | **165** | 1 try/except pair; only one arm runs | ❌ none — count **printed** |
+| `mixin-target-sizer.py` | 67 | **63** | 4 try/except pairs | ❌ none — count **printed** |
+| `branch-file-identity-audit.py` | 64 | **64** | — | ❌ none — **no count at all** |
+| `derive-official-names.py` | 58 | **58** | — | 🔴 **`< 43` — SLACK BY 15** |
+| `gradle-key-identity-audit.py` | 46 | **46** | — | ❌ none — **no count at all** |
+| `expected_bands.py` | 31 | **38** | a loop — grep **under**-counts by 7 | 🟡 §75 loop floor only |
+| `manifest-identity-audit.py` | 35 | **35** | — | ❌ none — **no count at all** |
+| `extract-mc-ids.py` | — | **16** | — | 🟡 §75 loop floor only; **the TODO row never listed this script** |
+
+🔑 **Two corrections to the §75 row that named this work.** It said *"nine"* scripts and named
+`drift-audit.py` and `loomjar.py`; both have **zero** `check()` calls and neither has this shape. It
+said `expected_bands.py` 30; the source has 31 and **38 actually run**. The real set is **eight**, and
+one of them (`extract-mc-ids.py`) was never named.
+
+🔴 **`derive-official-names.py` is the finding that justifies the design.** It is the only script that
+already tried — `if len(ran) < 43` — and it has been **slack by fifteen checks** ever since checks
+were added after it was written. A lower bound does not stay tight; it rots in the one direction
+nobody looks.
+
+⚠️ **One false positive of the instrument, recorded so it is not re-derived:**
+`gameplay_smoke_scenario.py` reports 9, but its `check(log, profile_text) -> Verdict` is the
+**scorer**, not an assertion helper. The tracer matched on the name. It is **out of scope**.
+
+### P2 — the design decision
+
+1. ✅ **Exact equality (`ran != EXPECTED`), not a floor (`ran < N`).** `derive-official-names.py` is
+   the measurement that settles it: a floor only fails downward, so every check added after it was
+   written widens the slack silently. Exact fails in **both** directions, so adding a check forces a
+   deliberate bump. **That friction is the mechanism, not its cost.**
+2. 🔴 **The constant is a LITERAL, never derived from the script's own source.** Counting `check(` in
+   the file at runtime is **vacuous for the deletion case** — delete a line and both sides drop
+   together, and the guard reports green. P1 also measured the source count as simply *wrong* on four
+   of eight scripts.
+3. ✅ **Placed AFTER the failures report.** Several `check()` calls are nested under `if` guards that
+   only skip when a prior check already failed; a failing run must exit 1 on the failure, not on a
+   confusing count mismatch.
+
+### P3 – P6
+
+- **P3** implement. Two commits: (a) the floor across all eight scripts, (b) `derive-official-names.py`'s
+  slack floor `43` → exact `58`, which is a separate decision and gets its own diff.
+- **P4** prove it. Per script, a mutation in **each direction** — delete one `check()` (under) and add
+  one (over) — and assert exit 1. **16 mutations + a green control.** A floor that has not been seen
+  to fire is decoration.
+- **P5** prove the constant is **branch-invariant**. `scripts/**` is byte-identical on every branch
+  (P19-1), so one literal must be right on all of them; a per-band count would make the constant
+  unshippable. Run all eight on each live band.
+- **P6** propagate to the three live bands, then the gate sweep.
+
+### What I am NOT doing
+
+- ❌ **Not pushing, not bumping `mod_version`, not closing an issue** — ruling 1, **ninth** session.
+- ❌ **Not touching gates 2/12's mis-scoped `--self-test`** — deferred by owner ruling 3 this session.
+- ❌ **Not the S2 one-sided sweep** — §75's other carried row, still open.
+- ❌ **Not adding, removing or rewriting a single `check()`.** This section counts the assertions that
+  exist; changing what they assert is a different question and would hide this one.
+- ❌ **Not `gameplay_smoke_scenario.py`** (scorer, not an assertion helper — see P1),
+  nor `config-id-audit.py` / `extract-mc-surface.py` / `drift-audit.py` (**0** `check()` calls; §75
+  already floored their collection loops).
+
+### Blast radius and rollback
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| P1 census | nothing — tracing only | nothing | n/a |
+| P3 fix | 8 files in `scripts/` | a green gate self-test turns red, or a floor that cannot fire | `git diff`; `scratchpad/TODO.md.bak-s15` for the doc |
+| **P4 mutations** | `scripts/**` **temporarily**, 16 mutations | 🔴 **a mutated script left behind disarms a SHIP GATE** — worse than a red test, because a gate that lies reads as green | byte-exact `.orig` copies in `scratchpad/mut-backup-s15/`, taken **before the first mutation**, `cmp`-verified after **every** run |
+| P6 propagation | 3 live band heads | a band left behind | pre-propagation heads frozen as ready-to-run `git branch -f` lines in `scratchpad/UNDO-s15-bands.txt` |
+
+---
+
+### ✅ P3 — the fix, in two commits
+
+| commit | what |
+|---|---|
+| `29f8993bc` `fix(guards)` | an **exact** `EXPECTED_CHECKS` floor in the seven scripts that had none |
+| `cf385f4f6` `fix(guards)` | `derive-official-names.py`'s `< 43` tightened to **exactly 58** |
+
+Separate commits because they rest on different decisions: the second one *is* the measurement that
+justifies the first, and burying it in a 7-file diff would hide the only evidence that a lower bound
+rots.
+
+🔴 **One bug in this change, caught by the floor it was adding.** The counter was first named `ran`
+— and `extract-mc-ids.py` already binds `ran` as a **loop variable** in its own §75 floor
+(`for label, ran, declared in (...)`). My counter was silently rebound to `2`, the number of
+cross-checked kinds. It went red only because 2 ≠ 16; **had the two numbers happened to agree it
+would have been a silently wrong guard that nothing could see.** Renamed `ran_checks` throughout,
+and the other four were checked for the same collision (clean). Same family as §75's *"a mutation at
+the wrong SCOPE is a different mutation"* — a name collision is that, one level up.
+
+### ✅ P4 — the proof: 16 mutations, both directions, 0 survivors
+
+Per script: delete one **executing** single-line `check()` (count falls), and duplicate it (count
+rises). A mutation counts as **caught only when the floor itself fired** — exit 1 alone is not
+evidence, which is §75's measured lesson about six of eleven "catches" being crashes.
+
+| script | control | MUT-DEL | MUT-ADD |
+|---|---|---|---|
+| `branch-file-identity-audit.py` | GREEN | CAUGHT 63≠64 | CAUGHT 65≠64 |
+| `gradle-key-identity-audit.py` | GREEN | CAUGHT 45≠46 | CAUGHT 47≠46 |
+| `manifest-identity-audit.py` | GREEN | CAUGHT 34≠35 | CAUGHT 36≠35 |
+| `extract-mc-ids.py` | GREEN | CAUGHT 15≠16 | CAUGHT 17≠16 |
+| `expected_bands.py` | GREEN | CAUGHT 37≠38 | CAUGHT 39≠38 |
+| `rename-to-official.py` | GREEN | CAUGHT 164≠165 | CAUGHT 166≠165 |
+| `mixin-target-sizer.py` | GREEN | CAUGHT 62≠63 | CAUGHT 64≠63 |
+| `derive-official-names.py` | GREEN | CAUGHT 57≠58 | CAUGHT 59≠58 |
+
+🔑 **The harness was wrong TWICE before it was right, and both wrongs are the point.**
+Its first run reported two scripts as *"exit 1 but not by the floor"* and its second reported the
+same two as **SURVIVED** — two different false answers about the same two scripts, neither of which
+was a property of the guard:
+
+1. **A mutant that does not compile is not a mutation.** The last one-line `check()` in
+   `rename-to-official.py` and `mixin-target-sizer.py` is the sole statement of an `except:` block;
+   deleting it is an `IndentationError`. The script exits 1 without the floor ever running — **a
+   crash scored as a catch.** Fixed by requiring both mutants to `compile()`.
+2. **A mutation on a line that never executes is not a mutation either.** The next candidate up is
+   the **try-arm** of a mutation pair whose *passing* path is the `except` arm, so it never runs.
+   Deleting dead code cannot move a runtime count, and the harness read the floor as blind —
+   **dead code scored as a survival.** Fixed by tracing which call sites actually execute
+   (`sys.settrace`) and mutating only those.
+
+⚠️ **The census instrument had the same disease and it nearly set a wrong constant.** The first
+tracer counted calls to any function *named* `check`, which over-reported `extract-mc-ids.py` at 16
+when its own helper ran twice — and reported `gameplay_smoke_scenario.py` at 9, where `check(log,
+profile_text)` is the **scorer**, not an assertion helper. Match on the code object's file, not on
+the name.
+
+### ✅ P5 / P6 — branch-invariance and propagation, with real exit codes
+
+**Both commits propagate** (`scripts/` only), with `Backport-of:` trailers verified through git's
+**own** parser, not by grepping the text.
+
+| Band | Head after | `Backport-of` readable |
+|---|---|---|
+| `mc/26.2` | `cc9b7e1ec` | `29f8993bc` ✅ `cf385f4f6` ✅ |
+| `mc/26.1.2` | `6e989db50` | `29f8993bc` ✅ `cf385f4f6` ✅ |
+| `mc/1.21.11` | `593c079d0` | `29f8993bc` ✅ `cf385f4f6` ✅ |
+
+⚠️ **All three applied cleanly including the yarn band — the outcome the notes call DANGEROUS.**
+Checked, not assumed: the two commits touch **`scripts/*.py` only** (no Java, no MC symbol), and a
+grep for official-name leakage on `mc/1.21.11` returns **0**. No translation was required, and that
+is a measurement.
+
+🔑 **The constant is branch-invariant, which this design REQUIRED and did not assume.** `scripts/**`
+is byte-identical on every branch (P19-1), so one literal has to be right on all of them; a count
+that differed per band would have made the whole approach unshippable. All eight self-tests exit 0
+on all three bands.
+
+| Check | Result |
+|---|---|
+| All 20 `--self-test`s on `master` (16 Python + 4 shell) | **exit 0**, before and after |
+| The 16-mutation matrix | **0 survivors**, 8 green controls |
+| 🔑 **Floor ARMED on a band** | a check deleted from `mc/1.21.11`'s **own** copy → `34 checks ran, expected exactly 35`, exit **1**. A propagated self-test passing only proves the file arrived |
+| `drift-audit.py --self-test` | PASSED — **run FIRST** |
+| `drift-audit.py --master master`, **fresh clone** | **0 MISSING** on all three live bands; 6 archived skipped; exit **0** |
+| `branch-file-identity-audit.py` | **54** paths across 4 branches byte-identical; exit **0** |
+| `manifest-identity-audit.py` / `gradle-key-identity-audit.py` | exit **0** / exit **0** |
+| Java suite on `master` | **174 classes / 1,948 tests / 0 failures / 0 errors** — matches the §75 baseline. Both tasks **bare**, and the figure is the SUM (`test` 173/1,935 **+** `tagBoundTest` 1/13) |
+| Caveat-expiry pass | `README.md` + `wiki/**` grepped for the symptom — **no hits**; nothing player-facing describes these floors |
+
+⚠️ **Gates 1–6 and 12 need a built jar and a live server per version and were NOT run.** Nothing in
+this change can affect them. **Not claimed as green — not run.**
+⚠️ **`--require-bands 3`** throughout, the LIVE count from `expected_bands.py --count`. **Exit 2 was
+treated as a failure everywhere, never a pass.**
+
+### ↩️ Blast radius and rollback — what was actually done
+
+| Step | Touched | Undo |
+|---|---|---|
+| P4 mutations | `scripts/**` temporarily, 16 mutations + 2 discarded harness attempts | byte-exact `.orig`/`.fixed` copies in `scratchpad/mut-backup-s15/`; **`cmp`-verified after every run**, and a final census asserting all 8 match at exit |
+| The fix | 8 files in `scripts/` | `git revert cf385f4f6 29f8993bc` |
+| Propagation | 3 band heads | `scratchpad/UNDO-s15-bands.txt` — the pre-propagation heads as ready-to-run `git branch -f` lines |
+| The band arming probe | 1 file on `mc/1.21.11`, temporarily | `scratchpad/band-armed-s15.orig`, restored and `cmp`-verified, `git status` clean before checkout |
+| `TODO.md` | docs commits | `scratchpad/TODO.md.bak-s15` |
+| `.agent/memory/` | appended | `scratchpad/{gotchas,decisions,state}.md.bak-s15` |
+
+✅ **Nothing pushed. Nothing deleted. No test removed, no suppression added, no `--no-verify`.**
+
+### What §76 did NOT close — carried forward
+
+- [ ] ⬜ **The `check()` helpers are not the only assertion shape.** `extract-mc-ids.py` makes **10**
+      direct `failures.append(...)` calls that bypass `check()` entirely, so its floor of 16 counts
+      the `check()` calls and **nothing else**. Delete one of those ten and the count is unmoved.
+      Same question as this section, one layer in; no detector.
+- [ ] ⬜ **A hardcoded prose tally still rots next to the new floor.** `gradle-key-identity-audit.py`
+      prints *"3 quiet, 8 firing, 1 warning, 5 detector mutations, 1 parser case, 4 archive-filter"*
+      and `manifest-identity-audit.py` an equivalent line. Nothing asserts either. They are a
+      different unit from the check count (cases, not assertions), so the new floor does not cover
+      them — and `branch-file-identity-audit.py` already **computes** its tally from `seen` for
+      exactly this reason. The other two should follow it; left alone here on scope discipline.
+- [ ] ⬜ **Untouched §75 rows:** the S2 one-sided sweep, and the mis-scoped `--self-test` on gates 2
+      and 12 (**deferred by owner ruling** this session, not forgotten).
+- [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **ninth** consecutive
+      session. ⚠️ **The ahead-count is deliberately not recorded here** — a status row cannot count
+      the commit that records it. Run `git rev-list --left-right --count origin/master...master`.
+
+---
+
+## §77 — §74's two carried items: the undeclared mixin, and the cache that hid a config read — ✅ DONE (Tier 2; both closed, closes HELD until push)
+
+**Owner-chosen 2026-09-22 (session 16)**, over the §76 `failures.append()` follow-up, the §75 S2
+one-sided sweep, and gates 2/12's mis-scoped `--self-test`. Tier **2** — a new guard, a production
+null-safety claim made falsifiable, and a propagation to three live bands.
+
+### Two owner rulings taken FIRST, before any command
+
+| # | Ruling |
+|---|---|
+| 1 | 🔴 **The push hold STILL STANDS.** Re-asked, not inherited — **TENTH consecutive session**, same answer every time. No push, no `mod_version` bump, no issue closed |
+| 2 | ✅ **`resetRankCache()` gets a TEST-SUPPORT class, not a widened production API.** A `src/test` class in `com.gmail.nossr50.util.skills` calls the package-private method and re-exposes it. `RankUtils` ships not one extra public method |
+
+### The two holes, both MEASURED before a line was written
+
+**A — a mixin deleted from `mcmmo.mixins.json` is INERT, and nothing goes red.**
+§74 stated this as a residual gap next to four `MixinApplicationTest` false positives. Measured here:
+`grep -rn 'mcmmo.mixins.json' src/test` returns **eight files and every hit is a javadoc mention** —
+**nothing in the suite parses the `mixins` array.** The source tree carries **41** `@Mixin` files and
+the manifest declares **41**; they agree today and no instrument knows it.
+🔑 **Why an undeclared mixin is silent rather than loud.** `defaultRequire = 1` makes a *drifted*
+injection throw at class-load, which is exactly what the four `assertDoesNotThrow(Class.forName(…))`
+tests rely on. An **undeclared** mixin is the opposite shape: Mixin never tries to apply it, the
+target class loads clean, and the feature it implements simply stops happening. No exception, no log
+line, no red test — the defect is a *missing* transformation, and every instrument in this repo
+watches for *failed* ones.
+⚠️ `theMixinsWereActuallyApplied` cannot see it either: its floor is `>= 20` transformed targets, so
+deleting one of 41 leaves ~35 and it passes comfortably.
+
+**B — a STATIC warmed by a sibling test class made a config claim unfalsifiable.**
+`NotificationManagerTest`'s three null-player guards unbind `AdvancedConfig`/`GeneralConfig`/
+`RankConfig` on purpose and claim the null guard sits before **every config read**. The no-throw half
+is mutation-proven. The **config half is not**, for `sendPlayerUnlockNotification`: hoisting
+`RankUtils.getRank(...)` above the guard SURVIVES, because `getRank` short-circuits on a warm
+`RankUtils.subSkillRanks` and never reaches `addRanks()` → `getRankUnlockLevel()` →
+`McMMOMod.getRankConfig()`. Cold, that mutation NPEs and reddens.
+🔑 **A test's reachability can depend on what a SIBLING TEST CLASS did to a static** — and which
+sibling ran first is decided by Gradle's non-deterministic fork assignment, so the guard's strength
+was a coin flip nobody was tossing.
+✅ **Clearing it cannot break a sibling.** Checked, not assumed: `test` runs `maxParallelForks = 4`
+but classes are **sequential within a fork**, there is no `junit-platform.properties` enabling
+parallel execution, and **cold is the fresh-JVM default** that `RankUtilsTest` and `SkillGatingTest`
+already reset to in their own setup. A class that needs a warm cache and does not bind `RankConfig`
+is already a latent flake under fork assignment; this makes it deterministic rather than creating it.
+⚠️ **The SoundManager half is NOT the same defect and is deliberately left alone.** A hoisted
+`SoundManager.sendCategorizedSound(null, …)` also survives, but because `readyConfig` null-guards
+*itself* — that is defence in depth working, not a missing assertion.
+
+### Phases — file by file
+
+| # | Phase | Touches |
+|---|---|---|
+| **1** | **Prove hole A by mutation BEFORE writing the guard.** Delete one name from `mcmmo.mixins.json`, run both `MixinApplicationTest` copies + `MixinAllowCoverageTest`, and record them **GREEN**. A guard written against an unproven hole is decoration | `src/main/resources/mcmmo.mixins.json` **temporarily** |
+| **2** | Write `MixinManifestDeclarationTest` — set equality both directions, plus the `defaultRequire`/`package` claims four other tests cite as their own justification | new `src/test/java/com/gmail/nossr50/guards/MixinManifestDeclarationTest.java` |
+| **3** | Mutation-prove the new guard: name deleted → red · bogus name added → red · `defaultRequire: 0` → red · `package` drifted → red · unmutated control → green | the manifest **temporarily** |
+| **4** | Hole B: add `RankCacheTestSupport`, reset the cache in the three null-player tests, and mutation-prove the hoisted rank read now reddens | new `src/test/java/com/gmail/nossr50/util/skills/RankCacheTestSupport.java`, `NotificationManagerTest` |
+| **5** | Full suite — **BOTH tasks**, `test` + `tagBoundTest`, and the baseline is the **SUM** (174 / 1,948). Then gates 7–11, caveat-expiry, propagation to the three live bands | — |
+| **6** | `.agent/memory/` + close the section | — |
+
+### ❌ What I am NOT doing
+
+- ❌ **Not pushing, not bumping `mod_version`, not closing an issue** — ruling 1, tenth session.
+- ❌ **Not making `resetRankCache()` public** — ruling 2 chose the test-support class.
+- ❌ **Not the §76 `failures.append()` follow-up**, not the **S2 one-sided sweep**, not **gates 2/12's
+  mis-scoped `--self-test`**. All three stay open and stay listed.
+- ❌ **Not "fixing" the SoundManager hoist** — measured as defence in depth, not a gap.
+- ❌ **Not re-measuring the `>= 36` target floor or touching either `MixinApplicationTest`.** The new
+  guard is additive; the four false positives §74 justified stay exactly as they are.
+- ❌ **Not running gates 1–6 or 12** — they need a built jar and a live server per version. Not run,
+  therefore not claimed.
+
+### ↩️ Blast radius and rollback — written BEFORE the destructive steps
+
+| Step | Touches | Lost if wrong | Comes back from |
+|---|---|---|---|
+| **Phases 1 + 3 mutations** | `src/main/resources/mcmmo.mixins.json` **temporarily** — the only production file this section mutates | 🔴 a mutated manifest left behind ships a mod with a mixin switched off | byte-exact copy at `scratchpad/mixins-json-s16.orig`, taken **before the first mutation**, `cmp`-verified after **every** run, with a final census at exit |
+| Phase 4 mutation | `src/main/java/.../NotificationManager.java` **temporarily** | a hoisted read left in production | byte-exact copy at `scratchpad/notifmgr-s16.orig`, same discipline |
+| New test files | `src/test/**` only | nothing — untracked until committed | `git rm` / `git diff` |
+| `NotificationManagerTest` edits | one file | a green guard becomes red | `git diff` is the undo |
+| Propagation | 3 band heads | a band left mid-propagation | `scratchpad/UNDO-s16-bands.txt` — pre-propagation heads as ready-to-run `git branch -f` lines |
+| `TODO.md` / `.agent/memory/` | docs | — | `scratchpad/TODO.md.bak-s16`, `scratchpad/{gotchas,decisions,state}.md.bak-s16` |
+
+⚠️ **`TODO.md` is 100% CRLF in this working copy** (censused: 4103 CRLF, 0 bare LF). §76 recorded
+`git diff --numstat` masking a CRLF/LF mix **twice in two sessions** — census the bytes before and
+after every programmatic write, and re-read the file's own ending each time rather than recalling it.
+
+### ✅ Results — both §74 items closed
+
+**A — the undeclared mixin.** `MixinManifestDeclarationTest`, three tests, every assertion with a
+proven unique domain.
+
+| Mutation | Result |
+|---|---|
+| a declared mixin dropped | **CAUGHT** by `everyMixinSourceFileIsDeclaredInTheManifest` |
+| `injectors.defaultRequire` lowered to 0 | **CAUGHT** by `theInjectorDefaultRequireIsStillOne` |
+| `scripts/mc-surface.txt` MIXINCLASS records truncated | **CAUGHT** by `theScanFoundARealMixinPopulation` |
+| the `@Mixin` source walk made to match nothing | **CAUGHT** by `theScanFoundARealMixinPopulation` |
+| control, unmutated | **green at 3 tests** |
+
+🔑 **That last case is why the floor exists.** With the walk empty the set difference is
+`{} - declared = {}`, so the main test **passes vacuously** on an empty derived collection — the §74
+shape — and only the floor notices.
+
+**B — the cache that hid a config read.** Proven **both ways**, because one direction proves nothing:
+
+| | |
+|---|---|
+| hoist `RankUtils.getRank()` above the null guard, reset **PRESENT** | `unlockNotificationIsNoOpForNullPlayer` **FAILED**, 11 siblings green |
+| same hoist, reset **REMOVED**, whole `test` task | **BUILD SUCCESSFUL** — that class 12/0/0, **174 classes / 1,938 tests / 0 failures**. The defect is live and the suite cannot see it |
+
+### 🔴🔴 The measurement that justified the whole section
+
+Before a line of the guard was written: `"SnowGolemTrailMixin"` deleted from the manifest, whole
+suite run, **both tasks** — **174 classes / 1,948 tests / 0 failures / 0 errors**, byte-for-byte the
+recorded green baseline. The mutation reached the runtime (`build/resources/main` contained zero
+occurrences), so it is a real blind spot and not a stale build. **One mixin switched off, and
+nothing in this repo could tell.**
+
+### 🔴🔴 TWO assertions written, measured UNFALSIFIABLE, and DELETED
+
+*"every declaration has a source file"* and *"the declared package is where the sources live"* both
+looked obviously right and both **can never fail**. Mixin refuses to transform **any** class under a
+config it cannot resolve, so each mutation killed the fork with *"Mixin transformation of
+MixinManifestDeclarationTest failed"* **before the test class loaded** — `exit=1` with **zero JUnit
+XML**. Not redundant: **unreachable**.
+🔑 **An exit code is not a result.** A harness scoring `exit != 0` as CAUGHT would have certified two
+pieces of decoration as mutation-proven guards. Both conditions *are* enforced, loudly, by Mixin
+itself at fork startup.
+⚠️ A symmetric manifest-side floor was deleted for the weaker reason: it can never fire **alone**.
+
+### ⚠️⚠️ The harness lied before the guard did — twice, again
+
+1. JUnit XML `testcase name` attributes carry `()`. Matching bare method names scored **three genuine
+   catches as MIS-ATTRIBUTED**. A uniformly-bad matrix is a harness hypothesis first.
+2. The first band run's tally read **stale XML from the previous `master` run** and printed a
+   confident `175 classes / 1,951 tests / 0 failures` underneath a **`BUILD FAILED`**. Read the
+   failure text, not the leftover artefacts.
+
+### ✅ NEGATIVE RESULT — `tagBoundTest` missing on every band is CORRECT
+
+`./gradlew test tagBoundTest` failed on `mc/26.2` with *"Task 'tagBoundTest' not found"*. It fits
+this repo's favourite failure shape exactly: a **version-agnostic** build change (the task split
+that stops `SuperAbilityListenerTillingTest` binding tags into a fork shared with `BlockUtilsTest`)
+bundled into `d6761338c feat(26.3)`, whose `Backport-not-needed:` then waived the **whole commit**.
+`build.gradle` **is** a `PROPAGATABLE_PREFIX`, so gate 7 could have seen it.
+
+**Measured instead of reported:** `McTestRegistries.bootstrapWithTags()` **does not exist on any
+band** — `d6761338c` introduced it. No band binds tags, so there is no race and the task is correctly
+absent. **The opt-out was right.** The band baseline is `./gradlew test` alone.
+
+🔴 **The shape behind the false alarm is real and stays open:** rule 3's opt-out is **commit-scoped**
+and cannot express *"half of this commit should propagate"*. A commit mixing version-specific and
+version-agnostic work waives both halves with gate 7 green. **No detector.**
+
+### ✅ Verification, real exit codes, read directly
+
+| Check | Result |
+|---|---|
+| Java suite on `master` | **175 classes / 1,951 tests / 0 failures / 0 errors** — delta vs §76 is exactly **+1 class / +3 tests**, the new guard. Both tasks **bare**; the figure is the SUM (`test` 174/1,938 **+** `tagBoundTest` 1/13) |
+| Band suites | `mc/26.2` **175 / 1,947**, `mc/26.1.2` **175 / 1,947**, `mc/1.21.11` **174 / 1,941** — all 0 failures / 0 errors |
+| 🔑 **ARMED ON THE YARN BAND** | both guards mutated on `mc/1.21.11`'s **own** files → both **RED**. A propagated test passing only proves the file arrived |
+| All 16 Python `--self-test`s | exit **0** — run **after** the matrix, which mutates `scripts/mc-surface.txt` |
+| `drift-audit.py --self-test` | PASSED — **run FIRST** |
+| `drift-audit.py --master master`, **fresh clone** | **0 MISSING** on all 3 live bands, 6 archived skipped, exit **0** |
+| Gates 9 / 10 / 11 | exit **0 / 0 / 0**, re-run **after** the wiki propagation |
+| Caveat-expiry pass | found a real **gap**, not a stale claim: `wiki/Building-from-Source.md` said *"Two hard-won rules"* about mixins and neither was this one. Now three |
+
+⚠️ **Gates 1–6 and 12 need a built jar and a live server per version and were NOT run.** Nothing in
+this change can affect them. **Not claimed as green — not run.**
+⚠️ **`--require-bands 3`** throughout. **Exit 2 was treated as a failure everywhere, never a pass.**
+
+### 🔁 Propagation
+
+| Band | Head after | `Backport-of` readable by git's own parser |
+|---|---|---|
+| `mc/26.2` | `4af909e39` | `2190b326b` ✅ `1e765e193` ✅ `81f07c501` ✅ |
+| `mc/26.1.2` | `ac990fd07` | `2190b326b` ✅ `1e765e193` ✅ `81f07c501` ✅ |
+| `mc/1.21.11` | `3735e0714` | `2190b326b` ✅ `1e765e193` ✅ `81f07c501` ✅ |
+
+⚠️ **All three applied cleanly including the yarn band — the outcome the notes call DANGEROUS.**
+Checked, not assumed: the two new files carry **0** `net.minecraft` references, the
+`NotificationManagerTest` hunk is a comment + an import + one call, and the band's own
+`import net.minecraft.text.Text` is untouched. No translation was required, and that is a measurement.
+⚠️ **`wiki/**` needed HAND propagation.** `drift-audit.py` does not track docs but the identity guard
+(R-y) does, so a wiki-only commit on `master` leaves gate 9 red while gate 7 stays green. The
+documented docs-propagation seam, hit again.
+
+### ↩️ Blast radius and rollback — what was actually done
+
+| Step | Touched | Undo |
+|---|---|---|
+| Hole-A proof + mutation matrix | `src/main/resources/mcmmo.mixins.json` and `scripts/mc-surface.txt` **temporarily** | `scratchpad/mixins-json-s16.orig`, `scratchpad/mc-surface-s16.orig`; **`cmp`-verified after every run**, with a census at exit |
+| Hole-B mutation | `src/main/java/.../NotificationManager.java` **temporarily** | `scratchpad/NotificationManager.java.orig`, same discipline |
+| The band arming probes | 2 files on `mc/1.21.11`, temporarily | `scratchpad/band-{mixins,notifmgr}-s16.orig`, restored and `cmp`-verified, `git status` clean before checkout |
+| The work | 2 new `src/test` files, 1 edited, 1 wiki line | `git revert 81f07c501 1e765e193 2190b326b` |
+| Propagation | 3 band heads | `scratchpad/UNDO-s16-bands.txt` — pre-propagation heads as ready-to-run `git branch -f` lines |
+| `TODO.md` / `wiki/` / `.agent/memory/` | docs | `scratchpad/TODO.md.bak-s16`, `scratchpad/Building-from-Source.md.bak-s16`, `scratchpad/{gotchas,decisions,state}.md.bak-s16` |
+
+✅ **Nothing pushed. Nothing deleted from history. No existing test removed, no suppression added, no
+`--no-verify`.** The two deleted assertions were written in this section and never committed.
+
+### What §77 did NOT close — carried forward
+
+- [ ] 🔴 **Rule 3's `Backport-not-needed:` is COMMIT-SCOPED** and cannot say *"half of this commit
+      should propagate"*. `d6761338c` bundled a version-agnostic `build.gradle` change into the 26.3
+      conversion and waived both halves; that instance was **benign** (measured), but nothing detects
+      the mixture and `build.gradle` is a tracked propagatable prefix. **No detector.**
+- [ ] ⬜ **The SoundManager half of §74's limit** stays open *as a non-defect*: a hoisted
+      `sendCategorizedSound(null, …)` survives because `readyConfig` null-guards itself. Recorded so
+      nobody "fixes" defence in depth.
+- [ ] ⬜ **Untouched §76 rows:** the `failures.append()` assertions that bypass `check()`, and the two
+      unasserted prose tallies.
+- [ ] ⬜ **Untouched §75 rows:** the S2 one-sided sweep, the mis-scoped `--self-test` on gates 2 and
+      12, and the `--mutate` second-proof audit.
+- [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **tenth** consecutive
+      session. ⚠️ **The ahead-count is deliberately not recorded here** — a status row cannot count
+      the commit that records it. Run `git rev-list --left-right --count origin/master...master`.
+
+
+---
+
+## §78 — the mixed waiver: `build.gradle` is in the seam, and the instrument is FILE STATE — ✅ DONE (Tier 2; ship gate 13, closes HELD until push)
+
+**§77's own carried row, taken as this session's work** (owner ruling 2, 2026-09-23 s17). Rule 3's
+`Backport-not-needed:` is **commit-scoped** and cannot say *"half of this commit should propagate"*.
+`d6761338c` bundled a version-agnostic `build.gradle` change into the 26.3 conversion and waived both
+halves. §77 recorded it as **benign but undetected**.
+
+### Re-measured here before touching anything — a carried row is a claim, not a fact
+
+🔑 **The carried row understated it. The waiver population is small enough to read, and the
+`build.gradle` divergence is LIVE, not historical.**
+
+| Measured | Result |
+|---|---|
+| commits on `master` carrying `Backport-not-needed:` | **58** |
+| ...of those, **propagatable** (i.e. that actually reach the waiver branch) | **14**. The other 44 are `docs(...)` and never get past `if not c.propagatable: continue` |
+| `build.gradle` blobs across the four live branches | **THREE distinct**: `master`, (`mc/26.2` = `mc/26.1.2`), `mc/1.21.11` |
+| `settings.gradle` blobs | **ONE** — identical on all four. Already effectively invariant, and nothing enforces it |
+| `master` vs `mc/26.2` `build.gradle` | **exactly the `d6761338c` waived half** — the `test {` → `tasks.withType(Test).configureEach {` refactor plus the whole `tagBoundTest` block. Nothing else |
+| `mc/26.2` vs `mc/1.21.11` `build.gradle` | the Loom plugin id (`net.fabricmc.fabric-loom` vs `fabric-loom`) and the yarn `mappings` / `mod*` configuration block — **REQUIRED** per-band differences |
+
+⚠️ **And three of the 14 waiver reasons do not say "not needed" at all** — they say *needed,
+discharged by another route*, which nothing checks:
+
+- `4f4e4d8bb` `scripts/mixin-allow-audit.py` — *"propagated by hand in the section 37 sweep"*
+- `ec9b497f7` `scripts/gameplay_smoke_scenario.py` — *"each band gets its own cherry-pick"*
+- `0e5ba811e` `scripts/drift-audit.py` — *"tooling under `scripts/`, not shipped code; master-only"*.
+  🔴 That premise was **made false by R9** three months later, and the waiver was never revisited.
+
+✅ **All three are nonetheless harmless TODAY, and the reason matters:** `scripts/**` is in the
+**identity guard's** `INCLUDE` set (R9a), so gate 9 forces those files byte-identical regardless of
+what any waiver claims. A waiver over an identity-guarded path can only ever be **stale**, never
+load-bearing — which is why the detector below does **not** target them.
+
+### 🔑 The design turn — why a commit-scoped detector is the WRONG instrument
+
+The obvious reading of the carried row is *"detect a mixed commit"*. **That cannot be done**, and
+attempting it is how this session would ship decoration:
+
+- Classifying `src/**.java` as version-specific vs version-agnostic requires reading intent. In a
+  port commit every one of those files is legitimately version-specific; in a fix commit none is.
+  A path rule flags **13 of the 14** — and a guard red for an expected reason is one people stop
+  reading, which AGENTS.md says in its own words.
+- For the paths where content IS decidable (`scripts/**`, `.github/workflows/*.yml`), **gate 9 is
+  already strictly stronger.** A second detector there adds diagnosis, not detection.
+
+🔑 **This repo has already learned the right instrument once:** a back-port is **FILE STATE, not a
+commit** (§8.3's tail). The mixture is invisible in the commit and plainly visible in the file. So
+§78 stops auditing the waiver and audits **the file the waiver let drift**.
+
+🔑 **And `build.gradle` has EXACTLY gate 11's shape**, which is why the precedent is load-bearing
+rather than decorative. `gradle.properties` needs `mod_version` identical (R-p) and
+`minecraft_version` different (R-a), so `drift-audit.py` excludes it and the identity guard cannot
+demand it — a gap one key wide, closed by the **per-KEY** audit (R-w′). `build.gradle` needs its
+Loom plugin id and mappings block **different** (the remap switch) and everything else **identical**
+— a gap the **whole file** wide, and §64's own row in this file records that *"`build.gradle:2`'s
+bare vs qualified id is a **REQUIRED per-band difference NO gate watches**"*. It is the third
+instance of the seam shape, after `mod_version` and `TODO.md`.
+⚠️ **This sentence said "AGENTS.md already records" when it was first written, and that was FALSE
+— `AGENTS.md` does not contain the string `build.gradle` at all.** Caught by grepping for the claim
+instead of trusting it, in the same pass that was supposed to be checking someone else's wording.
+
+### The pieces — file by file
+
+| # | File | Change |
+|---|---|---|
+| 78.1 | `scripts/build-gradle-identity-audit.py` | **NEW.** Ship gate **13**. Requires `build.gradle` + `settings.gradle` identical across the live bands **except** differences matched by a declared, reasoned classification table. **Fails closed on an unclassified DIFFERING line** — never on an unclassified line that agrees, per gate 11's rule that a table demanding every knob be classified is one nobody maintains |
+| 78.2 | same | `--self-test`, **two-sided** and **floored on what RAN**, per §75/§76: an exact executed-case count, a quiet case that must stay green, a firing case that must go red, a parser case, and a refusal case. ⚠️ **Exit 2 is not a pass** — fewer than two branches compared nothing |
+| 78.3 | the `tagBoundTest` finding | The guard goes red on the `master`-only block on its first run. That is a **live finding, not an obstacle**: resolve it by classifying it with a measured reason (`bootstrapWithTags()` does not exist on any band, so the task cannot be registered there) — **not** by widening the rule |
+| 78.4 | `AGENTS.md` | Add gate 13 to the tooling table; correct the §64 sentence saying no gate watches `build.gradle:2`. ⚠️ Byte-identical on every branch (P19-1) — propagate, or gate 9 goes red |
+| 78.5 | gates 2 and 12 | **Owner ruling 3 this session: RE-SCOPE, not defer.** `mixin-allow-audit.py --self-test` must exercise injection-point counting, `probe-bands.py --self-test` the manifest validation. Keep the borrowed `loomjar.py` cases as well — they are real, just about something else |
+
+### Verification — nothing is "done" on a printed PASS
+
+- ⚠️ **`--self-test` FIRST**, before any real run, on every gate touched.
+- **Mutation matrix** for 78.1: one mutation per declared classification entry plus one per refusal
+  path, each scored **CAUGHT by a named case**, against a **green control**. ⚠️ A uniformly bad
+  matrix is a **harness hypothesis first** (§77 lesson 3) — check the harness before the guard.
+- ⚠️ **Gates prefer REMOTE refs**, and `master` is unpushed. The honest run is inside
+  `git clone --local --no-hardlinks . <scratch>`.
+- Full Java suite must stay green. ⚠️ **TWO tasks** — the baseline is `test` + `tagBoundTest`
+  **summed**; quoting one reads as a 13-test regression that does not exist.
+- Gate sweep 9/10/11 after propagation, not just before.
+- Caveat-expiry pass: grep `README.md` + `wiki/**` for the **symptom**, not the file edited.
+
+### §78 RESULTS — measured 2026-09-23, real exit codes read directly
+
+| Check | Result |
+|---|---|
+| Gate 13 on the four live branches | **exit 0.** `build.gradle` is 489 / 432 / 432 / 429 lines and **every residue is 427** — the arithmetic reconciles exactly (`master` 489 − 5 − 6 − 51). `settings.gradle` is identical on all four and **nothing enforced that until now** |
+| `--self-test` | **21 checks**, floored on what RAN and refusing if any category ran zero. ⚠️ **The first cut predicted 22 and the floor rejected the run** — the prediction was wrong, not the harness. The per-category tally is **derived from the labels**, not hand-written beside it (§76's open row, avoided rather than repeated) |
+| Mutation matrix | **10 mutations, 10 CAUGHT, 0 SURVIVED, 0 NOT-APPLIED**, against a green control, **re-run after the dead-code removal**, census proving the file byte-identical at exit |
+| 🔑 **ARMED ON THE YARN BAND** | the core mutation applied to `mc/1.21.11`'s **own copy** turned **6 of 21** checks red. A propagated guard passing only proves the file arrived |
+| Java suite | **175 classes / 1,951 tests / 0 failures / 0 errors**, both tasks **bare**. Identical to §77's baseline — the change touches zero Java |
+| Propagation | all **3 live bands**, cherry-picked with `Backport-of: 1b685bf64`, applied cleanly including the yarn band (**0** `net.minecraft` references — measured, not assumed) |
+| Gate sweep, **fresh local clone** | self-tests **first**, all exit 0; then gates **7 / 9 / 10 / 11 / 13** all exit 0. Gate 9 now covers **55** shared paths — the new script joined the identity set by **union expansion**, with nothing to remember |
+| Caveat-expiry pass | `README.md` + `wiki/**` grepped for the **symptom**. No stale claim there — but the pass found one in **this file** (below) |
+
+### 🔑 What §78 is worth carrying
+
+1. 🔴🔴 **The carried row asked for a detector that CANNOT EXIST, and building it anyway was the
+   trap.** A mixed commit is not decidable from the commit: classifying `src/**.java` as
+   version-specific needs intent, and a path rule flags **13 of the 14**. The answer was to change
+   instrument — **a back-port is FILE STATE, not a commit** — which this repo had already learned
+   once in §8.3 and did not apply here.
+2. 🔴 **Three of the 14 waiver reasons do not say "not needed".** They say *needed, discharged by
+   another route* — *"propagated by hand in the section 37 sweep"*, *"each band gets its own
+   cherry-pick"* — and one (`0e5ba811e`) rests on a premise **R9 made false three months later**.
+   All three are harmless **only** because `scripts/**` is in gate 9's `INCLUDE` set. Nothing
+   checks that a waiver's stated reason is still true.
+3. 🔑 **`SUBSTITUTE` over `VARIANT` is the whole difference between a guard and a hole.** Throwing
+   away a differing LINE throws away everything else on it: the first cut of `mod-remap-prefixes`
+   would have let a band move to a different ModMenu version silently, and its own reason text
+   **claimed the opposite**. Two self-test cases exist purely to prove the coordinate and the Loom
+   version stay under comparison, and both go red if either rule is downgraded.
+4. ⚠️⚠️ **A mutation appended to a rule table was CAUGHT BY THE WRONG DETECTOR** — the overlap
+   refusal fired before the residue floor it was written to test. A green matrix row proving a
+   different assertion than its label claims. It now **replaces** the table instead.
+5. 🔴 **"AGENTS.md records X" was written THREE times and `AGENTS.md` does not contain the string.**
+   The claim is real; it lives in §64's row **in this file**. Carried from memory, filled in from
+   habit, then copied twice. An attribution is a claim — grep before naming the file.
+6. ⚠️ **`Path.write_text` rewrites newlines**, so a deliberately-CRLF fixture was written as
+   `\r\r\n` and failed a parser case against a guard that was handling CRLF **correctly**. The
+   harness corrupted the input and the guard took the blame.
+7. ⚠️ **The suite's first run read `BUILD FAILED` with a complete, green `test` XML.** Both tasks
+   were marked FAILED; `test` had 174/1,938/0/0 and `tagBoundTest` had **zero XML** — an executor
+   death (*"Could not write standard input"*), not a test failure, and not reproducible. **An exit
+   code is not a result**, §77's lesson arriving through a different door.
+
+### What I am NOT doing
+
+- ❌ **Not building a mixed-commit detector.** Reasoned above; it cannot be done from the commit and
+  the path-rule version is noise. The carried row is closed by a different instrument, and the row
+  itself is rewritten to say so rather than ticked.
+- ❌ **Not touching `drift-audit.py`'s waiver branch.** `if c.not_needed: waived += 1` stays. Rule 3
+  is not being amended, and no new escape hatch is created.
+- ❌ **Not retroactively re-waiving the 14.** They are measured harmless today; three carry stale
+  reasons, and that is recorded here rather than "fixed" by rewriting published commits.
+- ❌ **Not putting `build.gradle` into the identity guard's `INCLUDE`.** It MUST differ per band;
+  that would make the repo unshippable — the same collision `mc-surface.txt`'s exclusion note warns
+  about, in the opposite direction.
+- ❌ **Not pushing, not bumping `mod_version`, not closing an issue** — ruling 1, eleventh session.
+- ❌ **Not** the §76 `failures.append()` rows, the §75 S2 one-sided sweep, or the `--mutate` audit.
+
+### Rollback
+
+| Step | Touched | Undo |
+|---|---|---|
+| The plan + close | `TODO.md` | `scratchpad/TODO.md.bak-s17` |
+| Memory | `.agent/memory/{state,decisions,gotchas}.md` | `scratchpad/{state,decisions,gotchas}.md.bak-s17` |
+| The guard | new `scripts/` file, `AGENTS.md` | `git revert <sha>` — all new work, nothing overwritten |
+| Mutation runs | `build.gradle` and `scripts/` copies **temporarily** | `.orig` copies in `scratchpad/`, **`cmp`-verified after every run**, census at exit |
+| Propagation | 3 live band heads | `scratchpad/UNDO-s17-bands.txt` — pre-propagation heads as ready-to-run `git branch -f` lines |
+
+### What §78 did NOT close — carried forward
+
+- [ ] 🔴 **A waiver's stated REASON is never re-checked.** Three of the 14 propagatable
+      `Backport-not-needed:` commits say *needed, discharged by another route*, and `0e5ba811e`'s
+      premise (*"tooling under `scripts/`, not shipped code; master-only"*) was **falsified by R9**
+      three months later. They are harmless only because `scripts/**` is in gate 9's `INCLUDE` set —
+      an accident of another guard, not a check. **No detector**, and it is the same shape §78 just
+      closed one file over.
+- [ ] ⬜ **`src/**` and the mixed commit remain undecidable**, stated rather than left implied.
+      Gate 13 covers `build.gradle` + `settings.gradle`; a commit mixing version-specific and
+      version-agnostic `src/` work still waives both halves with gate 7 green. That is not a gap
+      this section failed to close — it is one no commit-scoped instrument can.
+- [x] ✅ **DONE by §79 (2026-09-23), the session after the ruling.** The original row:
+- [x] ⬜ **Gates 2 and 12: owner RULED to RE-SCOPE (2026-09-23), NOT DONE this session.**
+      `mixin-allow-audit.py --self-test` must exercise injection-point counting and
+      `probe-bands.py --self-test` the manifest validation; the borrowed `loomjar.py` and `DECL_RE`
+      cases stay as well. ⚠️ **This is a ruling carried as an open item, which is different from a
+      deferral** — the decision is made, only the work is outstanding.
+- [ ] ⬜ **Untouched §76 rows:** the `failures.append()` assertions that bypass `check()` in
+      `extract-mc-ids.py`, and the unasserted prose tally in `gradle-key-identity-audit.py` /
+      `manifest-identity-audit.py`. ✅ Gate 13 **avoided** that shape rather than fixing it — its
+      tally is derived, and it refuses if a category ran zero checks.
+- [ ] ⬜ **Untouched §75 rows:** the S2 one-sided sweep, and the `--mutate` second-proof audit.
+- [ ] ⬜ **The `test {` -> `withType(Test).configureEach {` split is now a PREDICTABLE future
+      conflict.** Any later edit to those ~185 shared lines on `master` lands inside a `withType`
+      block while the bands carry `test {`, so the cherry-pick conflicts on the header. Declared and
+      benign today; recorded so the conflict is recognised rather than re-diagnosed.
+- [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **eleventh** consecutive
+      session. ⚠️ **The ahead-count is deliberately not recorded here** — a status row cannot count
+      the commit that records it. Run `git rev-list --left-right --count origin/master...master`.
+
+---
+
+## §79 — gates 2 and 12: a self-test that exercises the GATE, not the borrowed helper — ✅ DONE (Tier 2; both re-scoped, closes HELD until push)
+
+**Tier 2.** Two shared `scripts/` files under the identity guard, a ship gate each, propagation to
+three live bands. The ruling was taken on **2026-09-23 (§78, ruling 3)** and carried unexecuted;
+this section executes it. **A ruling carried as work is not a deferral to re-decide.**
+
+### The defect, measured before touching anything (2026-09-23, session 18)
+
+Both gates self-test a **borrowed helper** and call it proof of the gate.
+
+| Gate | `--self-test` prints | what it actually exercises | what the GATE computes |
+|---|---|---|---|
+| **2** `mixin-allow-audit.py` | `8 cases` + `3 cases` | `loomjar.py`'s jar selection and naming classification | **injection-point counting** from bytecode — `count_points`, `normalise_ref`, `select_methods`, `Result.status`. **ZERO cases** |
+| **12** `probe-bands.py` | `7 real javap declaration lines parse` | `DECL_RE`, one regex on one line shape | **manifest validation** — `owner_of`, `member_of`, `name_candidates`, `resolve_owner`, `find_member`'s supertype closure, `control_versions`' range logic. **ZERO cases** |
+
+🔑 **Neither self-test is WRONG, and that is why this sat for three sessions.** Both pass, both are
+two-sided, both were floored in §75/§76 — and both certify a component the gate *uses* rather than
+the computation the gate *is*. A jar selector proving it picks the right jar says nothing about
+whether the thing that reads the jar can count. **The floor was applied to the wrong surface.**
+
+🔴 **The blast radius is the same shape gate 2 exists to catch.** `count_points` returning a wrong
+number is `allow = N` grading itself against a broken counter — and §32 already recorded a mixin
+bound to the *wrong live method* with every structural gate green. `--check`'s own docstring says a
+MISMATCH *"means THIS SCRIPT is wrong, not Minecraft"*, which is a claim about a counter that **no
+self-test has ever exercised**.
+
+### What §79 is NOT doing — stated, so it cannot creep
+
+- ❌ **Not pushing, not bumping `mod_version`, not closing an issue.** Ruling 1 stands — **twelfth**
+  consecutive session.
+- ❌ **Not changing what either gate CHECKS.** Only what its `--self-test` proves. A gate whose
+  verdict moves in the same commit as its self-test cannot be graded by that self-test.
+- ❌ **Not refactoring `disassemble()` to drop its `subprocess` call.** Making production code
+  testable is a real change to a shipped gate; the offline-constructible surface below is large
+  enough without it. Recorded as a limit, not closed.
+- ❌ **Not deleting the existing `loomjar.py` / `DECL_RE` cases.** The ruling says they stay. They
+  certify something real; they were only ever mis-labelled as certifying the gate.
+- ❌ **Not touching §76's `failures.append()` rows, §75's S2 sweep, or §78's waiver-reason row.**
+  All three stay open.
+
+### Phases
+
+- [x] ✅ **P0 — baseline, before any edit.** Both self-tests exit 0; record what each covers. Back up
+      `TODO.md`, the two scripts and the three memory files to `scratchpad/*.bak-s18`. ✅ **DONE.**
+- [x] ✅ **P1 — gate 2 gains injection-point cases.** 34 checks, floor matched first cut. Adopt §78's `check()` funnel verbatim: one
+      counter, per-kind tally **derived from the label prefix**, exact **executed** floor, and a
+      refusal if any category ran zero. Cases over `count_points` (HEAD/TAIL/RETURN/INVOKE/FIELD/
+      NEW, `ordinal`, the unsupported-`@At` MANUAL path, target exact vs prefix vs near-miss),
+      `normalise_ref` (**its docstring already tabulates six mappings that nothing asserts** —
+      including the owner-elision case its own ⚠️ calls the one that bites), `select_methods`
+      (name-only matches every overload; descriptor matches by prefix) and `Result.status`' ladder.
+      Every quiet case paired with a firing one.
+- [x] ✅ **P2 — gate 12 gains manifest-validation cases.** 37 checks; the floor REJECTED a predicted 40. Same funnel. `owner_of`/`member_of` across
+      all three record families and the `None` fall-through; `name_candidates`' `$`-nesting;
+      `find_member`'s supertype closure with **every class pre-seeded so javap is never spawned** —
+      which is itself the assertion that the walk resolves through `java.lang.Enum`,
+      `java.lang.Object` and a non-MC interface, the three false-ABSENT shapes its docstring
+      records; `control_versions`' §56.4 range logic **and its refusal** when the primary is not in
+      `supported_minecraft_versions`.
+- [x] ✅ **P3 — the mutation matrix. TWO-SIDED, with per-case ATTRIBUTION.** 10/10 and 12/12. Every new case mutated at
+      the **module scope the production code reads** (a rebind inside a function shadows the global
+      — measured, §75), against a **green control**, reading **exit codes** not output. 🔴 **Record
+      WHICH check went red, not just that the run did** — a mutation caught by the floor instead of
+      the case it targets is the third-time-in-this-repo failure §78 hit.
+- [x] ✅ **P4 — verify.** 17 self-tests, 175/1,951/0, gates 7/9/10/11/13 in a fresh clone. Both `--self-test`s exit 0; all 16 other Python `--self-test`s still exit 0;
+      `./gradlew test` **and** `tagBoundTest` (the baseline is the SUM, both **bare**); gates
+      7/9/10/11/13 in a **fresh local clone** (they prefer remote refs).
+- [x] ✅ **P5 — propagated to the three live bands**, `Backport-of:` trailer each. 🔑 **Arm the new
+      cases on `mc/1.21.11`'s OWN copy** — a propagated guard passing only proves the file arrived.
+- [x] ✅ **P6 — caveat-expiry, memory, close.** The pass found FOUR falsified claims, all in `TODO.md`. Grep `README.md` + `wiki/**` for the **symptom**
+      (*"self-test proves the gate"*), not the files edited.
+
+### Rollback
+
+| What | Undo |
+|---|---|
+| The plan + close | `scratchpad/TODO.md.bak-s18` |
+| The two scripts | `scratchpad/{mixin-allow-audit,probe-bands}.py.bak-s18`, and `git revert <sha>` |
+| Memory | `scratchpad/{state,decisions,gotchas}.md.bak-s18` |
+| Mutation runs | `.orig` copies in `scratchpad/`, `cmp`-verified after every run |
+| Propagation | `scratchpad/UNDO-s18-bands.txt` — pre-propagation heads as `git branch -f` lines |
+
+---
+
+### §79 — what it closed, measured
+
+✅ **Both gates re-scoped. The ruling carried from §78 is discharged.**
+
+| Gate | before | after |
+|---|---|---|
+| **2** `mixin-allow-audit.py` | 11 cases, all `loomjar.py` | **+34 checks** over `count_points`, `normalise_ref`, `select_methods`, `Result.status` — 21 quiet, 10 firing, 3 detector-mutation |
+| **12** `probe-bands.py` | 7 cases, all `DECL_RE` | **+37 checks** over `owner_of`, `member_of`, `name_candidates`, `find_member`'s closure, `control_versions` — 24 quiet, 7 firing, 1 refusal, 5 detector-mutation |
+
+⚠️ **The borrowed cases were KEPT, per the ruling.** They are real and falsifiable; they were only
+ever mis-labelled as certifying the gate.
+
+### ✅ Verification — real exit codes, read directly
+
+| Check | Result |
+|---|---|
+| Gate 2 `--self-test` | **exit 0**, 34 checks, every category non-zero |
+| Gate 12 `--self-test` | **exit 0**, 37 checks, **0.2s — no javap spawned**, proving the closure walk runs fully offline |
+| Gate 2 mutation matrix | **10 mutations, 10 CAUGHT**, each attributed to its own named check, green control before and after |
+| Gate 12 mutation matrix | **12 mutations, 12 CAUGHT**, same discipline |
+| 🔑 **ARMED ON THE YARN BAND** | both guards mutated on `mc/1.21.11`'s OWN copies → **both RED**, restored and `cmp`-verified, band tree clean |
+| Both gates, for real | gate 2 `--check` **OK=60 SLICE=1 ZERO=0**; gate 12 `--check` **1466 records resolve on 26.3**. Verdicts UNCHANGED — the self-test moved, the gate did not |
+| All Python `--self-test`s | **17 of 17 exit 0** (16 in §77; gate 13 added the 17th in §78) |
+| Java suite | **175 classes / 1,951 tests / 0 failures / 0 errors**, both tasks **bare**, both producing XML. Identical to §78 — this change touches zero Java |
+| Gate sweep, **fresh local clone** | self-tests first (all exit 0), then gates **7 / 9 / 10 / 11 / 13** all **exit 0**. Gate 7: **0 MISSING** on all three live bands |
+| Caveat-expiry | `README.md` + `wiki/**` **clean** — neither mentions a self-test. The pass found **four** falsified claims, all in `TODO.md`, all annotated above rather than deleted |
+
+### 🔑 What §79 is worth carrying
+
+1. 🔴🔴 **A self-test can be two-sided, floored, mutation-proven — and still certify the wrong
+   thing.** Both of these passed every quality bar §75 and §76 established, and neither touched the
+   computation its gate exists to perform. **The floor was applied to the wrong surface**, and no
+   instrument in this repo could see that, because every instrument asks *"can this fail?"* and
+   none asks *"fail at WHAT?"*. That is why the ruling had to come from reading, not from a gate.
+2. 🔴 **A mutation that CRASHES the harness is not a catch.** M08's first cut deleted
+   `members.setdefault(cls, [])`, which does not disable the negative cache — it makes the next
+   line raise `KeyError`. The run went red at exit 1 **with the target check never executed**.
+   Reading the exit code alone would have scored it CAUGHT. **The attribution column is what
+   caught it**, and it is the fourth time in this repo a mutation has scored against the wrong
+   mechanism.
+3. ⚠️⚠️ **The documented remedy was written down and I still reproduced the defect.** The
+   `Backport-of:` trailer needs a **double** `\n` because `$(...)` strips `%B`'s trailing newline —
+   a row in this very file says so, naming the sixteen commits it already cost. The first
+   propagation used one `\n`, and git's own parser returned **empty** on all six new band commits.
+   Caught by verifying with `%(trailers:...)` **plus the control** that master's source commits
+   return empty. 🔑 **Reading a remedy is not applying it** — the same shape as §78's
+   *"AGENTS.md records X"* written three times.
+4. 🔑 **The floor refused its own author again.** Gate 12's first cut predicted **40** checks; the
+   real executed count is **37**. §78 recorded the identical event at 22-vs-21. A floor that has
+   rejected the person who wrote it is the only kind with evidence it would reject anyone else.
+5. ⚠️ **Official-name fixtures are safe on a yarn band, and that was MEASURED.** Both new case sets
+   carry `net.minecraft...` strings while `mc/1.21.11` is yarn-mapped. They are string fixtures,
+   not resolved symbols, so no translation was required — but a clean cherry-pick onto the yarn
+   band is the **dangerous** outcome, so it was armed rather than assumed.
+6. ⚠️ **The kind loop funnels through `check()` on purpose.** Appending straight to `_FAILURES` is
+   invisible to the counter — the §76 shape still open in `extract-mc-ids.py`. This work did not
+   add a fourth instance of it.
+
+### What §79 did NOT close — carried forward
+
+- [ ] 🔴 **`disassemble()` is still uncovered.** It shells out to javap, so the javap-output PARSER
+      — the thing that turns real bytecode into the `Method` objects the new cases hand-build — has
+      no case at all. Refactoring shipped gate code to suit its test was **declined, not
+      forgotten**. 🔑 The same limit applies to `javap_all` in gate 12. **A hand-built fixture
+      proves the logic, never the reading.**
+- [ ] 🔴 **A waiver's stated REASON is never re-checked** — unchanged from §78.
+- [ ] ⬜ **`src/**` and the mixed commit remain undecidable** — unchanged from §78.
+- [ ] ⬜ **Untouched §76 rows:** the `failures.append()` assertions that bypass `check()` in
+      `extract-mc-ids.py`, and the unasserted prose tally in `gradle-key-identity-audit.py` /
+      `manifest-identity-audit.py`. ✅ §79 **avoided** the shape rather than fixing it.
+- [ ] ⬜ **Untouched §75 rows:** the S2 one-sided sweep, and the `--mutate` second-proof audit.
+- [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **twelfth** consecutive
+      session. ⚠️ **The ahead-count is deliberately not recorded here** — a status row cannot count
+      the commit that records it. Run `git rev-list --left-right --count origin/master...master`.
+
+---
+
+## §80 — THE PUSH: `v1.5.0` to every live band — ✅ DONE
+
+🔴 **The twelve-session push hold is LIFTED** (owner, 2026-09-23, §80 ruling 1). It was re-asked a
+**thirteenth** time and the answer changed, on a stated condition the owner set and this plan
+**measured before acting**: *"if there is no more java code to produce for the actual mod"*.
+
+✅ **The condition was MEASURED, not assumed.** No open row in this file asks for mod `src/` code:
+the only open `src/**` rows are §78/§79's *"the mixed commit remains undecidable"* governance note,
+and the live play-test is owner-only and is not code. All five §68 issues (#14, #15, #16, #17, #19)
+are fixed on `master` and propagated to the three live bands. **17 of the 67 unpushed `master`
+commits touch `src/`** — that is the payload this push delivers to players.
+
+| ruling | answer |
+|---|---|
+| 1 | ✅ **PUSH.** Bump, verify, push `master` + the three live bands, watch the release runs, close the five issues |
+| 2 | ✅ **`mod_version` → `1.5.0-SNAPSHOT`.** A minor bump, not a patch: since `v1.4.0` this line gained per-skill XP-bar show/hide (#15), `/mcstats <skill> keep` (#17.1), the sub-skill descriptions, **and** `master` moved to Minecraft **26.3** |
+
+### Why the bump is mandatory, not hygiene
+
+`v1.4.0` is **published on all nine bands** (`git ls-remote --tags origin`: `mc1.21.1-v1.4.0` …
+`mc26.2-v1.4.0`) and **every branch still reads `mod_version=1.4.0-SNAPSHOT`**. R-t's *"Refuse a
+stale mod_version"* step compares the computed tag against the published one, so pushing without a
+bump fires four release runs and **all four are REFUSED**. §44 already paid for this exact lesson:
+*"the push succeeded, only the release did not."*
+
+### 🔴 Blast radius — this is the destructive part, and it is a RELEASE sweep
+
+Each release run ends in **Delete previous release on this Minecraft line**, which reaps by release
+**ID** on the prefix `mc<minecraft_version>-v*`, keeping only the run's own. Per branch:
+
+| branch | `minecraft_version` | sweep prefix | what it reaps |
+|---|---|---|---|
+| `master` | `26.3` | `mc26.3-v*` | **nothing** — no `26.3` release exists yet |
+| `mc/26.2` | `26.2` | `mc26.2-v*` | 🔴 **`mc26.2-v1.4.0`** — the release `master` published while it *was* `26.2`. Intended: `mc/26.2` takes over that line |
+| `mc/26.1.2` | `26.1.2` | `mc26.1.2-v*` | `mc26.1.2-v1.4.0` |
+| `mc/1.21.11` | `1.21.11` | `mc1.21.11-v*` | `mc1.21.11-v1.4.0` |
+
+⚠️ **R10 is LIVE on this push and the ordering is what defuses it.** `origin/master` still reads
+`minecraft_version=26.2` and local `mc/26.2` reads `26.2` — **two refs on one line**, exactly the
+collision where each release run deletes the other's release. **`master` (26.3) goes out FIRST**, so
+by the time `mc/26.2` releases, the only claimant of the `26.2` line is `mc/26.2` itself.
+
+🔴 **The six ARCHIVED bands are NOT pushed and NOT bumped.** `v1.4.0` is their final release by the
+§69 Phase D ruling. They stay at `1.4.0-SNAPSHOT` locally; gate 11 subtracts the archived set
+(`drop_archived`), so the four live refs agreeing on `1.5.0-SNAPSHOT` is what it checks.
+
+**Recovery, written before the fact:** every pre-push head is in
+`scratchpad/UNDO-s19-heads.txt` as ready-to-run `git branch -f` lines. A push that goes wrong is
+recovered by re-pushing the recorded head, **never** by deleting a tag — ⚠️ deleting a tag DRAFTS
+its release rather than removing it, and a same-tag draft is the orphan §67 spent a session on.
+
+### What I am NOT doing
+
+- **Not** pushing, bumping or re-releasing the six archived bands.
+- **Not** closing any issue before its band's release run is green — §73 ruling 3, unchanged.
+- **Not** touching `src/`. This session ships what is already written and verified.
+- **Not** taking a carried guard row (§75/§76/§78/§79). All of them stay open.
+
+### §80 — verification, measured before the push
+
+✅ **All of this ran BEFORE the push, and every number is read off an artifact, not a summary line.**
+
+| Check | Result |
+|---|---|
+| Java suite | **175 classes / 1,951 tests / 0 failures / 0 errors / 0 skipped** — the SUM of both tasks (`test` 174/1938 + `tagBoundTest` 1/13), read off the JUnit XML. Identical to §79; zero `src/` touched |
+| ⚠️ **`tagBoundTest`'s XML was 29 min STALE** | `./gradlew cleanTest test` runs `:test` **only** — it does not clean or re-run the second task. Caught by reading each file's **mtime**, not its contents: a stale green XML is indistinguishable from a fresh one by counts alone. Re-run bare with `cleanTagBoundTest tagBoundTest` |
+| ⚠️ **My own `EXIT=$?` was wrong** | it captured `tail`'s status through a pipe, not gradle's. The suite verdict comes from the XML and `BUILD SUCCESSFUL`, never from that variable |
+| Python `--self-test` | **17 of 17 exit 0**, run FIRST — "no drift" is also what a broken auditor prints |
+| Gate 2 `mixin-allow-audit --check` | **exit 0, OK=60 SLICE=1**, no injector resolves to 0 sites. Unchanged from §79 |
+| Gate 7 `drift-audit` | **exit 0, 0 MISSING** on all three live bands; 6 archived correctly skipped |
+| Gate 9 `branch-file-identity` | **exit 0, 55 shared paths across 4 branches** |
+| Gate 10 `manifest-identity` | **exit 0**, all four manifests distinct |
+| Gate 11 `gradle-key-identity` | **exit 0** — four live refs agree on `1.5.0-SNAPSHOT`, `minecraft_version` **distinct on every one** |
+| Gate 12 `probe-bands --check` | **exit 0**, 1466 records resolve on 26.3 |
+| Gate 13 `build-gradle-identity` | **exit 0**, residue 427 on all four |
+| Build | **BUILD SUCCESSFUL**, `mcmmo-1.5.0-SNAPSHOT+mc26.3.jar` produced |
+| Caveat-expiry | **clean, no edit needed.** All 22 `v1.4.0` mentions in `README.md`/`wiki/` describe the **archived** bands, whose final release genuinely IS v1.4.0. The live table uses `mcmmo-<version>+mc26.3.jar` — the version-free placeholder this repo already arrived at, so a bump rots nothing |
+
+⚠️ **Gates 1, 3, 4, 5, 6 were NOT run** — they need a jar and a live server per version. Not claimed.
+⚠️ **Every gate above compared FOUR branches.** None exited 2, and exit 2 is not a pass.
+
+### The push — `master` FIRST, and the precondition RE-READ on the remote
+
+`git push --dry-run` first: four fast-forwards, no force, `mc/26.2` new. Then **`master` alone**,
+then `origin/master` was **re-read** (`git show origin/master:gradle.properties`) to confirm it
+reported `26.3` — the R10 precondition **measured on the remote**, not inferred from having just
+pushed it. Only then did the three bands go.
+
+```
+cee957c16..f65ee3bbc  master      (+69)
+ * [new branch]       mc/26.2
+ec07d2ab9..bce931ad4  mc/26.1.2   (+32)
+06a5c1430..a0f3e261e  mc/1.21.11  (+32)
+```
+
+✅ **The bump was NECESSARY, and CI proved it rather than the argument doing so:** master's run
+shows **`Refuse a stale mod_version` → success**. At `1.4.0-SNAPSHOT` that step refuses, and all
+four runs would have died there exactly as §44's did.
+
+🔴 **Three issues auto-closed ON PUSH, and only two of them meant to.** #15 and #19 closed on a
+deliberate `Closes #N` trailer in their own fix commit. **#14 did not** — its fix `a790720a6`
+carries no closing keyword. It was closed by `025588517`, a `docs(74)` commit whose body says
+*"§73 **fixed #14** the same day"*. GitHub matches closing keywords **anywhere in a commit body**,
+including prose describing history in the past tense — and this repo's commit bodies are
+narrative by convention, so the construction recurs. The outcome matched the §73 ruling-3 intent,
+so nothing was reverted; the hazard is in `.agent/memory/gotchas.md` and the owed reply was posted
+by hand. 🔑 **The tell is that the close is attributed to a commit unrelated to the fix.**
+
+### The steps
+
+- [x] **80.1** Bump `mod_version` → `1.5.0-SNAPSHOT` on `master`; commit alone.
+- [x] **80.2** Propagate 80.1 to `mc/26.2`, `mc/26.1.2`, `mc/1.21.11` with a `Backport-of:` trailer.
+      ⚠️ **The trailer needs a DOUBLE `\n`** — `$(...)` strips `%B`'s trailing newline and §79
+      reproduced that defect *after reading the remedy*. Verify with `%(trailers:...)`, **plus the
+      control** that master's own commit returns empty.
+- [x] **80.3** Build + full suite on `master`. Baseline to beat: **175 classes / 1,951 tests / 0
+      failures**, both test tasks bare. ⚠️ `./gradlew test` is TWO tasks — the total is the SUM.
+- [x] **80.4** All Python `--self-test`s (17 expected, exit 0 each) — **run these FIRST**, because
+      "no drift" is also what a broken auditor prints.
+- [x] **80.5** Gates 7 / 9 / 10 / 11 / 13 in a **fresh local clone**. ⚠️ All of them prefer
+      **remote** refs, so a pre-push run in this working copy grades the stale remote.
+- [x] **80.6** 🔴 Push `master` FIRST (R10), then `mc/26.2`, `mc/26.1.2`, `mc/1.21.11`.
+- [x] **80.7** Watch all four release runs to green. ⚠️ `github` MCP is **down this session**; the
+      `gh` CLI does the work — **say which path ran**.
+- [x] **80.8** Close #14, #15, #16, #17, #19 once their runs are green. #14 also owes its reporter a
+      reply — it is the only outside bug report of the five.
+- [x] **80.9** Caveat-expiry pass, `.agent/memory/`, and close this section with the proof matrix.
+
+### §80 — CLOSED. `v1.5.0` is live on all four live bands
+
+✅ **All four release runs GREEN**, confirmed two ways (four `gh run watch --exit-status` exit
+codes, then a fresh `gh run list`). Per-run step conclusions read directly, not inferred from the
+run's overall verdict:
+
+| branch | stale-version gate | publish | sweep | R10 collision check |
+|---|---|---|---|---|
+| `master` (26.3) | ✅ success | ✅ | ✅ | ✅ |
+| `mc/26.2` | ✅ success | ✅ | ✅ | ✅ |
+| `mc/26.1.2` | ✅ success | ✅ | ✅ | ✅ |
+| `mc/1.21.11` | ✅ success | ✅ | ✅ | ✅ |
+
+**The release state matches the blast-radius table exactly — measured, not assumed:**
+
+- **4 new** at `v1.5.0`: `mc26.3`, `mc26.2`, `mc26.1.2`, `mc1.21.11`, each carrying **both** the
+  mod jar and its sources jar.
+- **6 archived SURVIVED at `v1.4.0`**: `mc1.21.1`, `mc1.21.3`, `mc1.21.4`, `mc1.21.5`, `mc1.21.8`,
+  `mc1.21.10` — untouched, because they were never pushed. Exactly the §69 Phase D contract.
+- **3 superseded reaped**: the live bands' old `v1.4.0` releases are gone, replaced in place.
+- **ZERO drafts.** `isDraft=false` on all ten — the §67 same-tag orphan did not recur.
+
+**Issue queue: EMPTY.** #14, #15, #16, #19 and #17 all closed. #16 and #17 were closed with their
+**won't-fix** parts stated in the comment (16.1 `master`-to-docs, cancelled under R-a; 17.9 hotbar
+overlap) rather than left looking uniformly done. #14's reporter got the reply your 2026-09-21
+comment promised — they are on `1.21.11`, a live band, so `v1.5.0` reaches them.
+
+### 🔴 NEW DEFECT, found only because the release state was read rather than trusted
+
+**The "Latest" badge is assigned by a RACE.** After the four parallel runs, `mc26.2-v1.5.0` held
+`isLatest=true` and `mc26.3-v1.5.0` did not — **the second-newest band was the headline release.**
+`release.yml` never sets `make_latest`, so GitHub falls back to *"latest = most recently
+published"*. Measured: `26.3` published at `07:21:12`, `26.2` at `07:21:23`. **Eleven seconds
+decided which jar the Releases page offers**, and `/releases/latest` is a real URL players follow.
+
+🔑 **This is the repo's signature shape: a player-facing wrong answer that EVERY structural gate
+calls green.** All four runs succeeded, gates 2/7/9/10/11/12/13 all exited 0, and **nothing in
+this repo reads release metadata at all.**
+
+- ✅ **Symptom fixed now:** `gh release edit mc26.3-v1.5.0 --latest`.
+- [ ] 🔴 **Cause NOT fixed, deliberately.** `release.yml` needs `make_latest` pinned to the newest
+      band — but that file sits **inside its own `paths:` filter** and under gate 9's byte-identity
+      rule, so the change fires four more release runs and must reach three bands. It is its own
+      piece of work, not a tail-end edit after a ship.
+- [ ] ⬜ **Add to the release procedure:** `gh release list --json tagName,isLatest` after every
+      multi-band push. One command, and no gate performs it.
+
+### 🔴 The other new hazard — an issue closed by PROSE
+
+#15 and #19 closed on a deliberate `Closes #N` trailer in their own fix commit. **#14 did not** —
+its fix `a790720a6` carries no closing keyword. It was closed by `025588517`, a `docs(74)` commit
+whose body reads *"§73 **fixed #14** the same day"*. GitHub matches closing keywords **anywhere in
+a commit body**, including a past-tense sentence describing history — and narrative commit bodies
+are this repo's house style, so the construction will recur.
+🔑 **The tell: the close is attributed to a commit that has nothing to do with the fix.**
+`gh api repos/<r>/issues/<n>/timeline --jq '[.[]|select(.event=="closed")][-1].commit_id'`
+**Convention going forward:** write `issue 14` or `GH-14` in narrative prose; reserve `#N` for the
+deliberate `Closes #N` trailer.
+
+### What §80 did NOT close — carried forward
+
+- [ ] 🔴 **`release.yml`'s `make_latest`** — the new row above.
+- [ ] 🔴 **`disassemble()` / `javap_all` are still uncovered** — unchanged from §79.
+- [ ] 🔴 **A waiver's stated REASON is never re-checked** — unchanged from §78.
+- [ ] ⬜ **`src/**` and the mixed commit remain undecidable** — unchanged from §78.
+- [ ] ⬜ **Untouched §76 rows:** the `failures.append()` assertions that bypass `check()`, and the
+      unasserted prose tallies.
+- [ ] ⬜ **Untouched §75 rows:** the S2 one-sided sweep, and the `--mutate` second-proof audit.
+- [ ] 🔴 **THE LIVE PLAY-TEST — owner only. Now the oldest debt by a wide margin**, and for the
+      first time there is no push hold standing in front of it.
+- ✅ **The push hold row is GONE from this list.** Thirteen sessions, lifted 2026-09-23.
+
+⚠️ **Gates 1, 3, 4, 5, 6 were NOT run this session** — they need a jar and a live server per
+version. `v1.5.0` is built, released and structurally verified; it is **not** boot- or
+gameplay-smoked. Not claimed. That is the honest state of the ship.
+
+
+## §81 — `/mcstats <skill> keep` floods chat: cumulate, flush every 5s — ✅ DONE (v1.5.1 SHIPPED)
+
+**Tier 1.** Owner report (2026-09-23): *"the /mcstats ability keep prints every single xp gain, lets
+instead cumulate and print every 5 seconds"*. Then bump to `1.5.1` and push for a fresh release.
+
+### The defect
+
+`McMMOPlayer#applyXpGain` calls `sendXpChatUpdate` on **every** gain. Mining is one gain per block,
+combat is one gain **per hit** (see `combat-xp-model-decision`), so a kept skill emits a chat line
+several times a second. The feature is unusable for exactly the skills a player would turn it on for.
+
+### The change
+
+| file | change |
+|---|---|
+| `datatypes/player/McMMOPlayer.java` | `applyXpGain` merges the gain into a per-skill `EnumMap` instead of sending; new `flushXpChat()` emits **one line per skill** and clears; `toggleXpChat` OFF **drops** that skill's pending |
+| `runnables/player/XpChatFlushTask.java` (new) | fan `flushXpChat()` across `UserManager.getPlayers()` — same shape as `ClearRegisteredXPGainTask` |
+| `fabric/McMMOMod.java` | `scheduler.runTimer(new XpChatFlushTask(), 100, 100)` — 100 ticks = 5 s at 20 tps, named constant, cancelled by the existing `cancelAll()` |
+
+🔑 **A scheduler task, not a lazy "has 5 s passed?" check on the next gain.** A lazy check cannot
+flush the **last** window: a player who mines for three seconds and stops would never see those
+gains at all. The tail is precisely the case a player watches for.
+
+🔑 **The locale string is unchanged.** `Commands.XPGain.Keep=&6{0} &a+{1} XP &7({2}/{3}) &eLv.{4}`
+already reads correctly for a window total, and the trailing three placeholders are read off the
+profile **at flush time**, so the line still agrees with `/mcstats` rather than leading it.
+
+⚠️ **Toggling OFF discards, it does not flush.** A line arriving *after* `Commands.XPGain.Keep.Off`
+said "stopped printing" would read as a bug. Tested.
+
+⚠️ **An empty window sends nothing.** A task that fires every 5 s and prints `+0.0 XP` forever is a
+worse flood than the one being fixed. Tested.
+
+### Tests — each fails if the change is reverted
+
+- `keepCumulatesAndPrintsOneLinePerFlush` — three gains, `verify(never()).sendMessage` **before**
+  the flush (this is the assertion the old per-gain code fails), then exactly **one** line whose
+  `+N` equals the profile's stored delta. The delta is **measured**, not hardcoded: the early-game
+  boost and the config multipliers land before storage, so a literal would assert the wrong number.
+- `togglingOffDropsThePendingWindow` — gain, toggle off, flush → silent.
+- `flushWithNothingPendingSaysNothing` — flush twice → one line, then silence.
+- `XpChatFlushTaskTest#flushesEveryTrackedPlayer` — the fan-out, mirroring
+  `ClearRegisteredXPGainTaskTest`.
+
+### What I am NOT doing
+
+- **Not** making the interval configurable. One number, one constant; a knob nobody asked for is a
+  knob nobody tunes.
+- **Not** touching the XP bar, the boss bar, or the notification path — `keep` is the only flood.
+- **Not** persisting the toggle (unchanged from #17.1's reasoning).
+- **Not** touching `release.yml`'s `make_latest` (§80's carried row). ⚠️ That means this release
+  **inherits the same race** — the `Latest` badge must be re-read after the runs and corrected by
+  hand if it lands on the wrong band.
+
+### The release — `1.5.1`, patch
+
+A patch bump: one behaviour fix, no new surface. Same four LIVE bands (`master` 26.3, `mc/26.2`,
+`mc/26.1.2`, `mc/1.21.11`), same R10 ordering discipline, six archived bands untouched at `v1.4.0`.
+
+🔴 **The `src/` change needs TRANSLATION for `mc/1.21.11`**, which is yarn-mapped. `McMMOMod.java`
+and the new task touch no renamed MC symbol, but the cherry-pick is verified by **building** the
+band, not by a clean apply.
+
+### §81 — what happened, measured
+
+✅ **SHIPPED. `v1.5.1` on all four live bands**, four release runs green by exit code **and** by
+per-step conclusion, release state read back rather than inferred.
+
+| | |
+|---|---|
+| releases now | **10**: 4 live at `v1.5.1` + **6 archived surviving at `v1.4.0`**, zero drafts |
+| reaped | the four lines' own `v1.5.0`, superseded in place |
+| suite (master) | **176 classes / 1,957 tests / 0 failures** — the SUM of `test` (175/1944) + `tagBoundTest` (1/13). Exactly **+1 class, +6 tests** against §80's 175/1,951 |
+| bands built | all three, each with the six new tests **present and passing** — not assumed from a clean cherry-pick |
+
+🔴🔴 **THE `Latest` BADGE RACE FIRED AGAIN, AND WORSE.** §80 recorded it as a known open cause and
+this release proved it is not self-correcting: `mc1.21.11-v1.5.1` published **32 seconds** after
+`mc26.3` and took `isLatest`, so `/releases/latest` was handing every player the **oldest** band's
+jar — 1.21.11, four bands back. Last time the winner was one band off; this time it was the worst
+possible one. Symptom fixed again by hand (`gh release edit mc26.3-v1.5.1 --latest`, then re-read).
+🔑 **A symptom fixed twice is a cause that must be fixed.** The §80 row is no longer "known
+open" — it is now **recurring and measured**, and the next release will do the same thing.
+
+🔴 **`extract-mc-surface.py --check` was RED on `master`, and `v1.5.0` SHIPPED THAT WAY.**
+`a790720a6` (the #14 fix) added `Blocks.CRAFTING_TABLE`; the manifest was last regenerated at
+`d6761338c`, which `git merge-base --is-ancestor` proves is an **ancestor** of that fix. So the two
+records were never captured. Regenerated here — the diff is exactly the delta `--check` predicted,
++2 records, 0 removed, nothing else moved. ⚠️ **The gate was not in §80's run list**, which is the
+whole reason nothing reported it: a gate nobody runs is not a gate.
+⚠️ **The three live bands are red on this gate for the same reason** and each needs its **own**
+regeneration — `mc-surface.txt` is a per-band generated fact, so it must NOT be cherry-picked and
+gate 10 exists to catch exactly that. Carried below; it needs a build per band.
+
+⚠️ **`extract-mc-surface.py` warns `expected 42 mixin files, found 41`.** The `42` was hardcoded in
+`6be971951`, the first probe-tooling commit; `d6761338c` deleted a mixin in the 26.3 move. It is a
+WARN, not a failure, and it has been crying wolf ever since. ⚠️ A hardcoded count is the wrong shape
+here anyway — a band may legitimately carry a different number.
+
+### 🔑 The mutation harness found TWO of my own tests wrong, and review had not
+
+Neither was caught by reading. Both were caught by mutating the shipping code and **counting which
+tests noticed** — and both are the same shape: **two guards masking each other**.
+
+1. **`togglingOff…` flushed between the two toggles.** The flush clears unconditionally, so the
+   flush in the middle cleared the window by itself and the case passed against a `toggleXpChat`
+   that discards **nothing**. Off-then-on **inside one window** — no flush between — is the only
+   sequence where the discard is load-bearing. That is also the sequence a player produces by
+   running the command twice to check it took.
+2. **`aZeroTotalIsNotPrinted` drove a PVE zero, which is not zero.** The early-game boost is a flat
+   top-up, so `applyXpGain(MINING, 0f, PVE, …)` arrives as **`+51.0`**. The case was asserting the
+   guard from an input the guard never sees. It now goes through `XPGainReason.COMMAND` — the one
+   reason the modifiers leave untouched — **with the arrival asserted as zero**, so it cannot go
+   vacuous again.
+
+🔑 **And one guard was DELETED rather than kept.** A flush-time `isXpChatEnabled` re-check was
+written; the mutation showed **no test could see its removal**, because an entry only exists for a
+skill that was kept when the XP landed and `toggleXpChat` deletes it on the way off. It is
+unreachable. Kept, it would have been decoration — refactored away later with nothing going red.
+
+⚠️⚠️ **The harness lied first, and the lie read as five survivors.** Its XML scraper used
+`<testcase …>(.*?)</testcase>`, but a **passing** testcase is written **self-closing** with no
+closing tag — so each passing case greedily swallowed every element up to the next failing one. The
+control (all passing, no `</testcase>` anywhere in the file) backtracked correctly and read **52**,
+while every mutation run under-counted and five genuine catches were scored **SURVIVED**. 🔑 **The
+count-mismatch check is what caught it**, not the survivor list: the counts came back 8, 18, 6, 25,
+19 against a control of 52, and a harness whose test count moves under mutation is reporting on
+something other than the mutation. Replaced with `xml.etree`.
+
+⚠️ **`tagBoundTest` does not exist outside `master`** — it is a declared per-band `build.gradle`
+difference under gate 13. On a band, `test` **is** the whole suite, and `cleanTagBoundTest` fails
+with *"Task not found"*. That is not a red band.
+
+### §81 — gates run
+
+| Gate | Result |
+|---|---|
+| Self-tests | **5 of 5 exit 0**, run FIRST |
+| 2 `mixin-allow-audit --check` | exit 0, `SLICE=1 OK=60`, no injector resolves to 0 sites |
+| `extract-mc-surface --check` | **RED → regenerated → exit 0.** See above |
+| 7 `drift-audit` | exit 0, **0 MISSING** on all three live bands; 6 archived correctly skipped |
+| 9 `branch-file-identity` | exit 0, **55 shared paths across 4 branches** |
+| 10 `manifest-identity` | exit 0, all four manifests distinct |
+| 11 `gradle-key-identity` | exit 0 — four live refs agree on `1.5.1-SNAPSHOT`, `minecraft_version` distinct on every one |
+| 12 `probe-bands --check` | exit 0, 1466 records resolve on 26.3 |
+| 13 `build-gradle-identity` | exit 0, residue 427 |
+| Java suite | 176 classes / 1,957 tests / 0 failures on `master`; all three bands green with the new tests present |
+| Caveat-expiry | `wiki/Commands.md` said *"a running chat readout"*, which reads as **broken** at one line per five seconds. Now states the cadence. It is under the identity guard, so it propagated with the fix |
+
+⚠️ **Every cross-branch gate compared FOUR branches and none exited 2**, run inside
+`git clone --local --no-hardlinks` so the remote-preferring ones graded these commits and not the
+stale `origin`. ⚠️ **Gates 1, 3, 4, 5, 6 were NOT run** — they need a jar and a live server per
+version. `v1.5.1` is built, released, suite-green on all four branches and structurally verified;
+it is **not** boot- or gameplay-smoked. Not claimed.
+
+### What §81 did NOT close — carried forward
+
+- [ ] 🔴🔴 **`release.yml`'s `make_latest`** — **recurring, no longer merely known.** Twice now the
+      badge has gone to the wrong band, the second time to the oldest one. Still costly to fix:
+      `release.yml` is inside its own `paths:` filter and under gate 9, so the change fires four
+      release runs and must reach three bands.
+- [ ] 🔴 **The three live bands' `mc-surface.txt` are stale** — same `CRAFTING_TABLE` cause. Needs a
+      build per band; must be regenerated **per band**, never cherry-picked.
+- [ ] ⚠️ **`extract-mc-surface.py`'s hardcoded `expected 42 mixin files`** — stale since the 26.3
+      move, and the wrong shape for a per-band fact.
+- [ ] 🔴 **THE LIVE PLAY-TEST — owner only.** Still the oldest debt.
+- [ ] 🔴 **`disassemble()` / `javap_all` still uncovered** — unchanged from §79.
+- [ ] 🔴 **A waiver's stated REASON is never re-checked** — unchanged from §78.
+- [ ] ⬜ **`src/**` and the mixed commit remain undecidable** — unchanged from §78.
+- [ ] ⬜ **Untouched §75/§76 rows** — unchanged.
