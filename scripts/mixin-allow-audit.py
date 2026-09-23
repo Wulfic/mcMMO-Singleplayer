@@ -337,6 +337,279 @@ def audit(jar: Path, root: Path) -> list[Result]:
     return results
 
 
+
+# --------------------------------------------------------------------------------------------
+# Self-test: prove the COUNTER can count, and say HOW MUCH of it ran
+#
+# 🔴 SECTION 79 -- WHY THIS EXISTS, WHEN --self-test ALREADY PASSED.
+# Until now `--self-test` ran `selftest_jar_selection()` and `selftest_naming()` and nothing else:
+# 11 cases, every one of them about `loomjar.py`. Both are real, both are two-sided, both were
+# floored in section 75 -- and both certify the component this gate USES rather than the
+# computation this gate IS. A jar selector proving it picks the right jar says nothing about
+# whether the thing that reads the jar can count.
+#
+# 🔑 That matters here more than in most gates, because of what --check claims:
+# "A MISMATCH against a shipped, boot-proven allow means THIS SCRIPT is wrong, not Minecraft."
+# That sentence is a statement about the counter's trustworthiness, and no self-test had ever
+# exercised the counter. Section 32 already found a mixin bound to the WRONG LIVE METHOD with
+# every structural gate green; `allow = N` is the instrument that is supposed to see that, and an
+# unexercised instrument is the shape this repo keeps paying for.
+#
+# Everything below runs OFFLINE against hand-built `Method` objects. That is deliberate and it is
+# also the limit: `disassemble()` shells out to javap, so the javap-output PARSER is still
+# uncovered here. Refactoring it to take text would be a production change to a shipped gate made
+# to suit its test, so it is recorded as a limit rather than taken. See TODO section 79.
+# --------------------------------------------------------------------------------------------
+_CHECKS = 0
+_FAILURES: list[str] = []
+_BY_KIND: dict[str, int] = {}
+
+
+def check(condition: bool, label: str) -> None:
+    """Every assertion below goes through here, so the count cannot drift from reality.
+
+    The per-kind tally is DERIVED from the label prefix rather than written into the PASS line by
+    hand -- a hardcoded prose tally beside a computed floor is a number with nothing asserting it.
+    Same funnel as `build-gradle-identity-audit.py` (section 78); copied deliberately rather than
+    re-invented, so the two read the same when someone audits both.
+    """
+    global _CHECKS
+    _CHECKS += 1
+    kind = {"Q": "quiet", "F": "firing", "M": "detector-mutation"}.get(label[:1], "other")
+    _BY_KIND[kind] = _BY_KIND.get(kind, 0) + 1
+    if not condition:
+        _FAILURES.append(label)
+
+
+def _m(*code: tuple[str, str], name: str = "tick", desc: str = "()V") -> Method:
+    """A Method built from an instruction list -- what `disassemble()` would have produced."""
+    return Method(name=name, desc=desc, code=list(code))
+
+
+# One realistic method body, reused so every count is checked against a FIXED denominator. Two
+# invokes on the owner, one invoke on another owner sharing the callee's name and descriptor (the
+# near-miss shape), one field read, one field write, one `new`, and two return paths.
+_OWNER = "net/minecraft/world/entity/Wolf"
+_BODY = (
+    ("aload_0", ""),
+    ("invokevirtual", "Method " + _OWNER + ".setTamed:(Z)V"),
+    ("getfield", "Field " + _OWNER + ".health:F"),
+    ("invokevirtual", "Method net/minecraft/world/entity/Cat.setTamed:(Z)V"),
+    ("ifeq", ""),
+    ("return", ""),
+    ("new", "class net/minecraft/world/item/ItemStack"),
+    ("putfield", "Field " + _OWNER + ".health:F"),
+    ("invokestatic", "Method setTamed:(Z)V"),
+    ("return", ""),
+)
+
+
+def selftest_counting() -> int:
+    saved_return = set(RETURN_OPS)
+
+    # -- normalise_ref: the six mappings its own docstring tabulates and nothing asserted --------
+    check(
+        normalise_ref("Method " + _OWNER + ".setTamed:(Z)V", _OWNER)
+        == "L" + _OWNER + ";setTamed(Z)V",
+        "Q1 a plain Method comment normalises to mixin descriptor form",
+    )
+    check(
+        normalise_ref("InterfaceMethod " + _OWNER + ".setTamed:(Z)V", _OWNER)
+        == "L" + _OWNER + ";setTamed(Z)V",
+        "Q2 InterfaceMethod normalises identically to Method",
+    )
+    # ⚠️ The case the docstring calls "the one that bites": javap OMITS the owner when it equals
+    # the class being disassembled, so a naive parser loses it and never matches a mixin target
+    # that names the owner explicitly.
+    check(
+        normalise_ref("Method setTamed:(Z)V", _OWNER) == "L" + _OWNER + ";setTamed(Z)V",
+        "Q3 an ELIDED owner is restored from the class being disassembled",
+    )
+    check(
+        normalise_ref('Method ' + _OWNER + '."<init>":()V', _OWNER)
+        == "L" + _OWNER + ";<init>()V",
+        "Q4 a constructor's quoted <init> loses the quotes, not the angle brackets",
+    )
+    check(
+        normalise_ref("Field " + _OWNER + ".health:F", _OWNER) == "L" + _OWNER + ";health:F",
+        "Q5 a Field keeps the ':' separator a method drops",
+    )
+    check(
+        normalise_ref("class " + _OWNER, _OWNER) == "L" + _OWNER + ";",
+        "Q6 a bare class comment becomes a type descriptor",
+    )
+    # 🔴 The else-branch. A comment shape this function does not know must return EMPTY, because
+    # `count_points` filters on `if op in ops and comment` and then compares strings -- a made-up
+    # non-empty answer would silently JOIN the match set and inflate a count.
+    check(
+        normalise_ref("SomeFutureConstantKind foo.bar", _OWNER) == "",
+        "F1 an unrecognised comment kind returns EMPTY rather than a guessed reference",
+    )
+
+    # -- count_points: the injection-point counting this gate exists to do -----------------------
+    body = _m(*_BODY)
+    check(count_points(AtSpec(value="HEAD"), body, _OWNER)[0] == 1, "Q7 HEAD selects one point")
+    check(count_points(AtSpec(value="TAIL"), body, _OWNER)[0] == 1, "Q8 TAIL selects one point")
+    check(
+        count_points(AtSpec(value=""), body, _OWNER)[0] == 1,
+        "Q9 an empty @At value defaults to HEAD's single point",
+    )
+    check(
+        count_points(AtSpec(value="RETURN"), body, _OWNER)[0] == 2,
+        "Q10 RETURN counts EVERY return op, not one",
+    )
+    # 🔑 The ordinal short-circuit is the one branch that must IGNORE the body. An @At carrying an
+    # explicit ordinal selects exactly one instruction by construction, so a counter that fell
+    # through to the RETURN arm here would report 2 and grade a correct `allow = 1` a MISMATCH.
+    check(
+        count_points(AtSpec(value="RETURN", ordinal=1), body, _OWNER)[0] == 1,
+        "Q11 an explicit ordinal selects exactly one point, whatever the body holds",
+    )
+    check(
+        count_points(AtSpec(value="INVOKE"), body, _OWNER)[0] == 3,
+        "Q12 INVOKE with no target counts every invoke op",
+    )
+    check(
+        count_points(AtSpec(value="FIELD"), body, _OWNER)[0] == 2,
+        "Q13 FIELD counts field access only -- invokes must not leak in",
+    )
+    check(
+        count_points(AtSpec(value="NEW"), body, _OWNER)[0] == 1,
+        "Q14 NEW counts object creation only",
+    )
+    # The owner-elided invokestatic normalises onto the owner, so an exact target matches TWO of
+    # the three invokes -- and must not match the Cat one, which shares name and descriptor.
+    check(
+        count_points(
+            AtSpec(value="INVOKE", target="L" + _OWNER + ";setTamed(Z)V"), body, _OWNER
+        )[0]
+        == 2,
+        "Q15 an exact target matches by owner AND signature, excluding a same-name foreign owner",
+    )
+    # Mixin matches a target descriptor by PREFIX, which is why truncated selectors work at all.
+    check(
+        count_points(
+            AtSpec(value="INVOKE", target="L" + _OWNER + ";setTamed("), body, _OWNER
+        )[0]
+        == 2,
+        "Q16 a TRUNCATED target still matches, by descriptor prefix",
+    )
+    # 🔴 The near miss. A wrong owner must read as a DIAGNOSIS, not a bare zero -- this is the
+    # shape that tells a band's maintainer "the method moved" instead of "the method is gone".
+    n_cnt, n_note = count_points(
+        AtSpec(value="INVOKE", target="Lnet/minecraft/world/entity/Sheep;setTamed(Z)V"),
+        body,
+        _OWNER,
+    )
+    check(n_cnt == 0, "F2 an unmatchable target counts ZERO -- the status that fails --check")
+    check(
+        n_note == "0 matches; 3 same-name/desc with a DIFFERENT owner",
+        "F3 a near miss names how many same-signature calls a DIFFERENT owner has",
+    )
+    check(
+        count_points(AtSpec(value="CONSTANT"), body, _OWNER)[0] == -1,
+        "F4 an unsupported @At value returns -1 (MANUAL), never a confident 0 or 1",
+    )
+
+    # -- select_methods: mixin's MemberInfo semantics ---------------------------------------------
+    overloads = (
+        _m(name="hurt", desc="(Lnet/minecraft/DamageSource;F)Z"),
+        _m(name="hurt", desc="(F)Z"),
+        _m(name="tick", desc="()V"),
+    )
+    check(
+        len(select_methods(["hurt"], overloads)) == 2,
+        "Q17 a name-only selector matches EVERY overload of that name",
+    )
+    check(
+        len(select_methods(["hurt(F)Z"], overloads)) == 1,
+        "Q18 a descriptor narrows the selector to one overload",
+    )
+    check(
+        len(select_methods(["hurt(Lnet/minecraft/Damage"], overloads)) == 1,
+        "Q19 a TRUNCATED descriptor still resolves, by prefix",
+    )
+    check(
+        len(select_methods(["L" + _OWNER + ";tick()V"], overloads)) == 1,
+        "Q20 an explicit owner prefix is dropped before matching",
+    )
+    check(
+        select_methods(["noSuchMethod"], overloads) == [],
+        "F5 a selector matching nothing resolves EMPTY, not to an arbitrary method",
+    )
+
+    # -- Result.status: the ladder --check actually reads ------------------------------------------
+    def _r(computed: int, declared: int | None, sliced: bool = False) -> str:
+        return Result(
+            file="f",
+            line=1,
+            kind="Inject",
+            handler="h",
+            declared=declared,
+            computed=computed,
+            per_target={},
+            notes=[],
+            sliced=sliced,
+        ).status
+
+    check(_r(2, 2) == "OK", "Q21 a declared allow matching the computed count is OK")
+    check(_r(3, 2) == "MISMATCH", "F6 a declared allow the body does not support is MISMATCH")
+    check(_r(0, 1) == "ZERO", "F7 an injector binding to nothing is ZERO, not MISMATCH")
+    check(_r(-1, 1) == "MANUAL", "F8 MANUAL outranks every other verdict")
+    check(_r(2, None) == "MISSING", "F9 an injector with no declared allow is MISSING")
+    check(_r(2, 2, sliced=True) == "SLICE", "F10 a sliced injector is SLICE, never a silent OK")
+
+    # -- DETECTOR MUTATIONS: prove the cases above are bound to the real tables ---------------------
+    # 🔴 MUTATE AT THE SCOPE THE PRODUCTION CODE READS. `count_points` resolves RETURN_OPS as a
+    # module global, so rebinding a local of the same name inside this function would SHADOW it and
+    # the mutation would never reach the code under test -- a mutation at the wrong scope is a
+    # DIFFERENT mutation, and this repo has already scored a run that way. The set is therefore
+    # mutated IN PLACE, on the very object `count_points` dereferences.
+    RETURN_OPS.clear()
+    RETURN_OPS.update({"ireturn"})
+    check(
+        count_points(AtSpec(value="RETURN"), body, _OWNER)[0] == 0,
+        "M1 emptying the return-op table must change the count -- Q10 reads the real table",
+    )
+    RETURN_OPS.clear()
+    RETURN_OPS.update(saved_return)
+    check(
+        count_points(AtSpec(value="RETURN"), body, _OWNER)[0] == 2,
+        "M2 the return-op table is restored, and the count comes back",
+    )
+    check(RETURN_OPS == saved_return, "M3 the module table is identical after the mutation")
+
+    # -- THE FLOOR ON WHAT RAN ----------------------------------------------------------------------
+    # 🔴 An EXACT count of checks that EXECUTED, not `len(cases)` and not `>=`. A floor written over
+    # a declared list still reads its full length when the loop body runs zero times; this one moves
+    # the moment a check is deleted or an exception unwinds past one.
+    expected = 34
+    if _CHECKS != expected:
+        print(
+            "SELF-TEST BROKEN: " + str(_CHECKS) + " checks executed, expected exactly "
+            + str(expected) + ". A case was added, deleted, or never reached -- fix the count "
+            "deliberately.",
+            file=sys.stderr,
+        )
+        return 1
+    if _FAILURES:
+        print(f"SELF-TEST FAILED: {len(_FAILURES)} of {_CHECKS} checks", file=sys.stderr)
+        for f in _FAILURES:
+            print(f"    {f}", file=sys.stderr)
+        return 1
+    for required in ("quiet", "firing", "detector-mutation"):
+        if _BY_KIND.get(required, 0) == 0:
+            print(f"SELF-TEST BROKEN: zero {required} checks executed.", file=sys.stderr)
+            return 1
+    tally = ", ".join(f"{n} {kind}" for kind, n in sorted(_BY_KIND.items()))
+    print("=== SELF-TEST: injection-point counting ===")
+    print(
+        f"  PASS -- {_CHECKS} checks executed ({tally}): the counter reproduces a hand-built\n"
+        f"          body, every refusal verdict fires, and the tables are the ones it reads."
+    )
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--mc", default=None, help="Minecraft version (default: gradle.properties)")
@@ -360,7 +633,7 @@ def main() -> int:
         # Both, and the naming one is not optional here: this gate resolves a jar and then reads
         # per-name selectors out of it, so "which naming did I get" is the same question the
         # selection self-test asks, one step later.
-        return selftest_jar_selection() or selftest_naming()
+        return selftest_jar_selection() or selftest_naming() or selftest_counting()
 
     mc = args.mc or gradle_prop("minecraft_version")
     jar = find_jar(mc)
