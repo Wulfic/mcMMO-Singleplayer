@@ -31,11 +31,13 @@ import com.gmail.nossr50.util.player.PlayerLevelUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 
 /**
  * Exercises the Phase 10.1 stripped {@link McMMOPlayer} god-object MC-free. The player handle is a
@@ -557,6 +559,7 @@ class McMMOPlayerTest {
         assertTrue(mmoPlayer.toggleXpChat(PrimarySkillType.MINING), "first toggle turns it ON");
 
         mmoPlayer.beginXpGain(PrimarySkillType.MINING, 50f, XPGainReason.PVE, XPGainSource.SELF);
+        mmoPlayer.flushXpChat();
         // The line names the skill and carries the STORED gain. Not asserted against the 50f passed
         // in: the early-game boost and the config multipliers both land before storage, so pinning
         // the raw input would be asserting the wrong number and would break on any tuning change.
@@ -566,6 +569,7 @@ class McMMOPlayerTest {
         // consulted rather than the echo being unconditional. Counted rather than matched on text,
         // so it cannot pass merely because the needle was spelled differently.
         mmoPlayer.beginXpGain(PrimarySkillType.SWORDS, 50f, XPGainReason.PVE, XPGainSource.SELF);
+        mmoPlayer.flushXpChat();
         verify(player, times(1)).sendMessage(anyString());
     }
 
@@ -576,6 +580,126 @@ class McMMOPlayerTest {
         assertFalse(mmoPlayer.isXpChatEnabled(PrimarySkillType.MINING));
 
         mmoPlayer.beginXpGain(PrimarySkillType.MINING, 50f, XPGainReason.PVE, XPGainSource.SELF);
+        mmoPlayer.flushXpChat();
+        verify(player, never()).sendMessage(anyString());
+    }
+
+    /**
+     * §81 — the echo is CUMULATIVE. Three gains produce nothing until the flush, then
+     * exactly one line carrying the window total.
+     *
+     * <p>The {@code never()} before the flush is the assertion that fails if the per-gain send is
+     * restored; the count after it is what fails if the flush emits one line per gain rather than
+     * one per skill. Neither alone would catch both.
+     */
+    @Test
+    void keepCumulatesAndPrintsOneLinePerFlush() {
+        assertTrue(mmoPlayer.toggleXpChat(PrimarySkillType.MINING));
+
+        mmoPlayer.beginXpGain(PrimarySkillType.MINING, 50f, XPGainReason.PVE, XPGainSource.SELF);
+        mmoPlayer.beginXpGain(PrimarySkillType.MINING, 50f, XPGainReason.PVE, XPGainSource.SELF);
+        mmoPlayer.beginXpGain(PrimarySkillType.MINING, 50f, XPGainReason.PVE, XPGainSource.SELF);
+
+        verify(player, never()).sendMessage(anyString());
+
+        // The window total is MEASURED off the profile rather than hardcoded -- the early-game boost
+        // and the config multipliers land before storage. That reading is only the window total while
+        // no level-up intervened (a level-up resets the raw counter), so it is asserted, not assumed.
+        assertEquals(0, mmoPlayer.getSkillLevel(PrimarySkillType.MINING),
+                "precondition: no level-up, so the raw XP counter IS the window total");
+        final float windowTotal = profile.getSkillXpLevelRaw(PrimarySkillType.MINING);
+        assertTrue(windowTotal > 0f, "precondition: the three gains actually reached the profile");
+
+        mmoPlayer.flushXpChat();
+
+        final ArgumentCaptor<String> sent = ArgumentCaptor.forClass(String.class);
+        verify(player, times(1)).sendMessage(sent.capture());
+        assertTrue(sent.getValue().contains(String.format(Locale.ROOT, "%.1f", windowTotal)),
+                "the line carries the SUM of the window, not one gain: " + sent.getValue());
+    }
+
+    /** §81 -- a flush with nothing pending is silent, or the timer floods chat by itself. */
+    @Test
+    void flushWithNothingPendingSaysNothing() {
+        assertTrue(mmoPlayer.toggleXpChat(PrimarySkillType.MINING));
+
+        mmoPlayer.flushXpChat();
+        verify(player, never()).sendMessage(anyString());
+
+        mmoPlayer.beginXpGain(PrimarySkillType.MINING, 50f, XPGainReason.PVE, XPGainSource.SELF);
+        mmoPlayer.flushXpChat();
+        verify(player, times(1)).sendMessage(anyString());
+
+        // The second flush closes an EMPTY window. Still one message in total.
+        mmoPlayer.flushXpChat();
+        verify(player, times(1)).sendMessage(anyString());
+    }
+
+    /**
+     * §81 -- toggling off DISCARDS the half-filled window rather than merely suppressing it.
+     *
+     * <p>⚠️ There is deliberately NO flush between the two toggles, and that is the whole test.
+     * The flush clears unconditionally, so a flush in the middle would clear the window by itself
+     * and this case would pass against a {@code toggleXpChat} that drops nothing -- measured: it
+     * does. Off-then-on INSIDE one window is the only sequence where the discard is load-bearing,
+     * and it is the sequence a player produces by running the command twice to check it took.
+     */
+    @Test
+    void togglingOffInsideAWindowDropsWhatWasPending() {
+        assertTrue(mmoPlayer.toggleXpChat(PrimarySkillType.MINING));
+        mmoPlayer.beginXpGain(PrimarySkillType.MINING, 50f, XPGainReason.PVE, XPGainSource.SELF);
+
+        assertFalse(mmoPlayer.toggleXpChat(PrimarySkillType.MINING), "toggled OFF");
+        assertTrue(mmoPlayer.toggleXpChat(PrimarySkillType.MINING), "and back ON, same window");
+
+        mmoPlayer.flushXpChat();
+        // XP earned before the echo was switched off must not survive the toggle.
+        verify(player, never()).sendMessage(anyString());
+    }
+
+    /**
+     * §81 -- a window whose total is zero prints nothing, or the timer emits "+0.0 XP" every five
+     * seconds by itself.
+     *
+     * <p>Driven through {@link XPGainReason#COMMAND}, which is the one reason
+     * {@code applySelfListenerModifiers} returns untouched -- {@code /addxp <skill> 0}. ⚠️ A
+     * {@code PVE} zero does NOT reach the accumulator as zero and would make this case vacuous:
+     * measured, it arrives as {@code +51.0}, because the early-game boost is a flat top-up added to
+     * whatever came in. The other real route to a zero total is the diminished-returns throttle
+     * reducing a gain to nothing.
+     */
+    @Test
+    void aZeroTotalIsNotPrinted() {
+        assertTrue(mmoPlayer.toggleXpChat(PrimarySkillType.MINING));
+
+        mmoPlayer.applyXpGain(PrimarySkillType.MINING, 0f, XPGainReason.COMMAND,
+                XPGainSource.COMMAND);
+        assertEquals(0f, profile.getSkillXpLevelRaw(PrimarySkillType.MINING), 1.0E-9,
+                "precondition: the gain really did arrive as ZERO, not as a boosted non-zero");
+
+        mmoPlayer.flushXpChat();
+
+        verify(player, never()).sendMessage(anyString());
+    }
+
+    /**
+     * §81 -- a window left open when the player switched the echo off prints nothing, because the
+     * command already answered "stopped printing" and a line seconds later reads as the toggle
+     * having failed.
+     *
+     * <p>The mechanism is {@code toggleXpChat} deleting the entry, NOT a re-check inside the flush:
+     * that re-check was written, and a mutation proved no test could see it, because an entry only
+     * exists for a skill that was kept when the XP landed. It was deleted rather than left as
+     * decoration.
+     */
+    @Test
+    void aWindowClosedBeforeItsFlushPrintsNothing() {
+        assertTrue(mmoPlayer.toggleXpChat(PrimarySkillType.MINING));
+        mmoPlayer.beginXpGain(PrimarySkillType.MINING, 50f, XPGainReason.PVE, XPGainSource.SELF);
+
+        assertFalse(mmoPlayer.toggleXpChat(PrimarySkillType.MINING), "toggled OFF");
+
+        mmoPlayer.flushXpChat();
         verify(player, never()).sendMessage(anyString());
     }
 
