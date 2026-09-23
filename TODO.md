@@ -4098,6 +4098,86 @@ ever mis-labelled as certifying the gate.
 
 ---
 
+## §80 — THE PUSH: `v1.5.0` to every live band — ⬜ IN PROGRESS
+
+🔴 **The twelve-session push hold is LIFTED** (owner, 2026-09-23, §80 ruling 1). It was re-asked a
+**thirteenth** time and the answer changed, on a stated condition the owner set and this plan
+**measured before acting**: *"if there is no more java code to produce for the actual mod"*.
+
+✅ **The condition was MEASURED, not assumed.** No open row in this file asks for mod `src/` code:
+the only open `src/**` rows are §78/§79's *"the mixed commit remains undecidable"* governance note,
+and the live play-test is owner-only and is not code. All five §68 issues (#14, #15, #16, #17, #19)
+are fixed on `master` and propagated to the three live bands. **17 of the 67 unpushed `master`
+commits touch `src/`** — that is the payload this push delivers to players.
+
+| ruling | answer |
+|---|---|
+| 1 | ✅ **PUSH.** Bump, verify, push `master` + the three live bands, watch the release runs, close the five issues |
+| 2 | ✅ **`mod_version` → `1.5.0-SNAPSHOT`.** A minor bump, not a patch: since `v1.4.0` this line gained per-skill XP-bar show/hide (#15), `/mcstats <skill> keep` (#17.1), the sub-skill descriptions, **and** `master` moved to Minecraft **26.3** |
+
+### Why the bump is mandatory, not hygiene
+
+`v1.4.0` is **published on all nine bands** (`git ls-remote --tags origin`: `mc1.21.1-v1.4.0` …
+`mc26.2-v1.4.0`) and **every branch still reads `mod_version=1.4.0-SNAPSHOT`**. R-t's *"Refuse a
+stale mod_version"* step compares the computed tag against the published one, so pushing without a
+bump fires four release runs and **all four are REFUSED**. §44 already paid for this exact lesson:
+*"the push succeeded, only the release did not."*
+
+### 🔴 Blast radius — this is the destructive part, and it is a RELEASE sweep
+
+Each release run ends in **Delete previous release on this Minecraft line**, which reaps by release
+**ID** on the prefix `mc<minecraft_version>-v*`, keeping only the run's own. Per branch:
+
+| branch | `minecraft_version` | sweep prefix | what it reaps |
+|---|---|---|---|
+| `master` | `26.3` | `mc26.3-v*` | **nothing** — no `26.3` release exists yet |
+| `mc/26.2` | `26.2` | `mc26.2-v*` | 🔴 **`mc26.2-v1.4.0`** — the release `master` published while it *was* `26.2`. Intended: `mc/26.2` takes over that line |
+| `mc/26.1.2` | `26.1.2` | `mc26.1.2-v*` | `mc26.1.2-v1.4.0` |
+| `mc/1.21.11` | `1.21.11` | `mc1.21.11-v*` | `mc1.21.11-v1.4.0` |
+
+⚠️ **R10 is LIVE on this push and the ordering is what defuses it.** `origin/master` still reads
+`minecraft_version=26.2` and local `mc/26.2` reads `26.2` — **two refs on one line**, exactly the
+collision where each release run deletes the other's release. **`master` (26.3) goes out FIRST**, so
+by the time `mc/26.2` releases, the only claimant of the `26.2` line is `mc/26.2` itself.
+
+🔴 **The six ARCHIVED bands are NOT pushed and NOT bumped.** `v1.4.0` is their final release by the
+§69 Phase D ruling. They stay at `1.4.0-SNAPSHOT` locally; gate 11 subtracts the archived set
+(`drop_archived`), so the four live refs agreeing on `1.5.0-SNAPSHOT` is what it checks.
+
+**Recovery, written before the fact:** every pre-push head is in
+`scratchpad/UNDO-s19-heads.txt` as ready-to-run `git branch -f` lines. A push that goes wrong is
+recovered by re-pushing the recorded head, **never** by deleting a tag — ⚠️ deleting a tag DRAFTS
+its release rather than removing it, and a same-tag draft is the orphan §67 spent a session on.
+
+### What I am NOT doing
+
+- **Not** pushing, bumping or re-releasing the six archived bands.
+- **Not** closing any issue before its band's release run is green — §73 ruling 3, unchanged.
+- **Not** touching `src/`. This session ships what is already written and verified.
+- **Not** taking a carried guard row (§75/§76/§78/§79). All of them stay open.
+
+### The steps
+
+- [ ] **80.1** Bump `mod_version` → `1.5.0-SNAPSHOT` on `master`; commit alone.
+- [ ] **80.2** Propagate 80.1 to `mc/26.2`, `mc/26.1.2`, `mc/1.21.11` with a `Backport-of:` trailer.
+      ⚠️ **The trailer needs a DOUBLE `\n`** — `$(...)` strips `%B`'s trailing newline and §79
+      reproduced that defect *after reading the remedy*. Verify with `%(trailers:...)`, **plus the
+      control** that master's own commit returns empty.
+- [ ] **80.3** Build + full suite on `master`. Baseline to beat: **175 classes / 1,951 tests / 0
+      failures**, both test tasks bare. ⚠️ `./gradlew test` is TWO tasks — the total is the SUM.
+- [ ] **80.4** All Python `--self-test`s (17 expected, exit 0 each) — **run these FIRST**, because
+      "no drift" is also what a broken auditor prints.
+- [ ] **80.5** Gates 7 / 9 / 10 / 11 / 13 in a **fresh local clone**. ⚠️ All of them prefer
+      **remote** refs, so a pre-push run in this working copy grades the stale remote.
+- [ ] **80.6** 🔴 Push `master` FIRST (R10), then `mc/26.2`, `mc/26.1.2`, `mc/1.21.11`.
+- [ ] **80.7** Watch all four release runs to green. ⚠️ `github` MCP is **down this session**; the
+      `gh` CLI does the work — **say which path ran**.
+- [ ] **80.8** Close #14, #15, #16, #17, #19 once their runs are green. #14 also owes its reporter a
+      reply — it is the only outside bug report of the five.
+- [ ] **80.9** Caveat-expiry pass, `.agent/memory/`, and close this section with the proof matrix.
+
+---
+
 ## Other open work — harness and playtest
 
 *Closed items are summarised in one line each; the full reasoning is in the archives.*
