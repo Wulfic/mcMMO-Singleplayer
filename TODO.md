@@ -115,7 +115,11 @@ not a mystery and `2.2.050` was not an impossible number: it **was** this repo's
 🔴 **They were a lower bound, not a count — 62 local tags are absent from the remote**, same cause,
 and the other 56 are still here pending the owner's call (see *Carried debt*).
 
-🔑 **Nothing in the twelve gates reads the remote TAG list.** Gates 9/10/11 compare branches; the
+🔑 **NO ship gate reads the remote TAG list — and this sentence no longer carries a COUNT, which
+is the fix.** It said *"the eleven gates"* until §56.4 added gate 12 (caught in §65), then *"the
+twelve gates"* until §78 added gate 13 — **the same number rotting for the third time, inside a
+sentence that stayed true throughout.** The claim is about what the gates do not do; the tally was
+never load-bearing and only ever supplied a way to be wrong. Gates 9/10/11 compare branches; the
 release sweep enumerates `gh release list`, which a bare tag is invisible to. **Re-read
 `git ls-remote --tags` before repeating any statement about which tags exist.** ⚠️ One bare tag
 does exist and is not a release: `v1.21.11-baseline`.
@@ -3730,7 +3734,7 @@ documented docs-propagation seam, hit again.
 
 ---
 
-## §78 — the mixed waiver: `build.gradle` is in the seam, and the instrument is FILE STATE — ⬜ PLANNED
+## §78 — the mixed waiver: `build.gradle` is in the seam, and the instrument is FILE STATE — ✅ DONE (Tier 2; ship gate 13, closes HELD until push)
 
 **§77's own carried row, taken as this session's work** (owner ruling 2, 2026-09-23 s17). Rule 3's
 `Backport-not-needed:` is **commit-scoped** and cannot say *"half of this commit should propagate"*.
@@ -3815,6 +3819,50 @@ instead of trusting it, in the same pass that was supposed to be checking someon
 - Gate sweep 9/10/11 after propagation, not just before.
 - Caveat-expiry pass: grep `README.md` + `wiki/**` for the **symptom**, not the file edited.
 
+### §78 RESULTS — measured 2026-09-23, real exit codes read directly
+
+| Check | Result |
+|---|---|
+| Gate 13 on the four live branches | **exit 0.** `build.gradle` is 489 / 432 / 432 / 429 lines and **every residue is 427** — the arithmetic reconciles exactly (`master` 489 − 5 − 6 − 51). `settings.gradle` is identical on all four and **nothing enforced that until now** |
+| `--self-test` | **21 checks**, floored on what RAN and refusing if any category ran zero. ⚠️ **The first cut predicted 22 and the floor rejected the run** — the prediction was wrong, not the harness. The per-category tally is **derived from the labels**, not hand-written beside it (§76's open row, avoided rather than repeated) |
+| Mutation matrix | **10 mutations, 10 CAUGHT, 0 SURVIVED, 0 NOT-APPLIED**, against a green control, **re-run after the dead-code removal**, census proving the file byte-identical at exit |
+| 🔑 **ARMED ON THE YARN BAND** | the core mutation applied to `mc/1.21.11`'s **own copy** turned **6 of 21** checks red. A propagated guard passing only proves the file arrived |
+| Java suite | **175 classes / 1,951 tests / 0 failures / 0 errors**, both tasks **bare**. Identical to §77's baseline — the change touches zero Java |
+| Propagation | all **3 live bands**, cherry-picked with `Backport-of: 1b685bf64`, applied cleanly including the yarn band (**0** `net.minecraft` references — measured, not assumed) |
+| Gate sweep, **fresh local clone** | self-tests **first**, all exit 0; then gates **7 / 9 / 10 / 11 / 13** all exit 0. Gate 9 now covers **55** shared paths — the new script joined the identity set by **union expansion**, with nothing to remember |
+| Caveat-expiry pass | `README.md` + `wiki/**` grepped for the **symptom**. No stale claim there — but the pass found one in **this file** (below) |
+
+### 🔑 What §78 is worth carrying
+
+1. 🔴🔴 **The carried row asked for a detector that CANNOT EXIST, and building it anyway was the
+   trap.** A mixed commit is not decidable from the commit: classifying `src/**.java` as
+   version-specific needs intent, and a path rule flags **13 of the 14**. The answer was to change
+   instrument — **a back-port is FILE STATE, not a commit** — which this repo had already learned
+   once in §8.3 and did not apply here.
+2. 🔴 **Three of the 14 waiver reasons do not say "not needed".** They say *needed, discharged by
+   another route* — *"propagated by hand in the section 37 sweep"*, *"each band gets its own
+   cherry-pick"* — and one (`0e5ba811e`) rests on a premise **R9 made false three months later**.
+   All three are harmless **only** because `scripts/**` is in gate 9's `INCLUDE` set. Nothing
+   checks that a waiver's stated reason is still true.
+3. 🔑 **`SUBSTITUTE` over `VARIANT` is the whole difference between a guard and a hole.** Throwing
+   away a differing LINE throws away everything else on it: the first cut of `mod-remap-prefixes`
+   would have let a band move to a different ModMenu version silently, and its own reason text
+   **claimed the opposite**. Two self-test cases exist purely to prove the coordinate and the Loom
+   version stay under comparison, and both go red if either rule is downgraded.
+4. ⚠️⚠️ **A mutation appended to a rule table was CAUGHT BY THE WRONG DETECTOR** — the overlap
+   refusal fired before the residue floor it was written to test. A green matrix row proving a
+   different assertion than its label claims. It now **replaces** the table instead.
+5. 🔴 **"AGENTS.md records X" was written THREE times and `AGENTS.md` does not contain the string.**
+   The claim is real; it lives in §64's row **in this file**. Carried from memory, filled in from
+   habit, then copied twice. An attribution is a claim — grep before naming the file.
+6. ⚠️ **`Path.write_text` rewrites newlines**, so a deliberately-CRLF fixture was written as
+   `\r\r\n` and failed a parser case against a guard that was handling CRLF **correctly**. The
+   harness corrupted the input and the guard took the blame.
+7. ⚠️ **The suite's first run read `BUILD FAILED` with a complete, green `test` XML.** Both tasks
+   were marked FAILED; `test` had 174/1,938/0/0 and `tagBoundTest` had **zero XML** — an executor
+   death (*"Could not write standard input"*), not a test failure, and not reproducible. **An exit
+   code is not a result**, §77's lesson arriving through a different door.
+
 ### What I am NOT doing
 
 - ❌ **Not building a mixed-commit detector.** Reasoned above; it cannot be done from the commit and
@@ -3839,6 +3887,36 @@ instead of trusting it, in the same pass that was supposed to be checking someon
 | The guard | new `scripts/` file, `AGENTS.md` | `git revert <sha>` — all new work, nothing overwritten |
 | Mutation runs | `build.gradle` and `scripts/` copies **temporarily** | `.orig` copies in `scratchpad/`, **`cmp`-verified after every run**, census at exit |
 | Propagation | 3 live band heads | `scratchpad/UNDO-s17-bands.txt` — pre-propagation heads as ready-to-run `git branch -f` lines |
+
+### What §78 did NOT close — carried forward
+
+- [ ] 🔴 **A waiver's stated REASON is never re-checked.** Three of the 14 propagatable
+      `Backport-not-needed:` commits say *needed, discharged by another route*, and `0e5ba811e`'s
+      premise (*"tooling under `scripts/`, not shipped code; master-only"*) was **falsified by R9**
+      three months later. They are harmless only because `scripts/**` is in gate 9's `INCLUDE` set —
+      an accident of another guard, not a check. **No detector**, and it is the same shape §78 just
+      closed one file over.
+- [ ] ⬜ **`src/**` and the mixed commit remain undecidable**, stated rather than left implied.
+      Gate 13 covers `build.gradle` + `settings.gradle`; a commit mixing version-specific and
+      version-agnostic `src/` work still waives both halves with gate 7 green. That is not a gap
+      this section failed to close — it is one no commit-scoped instrument can.
+- [ ] ⬜ **Gates 2 and 12: owner RULED to RE-SCOPE (2026-09-23), NOT DONE this session.**
+      `mixin-allow-audit.py --self-test` must exercise injection-point counting and
+      `probe-bands.py --self-test` the manifest validation; the borrowed `loomjar.py` and `DECL_RE`
+      cases stay as well. ⚠️ **This is a ruling carried as an open item, which is different from a
+      deferral** — the decision is made, only the work is outstanding.
+- [ ] ⬜ **Untouched §76 rows:** the `failures.append()` assertions that bypass `check()` in
+      `extract-mc-ids.py`, and the unasserted prose tally in `gradle-key-identity-audit.py` /
+      `manifest-identity-audit.py`. ✅ Gate 13 **avoided** that shape rather than fixing it — its
+      tally is derived, and it refuses if a category ran zero checks.
+- [ ] ⬜ **Untouched §75 rows:** the S2 one-sided sweep, and the `--mutate` second-proof audit.
+- [ ] ⬜ **The `test {` -> `withType(Test).configureEach {` split is now a PREDICTABLE future
+      conflict.** Any later edit to those ~185 shared lines on `master` lands inside a `withType`
+      block while the bands carry `test {`, so the cherry-pick conflicts on the header. Declared and
+      benign today; recorded so the conflict is recognised rather than re-diagnosed.
+- [ ] 🔴 **Still held by ruling 1:** the push and the `mod_version` bump, **eleventh** consecutive
+      session. ⚠️ **The ahead-count is deliberately not recorded here** — a status row cannot count
+      the commit that records it. Run `git rev-list --left-right --count origin/master...master`.
 
 ---
 
