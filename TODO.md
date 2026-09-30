@@ -923,6 +923,53 @@ are present and passing"* (codec 3/3, resources 9/9 on every band), not a subtra
 
 ---
 
+## §84 — ship `v1.5.2`: the #20 fix to all four live bands — ⬜ IN PROGRESS
+
+**Owner 2026-09-29:** *"bump version to 1.5.2 and push"* — the owner call §83 carried.
+
+### What was measured before planning
+
+- `master` is **+10** vs `origin` (4 × §82 docs, 6 × §83); `mc/26.2`, `mc/26.1.2`, `mc/1.21.11` are
+  **+5** each (§83's back-ports). All four read `mod_version=1.5.1-SNAPSHOT`, and `v1.5.1` **is
+  published** on all four — so without a bump R-t's *"Refuse a stale mod_version"* kills every run.
+- `origin/master` already reads `minecraft_version=26.3`, so no two refs share a Minecraft line and
+  push order is **not** load-bearing for R10 this time (§80's ordering constraint does not apply).
+- A successful run **reaps that band's `v1.5.1` release and tag** (`release.yml`, *"Delete previous
+  release on this Minecraft line"*). That is the designed behaviour, and replacing the 26.3 jar that
+  cannot load a world is the point — but it is outward-facing and not undone by a `git revert`.
+
+### The plan
+
+```
+84.1 bump    master: mod_version 1.5.1-SNAPSHOT -> 1.5.2-SNAPSHOT  (PATCH: one bug fix + tooling)
+84.2 bands   cherry-pick to mc/26.2, mc/26.1.2, mc/1.21.11 with Backport-of: (worktrees in scratch)
+84.3 gates   per band, from that band's own checkout, AFTER the bump -- the §83 hard rule:
+               1   build + suite, -Pmod_version=1.5.2, --no-build-cache cleanTest; `> Task :test` bare
+               3   boot-check.sh --self-test, then on the BUILT jar
+               14  client-world-check.sh --self-test, then the run (a game window opens)
+84.4 cross   from a fresh `git clone --local --no-hardlinks`: gates 7, 9, 10, 11, 13
+84.5 backup  gh release download the four v1.5.1 jars + record their tag shas -- the reap deletes them
+84.6 record  gate results below; commit
+84.7 push    master, mc/26.2, mc/26.1.2, mc/1.21.11 -- fast-forwards only, checked before pushing
+84.8 verify  four runs green by conclusion; gh release list = 4 live at v1.5.2, 6 archived at
+             v1.4.0, 0 drafts; Latest badge on mc26.3-v1.5.2 (fix by hand + re-read if the race took it)
+```
+
+**Rollback:** pre-§84 tips are `master` `5d5dcc7b0`, `mc/26.2` `20e154bd3`, `mc/26.1.2` `b70ef2ef7`,
+`mc/1.21.11` `8a0dd8b70`. Before the push, every step is a local commit (`git revert`). After it,
+the undo is **forward**: a bad `v1.5.2` is superseded by a `1.5.3` bump; the reaped `v1.5.1` jars
+come back from the 84.5 download or a rebuild of the recorded tag sha. Nothing is force-pushed.
+
+### What I am NOT doing
+
+- **Not fixing the `Latest` badge race's cause** (`make_latest` in `release.yml`). It fires four more
+  release runs and needs its own session (row in *Carried debt*). The symptom is fixed
+  by hand in 84.8 if it recurs, and re-read.
+- **Not touching the six archived bands** — they keep `v1.4.0` (§69 Phase D).
+- **Not running gates 4, 5, 6** — a `mod_version` bump changes nothing they read. Stated, not hidden.
+- **Not closing the other §83 carried rows** (`probe-bands.py` exit code, the mixin-count WARN).
+
+---
 
 ---
 
