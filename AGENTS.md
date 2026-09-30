@@ -12,6 +12,12 @@ broken until a test proves otherwise. Never pad a report with praise — silence
 - **Write the plan down before you write code.** A plan that lives only in chat did not happen.
 - **Record what you learn.** Decisions and gotchas go in `.agent/memory/` — see [Memory](#memory) below. Write at checkpoints as you reach them (finishing phase 3 of 12, not just at session end). Not optional.
 - **Tests before "done".** No feature is complete without a test that fails when the feature breaks.
+- **Launch the game before any release push.** Before a push that can publish a release, the real
+  game client is launched with the mod on **every band being released**, a **new** singleplayer world
+  is created and joined, and mcMMO is running in it — `scripts/client-world-check.sh` exits **0** on
+  that band, and `scripts/boot-check.sh` exits **0** on its built jar. No green suite, CI run or
+  structural gate substitutes for it. See
+  [Launch the game before a release push](#launch-the-game-before-a-release-push).
 - **Log every error path.** If it can fail and there's no log, that's a bug.
 - **Zero suppressions.** No `@ts-ignore`, `as any`, `# type: ignore`, empty `catch`, `eslint-disable`, or `--no-verify`. If you think you need one, you've misdiagnosed the problem.
 - **Never commit red.** Zero errors and green tests, or it doesn't get committed.
@@ -92,6 +98,39 @@ destructive-shaped ones (`permissions.ask`). It matches on **command prefix**, s
 `cd sub && rm -rf ../..` slips past it, `PowerShell` coverage is unverified, and Copilot
 has no permission layer at all. **It's a seatbelt, not a sandbox.** The five gates are the
 actual guard.
+
+---
+
+## Launch the game before a release push
+
+**Hard rule (owner ruling, 2026-09-29).** `v1.5.1` shipped to Minecraft `26.3` with a milestone
+advancement that `26.3` refuses at registry load — and a failed registry load is a world that never
+loads, so **no `26.3` player could create or join a world** (GitHub #20). The suite was green. Every
+structural gate was green. The gates that launch anything had been written down as *"NOT run"* for
+two releases in a row, and nothing stopped the push. **A skip that is written down is still a skip.**
+
+**Before any push that can publish a release** — a `mod_version` bump, or a push to any branch whose
+`mod_version` has no release yet; **when unsure, treat it as one** — do all of this **on every band
+being released**, from that band's own checkout:
+
+1. `scripts/client-world-check.sh --self-test`, then `scripts/client-world-check.sh` — **exit 0**.
+   The **real game client** creates a **new** singleplayer world, joins it, and asserts mcMMO's
+   session is that world's server and the joined player has an mcMMO profile. A game window opens;
+   that is the point, not a side effect.
+2. `scripts/boot-check.sh --self-test`, then `scripts/boot-check.sh <built jar>` — **exit 0**. The
+   shipped **jar** on a real server. Step 1 runs from the source tree; this is the half that proves
+   the artifact players download.
+3. Record both results — band, exit codes, date — in `TODO.md`, in the section doing the release.
+
+- **Exit 1 blocks the push.** Fix it on `master` first (multi-version rule 1), then re-run on every band.
+- **Exit 2 means the game never launched and nothing was proven. It is never a pass.** Fix the
+  environment and re-run. If the harness truly cannot run, a person launches the game by hand with
+  the built jar — install it, **Create New World**, join, run `/mcstats` — and records that instead.
+- **No exception for a "small" change.** #20 was one missing line in one data file.
+- ⚠️ **A dedicated server is a proxy for the game, not the game.** Step 2 did reproduce #20, but a
+  server cannot see a client mixin, a renderer, a screen, or the create-world flow. Step 1 can.
+- ⚠️ **Scope, stated rather than hidden:** step 1 runs each band's `minecraft_version` only.
+  `scripts/version-sweep.sh` (server-side) remains the instrument across `supported_minecraft_versions`.
 
 ---
 
@@ -319,7 +358,8 @@ Tooling (all converse-checked; run them, don't trust them because they printed s
 | `scripts/gradle-key-identity-audit.py` | the **per-KEY** guard (**R-w'**), for the one shared file the other two can never compare whole. `gradle.properties` needs `mod_version` **identical** on every branch (R-p) and `minecraft_version` **different** (R-a) — so `drift-audit.py` excludes the file and the identity guard cannot demand it, leaving a gap exactly one key wide. 🔴 **A band left behind on `mod_version` silently STOPS RELEASING**, because it trips R-t's stale-version gate in a repo where a red release run is already the normal outcome of an ordinary push. Carries **R10** too: two branches on one `minecraft_version` means each release run reaps the other's release. ⚠️ It fails closed on an unclassified key **only when that key differs** between branches — a rule demanding every tuning knob be classified is one nobody maintains. ⚠️ **Exit 2 is not a pass**; ⚠️ **agreement is not correctness** — it proves the branches say the same thing, not that the value is right or that anything released |
 | `scripts/build-gradle-identity-audit.py` | **ship gate 13** (§78), the per-DIFFERENCE guard for `build.gradle` + `settings.gradle` — the seam gate 11 left open one file over. Both must be byte-identical on every live band **except** where a declared, reasoned rule says otherwise: the Loom plugin id and the yarn `mappings`/`mod*` block (**required** per-band, the remap switch), and master's `tagBoundTest` split. 🔑 **It fails CLOSED by construction** — an undeclared difference matches no rule, so it survives into the residue and diverges there. 🔴 **The rule table is a SPECIFICATION, not a mute button**: each entry carries the reason, and `SUBSTITUTE` rules rewrite only the differing TOKEN so the rest of the line stays under comparison (the Loom **version** and the ModMenu/Cloth **coordinates** are still guarded). ⚠️ An over-broad rule is the one way this rots into a meaningless green, so a rule matching nothing anywhere is reported **STALE** and the residue must clear `--min-residue` or the run REFUSES. ⚠️ **Exit 2 is not a pass** — fewer than two branches compared nothing. ⚠️ Prefers **remote** refs; run it in a local clone before a push |
 | `scripts/vacuity-census.py` | which tests **cannot fail** - the vacuous-guard census. Four shapes: no assertion at all, only `assertDoesNotThrow`, an assertion inside a loop over a DERIVED collection with no non-empty floor, and an assert over a derived collection in a polarity that passes when it is EMPTY. ⚠️ **It reports CANDIDATES, never findings** - a human reads each one and confirms by mutation. ⚠️⚠️ **`--self-test` is TWO-SIDED and a real run REFUSES until it passes**, because a detector reporting zero is indistinguishable from a clean codebase - shape A3 shipped reporting ZERO and the zero was a broken detector. `--prove-refusal` feeds it six broken shape sets and asserts every one is refused |
-| `scripts/boot-check.sh` | that a **built jar** boots a real server on a given version |
+| `scripts/client-world-check.sh` | **ship gate 14, MANDATORY before any release push**: that the **real game client** creates and joins a **new** singleplayer world with mcMMO running in it (Fabric client game test, `./gradlew runClientGameTest`, `src/gametest/`). ⚠️⚠️ **Gradle's exit code is NOT the verdict** — exit 0 without the test's PASS marker is a run that tested nothing, and it FAILS. ⚠️ Exit 2 = the game never launched; not a pass |
+| `scripts/boot-check.sh` | that a **built jar** boots a real server on a given version. **Mandatory before any release push**, with gate 14. ⚠️ Its ERROR count was **vacuous** until 2026-09-29 — the old regex could not match `[thread/ERROR]` — so no earlier "0 ERROR" measured anything |
 | `scripts/gameplay-smoke.sh` | that the **earning paths** still fire on a given version, driving a real player (fabric-carpet `/player`) through mining, digging, combat, repair, cooking and a super ability, scored from `/mcstats` + the profile YAML. `--self-test` on the scorer runs first; `GAMEPLAY_SMOKE_CONTROL=1` re-runs the scenario with mcMMO **removed** and must FAIL |
 
 ---
@@ -524,6 +564,8 @@ Not done until **all** of these are true:
 - [ ] Lint and typecheck pass with no new suppressions
 - [ ] A test exists that fails if this change is reverted
 - [ ] Full suite green — no regressions
+- [ ] **If it ships in a release: the game was launched** — `client-world-check.sh` and
+      `boot-check.sh` exit 0 on every band being released, recorded in `TODO.md`
 - [ ] Every error path logs something useful
 - [ ] **Every destructive path is guarded** — dry-run default, confirmation showing counts,
       refusal on an empty filter, logging with the recovery path
