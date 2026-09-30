@@ -1,5 +1,6 @@
 {
   "display": {
+    "background": "minecraft:gui/advancements/backgrounds/stone",
     "icon": {
       "id": "minecraft:nether_star"
     },

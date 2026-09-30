@@ -258,6 +258,50 @@ class MilestoneAdvancementResourcesTest {
     }
 
     /**
+     * <b>GitHub #20.</b> The root carries a tab background, and nothing else carries one.
+     *
+     * <p>Minecraft 26.3 validates both halves at registry load and refuses the whole advancement
+     * registry on either one: a parentless advancement <em>with a display</em> and no background
+     * fails with <i>"Visible advancement roots must have background"</i>, and any advancement with a
+     * parent and a background fails with <i>"Only advancement roots can have background"</i>. A
+     * failed registry load means the world never loads — v1.5.1 shipped a root with no background and
+     * no 26.3 player could create or join a world.
+     *
+     * <p>⚠️ <i>"Visible"</i> is the presence of a {@code display}, not {@code hidden: false}, so this
+     * does not depend on {@link #rootRendersAnAdvancementTabButNeverToasts()} keeping the root shown.
+     *
+     * <p>Asserted structurally here so it holds on every band from one source, including those whose
+     * Minecraft does not enforce it yet. {@code MilestoneAdvancementCodecTest} asks Minecraft's own
+     * codec the same question on the version this band compiles against.
+     */
+    @Test
+    void onlyTheRootCarriesAnAdvancementTabBackground() {
+        final Object background = display("root", load("root")).get("background");
+        assertInstanceOf(String.class, background,
+                "the milestone root must carry a tab background; Minecraft 26.3 refuses a visible "
+                        + "root without one and no world can load (GitHub #20)");
+        assertEquals("minecraft:gui/advancements/backgrounds/stone", background,
+                "the background is a texture id without textures/ or .png, as vanilla writes it");
+
+        final Set<String> nonRoot = new TreeSet<>(grantablePaths());
+        nonRoot.addAll(structuralPaths());
+        nonRoot.remove("root");
+        // The set is derived from the enums, so an empty one would pass every assertion below.
+        assertTrue(nonRoot.size() > 300,
+                "expected every milestone and hub to be checked, derived only " + nonRoot.size());
+
+        final List<String> offenders = new ArrayList<>();
+        for (String path : nonRoot) {
+            if (display(path, load(path)).containsKey("background")) {
+                offenders.add(path);
+            }
+        }
+        assertTrue(offenders.isEmpty(),
+                () -> "only an advancement root may carry a background; Minecraft 26.3 refuses the "
+                        + "whole registry otherwise: " + offenders);
+    }
+
+    /**
      * No orphans: every shipped file is either grantable or one of the structural tab nodes. This is
      * the direction the old guard missed — it only ever proved that the ids it expected existed, so
      * a renamed id left its predecessor sitting in the jar forever.

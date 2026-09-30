@@ -12,6 +12,7 @@ ACCESSEDFIELD	net.minecraft.ChatFormatting#RESET
 ACCESSEDFIELD	net.minecraft.ChatFormatting#STRIKETHROUGH
 ACCESSEDFIELD	net.minecraft.ChatFormatting#UNDERLINE
 ACCESSEDFIELD	net.minecraft.ChatFormatting#YELLOW
+ACCESSEDFIELD	net.minecraft.advancements.Advancement#CODEC
 ACCESSEDFIELD	net.minecraft.commands.Commands#LEVEL_GAMEMASTERS
 ACCESSEDFIELD	net.minecraft.core.Direction#DOWN
 ACCESSEDFIELD	net.minecraft.core.Direction#EAST
@@ -278,6 +279,7 @@ ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#BASALT
 ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#CARROTS
 ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#COBBLESTONE
 ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#COCOA
+ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#CRAFTING_TABLE
 ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#DEAD_BUSH
 ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#DIRT
 ACCESSEDFIELD	net.minecraft.world.level.block.Blocks#FARMLAND
@@ -362,6 +364,9 @@ CALLEDMETHOD	net.minecraft.ChatFormatting#getByCode
 CALLEDMETHOD	net.minecraft.ChatFormatting#ordinal
 CALLEDMETHOD	net.minecraft.ChatFormatting#values
 CALLEDMETHOD	net.minecraft.SharedConstants#tryDetectVersion
+CALLEDMETHOD	net.minecraft.advancements.Advancement#display
+CALLEDMETHOD	net.minecraft.advancements.Advancement#parent
+CALLEDMETHOD	net.minecraft.advancements.DisplayInfo#getBackground
 CALLEDMETHOD	net.minecraft.client.Minecraft#setScreenAndShow
 CALLEDMETHOD	net.minecraft.client.gui.GuiGraphicsExtractor#centeredText
 CALLEDMETHOD	net.minecraft.client.gui.components.Button#builder
@@ -450,6 +455,7 @@ CALLEDMETHOD	net.minecraft.resources.Identifier#getPath
 CALLEDMETHOD	net.minecraft.resources.Identifier#toString
 CALLEDMETHOD	net.minecraft.resources.Identifier#tryParse
 CALLEDMETHOD	net.minecraft.resources.Identifier#withDefaultNamespace
+CALLEDMETHOD	net.minecraft.resources.RegistryOps#create
 CALLEDMETHOD	net.minecraft.resources.ResourceKey#identifier
 CALLEDMETHOD	net.minecraft.server.Bootstrap#bootStrap
 CALLEDMETHOD	net.minecraft.server.MinecraftServer#getAdvancements
@@ -874,6 +880,7 @@ CALLEDMETHOD	net.minecraft.world.phys.Vec3#y
 CALLEDMETHOD	net.minecraft.world.phys.Vec3#z
 CLASS	net.minecraft.ChatFormatting
 CLASS	net.minecraft.SharedConstants
+CLASS	net.minecraft.advancements.Advancement
 CLASS	net.minecraft.advancements.AdvancementHolder
 CLASS	net.minecraft.advancements.triggers.BredAnimalsTrigger
 CLASS	net.minecraft.client.gui.GuiGraphicsExtractor
@@ -906,6 +913,7 @@ CLASS	net.minecraft.network.chat.Style
 CLASS	net.minecraft.network.chat.TextColor
 CLASS	net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket
 CLASS	net.minecraft.resources.Identifier
+CLASS	net.minecraft.resources.RegistryOps
 CLASS	net.minecraft.resources.ResourceKey
 CLASS	net.minecraft.server.Bootstrap
 CLASS	net.minecraft.server.MinecraftServer
@@ -1148,6 +1156,7 @@ STATICFIELD	net.minecraft.ChatFormatting#GREEN
 STATICFIELD	net.minecraft.ChatFormatting#RED
 STATICFIELD	net.minecraft.ChatFormatting#RESET
 STATICFIELD	net.minecraft.ChatFormatting#YELLOW
+STATICFIELD	net.minecraft.advancements.Advancement#CODEC
 STATICFIELD	net.minecraft.commands.Commands#LEVEL_GAMEMASTERS
 STATICFIELD	net.minecraft.core.Direction#DOWN
 STATICFIELD	net.minecraft.core.Direction#EAST
@@ -1403,6 +1412,7 @@ STATICFIELD	net.minecraft.world.level.block.Blocks#BASALT
 STATICFIELD	net.minecraft.world.level.block.Blocks#CARROTS
 STATICFIELD	net.minecraft.world.level.block.Blocks#COBBLESTONE
 STATICFIELD	net.minecraft.world.level.block.Blocks#COCOA
+STATICFIELD	net.minecraft.world.level.block.Blocks#CRAFTING_TABLE
 STATICFIELD	net.minecraft.world.level.block.Blocks#DEAD_BUSH
 STATICFIELD	net.minecraft.world.level.block.Blocks#DIRT
 STATICFIELD	net.minecraft.world.level.block.Blocks#FARMLAND
