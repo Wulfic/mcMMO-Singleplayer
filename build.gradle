@@ -134,6 +134,31 @@ dependencies {
 }
 
 // -----------------------------------------------------------------------------
+// Ship gate 14 (TODO.md 83): launch the REAL game client, create a NEW singleplayer world with mcMMO
+// loaded, and join it. `./gradlew runClientGameTest`, driven by scripts/client-world-check.sh.
+//
+// 🔴 WHY IT EXISTS. v1.5.1 reached every 26.3 player unable to create OR join a world (GitHub #20):
+// one advancement file failed 26.3's registry validation and the world load died with it. Every
+// test was green and the release was structurally verified. The only gates that launch anything
+// were not run -- and a dedicated server is a proxy for the game, not the game. This is the game.
+//
+// createSourceSet: the `gametest` source set (src/gametest/) is a separate mod, `mcmmo-gametest`,
+// that runs ONLY under this task. It is never on the main or test classpath and never in the jar.
+// enableGameTests = false: server game tests are not used; the server half is ship gate 3.
+// eula = true accepts the Minecraft EULA for the throwaway run directory, as boot-check.sh does.
+// -----------------------------------------------------------------------------
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'mcmmo-gametest'
+        enableGameTests = false
+        enableClientGameTests = true
+        eula = true
+        clearRunDirectory = true
+    }
+}
+
+// -----------------------------------------------------------------------------
 // Incremental migration note.
 //
 // The legacy Bukkit/Spigot plugin lives under legacy/ (NOT a Gradle source dir)
