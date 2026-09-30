@@ -22,6 +22,16 @@ import org.slf4j.LoggerFactory;
  * on the official-named bands and the yarn-named {@code 1.21.x} bands alike. The lambdas below take
  * a {@code MinecraftServer} they never call into; comparing its identity is enough.
  *
+ * <p>⚠️⚠️ <b>It also uses ONLY the game-test API that every live band's Fabric API has</b>, and the
+ * bands span four generations of it (measured 2026-09-29: {@code fabric-client-gametest-api-v1}
+ * 4.3.5 on {@code mc/1.21.11}, 5.1.0 on {@code mc/26.1.2}, 6.0.0 on {@code mc/26.2}, 6.0.7 on
+ * {@code master}). The first cut waited with {@code getConnection().waitForChunksRender()} and the
+ * server-side {@code waitFor}: both arrived in 6.0.0, so it compiled on two bands and not on the
+ * other two — and the wait-for-chunks call is spelled three different ways across the four. What is
+ * common is {@code worldBuilder().create()} (which returns only once the world is joined),
+ * {@code getServer().computeOnServer}, {@code waitTick} and {@code takeScreenshot}; the polling loop
+ * below is built from those alone. Before reaching for a newer call, check it exists on every band.
+ *
  * <p>🔑 {@link #PASS_MARKER} is logged only after every check has passed, and
  * {@code scripts/client-world-check.sh} refuses a green Gradle run that lacks it: a client game-test
  * run whose entrypoint was never found runs zero tests and exits 0, and that must not read as a pass.
@@ -31,14 +41,16 @@ public class WorldLoadClientGameTest implements FabricClientGameTest {
     /** Grepped by {@code scripts/client-world-check.sh}. Change both together or neither. */
     public static final String PASS_MARKER = "mcMMO client world check: PASSED";
 
+    /** How long the joined player may take to get an mcMMO profile: 30 seconds of ticks. */
+    private static final int PROFILE_WAIT_TICKS = 600;
+
     private static final Logger LOGGER = LoggerFactory.getLogger("mcMMO gate 14");
 
     @Override
     public void runTest(ClientGameTestContext context) {
         LOGGER.info("mcMMO client world check: creating a NEW singleplayer world (the GitHub #20 path)");
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
-            world.getConnection().waitForChunksRender();
-            LOGGER.info("mcMMO client world check: world created, joined, chunks rendered");
+            LOGGER.info("mcMMO client world check: world created and joined");
 
             // The session mcMMO opened must be THIS world's server. A stale static from an earlier
             // session, or none at all, both mean onServerStarting did not run for the world we joined.
@@ -49,11 +61,20 @@ public class WorldLoadClientGameTest implements FabricClientGameTest {
                             .computeOnServer(server -> McMMOMod.getProfileStore() != null)),
                     "mcMMO bound no profile store for the new world, so no player's skills would load");
 
-            // The joining player gets an mcMMO profile (PlayerSessionListener). waitFor throws on
-            // timeout, which fails the test with the game's own message.
-            world.getServer().waitFor(server -> UserManager.getPlayers().size() == 1);
-            LOGGER.info("mcMMO client world check: the joined player has an mcMMO profile");
+            // The joining player gets an mcMMO profile (PlayerSessionListener).
+            int waited = 0;
+            while (!Boolean.TRUE.equals(world.getServer()
+                    .computeOnServer(server -> UserManager.getPlayers().size() == 1))) {
+                check(waited < PROFILE_WAIT_TICKS, "the joined player had no mcMMO profile after "
+                        + PROFILE_WAIT_TICKS + " ticks");
+                context.waitTick();
+                waited++;
+            }
+            LOGGER.info("mcMMO client world check: the joined player has an mcMMO profile (after {} tick(s))",
+                    waited);
 
+            // Evidence, not a check: let the view settle so the screenshot shows the world.
+            context.waitTicks(40);
             context.takeScreenshot("mcmmo-gate14-new-world");
             LOGGER.info(PASS_MARKER);
         }
