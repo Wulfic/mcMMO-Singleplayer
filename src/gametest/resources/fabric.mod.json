@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "mcmmo-gametest",
+  "version": "1.0.0",
+  "name": "mcMMO client world check",
+  "description": "Ship gate 14: the real client creates a new singleplayer world with mcMMO loaded. Dev-only; never shipped.",
+  "license": "GPL-3.0-only",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "com.gmail.nossr50.gametest.WorldLoadClientGameTest"
+    ]
+  },
+  "depends": {
+    "mcmmo": "*",
+    "fabric-client-gametest-api-v1": "*"
+  }
+}
