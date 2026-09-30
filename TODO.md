@@ -56,11 +56,11 @@ block rather than a sixth time to one row.
 | suite | `./gradlew test`. ⚠️ **TWO test tasks — the baseline is the SUM**; quoting one reads as a 13-test regression that does not exist. Per-band totals legitimately differ and **no branch is expected to lead** |
 | gates | *The ship gate* below, run inside `git clone --local --no-hardlinks . <scratch>` — four gates prefer **remote** refs and will grade a stale remote from this working copy |
 
-📌 **Measured 2026-09-23 (§82) as a DATED SAMPLE, not a carried fact:** ten branches — four live
+📌 **Measured 2026-09-29 (§84) as a DATED SAMPLE, not a carried fact:** ten branches — four live
 (`master` at `26.3`, `mc/26.2`, `mc/26.1.2`, `mc/1.21.11`) and six archived `1.21.x` — all four live
-at `0 ahead / 0 behind origin`, `mod_version=1.5.1-SNAPSHOT`, `v1.5.1` published to the live four,
-and **19 of 19 GitHub issues CLOSED**. Every push hold and every held issue-close is **discharged**.
-Re-measure before repeating any of it.
+at `0 ahead / 0 behind origin`, `mod_version=1.5.2-SNAPSHOT`, `v1.5.2` published to the live four
+with `Latest` on `mc26.3-v1.5.2`, and **20 of 20 GitHub issues CLOSED**. Re-measure before
+repeating any of it.
 
 ⚠️ **A clean compile and a green gate are STRUCTURAL.** §32 found a mixin bound to the *wrong live
 method* while every structural gate read green, `mc/1.21.1` shipped a `/summon` origin gap past
@@ -794,7 +794,10 @@ session and was **21× larger than the index it supplements.**
       §83.** Each band's manifest was regenerated on its own build while back-porting #20's codec test
       (never copied), picking up the missing `Blocks#CRAFTING_TABLE` records; `--check` and gate 12
       pass on all four live bands.
-- [ ] 🔴 **The `Latest` badge race** — won by the wrong band twice (§80, §81). Still a manual fix.
+- [ ] 🔴 **The `Latest` badge race** — won by the wrong band twice (§80, §81). Cause still open.
+      ✅ **§84 avoided it by PUSH ORDER, with no hand edit:** the three bands first, `master` only
+      after their releases published, so `mc26.3` published last and took the badge. A procedure,
+      not a fix — a `release.yml` `make_latest` pin is still the cause-level close.
 
 ---
 
@@ -908,7 +911,7 @@ are present and passing"* (codec 3/3, resources 9/9 on every band), not a subtra
 
 ### ⬜ Carried out of this section
 
-- [ ] 🔴 **OWNER CALL: ship the fix.** Nothing is pushed: `master` is 9 ahead of `origin`, each live
+- [x] ✅ **SHIPPED by §84 as `v1.5.2`** (owner: *"bump version to 1.5.2 and push"*). Was: Nothing is pushed: `master` is 9 ahead of `origin`, each live
       band 5 ahead. `mod_version` is still `1.5.1-SNAPSHOT` and `1.5.1` **is already released**, so a
       push alone would build and **not** release — the fix needs a `mod_version` bump (to `1.5.2`) on
       every live band, then the push. Under the new rule, gates 3 and 14 are already green on all four
@@ -923,7 +926,7 @@ are present and passing"* (codec 3/3, resources 9/9 on every band), not a subtra
 
 ---
 
-## §84 — ship `v1.5.2`: the #20 fix to all four live bands — ⬜ IN PROGRESS
+## §84 — ship `v1.5.2`: the #20 fix to all four live bands — ✅ DONE, SHIPPED
 
 **Owner 2026-09-29:** *"bump version to 1.5.2 and push"* — the owner call §83 carried.
 
@@ -994,6 +997,31 @@ agrees except declared rules. `expected_bands.py --verify` 9 declared, none unde
 `testzip`-clean; the 26.3 jar's sha256 `9516ddd…` matches the shipped jar §83 recorded. Tag shas the
 reap will delete: `mc26.3` `35b1a4261` · `mc26.2` `f0553576e` · `mc26.1.2` `296fa182a` ·
 `mc1.21.11` `414c7a7dc`.
+
+### ✅ RESULT — the push, read back from GitHub rather than inferred
+
+- **Pushed in two steps, on purpose:** the three bands first (`git push origin mc/26.2 mc/26.1.2
+  mc/1.21.11`), then `master` only after all three had **published**. Every push a fast-forward,
+  re-checked against a fresh fetch immediately before it.
+- **Four release runs green by exit code AND per step:** `36655713979` (26.2), `36655714171`
+  (26.1.2), `36655714089` (1.21.11), `36656005454` (26.3) — each shows *Refuse a stale mod_version*,
+  *Create and push tag*, *Build*, *Publish release*, *Delete previous release* = success.
+  **Gate 8** (`ci-watch.sh --mutate`, all mutations caught; then `HEAD` per branch) **exit 0** × 4.
+- **`gh release list`: 10 releases, 0 drafts** — four live at `v1.5.2`, the six archived untouched at
+  `v1.4.0`. `git ls-remote --tags origin`: exactly the four `v1.5.2` tags on the `v1.5` line; the four
+  `v1.5.1` releases and tags reaped, as designed.
+- ✅ **`Latest` = `mc26.3-v1.5.2`, and no hand edit was needed** — `gh api .../releases/latest` read
+  back. The ordering above is why: `26.3` published at 01:39:47, three minutes after the last band.
+  🔑 **That defuses the race by procedure, not by fixing it** — the cause row stays open.
+- ✅ **The SHIPPED jars, downloaded from the releases (not the local builds):** all four carry
+  `fabric.mod.json` version `1.5.2+mc<band>` and the milestone root's `background`. **Gate 3 on the
+  shipped `mcmmo-1.5.2+mc26.3.jar`: exit 0**, 0 ERROR, 0 mixin failures — the artifact a 26.3 player
+  downloads, on the version #20 broke.
+- **20 of 20 GitHub issues closed.**
+
+⚠️ **Not run, and not claimed:** gates 2, 4, 5, 6, 12 — a `mod_version` bump changes nothing they
+read, and §83 ran 12 on this exact code. Gate 14 covers `minecraft_version` per band only, as stated
+in the gate.
 
 ---
 
