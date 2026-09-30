@@ -969,6 +969,32 @@ come back from the 84.5 download or a rebuild of the recorded tag sha. Nothing i
 - **Not running gates 4, 5, 6** — a `mod_version` bump changes nothing they read. Stated, not hidden.
 - **Not closing the other §83 carried rows** (`probe-bands.py` exit code, the mixin-count WARN).
 
+### ✅ Gates — measured 2026-09-29, AFTER the bump, each band from its own checkout
+
+Bump: `master` `9d0dd3561`; `Backport-of:` it on `mc/26.2` `a66a90ed9`, `mc/26.1.2` `53561ea93`,
+`mc/1.21.11` `112be73a2`. Each cherry-pick staged **one line** (`mod_version`) — read, not assumed.
+
+| gate | `master` (26.3) | `mc/26.2` | `mc/26.1.2` | `mc/1.21.11` |
+|---|---|---|---|---|
+| 1 build + suite (`-Pmod_version=1.5.2 --no-build-cache cleanTest`), `> Task :test` bare, JUnit XML | ✅ exit 0 · 176+1 / 1,948+13 = **1,961** / 0 | ✅ exit 0 · 177 / 1,957 / 0 | ✅ exit 0 · 177 / 1,957 / 0 | ✅ exit 0 · 176 / 1,951 / 0 |
+| 3 `boot-check.sh --self-test` (20/20), then the BUILT jar | ✅ **exit 0** · 0 ERROR (+1 excl.) · 0 mixin | ✅ **exit 0** · same | ✅ **exit 0** · same | ✅ **exit 0** · same |
+| 14 `client-world-check.sh --self-test` (7/7), then the real client | ✅ **exit 0** · new world created + joined | ✅ **exit 0** | ✅ **exit 0** | ✅ **exit 0** |
+| built jar: `fabric.mod.json` version · root `background` present | `1.5.2+mc26.3` · ✅ | `1.5.2+mc26.2` · ✅ | `1.5.2+mc26.1-26.1.2` · ✅ | `1.5.2+mc1.21.11` · ✅ |
+
+Suite totals equal §83's per band exactly, as a bump-only change should — a drop would have meant
+something was disabled. Built-jar sha256 prefixes: `772abc3475a6` · `bae46921542b` · `9a2e6fb72045`
+· `acb2098c9e89` (local builds; CI builds its own from the same commits).
+
+Cross-branch, from a fresh `git clone --local --no-hardlinks` (every self-test first, all exit 0):
+gate 7 **0 MISSING** on all three bands · gate 9 no collisions · gate 10 **56 shared paths identical**
+· gate 11 all four live refs `mod_version=1.5.2-SNAPSHOT`, `minecraft_version` distinct · gate 13
+agrees except declared rules. `expected_bands.py --verify` 9 declared, none undeclared.
+
+**84.5 backup — done before the push.** The four `v1.5.1` release jars (+ sources) downloaded and
+`testzip`-clean; the 26.3 jar's sha256 `9516ddd…` matches the shipped jar §83 recorded. Tag shas the
+reap will delete: `mc26.3` `35b1a4261` · `mc26.2` `f0553576e` · `mc26.1.2` `296fa182a` ·
+`mc1.21.11` `414c7a7dc`.
+
 ---
 
 ---
