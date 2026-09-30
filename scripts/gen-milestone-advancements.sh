@@ -221,9 +221,22 @@ json_escape() {
     ESCAPED="${ESCAPED//\"/\\\"}"
 }
 
+# The advancement-tab background, written on the ROOT and on nothing else.
+#
+# 🔴 GitHub #20: without it Minecraft 26.3 cannot create OR join a world. 26.3's
+# Advancement.validate (bytecode-read) refuses BOTH halves of this rule at registry load:
+#     no parent + a display + no background  -> "Visible advancement roots must have background"
+#     a parent  + a background               -> "Only advancement roots can have background"
+# ⚠️ "Visible" means HAS A DISPLAY. It does not read `hidden`, so a hidden root would fail the same
+# way. One bad file fails the whole advancement registry, and with it the world load.
+# Older versions accept the key and simply use it, so this one value is correct on every live band.
+# The format is a texture id WITHOUT `textures/` or `.png` -- vanilla's own story/root.json writes
+# exactly this on 1.21.11, 26.1.2, 26.2 and 26.3.
+ROOT_BACKGROUND="minecraft:gui/advancements/backgrounds/stone"
+
 # write_adv <outfile> <parent-path|""> <icon> <frame> <color> <title> <desc> <hidden> <show_toast>
-# An empty <parent-path> writes a root (no `parent` key). The containing directory must already
-# exist (see the bulk mkdir in the generate section).
+# An empty <parent-path> writes a root (no `parent` key, and the one `background`). The containing
+# directory must already exist (see the bulk mkdir in the generate section).
 write_adv() {
     local outfile="$1" parent="$2" icon="$3" frame="$4" color="$5"
     local title desc hidden="$8" toast="$9"
@@ -236,6 +249,9 @@ write_adv() {
             printf '  "parent": "mcmmo:milestone/%s",\n' "$parent"
         fi
         printf '  "display": {\n'
+        if [[ -z "$parent" ]]; then
+            printf '    "background": "%s",\n' "$ROOT_BACKGROUND"
+        fi
         printf '    "icon": {\n'
         printf '      "id": "minecraft:%s"\n' "$icon"
         printf '    },\n'
