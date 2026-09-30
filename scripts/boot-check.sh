@@ -52,6 +52,31 @@ boot_verdict() {  # log
     return 0
 }
 
+# --- count the log's ERROR/FATAL lines ------------------------------------------------------------
+# Prints the lines that count, one per line; the caller counts them. A function so --self-test drives
+# the REAL matcher with synthetic logs, as boot_verdict above.
+#
+# 🔴🔴 §83: THE OLD CHECK WAS VACUOUS FOR ITS WHOLE LIFE. It was `grep -cE "\[ERROR\]|\[FATAL\]"`,
+# and this log never writes a bare `[ERROR]` -- the level shares a bracket with the thread:
+#     [19:46:14] [Worker-Main-13/ERROR]: Registry loading errors:
+# So it printed `ERROR/FATAL lines: 0` over a log holding two, on every run on every version, and
+# every recorded "0 ERROR" from this gate measured nothing. It was found on GitHub #20, where 26.3
+# refused a mcMMO advancement and the server logged ERROR lines this check could not see (the run
+# still failed, only because the server never reached `Done (`).
+#
+# ⚠️ ONE line is excluded, by its EXACT text, and the exclusion is printed rather than silent:
+#     No key layers in MapLike[{}]
+# It is this harness's own doing -- server_props writes a superflat level-type with no
+# generator-settings -- and it is logged by vanilla with NO MOD INSTALLED (measured: the brew-smoke
+# vanilla control, 0 mcMMO lines, logs it too). All 16 declared versions log exactly that line and no
+# other ERROR on a clean boot. Do NOT widen this into a pattern: every other ERROR is a finding.
+KNOWN_HARNESS_ERROR='No key layers in MapLike[{}]'
+log_errors() {  # log
+    [[ -f "$1" ]] || return 0
+    grep -E '^\[[^]]*\] \[[^]]*/(ERROR|FATAL)\]' "$1" 2>/dev/null | grep -vF "$KNOWN_HARNESS_ERROR"
+    return 0
+}
+
 # --- clear the work directory, and PROVE it cleared ---------------------------------------------
 # ⚠️⚠️ AN UNCHECKED `rm -rf` HERE IS NOT A TIDINESS BUG -- IT IS A FALSE VERDICT ABOUT THE MOD.
 # On Windows a file still held open by a server from an earlier run cannot be removed: `rm` writes
@@ -171,6 +196,34 @@ STUB
     # Cannot occur in a real run, but the precedence must be deliberate rather than incidental.
     verdchk "verdict: both -> up wins" \
         "$(printf 'FAILED TO BIND TO PORT\nDone (1.0s)!')" up
+
+    # --- §83: the ERROR count, driven with synthetic logs ------------------------------------
+    # These call the REAL log_errors. The first case is the one the old `\[ERROR\]` regex scored as
+    # ZERO on every run this gate ever made -- it is the regression this block exists to hold.
+    errchk() { # name, log-content, want-count
+        local name="$1" want="$3" got
+        printf '%s\n' "$2" > "$tmp/errors.log"
+        got="$(log_errors "$tmp/errors.log" | grep -c .)"
+        if [[ "$got" == "$want" ]]; then
+            echo "  PASS  $name (counted $got)"; pass=$((pass+1))
+        else
+            echo "  FAIL  $name: counted $got, want $want"; fail=$((fail+1))
+        fi
+    }
+    errchk "errors: [thread/ERROR] is counted (the old regex saw 0)" \
+        '[19:46:14] [Worker-Main-13/ERROR]: Registry loading errors:' 1
+    errchk "errors: [thread/FATAL] is counted" \
+        '[19:46:14] [Server thread/FATAL]: Unhandled exception' 1
+    errchk "errors: the harness's own superflat line alone -> 0" \
+        '[20:17:53] [main/ERROR]: No key layers in MapLike[{}]' 0
+    errchk "errors: the harness line does not mask a real one" \
+        "$(printf '%s\n%s' '[20:17:53] [main/ERROR]: No key layers in MapLike[{}]' \
+            '[20:17:54] [Worker-Main-2/ERROR]: Registry loading errors:')" 1
+    # The old regex matched a literal "[ERROR]" ANYWHERE, so it would have counted this INFO line.
+    errchk "errors: the word in an INFO message is not a level -> 0" \
+        '[15:00:00] [Server thread/INFO]: a message that merely says [ERROR] in its text' 0
+    errchk "errors: WARN is not ERROR -> 0" \
+        '[15:00:00] [Server thread/WARN]: Can'"'"'t keep up!' 0
 
     # The port must reach the FILE. Resolving it into a variable and never writing it is exactly
     # the bug that would leave every run on 25565 while the log claims otherwise.
@@ -422,9 +475,12 @@ chk "clean shutdown"                  "mcMMO server session stopping"
 
 # NB: `grep -c` prints 0 and exits 1 when there are no matches, so a `|| echo 0` fallback appends a
 # SECOND zero and the arithmetic tests below break on "0\n0". The count alone is already correct.
-errs=$(grep -cE "\[ERROR\]|\[FATAL\]" "$LOG" 2>/dev/null); errs=${errs:-0}
+err_lines="$(log_errors "$LOG")"
+errs=0; [[ -n "$err_lines" ]] && errs=$(printf '%s\n' "$err_lines" | wc -l | tr -d ' ')
+known=$(grep -cF "$KNOWN_HARNESS_ERROR" "$LOG" 2>/dev/null); known=${known:-0}
 mixf=$(grep -icE "mixin apply failed|InvalidInjectionException|Critical injection failure" "$LOG" 2>/dev/null); mixf=${mixf:-0}
-echo "  ERROR/FATAL lines: $errs"
+echo "  ERROR/FATAL lines: $errs   (+$known excluded: the harness's own superflat '$KNOWN_HARNESS_ERROR')"
+[[ -n "$err_lines" ]] && printf '%s\n' "$err_lines" | head -10 | sed 's/^/      | /'
 echo "  mixin failures:    $mixf"
 [[ "$errs" -eq 0 ]] || fail=1
 [[ "$mixf" -eq 0 ]] || fail=1
