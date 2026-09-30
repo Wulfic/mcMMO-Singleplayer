@@ -797,6 +797,70 @@ session and was **21× larger than the index it supplements.**
 ---
 
 
+## §83 — GitHub #20: `26.3` cannot create or join a world; the launch-the-game rule — ⬜ IN PROGRESS
+
+**Owner 2026-09-29:** *"i want to add a hard rule that before a version push to git, we confirm the
+game works, by actually launching the game into a world with the mod in place, as the 26.3 version
+fails to load a new world at all and we didnt catch it before release! check the issues page and
+close the issue with no comment"* — plus the player's client log from #20.
+
+### What was measured before planning
+
+- 🔴 **Cause:** `data/mcmmo/advancement/milestone/root.json` has a `display` and no `background`.
+  `26.3`'s `Advancement.validate` (bytecode-read, not recalled) refuses **parentless + display + no
+  background** with *"Visible advancement roots must have background"*, and **parent + background**
+  with *"Only advancement roots can have background"*. ⚠️ *"Visible"* means **has a display** — it
+  does not read `hidden`. Registry load fails, so the world never loads: create **and** join.
+- ✅ **Only `26.3` enforces it.** The string is absent from the `26.2`, `26.1.2` and `1.21.11` merged
+  jars. The `background` format is identical on all four live versions —
+  `minecraft:gui/advancements/backgrounds/stone`, as vanilla's own `story/root` writes it.
+- 🔴🔴 **Gate 3 WOULD HAVE CAUGHT IT, and was never run.** `boot-check.sh` on the **shipped**
+  `mcmmo-1.5.1+mc26.3.jar` (sha256 `9516ddd…`, downloaded from the release, not rebuilt) reproduces
+  the player's exception and *"Failed to load datapacks, can't proceed with server load"*. §80 and
+  §81 both record **"Gates 1, 3, 4, 5, 6 were NOT run"** — honestly, and nothing stopped the push.
+  **A gate that is optional in practice is not a gate.** That is what the owner's rule closes.
+- 🔴 **Gate 3's `ERROR/FATAL lines: 0` check is VACUOUS and always was.** Its regex
+  `\[ERROR\]|\[FATAL\]` cannot match Fabric's `[Worker-Main-13/ERROR]` format; it prints **0** over
+  a log holding **2** ERROR lines. Every recorded *"0 ERROR"* from gate 3 measured nothing. The #20
+  crash still fails gate 3 only because the server never reaches `Done (`.
+- ⚠️ **A dedicated server is a proxy, not the game.** Vanilla `--quickPlaySingleplayer` shows an
+  error screen for a missing world rather than creating one (bytecode-read), so the only automated
+  way to drive the client's own **create-new-world** path is Fabric's client game-test API
+  (`fabric-client-gametest-api-v1`, already in the 26.3 Fabric API set).
+
+### The plan
+
+```
+83.1  fix       gen-milestone-advancements.sh writes `background` on the ROOT only; regenerate
+83.2  test      decode every shipped advancement through Minecraft's own Advancement.CODEC on
+                bootstrapped registries -- red on the pre-fix root on 26.3, green after
+83.3  gate 3    count ERROR/FATAL in the format the log actually uses; self-test both polarities
+83.4  gate 14   client-world-check: the REAL client creates a NEW singleplayer world with the mod
+                loaded (Loom client game test) -- control: must FAIL on the pre-fix root
+83.5  rule      AGENTS.md non-negotiable + ship gate 14 below; no release push without it
+83.6  bands     propagate to mc/26.2, mc/26.1.2, mc/1.21.11 from a scratch clone (Backport-of);
+                1.21.11 is yarn-named -> translate, never "take master"; each band must BUILD
+83.7  issue     close #20, no comment (owner instruction)
+```
+
+**Rollback:** pre-§83 `master` tip **`1ef59066b`**; every step is an ordinary commit, reverted with
+`git revert`. Nothing in §83 deletes, force-pushes or rewrites history.
+
+### What I am NOT doing
+
+- **Not pushing or releasing.** Not asked — and the rule being added requires gate 14 green on every
+  band first. The release decision stays with the owner.
+- **Not touching the six archived bands.** Propagation stopped at §69 Phase D, and none of them runs
+  a Minecraft that enforces the check.
+- **Not running gate 14 across every version in a band's range** — `minecraft_version` only. The
+  server-side range sweep (`version-sweep.sh`) stays the range instrument; the limit is stated in
+  the gate text rather than hidden.
+- **Not fixing the `Latest` badge race or the red `extract-mc-surface.py --check` bands** — carried
+  from §82, unrelated to #20.
+
+---
+
+
 ---
 
 ## Other open work — harness and playtest
@@ -863,8 +927,15 @@ watches (**R11**). Run the list first; the workflow is a backstop, never the che
 ⚠️ **Only gates 1, 7, 9, 10 and 11 have any unattended leg at all, and four of those are weekly.**
 Gate 1 fires per push via `release.yml`; gates **7**, **9**, **10** and **11** run from
 `.github/workflows/drift-audit.yml`, which GitHub fires **weekly and only from the default branch** —
-inert on every band by construction. **The other seven have no automation whatsoever.**
-⚠️ **Twelve gates are listed. Update this sentence when you add one.**
+inert on every band by construction. **Every other gate has no automation whatsoever.**
+🔴 **Gates 3 and 14 are MANDATORY before any push that can release — AGENTS.md, owner hard rule
+2026-09-29 (§83).** v1.5.0 and v1.5.1 both shipped with *"Gates 1, 3, 4, 5, 6 were NOT run"* written
+down, and v1.5.1 left every 26.3 player unable to create or join a world (GitHub #20). A recorded
+skip is still a skip.
+🔴 **This line said *"Twelve gates are listed"* while gate 13 was MISSING from the list** — referenced
+throughout since §78, never given a row (found in §83). A count in prose cannot see a missing row, so
+this line no longer carries one: count with
+`sed -n '/^## The ship gate/,/^## Risk register/p' TODO.md | grep -cE '^[0-9]+\. '`.
 🔴 **This line used to end *"nothing else counts them"*, and that was FALSE when written.**
 L114 said *"the **eleven** gates"* (bolded here so this citation does not match the grep below) — 915 lines earlier, stale since §56.4 added gate 12, and found by a
 peer session in §64, not by this warning. 🔑 **The countermeasure was attached to the list rather
@@ -912,9 +983,17 @@ noun:** `grep -nE '(eleven|twelve|thirteen|[0-9]+) gates' TODO.md` against
    `boot-check.sh` glob is not.
 2. `python scripts/mixin-allow-audit.py --mc <version> --check` — 61/61. 🔑 **Run this BEFORE gate 1.**
    A `MISMATCH` is a fact to record, not a bug to suppress.
-3. `scripts/boot-check.sh <jar> <version>` — 0 ERROR, 0 mixin failures, canary rejected.
+3. 🔴 **MANDATORY before any push that can release (with gate 14).**
+   `scripts/boot-check.sh <jar> <version>` — 0 ERROR, 0 mixin failures, canary rejected.
    ⚠️ **Read the exit code: `1` = the mod is bad, `2` = ENVIRONMENT and nothing was proven about the
    mod.** `--self-test` first, as with every gate.
+   🔴🔴 **Its `0 ERROR` was VACUOUS until §83 — every recorded run before 2026-09-29 measured
+   nothing there.** The regex `\[ERROR\]` cannot match this log's `[thread/ERROR]` format, so it
+   printed 0 over logs holding ERROR lines. It now counts the level bracket, excludes exactly one
+   line by exact text (the harness's own superflat `No key layers in MapLike[{}]`, which vanilla logs
+   with **no mod installed**), prints what it counted, and self-tests both polarities.
+   🔑 **It reproduced GitHub #20 on the shipped jar** (exit 1, never reached `Done (`) — it was simply
+   not run for v1.5.0 or v1.5.1.
    🔑 **Run it across the whole DECLARED RANGE, not just `minecraft_version`** —
    `scripts/version-sweep.sh` (§61) drives gates 3, 5 and 6 over every entry in
    `supported_minecraft_versions`, resolving each version's fabric-api itself. ⚠️ **That script is a
@@ -1035,6 +1114,35 @@ noun:** `grep -nE '(eleven|twelve|thirteen|[0-9]+) gates' TODO.md` against
     skipped control reads as a clean run, which is how §37 printed *"No drift"* over an exit of 2.
     ⚠️ **Exit 1 means `minecraft_version` is not in `supported_minecraft_versions`** — the branch
     compiling against a version it does not claim to ship to. Fix `gradle.properties`, not the script.
+
+13. `python scripts/build-gradle-identity-audit.py --self-test` **then**
+    `--require-bands "$(python scripts/expected_bands.py --count)"` — **exit 0**. `build.gradle` and
+    `settings.gradle` byte-identical on every live band **except** where a declared, reasoned rule
+    says otherwise (the Loom plugin id, the yarn mapping/`mod*` configurations, `tagBoundTest`).
+    Fails **closed** by construction: an undeclared difference matches no rule and diverges.
+    ⚠️ Prefers **remote** refs — `--local` before a push, or run it in a local clone.
+    ⚠️ **Exit 2 is not a pass.** 🔴 **A rule is a SPECIFICATION, not a mute button** — a rule matching
+    nothing is reported STALE, and the residue must clear `--min-residue` or the run refuses.
+    *(§78 added this gate; it had no row here until §83 — see the note above the list.)*
+
+14. 🔴 **MANDATORY before any push that can release.** `scripts/client-world-check.sh --self-test`
+    **then** `scripts/client-world-check.sh` — **exit 0, on every band being released.** The **real
+    game client** creates a **new** singleplayer world with mcMMO loaded, joins it, and asserts
+    mcMMO's session is that world's server and the joined player has an mcMMO profile (Fabric client
+    game test, `./gradlew runClientGameTest`, `src/gametest/`). **A game window opens — that is the
+    point.** ~1.5 min on `master`.
+    🔑 **This is the gate GitHub #20 needed.** Gate 3 did reproduce #20 on a server, but a server is a
+    proxy for the game: it cannot see a client mixin, a renderer, a screen, or the create-world flow.
+    ✅ **Converse-checked on the #20 defect itself (§83):** with the pre-fix `root.json` it must exit
+    **1**; with the fix, **0**.
+    ⚠️⚠️ **Gradle's exit code is NOT the verdict.** Exit 0 without the test's PASS marker is a run that
+    tested nothing — an entrypoint that was never found runs zero client tests and exits cleanly —
+    and it **FAILS**. A PASS marker followed by a crash also fails.
+    ⚠️ **Exit 2 = the game never launched; nothing proven.** Never a pass. If the harness truly cannot
+    run, a person launches the game by hand with the built jar — **Create New World**, join, `/mcstats`
+    — and records that instead. Never skip.
+    ⚠️ **Scope, stated:** `minecraft_version` only, from the source tree. Gate 3 on the **built jar**
+    is what proves the artifact, and `version-sweep.sh` covers the rest of the declared range.
 
 ⚠️⚠️ **Nothing checks that these REMEDIES compose.** Phase 20: `MSYS2_ARG_CONV_EXCL='*'` — prescribed
 by this repo's own gotchas for the Phase-18 `rev-parse` trap — silently turned two gate steps off. **A
