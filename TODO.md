@@ -790,14 +790,16 @@ session and was **21× larger than the index it supplements.**
       invariant deliberately, so this is not a defect — but a band reading its own copy is now
       reading a **5,000-line pre-§82 file**. **Owner call: propagate this cleanup, or let the bands
       keep their own?** §65 was explicitly scoped *"on all the branches"*; §82 was not.
-- [ ] 🔴 **`extract-mc-surface.py --check` is RED on the three non-`master` live bands** — carried in
-      from §81 and **not touched here**. `master` was regenerated; the bands were not.
+- [x] ✅ **`extract-mc-surface.py --check` was RED on the three non-`master` live bands — CLOSED by
+      §83.** Each band's manifest was regenerated on its own build while back-porting #20's codec test
+      (never copied), picking up the missing `Blocks#CRAFTING_TABLE` records; `--check` and gate 12
+      pass on all four live bands.
 - [ ] 🔴 **The `Latest` badge race** — won by the wrong band twice (§80, §81). Still a manual fix.
 
 ---
 
 
-## §83 — GitHub #20: `26.3` cannot create or join a world; the launch-the-game rule — ⬜ IN PROGRESS
+## §83 — GitHub #20: `26.3` cannot create or join a world; the launch-the-game rule — ✅ DONE (NOT pushed)
 
 **Owner 2026-09-29:** *"i want to add a hard rule that before a version push to git, we confirm the
 game works, by actually launching the game into a world with the mod in place, as the 26.3 version
@@ -856,7 +858,68 @@ close the issue with no comment"* — plus the player's client log from #20.
   server-side range sweep (`version-sweep.sh`) stays the range instrument; the limit is stated in
   the gate text rather than hidden.
 - **Not fixing the `Latest` badge race or the red `extract-mc-surface.py --check` bands** — carried
-  from §82, unrelated to #20.
+  from §82, unrelated to #20. *(The second was closed anyway, as a side effect — see below.)*
+
+### ✅ RESULT — measured, per band
+
+`master` commits: `24d385d0c` fix · `a8a2d7151` gate-3 ERROR count · `e103d7283` gate 14 ·
+`8bcb077f0` the rule · `e63c3badd` gate 14 on every band's API. Each back-ported to all three live
+bands with `Backport-of:` (5 commits per band). **#20 closed, no comment**, via `gh` (the GitHub MCP
+server did not connect this session).
+
+| gate | `master` (26.3) | `mc/26.2` | `mc/26.1.2` | `mc/1.21.11` |
+|---|---|---|---|---|
+| 1 build + suite (`-Pmod_version=1.5.1`, `> Task :test` bare) | ✅ 177 / 1,961 / 0 | ✅ 177 / 1,957 / 0 | ✅ 177 / 1,957 / 0 | ✅ 176 / 1,951 / 0 |
+| 3 `boot-check.sh` on the BUILT jar | ✅ 0 ERROR (+1 excl.) | ✅ | ✅ | ✅ |
+| 14 `client-world-check.sh` | ✅ | ✅ | ✅ | ✅ |
+| 12 `probe-bands --check` | ✅ 26.3 | ✅ 26.2 | ✅ 26.1, 26.1.1, 26.1.2 | ✅ 1.21.11 |
+| `extract-mc-surface --check` | ✅ | ✅ | ✅ | ✅ |
+
+Cross-branch, from a fresh local clone: gate 7 **0 MISSING** on all three · gate 9 distinct · gate 10
+**56 shared paths identical** · gate 11 0 violations · gate 13 agrees except declared rules. Every
+self-test first. **Gates 2, 4, 5, 6, 8 not run** — nothing they read changed, and 8 is post-push.
+⚠️ Suite rows are **per band**; §81 recorded no band totals, so the band check is *"the two new classes
+are present and passing"* (codec 3/3, resources 9/9 on every band), not a subtraction.
+
+**Controls — the reason to believe the rows above:**
+- Codec test red on the pre-fix root with the player's exact message; red again with a background on
+  a child (*"Only advancement roots can have background"*). Structural test red on both.
+- Gate 14 with the pre-fix root: **exit 1**, *"Visible advancement roots must have background"* —
+  run twice, on both versions of the game test. With the fix: **exit 0**.
+- Gate 3 on the **shipped** v1.5.1 jar: **exit 1**. The fixed jar: **exit 0**.
+- Gate 3's new ERROR matcher: the old regex fails 4 of its 6 new self-test cases; dropping the
+  harness-line exclusion fails 2. Gate 14's wrapper: a *"trust Gradle's exit code"* mutant fails the
+  zero-test case.
+
+**What this found beyond #20:**
+- 🔴 **Gate 3's `0 ERROR` could never fail** (regex vs the log's `[thread/ERROR]` format). Fixed.
+- 🔴 **Gate 13 had no row in the ship-gate list** while the list's own sentence said *"Twelve gates
+  are listed"*. Row added; the sentence now carries the counting command, not a number.
+- 🔴 **The first cut of gate 14 compiled on only TWO of the four live bands.** The bands span four
+  generations of Fabric's client game-test API (4.3.5 · 5.1.0 · 6.0.0 · 6.0.7); `getConnection()` and
+  the server `waitFor` arrived in 6.0.0. `client-world-check.sh` reported **exit 2** — *nothing
+  proven* — on the other two, which is the contract working. Rewritten to the common subset.
+- ⚠️ **A clean cherry-pick onto a 26.x band FAILED TO COMPILE** — 26.3 renamed
+  `VanillaRegistries.createLookup` → `createWorldLookup` and `DisplayInfo.getBackground` →
+  `background`. The translation hazard is not only yarn-vs-official.
+- ⚠️ **`probe-bands.py` crashed (exit 1) in a deep scratch clone** — a Python `scandir` past Windows'
+  260-char path limit inside the project-local Loom cache. An uncaught traceback exits **1**, the same
+  code as a real finding. Re-run from a short-path clone: green. Carried below.
+
+### ⬜ Carried out of this section
+
+- [ ] 🔴 **OWNER CALL: ship the fix.** Nothing is pushed: `master` is 9 ahead of `origin`, each live
+      band 5 ahead. `mod_version` is still `1.5.1-SNAPSHOT` and `1.5.1` **is already released**, so a
+      push alone would build and **not** release — the fix needs a `mod_version` bump (to `1.5.2`) on
+      every live band, then the push. Under the new rule, gates 3 and 14 are already green on all four
+      bands for this code; a bump-only change leaves that true, but **re-run gate 14 per band after the
+      bump anyway** — it is the rule, and it is ~1.5 min a band.
+- [ ] ⚠️ **`probe-bands.py` exits 1 on an uncaught exception** — indistinguishable from its own
+      "minecraft_version not in supported" exit 1. It should report an environment failure as exit 2,
+      as `boot-check.sh` and `client-world-check.sh` do. Trigger: any path over 260 chars.
+- [ ] ⚠️ `extract-mc-surface.py` prints *"WARN: expected 42 mixin files, found 41"* on `master` —
+      pre-existing, not touched by §83, not investigated.
+- [ ] 🔴 **The `Latest` badge race** — still carried from §80/§81/§82.
 
 ---
 
@@ -1143,6 +1206,10 @@ noun:** `grep -nE '(eleven|twelve|thirteen|[0-9]+) gates' TODO.md` against
     — and records that instead. Never skip.
     ⚠️ **Scope, stated:** `minecraft_version` only, from the source tree. Gate 3 on the **built jar**
     is what proves the artifact, and `version-sweep.sh` covers the rest of the declared range.
+    ⚠️⚠️ **The live bands span FOUR generations of Fabric's client game-test API** (4.3.5 · 5.1.0 ·
+    6.0.0 · 6.0.7 as of §83). The test uses only calls all four have; a newer call compiles on
+    `master` and breaks the older bands, where this gate then reports exit 2. javap it on all four
+    before adding one — the test's javadoc lists what is common.
 
 ⚠️⚠️ **Nothing checks that these REMEDIES compose.** Phase 20: `MSYS2_ARG_CONV_EXCL='*'` — prescribed
 by this repo's own gotchas for the Phase-18 `rev-parse` trap — silently turned two gate steps off. **A
