@@ -1,7 +1,11 @@
 # Multi-Version Support — Development TODO
 
-**Scope:** Fabric only. Target: every stable **`1.21.x` (12)** and **`26.x` (4)** = **16 versions**.
-NeoForge/Forge deferred (see bottom). The `1.20` line was ruled IN by R-v and back OUT by **R-x**
+**Scope:** 🔴 **CHANGING, see §85 (owner, 2026-10-27).** `26.x` becomes **one band branch for
+`26.1` – `26.3` on Fabric, Quilt, NeoForge and Forge**, aiming at **one jar**. The repo moves to the
+**CTCL layout**: `master` carries docs and tooling and **no mod code**, with one branch per major
+version. **`1.21.x` is frozen and stays Fabric only** (R-ad, `mc/1.21.11` included). Until §85
+lands, what ships is Fabric only, on every stable **`1.21.x` (12)** and **`26.x` (4)**, and the
+strategy below still binds. The `1.20` line was ruled IN by R-v and back OUT by **R-x**
 (2026-08-20) before any of it was built — it is out of scope on **scope grounds, never measured**.
 
 **Strategy:** branch-per-band (ruling **R-a**). `master` **is** the newest band; `mc/**` exists only
@@ -1025,6 +1029,244 @@ in the gate.
 
 ---
 
+## §85 — `26.x` on Fabric, Quilt, NeoForge and Forge, in the CTCL layout; `1.21.x` frozen — ⬜ PLANNED, nothing built
+
+**Owner 2026-10-27, two messages:**
+1. *"we want to add support for the 26.x versions for quilt, forge and neoforge. 1.21.x versions stay
+   frozen."*
+2. *"1.21.11 stays as fabric only. we are freezing 1.21.11. as for the repo layout, the CTCL repo is a
+   perfect example of how i want things setup, where main only has readme info etc and no real code,
+   and branches for each major version. ideally we produce as few jars as possible. but only within
+   reason."*
+
+Tier 2: many sessions. It changes the build, the release pipeline, the branch topology and most of
+`scripts/`. **Nothing below is built.**
+
+### Rulings (owner, 2026-10-27)
+
+- **R-ad — `1.21.x` is frozen, `mc/1.21.11` included, and it stays Fabric only.** Frozen means
+  **kept**: the branch and its published `v1.5.2` release stay downloadable. It gets no fixes,
+  features, back-ports or loaders unless the owner asks for that specific one. The six archived
+  `1.21.x` bands are unchanged.
+- **R-ae — the repo takes the CTCL layout** (`../CTCL`, its `BANDS.md`, read 2026-10-27):
+  - **`master` holds the README, docs and agent tooling, and no mod code.** CTCL names it `main`. Ours
+    stays `master`: renaming the default branch was not asked for.
+  - **One branch per major version.** `1.21.x` is `mc/1.21.11` (frozen, Fabric), and the six archived
+    bands stay as they are. **`26.x` becomes ONE new band branch covering `26.1` – `26.3` on all four
+    loaders.** Its working name is **`mc/26.x`**, which keeps the `mc/` prefix that `release.yml`,
+    `expected-bands.txt` and every guard match on. ⚠️ The name is my choice; confirm it at 85.D.
+  - **CTCL's band rule:** a new band only for a **major code change**. A new Minecraft version joins
+    the newest band if the band's full suite passes on it.
+  - 🔴 **This supersedes R-a** (branch per *band of identical surface*), **R-f** (`master` = newest
+    band) and the rule *"fixes land on `master` FIRST"*. With one live band and a codeless `master`,
+    fixes land on the 26.x band. AGENTS.md's *Multi-version discipline* section is rewritten in 85.K,
+    and until then it still binds as written.
+- **R-af — as few jars as possible, within reason.** **Target: ONE jar for the whole `26.x` band and
+  all four loaders.** CTCL ships exactly that (`ctcl-1.2.0+26.1-26.3-Fabric-Quilt-Forge-NeoForge.jar`).
+  "Within reason" is decided by 85.C's numbers against the stop rule below, not by preference.
+- **R-ag — Quilt rides inside the Fabric jar.** Quilted Fabric API stops at `1.20.1`. CTCL names Quilt
+  in the jar only while every Fabric version also has a Quilt loader pin, and we copy that rule.
+- **R-ai — the client check on NeoForge/Forge: answered by CTCL.** Neither loader has a client
+  game-test API. CTCL's `common/src/gametestClient/.../ClientSmoke.java`, driven by a per-loader
+  `*ClientSmoke`, creates a **new** superflat world through the real client, writes `PASS`/`FAIL` to a
+  result file, and runs under Xvfb in CI. That meets AGENTS.md's launch-the-game rule. **Port it; no
+  recurring manual launches.**
+- **Still open:** **R-ah**, the config screen off Fabric. Recommendation: port it where Cloth Config
+  exists for that loader and version (measure first), otherwise ship no in-game screen there and say
+  so in the README. The second open call is **what happens to the superseded per-line releases**
+  (85.L).
+
+### What was measured before planning (2026-10-27, `master` at `d2160f22f`)
+
+- **The loader coupling is narrow.** **20 of 295** `src/main` files import `net.fabricmc`, all under
+  `com/gmail/nossr50/fabric/`: the two entrypoints, `McMMOAttachments`, `McMMOCommands`,
+  `PlayerSessionListener`, 14 listeners, the ModMenu integration. Fabric API modules used, by import
+  count: `event.player` 12 · `event.lifecycle` 4 · `entity.event` 4 · `networking.v1` 2 ·
+  `attachment.v1` 2 · `command.v2` 1. Six `src/test` + `src/gametest` files touch `net.fabricmc`.
+- **95** files import `net.minecraft`. On `26.x` all loaders run the same unobfuscated Mojang names, so
+  **that coupling is not a loader problem.**
+- 🔴 **The Deferred row's blocker looks mis-scoped for `26.x`.** It held NeoForge/Forge *"blocked on
+  `platform/` being real interfaces"*. That is a seam over **Minecraft**, and every 26.x loader gives
+  the same Minecraft. A second loader needs a seam over the **loader**: the 20 files above.
+  ⚠️ This is an inference from import counts; 85.E proves it by compiling `common` with no loader on
+  its classpath.
+- No access widener exists, so nothing needs translating to an access transformer. Both mixin configs
+  say `compatibilityLevel: JAVA_21`, the level Forge's Mixin accepts. 41 mixin classes, 2 configs.
+- **Persistence a new loader must reproduce:** two persistent **entity** attachments, `BRED_BY` and
+  `MOB_ORIGIN`. Placed-block flags go to their own file (`<world>/mcmmo/placed_blocks.dat`), so Forge
+  26.3 not saving **chunk** capabilities does not reach them.
+- 🔴 **The three 26.x branches differ today in 16 Java files plus metadata** (`git diff --shortstat`
+  over `src/main`):
+
+| from → to | files | lines |
+|---|---|---|
+| `mc/26.1.2` → `mc/26.2` | 7 | +24 / −31 |
+| `mc/26.2` → `master` (26.3) | 11 | +121 / −105 |
+| `mc/26.1.2` → `master`, end to end | 17 | +144 / −135 |
+
+  11 of the 16 Java files are mixins or accessors. **These are API changes, not renames.** 26.3 tills
+  through the `BLOCK_TRANSFORMER` data component instead of `HoeItem`'s tilling map. The
+  `BrewingStandBlockEntity` brew hooks take the block entity instead of `PotionBrewing` + slots.
+  `Player.drop` gained a `Prediction` argument. `Util.getPlatform().openUri` became
+  `Blaze3D.openPath`.
+- 🔴 **So one 26.x jar cannot come from one source compiled once.** CTCL manages it because its code
+  uses only API that is identical on every version (its `ClientSmoke` says so in its javadoc). A class
+  compiled against 26.1 cannot name 26.3's `BlockTransformer`.
+- **What exists upstream, read from metadata (never from memory):**
+
+| loader | `26.1` | `26.1.1` | `26.1.2` | `26.2` | `26.3` | source |
+|---|---|---|---|---|---|---|
+| NeoForge | `26.1.0.*` (33 builds) | `26.1.1.*` (14) | `26.1.2.*` (122) | `26.2.0.*` (92) | `26.3.0.*` (95) | `maven.neoforged.net` metadata |
+| Forge | `62.0.9` | `63.0.2` | `64.1.5` rec. | `65.1.5` rec. | `66.1.0` rec. | `promotions_slim.json` |
+| Quilt loader | not checked | not checked | not checked | not checked | listed by meta | `meta.quiltmc.org`; newest loader `0.31.0-beta.4`, **beta only** |
+
+- ⚠️ **Forge has a different major for each `26.1` patch** (62 / 63 / 64), and NeoForge publishes a
+  line per patch. Whether one NeoForge or Forge jar loads on all three is unknown; each version gets
+  proven.
+- 🔴 **Gate 6 (`gameplay-smoke.sh`) drives its player with fabric-carpet**, which does not exist on
+  NeoForge or Forge. **Gate 14 is a Fabric client game test.** R-ai covers gate 14's half; gate 6 has
+  no NeoForge/Forge form yet.
+
+### "Within reason": the jar-count stop rule (R-af)
+
+| shape | jars for `26.x` | how the 16 differences are carried |
+|---|---|---|
+| **1 — one jar, version adapters** (recommended) | **1**, all loaders | a source set per Minecraft line (`v26_1`, `v26_2`, `v26_3`), each compiled against its own Minecraft, all packed into the one jar. A small `VersionAdapter` interface in `common` picks one at startup from the running version, and an `IMixinConfigPlugin` applies only that version's mixin variants |
+| 2 — one jar per Minecraft line | 3, each all loaders | per-line source sets or Stonecutter, one jar per line. Today's count, merged across loaders |
+| 3 — split by loader family | +1 on top of 1 or 2 | CTCL's own `v1.1.0` fallback: Fabric+Quilt in one jar and Forge+NeoForge in another, **only** where their version ranges differ |
+
+**Take shape 1 if 85.C classifies every difference as one of:**
+- (a) a call that exists on all three versions: unify it, no adapter;
+- (b) a contained adapter seam.
+
+**Stop rule:** if adapters exceed **~10 seams**, or any mixin cannot be expressed as a plugin-gated
+variant, fall back to shape 2 and bring the numbers to the owner before building. ⚠️ A wrong
+adapter pick fails at **runtime**, not compile time, so every version in the range has to boot and
+pass the client check (85.D).
+
+### The plan
+
+The new band branch is cut in 85.D. Until then everything is a measurement or happens on `master`.
+**Nothing is released until 85.J.**
+
+```
+85.A freeze     mc/1.21.11 -> [archived] in scripts/expected-bands.txt (R-ad; reuse the mechanism,
+                no third "frozen" state). AGENTS.md live-set wording + the skills table gains
+                `dev-server` and `mc-port` (AGENTS.md is byte-identical on every branch, P19-1).
+     Proof:     expected_bands.py --verify; drift-audit --self-test + a run; gates 9/10/11/13 from a
+                local clone. Confirm the push matches no release.yml `paths:` entry.
+85.B dev-server rung 3 from the imported `dev-server` skill: scripts/dev-server-smoke.sh to its
+                contract (exit 2 on a busy port, one qualified task, marker-file log freshness,
+                @expect, ERROR regex `/(ERROR|FATAL)\]`, exit 0/1/2, --self-test in both polarities).
+                It takes a LOADER argument from day one. Decide its overlap with gameplay-smoke.sh
+                first; one harness, not two.
+     Proof:     --self-test exit 0; Fabric run exit 0; the same check against a reverted effect
+                exits 1.
+85.C measure    classify each of the 16 differing files: (a) a call common to 26.1-26.3, (b) an
+                adapter seam, (c) neither. javap each version's jar; never recall. Also check
+                whether a jar compiled against 26.1 loads at all on 26.3. The result table goes
+                here, with the shape the stop rule picks.
+     Gate:      OWNER SIGN-OFF on the jar shape, with the numbers, before 85.D.
+85.D band       cut mc/26.x from master's tip (master = the 26.3 code). From here ALL code lands on
+                mc/26.x. Merge 26.1 + 26.2 support into it in the shape 85.C chose. Fabric only.
+                Declare `supported_minecraft_versions` = 26.1 ... 26.3.
+     Proof:     ONE Fabric jar; suite green; gates 3 + 14 exit 0 on EACH of 26.1, 26.1.1, 26.1.2,
+                26.2, 26.3 (gate 12 validates the manifest on every declared version).
+85.E split      mc/26.x -> `common` + `fabric` (+ the version-adapter sets), NO behaviour change.
+                The 20 fabric/ files reach the loader through small seams in common: lifecycle,
+                player events, entity events, attachments, networking, commands, config screen.
+                New test: common imports no net.fabricmc / net.neoforged / net.minecraftforge /
+                org.quiltmc. Declare its inputs or Gradle serves a cached pass; its self-test plants
+                an import. Every script that assumes ONE project/jar is fixed and self-tested again
+                (boot-check, client-world-check, gameplay-smoke, mixin-allow-audit, extract-mc-surface,
+                build-gradle-identity-audit rules, the release jar glob).
+     Proof:     suite total EQUAL to 85.D's; gates 3 + 14 on every version.
+85.F Quilt      no code. Quilt loader + FAPI + the Fabric jar, on every version that has a Quilt
+                pin: boot, /mcstats, 0 ERROR, then the client.
+     Proof:     recorded per version. If the beta loader can't load it: record it and ask.
+85.G NeoForge   `neoforge` project on ModDevGradle (pins from metadata, coordinates curl-checked,
+                dated). RegisterEvent / DeferredHolder, AttachmentType, the event bus, the payload
+                registrar, RegisterCommandsEvent. javap the PATCHED jar for every injection target.
+                Port CTCL's ClientSmoke (R-ai). Grep the GameTest log for ERROR after a green run.
+     Proof:     common suite unchanged; dev-server smoke exit 0; built jar on a real NeoForge server
+                0 ERROR; ClientSmoke PASS, on every NeoForge version in the range.
+85.H Forge      ForgeGradle 7 (run* tasks register late: tasks.matching); mods.toml; pack.mcmeta IN
+                THE JAR; MixinConfigs manifest attribute + --mixin.config in dev; a timeout on the
+                GameTest server task; no FakePlayer; entity-capability persistence for the two
+                attachments, checked explicitly. ClientSmoke as in 85.G.
+     Proof:     as 85.G, per Forge major (62 / 63 / 64 / 65 / 66). Narrow Forge's declared range to
+                what booted.
+85.I one jar    package every loader into ONE jar (CTCL's `releaseJars`). The jar name lists the
+                loaders its metadata actually declares. Split per loader family (shape 3) only
+                where a range differs.
+     Proof:     the RELEASE jar itself: boot + client check on every loader x version pin.
+85.J release    port CTCL's tools/release.py + ci.yml shape to mc/26.x: a run on each band push;
+                verify matrix = loader x pin; publish refuses unless the staged jars == the planned
+                jars and each jar's metadata declares <version>+<range>. One tag
+                `v<mod>+26.1-26.3` and ONE release carrying every jar. First release: MINOR
+                (1.6.0 — new loaders are a feature). Reconcile with R-t's stale-version gate before
+                porting (CTCL takes the version from tags). AGENTS.md hard rule before the push:
+                client + built-jar checks on every loader x version, recorded here.
+85.K master     AFTER 85.J's first release is published and read back:
+                strip `master` to README, wiki/, AGENTS.md, TODO.md, a new BANDS.md (CTCL's) and
+                band-neutral tooling. release.yml leaves master IN THE SAME COMMIT: that commit
+                deletes src/**, which matches release.yml's paths filter. Verify no run fires.
+                Rewrite AGENTS.md's Multi-version section to the CTCL rules: tooling/docs land on
+                master and merge master -> band, never band -> master; fixes on the band; a new band
+                only for a major code change.
+                Guards whose whole premise is SEVERAL LIVE BRANCHES lose their subject: drift-audit
+                (+ its weekly workflow), branch-file-identity-, gradle-key-identity-,
+                build-gradle-identity- and manifest-identity-audit. 🔴 Retiring a guard is an AGENTS
+                absolute stop: each one is listed, the owner confirms it at this step, and its reason
+                is recorded. Never deleted silently.
+     Rollback:  the strip is one commit (git revert); the code also lives on mc/26.x.
+85.L old bands  mc/26.2 and mc/26.1.2 -> [archived], KEPT. master's code history stays in git.
+                Their per-line releases (mc26.1.2-v1.5.2, mc26.2-v1.5.2, mc26.3-v1.5.2) are
+                superseded by the band release. Deleting them is outward-facing, so it's an OWNER
+                CALL. Recommendation: delete after the band release is verified, jars backed up
+                first (as §84.5 did).
+85.M docs       master's README names each band: 26.x (loaders + versions), 1.21.11 frozen and
+                Fabric only, the archived bands. Install page per loader. Caveat-expiry pass: grep
+                the symptom ("Fabric only", "requires Fabric API", "master is the newest band").
+```
+
+### What I am NOT doing
+
+- **No Stonecutter migration**, unless 85.C's stop rule fires; then the owner decides.
+- **Nothing on any `1.21.x` branch after 85.A.**
+- **No Quilt-specific build and no QSL. No snapshot targets.**
+- **No new gameplay.** Behaviour parity only. A feature a loader can't reproduce becomes a stated gap
+  in the README, not a silent one.
+- **No branch is deleted, and the default branch is not renamed.**
+
+### Risks found while planning
+
+- 🔴 A wrong version-adapter pick is a **runtime** failure that every compile and unit test passes. The
+  only guard is booting every version in the range, so 85.D and 85.I prove each one.
+- 🔴 85.K's strip commit touches `src/**`, which **matches `release.yml`'s `paths:` filter**. If that
+  workflow is still on `master` when it lands, it fires on a branch with no build.
+- 🔴 Every tool that picks "the jar" will see more than one. `mixin-allow-audit.py` already picked the
+  wrong one once (by alphabet).
+- ⚠️ Gate 6 (carpet) has no NeoForge/Forge form. Without one, the earning paths on those loaders are
+  proven only by GameTests and ClientSmoke.
+- ⚠️ CI cost: CTCL measured about 146 runner-minutes per push for a 14-job matrix. Ours would be
+  similar per push, against the 2,000-minute free tier.
+
+### Skills imported from `../Minecraft-Template` (2026-10-27): done, local only
+
+Template `48ca808`. **New:** `dev-server`, `mc-port`. **Refreshed:** `build-run`, `code-explore`,
+`code-review`, `debug-errors`, `git-github`, `guard-destructive`, `plan-work`, `recall-session`,
+`research-docs`, `test-iterate`. Seven of these were still the template's unedited original. The other
+three differed only in line endings, except `git-github`: our copy had **lost** the no-AI-attribution
+paragraph, and the template version restores it. **Kept ours:** `save-memory`. The template has not
+changed it since its first commit, and ours carries the R-n note. **Adapted:** `main` → `master` in
+`git-github` and `recall-session`. Both trees are byte-identical. ⚠️ The skill trees are gitignored
+(R-n), so this exists in this working copy only. **Not imported, owner call:** the template's
+AGENTS.md *Minecraft Mod Development* section, and its `.claude/settings.json` deny on killing java
+by name.
+
+---
+
 ---
 
 ## Other open work — harness and playtest
@@ -1656,7 +1898,11 @@ away as "probably the flake". Remedy (`-XX:+EnableDynamicAgentLoading` or fewer 
 
 ## Deferred (explicitly out of scope)
 
-- **NeoForge / Forge.** Blocked on `platform/` being real interfaces — today `PlatformPlayer`,
+- ~~**NeoForge / Forge.**~~ ➡️ **UN-DEFERRED for the `26.x` band by §85 (owner, 2026-10-27).** §85
+  measured the blocker below as probably **mis-scoped** for `26.x`: it is a seam over Minecraft, and
+  a second loader needs a seam over the loader. Kept verbatim as the reasoning §85 is answering.
+  NeoForge/Forge/Quilt on `1.21.x` stay out: that line is frozen and Fabric only (R-ad).
+  Original row: blocked on `platform/` being real interfaces — today `PlatformPlayer`,
   `PlatformBlock`, `PlatformItem` and 7 others are `public final class` importing `net.minecraft`
   directly. A final class cannot have a second platform implementation. Never caught because
   Mockito 5's inline mock maker mocks final classes happily.
